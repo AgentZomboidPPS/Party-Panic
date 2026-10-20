@@ -70,7 +70,7 @@ Config.Monetization = {
 Config.Debug = {
 	LogPhases = true,
 	-- Studio-only helpers for building new modes. Ignored in live servers.
-	ForceGame = "", -- e.g. "FloorIsLava": every vote offers only this mode
+	ForceGame = "", -- e.g. "HexMeltdown": every vote offers only this mode
 	StudioIntermissionTime = 8, -- shorter lobby wait while testing
 }
 

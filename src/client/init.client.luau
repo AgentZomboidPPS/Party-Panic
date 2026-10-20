@@ -52,6 +52,7 @@ local order = {
 	"EmoteController",
 	"SpectateController",
 	"OnboardingController",
+	"MiniGameController",
 }
 
 local context = { Hud = hud, Overlay = overlay }

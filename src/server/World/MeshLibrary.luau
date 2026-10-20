@@ -385,6 +385,7 @@ end
 
 local function normalize(name: string, model: Model, spec: Spec)
 	model.Name = name
+	model:SetAttribute("PP_Prop", name) -- lets tools (and clones) know which prop this is
 	-- Scale imported meshes to the canonical size the game is designed around.
 	local _, size = model:GetBoundingBox()
 	if size.Y > 0 and math.abs(size.Y - spec.Height) / spec.Height > 0.05 then

@@ -16,12 +16,24 @@ local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local GameState = require(Shared.GameState)
 local Janitor = require(Shared.Janitor)
+local Remotes = require(Shared.Remotes)
 
 local CosmeticService = require(script.Parent.CosmeticService)
 local Notifier = require(script.Parent.Notifier)
 local Telemetry = require(script.Parent.Telemetry)
 
 local LOBBY_RADIUS = 600
+
+local actionRemote = Remotes.Get("MiniGameAction")
+local eventRemote = Remotes.Get("MiniGameEvent")
+local rng = Random.new()
+
+type ActionEntry = {
+	Handler: (player: Player, ...any) -> (),
+	Interval: number,
+	AliveOnly: boolean,
+	Last: { [Player]: number },
+}
 
 local RoundContext = {}
 RoundContext.__index = RoundContext
@@ -67,6 +79,11 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 	self.KillY = Config.ArenaOrigin.Y - 40
 	self.WalkSpeed = StarterPlayer.CharacterWalkSpeed
 	self.TeamScores = nil :: { [string]: number }?
+	self.StartServerTime = 0
+	self._actions = {} :: { [string]: ActionEntry }
+	self._sharedKeys = {} :: { [string]: boolean }
+	self._playerKeys = {} :: { [string]: boolean }
+	self._stunnedUntil = {} :: { [Player]: number }
 	self.Hooks = {
 		Respawn = nil :: ((player: Player) -> CFrame?)?,
 		CharacterReady = nil :: ((player: Player, character: Model) -> ())?,
@@ -98,6 +115,9 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 
 	self.Janitor:Add(Players.PlayerRemoving:Connect(function(player)
 		self:_onLeave(player)
+	end))
+	self.Janitor:Add(actionRemote.OnServerEvent:Connect(function(player, name, ...)
+		self:_onAction(player, name, ...)
 	end))
 
 	-- Fall / out-of-bounds check (server side so clients can't skip it).
@@ -142,6 +162,7 @@ end
 function RoundContext.Begin(self: RoundContext)
 	self.Started = true
 	self.StartTime = os.clock()
+	self.StartServerTime = workspace:GetServerTimeNow()
 	self.StartCount = #self:GetPlayers()
 	self:UnfreezeAll()
 	Notifier.Sound(nil, "RoundStart")
@@ -433,6 +454,131 @@ function RoundContext.Sound(self: RoundContext, soundName: string)
 	Notifier.Sound(nil, soundName)
 end
 
+-- Mini-game controls and state for the client half of a mode --------------------------------------
+
+-- Server time shared with every client (workspace:GetServerTimeNow()), for synced schedules.
+function RoundContext.Now(_self: RoundContext): number
+	return workspace:GetServerTimeNow()
+end
+
+-- Handles a MiniGameAction the client sends while the round runs (a pump, a push, a shot...).
+-- Each player is limited to one call per `Interval` seconds; eliminated players are ignored unless
+-- `AliveOnly` is false. Arguments come from the client: validate them in the handler.
+function RoundContext.OnAction(
+	self: RoundContext,
+	name: string,
+	handler: (player: Player, ...any) -> (),
+	options: { Interval: number?, AliveOnly: boolean? }?
+)
+	local opts = options or {}
+	self._actions[name] = {
+		Handler = handler,
+		Interval = opts.Interval or 0.05,
+		AliveOnly = opts.AliveOnly ~= false,
+		Last = {},
+	}
+end
+
+-- Round-wide state for clients: GameState attribute "MG_<key>" (cleared when the round ends).
+function RoundContext.SetShared(self: RoundContext, key: string, value: any)
+	self._sharedKeys[key] = true
+	GameState.Set("MG_" .. key, value)
+end
+
+function RoundContext.SetSharedJSON(self: RoundContext, key: string, value: any)
+	self._sharedKeys[key] = true
+	GameState.SetJSON("MG_" .. key, value)
+end
+
+-- Per-player state for clients: player attribute "MG_<key>" (cleared when the round ends).
+function RoundContext.SetPlayerShared(self: RoundContext, player: Player, key: string, value: any)
+	self._playerKeys[key] = true
+	player:SetAttribute("MG_" .. key, value)
+end
+
+-- Sends a MiniGameEvent to one player, a list of players, or everyone (nil).
+function RoundContext.Fire(self: RoundContext, target: any, name: string, ...: any)
+	if target == nil then
+		eventRemote:FireAllClients(name, ...)
+	elseif type(target) == "table" then
+		for _, player in target do
+			if player.Parent then
+				eventRemote:FireClient(player, name, ...)
+			end
+		end
+	elseif target.Parent then
+		eventRemote:FireClient(target, name, ...)
+	end
+end
+
+-- Hands physics of a part to a player's client (smooth control of their own vehicle or ball).
+function RoundContext.GiveOwnership(_self: RoundContext, part: BasePart, player: Player)
+	if typeof(player) == "Instance" then
+		pcall(part.SetNetworkOwner, part, player)
+	end
+end
+
+-- Briefly stops a player from moving or jumping.
+function RoundContext.Stun(self: RoundContext, player: Player, seconds: number)
+	local untilTime = math.max(self._stunnedUntil[player] or 0, os.clock() + seconds)
+	self._stunnedUntil[player] = untilTime
+	self:Freeze(player, true)
+	self:SetPlayerShared(player, "Stunned", true)
+	task.delay(seconds, function()
+		if (self._stunnedUntil[player] or 0) > os.clock() + 0.01 or not self.Active then
+			return
+		end
+		self._stunnedUntil[player] = nil
+		self:SetPlayerShared(player, "Stunned", false)
+		if self:IsAlive(player) then
+			self:Freeze(player, false)
+		end
+	end)
+end
+
+function RoundContext.IsStunned(self: RoundContext, player: Player): boolean
+	return (self._stunnedUntil[player] or 0) > os.clock()
+end
+
+-- Splits the participants into teams with these names (shuffled; sizes differ by at most one).
+function RoundContext.AssignTeams(self: RoundContext, names: { string }): { [string]: { Player } }
+	local players = self:GetPlayers()
+	for index = #players, 2, -1 do
+		local other = rng:NextInteger(1, index)
+		players[index], players[other] = players[other], players[index]
+	end
+	local teams = {}
+	for _, name in names do
+		teams[name] = {}
+	end
+	for index, player in players do
+		local name = names[((index - 1) % #names) + 1]
+		self:SetTeam(player, name)
+		table.insert(teams[name], player)
+	end
+	return teams
+end
+
+function RoundContext._onAction(self: RoundContext, player: Player, name: any, ...: any)
+	if type(name) ~= "string" or not self:IsRunning() then
+		return
+	end
+	local action = self._actions[name]
+	local state = self.Participants[player]
+	if not action or not state or (action.AliveOnly and not state.Alive) then
+		return
+	end
+	local now = os.clock()
+	if now - (action.Last[player] or 0) < action.Interval then
+		return
+	end
+	action.Last[player] = now
+	local ok, err = pcall(action.Handler, player, ...)
+	if not ok then
+		Telemetry.Error("RoundAction", `{self.Definition.Id}.{name}: {err}`)
+	end
+end
+
 -- Scheduling (everything here dies with the round) ----------------------------------------------
 
 function RoundContext.Track<T>(self: RoundContext, item: T): T
@@ -658,6 +804,16 @@ function RoundContext.Destroy(self: RoundContext)
 	self.Arena:Destroy()
 	GameState.Set("Status", "")
 	GameState.Set("TeamScores", "")
+	for key in self._sharedKeys do
+		GameState.Set("MG_" .. key, nil)
+	end
+	for player in self.Participants do
+		if player.Parent then
+			for key in self._playerKeys do
+				player:SetAttribute("MG_" .. key, nil)
+			end
+		end
+	end
 end
 
 return RoundContext

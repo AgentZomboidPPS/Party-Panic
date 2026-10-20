@@ -216,7 +216,7 @@ def build_parts(parts):
             k = [size[i] / orig[i] if orig[i] else 1 for i in range(3)]
             parent = cframe_matrix(p["cf"])
             positives, cutters = [], []
-            for piece in info["pieces"]:
+            for piece_index, piece in enumerate(info["pieces"]):
                 kind = shape_kind(piece[0])
                 psize = piece[1:4]
                 rel = piece[4:16]
@@ -226,8 +226,11 @@ def build_parts(parts):
                 if kind == "Cylinder":
                     d = min(psize[1], psize[2])
                     psize = [psize[0], d, d]
-                # Approximate non-uniform union scaling by scaling each piece's size.
-                psize = [psize[0] * k[0], psize[1] * k[1], psize[2] * k[2]]
+                # Approximate non-uniform union scaling by scaling each piece's size. The tiny
+                # per-piece growth keeps coplanar faces of overlapping pieces apart (Roblox merges
+                # them into one mesh; Cycles would render coincident faces black).
+                jitter = 1 + 0.0008 * piece_index
+                psize = [psize[0] * k[0] * jitter, psize[1] * k[1] * jitter, psize[2] * k[2] * jitter]
                 matrix = parent @ cframe_matrix(rel, psize)
                 is_cutter = len(piece) > 16 and piece[16] == 1
                 (cutters if is_cutter else positives).append((kind, matrix))
@@ -299,6 +302,8 @@ def build_parts(parts):
 
 def build_terrain(t):
     half, step = t["half"], t["step"]
+    if not t.get("heights"):
+        return
     n = int(round(2 * half / step)) + 1
     h = np.array(t["heights"], dtype=np.float64).reshape(n, n)  # [z][x]
     mats = np.array(t["mats"]).reshape(n, n)

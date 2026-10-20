@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage.Shared
 local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
+local Teams = require(Shared.Teams)
 
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -17,10 +18,7 @@ local RoundController = {}
 
 local player = Players.LocalPlayer
 
-local TEAM_COLORS = {
-	Red = Color3.fromRGB(255, 80, 90),
-	Blue = Color3.fromRGB(80, 160, 255),
-}
+local TEAM_COLORS = Teams.Colors
 
 local rules: Frame
 local rulesFields: { [string]: TextLabel } = {}

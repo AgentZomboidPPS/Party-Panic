@@ -14,6 +14,7 @@ local NAMES = {
 	"TutorialDone", -- ()
 	"SetSetting", -- (key: string, value: any)
 	"PromptVip", -- ()
+	"MiniGameAction", -- (action: string, ...) a mini-game control (pump, push, shoot...); see RoundContext:OnAction
 	-- server -> client
 	"ProfileData", -- (snapshot)
 	"Notify", -- (text, kind?, duration?)
@@ -21,6 +22,7 @@ local NAMES = {
 	"PlayEffect", -- (effectName, position, colors?)
 	"Knockback", -- (velocity: Vector3, stunTime: number)
 	"PlaySound", -- (soundName)
+	"MiniGameEvent", -- (event: string, ...) mini-game specific cue for the client half of a mode
 }
 
 local Remotes = {}
