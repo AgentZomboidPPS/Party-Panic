@@ -67,7 +67,8 @@ def material(color, mat_name, transparency):
              "Foil": 0.25, "Ice": 0.1, "Marble": 0.3, "Wood": 0.7, "WoodPlanks": 0.7}.get(mat_name, 0.55)
     bsdf.inputs["Roughness"].default_value = rough
     if mat_name in ("Metal", "DiamondPlate", "Foil"):
-        bsdf.inputs["Metallic"].default_value = 0.7
+        # Roblox metal reads as shiny paint, not a mirror.
+        bsdf.inputs["Metallic"].default_value = 0.35
     if mat_name == "Neon":
         bsdf.inputs["Emission Color"].default_value = (*rgb, 1)
         bsdf.inputs["Emission Strength"].default_value = 4.0
@@ -214,10 +215,11 @@ def build_parts(parts):
             orig = info["size"]
             k = [size[i] / orig[i] if orig[i] else 1 for i in range(3)]
             parent = cframe_matrix(p["cf"])
+            positives, cutters = [], []
             for piece in info["pieces"]:
                 kind = shape_kind(piece[0])
                 psize = piece[1:4]
-                rel = piece[4:]
+                rel = piece[4:16]
                 rel = [rel[0] * k[0], rel[1] * k[1], rel[2] * k[2]] + list(rel[3:])
                 if kind == "Ball":
                     psize = [min(psize)] * 3
@@ -227,7 +229,27 @@ def build_parts(parts):
                 # Approximate non-uniform union scaling by scaling each piece's size.
                 psize = [psize[0] * k[0], psize[1] * k[1], psize[2] * k[2]]
                 matrix = parent @ cframe_matrix(rel, psize)
-                add_object(f"u{index}", prim_mesh(kind), matrix, mat, shadow)
+                is_cutter = len(piece) > 16 and piece[16] == 1
+                (cutters if is_cutter else positives).append((kind, matrix))
+            cutter_collection = None
+            if cutters:
+                cutter_collection = bpy.data.collections.new(f"cut{index}")
+                for kind, matrix in cutters:
+                    cutter = bpy.data.objects.new("cutter", prim_mesh(kind))
+                    cutter.matrix_world = matrix
+                    cutter.hide_render = True
+                    cutter.material_slots[0].link = "OBJECT"
+                    cutter.material_slots[0].material = mat
+                    cutter_collection.objects.link(cutter)
+            for kind, matrix in positives:
+                obj = add_object(f"u{index}", prim_mesh(kind), matrix, mat, shadow)
+                if cutter_collection:
+                    mod = obj.modifiers.new("cut", "BOOLEAN")
+                    mod.operation = "DIFFERENCE"
+                    mod.operand_type = "COLLECTION"
+                    mod.collection = cutter_collection
+                    mod.solver = "EXACT"
+                    mod.material_mode = "TRANSFER"
             continue
         if p["c"] == "MeshPart" and p.get("prop"):
             pieces = glb_pieces(p["prop"])
@@ -370,21 +392,20 @@ def setup_world(lighting):
     world.use_nodes = True
     nodes, links = world.node_tree.nodes, world.node_tree.links
     bg = nodes["Background"]
-    sky = nodes.new("ShaderNodeTexSky")
-    try:
-        sky.sky_type = "NISHITA"
-    except TypeError:
-        pass
+    # Roblox's default sky: pale near the horizon, clear blue overhead.
+    coords = nodes.new("ShaderNodeTexCoord")
+    split = nodes.new("ShaderNodeSeparateXYZ")
+    ramp = nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].position = 0.0
+    ramp.color_ramp.elements[0].color = (0.62, 0.78, 0.98, 1)
+    ramp.color_ramp.elements[1].position = 0.6
+    ramp.color_ramp.elements[1].color = (0.16, 0.42, 0.9, 1)
+    links.new(coords.outputs["Generated"], split.inputs[0])
+    links.new(split.outputs["Z"], ramp.inputs["Fac"])
+    links.new(ramp.outputs["Color"], bg.inputs["Color"])
+    bg.inputs["Strength"].default_value = 1.0
     sun = lighting.get("sun", [0.3, 0.8, 0.3])
     sun_b = to_blender(*sun).normalized()
-    elevation = math.asin(max(-1, min(1, sun_b.z)))
-    rotation = math.atan2(sun_b.x, sun_b.y)
-    if hasattr(sky, "sun_elevation"):
-        sky.sun_elevation = elevation
-        sky.sun_rotation = rotation
-        sky.sun_disc = False
-    links.new(sky.outputs["Color"], bg.inputs["Color"])
-    bg.inputs["Strength"].default_value = 0.35
 
     light_data = bpy.data.lights.new("sun", "SUN")
     light_data.energy = 4.5 * lighting.get("brightness", 2) / 2

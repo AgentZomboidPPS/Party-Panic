@@ -366,6 +366,23 @@ local function fromAsset(name: string): Model?
 	return model
 end
 
+-- Puts a model's pivot at `pivot`. With a PrimaryPart, Model.WorldPivot doesn't stick on servers
+-- (the pivot stays at the primary part's center), so set the part's PivotOffset directly.
+local function setPivot(model: Model, pivot: CFrame)
+	local primary = model.PrimaryPart
+	if primary then
+		primary.PivotOffset = primary.CFrame:ToObjectSpace(pivot)
+	else
+		model.WorldPivot = pivot
+	end
+end
+
+-- Moves the pivot to the bottom center of the model's bounding box.
+local function pivotAtBottom(model: Model)
+	local box, size = model:GetBoundingBox()
+	setPivot(model, CFrame.new((box * CFrame.new(0, -size.Y / 2, 0)).Position))
+end
+
 local function normalize(name: string, model: Model, spec: Spec)
 	model.Name = name
 	-- Scale imported meshes to the canonical size the game is designed around.
@@ -401,10 +418,8 @@ local function normalize(name: string, model: Model, spec: Spec)
 	end
 
 	-- Pivot at the bottom center so `PivotTo(CFrame.new(groundPoint))` sits the prop on the ground.
-	local boxCFrame, boxSize = model:GetBoundingBox()
-	local pivot = CFrame.new((boxCFrame * CFrame.new(0, -boxSize.Y / 2, 0)).Position)
 	model.PrimaryPart = largest
-	model.WorldPivot = pivot
+	pivotAtBottom(model)
 	if spec.PostProcess then
 		spec.PostProcess(model)
 	end
@@ -449,6 +464,7 @@ function MeshLibrary.Get(name: string, options: GetOptions?): Model
 	local opts = options or {}
 	if opts.Scale and opts.Scale ~= 1 then
 		model:ScaleTo(model:GetScale() * opts.Scale)
+		pivotAtBottom(model)
 	end
 	if opts.Colors then
 		for _, descendant in model:GetDescendants() do

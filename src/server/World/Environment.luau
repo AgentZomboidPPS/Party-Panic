@@ -44,41 +44,43 @@ local function setupSky()
 	terrain:SetMaterialColor(Enum.Material.Grass, rgb(110, 200, 95))
 	terrain:SetMaterialColor(Enum.Material.LeafyGrass, rgb(90, 185, 85))
 	terrain:SetMaterialColor(Enum.Material.Sand, rgb(250, 225, 170))
-	terrain:SetMaterialColor(Enum.Material.Rock, rgb(150, 135, 160))
+	terrain:SetMaterialColor(Enum.Material.Rock, rgb(150, 145, 135))
 	terrain:SetMaterialColor(Enum.Material.Ground, rgb(150, 110, 80))
 end
 
-local function lobbyTerrain()
+local function lobbyTerrain(plazaRadius: number)
 	local terrain = workspace.Terrain
 	local rng = Random.new(7)
 
-	-- Ground under the plaza and the walkable lawn (grass blades come from Terrain.Decoration).
-	terrain:FillCylinder(CFrame.new(0, -6, 0), 12, 215, Enum.Material.Ground)
-	terrain:FillCylinder(CFrame.new(0, -1.8, 0), 3, 210, Enum.Material.Grass) -- surface at y = -0.3
+	-- Lawn around the plaza (grass blades come from Terrain.Decoration).
+	terrain:FillCylinder(CFrame.new(0, -8, 0), 14, 330, Enum.Material.Ground)
+	terrain:FillCylinder(CFrame.new(0, -1.8, 0), 3, 325, Enum.Material.Grass) -- surface at y = -0.3
+	-- Carve it away under the plaza disc so grass never grows through the floor.
+	terrain:FillCylinder(CFrame.new(0, 3, 0), 10, plazaRadius + 1, Enum.Material.Air)
 
-	-- Rolling hills just outside the boundary.
-	for index = 1, 34 do
-		local angle = index / 34 * math.pi * 2 + rng:NextNumber(-0.06, 0.06)
-		local distance = rng:NextNumber(225, 290)
-		local radius = rng:NextNumber(30, 52)
+	-- Soft rolling hills just past the trees, so the view ends in green, not a flat horizon.
+	for index = 1, 30 do
+		local angle = index / 30 * math.pi * 2 + rng:NextNumber(-0.05, 0.05)
+		local distance = rng:NextNumber(170, 230)
+		local radius = rng:NextNumber(38, 62)
 		local center =
-			Vector3.new(math.cos(angle) * distance, -radius * rng:NextNumber(0.45, 0.7), math.sin(angle) * distance)
-		terrain:FillBall(center, radius, if index % 5 == 0 then Enum.Material.LeafyGrass else Enum.Material.Grass)
+			Vector3.new(math.cos(angle) * distance, -radius * rng:NextNumber(0.55, 0.75), math.sin(angle) * distance)
+		terrain:FillBall(center, radius, if index % 4 == 0 then Enum.Material.LeafyGrass else Enum.Material.Grass)
 	end
 
-	-- A lake with sandy shores, visible from the plaza across the hedges.
-	local lake = Vector3.new(-250, 0, 210)
-	terrain:FillCylinder(CFrame.new(lake + Vector3.new(0, -5, 0)), 8, 105, Enum.Material.Sand)
-	terrain:FillCylinder(CFrame.new(lake + Vector3.new(0, -3.5, 0)), 7, 92, Enum.Material.Water)
+	-- A lake with sandy shores, visible from the parkour deck.
+	local lake = Vector3.new(-170, 0, 150)
+	terrain:FillCylinder(CFrame.new(lake + Vector3.new(0, -5, 0)), 8, 62, Enum.Material.Sand)
+	terrain:FillCylinder(CFrame.new(lake + Vector3.new(0, -3.5, 0)), 7, 54, Enum.Material.Water)
 
-	-- Distant mountains frame the horizon.
+	-- Big grassy mountains far away frame the horizon (rock only peeks out low on the sides).
 	for index = 1, 12 do
 		local angle = index / 12 * math.pi * 2 + 0.3
-		local distance = rng:NextNumber(520, 650)
-		local radius = rng:NextNumber(90, 150)
-		local center = Vector3.new(math.cos(angle) * distance, -radius * 0.35, math.sin(angle) * distance)
+		local distance = rng:NextNumber(560, 680)
+		local radius = rng:NextNumber(100, 160)
+		local center = Vector3.new(math.cos(angle) * distance, -radius * 0.45, math.sin(angle) * distance)
 		terrain:FillBall(center, radius, Enum.Material.Rock)
-		terrain:FillBall(center + Vector3.new(0, radius * 0.25, 0), radius * 0.82, Enum.Material.Grass)
+		terrain:FillBall(center + Vector3.new(0, radius * 0.12, 0), radius * 0.97, Enum.Material.Grass)
 	end
 end
 
@@ -116,9 +118,9 @@ local function skyIslands()
 	end
 end
 
-function Environment.Build()
+function Environment.Build(plazaRadius: number)
 	setupSky()
-	lobbyTerrain()
+	lobbyTerrain(plazaRadius)
 	skyIslands()
 end
 

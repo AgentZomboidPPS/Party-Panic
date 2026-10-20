@@ -13,5 +13,9 @@
   "mesh:Treasure": 73358707534847,
   "mesh:Tree": 114892679986038,
   "mesh:Trophy": 87726610725779,
-  "mesh:YeetGlove": 113241943219410
+  "mesh:YeetGlove": 113241943219410,
+  "music:Lobby": 125330857433697,
+  "music:Lobby2": 101866514278416,
+  "music:Round": 74689013738140,
+  "sprite:SfxSprite": 135145103433440
 }

@@ -2,6 +2,7 @@
 Luau execution, so lobby changes can be previewed without publishing a place version.
 
     python3 tools/preview/bundle.py > /tmp/task.luau
+    python3 tools/preview/bundle.py my_check.luau > /tmp/task.luau   # run your own script instead
 """
 
 import re
@@ -36,8 +37,9 @@ def main():
         out.append(f'__modules["{name}"] = function()')
         out.append(module_source(name))
         out.append("end")
+    script = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "tools" / "preview" / "dump_world.luau"
     out.append("do")
-    out.append((ROOT / "tools" / "preview" / "dump_world.luau").read_text())
+    out.append(script.read_text())
     out.append("end")
     sys.stdout.write("\n".join(out) + "\n")
 

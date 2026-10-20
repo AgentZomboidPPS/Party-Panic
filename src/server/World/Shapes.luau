@@ -8,6 +8,7 @@
 -- a plain part. If CSG is unavailable for any reason the module falls back to plain parts, so the
 -- game always works.
 
+local GeometryService = game:GetService("GeometryService")
 local HttpService = game:GetService("HttpService")
 local ServerStorage = game:GetService("ServerStorage")
 
@@ -42,37 +43,55 @@ local function piece(size: Vector3, cframe: CFrame, shape: Enum.PartType?): Base
 	})
 end
 
--- Unions `parts` into one UnionOperation (or returns nil when CSG fails).
-local function union(parts: { BasePart }): BasePart?
-	if failures >= MAX_FAILURES or #parts == 0 then
-		for _, part in parts do
+-- Unions `parts` into one UnionOperation, then cuts `cutters` out of it (or returns nil when CSG
+-- fails). Every piece is destroyed afterwards.
+local function union(parts: { BasePart }, cutters: { BasePart }?): BasePart?
+	local all = table.clone(parts)
+	if cutters then
+		for _, cutter in cutters do
+			table.insert(all, cutter)
+		end
+	end
+	local function cleanUp()
+		for _, part in all do
 			part:Destroy()
 		end
+	end
+	if failures >= MAX_FAILURES or #parts < 2 then
+		cleanUp()
 		return nil
 	end
 	local first = parts[1]
 	local rest = table.move(parts, 2, #parts, 1, {})
-	local ok, result = pcall(function()
+	local ok, result = pcall(function(): BasePart
+		if cutters and #cutters > 0 then
+			-- Subtracting from a fresh BasePart:UnionAsync result fails on servers ("missing child
+			-- data"), so cut shapes go through GeometryService for both steps.
+			local options = { SplitApart = false }
+			local merged = GeometryService:UnionAsync(first, rest, options)[1]
+			local cut = GeometryService:SubtractAsync(merged, cutters, options)[1]
+			merged:Destroy()
+			return cut :: BasePart
+		end
 		return first:UnionAsync(rest, Enum.CollisionFidelity.Default, Enum.RenderFidelity.Automatic)
 	end)
 	if ok and result and Shapes.RecordPieces then
 		local pieces = {}
-		for _, part in parts do
+		for _, part in all do
 			local relative = result.CFrame:ToObjectSpace(part.CFrame)
-			table.insert(
-				pieces,
+			local isCutter = if table.find(parts, part) then 0 else 1
+			local entry =
 				{ (part :: Part).Shape.Value, part.Size.X, part.Size.Y, part.Size.Z, relative:GetComponents() }
-			)
+			table.insert(entry, isCutter)
+			table.insert(pieces, entry)
 		end
 		local size = result.Size
 		result:SetAttribute("PP_Pieces", HttpService:JSONEncode({ size = { size.X, size.Y, size.Z }, pieces = pieces }))
 	end
-	for _, part in parts do
-		part:Destroy()
-	end
+	cleanUp()
 	if not ok or not result then
 		failures += 1
-		warn(`[Shapes] CSG union failed ({failures}/{MAX_FAILURES}), using plain parts: {result}`)
+		warn(`[Shapes] CSG failed ({failures}/{MAX_FAILURES}), using plain parts: {result}`)
 		return nil
 	end
 	local unionPart = result :: UnionOperation
@@ -225,8 +244,22 @@ function Shapes.Capsule(length: number, diameter: number, props: Props?): BasePa
 	end, props)
 end
 
--- A rounded arch opening along Z. `ground` is where its feet stand; the arch is positioned from
--- its real bounding box, so it never sinks into the floor whatever proportions it ends up with.
+-- Pieces of a "tombstone" (a rectangle with a round top) standing on y = `bottom`, facing Z.
+local function tombstonePieces(width: number, top: number, depth: number, bottom: number): { BasePart }
+	local radius = width / 2
+	local boxTop = math.max(bottom + 0.5, top - radius)
+	return {
+		piece(Vector3.new(width, boxTop - bottom, depth), CFrame.new(0, (boxTop + bottom) / 2, 0)),
+		piece(
+			Vector3.new(depth, width, width),
+			CFrame.new(0, boxTop, 0) * CFrame.Angles(0, math.rad(90), 0),
+			Enum.PartType.Cylinder
+		),
+	}
+end
+
+-- A smooth rounded arch opening along Z: an outer tombstone with an inner one cut out. `ground`
+-- is where its feet stand; it's positioned from its real bounding box, so it never sinks.
 function Shapes.Arch(
 	width: number,
 	height: number,
@@ -236,26 +269,11 @@ function Shapes.Arch(
 	props: Props?
 ): BasePart
 	local part = fromTemplate(key("Arch", width, height, thickness, depth), function()
-		local radius = width / 2 - thickness / 2
-		local legHeight = math.max(0.5, height - radius - thickness / 2)
-		local parts = {}
-		for _, side in { -1, 1 } do
-			table.insert(
-				parts,
-				piece(Vector3.new(thickness, legHeight, depth), CFrame.new(side * radius, legHeight / 2, 0))
-			)
-		end
-		local segments = 14
-		local segmentLength = math.pi * radius / segments * 1.25
-		for index = 0, segments - 1 do
-			local angle = math.pi * (index + 0.5) / segments
-			local position = Vector3.new(math.cos(angle) * radius, legHeight + math.sin(angle) * radius, 0)
-			table.insert(
-				parts,
-				piece(Vector3.new(thickness, segmentLength, depth), CFrame.new(position) * CFrame.Angles(0, 0, angle))
-			)
-		end
-		return union(parts)
+		local inner = width - 2 * thickness
+		return union(
+			tombstonePieces(width, height, depth, 0),
+			tombstonePieces(inner, height - thickness, depth + 2, -1)
+		)
 	end, function()
 		return Build.Part({ Size = Vector3.new(width, thickness, depth) })
 	end, props)

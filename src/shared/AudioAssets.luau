@@ -3,11 +3,11 @@
 
 return {
 	-- One upload holding every sound effect (see src/shared/SfxSprite.luau for the offsets).
-	SfxSprite = 0,
+	SfxSprite = 135145103433440,
 	Music = {
-		Lobby = 0,
-		Lobby2 = 0,
-		Round = 0,
+		Lobby = 125330857433697,
+		Lobby2 = 101866514278416,
+		Round = 74689013738140,
 	},
 	Sfx = {
 		VoteOpen = 0,
