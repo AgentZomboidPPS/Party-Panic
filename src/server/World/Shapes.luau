@@ -45,7 +45,15 @@ end
 
 -- Unions `parts` into one UnionOperation, then cuts `cutters` out of it (or returns nil when CSG
 -- fails). Every piece is destroyed afterwards.
-local function union(parts: { BasePart }, cutters: { BasePart }?): BasePart?
+--
+-- A cut shape comes from GeometryService, whose result takes the CFrame of the first part rather
+-- than the center of its bounds (BasePart:UnionAsync results are centered). So cut shapes pass
+-- `center`, the middle of their final bounds: a speck placed there goes first, which puts the
+-- result's CFrame where every caller expects it. The speck must sit inside a cutter or the solid.
+local function union(parts: { BasePart }, cutters: { BasePart }?, center: CFrame?): BasePart?
+	if center then
+		table.insert(parts, 1, piece(Vector3.one * 0.05, center))
+	end
 	local all = table.clone(parts)
 	if cutters then
 		for _, cutter in cutters do
@@ -270,10 +278,10 @@ function Shapes.Arch(
 ): BasePart
 	local part = fromTemplate(key("Arch", width, height, thickness, depth), function()
 		local inner = width - 2 * thickness
-		return union(
-			tombstonePieces(width, height, depth, 0),
-			tombstonePieces(inner, height - thickness, depth + 2, -1)
-		)
+		local cutters = tombstonePieces(inner, height - thickness, depth + 2, -1)
+		-- A wide, low arch's round top would bulge below its feet: cut off anything under them.
+		table.insert(cutters, piece(Vector3.new(width + 2, width, depth + 2), CFrame.new(0, -width / 2, 0)))
+		return union(tombstonePieces(width, height, depth, 0), cutters, CFrame.new(0, height / 2, 0))
 	end, function()
 		return Build.Part({ Size = Vector3.new(width, thickness, depth) })
 	end, props)

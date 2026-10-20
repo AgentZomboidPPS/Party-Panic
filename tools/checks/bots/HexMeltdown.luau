@@ -24,9 +24,15 @@ return function(env)
 		-- With the client half running, a sunk hex really is lower than where the server built it.
 		if env.client and not checkedClient and call and ctx:Now() > call.SinkAt + 1 and ctx:Now() < call.RiseAt then
 			for _, model in ctx.Arena:GetChildren() do
-				if model:IsA("Model") and model:GetAttribute("ColorIndex") and model:GetAttribute("ColorIndex") ~= call.Color then
+				if
+					model:IsA("Model")
+					and model:GetAttribute("ColorIndex")
+					and model:GetAttribute("ColorIndex") ~= call.Color
+				then
 					local cap = model:FindFirstChild("Cap")
-					env.note(`client check: hex {model.Name} cap at {math.floor(cap.Position.Y - ctx.Origin.Y)} (0 = resting)`)
+					env.note(
+						`client check: hex {model.Name} cap at {math.floor(cap.Position.Y - ctx.Origin.Y)} (0 = resting)`
+					)
 					checkedClient = true
 					break
 				end
@@ -70,7 +76,9 @@ return function(env)
 					if hex and distance < 7 and hex.ColorIndex ~= call.Color then
 						falls += 1
 						env.Move(player, position - Vector3.new(0, 30, 0))
-						env.note(`{player.Name} fell (stood on color {hex.ColorIndex}, call {call.Color}), calls so far {calls}, falls {falls}`)
+						env.note(
+							`{player.Name} fell (stood on color {hex.ColorIndex}, call {call.Color}), calls so far {calls}, falls {falls}`
+						)
 					end
 				end
 			end

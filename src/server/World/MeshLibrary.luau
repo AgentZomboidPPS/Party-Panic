@@ -321,6 +321,48 @@ local SPECS: { [string]: Spec } = {
 			pillar(m, "Stripe", 1.12, 0.35, Vector3.new(0, 1.55, 0))
 		end,
 	},
+	-- Backdrop for the lava arenas; its lava runs face -Z.
+	Volcano = {
+		Height = 62,
+		Shadow = false,
+		Palette = { Rock = rgb(62, 46, 52), Lava = rgb(255, 120, 40) },
+		Materials = { Rock = Enum.Material.Basalt, Lava = Enum.Material.Neon },
+		Fallback = function(m)
+			for index = 0, 3 do
+				pillar(m, "Rock", 100 - index * 24, 16, Vector3.new(0, 8 + index * 15, 0))
+			end
+			pillar(m, "Lava", 22, 0.6, Vector3.new(0, 61.7, 0))
+		end,
+	},
+	Spire = {
+		Height = 20.4,
+		Collide = true,
+		Palette = { Rock = rgb(66, 50, 56), Glow = rgb(255, 130, 40) },
+		Materials = { Rock = Enum.Material.Basalt, Glow = Enum.Material.Neon },
+		Fallback = function(m)
+			blob(m, "Rock", Vector3.new(7, 20.4, 7), Vector3.new(0, 10.2, 0))
+			blob(m, "Rock", Vector3.new(4, 11, 4), Vector3.new(4, 5.5, 1.5))
+			ball(m, "Glow", 1.6, Vector3.new(3, 0.3, -2.6))
+		end,
+	},
+	-- Turns Fire Rope's rope; stands in the YZ plane with its axle along X.
+	FireWheel = {
+		Height = 22.7,
+		Palette = { Rim = rgb(70, 55, 62), Spokes = rgb(255, 140, 50), Hub = rgb(255, 200, 60) },
+		Materials = { Rim = Enum.Material.Metal, Spokes = Enum.Material.Neon },
+		Fallback = function(m)
+			roller(m, "Rim", 22.7, 1.2, Vector3.new(0, 11.35, 0))
+			for spoke = 0, 3 do
+				Build.Part({
+					Name = "Spokes",
+					Size = Vector3.new(1.4, 19, 1),
+					CFrame = CFrame.new(-0.7, 11.35, 0) * CFrame.Angles(spoke * math.pi / 4, 0, 0),
+					Parent = m,
+				})
+			end
+			roller(m, "Hub", 3.4, 2.6, Vector3.new(0, 11.35, 0))
+		end,
+	},
 }
 
 local templates: { [string]: Model } = {}

@@ -637,6 +637,98 @@ def traffic_cone():
     return {"Cone": merge(base, cone), "Stripe": merge(*stripes)}
 
 
+def volcano():
+    """Backdrop volcano: a craggy faceted cone with gullies, a crater lip, a lava pool in the crater
+    and lava runs pouring down the gullies on the front (-Z) side."""
+    rng = np.random.default_rng(21)
+    phases = rng.uniform(0, 2 * math.pi, 3)
+    directions = rng.normal(size=(9, 3))
+    directions /= np.linalg.norm(directions, axis=1, keepdims=True)
+    frequencies = rng.uniform(0.05, 0.12, 9)
+    offsets = rng.uniform(0, 2 * math.pi, 9)
+    top = 60.0
+
+    def slope_radius(y):
+        return 12.5 + 40.0 * (1 - np.minimum(y, top) / top) ** 1.35
+
+    def gullies(theta, y):
+        return 1 + 0.06 * np.sin(5 * theta + phases[0]) + 0.03 * np.sin(11 * theta + 0.06 * y + phases[1])
+
+    def crags(points):
+        # Lumpy rock: a few low-frequency waves in 3D, so ledges run every which way (not just down).
+        return 1 + 0.11 * np.mean(np.sin(points @ directions.T * frequencies + offsets), axis=1)
+
+    def surface(theta, y, extra=0.0):
+        r = slope_radius(y) * gullies(theta, y)
+        point = np.array([[np.cos(theta) * r, y, np.sin(theta) * r]])
+        r = r * crags(point)[0] + extra
+        return (math.cos(theta) * r, y, math.sin(theta) * r)
+
+    profile = [(slope_radius(y), y) for y in np.linspace(0, top, 13)]
+    profile += [(11.8, top + 0.8), (10.4, top + 0.3), (8.4, top - 1.8), (6.6, top - 3.4), (0.0, top - 4.0)]
+    rock = lathe(profile, 40)
+    angle = np.arctan2(rock.v[:, 2], rock.v[:, 0])
+    rock.v[:, [0, 2]] *= gullies(angle, rock.v[:, 1])[:, None]
+    rock.v[:, [0, 2]] *= crags(rock.v)[:, None]
+    rock.smooth = False
+
+    pool = cylinder(9.6, 0.6, 32).translate(0, top - 3.0, 0)
+    runs = []
+    for start in (205, 248, 292, 335):
+        # Snap each run into the nearest gully (where the slope dips inward).
+        candidates = np.radians(np.linspace(start - 8, start + 8, 33))
+        theta0 = candidates[np.argmin(gullies(candidates, top - 6))]
+        end = rng.uniform(4, 24)
+        lip = 11.0 * gullies(theta0, top) * crags(np.array([[math.cos(theta0) * 11.0, top, math.sin(theta0) * 11.0]]))[0]
+        points = [(math.cos(theta0) * lip, top + 1.1, math.sin(theta0) * lip)]  # spilling over the crater lip
+        for y in np.linspace(top - 0.4, end, 18):
+            points.append(surface(theta0 + 0.035 * math.sin(0.18 * y), y, 0.5))
+        runs.append(tube(points, 1.05, 8))
+    return {"Rock": rock, "Lava": merge(pool, *runs)}
+
+
+def spire():
+    """A cluster of jagged volcanic rock spikes for crater rims, faceted like the boulder, with a few
+    glowing lava blobs at the foot."""
+    spikes = []
+    for x, z, height, radius, lean_x, lean_z, seed in (
+        (0.0, 0.0, 20.0, 4.6, 0.10, -0.05, 1),
+        (4.3, 1.6, 12.5, 3.0, 0.24, 0.10, 2),
+        (-3.7, -1.3, 9.5, 2.7, -0.28, -0.12, 3),
+        (1.1, -3.8, 6.5, 2.1, 0.05, -0.30, 4),
+    ):
+        profile = [(radius, 0.0), (radius * 0.86, height * 0.18), (radius * 0.62, height * 0.42), (radius * 0.38, height * 0.68),
+                   (radius * 0.15, height * 0.9), (0.0, height)]
+        spike = organic_lathe(profile, 7, 0.2, waves=3, seed=seed)
+        bend = (spike.v[:, 1] / height) ** 2 * height
+        spike.v[:, 0] += lean_x * bend
+        spike.v[:, 2] += lean_z * bend
+        spikes.append(spike.translate(x, 0, z))
+    rock = merge(*spikes)
+    rock.smooth = False
+    blobs = merge(*(icosphere(r, 1, 0.3, seed=s).scale(1.0, 0.55, 1.0).translate(x, 0.2, z)
+                    for s, (x, z, r) in enumerate(((3.2, -2.6, 1.1), (-2.8, 2.4, 0.9), (5.6, -0.6, 0.7)))))
+    return {"Rock": rock, "Glow": blobs}
+
+
+def fire_wheel():
+    """The wheel that turns the fire rope: a studded iron rim, eight glowing spokes and a gold hub.
+    It stands in the YZ plane with its axle along X; the rope hangs off the rim's inner edge."""
+    major = 10.2
+    rim = [torus(major, 0.9, 64, 12), torus(major - 1.35, 0.32, 64, 8)]
+    rim += [icosphere(0.55, 1).translate(math.cos(a) * (major + 0.62), 0, math.sin(a) * (major + 0.62))
+            for a in np.linspace(0, 2 * math.pi, 16, endpoint=False)]
+    spokes = [tube([(math.cos(a) * 1.5, 0, math.sin(a) * 1.5), (math.cos(a) * (major - 0.7), 0, math.sin(a) * (major - 0.7))], 0.34, 8)
+              for a in np.linspace(0, 2 * math.pi, 8, endpoint=False) + math.pi / 8]
+    hub = merge(cylinder(1.7, 2.6, 28, 0.35).translate(0, -1.3, 0), cylinder(0.8, 3.6, 16, 0.2).translate(0, -1.8, 0))
+    lift = major + 1.17
+
+    def place(mesh: Mesh) -> Mesh:
+        return mesh.rotate("z", 90).translate(0, lift, 0)
+
+    return {"Rim": place(merge(*rim)), "Spokes": place(merge(*spokes)), "Hub": place(hub)}
+
+
 PROPS = {
     "ShoppingCart": shopping_cart,
     "YeetGlove": yeet_glove,
@@ -653,6 +745,9 @@ PROPS = {
     "LampPost": lamp_post,
     "GiftBox": gift_box,
     "Cone": traffic_cone,
+    "Volcano": volcano,
+    "Spire": spire,
+    "FireWheel": fire_wheel,
 }
 
 # Preview colors baked into the files' materials (the game recolors pieces by name anyway).
@@ -664,6 +759,7 @@ COLORS = {
     "Leaves": (80, 190, 90), "Balloon": (255, 90, 140), "String": (240, 240, 240), "Bench": (190, 130, 80),
     "Legs": (70, 70, 80), "Pole": (60, 60, 75), "Lamp": (255, 235, 180), "Box": (120, 90, 255),
     "Ribbon": (255, 220, 70), "Cone": (255, 130, 40), "Stripe": (250, 250, 250),
+    "Lava": (255, 120, 40), "Glow": (255, 130, 40), "Rim": (70, 55, 62), "Spokes": (255, 140, 50), "Hub": (255, 200, 60),
 }
 
 

@@ -127,7 +127,10 @@ local __playersShim
 
 local function __makeRig(name)
 	local ok, rig = pcall(function()
-		return RealPlayers:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), Enum.HumanoidRigType.R15)
+		return RealPlayers:CreateHumanoidModelFromDescription(
+			Instance.new("HumanoidDescription"),
+			Enum.HumanoidRigType.R15
+		)
 	end)
 	if not ok then
 		error("[harness] couldn't build a rig: " .. tostring(rig))
@@ -296,7 +299,11 @@ local function __dumpParts(roots)
 				n = item.Name,
 				s = { r(item.Size.X), r(item.Size.Y), r(item.Size.Z) },
 				cf = { cf:GetComponents() },
-				col = { math.floor(item.Color.R * 255 + 0.5), math.floor(item.Color.G * 255 + 0.5), math.floor(item.Color.B * 255 + 0.5) },
+				col = {
+					math.floor(item.Color.R * 255 + 0.5),
+					math.floor(item.Color.G * 255 + 0.5),
+					math.floor(item.Color.B * 255 + 0.5),
+				},
 				m = item.Material.Name,
 				t = r(item.Transparency),
 				sh = item.CastShadow,
@@ -466,6 +473,10 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt)
 			end
 			if dumpAt and not summary.dump and now - begin >= dumpAt then
 				local roots = { ctx.Arena }
+				local clientWorld = workspace:FindFirstChild("MiniGameClient")
+				if clientWorld then
+					table.insert(roots, clientWorld)
+				end
 				for _, player in __fakePlayers do
 					if player.Character then
 						table.insert(roots, player.Character)

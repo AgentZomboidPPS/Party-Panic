@@ -72,6 +72,12 @@ function Api.new(id: string)
 		Parent = playerGui,
 	})
 	self.Janitor:Add(self.Gui)
+	-- Parts the client half creates go here (removed with the round).
+	local world = Instance.new("Folder")
+	world.Name = "MiniGameClient"
+	world.Parent = workspace
+	self.World = world
+	self.Janitor:Add(world)
 	return self
 end
 

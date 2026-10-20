@@ -17,5 +17,8 @@
   "music:Lobby": 125330857433697,
   "music:Lobby2": 101866514278416,
   "music:Round": 74689013738140,
-  "sprite:SfxSprite": 135145103433440
+  "sprite:SfxSprite": 135145103433440,
+  "mesh:FireWheel": 122334341468700,
+  "mesh:Spire": 112375939660771,
+  "mesh:Volcano": 140199166711495
 }

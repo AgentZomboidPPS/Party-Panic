@@ -11,6 +11,7 @@ That's why mini-games check positions and distances on the server instead of rel
 """
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -84,19 +85,29 @@ def main():
     parser.add_argument("--seconds", type=float, default=0, help="stop after this many seconds (0 = game length)")
     parser.add_argument("--client", action="store_true", help="also run the client half as Bot1")
     parser.add_argument("--dump-at", type=float, default=None, help="snapshot the arena this many seconds into the round")
+    parser.add_argument("--map", help="write a line map (bundle line -> module) here for readable errors")
     args = parser.parse_args()
 
     out = [PRELUDE]
     paths = module_paths()
     if args.client:
         paths.update(client_paths())
+    line_map = []  # (first line of the module body in the bundle, module name)
+    line = PRELUDE.count("\n") + 1
     for module, path in paths.items():
         if module == "Shared/Remotes":
             continue  # replaced by the harness's recording stand-in
         is_init = path.name == "init.luau"
+        body = rewrite(module, path.read_text(), is_init)
         out.append(f'__modules["{module}"] = function()')
-        out.append(rewrite(module, path.read_text(), is_init))
+        line += 1
+        line_map.append((line, module))
+        out.append(body)
+        line += body.count("\n") + 1
         out.append("end")
+        line += 1
+    if args.map:
+        Path(args.map).write_text(json.dumps(line_map))
     bot_file = BOTS / f"{args.game}.luau"
     bot = bot_file.read_text() if bot_file.exists() else "return function() end"
     out.append("local __bot = (function()\n" + bot + "\nend)()")

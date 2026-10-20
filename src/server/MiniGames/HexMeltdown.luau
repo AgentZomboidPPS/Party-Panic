@@ -7,15 +7,14 @@
 -- server never needs their position, only the players', and the round's fall check knocks out
 -- anyone who sinks into the lava.
 
-local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 
 local ArenaKit = require(script.Parent.Kit.ArenaKit)
 local MiniGame = require(script.Parent.Kit.MiniGame)
+local Scenery = require(script.Parent.Kit.Scenery)
 local Build = require(script.Parent.Parent.World.Build)
-local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 local Shapes = require(script.Parent.Parent.World.Shapes)
 
 local HexMeltdown = MiniGame.Define("HexMeltdown")
@@ -98,92 +97,14 @@ function HexMeltdown:Prepare()
 	self.lastStomp = {} :: { [string]: number }
 	local origin = ctx.Origin.Position
 
-	-- Lava lake and its glow.
-	local lava = ArenaKit.Part(ctx, {
-		Name = "Lava",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(2, 200, 200),
-		CFrame = CFrame.new(origin - Vector3.new(0, LAVA_DROP, 0)) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = rgb(255, 110, 30),
-		Material = Enum.Material.CrackedLava,
-		CanCollide = false,
-		CanQuery = false,
-		CanTouch = false,
-	})
-	Build.Decor({
-		Name = "LavaGlow",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.4, 200, 200),
-		CFrame = CFrame.new(origin - Vector3.new(0, LAVA_DROP - 1.2, 0)) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = rgb(255, 140, 40),
-		Material = Enum.Material.Neon,
-		Transparency = 0.7,
-		Parent = ctx.Arena,
-	})
-	for index = 0, 5 do
-		local angle = index / 6 * math.pi * 2
-		local glow = Build.Decor({
-			Name = "Glow",
-			Size = Vector3.one,
-			Transparency = 1,
-			CFrame = CFrame.new(origin + Vector3.new(math.cos(angle) * 30, -LAVA_DROP + 6, math.sin(angle) * 30)),
-			Parent = ctx.Arena,
-		})
-		Build.Light(glow, rgb(255, 120, 40), 45, 2)
-	end
-	local embers = Instance.new("ParticleEmitter")
-	embers.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-	embers.Color = ColorSequence.new(rgb(255, 170, 60))
-	embers.LightEmission = 1
-	embers.Size = NumberSequence.new(0.35, 0)
-	embers.Lifetime = NumberRange.new(3, 5)
-	embers.Speed = NumberRange.new(3, 7)
-	embers.SpreadAngle = Vector2.new(20, 20)
-	embers.EmissionDirection = Enum.NormalId.Right -- the cylinder's +X faces up
-	embers.Rate = 25
-	embers.Parent = lava
-	CollectionService:AddTag(embers, "PP_Ambient") -- off for players with reduced effects
-
-	-- Volcanic rim of boulders far around the lake.
-	for index = 0, 13 do
-		local angle = index / 14 * math.pi * 2 + rng:NextNumber(-0.1, 0.1)
-		local distance = rng:NextNumber(70, 86)
-		MeshLibrary.Get("Boulder", {
-			Scale = rng:NextNumber(2.2, 3.6),
-			Colors = { Rock = rgb(70, 52, 58) },
-			CFrame = CFrame.new(
-				origin + Vector3.new(math.cos(angle) * distance, -LAVA_DROP - 2, math.sin(angle) * distance)
-			) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
-			Parent = ctx.Arena,
-		})
-	end
-
-	-- Dark volcanic peaks behind the referee close off the view.
-	for _, spec in { { -70, 125, 9 }, { -18, 150, 12 }, { 42, 130, 10 }, { 100, 104, 8 }, { -118, 96, 7 } } do
-		MeshLibrary.Get("Boulder", {
-			Scale = spec[3],
-			Colors = { Rock = rgb(56, 42, 48) },
-			CFrame = CFrame.new(origin + Vector3.new(spec[1], -LAVA_DROP - 10, -spec[2]))
-				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
-			Parent = ctx.Arena,
-		})
-	end
-	-- Heat shimmer rising off the lava.
-	local haze = Instance.new("ParticleEmitter")
-	haze.Texture = "rbxasset://textures/particles/smoke_main.dds"
-	haze.Color = ColorSequence.new(rgb(255, 160, 110), rgb(120, 90, 90))
-	haze.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 1),
-		NumberSequenceKeypoint.new(0.3, 0.86),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	haze.Size = NumberSequence.new(8, 16)
-	haze.Lifetime = NumberRange.new(5, 8)
-	haze.Speed = NumberRange.new(2, 4)
-	haze.EmissionDirection = Enum.NormalId.Right
-	haze.Rate = 5
-	haze.Parent = lava
-	CollectionService:AddTag(haze, "PP_Ambient")
+	-- A lava lake in a volcanic crater; volcanoes behind the referee close off the view.
+	local lake = origin - Vector3.new(0, LAVA_DROP, 0)
+	Scenery.LavaLake(ctx, lake, 200)
+	Scenery.Ground(ctx, lake)
+	Scenery.RockRim(ctx, lake, 96, 16, 0.9, 1.7)
+	Scenery.Volcano(ctx, lake + Vector3.new(-20, -2, -300), origin, 2.3)
+	Scenery.Volcano(ctx, lake + Vector3.new(260, -2, -220), origin, 1.4)
+	Scenery.Volcano(ctx, lake + Vector3.new(-290, -2, -160), origin, 1.1)
 
 	-- The hex grid: a white start hex in the middle, colored hexes around it.
 	local coords = {}
