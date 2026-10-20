@@ -1,7 +1,8 @@
 # Adding a mini-game
 
-Party Panic is built so a new mode is **one file plus one definition**. The round manager, voting,
-rewards, quests, results screen, spectating and cleanup all work automatically.
+Party Panic is built so a new mode is **a server module, a client half and a definition**. The round
+manager, voting, rewards, quests, results screen, spectating and cleanup all work automatically, for
+1 to 12 players.
 
 ## 1. Scaffold it
 
@@ -10,30 +11,42 @@ lune run tools/new-minigame HotPotato "Hot Potato" Survival
 lune run tools/new-minigame CaptureTheCake "Capture the Cake" Team --team
 ```
 
-Categories: `Survival`, `Race`, `Knockback`, `Reaction`, `Team`.
+Categories: `Survival`, `Race`, `Knockback`, `Reaction`, `Team`, `Luck`, `Versus`.
 
-This creates `src/server/MiniGames/HotPotato.luau` (a small but working game) and adds an entry
-to `src/shared/GameDefinitions.luau`. Fill in the entry's `Objective` and `Controls`: those lines
-appear on the vote cards and the rules screen.
+It creates a small but working game you can play right away:
 
-## 2. Test only your mode
+| File | What it is |
+| --- | --- |
+| `src/server/MiniGames/HotPotato.luau` | the rules (server) |
+| `src/client/MiniGames/HotPotato.luau` | the client half: HUD, controls, smooth visuals |
+| `src/server/World/Props/HotPotato.luau` | the mode's props (mesh specs with primitive fallbacks) |
+| `tools/meshgen/props/HotPotato.py` | the props' meshes |
+| `tools/checks/bots/HotPotato.luau` | a test bot for the real-server round harness |
 
-In `src/shared/Config.luau`:
+and an entry in `src/shared/GameDefinitions.luau`. Fill in its `Objective` and `Controls`: those
+lines appear on the vote cards and the rules screen.
 
-```lua
-Config.Debug = {
-	ForceGame = "HotPotato", -- Studio only: every vote offers just this mode
-	StudioIntermissionTime = 8,
-	...
-}
+## 2. Play it
+
+**On a real Roblox server, with 12 bots** (no Studio needed; this is how every mode is tested):
+
+```sh
+python3 tools/checks/round_harness.py HotPotato --players 12 --client --dump-at 8 --map map.json > round.luau
+python3 tools/preview/luau_task.py round.luau - round.json
+python3 tools/checks/summarize.py round.json map.json --dump arena.json
 ```
 
-Start `rojo serve`, connect the Rojo plugin, and press **Play** in Studio. With one player, Studio
-ignores minimum player counts, so you can test solo. Clear `ForceGame` when you're done.
+`--client` also runs the client half as Bot1. The summary shows errors (as `module:line`), how the
+round ended, the results, and whether the arena and shared state were cleaned up. The test server
+has **no physics**: bots move rigs with `PivotTo`, which is one more reason modes check positions
+instead of relying on `Touched`. Try 2 and 5 players too.
 
-## 3. Write the rules
+**In Studio:** set `Config.Debug.ForceGame = "HotPotato"` in `src/shared/Config.luau`, `rojo serve`,
+press Play. With one player Studio ignores minimum player counts. Clear `ForceGame` when done.
+Anything physical (jumping, rolling, steering) and anything on a phone (tilt, touch) has to be
+checked this way.
 
-A mode extends `Kit/MiniGame` and usually implements just two methods:
+## 3. Write the rules (server)
 
 ```lua
 local MyGame = MiniGame.Define("MyGame", { Results = "Score" }) -- "Survival" | "Score" | "Team"
@@ -54,21 +67,78 @@ Optional overrides: `:Stop(reason)`, `:GetResults()`, `:Cleanup()`.
 | Falling behavior | `ctx.RespawnMode = "Eliminate"` or `"Respawn"` + `ctx.Hooks.Respawn = function(player) return cframe end` |
 | End early | `ctx.EndWhenOneLeft = true`, or `ctx:End("reason")` |
 | Score | `ctx:AddScore(player, n)`, `ctx:SetScoreText(player, "3 laps")` |
-| Teams | `ctx:SetTeam(player, "Red")`, `ctx:AddTeamScore("Red", n)` |
+| Teams | `ctx:AssignTeams({ "Red", "Blue" })`, `ctx:SetTeam(player, "Red")`, `ctx:AddTeamScore("Red", n)`, `Teams.CountFor(n, perTeam)` |
+| Controls from clients | `ctx:OnAction("Pump", function(player, ...) end, { Interval = 0.1 })` - validate everything |
+| State for clients | `ctx:SetShared(key, v)`, `ctx:SetSharedJSON(key, t)`, `ctx:SetPlayerShared(player, key, v)` |
+| Cues for clients | `ctx:Fire(player or list or nil, "Name", ...)` |
+| Models for clients | `ctx:ShareTemplate("Fruit", MeshLibrary.Get("Fruit"))` (client: `api:Template("Fruit")`) |
+| Server clock | `ctx:Now()` - the same clock clients see, for shared schedules |
 | HUD | `ctx:SetStatus("Survivors: 4")`, `ctx:Announce("Watch out!", "warning")`, `ctx:Sound("HazardWarning")` |
-| Timing | `ctx:Loop(fn)` (fn returns seconds to wait), `ctx:Heartbeat(fn)`, `ctx:Delay(t, fn)`, `ctx:Progress()` (0 to 1) |
+| Timing | `ctx:Loop(fn)` (fn returns seconds to wait), `ctx:Heartbeat(fn)`, `ctx:Delay(t, fn)`, `ctx:Progress()` |
+| Short freeze | `ctx:Stun(player, seconds)`, `ctx:Freeze(player, true)`, `ctx:SetWalkSpeed(player, n)` |
 
-Everything scheduled through the context stops by itself when the round ends, and the arena and
-any tools are cleaned up automatically, so a mode can't leak into the next round.
+Everything scheduled through the context stops by itself when the round ends, and the arena,
+shared state and templates are cleaned up automatically, so a mode can't leak into the next round.
 
-### Building blocks
+**The house rules:** the server owns scores, eliminations, timing and positions. A client only asks
+(`api:Action`) and draws. Never trust an amount a client sends; time it on the server, with a
+little leeway for ping (`player:GetNetworkPing()`), like Fire Rope and Honey Trap do. Moving
+hazards are animated on clients from a shared schedule (smooth), and the server checks player
+positions against the same schedule.
 
-- `Kit/ArenaKit`: spawn layouts, hazard warning circles and strips, signs, distance helpers.
-- `World/Shapes`: rounded boxes, slabs, capsules, arches (soft geometry, not blocks).
-- `World/MeshLibrary`: mesh props such as `MeshLibrary.Get("Boulder", { CFrame = ..., Parent = ctx.Arena })`.
-- `Kit/Glove`: a server-validated melee tool with knockback (used by Yeet Arena and Greedy Goblins).
+## 4. The client half
 
-## Quality bar (from the design outline)
+```lua
+function MyGame.Start(api)
+	api:Mood({ Tint = ..., Saturation = 0.15 })           -- this player's color grading for the arena
+	local hud = api:TopHud()                               -- under the round banner, every screen size
+	local label = UIKit.Label({ Position = UDim2.new(0.5, 0, 0, api:HudY()), Parent = hud, ... })
+	local pump = api:Button({ Text = "PUMP", Key = Enum.KeyCode.E })  -- beside the jump button on phones
+	pump.Pressed:Connect(function() api:Action("PumpDown") end)
+	api:OnShared("Air", function(value) ... end)
+	api:RenderStep(function(dt) ... end)                   -- animate from api:Now() and shared state
+end
+```
+
+Also: `api:Shared/SharedJSON/OnShared`, `api:Mine/OnMine` (per-player state), `api:OnEvent`,
+`api:Hint(text, y)`, `api:Template(name)`, `api:Sound(name)`, `api:Effect(name, position)`,
+`api:Tilt()` (phone tilt), `api:World` (a folder for client-made parts), `api:Track(thing)`.
+
+**HUD rules:** everything goes in `api:TopHud()` at `y >= api:HudY()` so it never covers the
+round banner, status line or team scores; action buttons come from `api:Button`. Keep text short
+and big, and pair every color with a shape or icon. Check the layout on phones (below).
+
+## 5. Props and meshes
+
+Detailed meshes, not blocks. A mode's props live in its own files, so modes never edit the same
+file:
+
+```sh
+python3 tools/meshgen/generate_meshes.py --only Pump,Balloon          # assets/meshes/*.glb
+<blender python> tools/preview/meshpreview.py out.png Pump Balloon    # look at them
+python3 tools/upload_assets.py --user-id <owner> --what meshes --only Pump,Balloon
+python3 tools/checks/asset_status.py --meshes                         # approved for every player?
+```
+
+The upload writes each `AssetId` into `World/Props/<Mode>.luau`. Until a mesh is uploaded and
+approved by moderation the game uses its `Fallback`. Build meshes facing **-Z** (their front);
+MeshLibrary corrects for Roblox's importer, which turns glTF models half a turn.
+`Kit/Scenery` has ready-made settings: `Meadow`, `LavaLake`, `Ground`, `Volcano`, `RockRim`.
+
+## 6. Check it looks right
+
+```sh
+python3 tools/preview/render.py arena.json out --views player,overview --cameras cams.json   # the arena
+python3 tools/preview/zfight.py arena.json                                                   # flicker
+python3 tools/checks/round_harness.py MyGame --client --touch --ui-at 3,10 ... > ui.luau      # phone HUD
+python3 tools/checks/ui_render.py ui.json out --sizes all                                    # draw + check
+```
+
+`render.py` needs Blender's `bpy` (Python 3.11). `ui_render.py` draws the player's screen at PC,
+phone, small phone and tablet sizes with Roblox's buttons, thumbstick and jump button, and lists
+overlaps and anything off-screen.
+
+## Quality bar
 
 A mode should only join the live pool when it's fun in repeated tests, easy to explain in one
 sentence, stable with a full server, and has a clear end condition. Use `Enabled = false` in its

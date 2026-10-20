@@ -40,9 +40,9 @@ SIZES = {
 }
 SIZE_GROUPS = {"phone": ["phone", "phone-small"], "pc": ["pc", "pc-hd"], "all": list(SIZES)}
 
-EMOJI = re.compile(
-    "[\U0001F000-\U0001FAFF☀-➿⬀-⯿←-⇿⌀-⏿️‍■-◿♠-♧]"
-)
+# Pictographs go to the emoji font; plain symbols (arrows, shapes, suits, stars) stay in DejaVu,
+# which has them, like Roblox's fonts do.
+EMOJI = re.compile("[\\U0001F000-\\U0001FAFF\\u2600-\\u2604\\u2606-\\u265F\\u2668-\\u27BF\\u2B00-\\u2BFF\\u2300-\\u23FF\\uFE0F\\u200D]")
 _font_cache: dict = {}
 
 
