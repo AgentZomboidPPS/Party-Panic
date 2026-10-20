@@ -1,5 +1,6 @@
 -- Results screen (design doc §12): placement, standings, an itemized reward breakdown and a
--- "next vote soon" cue. Short and skippable; it closes itself when the lobby returns.
+-- "next vote soon" cue. Short and skippable; it closes itself when the lobby returns. Bots' names
+-- in the standings are a little softer than people's (Participants).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -10,6 +11,7 @@ local Placement = require(Shared.Logic.Placement)
 local Remotes = require(Shared.Remotes)
 
 local AudioController = require(script.Parent.AudioController)
+local Participants = require(script.Parent.Parent.Participants)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -48,8 +50,11 @@ local function show(data)
 	clear(standings)
 	for index, entry in data.Standings do
 		local isMe = entry.UserId == game:GetService("Players").LocalPlayer.UserId
+		local place = MEDALS[entry.Place] or Placement.Ordinal(entry.Place)
+		local name = Participants.ListName(entry.Name, Participants.IsBotId(entry.UserId))
 		UIKit.Label({
-			Text = `{MEDALS[entry.Place] or Placement.Ordinal(entry.Place)}  {entry.Name}  ·  {entry.ScoreText}`,
+			Text = `{place}  {name}  ·  {Participants.Escape(entry.ScoreText or "")}`,
+			RichText = true,
 			TextSize = 21,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,

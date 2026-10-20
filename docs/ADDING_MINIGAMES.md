@@ -104,6 +104,11 @@ Also: `api:Shared/SharedJSON/OnShared`, `api:Mine/OnMine` (per-player state), `a
 `api:Hint(text, y)`, `api:Template(name)`, `api:Sound(name)`, `api:Effect(name, position)`,
 `api:Tilt()` (phone tilt), `api:World` (a folder for client-made parts), `api:Track(thing)`.
 
+**Bots play too:** they aren't in `Players`, so never look people up with `Players:GetPlayers()`.
+`api:Participants()` lists everyone in the round (players and bots: `DisplayName`, `UserId`,
+`IsBot`, `:GetAttribute()`, `:Character()`), and `api:CharacterOf(userId)` finds anyone's character
+from a UserId the server shared.
+
 **HUD rules:** everything goes in `api:TopHud()` at `y >= api:HudY()` so it never covers the
 round banner, status line or team scores; action buttons come from `api:Button`. Keep text short
 and big, and pair every color with a shape or icon. Check the layout on phones (below).

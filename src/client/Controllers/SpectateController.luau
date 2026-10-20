@@ -1,11 +1,13 @@
 -- Spectating (design doc §11 "Spectator options"): watch remaining players during a round,
--- cycle between them, and return to your own camera automatically at results.
+-- cycle between them, and return to your own camera automatically at results. Bots in the round
+-- can be watched too (Participants).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameState = require(ReplicatedStorage.Shared.GameState)
 
+local Participants = require(script.Parent.Parent.Participants)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -19,17 +21,22 @@ local openButton: TextButton
 local index = 1
 local spectating = false
 
-local function targets(): { Player }
+local function targets(): { Participants.Participant }
 	local list = {}
-	for _, other in Players:GetPlayers() do
-		if other ~= player and other:GetAttribute("PP_InRound") and other:GetAttribute("PP_Alive") then
+	for _, other in Participants.InRound() do
+		if not other.IsLocal and other:GetAttribute("PP_Alive") then
 			table.insert(list, other)
 		end
 	end
 	table.sort(list, function(a, b)
-		return a.UserId < b.UserId
+		return a.UserId > b.UserId -- players first, then bots in the order they arrived
 	end)
 	return list
+end
+
+local function humanoidOf(target: Participants.Participant): Humanoid?
+	local character = target:Character()
+	return if character then character:FindFirstChildOfClass("Humanoid") else nil
 end
 
 local function resetCamera()
@@ -54,7 +61,7 @@ local function focus()
 	end
 	index = ((index - 1) % #list) + 1
 	local target = list[index]
-	local humanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+	local humanoid = humanoidOf(target)
 	if humanoid then
 		workspace.CurrentCamera.CameraSubject = humanoid
 	end
@@ -141,15 +148,22 @@ function SpectateController.Start(context)
 		end
 	end)
 
+	-- The "you're out" panel (RoundController) has its own Spectate button in the same spot.
+	local outPanel = context.Hud:FindFirstChild("OutPanel") :: GuiObject?
 	local function refresh()
 		local phase = GameState.Get("Phase")
 		local roundLive = phase == "InRound"
 		if not roundLive and spectating then
 			stop()
 		end
-		openButton.Visible = roundLive and not spectating and not (State.InRound() and State.Alive()) and #targets() > 0
+		openButton.Visible = roundLive
+			and not spectating
+			and not (State.InRound() and State.Alive())
+			and not (outPanel and outPanel.Visible)
+			and #targets() > 0
 	end
 	GameState.Changed("Phase", refresh)
+	Participants.Changed:Connect(refresh)
 	task.spawn(function()
 		while true do
 			task.wait(0.5)
@@ -160,7 +174,8 @@ function SpectateController.Start(context)
 				local subject = workspace.CurrentCamera.CameraSubject
 				local watching = false
 				for _, other in list do
-					if other.Character and subject and subject:IsDescendantOf(other.Character) then
+					local character = other:Character()
+					if character and subject and subject:IsDescendantOf(character) then
 						watching = true
 					end
 				end
