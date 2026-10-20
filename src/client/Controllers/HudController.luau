@@ -34,17 +34,24 @@ local PHASE_ICONS = {
 local player = Players.LocalPlayer
 local badges: { [string]: TextLabel } = {}
 
+-- Phones and tablets without a keyboard: the HUD keeps clear of the thumbstick and jump button.
+local function isTouch(): boolean
+	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+end
+
 local function buildProfileChip(parent: Instance)
+	-- A little narrower on phones, so it never runs under the round banner on small screens.
+	local width = if isTouch() then 290 else 310
 	local holder = UIKit.new("Frame", {
 		Name = "ProfileChip",
 		Position = UDim2.fromOffset(16, 12),
-		Size = UDim2.fromOffset(310, 130),
+		Size = UDim2.fromOffset(width, 130),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	})
 	UIKit.AutoScale(holder)
 
-	local chip = UIKit.Panel({ Size = UDim2.fromOffset(310, 74), CornerRadius = 37, Parent = holder })
+	local chip = UIKit.Panel({ Size = UDim2.fromOffset(width, 74), CornerRadius = 37, Parent = holder })
 	local badge = UIKit.new("Frame", {
 		Size = UDim2.fromOffset(62, 62),
 		Position = UDim2.fromOffset(6, 6),
@@ -132,11 +139,12 @@ local function buildProfileChip(parent: Instance)
 end
 
 local function buildPhaseBanner(parent: Instance)
+	local width = if isTouch() then 420 else 520 -- room for the profile chip on small phones
 	local holder = UIKit.new("Frame", {
 		Name = "PhaseBanner",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 10),
-		Size = UDim2.fromOffset(520, 150),
+		Size = UDim2.fromOffset(width, 150),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	})
@@ -144,7 +152,7 @@ local function buildPhaseBanner(parent: Instance)
 	local banner = UIKit.Panel({
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.fromScale(0.5, 0),
-		Size = UDim2.fromOffset(520, 70),
+		Size = UDim2.fromOffset(width, 70),
 		CornerRadius = 35,
 		Parent = holder,
 	})
@@ -248,11 +256,12 @@ local function menuButton(
 	top: Color3,
 	bottom: Color3
 ): TextButton
+	local size = if isTouch() then 64 else 74
 	local button = UIKit.Button({
 		Name = name,
 		Text = icon,
-		TextSize = 36,
-		Size = UDim2.fromOffset(74, 74),
+		TextSize = if isTouch() then 32 else 36,
+		Size = UDim2.fromOffset(size, size),
 		CornerRadius = 24,
 		LayoutOrder = order,
 		Parent = parent,
@@ -287,15 +296,23 @@ local function menuButton(
 end
 
 local function buildMenu(parent: Instance)
+	-- PC: the middle of the right edge. Touch: the top right corner, where it can't be hit by
+	-- mistake when reaching for the jump button.
+	local touch = isTouch()
 	local menu = UIKit.new("Frame", {
 		Name = "Menu",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -14, 0.5, 0),
-		Size = UDim2.fromOffset(80, 360),
+		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(1, 0.5),
+		Position = if touch then UDim2.new(1, -10, 0, 6) else UDim2.new(1, -14, 0.5, 0),
+		Size = if touch then UDim2.fromOffset(70, 4 * 64 + 3 * 18 + 20) else UDim2.fromOffset(80, 360),
 		BackgroundTransparency = 1,
 		Parent = parent,
 		Children = {
-			UIKit.List(Enum.FillDirection.Vertical, 14, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center),
+			UIKit.List(
+				Enum.FillDirection.Vertical,
+				if touch then 18 else 14,
+				Enum.HorizontalAlignment.Center,
+				if touch then Enum.VerticalAlignment.Top else Enum.VerticalAlignment.Center
+			),
 		},
 	})
 	UIKit.AutoScale(menu)

@@ -195,7 +195,26 @@ end
 
 -- Controls ---------------------------------------------------------------------------------------
 
--- A big round button (bottom right, above the jump button on phones) that also listens to a key.
+-- Where Roblox's touch jump button is, in `gui`'s coordinates: its left edge, its middle height and
+-- its size. Read from the real button when it exists, else Roblox's own placement rule.
+local function jumpButtonSpot(gui: ScreenGui): (number, number, number)
+	local touchGui = gui.Parent and gui.Parent:FindFirstChild("TouchGui")
+	local frame = touchGui and touchGui:FindFirstChild("TouchControlFrame")
+	local jump = frame and frame:FindFirstChild("JumpButton") :: GuiObject?
+	if jump and jump.AbsoluteSize.X > 0 then
+		local origin = gui.AbsolutePosition
+		return jump.AbsolutePosition.X - origin.X,
+			jump.AbsolutePosition.Y - origin.Y + jump.AbsoluteSize.Y / 2,
+			jump.AbsoluteSize.X
+	end
+	local screen = gui.AbsoluteSize
+	local small = math.min(screen.X, screen.Y) <= 500
+	local size = if small then 70 else 120
+	local top = if small then screen.Y - size - 20 else screen.Y - size * 1.75
+	return screen.X - (size * 1.5 - 10), top + size / 2, size
+end
+
+-- A big round button (beside the jump button on phones, bottom middle on PC) that also listens to a key.
 function Api.Button(self: Api, options: ButtonOptions): ActionButton
 	local slot = options.Slot or 1
 	local color = options.Color or Theme.Colors.Pink
@@ -207,14 +226,26 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 	local holder = UIKit.new("Frame", {
 		Name = "Action_" .. options.Text,
 		AnchorPoint = Vector2.new(1, 1),
-		Position = if self:IsTouch()
-			then UDim2.new(1, -150 - (slot - 1) * 128, 1, -110)
-			else UDim2.new(0.5, 90 - (slot - 1) * 180, 1, -24),
+		Position = UDim2.new(0.5, 90 - (slot - 1) * 180, 1, -24),
 		Size = UDim2.fromOffset(118, 118),
 		BackgroundTransparency = 1,
 		Parent = self.Gui,
 	})
-	UIKit.AutoScale(holder)
+	local holderScale = UIKit.AutoScale(holder)
+	if self:IsTouch() then
+		-- Right beside Roblox's jump button (slot 2 further left), where the right thumb already is.
+		holder.AnchorPoint = Vector2.new(1, 0.5)
+		holder:SetAttribute("TouchSlot", slot) -- tools/checks/ui_render.py places it the same way
+		local function place()
+			local left, centerY, size = jumpButtonSpot(self.Gui)
+			local width = 118 * holderScale.Scale
+			holder.Position = UDim2.fromOffset(left - 12 - (slot - 1) * (width + 12), centerY - size * 0.15)
+		end
+		place()
+		self.Janitor:Add(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(place))
+		self.Janitor:Add(holderScale:GetPropertyChangedSignal("Scale"):Connect(place))
+		task.delay(1, place) -- the touch controls are created after the character spawns
+	end
 	local button = UIKit.new("TextButton", {
 		Name = "Button",
 		Size = UDim2.fromScale(1, 1),

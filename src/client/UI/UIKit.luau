@@ -180,8 +180,16 @@ function UIKit.Button(props: Props, onClick: (() -> ())?, top: Color3?, bottom: 
 end
 
 -- Keeps a container at a comfortable size on every screen, from phones to 4K monitors.
+-- The scale UIKit.AutoScale gives the current screen (layouts that line up with scaled HUD parts).
+function UIKit.CurrentScale(bias: number?): number
+	local viewport = workspace.CurrentCamera.ViewportSize
+	local raw = math.min(viewport.X / Theme.DesignSize.X, viewport.Y / Theme.DesignSize.Y)
+	return math.clamp(raw * (bias or 1), Theme.MinScale, Theme.MaxScale)
+end
+
 function UIKit.AutoScale(container: GuiObject, bias: number?): UIScale
 	local uiScale = UIKit.new("UIScale", { Parent = container })
+	uiScale:SetAttribute("AutoScale", bias or 1) -- lets tools/checks/ui_render.py redo the layout per screen
 	local camera = workspace.CurrentCamera
 	local function update()
 		local viewport = camera.ViewportSize

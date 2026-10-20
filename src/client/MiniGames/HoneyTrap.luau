@@ -494,6 +494,9 @@ function HoneyTrap.Start(api)
 		if new.Result and announcedResult ~= new.Id then
 			announcedResult = new.Id
 			resultAt = os.clock()
+			if new.User == me then
+				api:Hint("", y + 74)
+			end
 			local pad = pads[new.User]
 			if pad then
 				api:Effect("Stars", pad.Pos + Vector3.new(0, 9, 0))

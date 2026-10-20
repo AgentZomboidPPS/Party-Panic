@@ -71,7 +71,7 @@ def rewrite(module: str, text: str, is_init: bool) -> str:
         text = re.sub(r"\brequire\(", "__req(", text)  # dynamic requires of those bundled modules
     if module.startswith("Client/"):
         # Client code: client-only services get stand-ins, and folder lookups go through the bundle.
-        for service in ("RunService", "StarterGui"):
+        for service in ("RunService", "StarterGui", "UserInputService"):
             text = text.replace(f'game:GetService("{service}")', f'__clientService("{service}")')
         text = re.sub(r"(script(?:\.Parent)+\.MiniGames)(?!\.)", lambda m: f'__folder("{resolve(module, m.group(1), is_init)}")', text)
         text = re.sub(r"\brequire\(", "__req(", text)
@@ -90,14 +90,16 @@ def main():
     parser.add_argument("--client", action="store_true", help="also run the client half as Bot1")
     parser.add_argument("--dump-at", type=float, default=None, help="snapshot the arena this many seconds into the round")
     parser.add_argument("--map", help="write a line map (bundle line -> module) here for readable errors")
+    parser.add_argument("--touch", action="store_true", help="the stand-in client is a phone (touch, no keyboard)")
+    parser.add_argument("--ui-at", help="with --client: snapshot the player's screen UI at these round times, e.g. 2,10 (see ui_render.py)")
     args = parser.parse_args()
 
-    out = [PRELUDE]
+    out = [("__touchMode = true\n" if args.touch else "__touchMode = false\n") + PRELUDE]
     paths = module_paths()
     if args.client:
         paths.update(client_paths())
     line_map = []  # (first line of the module body in the bundle, module name)
-    line = PRELUDE.count("\n") + 1
+    line = PRELUDE.count("\n") + 2  # the __touchMode line comes first
     for module, path in paths.items():
         if module == "Shared/Remotes":
             continue  # replaced by the harness's recording stand-in
@@ -117,7 +119,8 @@ def main():
     out.append("local __bot = (function()\n" + bot + "\nend)()")
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)
-    out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump})')
+    ui = "nil" if not args.ui_at else "{" + ", ".join(str(float(t)) for t in args.ui_at.split(",")) + "}"
+    out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui})')
     sys.stdout.write("\n".join(out))
 
 

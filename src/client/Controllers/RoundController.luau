@@ -4,6 +4,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
 local GameDefinitions = require(Shared.GameDefinitions)
@@ -138,10 +139,15 @@ local function flashCountdown(text: string, color: Color3)
 	end)
 end
 
+-- Phones and tablets: the standings sit under the profile card, clear of the thumbstick.
+local function isTouch(): boolean
+	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+end
+
 local function buildBoard(parent: Instance)
 	board = UIKit.Panel({
 		Name = "Leaderboard",
-		AnchorPoint = Vector2.new(0, 0.5),
+		AnchorPoint = if isTouch() then Vector2.new(0, 0) else Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 14, 0.5, 0),
 		Size = UDim2.fromOffset(270, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
@@ -151,6 +157,15 @@ local function buildBoard(parent: Instance)
 		Children = { UIKit.List(Enum.FillDirection.Vertical, 4), UIKit.Padding(10, 12) },
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 	UIKit.AutoScale(board, 0.9)
+	if isTouch() then
+		-- Just under the profile chip and coins (HudController: 130 tall at y 12, scaled the same way).
+		local function place()
+			board.Position = UDim2.fromOffset(14, 12 + 130 * UIKit.CurrentScale() + 8)
+			board:SetAttribute("PP_UnderProfile", true)
+		end
+		place()
+		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
+	end
 end
 
 local function refreshBoard()
@@ -185,15 +200,24 @@ local function refreshBoard()
 		LayoutOrder = 0,
 		Parent = board,
 	})
+	-- The top rows, and always your own (in place of the last row if you're further down).
+	local rows = if isTouch() then 3 else 6
+	local shown = {}
+	for index = 1, math.min(rows, #entries) do
+		table.insert(shown, index)
+	end
 	for index, entry in entries do
-		if index > 6 then
-			break
+		if entry.player == player and index > rows then
+			shown[#shown] = index
 		end
+	end
+	for _, index in shown do
+		local entry = entries[index]
 		local status = if entry.alive then "" else "💀 "
 		local detail = if entry.text ~= "" then entry.text else tostring(entry.score)
 		local teamColor = TEAM_COLORS[entry.team]
 		UIKit.Label({
-			Text = `{status}{entry.player.DisplayName}  ·  {detail}`,
+			Text = `{index}. {status}{entry.player.DisplayName}  ·  {detail}`,
 			TextSize = 18,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,
