@@ -19,6 +19,7 @@ It creates a small but working game you can play right away:
 | --- | --- |
 | `src/server/MiniGames/HotPotato.luau` | the rules (server) |
 | `src/client/MiniGames/HotPotato.luau` | the client half: HUD, controls, smooth visuals |
+| `src/server/MiniGames/Bots/HotPotato.luau` | how bots play it |
 | `src/server/World/Props/HotPotato.luau` | the mode's props (mesh specs with primitive fallbacks) |
 | `tools/meshgen/props/HotPotato.py` | the props' meshes |
 | `tools/checks/bots/HotPotato.luau` | a test bot for the real-server round harness |
@@ -125,7 +126,38 @@ approved by moderation the game uses its `Fallback`. Build meshes facing **-Z** 
 MeshLibrary corrects for Roblox's importer, which turns glTF models half a turn.
 `Kit/Scenery` has ready-made settings: `Meadow`, `LavaLake`, `Ground`, `Volcano`, `RockRim`.
 
-## 6. Check it looks right
+## 6. Teach the bots to play it
+
+Bots fill empty spots so every round feels full (`Config.Bots`: the server keeps 8 participants while
+anyone is here; bots fade out when players join and back in when they leave). They are clearly
+labelled, never earn rewards, and look like players to the round code, so a mode needs no special
+cases for them, with two exceptions:
+
+1. **A brain:** `src/server/MiniGames/Bots/<Mode>.luau` tells bots how to play (see `Bots/Default.luau`,
+   which plays any mode that has none):
+
+   ```lua
+   local Brain = {}
+   function Brain.Step(bot, ctx, mode, dt)        -- ~7 times a second per bot still in the round
+       local root = bot:Root()
+       if root and bot:Chance(0.1) then bot:Jump() end
+       bot:MoveTo(target)                           -- walk (call again each step)
+       ctx:BotAction(bot, "Pump")                   -- press a control like a client does
+   end
+   return Brain
+   ```
+
+   Use `bot.Skill` (0.35 to 0.9) and `bot:Reaction()` so bots differ and stay beatable; keep per-round
+   notes in `bot.Memory`.
+2. **Hazards must catch bots too.** Bots are moved by the server. A hazard you animate only on clients
+   (sinking floors, sweeping beams) never touches a bot on the server, so check bots against it on
+   the server (e.g. a bot over a sunk hex drops and is eliminated). Use `ctx:Knockback(player,
+   velocity, stun)` to throw anyone; it works for players and bots.
+
+Test with real bots: `round_harness.py <Mode> --players 2 --bots 10 ...` (the test server has no
+physics, so bots' walking and jumping are simulated there).
+
+## 7. Check it looks right
 
 ```sh
 python3 tools/preview/render.py arena.json out --views player,overview --cameras cams.json   # the arena
