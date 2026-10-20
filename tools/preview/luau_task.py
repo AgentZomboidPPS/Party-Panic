@@ -8,26 +8,44 @@ that adds it). The script runs in a fresh server: the game's own scripts don't s
 is saved, so it can't change the live game.
 """
 import os
-import json, sys, time, urllib.request, urllib.error
+import json, random, sys, time, urllib.request, urllib.error
 U = int(os.environ.get("PP_UNIVERSE_ID", "10772087888"))
 P = int(os.environ.get("PP_PLACE_ID", "78868713931081"))
+RETRY_FOR = 900  # seconds to keep retrying when Roblox says "too many requests" (429) or is briefly down (5xx)
 def req(method, url, body=None):
     headers = {"Content-Type": "application/json"}
     if os.environ.get("ROBLOX_API_KEY"):
         headers["x-api-key"] = os.environ["ROBLOX_API_KEY"]
-    r = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode(), method=method, headers=headers)
-    try:
-        with urllib.request.urlopen(r, timeout=120) as resp:
-            return json.loads(resp.read() or b"{}")
-    except urllib.error.HTTPError as e:
-        sys.exit(f"{method} {url}: HTTP {e.code} {e.read().decode()[:2000]}")
+    data = None if body is None else json.dumps(body).encode()
+    give_up = time.time() + RETRY_FOR
+    wait = 4
+    while True:
+        r = urllib.request.Request(url, data=data, method=method, headers=headers)
+        try:
+            with urllib.request.urlopen(r, timeout=120) as resp:
+                return json.loads(resp.read() or b"{}")
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode()[:2000]
+            if (e.code == 429 or e.code >= 500) and time.time() < give_up:
+                print(f"busy ({e.code}), retrying in {wait}s", file=sys.stderr)
+                time.sleep(wait + random.uniform(0, wait / 2))
+                wait = min(wait * 2, 60)
+                continue
+            sys.exit(f"{method} {url}: HTTP {e.code} {detail}")
+        except (urllib.error.URLError, TimeoutError) as e:
+            if time.time() < give_up:
+                print(f"network error ({e}), retrying in {wait}s", file=sys.stderr)
+                time.sleep(wait)
+                wait = min(wait * 2, 60)
+                continue
+            raise
 def run(script, version=None, timeout="300s"):
     base = f"https://apis.roblox.com/cloud/v2/universes/{U}/places/{P}"
     if version: base += f"/versions/{version}"
     task = req("POST", base + "/luau-execution-session-tasks", {"script": script, "timeout": timeout})
     path = task["path"]
     while task.get("state") not in ("COMPLETE", "FAILED", "CANCELLED"):
-        time.sleep(3)
+        time.sleep(5)  # many agents share the rate limit: don't poll faster
         task = req("GET", "https://apis.roblox.com/cloud/v2/" + path)
     logs = req("GET", "https://apis.roblox.com/cloud/v2/" + path + "/logs")
     return task, logs
