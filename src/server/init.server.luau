@@ -17,6 +17,7 @@ local order = {
 	"SocialService",
 	"VotingService",
 	"LobbyService",
+	"BotService", -- after the lobby exists (spawns, vote pads)
 	"RoundManager",
 }
 

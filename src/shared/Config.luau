@@ -21,6 +21,16 @@ Config.Session = {
 	MysteryOptionChance = 0.1, -- §6 "Mystery option": one card hidden until it wins
 }
 
+-- Bots: friendly AI players that fill empty spots so every round feels full. They fade in when
+-- someone leaves and fade out when someone joins (after their round if they're playing one).
+Config.Bots = {
+	Enabled = true,
+	FillTo = 8, -- keep this many participants (players + bots) while at least one player is here
+	MaxBots = 11,
+	InStudio = true,
+	ArriveEvery = 1.2, -- seconds between bots fading in
+}
+
 -- Arenas are built far away from the lobby so they never overlap it.
 Config.ArenaOrigin = Vector3.new(0, 250, 1400)
 Config.LobbySpawnHeight = 4

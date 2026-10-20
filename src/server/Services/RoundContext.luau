@@ -18,6 +18,7 @@ local GameState = require(Shared.GameState)
 local Janitor = require(Shared.Janitor)
 local Remotes = require(Shared.Remotes)
 
+local BotRegistry = require(script.Parent.BotRegistry)
 local CosmeticService = require(script.Parent.CosmeticService)
 local Notifier = require(script.Parent.Notifier)
 local Telemetry = require(script.Parent.Telemetry)
@@ -26,6 +27,7 @@ local LOBBY_RADIUS = 600
 
 local actionRemote = Remotes.Get("MiniGameAction")
 local eventRemote = Remotes.Get("MiniGameEvent")
+local knockbackRemote = Remotes.Get("Knockback")
 local rng = Random.new()
 
 type ActionEntry = {
@@ -115,6 +117,9 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 
 	self.Janitor:Add(Players.PlayerRemoving:Connect(function(player)
 		self:_onLeave(player)
+	end))
+	self.Janitor:Add(BotRegistry.Removed:Connect(function(bot)
+		self:_onLeave(bot)
 	end))
 	self.Janitor:Add(actionRemote.OnServerEvent:Connect(function(player, name, ...)
 		self:_onAction(player, name, ...)
@@ -240,7 +245,7 @@ end
 function RoundContext.PlayerFromPart(self: RoundContext, part: BasePart): Player?
 	local model = part:FindFirstAncestorOfClass("Model")
 	while model do
-		local player = Players:GetPlayerFromCharacter(model)
+		local player = Players:GetPlayerFromCharacter(model) or BotRegistry.FromCharacter(model)
 		if player then
 			if self:IsAlive(player) then
 				return player
@@ -496,18 +501,93 @@ function RoundContext.SetPlayerShared(self: RoundContext, player: Player, key: s
 	player:SetAttribute("MG_" .. key, value)
 end
 
--- Sends a MiniGameEvent to one player, a list of players, or everyone (nil).
+-- Sends a MiniGameEvent to one player, a list of players, or everyone (nil). Bots are skipped:
+-- they have no client (their brain reads the round's state directly).
 function RoundContext.Fire(self: RoundContext, target: any, name: string, ...: any)
 	if target == nil then
 		eventRemote:FireAllClients(name, ...)
+	elseif BotRegistry.IsBot(target) then
+		return
 	elseif type(target) == "table" then
 		for _, player in target do
-			if player.Parent then
+			if typeof(player) == "Instance" and player.Parent then
 				eventRemote:FireClient(player, name, ...)
 			end
 		end
 	elseif target.Parent then
 		eventRemote:FireClient(target, name, ...)
+	end
+end
+
+-- Throws a participant: `velocity` in studs/s, ragdolled for `stun` seconds (0 = just a shove).
+-- Players are moved by their own device (smooth); bots by the server.
+function RoundContext.Knockback(self: RoundContext, player: any, velocity: Vector3, stun: number)
+	if typeof(player) == "Instance" then
+		knockbackRemote:FireClient(player, velocity, stun)
+		return
+	end
+	local _, humanoid, root = self:GetCharacter(player)
+	if not humanoid or not root then
+		return
+	end
+	if stun <= 0 then
+		root.AssemblyLinearVelocity += velocity
+		return
+	end
+	humanoid.PlatformStand = true
+	root.AssemblyLinearVelocity = velocity
+	task.delay(math.clamp(stun, 0.1, 2), function()
+		if humanoid.Parent then
+			humanoid.PlatformStand = false
+			humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		end
+	end)
+end
+
+-- Bots ---------------------------------------------------------------------------------------------
+
+-- Runs a mode's bot brain (MiniGames/Bots/<Id>.luau) for every bot in the round, about 7 times a
+-- second: brain.Step(bot, ctx, mode, dt), and brain.Start(ctx, mode) once if it has one.
+function RoundContext.RunBots(self: RoundContext, brain: any, mode: any)
+	if not brain then
+		return
+	end
+	for player in self.Participants do
+		if BotRegistry.IsBot(player) then
+			player.Memory = {}
+		end
+	end
+	if brain.Start then
+		local ok, err = pcall(brain.Start, self, mode)
+		if not ok then
+			Telemetry.Error("BotBrain", `{self.Definition.Id}.Start: {err}`)
+		end
+	end
+	local last = os.clock()
+	local failures = 0
+	self:Loop(function(): number?
+		local now = os.clock()
+		local dt = now - last
+		last = now
+		for player, state in self.Participants do
+			if state.Alive and BotRegistry.IsBot(player) and player.Parent then
+				local ok, err = pcall(brain.Step, player, self, mode, dt)
+				if not ok then
+					failures += 1
+					if failures <= 3 then
+						Telemetry.Error("BotBrain", `{self.Definition.Id}: {err}`)
+					end
+				end
+			end
+		end
+		return 0.15
+	end)
+end
+
+-- A bot pressing a control: goes through the same checks as a player's MiniGameAction.
+function RoundContext.BotAction(self: RoundContext, bot: any, name: string, ...: any)
+	if BotRegistry.IsBot(bot) then
+		self:_onAction(bot, name, ...)
 	end
 end
 

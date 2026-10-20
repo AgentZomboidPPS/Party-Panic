@@ -12,6 +12,7 @@ local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 local VoteLogic = require(Shared.Logic.VoteLogic)
 
+local BotRegistry = require(script.Parent.BotRegistry)
 local DataService = require(script.Parent.DataService)
 local Notifier = require(script.Parent.Notifier)
 local QuestService = require(script.Parent.QuestService)
@@ -27,6 +28,7 @@ local active = false
 local options: { VoteOption } = {}
 local votes: { [Player]: number } = {}
 local votedThisRound: { [Player]: boolean } = {}
+local pads: { [number]: BasePart } = {}
 
 local function publishCounts()
 	local counts = VoteLogic.Tally(votes, #options)
@@ -74,6 +76,9 @@ function VotingService.Begin(newOptions: { VoteOption })
 	for _, player in Players:GetPlayers() do
 		player:SetAttribute("PP_Vote", 0)
 	end
+	for _, bot in BotRegistry.List() do
+		bot:SetAttribute("PP_Vote", 0)
+	end
 	GameState.SetJSON("VoteOptions", options)
 	publishCounts()
 	Notifier.Sound(nil, "VoteOpen")
@@ -89,6 +94,15 @@ function VotingService.Cast(player: Player, index: any): boolean
 	end
 	if not VoteLogic.IsValidChoice(index, #options) then
 		return false
+	end
+	if BotRegistry.IsBot(player) then
+		-- Bots count like anyone else, without stats, quests or sounds.
+		if votes[player] ~= index then
+			votes[player] = index
+			player:SetAttribute("PP_Vote", index)
+			publishCounts()
+		end
+		return true
 	end
 	if not DataService.Get(player) then
 		return false -- profile still loading
@@ -141,15 +155,22 @@ function VotingService.Options(): { VoteOption }
 	return options
 end
 
+-- Where the portal pad for option `index` is (bots walk there to vote).
+function VotingService.PadPosition(index: number): Vector3?
+	local pad = pads[index]
+	return if pad then pad.Position else nil
+end
+
 -- Lets a physical portal pad cast a vote when a player steps on it.
 function VotingService.BindPad(pad: BasePart, index: number)
 	local lastTouch: { [Player]: number } = {}
+	pads[index] = pad
 	pad.Touched:Connect(function(hit)
 		if not active then
 			return
 		end
 		local character = hit.Parent
-		local player = character and Players:GetPlayerFromCharacter(character)
+		local player = character and (Players:GetPlayerFromCharacter(character) or BotRegistry.FromCharacter(character))
 		if not player then
 			return
 		end
@@ -173,7 +194,7 @@ function VotingService.Init()
 			VotingService.Cast(player, index)
 		end
 	end)
-	Players.PlayerRemoving:Connect(function(player)
+	local function forget(player: any)
 		if votes[player] then
 			votes[player] = nil
 			if active then
@@ -181,7 +202,9 @@ function VotingService.Init()
 			end
 		end
 		votedThisRound[player] = nil
-	end)
+	end
+	Players.PlayerRemoving:Connect(forget)
+	BotRegistry.Removed:Connect(forget)
 end
 
 return VotingService

@@ -11,9 +11,16 @@ local soundRemote = Remotes.Get("PlaySound")
 
 local Notifier = {}
 
+-- Bots (BotService) look like players but have no device to send anything to.
+local function reachable(player: any): boolean
+	return typeof(player) == "Instance" and player.Parent ~= nil
+end
+
 -- kind: "info" | "success" | "warning" | "reward"
 function Notifier.Send(player: Player, text: string, kind: string?, duration: number?)
-	notifyRemote:FireClient(player, text, kind or "info", duration)
+	if reachable(player) then
+		notifyRemote:FireClient(player, text, kind or "info", duration)
+	end
 end
 
 function Notifier.All(text: string, kind: string?, duration: number?)
@@ -22,7 +29,7 @@ end
 
 function Notifier.Players(players: { Player }, text: string, kind: string?, duration: number?)
 	for _, player in players do
-		if player.Parent then
+		if reachable(player) then
 			notifyRemote:FireClient(player, text, kind or "info", duration)
 		end
 	end
@@ -36,7 +43,7 @@ end
 function Notifier.Sound(players: { Player }?, soundName: string)
 	if players then
 		for _, player in players do
-			if player.Parent then
+			if reachable(player) then
 				soundRemote:FireClient(player, soundName)
 			end
 		end
