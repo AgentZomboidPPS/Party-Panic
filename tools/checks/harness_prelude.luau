@@ -645,3 +645,75 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	summary.events = __events
 	return HttpService:JSONEncode(summary)
 end
+
+-- The lobby with bots (round_harness.py --lobby): builds the lobby, adds bots, and plays an
+-- intermission and a vote so their wandering and portal voting can be checked.
+function __runLobby(botCount, intermission, voteTime)
+	local GameState = __require("Shared/GameState")
+	GameState.Folder()
+	local LobbyBuilder = __require("Server/World/LobbyBuilder")
+	local VotingService = __require("Server/Services/VotingService")
+	local BotService = __require("Server/Services/BotService")
+	local BotRegistry = __require("Server/Services/BotRegistry")
+	local summary = {}
+	local okLobby, refs = pcall(LobbyBuilder.Build)
+	summary.lobby = if okLobby then "ok" else tostring(refs)
+	if okLobby then
+		for index, pad in refs.VotePads do
+			VotingService.BindPad(pad, index)
+		end
+	end
+	BotService.Setup()
+	local bots = {}
+	for _ = 1, botCount do
+		table.insert(bots, BotService.Add())
+	end
+	local function positions()
+		local list = {}
+		for _, bot in bots do
+			local root = bot:Root()
+			if root then
+				table.insert(
+					list,
+					{ bot.DisplayName, __round(root.Position.X), __round(root.Position.Y), __round(root.Position.Z) }
+				)
+			end
+		end
+		return list
+	end
+	summary.spawned = positions()
+	GameState.Set("Phase", "Intermission")
+	local stepper = task.spawn(function()
+		while true do
+			for _, bot in BotRegistry.List() do
+				BotService.LobbyStep(bot, os.clock())
+			end
+			task.wait(0.4)
+		end
+	end)
+	task.wait(intermission)
+	summary.afterIntermission = positions()
+	GameState.Set("Phase", "Voting")
+	VotingService.Begin({
+		{ Id = "FireRope", Mystery = false },
+		{ Id = "HexMeltdown", Mystery = false },
+		{ Id = "HoneyTrap", Mystery = false },
+	})
+	task.wait(voteTime)
+	summary.voteCounts = GameState.GetJSON("VoteCounts")
+	summary.afterVote = positions()
+	local winner = VotingService.End()
+	summary.winner = winner and winner.Id
+	task.cancel(stepper)
+	-- One leaves (as if a player joined), to see the fade-out.
+	BotService.Remove(bots[1])
+	task.wait(1)
+	summary.remaining = #BotRegistry.List()
+	for _, bot in BotRegistry.List() do
+		BotService.Remove(bot)
+	end
+	summary.errors = __errors
+	summary.log = __log
+	summary.eventCounts = __eventCounts
+	return game:GetService("HttpService"):JSONEncode(summary)
+end

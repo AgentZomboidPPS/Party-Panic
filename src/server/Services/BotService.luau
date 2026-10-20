@@ -550,7 +550,7 @@ end
 
 local WANDER_RADIUS = 52
 
-local function lobbyStep(bot: Bot, now: number)
+function BotService.LobbyStep(bot: Bot, now: number)
 	local root = bot:Root()
 	local humanoid = bot:Humanoid()
 	if not root or not humanoid or humanoid.Health <= 0 then
@@ -671,7 +671,7 @@ function BotService.Init()
 			local now = os.clock()
 			for _, bot in BotRegistry.List() do
 				if not bot:GetAttribute("PP_InRound") then
-					local okStep, stepErr = pcall(lobbyStep, bot, now)
+					local okStep, stepErr = pcall(BotService.LobbyStep, bot, now)
 					if not okStep then
 						warn("[BotService] lobby step failed:", stepErr)
 					end

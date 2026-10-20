@@ -84,7 +84,7 @@ PRELUDE = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (Pat
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("game")
+    parser.add_argument("game", help="mode id, or LOBBY for the lobby with bots (uses --bots, --seconds)")
     parser.add_argument("--players", type=int, default=12)
     parser.add_argument("--seconds", type=float, default=0, help="stop after this many seconds (0 = game length)")
     parser.add_argument("--client", action="store_true", help="also run the client half as Bot1")
@@ -121,7 +121,10 @@ def main():
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)
     ui = "nil" if not args.ui_at else "{" + ", ".join(str(float(t)) for t in args.ui_at.split(",")) + "}"
-    out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots})')
+    if args.game == "LOBBY":
+        out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8}, 10)")
+    else:
+        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots})')
     sys.stdout.write("\n".join(out))
 
 
