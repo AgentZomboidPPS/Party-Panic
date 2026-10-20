@@ -65,6 +65,10 @@ def rewrite(module: str, text: str, is_init: bool) -> str:
     shared = r'(?:game:GetService\("ReplicatedStorage"\)\.Shared|ReplicatedStorage\.Shared|Shared)'
     text = re.sub(r"require\(" + shared + r"((?:\.\w+)+)\)", lambda m: '__require("Shared' + m.group(1).replace(".", "/") + '")', text)
     text = text.replace('game:GetService("Players")', '__service("Players")')
+    # Folder lookups such as script.Parent:FindFirstChild("Props") list bundled modules instead.
+    text = re.sub(r'(script(?:\.Parent)+):FindFirstChild\("(\w+)"\)', lambda m: f'__folder("{resolve(module, m.group(1) + "." + m.group(2), is_init)}")', text)
+    if module.startswith("Server/"):
+        text = re.sub(r"\brequire\(", "__req(", text)  # dynamic requires of those bundled modules
     if module.startswith("Client/"):
         # Client code: client-only services get stand-ins, and folder lookups go through the bundle.
         for service in ("RunService", "StarterGui"):

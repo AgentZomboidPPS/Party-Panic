@@ -17,6 +17,8 @@ MODULES = ["Build", "Shapes", "MeshAssets", "MeshLibrary", "Environment", "Lobby
 def module_source(name: str) -> str:
     text = (WORLD / f"{name}.luau").read_text()
     text = re.sub(r"require\(script\.Parent\.(\w+)\)", r'__require("\1")', text)
+    # The lobby doesn't use the mini-games' own props (World/Props), so skip loading them.
+    text = text.replace('script.Parent:FindFirstChild("Props")', "nil")
     # Type exports are only legal at the top level; inside the wrapper they become local types.
     text = re.sub(r"^export type", "type", text, flags=re.M)
     return text

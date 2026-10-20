@@ -6,8 +6,11 @@
 --
 -- Resolution order for each prop (first match wins):
 --   1. ServerStorage.MeshTemplates.<Name>  - a Model/MeshPart imported in Studio from assets/meshes
---   2. MeshAssets[<Name>]                   - an uploaded Model asset id (tools/upload_meshes.py)
+--   2. its uploaded Model asset id           - spec.AssetId, or MeshAssets[<Name>] for older props
 --   3. A built-in fallback made from as few primitive parts as possible
+--
+-- Props that belong to one mini-game live in World/Props/<Game>.luau (see Props/README.md), so modes
+-- built side by side never edit the same file. Each returns function(helpers) -> { [name]: Spec }.
 --
 -- Every template is normalized once: anchored, piece colors applied by name, collision/query/touch
 -- flags set for its role, pivot moved to the bottom center so callers can drop it on the ground.
@@ -23,6 +26,7 @@ local MeshLibrary = {}
 
 type Spec = {
 	Height: number, -- canonical height in studs
+	AssetId: number?, -- uploaded Model asset (tools/upload_assets.py fills it in)
 	Collide: boolean?,
 	Touch: boolean?,
 	Shadow: boolean?,
@@ -439,6 +443,45 @@ local SPECS: { [string]: Spec } = {
 	},
 }
 
+-- Per-mode props (World/Props/*.luau) get the same fallback helpers the specs above use.
+local helpers = {
+	rgb = rgb,
+	block = block,
+	ball = ball,
+	pillar = pillar,
+	roller = roller,
+	blob = blob,
+	rounded = rounded,
+	capsule = capsule,
+	cluster = cluster,
+	Build = Build,
+	Shapes = Shapes,
+}
+MeshLibrary.Helpers = helpers
+
+local propsFolder = script.Parent:FindFirstChild("Props")
+if propsFolder then
+	for _, module in propsFolder:GetChildren() do
+		if not module:IsA("ModuleScript") then
+			continue
+		end
+		local ok, result = pcall(function()
+			return require(module :: any)(helpers)
+		end)
+		if not ok or type(result) ~= "table" then
+			warn(`[MeshLibrary] Props/{module.Name} failed to load: {result}`)
+			continue
+		end
+		for name, spec in result do
+			if SPECS[name] then
+				warn(`[MeshLibrary] Props/{module.Name} redefines {name}; keeping the first`)
+			else
+				SPECS[name] = spec
+			end
+		end
+	end
+end
+
 local templates: { [string]: Model } = {}
 local sources: { [string]: string } = {}
 
@@ -461,8 +504,8 @@ local function fromStudioTemplate(name: string): Model?
 	return wrapInModel(found:Clone(), name)
 end
 
-local function fromAsset(name: string): Model?
-	local assetId = (MeshAssets :: any)[name]
+local function fromAsset(name: string, spec: Spec): Model?
+	local assetId = spec.AssetId or (MeshAssets :: any)[name]
 	if type(assetId) ~= "number" or assetId <= 0 then
 		return nil
 	end
@@ -553,7 +596,7 @@ local function resolve(name: string): Model
 	local model = fromStudioTemplate(name)
 	local source = "Template"
 	if not model then
-		model = fromAsset(name)
+		model = fromAsset(name, spec)
 		source = "Asset"
 	end
 	if not model then

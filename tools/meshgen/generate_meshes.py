@@ -1,6 +1,10 @@
 """Generates the low-poly, toy-style prop meshes used by Party Panic.
 
-    python3 tools/meshgen/generate_meshes.py
+    python3 tools/meshgen/generate_meshes.py                  # every prop
+    python3 tools/meshgen/generate_meshes.py --only Bee,Fruit # just these
+
+A mini-game's own props go in tools/meshgen/props/<Game>.py (PROPS = {name: builder}, optional
+COLORS), using the helpers here: `from generate_meshes import lathe, tube, rounded_box, ...`.
 
 Writes assets/meshes/<Prop>.obj (for Studio's 3D Importer) and <Prop>.glb (for Open Cloud upload).
 Each prop is split into named pieces ("Basket", "Wheels", ...) that match the palette in
@@ -960,9 +964,36 @@ def write_glb(path: Path, pieces: dict[str, Mesh]):
         handle.write(binary)
 
 
+def load_mode_props() -> None:
+    """Adds the props in tools/meshgen/props/*.py (one file per mini-game, so modes built side by
+    side never edit the same file). Each defines PROPS = {name: builder} and may define COLORS."""
+    import importlib.util
+
+    for path in sorted((Path(__file__).resolve().parent / "props").glob("*.py")):
+        spec = importlib.util.spec_from_file_location(f"mode_props_{path.stem}", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for name, build in getattr(module, "PROPS", {}).items():
+            if name in PROPS:
+                raise SystemExit(f"{path.name} redefines prop {name}")
+            PROPS[name] = build
+        COLORS.update(getattr(module, "COLORS", {}))
+
+
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate prop meshes into assets/meshes.")
+    parser.add_argument("--only", help="comma-separated prop names (default: all)")
+    args = parser.parse_args()
+    load_mode_props()
+    wanted = set(args.only.split(",")) if args.only else None
+    if wanted and wanted - set(PROPS):
+        raise SystemExit(f"Unknown props: {', '.join(sorted(wanted - set(PROPS)))}")
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in PROPS.items():
+        if wanted and name not in wanted:
+            continue
         pieces = build()
         write_obj(OUT / f"{name}.obj", pieces)
         write_glb(OUT / f"{name}.glb", pieces)

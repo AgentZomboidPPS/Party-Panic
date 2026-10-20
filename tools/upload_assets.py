@@ -4,6 +4,10 @@ resulting asset ids into the game config, so the next build uses the real meshes
     python3 tools/upload_assets.py --user-id 12345678            # upload everything
     python3 tools/upload_assets.py --group-id 7654321 --what audio
     python3 tools/upload_assets.py --user-id 12345678 --dry-run  # show what would happen
+    python3 tools/upload_assets.py --user-id 12345678 --what meshes --only Pump,Balloon
+
+A mini-game's own props (defined in src/server/World/Props/<Game>.luau) get their asset id written
+into that file's spec (AssetId = ...); older props use assets/uploaded.json and MeshAssets.luau.
 
 Authentication: set ROBLOX_API_KEY to an Open Cloud API key with the "assets" read+write
 permission. Upload under the same user or group that owns the game, because the game loads mesh
@@ -107,19 +111,63 @@ def set_luau_value(path: Path, key_path: list[str], value: int):
     path.write_text(text)
 
 
+PROPS_DIR = ROOT / "src" / "server" / "World" / "Props"
+
+
+def props_file_for(name: str) -> tuple[Path, re.Match] | None:
+    """The World/Props/<Game>.luau file whose table defines prop `name`, if any."""
+    for path in sorted(PROPS_DIR.glob("*.luau")):
+        match = re.search(rf"^(\t+){re.escape(name)} = \{{\n", path.read_text(), re.M)
+        if match:
+            return path, match
+    return None
+
+
+def spec_block(text: str, match: re.Match) -> tuple[int, int]:
+    """Start and end offsets of the spec table that `match` opens."""
+    indent = match.group(1)
+    end = re.compile(rf"^{indent}\}},?$", re.M).search(text, match.end())
+    if not end:
+        raise SystemExit(f"Couldn't find the end of the {match.group(0).strip()} spec")
+    return match.end(), end.start()
+
+
+def props_asset_id(path: Path, match: re.Match) -> int:
+    text = path.read_text()
+    start, end = spec_block(text, match)
+    found = re.search(r"\bAssetId = (\d+)", text[start:end])
+    return int(found.group(1)) if found else 0
+
+
+def set_props_asset_id(path: Path, name: str, value: int):
+    text = path.read_text()
+    match = re.search(rf"^(\t+){re.escape(name)} = \{{\n", text, re.M)
+    start, end = spec_block(text, match)
+    block = text[start:end]
+    if re.search(r"\bAssetId = \d+", block):
+        block = re.sub(r"\bAssetId = \d+", f"AssetId = {value}", block, count=1)
+    else:
+        block = f"{match.group(1)}\tAssetId = {value},\n" + block
+    path.write_text(text[:start] + block + text[end:])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     who = parser.add_mutually_exclusive_group(required=True)
     who.add_argument("--user-id", help="upload as this Roblox user (must own the game)")
     who.add_argument("--group-id", help="upload as this group (must own the game)")
     parser.add_argument("--what", choices=["all", "meshes", "audio"], default="all")
+    parser.add_argument("--only", help="comma-separated mesh names (default: every mesh)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    only = set(args.only.split(",")) if args.only else None
     creator = {"userId": str(args.user_id)} if args.user_id else {"groupId": str(args.group_id)}
 
     jobs = []
     if args.what in ("all", "meshes"):
         for glb in sorted((ROOT / "assets" / "meshes").glob("*.glb")):
+            if only and glb.stem not in only:
+                continue
             jobs.append(("mesh", glb.stem, glb, "Model", "model/gltf-binary", f"Party Panic prop: {glb.stem}"))
     if args.what in ("all", "audio"):
         for name, title in MUSIC.items():
@@ -131,6 +179,20 @@ def main():
         key = f"{kind}:{name}"
         if not path.exists():
             raise SystemExit(f"Missing {path} - run the generators first (see docs/ASSETS.md)")
+        props = props_file_for(name) if kind == "mesh" else None
+        if props:
+            # A mini-game's own prop: its id lives in its World/Props file, not the shared record.
+            existing = props_asset_id(*props)
+            if existing > 0:
+                print(f"skip   {key:22s} already uploaded as {existing} ({props[0].name})")
+            elif args.dry_run:
+                print(f"would upload {key:16s} {path.relative_to(ROOT)} -> {props[0].name}")
+            else:
+                print(f"upload {key:22s} {path.relative_to(ROOT)} ...", end=" ", flush=True)
+                asset_id = upload(path, asset_type, display[:50], display, creator, content_type)
+                set_props_asset_id(props[0], name, asset_id)
+                print(f"{asset_id} -> {props[0].name}")
+            continue
         if key in record:
             asset_id = record[key]
             print(f"skip   {key:22s} already uploaded as {asset_id}")

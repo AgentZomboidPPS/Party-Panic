@@ -40,21 +40,38 @@ function __req(target)
 	end
 	return require(target)
 end
+local function __moduleToken(full, name)
+	return {
+		__path = full,
+		Name = name,
+		IsA = function(_, className)
+			return className == "ModuleScript"
+		end,
+	}
+end
 function __folder(path)
 	return {
 		__path = path,
+		Name = string.match(path, "[^/]+$"),
 		FindFirstChild = function(_, name)
 			local full = path .. "/" .. name
 			if __modules[full] then
-				return {
-					__path = full,
-					Name = name,
-					IsA = function(_, className)
-						return className == "ModuleScript"
-					end,
-				}
+				return __moduleToken(full, name)
 			end
 			return nil
+		end,
+		GetChildren = function()
+			local children = {}
+			for full in __modules do
+				local name = string.match(full, "^" .. string.gsub(path, "%p", "%%%0") .. "/([^/]+)$")
+				if name then
+					table.insert(children, __moduleToken(full, name))
+				end
+			end
+			table.sort(children, function(a, b)
+				return a.Name < b.Name
+			end)
+			return children
 		end,
 	}
 end
@@ -81,6 +98,21 @@ local function __record(remote, target, ...)
 end
 
 local __remoteObjects = {}
+local __fakePlayers = {}
+function __playerKey(player)
+	return if type(player) == "table" then "__player:" .. player.Name else player
+end
+function __playerFromKey(key)
+	if type(key) == "string" and string.sub(key, 1, 9) == "__player:" then
+		local name = string.sub(key, 10)
+		for _, player in __fakePlayers do
+			if player.Name == name then
+				return player
+			end
+		end
+	end
+	return key
+end
 __modules["Shared/Remotes"] = function()
 	local Remotes = {}
 	function Remotes.Get(name)
@@ -88,9 +120,17 @@ __modules["Shared/Remotes"] = function()
 			-- Server <-> client loopback: the stand-in client (Bot1) hears what it would hear.
 			local bindable = Instance.new("BindableEvent")
 			local clientBindable = Instance.new("BindableEvent")
+			-- Bindables copy tables, so a stand-in player crosses as its name and is looked up again.
+			local onServerEvent = {
+				Connect = function(_, callback)
+					return bindable.Event:Connect(function(key, ...)
+						callback(__playerFromKey(key), ...)
+					end)
+				end,
+			}
 			__remoteObjects[name] = {
 				Name = name,
-				OnServerEvent = bindable.Event,
+				OnServerEvent = onServerEvent,
 				OnClientEvent = clientBindable.Event,
 				FireClient = function(_, player, ...)
 					__record(name, if type(player) == "table" then player.Name else tostring(player), ...)
@@ -106,7 +146,7 @@ __modules["Shared/Remotes"] = function()
 				end,
 				FireServer = function(_, ...)
 					if __localPlayer then
-						bindable:Fire(__localPlayer, ...)
+						bindable:Fire(__playerKey(__localPlayer), ...)
 					end
 				end,
 				__bindable = bindable,
@@ -119,7 +159,6 @@ end
 
 -- Stand-in players ----------------------------------------------------------------------------------
 
-local __fakePlayers = {}
 local __byCharacter = {}
 local __playerAdded = Instance.new("BindableEvent")
 local __playerRemoving = Instance.new("BindableEvent")
@@ -418,7 +457,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt)
 		localPlayer = __localPlayer,
 	}
 	function env.Action(player, name, ...)
-		__remoteObjects.MiniGameAction.__bindable:Fire(player, name, ...)
+		__remoteObjects.MiniGameAction.__bindable:Fire(__playerKey(player), name, ...)
 	end
 	function env.Root(player)
 		local character = player.Character
