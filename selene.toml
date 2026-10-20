@@ -1,0 +1,8 @@
+std = "roblox_lite"
+
+[lints]
+# UI code intentionally reuses short names like `label` in nested builders.
+shadowing = "allow"
+
+[config]
+unused_variable = { ignore_pattern = "^_|^self$" }

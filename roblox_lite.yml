@@ -1,0 +1,130 @@
+# Lightweight Roblox globals for selene, used because selene's own `std = "roblox"` downloads
+# the API dump at lint time. Type-level API checks are done by luau-lsp with full definitions.
+base: luau
+name: roblox_lite
+globals:
+  game:
+    any: true
+  workspace:
+    any: true
+  script:
+    any: true
+  plugin:
+    any: true
+  shared:
+    any: true
+  Instance:
+    any: true
+  Vector3:
+    any: true
+  Vector2:
+    any: true
+  Vector3int16:
+    any: true
+  Vector2int16:
+    any: true
+  CFrame:
+    any: true
+  Color3:
+    any: true
+  UDim:
+    any: true
+  UDim2:
+    any: true
+  Enum:
+    any: true
+  task:
+    any: true
+  Random:
+    any: true
+  NumberRange:
+    any: true
+  NumberSequence:
+    any: true
+  NumberSequenceKeypoint:
+    any: true
+  ColorSequence:
+    any: true
+  ColorSequenceKeypoint:
+    any: true
+  TweenInfo:
+    any: true
+  PhysicalProperties:
+    any: true
+  Region3:
+    any: true
+  Region3int16:
+    any: true
+  Ray:
+    any: true
+  RaycastParams:
+    any: true
+  OverlapParams:
+    any: true
+  Rect:
+    any: true
+  BrickColor:
+    any: true
+  DateTime:
+    any: true
+  Font:
+    any: true
+  Faces:
+    any: true
+  Axes:
+    any: true
+  SharedTable:
+    any: true
+  Content:
+    any: true
+  PathWaypoint:
+    any: true
+  CatalogSearchParams:
+    any: true
+  FloatCurveKey:
+    any: true
+  RotationCurveKey:
+    any: true
+  buffer:
+    any: true
+  vector:
+    any: true
+  typeof:
+    args:
+      - type: "..."
+  tick:
+    args:
+      - type: "..."
+  time:
+    args:
+      - type: "..."
+  warn:
+    args:
+      - type: "..."
+  elapsedTime:
+    args:
+      - type: "..."
+  settings:
+    args:
+      - type: "..."
+  UserSettings:
+    args:
+      - type: "..."
+  version:
+    args:
+      - type: "..."
+  delay:
+    args:
+      - type: "..."
+  spawn:
+    args:
+      - type: "..."
+  wait:
+    args:
+      - type: "..."
+  gcinfo:
+    args:
+      - type: "..."
+  require:
+    args:
+      - type: "..."
