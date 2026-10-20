@@ -7,11 +7,13 @@
 -- id ("rbxassetid://123") into AudioAssets.luau.
 
 local AudioAssets = require(script.Parent.AudioAssets)
+local SfxSprite = require(script.Parent.SfxSprite)
 
 local defaults = {
 	Music = {
-		Lobby = "",
-		Round = "",
+		Lobby = "", -- "Party Plaza"
+		Lobby2 = "", -- "Sunset Social"
+		Round = "", -- "Panic Mode"
 	},
 	Sfx = {
 		VoteOpen = "rbxasset://sounds/electronicpingshort.wav",
@@ -51,4 +53,12 @@ for group, entries in defaults do
 	end
 end
 
-return defaults
+-- When the effects sprite is uploaded, every effect plays as a region of that one sound.
+local spriteId = idFor(AudioAssets.SfxSprite)
+local sprite = if spriteId then { Id = spriteId, Regions = SfxSprite } else nil
+
+return {
+	Music = defaults.Music,
+	Sfx = defaults.Sfx,
+	Sprite = sprite,
+}

@@ -15,14 +15,17 @@ local function bump(name: string)
 	Telemetry.Counters[name] = (Telemetry.Counters[name] or 0) + 1
 end
 
--- Player-scoped event, e.g. "VoteCast", "QuestCompleted", "ShopPurchase".
-function Telemetry.PlayerEvent(player: Player, name: string, value: number?)
+-- Player-scoped event with a fixed name (e.g. "ShopPurchase") and an optional detail such as the
+-- item or mode id. Names stay fixed because Roblox caps the number of distinct custom event names;
+-- the detail goes into a custom field instead.
+function Telemetry.PlayerEvent(player: Player, name: string, value: number?, detail: string?)
 	bump(name)
 	if RunService:IsStudio() then
 		return
 	end
+	local fields = if detail then { [Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = detail } else nil
 	local ok, err = pcall(function()
-		AnalyticsService:LogCustomEvent(player, name, value or 1)
+		AnalyticsService:LogCustomEvent(player, name, value or 1, fields)
 	end)
 	if not ok then
 		warn(`[Telemetry] LogCustomEvent {name} failed: {err}`)

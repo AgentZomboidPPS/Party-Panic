@@ -45,7 +45,7 @@ local function purchase(player: Player, itemId: any)
 	end
 	Notifier.Send(player, `Purchased {item.Icon} {item.Name}!`, "success")
 	Notifier.Sound({ player }, "Purchase")
-	Telemetry.PlayerEvent(player, "ShopPurchase:" .. itemId, price)
+	Telemetry.PlayerEvent(player, "ShopPurchase", price, itemId)
 	DataService.Changed(player)
 end
 
@@ -68,7 +68,7 @@ local function equip(player: Player, slot: any, itemId: any)
 			return
 		end
 		profile.Data.Equipped[slot] = itemId
-		Telemetry.PlayerEvent(player, "CosmeticEquipped:" .. itemId)
+		Telemetry.PlayerEvent(player, "CosmeticEquipped", 1, itemId)
 	end
 	CosmeticService.Refresh(player)
 	DataService.Changed(player)

@@ -110,8 +110,13 @@ end
 local SPECS: { [string]: Spec } = {
 	ShoppingCart = {
 		Height = 4.2,
-		Palette = { Basket = rgb(205, 215, 225), Frame = rgb(230, 60, 70), Wheels = rgb(40, 40, 50) },
-		Materials = { Basket = Enum.Material.DiamondPlate },
+		Palette = {
+			Basket = rgb(205, 215, 225),
+			Chassis = rgb(150, 155, 170),
+			Frame = rgb(230, 60, 70),
+			Wheels = rgb(40, 40, 50),
+		},
+		Materials = { Basket = Enum.Material.Metal, Chassis = Enum.Material.Metal },
 		Fallback = function(m)
 			rounded(m, "Basket", Vector3.new(3.8, 2.2, 4.6), 0.3, Vector3.new(0, 2.6, -0.6))
 			rounded(m, "Frame", Vector3.new(3.6, 0.35, 5.2), 0.15, Vector3.new(0, 1.15, -0.3))
@@ -226,7 +231,7 @@ local SPECS: { [string]: Spec } = {
 	},
 	Bush = {
 		Height = 4,
-		Palette = { Leaves = rgb(70, 175, 85) },
+		Palette = { Leaves = rgb(70, 175, 85), Flowers = rgb(255, 130, 190) },
 		Fallback = function(m)
 			cluster(
 				m,

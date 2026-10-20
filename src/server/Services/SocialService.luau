@@ -22,7 +22,7 @@ local lastEmote: { [Player]: number } = {}
 
 local SETTINGS_SCHEMA = {
 	ReducedEffects = "boolean",
-	MusicOn = "boolean",
+	MusicVolume = "number",
 }
 
 local function rootOf(player: Player): BasePart?
@@ -97,6 +97,12 @@ end
 local function setSetting(player: Player, key: any, value: any)
 	if type(key) ~= "string" or SETTINGS_SCHEMA[key] == nil or type(value) ~= SETTINGS_SCHEMA[key] then
 		return
+	end
+	if type(value) == "number" then
+		if value ~= value then
+			return -- NaN
+		end
+		value = math.clamp(value, 0, 1)
 	end
 	local profile = DataService.Get(player)
 	if profile then

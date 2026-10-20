@@ -12,6 +12,9 @@ Modal.__index = Modal
 
 local openModal = nil
 
+-- Fires with true/false whenever any modal opens or the last one closes (used to duck music).
+Modal.AnyOpenChanged = Signal.new()
+
 export type Modal = typeof(setmetatable(
 	{} :: {
 		Root: Frame,
@@ -115,6 +118,7 @@ function Modal.Open(self: Modal)
 	end
 	openModal = self
 	self.IsOpen = true
+	Modal.AnyOpenChanged:Fire(true)
 	self.Root.Visible = true
 	UIKit.PopIn(self.Window, 0.3)
 	self.Opened:Fire()
@@ -128,6 +132,7 @@ function Modal.Close(self: Modal)
 	self.Root.Visible = false
 	if openModal == self then
 		openModal = nil
+		Modal.AnyOpenChanged:Fire(false)
 	end
 	GuiService.SelectedObject = nil
 	self.Closed:Fire()

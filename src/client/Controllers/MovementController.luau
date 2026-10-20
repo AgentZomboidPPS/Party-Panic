@@ -61,38 +61,43 @@ local function bindBouncePad(pad: Instance)
 	end)
 end
 
-local function bindParkour()
-	for _, pad in CollectionService:GetTagged("ParkourStart") do
-		(pad :: BasePart).Touched:Connect(function(hit)
-			if isLocalCharacterPart(hit) and (not parkourStart or os.clock() - parkourStart > 2) then
-				parkourStart = os.clock()
-			end
-		end)
+local function bindParkourStart(pad: Instance)
+	(pad :: BasePart).Touched:Connect(function(hit)
+		if isLocalCharacterPart(hit) and (not parkourStart or os.clock() - parkourStart > 2) then
+			parkourStart = os.clock()
+		end
+	end)
+end
+
+local function bindParkourFinish(pad: Instance)
+	(pad :: BasePart).Touched:Connect(function(hit)
+		if not isLocalCharacterPart(hit) or not parkourStart then
+			return
+		end
+		local time = os.clock() - parkourStart
+		parkourStart = nil
+		local isBest = parkourBest == nil or time < parkourBest
+		if isBest then
+			parkourBest = time
+		end
+		local bestText = if isBest then " New best!" else string.format(" (best %.1fs)", parkourBest :: number)
+		NotificationController.Show(string.format("🧗 Parkour complete in %.1fs!%s", time, bestText), "success")
+		EffectsController.Play("Confetti", (pad :: BasePart).Position + Vector3.new(0, 3, 0))
+	end)
+end
+
+-- Binds existing and future instances with a tag (the lobby replicates over a few seconds).
+local function onTag(tag: string, callback: (Instance) -> ())
+	for _, instance in CollectionService:GetTagged(tag) do
+		callback(instance)
 	end
-	for _, pad in CollectionService:GetTagged("ParkourFinish") do
-		(pad :: BasePart).Touched:Connect(function(hit)
-			if not isLocalCharacterPart(hit) or not parkourStart then
-				return
-			end
-			local time = os.clock() - parkourStart
-			parkourStart = nil
-			local isBest = parkourBest == nil or time < parkourBest
-			if isBest then
-				parkourBest = time
-			end
-			local bestText = if isBest then " New best!" else string.format(" (best %.1fs)", parkourBest :: number)
-			NotificationController.Show(string.format("🧗 Parkour complete in %.1fs!%s", time, bestText), "success")
-			EffectsController.Play("Confetti", (pad :: BasePart).Position + Vector3.new(0, 3, 0))
-		end)
-	end
+	CollectionService:GetInstanceAddedSignal(tag):Connect(callback)
 end
 
 function MovementController.Start(_context)
-	for _, pad in CollectionService:GetTagged("BouncePad") do
-		bindBouncePad(pad)
-	end
-	CollectionService:GetInstanceAddedSignal("BouncePad"):Connect(bindBouncePad)
-	task.defer(bindParkour)
+	onTag("BouncePad", bindBouncePad)
+	onTag("ParkourStart", bindParkourStart)
+	onTag("ParkourFinish", bindParkourFinish)
 
 	-- Knockback decided by the server (direction, strength, stun), applied to our own physics.
 	Remotes.Get("Knockback").OnClientEvent:Connect(function(velocity, stun)

@@ -61,7 +61,7 @@ DataService.Template = {
 	Tutorial = { Done = false },
 	Settings = {
 		ReducedEffects = false,
-		MusicOn = true,
+		MusicVolume = 0.5, -- 0 = off; the client also starts quiet and fades in
 	},
 	Meta = {
 		FirstJoin = 0,

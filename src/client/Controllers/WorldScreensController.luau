@@ -36,6 +36,15 @@ local function surface(part: BasePart, face: Enum.NormalId, pixelsPerStud: numbe
 	})
 end
 
+-- Runs `callback` for every instance with `tag`, now and whenever one is added later. The server
+-- builds the lobby over several seconds, so tagged screens can replicate after this script starts.
+local function onTag(tag: string, callback: (Instance) -> ())
+	for _, instance in CollectionService:GetTagged(tag) do
+		task.spawn(callback, instance)
+	end
+	CollectionService:GetInstanceAddedSignal(tag):Connect(callback)
+end
+
 local function phaseTitle(phase: string): string
 	local gameId = GameState.Get("GameId")
 	local definition = gameId ~= "" and GameDefinitions.Get(gameId)
@@ -268,52 +277,8 @@ local function headshot(userId: number): string
 end
 
 local function buildChampions()
-	local spots: { [number]: BasePart } = {}
-	for _, spot in CollectionService:GetTagged("PodiumSpot") do
-		spots[spot:GetAttribute("Place") :: number] = spot :: BasePart
-	end
 	local tags: { [number]: { image: ImageLabel, label: TextLabel, gui: BillboardGui } } = {}
-	for place, spot in spots do
-		local gui = UIKit.new("BillboardGui", {
-			Adornee = spot,
-			Size = UDim2.fromOffset(150, 170),
-			MaxDistance = 140,
-			LightInfluence = 0,
-			ResetOnSpawn = false,
-			Parent = playerGui,
-		})
-		local image = UIKit.new("ImageLabel", {
-			Size = UDim2.fromOffset(110, 110),
-			Position = UDim2.fromOffset(20, 0),
-			BackgroundColor3 = Theme.Colors.Panel,
-			Parent = gui,
-			Children = { UIKit.Round(), UIKit.Stroke(Theme.Colors.Yellow, 3, 0) },
-		})
-		local label = UIKit.Label({
-			Text = "",
-			Font = Theme.Fonts.Display,
-			TextSize = 24,
-			Position = UDim2.fromOffset(0, 116),
-			Size = UDim2.new(1, 0, 0, 50),
-			Parent = gui,
-			Children = { UIKit.TextStroke(0.2) },
-		})
-		tags[place] = { image = image, label = label, gui = gui }
-	end
-
-	local boardPart = CollectionService:GetTagged("ChampionBoard")[1] :: BasePart?
 	local boardText: TextLabel? = nil
-	if boardPart then
-		local gui = surface(boardPart, Enum.NormalId.Left, 20)
-		boardText = UIKit.Label({
-			Text = "",
-			TextScaled = true,
-			Size = UDim2.fromScale(1, 1),
-			Font = Theme.Fonts.Display,
-			Parent = gui,
-			Children = { UIKit.Padding(18) },
-		})
-	end
 
 	local function refresh()
 		local champions = GameState.GetJSON("Champions") or {}
@@ -343,6 +308,50 @@ local function buildChampions()
 			boardText.Text = table.concat(lines, "\n")
 		end
 	end
+	-- Podium spots and the board are bound as they appear (the lobby builds over a few seconds).
+	onTag("PodiumSpot", function(instance)
+		local spot = instance :: BasePart
+		local place = spot:GetAttribute("Place") :: number
+		local gui = UIKit.new("BillboardGui", {
+			Adornee = spot,
+			Size = UDim2.fromOffset(150, 170),
+			MaxDistance = 140,
+			LightInfluence = 0,
+			ResetOnSpawn = false,
+			Parent = playerGui,
+		})
+		local image = UIKit.new("ImageLabel", {
+			Size = UDim2.fromOffset(110, 110),
+			Position = UDim2.fromOffset(20, 0),
+			BackgroundColor3 = Theme.Colors.Panel,
+			Parent = gui,
+			Children = { UIKit.Round(), UIKit.Stroke(Theme.Colors.Yellow, 3, 0) },
+		})
+		local label = UIKit.Label({
+			Text = "",
+			Font = Theme.Fonts.Display,
+			TextSize = 24,
+			Position = UDim2.fromOffset(0, 116),
+			Size = UDim2.new(1, 0, 0, 50),
+			Parent = gui,
+			Children = { UIKit.TextStroke(0.2) },
+		})
+		tags[place] = { image = image, label = label, gui = gui }
+		refresh()
+	end)
+	onTag("ChampionBoard", function(instance)
+		local gui = surface(instance :: BasePart, Enum.NormalId.Left, 20)
+		boardText = UIKit.Label({
+			Text = "",
+			TextScaled = true,
+			Size = UDim2.fromScale(1, 1),
+			Font = Theme.Fonts.Display,
+			Parent = gui,
+			Children = { UIKit.Padding(18) },
+		})
+		refresh()
+	end)
+
 	GameState.Changed("Champions", refresh)
 	refresh()
 end
@@ -367,21 +376,17 @@ local function bindSecretToken()
 end
 
 function WorldScreensController.Start(_context)
-	task.spawn(function()
-		workspace:WaitForChild("Lobby", 60)
-		task.wait(0.5)
-		for _, part in CollectionService:GetTagged("AnnouncementScreen") do
-			buildAnnouncement(part :: BasePart)
-		end
-		for _, part in CollectionService:GetTagged("VoteScreen") do
-			buildVoteScreen(part :: BasePart)
-		end
-		for _, part in CollectionService:GetTagged("QuestBoard") do
-			buildQuestBoard(part :: BasePart)
-		end
-		buildChampions()
-		bindSecretToken()
+	onTag("AnnouncementScreen", function(part)
+		buildAnnouncement(part :: BasePart)
 	end)
+	onTag("VoteScreen", function(part)
+		buildVoteScreen(part :: BasePart)
+	end)
+	onTag("QuestBoard", function(part)
+		buildQuestBoard(part :: BasePart)
+	end)
+	buildChampions()
+	task.spawn(bindSecretToken)
 end
 
 return WorldScreensController

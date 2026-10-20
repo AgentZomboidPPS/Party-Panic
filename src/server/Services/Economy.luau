@@ -20,7 +20,7 @@ function Economy.AddCoins(player: Player, amount: number, reason: string): boole
 		return false
 	end
 	profile.Data.Coins += math.floor(amount)
-	Telemetry.PlayerEvent(player, "CoinsEarned:" .. reason, amount)
+	Telemetry.PlayerEvent(player, "CoinsEarned", amount, reason)
 	DataService.Changed(player)
 	return true
 end
@@ -31,7 +31,7 @@ function Economy.SpendCoins(player: Player, amount: number, reason: string): boo
 		return false
 	end
 	profile.Data.Coins -= math.floor(amount)
-	Telemetry.PlayerEvent(player, "CoinsSpent:" .. reason, amount)
+	Telemetry.PlayerEvent(player, "CoinsSpent", amount, reason)
 	DataService.Changed(player)
 	return true
 end

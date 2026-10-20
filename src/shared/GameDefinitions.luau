@@ -98,6 +98,7 @@ local list: { GameDefinition } = {
 		MinPlayers = 1,
 		IsTeam = false,
 	},
+	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
 local GameDefinitions = {

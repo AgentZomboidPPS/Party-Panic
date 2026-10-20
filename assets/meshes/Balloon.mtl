@@ -1,0 +1,11 @@
+newmtl Balloon
+Kd 1.000 0.353 0.549
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl String
+Kd 0.941 0.941 0.941
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

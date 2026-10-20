@@ -123,7 +123,7 @@ function RewardService.GrantRound(definition, placed: { Placement.Placed }, winn
 			WinningTeam = winningTeam,
 			MyTeam = entry.Team,
 		})
-		Telemetry.PlayerEvent(player, "RoundPlacement:" .. definition.Id, item.Place)
+		Telemetry.PlayerEvent(player, "RoundPlacement", item.Place, definition.Id)
 		DataService.Changed(player)
 	end
 end

@@ -1,6 +1,5 @@
 -- Small declarative UI helpers so every screen shares the same rounded, glossy, animated style.
 
-local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
 local Theme = require(script.Parent.Theme)
@@ -120,9 +119,9 @@ function UIKit.Panel(props: Props, top: Color3?, bottom: Color3?): Frame
 	return UIKit.new("Frame", defaults, children)
 end
 
-local clickSound: Sound? = nil
-function UIKit.SetClickSound(sound: Sound)
-	clickSound = sound
+local clickHandler: (() -> ())? = nil
+function UIKit.SetClickHandler(handler: () -> ())
+	clickHandler = handler
 end
 
 -- Chunky button with hover and press animation. `onClick` fires on activation.
@@ -165,8 +164,8 @@ function UIKit.Button(props: Props, onClick: (() -> ())?, top: Color3?, bottom: 
 	end)
 	if onClick then
 		button.Activated:Connect(function()
-			if clickSound then
-				SoundService:PlayLocalSound(clickSound)
+			if clickHandler then
+				clickHandler()
 			end
 			onClick()
 		end)

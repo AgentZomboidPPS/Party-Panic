@@ -347,6 +347,59 @@ local function toggleRow(
 	refresh()
 end
 
+local MUSIC_LEVELS = {
+	{ Value = 0, Label = "🔇 Off" },
+	{ Value = 0.25, Label = "🔈 Low" },
+	{ Value = 0.5, Label = "🔉 Medium" },
+	{ Value = 1, Label = "🔊 High" },
+}
+
+local function musicRow(parent: Instance, order: number, setSetting: RemoteEvent)
+	local row = UIKit.new(
+		"Frame",
+		{ Size = UDim2.new(1, 0, 0, 64), BackgroundTransparency = 1, LayoutOrder = order, Parent = parent }
+	)
+	UIKit.Label({
+		Text = "🎵 Music volume",
+		TextSize = 24,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -190, 1, 0),
+		Parent = row,
+	})
+	local function currentIndex(): number
+		local volume = State.Setting("MusicVolume")
+		if type(volume) ~= "number" then
+			return 3
+		end
+		local best, bestDistance = 1, math.huge
+		for index, level in MUSIC_LEVELS do
+			local distance = math.abs(level.Value - volume)
+			if distance < bestDistance then
+				best, bestDistance = index, distance
+			end
+		end
+		return best
+	end
+	local button
+	button = UIKit.Button({
+		Text = "",
+		TextSize = 22,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.fromOffset(170, 50),
+		CornerRadius = 25,
+		Parent = row,
+	}, function()
+		local nextLevel = MUSIC_LEVELS[(currentIndex() % #MUSIC_LEVELS) + 1]
+		setSetting:FireServer("MusicVolume", nextLevel.Value)
+	end, Theme.Colors.Cyan, Color3.fromRGB(50, 120, 230))
+	local function refresh()
+		button.Text = MUSIC_LEVELS[currentIndex()].Label
+	end
+	State.ProfileChanged:Connect(refresh)
+	refresh()
+end
+
 local function buildSettings(overlay: Instance)
 	local modal = Modal.new(overlay, "Settings", "⚙️", Vector2.new(560, 420))
 	local list = UIKit.new("Frame", {
@@ -356,11 +409,7 @@ local function buildSettings(overlay: Instance)
 		Children = { UIKit.List(Enum.FillDirection.Vertical, 10) },
 	})
 	local setSetting = Remotes.Get("SetSetting")
-	toggleRow(list, 1, "🎵 Music", function()
-		return State.Setting("MusicOn") ~= false
-	end, function(value)
-		setSetting:FireServer("MusicOn", value)
-	end)
+	musicRow(list, 1, setSetting)
 	toggleRow(list, 2, "✨ Reduced effects", function()
 		return State.Setting("ReducedEffects") == true
 	end, function(value)

@@ -2,8 +2,11 @@
 -- 0 = not uploaded yet (Sounds.luau then uses its defaults). Filled in by tools/upload_assets.py.
 
 return {
+	-- One upload holding every sound effect (see src/shared/SfxSprite.luau for the offsets).
+	SfxSprite = 0,
 	Music = {
 		Lobby = 0,
+		Lobby2 = 0,
 		Round = 0,
 	},
 	Sfx = {

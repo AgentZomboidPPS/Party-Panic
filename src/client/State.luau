@@ -28,7 +28,7 @@ function State.Init()
 		if
 			not previous
 			or previous.Settings.ReducedEffects ~= snapshot.Settings.ReducedEffects
-			or previous.Settings.MusicOn ~= snapshot.Settings.MusicOn
+			or previous.Settings.MusicVolume ~= snapshot.Settings.MusicVolume
 		then
 			State.SettingsChanged:Fire(snapshot.Settings)
 		end

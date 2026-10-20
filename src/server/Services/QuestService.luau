@@ -68,7 +68,7 @@ function QuestService.Track(player: Player, eventName: string, amount: number?, 
 		Economy.AddCoins(player, def.RewardCoins, "Quest")
 		Economy.AddXP(player, def.RewardXP)
 		Notifier.Send(player, `Quest complete: {def.Text}! +{def.RewardCoins} coins, +{def.RewardXP} XP`, "reward", 6)
-		Telemetry.PlayerEvent(player, "QuestCompleted:" .. def.Id)
+		Telemetry.PlayerEvent(player, "QuestCompleted", 1, def.Id)
 	end
 	DataService.Changed(player)
 end
