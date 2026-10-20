@@ -63,3 +63,18 @@ How the client plays music (`AudioController`):
 - Music starts at a gentle default volume and **fades in** over 6 seconds on first launch.
 - Music **ducks** while a menu is open. Players choose Off / Low / Medium / High in Settings.
 - The round track **speeds up** during the last 10 seconds.
+
+## Store art
+
+`assets/store/` holds the experience icon (512×512) and five thumbnails (1920×1080): the lobby
+key art, Yeet Arena, Shopping Cart Grand Prix, Floor Is Lava and Don't Get Flattened. They're
+rendered from the game's own meshes and a dump of the real lobby (see the README, "Seeing the game
+without Studio"):
+
+```sh
+python tools/art/make_art.py --lobby dump.json --out art/ --samples 64   # needs bpy and Pillow
+```
+
+Lettering uses Luckiest Guy (Apache 2.0, `tools/art/fonts/LICENSE.txt`), the same face as the
+in-game signs. Upload them in the Creator Hub: your experience > **Places** > the start place >
+**Thumbnails**, and the icon under the experience's **Basic Settings**.

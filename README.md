@@ -15,7 +15,7 @@ Outline*.
 | **6 launch modes** | 🔨 Don't Get Flattened · 🌋 Floor Is Lava · 🥊 Yeet Arena · 🛒 Shopping Cart Grand Prix · 💰 Greedy Goblins · 🔘 The Wrong Button |
 | **Progression** | Coins, XP and levels, itemized round rewards, personal bests, daily and weekly quests, a daily gift with streaks, a hidden daily token, level and stat unlocks |
 | **Cosmetics** | Trails, titles, emotes (dances and effect emotes), victory and knockout effects, a coin shop with confirmation, an optional VIP pass (cosmetic only, never pay-to-win) |
-| **Lobby** | A vote stage with three portal arches and giant screens, winner podium with avatar headshots, shop, quest board, daily gift machine, arcade target range, emote stage with a confetti cannon, spiral parkour tower, bounce pads, terrain hills, a lake and floating sky islands |
+| **Lobby** | One compact round plaza built around the vote stage: three glowing portal bays with screens, a fountain with a turning gold trophy, winner podium, shop with a mannequin gallery, quest board and a giant gumball gift machine, arcade target range, emote stage with a dance floor, a spiral parkour tower to a view deck, colored walkways, planters, lamp posts with party lights, and a ring of trees and hills |
 | **Look** | Rounded CSG geometry instead of blocks, 15 detailed original mesh props, ShadowMap lighting (sharp sun shadows, light on phones), bloom, sun rays, clouds, ambient particles and bobbing decorations |
 | **Audio** | An original soundtrack (two lobby tracks plus a round track that speeds up near the end) and 15 original sound effects |
 | **UI** | Mobile-first scaling, rounded glossy panels, toasts, rules card with a 3-2-1 countdown, standings, results breakdown, spectate, settings (music volume, reduced effects), onboarding tips |
@@ -41,6 +41,13 @@ python3 tools/publish_place.py --universe-id <id> --place-id <id>
 
 It builds the place, publishes it, and sets the name, the store description from
 [docs/STORE_DESCRIPTION.txt](docs/STORE_DESCRIPTION.txt) and a server size of 12.
+
+- The API key needs **Place Publishing** (write) and **universe.place** (write) for the experience.
+- Publishing is refused with *409 "Server is busy"* while a Collaborative Editing (Team Create)
+  session holds the place. Close Studio, or turn Collaborative Editing off, and try again.
+
+Store art (thumbnails and icon) lives in [assets/store](assets/store) and is made with
+`tools/art/make_art.py` (see [docs/ASSETS.md](docs/ASSETS.md)).
 
 Also check these in **Game Settings** in Studio:
 
@@ -88,6 +95,20 @@ tools/               mesh generator, music composer, asset uploader, mini-game s
 tests/               Lune unit tests
 docs/                guides and design notes
 ```
+
+## Seeing the game without Studio
+
+`tools/preview` runs the lobby builder on a **real Roblox server** (Open Cloud Luau execution, no
+publish needed), dumps every part, the terrain and the lighting, and renders it with Blender:
+
+```sh
+python3 tools/preview/bundle.py > task.luau                  # working-tree World modules + dump script
+python3 tools/preview/luau_task.py task.luau - dump.json     # run it on Roblox
+python tools/preview/render.py dump.json shots/lobby --views spawn,overview   # needs `pip install bpy`
+```
+
+It catches runtime errors and warnings too (CSG failures, missing assets), and it's how the lobby
+layout was checked. `bundle.py my_check.luau` runs any script with the World modules loaded.
 
 ## Checks
 

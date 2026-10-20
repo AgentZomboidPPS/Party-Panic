@@ -241,15 +241,31 @@ def build_parts(parts):
                     cutter.material_slots[0].link = "OBJECT"
                     cutter.material_slots[0].material = mat
                     cutter_collection.objects.link(cutter)
-            for kind, matrix in positives:
-                obj = add_object(f"u{index}", prim_mesh(kind), matrix, mat, shadow)
-                if cutter_collection:
-                    mod = obj.modifiers.new("cut", "BOOLEAN")
-                    mod.operation = "DIFFERENCE"
-                    mod.operand_type = "COLLECTION"
-                    mod.collection = cutter_collection
-                    mod.solver = "EXACT"
-                    mod.material_mode = "TRANSFER"
+            if not cutter_collection:
+                for kind, matrix in positives:
+                    add_object(f"u{index}", prim_mesh(kind), matrix, mat, shadow)
+            else:
+                # Merge the pieces into one solid first (coplanar faces between pieces render black
+                # in Cycles), then cut.
+                first_kind, first_matrix = positives[0]
+                obj = add_object(f"u{index}", prim_mesh(first_kind), first_matrix, mat, shadow)
+                if len(positives) > 1:
+                    others = bpy.data.collections.new(f"pos{index}")
+                    for kind, matrix in positives[1:]:
+                        other = bpy.data.objects.new("piece", prim_mesh(kind))
+                        other.matrix_world = matrix
+                        others.objects.link(other)
+                    merge = obj.modifiers.new("merge", "BOOLEAN")
+                    merge.operation = "UNION"
+                    merge.operand_type = "COLLECTION"
+                    merge.collection = others
+                    merge.solver = "EXACT"
+                mod = obj.modifiers.new("cut", "BOOLEAN")
+                mod.operation = "DIFFERENCE"
+                mod.operand_type = "COLLECTION"
+                mod.collection = cutter_collection
+                mod.solver = "EXACT"
+                mod.material_mode = "TRANSFER"
             continue
         if p["c"] == "MeshPart" and p.get("prop"):
             pieces = glb_pieces(p["prop"])
