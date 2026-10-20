@@ -11,6 +11,9 @@ URL of the experience and of its start place.
 Authentication: set ROBLOX_API_KEY to an Open Cloud API key with "universe-places" write
 (publishing) and "universe.place" write (name and description) for this experience.
 
+If Studio has the place open with Collaborative Editing, Roblox refuses with 409 until that session
+ends (up to ~20 minutes after everyone leaves); --wait-minutes keeps retrying until then.
+
 Safety: this refuses to publish when the experience is public, so a test build can't go live by
 accident. Pass --allow-public to publish to a public experience on purpose.
 """
@@ -22,6 +25,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -70,6 +74,7 @@ def main():
     parser.add_argument("--no-build", action="store_true", help="publish the existing build/PartyPanic.rbxl")
     parser.add_argument("--allow-public", action="store_true", help="allow publishing to a public experience")
     parser.add_argument("--dry-run", action="store_true", help="check everything, publish nothing")
+    parser.add_argument("--wait-minutes", type=float, default=0, help="keep retrying while Studio holds the place")
     args = parser.parse_args()
 
     description = read_description()
@@ -96,28 +101,45 @@ def main():
         print("Dry run: nothing published.")
         return
 
-    version = request(
-        "POST",
-        f"{PUBLISH}/{args.universe_id}/places/{args.place_id}/versions?versionType=Published",
-        PLACE_FILE.read_bytes(),
-        {"Content-Type": "application/octet-stream"},
-    )
+    # 409 "Server is busy" means a Collaborative Editing session still holds the place. It can stay
+    # alive for up to ~20 minutes after everyone leaves Studio, so retry with backoff.
+    deadline = time.time() + args.wait_minutes * 60
+    delay = 30
+    while True:
+        try:
+            version = request(
+                "POST",
+                f"{PUBLISH}/{args.universe_id}/places/{args.place_id}/versions?versionType=Published",
+                PLACE_FILE.read_bytes(),
+                {"Content-Type": "application/octet-stream"},
+            )
+            break
+        except SystemExit as error:
+            if "HTTP 409" not in str(error) or time.time() + delay > deadline:
+                raise
+            print(f"Place is locked by a Studio session; retrying in {delay}s", flush=True)
+            time.sleep(delay)
+            delay = min(delay * 2, 240)
     print(f"Published version {version.get('versionNumber')}")
 
     patch = {"displayName": DISPLAY_NAME, "description": description, "serverSize": SERVER_SIZE}
-    request(
-        "PATCH",
-        f"{place_url}?updateMask={','.join(patch)}",
-        json.dumps(patch).encode(),
-        {"Content-Type": "application/json"},
-    )
-    # The API can accept an update it didn't apply (missing scope), so read it back.
-    place = request("GET", place_url)
-    mismatched = [field for field, value in patch.items() if place.get(field) != value]
-    if mismatched:
-        print(f"Warning: these place settings did not apply: {', '.join(mismatched)} (check the key's scopes)")
-    else:
-        print(f"Set name {DISPLAY_NAME!r}, description and server size {SERVER_SIZE}")
+    try:
+        request(
+            "PATCH",
+            f"{place_url}?updateMask={','.join(patch)}",
+            json.dumps(patch).encode(),
+            {"Content-Type": "application/json"},
+        )
+        # The API can accept an update it didn't apply (missing scope), so read it back.
+        place = request("GET", place_url)
+        mismatched = [field for field, value in patch.items() if place.get(field) != value]
+        if mismatched:
+            print(f"Warning: these place settings did not apply: {', '.join(mismatched)} (check the key's scopes)")
+        else:
+            print(f"Set name {DISPLAY_NAME!r}, description and server size {SERVER_SIZE}")
+    except SystemExit as error:
+        # The version is already live; settings are a separate permission (universe.place write).
+        print(f"Warning: published, but couldn't update the place settings: {error}")
 
     universe = request("GET", universe_url)
     print(f"Experience visibility is still {universe.get('visibility', 'UNKNOWN')}")
