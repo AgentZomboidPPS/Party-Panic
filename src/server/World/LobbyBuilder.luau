@@ -252,30 +252,22 @@ end
 local function buildGround(root: Model)
 	local ground = Build.Model("Ground", root)
 	-- One thick disc is the whole walkable plaza; terrain is carved away under it (Environment).
-	disc("Plaza", PLAZA_RADIUS * 2, 6, Vector3.new(0, -3, 0), { Color = PALETTE.Plaza, Parent = ground })
-	-- Thin layers on top, each a little higher than the one below so none of them flicker.
-	disc("Curb", PLAZA_RADIUS * 2 + 3, 6, Vector3.new(0, -3.2, 0), { Color = PALETTE.Curb, Parent = ground })
-	disc("CurbTrim", PLAZA_RADIUS * 2 + 0.8, 0.1, Vector3.new(0, 0, 0), flat({ Color = PALETTE.Trim, Parent = ground }))
-	-- Pastel bands: lavender outer ring, white pinstripe, warm cream middle, then the blue court.
+	disc("Plaza", PLAZA_RADIUS * 2, 6, Vector3.new(0, -3, 0), { Color = PALETTE.Outer, Parent = ground })
+	-- A gold curb just below the plaza edge.
+	disc("Curb", PLAZA_RADIUS * 2 + 3, 6, Vector3.new(0, -3.15, 0), { Color = PALETTE.Trim, Parent = ground })
+	-- Pattern layers stacked on top. Every layer's top is a full 0.1 stud above the one under it:
+	-- surfaces closer than that flicker (z-fighting) as the camera moves.
 	local layers = {
-		{ "PlazaTop", PLAZA_RADIUS * 2 - 0.6, PALETTE.Outer },
-		{ "MidStripe", 122, rgb(255, 255, 255) },
-		{ "Mid", 118, PALETTE.Plaza },
+		{ "MidStripe", 122, rgb(255, 255, 255), 0.1 },
+		{ "Mid", 118, PALETTE.Plaza, 0.2 },
+		-- (walkways: 0.3)
+		{ "CourtRing", 54, PALETTE.Trim, 0.4 },
+		{ "Court", 50, PALETTE.Court, 0.5 },
+		{ "CourtInner", 36, rgb(232, 238, 255), 0.6 },
 	}
-	for index, layer in layers do
-		disc(
-			layer[1],
-			layer[2],
-			0.1,
-			Vector3.new(0, 0.03 + index * 0.04, 0),
-			flat({ Color = layer[3], Parent = ground })
-		)
+	for _, layer in layers do
+		disc(layer[1], layer[2], 0.1, Vector3.new(0, layer[4] - 0.05, 0), flat({ Color = layer[3], Parent = ground }))
 	end
-
-	-- Fountain court and its gold ring (above the walkways, which run underneath its edge).
-	disc("CourtRing", 54, 0.1, Vector3.new(0, 0.19, 0), flat({ Color = PALETTE.Trim, Parent = ground }))
-	disc("Court", 50, 0.1, Vector3.new(0, 0.23, 0), flat({ Color = PALETTE.Court, Parent = ground }))
-	disc("CourtInner", 36, 0.1, Vector3.new(0, 0.27, 0), flat({ Color = rgb(232, 238, 255), Parent = ground }))
 
 	-- Walkways from the court to every zone, each in its zone's color.
 	local walkways = {
@@ -297,7 +289,7 @@ local function buildGround(root: Model)
 			walk.width * 0.45,
 			flat({
 				Name = "Walkway",
-				CFrame = CFrame.lookAt(middle + Vector3.new(0, 0.15, 0), middle + Vector3.new(0, 0.15, 0) + direction),
+				CFrame = CFrame.lookAt(middle + Vector3.new(0, 0.25, 0), middle + Vector3.new(0, 0.25, 0) + direction),
 				Color = walk.color,
 				Parent = ground,
 			})
@@ -323,7 +315,7 @@ local function buildSpawns(root: Model)
 		spawn.Neutral = true
 		spawn.Duration = 0
 		spawn.Size = Vector3.new(5, 0.2, 5)
-		spawn.CFrame = point + Vector3.new(0, 0.2, 0)
+		spawn.CFrame = point + Vector3.new(0, 0.7, 0)
 		spawn.Transparency = 1
 		spawn.CanCollide = false
 		spawn.Parent = spawns
@@ -331,7 +323,7 @@ local function buildSpawns(root: Model)
 			"SpawnPad",
 			5.5,
 			0.12,
-			position + Vector3.new(0, 0.18, 0),
+			position + Vector3.new(0, 0.66, 0),
 			flat({
 				Color = PALETTE.Spawn,
 				Material = Enum.Material.Neon,
@@ -422,7 +414,7 @@ local function buildFountain(root: Model)
 	for _, degrees in { 0, 50, 130, 180, 200, 340 } do
 		local angle = math.rad(degrees)
 		local position = Vector3.new(math.cos(angle) * 31, 0, math.sin(angle) * 31)
-		MeshLibrary.Get("Bench", { CFrame = facing(position, Vector3.zero), Parent = center })
+		MeshLibrary.Get("Bench", { CFrame = facing(position + Vector3.new(0, 0.2, 0), Vector3.zero), Parent = center })
 	end
 end
 
@@ -440,8 +432,8 @@ local function buildVoteStage(root: Model): { BasePart }
 		Parent = stage,
 	})
 	Shapes.Slab(Vector3.new(90.6, 0.5, 26.6), 6.2, {
-		Name = "StageTrim",
-		CFrame = CFrame.new(0, STAGE_TOP - 0.2, STAGE_Z),
+		Name = "StageTrim", -- top sits under the stage top, so only the gold lip shows
+		CFrame = CFrame.new(0, STAGE_TOP - 0.4, STAGE_Z),
 		Color = PALETTE.Trim,
 		Parent = stage,
 	})
@@ -663,8 +655,8 @@ local function buildPodium(root: Model)
 		Parent = podium,
 	})
 	Shapes.Slab(Vector3.new(24.6, 0.3, 36.6), 6.2, {
-		Name = "PodiumBaseTrim",
-		CFrame = CFrame.new(base + Vector3.new(2, 0.7, 0)),
+		Name = "PodiumBaseTrim", -- top sits under the base top, so only the gold lip shows
+		CFrame = CFrame.new(base + Vector3.new(2, 0.5, 0)),
 		Color = PALETTE.Trim,
 		Parent = podium,
 	})
@@ -1034,7 +1026,7 @@ local function buildArcade(root: Model): ({ BasePart }, TextLabel)
 	end
 	Shapes.RoundedBox(Vector3.new(15.4, 9.4, 1.4), 0.6, {
 		Name = "ScoreBezel",
-		CFrame = wallCFrame * CFrame.new(0, 13.6, 0.5),
+		CFrame = wallCFrame * CFrame.new(0, 13.6, 0.7),
 		Color = PALETTE.Trim,
 		Parent = arcade,
 	})
@@ -1064,7 +1056,7 @@ local function buildArcade(root: Model): ({ BasePart }, TextLabel)
 		0.55,
 		flat({
 			Name = "FiringLine",
-			CFrame = wallCFrame * CFrame.new(0, -8.2, -16),
+			CFrame = wallCFrame * CFrame.new(0, -8, -16),
 			Color = rgb(255, 210, 70),
 			Material = Enum.Material.Neon,
 			Parent = arcade,
@@ -1107,7 +1099,7 @@ local function buildEmoteStage(root: Model): (ProximityPrompt, Vector3)
 				0.6,
 				flat({
 					Name = "DanceTile",
-					CFrame = CFrame.new(center + offset + Vector3.new(0, 1.62, 0)),
+					CFrame = CFrame.new(center + offset + Vector3.new(0, 1.7, 0)),
 					Color = PARTY_COLORS[((gx + gz) % #PARTY_COLORS) + 1],
 					Material = if (gx + gz) % 2 == 0 then Enum.Material.Neon else Enum.Material.SmoothPlastic,
 					Transparency = if (gx + gz) % 2 == 0 then 0.25 else 0,
@@ -1333,7 +1325,7 @@ local function buildScenery(root: Model)
 		local position = Vector3.new(math.cos(angle) * 61, 0, math.sin(angle) * 61)
 		disc("Planter", 10, 2.4, position + Vector3.new(0, 1.2, 0), { Color = rgb(255, 255, 255), Parent = scenery })
 		disc("PlanterTrim", 10.6, 0.6, position + Vector3.new(0, 2.2, 0), { Color = PALETTE.Trim, Parent = scenery })
-		disc("Soil", 9, 0.2, position + Vector3.new(0, 2.45, 0), flat({ Color = rgb(120, 85, 60), Parent = scenery }))
+		disc("Soil", 9, 0.2, position + Vector3.new(0, 2.55, 0), flat({ Color = rgb(120, 85, 60), Parent = scenery }))
 		MeshLibrary.Get(
 			"Tree",
 			{ Scale = 1.15, CFrame = CFrame.new(position + Vector3.new(0, 2.4, 0)), Parent = scenery }

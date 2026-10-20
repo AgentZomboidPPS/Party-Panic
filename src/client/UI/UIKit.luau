@@ -15,6 +15,12 @@ function UIKit.new(className: string, props: Props?, children: { Instance }?): a
 	for key, value in props or ({} :: Props) do
 		if key == "Parent" then
 			parent = value
+		elseif key == "Children" then
+			-- Children can come in the props table too (like UIKit.Label/Button/Panel); setting it
+			-- as a property would throw "Children is not a valid member".
+			for _, child in value do
+				child.Parent = instance
+			end
 		else
 			(instance :: any)[key] = value
 		end
