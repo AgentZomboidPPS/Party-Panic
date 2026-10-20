@@ -57,8 +57,30 @@ for _, definition in GameDefinitions.List do
 	end
 end
 
+-- Bot brains (Bots/<Id>.luau): how bots play each mode. Bots/Default.luau explains the contract and
+-- plays any mode that has no brain yet.
+local brains: { [string]: any } = {}
+local botFolder = script:FindFirstChild("Bots")
+if botFolder then
+	for _, child in botFolder:GetChildren() do
+		if not child:IsA("ModuleScript") then
+			continue
+		end
+		local ok, brain = pcall(require, child)
+		if ok and type(brain) == "table" and type(brain.Step) == "function" then
+			brains[child.Name] = brain
+		else
+			warn(`[MiniGames] bot brain {child.Name} failed to load and is skipped: {brain}`)
+		end
+	end
+end
+
 function MiniGames.Get(id: string)
 	return modules[id]
+end
+
+function MiniGames.Brain(id: string): any
+	return brains[id] or brains.Default
 end
 
 function MiniGames.Ids(): { string }
