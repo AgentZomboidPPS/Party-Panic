@@ -151,6 +151,67 @@ function Scenery.Volcano(context, base: Vector3, facing: Vector3, scale: number)
 	return volcano
 end
 
+-- A sunny meadow on `center`'s height: grass out to the horizon, a ring of forest, flowering bushes
+-- and soft hills far away. The middle 50 studs stay open for the game.
+function Scenery.Meadow(context, center: Vector3, radius: number)
+	Build.Part({
+		Name = "Grass",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(4, radius * 2, radius * 2),
+		CFrame = upright(center - Vector3.new(0, 2, 0)),
+		Color = rgb(106, 188, 82),
+		Material = Enum.Material.Grass,
+		Parent = context.Arena,
+	})
+	local leafColors = { rgb(80, 190, 90), rgb(110, 200, 80), rgb(70, 165, 95), rgb(140, 205, 85) }
+	for index = 0, 29 do
+		local angle = (index + rng:NextNumber(-0.35, 0.35)) / 30 * math.pi * 2
+		local distance = rng:NextNumber(54, 96)
+		MeshLibrary.Get("Tree", {
+			Scale = rng:NextNumber(1.5, 2.7),
+			Colors = { Leaves = leafColors[rng:NextInteger(1, #leafColors)] },
+			CFrame = CFrame.new(center + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance))
+				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+			Parent = context.Arena,
+		})
+	end
+	local flowerColors = { rgb(255, 130, 190), rgb(255, 220, 90), rgb(180, 140, 255), rgb(255, 255, 255) }
+	for index = 0, 17 do
+		local angle = (index + rng:NextNumber(-0.4, 0.4)) / 18 * math.pi * 2
+		local distance = rng:NextNumber(36, 50)
+		MeshLibrary.Get("Bush", {
+			Scale = rng:NextNumber(1.1, 1.9),
+			Colors = { Flowers = flowerColors[rng:NextInteger(1, #flowerColors)] },
+			CFrame = CFrame.new(center + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance))
+				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+			Parent = context.Arena,
+		})
+	end
+	-- Rolling hills on the horizon (squashed spheres half sunk into the ground).
+	for index = 0, 11 do
+		local angle = (index + rng:NextNumber(-0.3, 0.3)) / 12 * math.pi * 2
+		local distance = radius * rng:NextNumber(0.7, 0.85)
+		local size = Vector3.new(rng:NextNumber(150, 230), rng:NextNumber(50, 90), rng:NextNumber(110, 160))
+		local hill = Build.Part({
+			Name = "Hill",
+			Size = size,
+			CFrame = CFrame.new(
+				center + Vector3.new(math.cos(angle) * distance, -size.Y * 0.2, math.sin(angle) * distance)
+			) * CFrame.Angles(0, -angle + math.pi / 2, 0),
+			Color = rgb(96, 176, 86):Lerp(rgb(70, 140, 90), rng:NextNumber(0, 1)),
+			Material = Enum.Material.Grass,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+			Parent = context.Arena,
+		})
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = hill
+	end
+end
+
 -- A ring of rock spires around `center` (on the ground at its Y), random sizes and turns.
 function Scenery.RockRim(context, center: Vector3, radius: number, count: number, minScale: number, maxScale: number)
 	for index = 0, count - 1 do

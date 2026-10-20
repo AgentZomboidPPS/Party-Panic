@@ -265,6 +265,25 @@ def tube(points: list[tuple[float, float, float]], radius: float, sides: int = 8
     return Mesh(verts, faces)
 
 
+def taper(points: list[tuple[float, float, float]], r0: float, r1: float, sides: int = 8) -> Mesh:
+    """A tube along a polyline that thins from r0 to r1 and is closed at both ends (roots, branches)."""
+    mesh = tube(points, 1.0, sides)
+    count = len(points)
+    for i, point in enumerate(points):
+        radius = lerp(r0, r1, i / (count - 1))
+        ring = slice(i * sides, (i + 1) * sides)
+        mesh.v[ring] = np.array(point) + (mesh.v[ring] - np.array(point)) * radius
+    faces = [tuple(f) for f in mesh.f]
+    verts = [tuple(v) for v in mesh.v]
+    for end, ring_start, flip in ((points[0], 0, True), (points[-1], (count - 1) * sides, False)):
+        center = len(verts)
+        verts.append(tuple(end))
+        for j in range(sides):
+            a, b = ring_start + j, ring_start + (j + 1) % sides
+            faces.append((center, b, a) if flip else (center, a, b))
+    return Mesh(verts, faces)
+
+
 def extrude(polygon: list[tuple[float, float]], depth: float) -> Mesh:
     """Extrudes a star-shaped 2D polygon (fan-triangulated from its centroid) along Z."""
     pts = np.array(polygon, dtype=float)
@@ -729,6 +748,100 @@ def fire_wheel():
     return {"Rim": place(merge(*rim)), "Spokes": place(merge(*spokes)), "Hub": place(hub)}
 
 
+def honey_tree():
+    """Honey Trap's giant tree: flared roots, a gnarled trunk, a leafy crown, a beehive, and a branch
+    reaching forward (-Z) whose tip ("Anchor") is where the fruit vine hangs from."""
+    trunk = organic_lathe([(9.5, 0.0), (7.2, 1.2), (6.0, 3.0), (5.3, 7.0), (4.9, 14.0), (4.5, 22.0), (3.9, 30.0),
+                           (3.1, 36.0), (0.0, 38.5)], 20, 0.12, waves=5, seed=8)
+    roots = []
+    for index in range(7):
+        a = 2 * math.pi * index / 7 + 0.3
+        bend = a + 0.15
+        roots.append(taper([(math.cos(a) * 3.5, 3.2, math.sin(a) * 3.5), (math.cos(a) * 7.0, 1.2, math.sin(a) * 7.0),
+                            (math.cos(bend) * 10.5, 0.3, math.sin(bend) * 10.5), (math.cos(bend) * 12.5, -0.2, math.sin(bend) * 12.5)],
+                           1.6, 0.25, 9))
+    branches = [
+        taper([(0, 25, -2.0), (0, 29.0, -7.0), (0, 31.0, -11.5), (0, 30.6, -14.5)], 1.7, 0.75, 10),  # holds the vine
+        taper([(2.0, 28, 0.5), (7.0, 33.5, 1.5), (12.0, 37.5, 2.5)], 1.8, 0.6, 10),
+        taper([(-2.0, 29, 0.0), (-7.0, 34.5, -1.0), (-12.5, 38.5, -2.0)], 1.8, 0.6, 10),
+        taper([(0, 30, 2.0), (0.5, 35.0, 7.0), (0.5, 39.0, 11.0)], 1.6, 0.6, 10),
+        tube([(9.6, 35.0, 2.0), (9.8, 31.8, 2.2)], 0.25, 6),  # hive hanger
+    ]
+    leaves = merge(
+        icosphere(13.0, 3, 0.12, 21).translate(0, 45.0, 0),
+        icosphere(9.5, 2, 0.15, 22).translate(-11.5, 41.0, -2.0),
+        icosphere(9.5, 2, 0.15, 23).translate(11.5, 41.0, 2.0),
+        icosphere(9.0, 2, 0.15, 24).translate(0.5, 41.5, 11.0),
+        icosphere(8.5, 2, 0.15, 25).translate(0.0, 40.5, -10.5),
+        icosphere(7.0, 2, 0.18, 26).translate(-7.0, 49.0, 6.0),
+        icosphere(7.0, 2, 0.18, 27).translate(7.0, 50.0, -5.0),
+    )
+    hive_profile = [(0.0, 0.0)]
+    for i in range(1, 15):
+        t = i / 14
+        bulge = math.sin(math.pi * t) * 2.9 + 0.3
+        ridge = 0.16 if i % 2 == 0 else 0.0  # stacked rings
+        hive_profile.append((bulge + ridge, -t * 6.2))
+    hive_profile.append((0.0, -6.4))
+    hive = lathe(hive_profile[::-1], 22).translate(9.8, 32.2, 2.2)
+    anchor = icosphere(0.3, 0).translate(0, 29.6, -14.5)
+    return {"Trunk": merge(trunk, *roots, *branches), "Leaves": leaves, "Hive": hive, "Anchor": anchor}
+
+
+def fruit():
+    """A round fruit with a dimpled top, a stem and a leaf (recolored per fruit in-game)."""
+    body = lathe([(0.0, 0.15), (0.45, 0.04), (0.85, 0.22), (1.05, 0.62), (1.1, 1.02), (1.0, 1.44), (0.75, 1.74),
+                  (0.38, 1.8), (0.0, 1.6)], 24)
+    stem = tube([(0, 1.55, 0), (0.05, 1.95, 0.02), (0.14, 2.25, 0.05)], 0.07, 6)
+    leaf = icosphere(1.0, 1).scale(0.5, 0.07, 0.24).rotate("z", -25).translate(0.42, 2.08, 0.05)
+    return {"Fruit": body, "Stem": merge(stem, leaf)}
+
+
+def honeycomb():
+    """A chunk of honeycomb: seven hexagonal cells with dripping honey; it faces -Z."""
+    cells = []
+    rng = np.random.default_rng(5)
+    radius = 0.56
+    centers = [(0.0, 0.0)] + [(math.cos(math.pi / 3 * i + math.pi / 6) * radius * math.sqrt(3),
+                                math.sin(math.pi / 3 * i + math.pi / 6) * radius * math.sqrt(3)) for i in range(6)]
+    for x, y in centers:
+        depth = 0.9 + rng.uniform(-0.12, 0.12)
+        cell = lathe([(radius * 0.98, 0.0), (radius * 0.98, depth)], 6, True, True).rotate("y", 30)
+        cells.append(cell.translate(0, -depth / 2, 0).rotate("x", 90).translate(x, y + 1.25, 0))
+    comb = merge(*cells)
+    comb.smooth = False
+    # Drips hang from the comb's zigzag bottom edge.
+    drips = [capsule(0.55, 0.13, 10).translate(x, y, -0.15) for x, y in ((0.0, -0.5), (-0.84, -0.02), (0.5, -0.22))]
+    drips += [icosphere(0.13, 1).translate(x, y, -0.15) for x, y in ((0.0, -0.95), (0.5, -0.66))]
+    return {"Comb": comb, "Honey": merge(*drips)}
+
+
+def bee():
+    """A chubby cartoon bee, facing -Z."""
+    body = sphere(1.0, 12, 18).scale(0.55, 0.5, 0.72).translate(0, 0.62, 0.05)
+    stripes = [torus(0.53, 0.07, 22, 6).rotate("x", 90).scale(1.0, 0.92, 1.0).translate(0, 0.62, z) for z in (-0.12, 0.26)]
+    head = sphere(0.36, 10, 14).translate(0, 0.72, -0.72)
+    stinger = lathe([(0.12, 0.0), (0.0, 0.32)], 8).rotate("x", 90).translate(0, 0.6, 0.72)
+    antennae = [tube([(side * 0.12, 0.98, -0.85), (side * 0.22, 1.25, -1.0)], 0.035, 5) for side in (-1, 1)]
+    wings = [icosphere(1.0, 2).scale(0.42, 0.04, 0.26).rotate("z", side * 25).translate(side * 0.42, 1.12, 0.0)
+             for side in (-1, 1)]
+    return {"Body": body, "Stripes": merge(*stripes, head, stinger, *antennae), "Wings": merge(*wings)}
+
+
+def basket():
+    """A woven fruit basket with a rolled rim and two weave bands."""
+    bowl = lathe([(0.0, 0.0), (1.25, 0.0), (1.55, 0.25), (1.8, 1.3), (1.86, 1.45), (1.72, 1.45), (1.66, 1.32),
+                  (1.43, 0.35), (1.15, 0.16), (0.0, 0.16)], 28)
+    rim = torus(1.8, 0.13, 32, 8).translate(0, 1.46, 0)
+    bands = [torus(1.62 + 0.18 * y, 0.06, 32, 6).translate(0, y, 0) for y in (0.5, 0.95)]
+    return {"Basket": bowl, "Rim": merge(rim, *bands)}
+
+
+def dice_block():
+    """The 1-or-2 block that floats over the player whose turn it is (numbers are added in-game)."""
+    return {"Block": rounded_box(4.0, 4.0, 4.0, 0.7)}
+
+
 PROPS = {
     "ShoppingCart": shopping_cart,
     "YeetGlove": yeet_glove,
@@ -748,6 +861,12 @@ PROPS = {
     "Volcano": volcano,
     "Spire": spire,
     "FireWheel": fire_wheel,
+    "HoneyTree": honey_tree,
+    "Fruit": fruit,
+    "Honeycomb": honeycomb,
+    "Bee": bee,
+    "Basket": basket,
+    "DiceBlock": dice_block,
 }
 
 # Preview colors baked into the files' materials (the game recolors pieces by name anyway).
@@ -760,6 +879,8 @@ COLORS = {
     "Legs": (70, 70, 80), "Pole": (60, 60, 75), "Lamp": (255, 235, 180), "Box": (120, 90, 255),
     "Ribbon": (255, 220, 70), "Cone": (255, 130, 40), "Stripe": (250, 250, 250),
     "Lava": (255, 120, 40), "Glow": (255, 130, 40), "Rim": (70, 55, 62), "Spokes": (255, 140, 50), "Hub": (255, 200, 60),
+    "Hive": (240, 175, 60), "Anchor": (120, 80, 50), "Fruit": (235, 60, 60), "Stem": (90, 140, 50), "Comb": (240, 170, 40),
+    "Honey": (255, 200, 60), "Stripes": (40, 30, 30), "Wings": (240, 250, 255), "Block": (255, 210, 60),
 }
 
 

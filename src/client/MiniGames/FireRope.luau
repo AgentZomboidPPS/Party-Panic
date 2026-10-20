@@ -149,12 +149,11 @@ function FireRope.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 54,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 84),
+		Position = UDim2.new(0.5, 0, 0, api:HudY()),
 		Size = UDim2.fromOffset(300, 64),
-		Parent = api.Gui,
+		Parent = api:TopHud(),
 		Children = { UIKit.TextStroke(0.1) },
 	})
-	UIKit.AutoScale(counter)
 	api:OnMine("Jumps", function(value)
 		counter.Text = `🔥 {value or 0}`
 		UIKit.PopIn(counter, 0.2)

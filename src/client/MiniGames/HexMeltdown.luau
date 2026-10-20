@@ -67,13 +67,12 @@ function HexMeltdown.Start(api)
 	local banner = UIKit.Panel({
 		Name = "Call",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 84),
+		Position = UDim2.new(0.5, 0, 0, api:HudY()),
 		Size = UDim2.fromOffset(380, 92),
 		CornerRadius = 22,
 		Visible = false,
-		Parent = api.Gui,
+		Parent = api:TopHud(),
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
-	UIKit.AutoScale(banner)
 	local callText = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,

@@ -11,6 +11,8 @@
 --   api:OnEvent(name, fn)        cues the server sent with ctx:Fire(...)
 --   api:Button({ ... })          big touch-friendly action button with a keyboard key
 --   api:Tilt()                   phone tilt as a move direction (nil without an accelerometer)
+--   api:Template(name)           a copy of a model the server shared with ctx:ShareTemplate
+--   api:Sound(name) / Effect     sound and particle effects for this player only
 
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
@@ -20,11 +22,14 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
+local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local Janitor = require(Shared.Janitor)
 local Remotes = require(Shared.Remotes)
 local Signal = require(Shared.Signal)
 
+local AudioController = require(script.Parent.Parent.Parent.Controllers.AudioController)
+local EffectsController = require(script.Parent.Parent.Parent.Controllers.EffectsController)
 local State = require(script.Parent.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.Parent.UI.UIKit)
@@ -46,6 +51,7 @@ export type ActionButton = {
 	SetText: (self: ActionButton, text: string) -> (),
 	SetEnabled: (self: ActionButton, enabled: boolean) -> (),
 	SetFill: (self: ActionButton, fraction: number, color: Color3?) -> (),
+	SetVisible: (self: ActionButton, visible: boolean) -> (),
 }
 
 export type Tilt = {
@@ -67,6 +73,7 @@ function Api.new(id: string)
 		Name = "MiniGame_" .. id,
 		ResetOnSpawn = false,
 		IgnoreGuiInset = false,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets, -- same safe area as the main HUD
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = 6,
 		Parent = playerGui,
@@ -139,6 +146,23 @@ end
 
 function Api.IsTouch(_self: Api): boolean
 	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+end
+
+-- A copy of a model the server shared with ctx:ShareTemplate (nil if it doesn't arrive in time).
+function Api.Template(_self: Api, name: string, timeout: number?): Instance?
+	local folder = ReplicatedStorage:WaitForChild("MiniGameAssets", timeout or 10)
+	local template = folder and folder:WaitForChild(name, timeout or 10)
+	return if template then template:Clone() else nil
+end
+
+-- Plays a sound effect (Shared/Sounds names) or a particle effect (EffectsController names) for
+-- this player only.
+function Api.Sound(_self: Api, name: string)
+	AudioController.Play(name)
+end
+
+function Api.Effect(_self: Api, name: string, position: Vector3, colors: { Color3 }?)
+	EffectsController.Play(name, position, colors)
 end
 
 -- Server traffic ---------------------------------------------------------------------------------
@@ -287,6 +311,12 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 			release()
 		end
 	end
+	function api.SetVisible(_api, value: boolean)
+		holder.Visible = value
+		if not value then
+			release()
+		end
+	end
 	function api.SetFill(_api, fraction: number, fillColor: Color3?)
 		fill.Size = UDim2.fromScale(1, math.clamp(fraction, 0, 1))
 		if fillColor then
@@ -334,9 +364,36 @@ function Api.Mood(self: Api, mood: Mood)
 	end
 end
 
--- A line of instructions near the top of the screen (pass "" to hide it).
-function Api.Hint(self: Api, text: string)
-	local label = self.Gui:FindFirstChild("Hint") :: TextLabel?
+-- The space under the round banner (title, timer, status line and team scores) for a mode's own
+-- HUD. It's laid out like the banner and scales with it, so anything placed at y >= api:HudY()
+-- never covers the banner on any screen.
+function Api.TopHud(self: Api): Frame
+	local hud = self.Gui:FindFirstChild("TopHud") :: Frame?
+	if not hud then
+		hud = UIKit.new("Frame", {
+			Name = "TopHud",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 10),
+			Size = UDim2.fromOffset(620, 420),
+			BackgroundTransparency = 1,
+			Parent = self.Gui,
+		})
+		UIKit.AutoScale(hud :: Frame)
+	end
+	return hud :: Frame
+end
+
+-- First free line in the TopHud: under the status line, or under the team scores in team modes.
+function Api.HudY(self: Api): number
+	local definition = GameDefinitions.Get(self.Id)
+	return if definition and definition.IsTeam then 156 else 112
+end
+
+-- A line of instructions under the banner (pass "" to hide it). `y` is a TopHud offset (default
+-- api:HudY()).
+function Api.Hint(self: Api, text: string, y: number?)
+	local hud = self:TopHud()
+	local label = hud:FindFirstChild("Hint") :: TextLabel?
 	if not label then
 		label = UIKit.Label({
 			Name = "Hint",
@@ -344,14 +401,14 @@ function Api.Hint(self: Api, text: string)
 			Font = Theme.Fonts.Display,
 			TextSize = 26,
 			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 92),
-			Size = UDim2.fromOffset(700, 40),
-			Parent = self.Gui,
+			Size = UDim2.fromOffset(620, 64),
+			TextYAlignment = Enum.TextYAlignment.Top,
+			Parent = hud,
 			Children = { UIKit.TextStroke(0.2) },
 		})
-		UIKit.AutoScale(label :: TextLabel)
 	end
 	local hint = label :: TextLabel
+	hint.Position = UDim2.new(0.5, 0, 0, y or self:HudY())
 	hint.Text = text
 	hint.Visible = text ~= ""
 end

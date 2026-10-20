@@ -363,6 +363,80 @@ local SPECS: { [string]: Spec } = {
 			roller(m, "Hub", 3.4, 2.6, Vector3.new(0, 11.35, 0))
 		end,
 	},
+	-- Honey Trap's giant tree. "Anchor" marks the tip of the front branch, where the vine hangs.
+	HoneyTree = {
+		Height = 57.9,
+		Collide = true,
+		Palette = {
+			Trunk = rgb(125, 84, 56),
+			Leaves = rgb(96, 186, 88),
+			Hive = rgb(240, 176, 60),
+			Anchor = rgb(125, 84, 56),
+		},
+		Fallback = function(m)
+			pillar(m, "Trunk", 9, 38, Vector3.new(0, 19, 0))
+			cluster(m, "Leaves", "HoneyTreeLeaves", {
+				{ 0, 0, 0, 26 },
+				{ -11.5, -4, -2, 19 },
+				{ 11.5, -4, 2, 19 },
+				{ 0, -4, 11, 18 },
+				{ 0, -4.5, -10.5, 17 },
+			}, Vector3.new(0, 45, 0))
+			blob(m, "Hive", Vector3.new(6, 6.4, 6), Vector3.new(9.8, 29, 2.2))
+			rounded(m, "Trunk", Vector3.new(3, 3, 14), 1.4, Vector3.new(0, 30.5, -8))
+			ball(m, "Anchor", 0.6, Vector3.new(0, 29.6, -14.5))
+		end,
+	},
+	Fruit = {
+		Height = 2.25,
+		Palette = { Fruit = rgb(235, 60, 60), Stem = rgb(90, 140, 50) },
+		Fallback = function(m)
+			ball(m, "Fruit", 2.2, Vector3.new(0, 1.1, 0))
+			block(m, "Stem", Vector3.new(0.15, 0.5, 0.15), Vector3.new(0, 2.25, 0))
+		end,
+	},
+	Honeycomb = {
+		Height = 3.85,
+		Palette = { Comb = rgb(240, 170, 40), Honey = rgb(255, 200, 60) },
+		Fallback = function(m)
+			Shapes.Custom("HoneycombFallback", function(piece)
+				local pieces = {}
+				for index = 0, 2 do
+					table.insert(
+						pieces,
+						piece(Vector3.new(1.5, 2.6, 0.9), CFrame.Angles(0, 0, index * math.pi / 3), Enum.PartType.Block)
+					)
+				end
+				return pieces
+			end, Vector3.new(2.6, 2.6, 0.9), { Name = "Comb", CFrame = CFrame.new(0, 2.5, 0), Parent = m })
+			ball(m, "Honey", 0.5, Vector3.new(0, 0.9, 0))
+		end,
+	},
+	Bee = {
+		Height = 1.23,
+		Palette = { Body = rgb(255, 205, 40), Stripes = rgb(40, 30, 30), Wings = rgb(240, 250, 255) },
+		Fallback = function(m)
+			blob(m, "Body", Vector3.new(1.1, 1, 1.44), Vector3.new(0, 0.62, 0))
+			ball(m, "Stripes", 0.72, Vector3.new(0, 0.72, -0.72))
+			blob(m, "Wings", Vector3.new(0.84, 0.08, 0.52), Vector3.new(0, 1.15, 0))
+		end,
+	},
+	Basket = {
+		Height = 1.59,
+		Palette = { Basket = rgb(205, 150, 85), Rim = rgb(150, 100, 55) },
+		Fallback = function(m)
+			pillar(m, "Basket", 3.4, 1.4, Vector3.new(0, 0.7, 0))
+			pillar(m, "Rim", 3.8, 0.25, Vector3.new(0, 1.45, 0))
+		end,
+	},
+	-- The 1-or-2 block; the client writes the numbers on it.
+	DiceBlock = {
+		Height = 4,
+		Palette = { Block = rgb(255, 210, 60) },
+		Fallback = function(m)
+			rounded(m, "Block", Vector3.new(4, 4, 4), 0.7, Vector3.new(0, 2, 0))
+		end,
+	},
 }
 
 local templates: { [string]: Model } = {}

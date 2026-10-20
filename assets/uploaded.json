@@ -20,5 +20,11 @@
   "sprite:SfxSprite": 135145103433440,
   "mesh:FireWheel": 122334341468700,
   "mesh:Spire": 112375939660771,
-  "mesh:Volcano": 140199166711495
+  "mesh:Volcano": 140199166711495,
+  "mesh:Basket": 129300570621520,
+  "mesh:Bee": 108050048314807,
+  "mesh:DiceBlock": 91165959902187,
+  "mesh:Fruit": 75895782098920,
+  "mesh:HoneyTree": 100851779929285,
+  "mesh:Honeycomb": 75888068398114
 }

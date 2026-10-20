@@ -518,6 +518,20 @@ function RoundContext.GiveOwnership(_self: RoundContext, part: BasePart, player:
 	end
 end
 
+-- Shares a model the client half copies (fruit, arrows, balloons...): it waits in
+-- ReplicatedStorage.MiniGameAssets, where nothing renders, until the round ends.
+function RoundContext.ShareTemplate(self: RoundContext, name: string, model: Instance)
+	local folder = ReplicatedStorage:FindFirstChild("MiniGameAssets")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "MiniGameAssets"
+		folder.Parent = ReplicatedStorage
+	end
+	model.Name = name
+	model.Parent = folder
+	self.Janitor:Add(model)
+end
+
 -- Briefly stops a player from moving or jumping.
 function RoundContext.Stun(self: RoundContext, player: Player, seconds: number)
 	local untilTime = math.max(self._stunnedUntil[player] or 0, os.clock() + seconds)
