@@ -398,6 +398,8 @@ def render(nodes: list, size_name: str, out: Path):
 
     # Checks.
     problems = []
+    # Full-screen backdrops behind pop-ups (the click-to-close dimmer) cover everything on purpose.
+    boxes = [b for b in boxes if not ((b[4] - b[2]) >= vw * 0.9 and (b[5] - b[3]) >= vh * 0.9)]
     for a in range(len(boxes)):
         sa, pa, ax0, ay0, ax1, ay1, la = boxes[a]
         if ax1 < 0 or ay1 < 0 or ax0 > vw or ay0 > vh:
@@ -422,7 +424,7 @@ def render(nodes: list, size_name: str, out: Path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("results", help="the file luau_task.py saved for a round_harness run with --ui-at")
+    parser.add_argument("results", help="what luau_task.py saved for a round_harness --ui-at run or a client_harness run")
     parser.add_argument("out", help="output prefix: <out>_<time>_<size>.png")
     parser.add_argument("--sizes", default="all", help="all, pc, phone, or comma-separated names: " + ", ".join(SIZES))
     args = parser.parse_args()
@@ -433,9 +435,16 @@ def main():
     if not snapshots:
         raise SystemExit("No UI snapshots: run round_harness.py with --client --ui-at <seconds>")
     names = SIZE_GROUPS.get(args.sizes) or args.sizes.split(",")
-    for at, nodes in sorted(snapshots.items(), key=lambda kv: float(kv[0])):
+    def order(key):
+        try:
+            return (0, float(key), "")
+        except ValueError:
+            return (1, 0.0, key)
+
+    for at, nodes in sorted(snapshots.items(), key=lambda kv: order(kv[0])):
+        label = f"{float(at):g}s" if order(at)[0] == 0 else at
         for size_name in names:
-            out = Path(f"{args.out}_{float(at):g}s_{size_name}.png")
+            out = Path(f"{args.out}_{label}_{size_name}.png")
             problems = render(json.loads(json.dumps(nodes)), size_name, out)
             print(f"wrote {out}")
             for problem in problems:

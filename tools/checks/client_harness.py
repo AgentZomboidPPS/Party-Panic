@@ -3,12 +3,15 @@ execution), so client code can be exercised without a player: every controller s
 script opens each screen, plays through every game phase, and fires every server->client remote.
 Errors and warnings from all of it come back in the result.
 
-    python3 tools/checks/client_harness.py > client.luau
+    python3 tools/checks/client_harness.py [--touch] > client.luau
     python3 tools/preview/luau_task.py client.luau - client.json
+    python3 tools/checks/ui_render.py client.json /tmp/screens    # draw every screen and phase
+
+--touch makes the stand-in client a phone (touch, no keyboard), for the phone layouts.
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder), RenderStepped (Heartbeat), StarterGui:SetCore, and the remotes (bindable
-events the harness can fire). Shared modules are the place's real ones.
+events the harness can fire). Shared modules come from the working tree (except Remotes).
 """
 
 import re
@@ -17,11 +20,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CLIENT = ROOT / "src" / "client"
-SHIMMED_SERVICES = ("Players", "RunService", "StarterGui")
+SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService")
 
 
 def module_paths():
     paths = {}
+    # The working tree's shared modules, so client code runs against the code it ships with.
+    for path in sorted((ROOT / "src" / "shared").rglob("*.luau")):
+        rel = path.relative_to(ROOT / "src" / "shared").with_suffix("")
+        if rel.parts != ("Remotes",):  # replaced by the harness's stand-in
+            paths["Shared/" + "/".join(rel.parts)] = path
     for path in sorted(CLIENT.rglob("*.luau")):
         if path.name == "init.client.luau":
             continue
@@ -40,15 +48,25 @@ def resolve(module: str, expr: str) -> str:
     return "/".join(parts)
 
 
+SHARED = r'(?:game:GetService\("ReplicatedStorage"\)\.Shared|ReplicatedStorage\.Shared|Shared)'
+
+
+def shared_requires(text: str) -> str:
+    return re.sub(r"require\(" + SHARED + r"((?:\.\w+)+)\)", lambda m: '__require("Shared' + m.group(1).replace(".", "/") + '")', text)
+
+
 def rewrite(module: str, text: str) -> str:
-    text = re.sub(r"require\((script(?:\.\w+)+)\)", lambda m: f'__require("{resolve(module, m.group(1))}")', text)
     text = re.sub(r"require\(([^()]*?(?:\([^()]*\))?[^()]*?)\.Remotes\)", "__RemotesShim", text)
-    for service in SHIMMED_SERVICES:
-        text = text.replace(f'game:GetService("{service}")', f'__service("{service}")')
+    text = re.sub(r"require\((script(?:\.\w+)+)\)", lambda m: f'__require("{resolve(module, m.group(1))}")', text)
+    text = shared_requires(text)
+    if module.startswith("Client/"):  # shared modules run as the server here (it owns GameState)
+        for service in SHIMMED_SERVICES:
+            text = text.replace(f'game:GetService("{service}")', f'__service("{service}")')
     return re.sub(r"^export type", "type", text, flags=re.M)
 
 
 PRELUDE = r'''
+local __ui = {}
 local __errors = {}
 game:GetService("LogService").MessageOut:Connect(function(message, kind)
 	if (kind == Enum.MessageType.MessageError or kind == Enum.MessageType.MessageWarning) and #__errors < 150 then
@@ -118,6 +136,11 @@ local function __wrap(real, overrides)
 end
 local __shims = {
 	Players = __wrap(__realPlayers, { LocalPlayer = __player }),
+	UserInputService = __wrap(game:GetService("UserInputService"), {
+		TouchEnabled = __touchMode == true,
+		KeyboardEnabled = __touchMode ~= true,
+		MouseEnabled = __touchMode ~= true,
+	}),
 	RunService = __wrap(__realRun, {
 		RenderStepped = __realRun.Heartbeat,
 		IsClient = function()
@@ -215,6 +238,7 @@ local function phase(name, seconds, extra)
 	GameState.Set("Phase", name)
 	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + seconds)
 	task.wait(1.2)
+	__ui[name] = __dumpGui(__playerGui)
 end
 
 -- 1. Start every controller like init.client.luau does.
@@ -288,6 +312,7 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
 	step = "OpenScreen " .. screen
 	State.OpenScreen:Fire(screen)
 	task.wait(1)
+	__ui[screen] = __dumpGui(__playerGui)
 	local Modal = __require("Client/UI/Modal")
 	if Modal.CloseAll then
 		pcall(Modal.CloseAll)
@@ -349,6 +374,7 @@ task.wait(1)
 
 local guiCount = #__playerGui:GetDescendants()
 return game:GetService("HttpService"):JSONEncode({
+	ui = __ui,
 	errors = __errors,
 	startMs = startTimes,
 	sentToServer = __sent,
@@ -359,12 +385,14 @@ return game:GetService("HttpService"):JSONEncode({
 
 
 def main():
-    out = [PRELUDE]
+    touch = "--touch" in sys.argv
+    gui_dump = (Path(__file__).resolve().parent / "gui_dump.luau").read_text()
+    out = [f"__touchMode = {'true' if touch else 'false'}\n" + gui_dump + PRELUDE]
     for module, path in module_paths().items():
         out.append(f'__modules["{module}"] = function()')
         out.append(rewrite(module, path.read_text()))
         out.append("end")
-    out.append(MAIN)
+    out.append(shared_requires(MAIN))
     sys.stdout.write("\n".join(out))
 
 
