@@ -8,11 +8,16 @@
 -- a plain part. If CSG is unavailable for any reason the module falls back to plain parts, so the
 -- game always works.
 
+local HttpService = game:GetService("HttpService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Build = require(script.Parent.Build)
 
 local Shapes = {}
+
+-- Tools only: when true, every union remembers its pieces (relative to itself) in the PP_Pieces
+-- attribute, so offline preview renders can redraw it exactly. Off in the game.
+Shapes.RecordPieces = false
 
 local cache: { [string]: BasePart } = {}
 local failures = 0
@@ -50,6 +55,18 @@ local function union(parts: { BasePart }): BasePart?
 	local ok, result = pcall(function()
 		return first:UnionAsync(rest, Enum.CollisionFidelity.Default, Enum.RenderFidelity.Automatic)
 	end)
+	if ok and result and Shapes.RecordPieces then
+		local pieces = {}
+		for _, part in parts do
+			local relative = result.CFrame:ToObjectSpace(part.CFrame)
+			table.insert(
+				pieces,
+				{ (part :: Part).Shape.Value, part.Size.X, part.Size.Y, part.Size.Z, relative:GetComponents() }
+			)
+		end
+		local size = result.Size
+		result:SetAttribute("PP_Pieces", HttpService:JSONEncode({ size = { size.X, size.Y, size.Z }, pieces = pieces }))
+	end
 	for _, part in parts do
 		part:Destroy()
 	end
