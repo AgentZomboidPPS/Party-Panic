@@ -16,7 +16,7 @@ Outline*.
 | **Progression** | Coins, XP and levels, itemized round rewards, personal bests, daily and weekly quests, a daily gift with streaks, a hidden daily token, level and stat unlocks |
 | **Cosmetics** | Trails, titles, emotes (dances and effect emotes), victory and knockout effects, a coin shop with confirmation, an optional VIP pass (cosmetic only, never pay-to-win) |
 | **Lobby** | A vote stage with three portal arches and giant screens, winner podium with avatar headshots, shop, quest board, daily gift machine, arcade target range, emote stage with a confetti cannon, spiral parkour tower, bounce pads, terrain hills, a lake and floating sky islands |
-| **Look** | Rounded CSG geometry instead of blocks, 15 detailed original mesh props, Future lighting, bloom, sun rays, clouds, ambient particles and bobbing decorations |
+| **Look** | Rounded CSG geometry instead of blocks, 15 detailed original mesh props, ShadowMap lighting (sharp sun shadows, light on phones), bloom, sun rays, clouds, ambient particles and bobbing decorations |
 | **Audio** | An original soundtrack (two lobby tracks plus a round track that speeds up near the end) and 15 original sound effects |
 | **UI** | Mobile-first scaling, rounded glossy panels, toasts, rules card with a 3-2-1 countdown, standings, results breakdown, spectate, settings (music volume, reduced effects), onboarding tips |
 | **Safety** | Session-locked DataStore saves, rate-limited and validated remotes, server-side hit, pickup and checkpoint validation, and no client-reported scores or rewards |
@@ -29,7 +29,20 @@ Outline*.
    Or run `rojo serve` and connect with the Rojo Studio plugin to live-sync while you edit.
 3. Press **Play**. In Studio, a single player is enough to start rounds.
 
-Before publishing, in **Game Settings** in Studio:
+### Publishing (private first)
+
+Open Cloud can't create an experience, so the first time, open the built place in Studio and use
+**File > Publish to Roblox As > New experience**. New experiences start **private**. After that,
+every publish is one command (it refuses to publish to a public experience unless you say so):
+
+```sh
+python3 tools/publish_place.py --universe-id <id> --place-id <id>
+```
+
+It builds the place, publishes it, and sets the name, the store description from
+[docs/STORE_DESCRIPTION.txt](docs/STORE_DESCRIPTION.txt) and a server size of 12.
+
+Also check these in **Game Settings** in Studio:
 
 - **Places**: max players **12** (matches `Config.Session.MaxPlayers`).
 - **Avatar**: R15 (emote animations use the default R15 emotes).
