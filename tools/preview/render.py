@@ -280,7 +280,9 @@ def build_parts(parts):
                 ext = np.maximum(vmax - vmin, 1e-4)
                 unit = (verts - center) / ext  # fits a 1x1x1 box, Roblox axes
                 key = f"{p['prop']}:{p['n']}"
-                blender_verts = np.stack([unit[:, 0], -unit[:, 2], unit[:, 1]], 1)
+                # Roblox's glTF import turns each mesh half a turn inside its MeshPart (x -> -x,
+                # z -> -z), so draw it the way the engine does.
+                blender_verts = np.stack([-unit[:, 0], unit[:, 2], unit[:, 1]], 1)
                 mesh = mesh_from_arrays(key, blender_verts, faces)
                 add_object(key, mesh, cframe_matrix(p["cf"], size), mat, shadow)
                 continue

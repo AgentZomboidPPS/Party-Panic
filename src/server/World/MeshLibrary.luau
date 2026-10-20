@@ -522,6 +522,10 @@ local function fromAsset(name: string, spec: Spec): Model?
 	local model = wrapInModel(content, name)
 	model.Parent = nil
 	container:Destroy()
+	-- Roblox imports a glTF turned half a turn (glTF's front is +Z, Roblox's is -Z): every piece sits
+	-- mirrored across the middle with its mesh turned. Turn it back, so the prop faces -Z as authored
+	-- (and as the fallback does).
+	model:PivotTo(model:GetPivot() * CFrame.Angles(0, math.pi, 0))
 	return model
 end
 
