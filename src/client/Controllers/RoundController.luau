@@ -1,5 +1,6 @@
 -- Rules card, countdown and in-round HUD (design doc §12): objective, controls and duration before
--- the round; then a live mini-leaderboard, team highlights and an "you're out" prompt.
+-- the round; then a live mini-leaderboard, team highlights and an "you're out" prompt. Bots are in
+-- the standings and get team outlines like everyone else (Participants).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,6 +12,7 @@ local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local Teams = require(Shared.Teams)
 
+local Participants = require(script.Parent.Parent.Participants)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -139,16 +141,16 @@ local function flashCountdown(text: string, color: Color3)
 	end)
 end
 
--- Phones and tablets: the standings sit under the profile card, clear of the thumbstick.
+-- Phones and tablets show fewer standings rows: less room, and the thumbstick below.
 local function isTouch(): boolean
 	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 end
 
+-- The standings sit under the profile card on every screen: clear of the thumbstick on phones,
+-- and of the tips panel on PC now that bots keep the board full.
 local function buildBoard(parent: Instance)
 	board = UIKit.Panel({
 		Name = "Leaderboard",
-		AnchorPoint = if isTouch() then Vector2.new(0, 0) else Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 14, 0.5, 0),
 		Size = UDim2.fromOffset(270, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		CornerRadius = 18,
@@ -157,15 +159,13 @@ local function buildBoard(parent: Instance)
 		Children = { UIKit.List(Enum.FillDirection.Vertical, 4), UIKit.Padding(10, 12) },
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 	UIKit.AutoScale(board, 0.9)
-	if isTouch() then
-		-- Just under the profile chip and coins (HudController: 130 tall at y 12, scaled the same way).
-		local function place()
-			board.Position = UDim2.fromOffset(14, 12 + 130 * UIKit.CurrentScale() + 8)
-			board:SetAttribute("PP_UnderProfile", true)
-		end
-		place()
-		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
+	-- Just under the profile chip and coins (HudController: 130 tall at y 12, scaled the same way).
+	local function place()
+		board.Position = UDim2.fromOffset(14, 12 + 130 * UIKit.CurrentScale() + 8)
 	end
+	board:SetAttribute("PP_UnderProfile", true)
+	place()
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
 end
 
 local function refreshBoard()
@@ -175,22 +175,23 @@ local function refreshBoard()
 		end
 	end
 	local entries = {}
-	for _, other in Players:GetPlayers() do
-		if other:GetAttribute("PP_InRound") then
-			table.insert(entries, {
-				player = other,
-				alive = other:GetAttribute("PP_Alive") == true,
-				score = other:GetAttribute("PP_Score") or 0,
-				text = other:GetAttribute("PP_ScoreText") or "",
-				team = other:GetAttribute("PP_Team") or "",
-			})
-		end
+	for _, other in Participants.InRound() do
+		table.insert(entries, {
+			who = other,
+			alive = other:GetAttribute("PP_Alive") == true,
+			score = other:GetAttribute("PP_Score") or 0,
+			text = other:GetAttribute("PP_ScoreText") or "",
+			team = other:GetAttribute("PP_Team") or "",
+		})
 	end
 	table.sort(entries, function(a, b)
 		if a.alive ~= b.alive then
 			return a.alive
 		end
-		return a.score > b.score
+		if a.score ~= b.score then
+			return a.score > b.score
+		end
+		return a.who.UserId > b.who.UserId -- ties keep their places (players, then bots)
 	end)
 	UIKit.Label({
 		Text = "🏁 Standings",
@@ -207,21 +208,24 @@ local function refreshBoard()
 		table.insert(shown, index)
 	end
 	for index, entry in entries do
-		if entry.player == player and index > rows then
+		if entry.who.IsLocal and index > rows then
 			shown[#shown] = index
 		end
 	end
 	for _, index in shown do
 		local entry = entries[index]
+		local who = entry.who
 		local status = if entry.alive then "" else "💀 "
-		local detail = if entry.text ~= "" then entry.text else tostring(entry.score)
 		local teamColor = TEAM_COLORS[entry.team]
+		local name = Participants.ListName(who.DisplayName, who.IsBot and not teamColor) -- teams keep their color
+		local detail = Participants.Escape(if entry.text ~= "" then entry.text else tostring(entry.score))
 		UIKit.Label({
-			Text = `{index}. {status}{entry.player.DisplayName}  ·  {detail}`,
+			Text = `{index}. {status}{name}  ·  {detail}`,
+			RichText = true,
 			TextSize = 18,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,
-			TextColor3 = if entry.player == player
+			TextColor3 = if who.IsLocal
 				then Theme.Colors.Yellow
 				elseif teamColor then teamColor
 				elseif entry.alive then Theme.Colors.Text
@@ -267,12 +271,14 @@ local function buildOutPanel(parent: Instance)
 end
 
 -- Team-colored outlines so teammates and rivals are readable at a glance.
-local highlights: { [Player]: Highlight } = {}
+local highlights: { [Participants.Participant]: Highlight } = {}
 local function refreshHighlights()
-	for _, other in Players:GetPlayers() do
+	local here = {}
+	for _, other in Participants.All() do
+		here[other] = true
 		local team = other:GetAttribute("PP_Team") or ""
 		local color = TEAM_COLORS[team]
-		local character = other.Character
+		local character = other:Character()
 		local existing = highlights[other]
 		if color and character and GameState.Get("Phase") == "InRound" then
 			if not existing or existing.Adornee ~= character then
@@ -292,6 +298,13 @@ local function refreshHighlights()
 			existing.OutlineColor = color
 		elseif existing then
 			existing:Destroy()
+			highlights[other] = nil
+		end
+	end
+	-- Whoever left (a bot fading out, a player quitting) takes their outline with them.
+	for other, highlight in highlights do
+		if not here[other] then
+			highlight:Destroy()
 			highlights[other] = nil
 		end
 	end
@@ -319,6 +332,12 @@ function RoundController.Start(context)
 		if GameState.Get("Phase") == "InRound" and State.InRound() and not State.Alive() then
 			outPanel.Visible = true
 			UIKit.PopIn(outPanel, 0.35)
+		end
+	end)
+	-- A bot fading in or out shows up in the standings right away.
+	Participants.Changed:Connect(function()
+		if board.Visible then
+			refreshBoard()
 		end
 	end)
 
