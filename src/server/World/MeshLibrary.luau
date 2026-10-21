@@ -25,7 +25,16 @@
 -- and everything else a mode sets up) passes through. Here on the server they stay non-colliding,
 -- so bots and anything else the server moves never touch them. Only for props that stay still or
 -- turn in place: a moving part would push the camera around.
+--
+-- Collision that follows the drawing (owner: "Theres invisible stuff you can jump on and hang on in
+-- several games"): an uploaded mesh comes with Roblox's Default collision, a rough handful of convex
+-- hulls that fills hollows and bulges past what's drawn (a palm's trunk and fronds, a broken
+-- column's top, a tree's branches, an arch's gold sun: up to 5 studs of invisible ledge to stand or
+-- hang on). Scripts can't set a MeshPart's CollisionFidelity, so every piece of a template that
+-- collides or stops the camera gets its collision rebuilt once as PreciseConvexDecomposition (see
+-- preciseCollision).
 
+local AssetService = game:GetService("AssetService")
 local CollectionService = game:GetService("CollectionService")
 local InsertService = game:GetService("InsertService")
 local PhysicsService = game:GetService("PhysicsService")
@@ -43,6 +52,7 @@ type Spec = {
 	Collide: boolean?,
 	Touch: boolean?,
 	BlocksCamera: (boolean | { string })?, -- solid to the camera only (see the top): all pieces, or these
+	Precise: boolean?, -- collision that follows the drawing even though it doesn't collide here (a client makes it solid)
 	Shadow: boolean?,
 	Palette: { [string]: Color3 },
 	Materials: { [string]: Enum.Material }?,
@@ -584,6 +594,42 @@ local function setPivot(model: Model, pivot: CFrame)
 	end
 end
 
+-- Rebuilds these mesh pieces' collision to follow their drawn shape: AssetService makes a MeshPart
+-- from the same mesh with PreciseConvexDecomposition and ApplyMesh copies its collision over, all
+-- pieces at once (a second or so each). A piece whose rebuild fails twice keeps its rough Default
+-- collision, and the output says so.
+local PRECISE = { CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition }
+
+local function preciseCollision(name: string, pieces: { MeshPart })
+	local remaining = #pieces
+	for _, part in pieces do
+		task.spawn(function()
+			local size, cframe = part.Size, part.CFrame
+			local ok, err = false, nil
+			for attempt = 1, 2 do
+				ok, err = pcall(function()
+					local fresh = AssetService:CreateMeshPartAsync(Content.fromUri(part.MeshId), PRECISE)
+					part:ApplyMesh(fresh)
+					fresh:Destroy()
+				end)
+				if ok or attempt == 2 then
+					break
+				end
+				task.wait(1)
+			end
+			part.Size = size
+			part.CFrame = cframe
+			if not ok then
+				warn(`[MeshLibrary] {name}.{part.Name} keeps its rough collision: {err}`)
+			end
+			remaining -= 1
+		end)
+	end
+	while remaining > 0 do
+		task.wait()
+	end
+end
+
 -- Moves the pivot to the bottom center of the model's bounding box.
 local function pivotAtBottom(model: Model)
 	local box, size = model:GetBoundingBox()
@@ -603,6 +649,7 @@ local function normalize(name: string, model: Model, spec: Spec)
 	local camera = spec.BlocksCamera ~= nil and spec.Collide ~= true and setupCameraSolid()
 	local largest: BasePart? = nil
 	local largestVolume = -1
+	local solidMeshes: { MeshPart } = {}
 	for _, descendant in model:GetDescendants() do
 		if not descendant:IsA("BasePart") then
 			continue
@@ -616,6 +663,9 @@ local function normalize(name: string, model: Model, spec: Spec)
 			part.CollisionGroup = CAMERA_SOLID
 			CollectionService:AddTag(part, CAMERA_SOLID)
 			cameraSolid[name] = true
+		end
+		if part:IsA("MeshPart") and (part.CanCollide or part.CollisionGroup == CAMERA_SOLID or spec.Precise) then
+			table.insert(solidMeshes, part)
 		end
 		local volume = part.Size.X * part.Size.Y * part.Size.Z
 		part.CastShadow = spec.Shadow ~= false and volume > 8
@@ -631,6 +681,7 @@ local function normalize(name: string, model: Model, spec: Spec)
 			largest, largestVolume = part, volume
 		end
 	end
+	preciseCollision(name, solidMeshes)
 
 	-- Pivot at the bottom center so `PivotTo(CFrame.new(groundPoint))` sits the prop on the ground.
 	model.PrimaryPart = largest
@@ -640,14 +691,7 @@ local function normalize(name: string, model: Model, spec: Spec)
 	end
 end
 
-local function resolve(name: string): Model
-	local cached = templates[name]
-	if cached then
-		return cached
-	end
-	local spec = SPECS[name]
-	assert(spec, `MeshLibrary has no prop named {name}`)
-
+local function build(name: string, spec: Spec): Model
 	local model = fromStudioTemplate(name)
 	local source = "Template"
 	if not model then
@@ -664,6 +708,31 @@ local function resolve(name: string): Model
 	templates[name] = model :: Model
 	sources[name] = source
 	return model :: Model
+end
+
+local building: { [string]: boolean } = {} -- templates being made right now (it takes seconds)
+
+local function resolve(name: string): Model
+	local cached = templates[name]
+	if cached then
+		return cached
+	end
+	local spec = SPECS[name]
+	assert(spec, `MeshLibrary has no prop named {name}`)
+	-- Someone else (Preload, a round) is making it already: wait for theirs instead of making two.
+	while building[name] do
+		task.wait()
+	end
+	if templates[name] then
+		return templates[name]
+	end
+	building[name] = true
+	local ok, result = pcall(build, name, spec)
+	building[name] = nil
+	if not ok then
+		error(result, 0)
+	end
+	return result
 end
 
 export type GetOptions = {

@@ -212,8 +212,8 @@ function __colliderSnapshot(label: string, opts)
 		if part:IsA("MeshPart") then
 			entry.mesh = (part :: MeshPart).MeshId
 			entry.fid = (part :: MeshPart).CollisionFidelity.Name
-		elseif part:IsA("UnionOperation") then
-			entry.fid = (part :: UnionOperation).CollisionFidelity.Name
+		elseif part:IsA("PartOperation") then
+			entry.fid = (part :: PartOperation).CollisionFidelity.Name
 		end
 		local special = part:FindFirstChildOfClass("SpecialMesh")
 		if special then
@@ -252,6 +252,7 @@ function __colliderSnapshot(label: string, opts)
 		people = peopleList,
 		bots = botList,
 		parts = parts,
+		killY = opts.killY, -- below this a character is out (the mode's KillY)
 	}
 
 	-- Where the characters are (seeds for the reachability flood fill).
@@ -271,6 +272,15 @@ function __colliderSnapshot(label: string, opts)
 				__r2(humanoid.JumpPower),
 				humanoid.UseJumpPower,
 			})
+		end
+	end
+	-- Nobody here (the lobby run): start from the spawn points.
+	if #seeds == 0 then
+		for _, item in workspace:GetDescendants() do
+			if item:IsA("SpawnLocation") then
+				local at = item.Position + Vector3.new(0, 3, 0)
+				table.insert(seeds, { item.Name, __r2(at.X), __r2(at.Y), __r2(at.Z), "Default", 16, 7.2, 0, false })
+			end
 		end
 	end
 	result.seeds = seeds
@@ -380,7 +390,7 @@ function __colliderSnapshot(label: string, opts)
 			if not (entry.cc or entry.cb) then
 				continue
 			end
-			if not (part:IsA("MeshPart") or part:IsA("UnionOperation")) then
+			if not (part:IsA("MeshPart") or part:IsA("PartOperation")) then
 				continue
 			end
 			local size = part.Size
@@ -393,7 +403,7 @@ function __colliderSnapshot(label: string, opts)
 				size.Z,
 				entry.fid or ""
 			)
-			if part:IsA("UnionOperation") then
+			if part:IsA("PartOperation") then
 				-- Unions of the same size can differ in shape: tell them apart by their pieces.
 				local pieces = tostring(part:GetAttribute("PP_Pieces") or "")
 				local hash = #pieces
@@ -487,10 +497,13 @@ function __colliderLeftovers(): { any }
 end
 
 -- The lobby (round_harness.py LOBBY --colliders): built as the game builds it, with its beach balls.
-function __runLobbyColliders()
+function __runLobbyColliders(reach: number)
 	local GameState = __require("Shared/GameState")
 	GameState.Folder()
 	__require("Server/World/Shapes").RecordPieces = true
+	if __noCsg then
+		__require("Server/World/Shapes").PauseCsgForTests(1e6)
+	end
 	local LobbyBuilder = __require("Server/World/LobbyBuilder")
 	local BeachBalls = __require("Server/World/BeachBalls")
 	local summary = {}
@@ -505,7 +518,7 @@ function __runLobbyColliders()
 		summary.balls = if okBalls then "ok" else tostring(err)
 	end
 	task.wait(2)
-	local okSnap, snapshot = pcall(__colliderSnapshot, "lobby", { center = Vector3.zero, reach = 400 })
+	local okSnap, snapshot = pcall(__colliderSnapshot, "lobby", { center = Vector3.zero, reach = reach })
 	summary.colliders = { if okSnap then snapshot else { label = "lobby", failed = tostring(snapshot) } }
 	summary.errors = __errors
 	summary.log = __log

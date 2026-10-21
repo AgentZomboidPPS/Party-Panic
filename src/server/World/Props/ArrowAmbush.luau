@@ -105,6 +105,9 @@ return function(h)
 			Height = 7.79,
 			AssetId = 73958289178272,
 			Collide = false, -- the client moves boards; arrows are blocked by the server's own check
+			-- ... and makes them solid for its runner: collision that follows the drawn board, not the
+			-- rough hull that bulged up to 6 studs past the planks (MeshLibrary: preciseCollision).
+			Precise = true,
 			Palette = {
 				Wood = h.rgb(206, 156, 102),
 				Frame = h.rgb(122, 82, 52),

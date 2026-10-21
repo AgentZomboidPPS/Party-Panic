@@ -124,9 +124,11 @@ def main():
     parser.add_argument("--colliders-at", help="snapshot every part characters collide with at these round times (0 = after "
                         "Prepare), e.g. 0,5,80, for tools/checks/colliders.py; with LOBBY: the lobby's")
     parser.add_argument("--colliders-reach", type=float, default=600, help="with --colliders-at: map this far from the arena's middle")
+    parser.add_argument("--no-csg", action="store_true", help="build as if CSG had failed on this server (Shapes from plain parts)")
     args = parser.parse_args()
 
     header = "__touchMode = true\n" if args.touch else "__touchMode = false\n"
+    header += "__noCsg = true\n" if args.no_csg else "__noCsg = false\n"
     if args.ui_at:
         header += devices_luau(size_names(args.sizes or ("touch" if args.touch else "pc")))
     prelude = PRELUDE + ("\n" + COLLIDERS if args.colliders_at is not None else "")
@@ -163,7 +165,7 @@ def main():
     dump = "nil" if args.dump_at is None else str(args.dump_at)
     ui = "nil" if not args.ui_at else "{" + ", ".join(str(float(t)) for t in args.ui_at.split(",")) + "}"
     if args.game == "LOBBY" and args.colliders_at is not None:
-        out.append("return __runLobbyColliders()")
+        out.append(f"return __runLobbyColliders({args.colliders_reach})")
     elif args.game == "LOBBY":
         out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8}, 10)")
     else:

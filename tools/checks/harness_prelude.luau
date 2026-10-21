@@ -520,6 +520,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	GameState.Folder()
 	local RoundContext = __require("Server/Services/RoundContext")
 	__require("Server/World/Shapes").RecordPieces = true
+	if __noCsg then
+		__require("Server/World/Shapes").PauseCsgForTests(1e6) -- as if CSG failed on this server
+	end
 	local module = __require("Server/MiniGames/" .. id)
 	local definition = GameDefinitions.Get(id)
 	assert(definition, "no definition for " .. id)
@@ -628,7 +631,11 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	end
 	local colliderTimes = if colliders then table.clone(colliders.times) else {}
 	local function snapColliders(label)
-		local okSnap, snapshot = pcall(__colliderSnapshot, label, { center = ctx.Origin.Position, reach = colliders.reach })
+		local okSnap, snapshot = pcall(
+			__colliderSnapshot,
+			label,
+			{ center = ctx.Origin.Position, reach = colliders.reach, killY = ctx.KillY }
+		)
 		summary.colliders = summary.colliders or {}
 		table.insert(summary.colliders, if okSnap then snapshot else { label = label, failed = tostring(snapshot) })
 	end

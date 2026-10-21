@@ -27,6 +27,7 @@ import argparse
 import base64
 import json
 import math
+import re
 import struct
 import sys
 from collections import defaultdict
@@ -121,7 +122,20 @@ def unit_sphere(rings=12, segments=24):
     return np.array(verts, float), np.array(f)
 
 
-PRIMS = {"Block": unit_box(), "Wedge": unit_wedge(), "Cylinder": unit_cylinder(), "Ball": unit_sphere()}
+def outward(mesh):
+    """Every face wound so its normal points out of the solid (the top faces face up)."""
+    v, f = mesh
+    a, b, c = v[f[:, 0]], v[f[:, 1]], v[f[:, 2]]
+    volume = np.einsum("ij,ij->i", a, np.cross(b, c)).sum()
+    return (v, f[:, ::-1].copy()) if volume < 0 else mesh
+
+
+PRIMS = {
+    "Block": outward(unit_box()),
+    "Wedge": outward(unit_wedge()),
+    "Cylinder": outward(unit_cylinder()),
+    "Ball": outward(unit_sphere()),
+}
 SHAPE_BY_VALUE = {0: "Ball", 1: "Block", 2: "Cylinder", 3: "Wedge"}
 
 
@@ -201,7 +215,7 @@ def mesh_local(part):
         # Roblox's glTF import turns each mesh half a turn inside its MeshPart (x -> -x, z -> -z).
         unit = unit * np.array([-1.0, 1.0, -1.0])
         return unit * size, faces[:, ::-1] if False else faces
-    if part["c"] == "UnionOperation":
+    if part["c"] in ("UnionOperation", "PartOperation", "IntersectOperation"):
         info = part.get("pieces")
         if not info:
             return None
@@ -267,14 +281,13 @@ def union_local(part, info):
         normals = np.cross(world[f[:, 1]] - world[f[:, 0]], world[f[:, 2]] - world[f[:, 0]])
         length = np.linalg.norm(normals, axis=1, keepdims=True)
         normals = normals / np.maximum(length, 1e-9)
-        probe_out = mids + normals * 0.02
-        probe_in = mids - normals * 0.02
-        if not cutter:
-            keep = ~inside(probe_out, False) & ~inside(mids, True)
-        else:
-            # A cutter's face shows where it bites into the solid (seen from the outside of the hole).
-            keep = inside(probe_in * 0 + mids, False) & ~inside(probe_in, True) | False
-            keep = inside(mids, False) & ~np.zeros(len(mids), bool)
+        # A face is on the union's surface when the solid (positives minus cutters) is on one side of
+        # it and not the other; a cutter's face shows where it bites into the solid.
+        side_a = inside(mids + normals * 0.02, False) & ~inside(mids + normals * 0.02, True)
+        side_b = inside(mids - normals * 0.02, False) & ~inside(mids - normals * 0.02, True)
+        keep = side_a != side_b
+        if cutter:
+            f = f[:, ::-1]  # its faces look into the hole, out of the solid
         all_v.append(world)
         all_f.append(f[keep] + base)
         base += len(world)
@@ -362,8 +375,9 @@ def decode_grid(grid):
     return Y, P, H
 
 
-def flood(grid, Y, H, seeds, kill_y):
-    """Reachable (layer, column) spots from the seeds, as a boolean (L, columns) array."""
+def flood(grid, Y, H, seeds, kill_y, want_graph=False):
+    """Reachable (layer, column) spots from the seeds, as a boolean (L, columns) array (with the
+    move graph and the start nodes too when `want_graph`: tools trace how a spot is reached)."""
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import breadth_first_order
 
@@ -375,7 +389,7 @@ def flood(grid, Y, H, seeds, kill_y):
     Yg = Y.reshape(L, nz, nx)
     Hg = H.reshape(L, nz, nx)
     Vg = valid.reshape(L, nz, nx)
-    ids = np.arange(L * N).reshape(L, nz, nx)
+    ids = np.arange(L * N, dtype=np.int32).reshape(L, nz, nx)
     offsets = set()
     for dx in (-1, 0, 1):
         for dz in (-1, 0, 1):
@@ -420,17 +434,42 @@ def flood(grid, Y, H, seeds, kill_y):
                     ok &= y1 + h1 >= np.maximum(y1, y2) + HEADROOM - 0.3
                 if not ok.any():
                     continue
+                if max(abs(dx), abs(dz)) > 1:
+                    # Nothing solid in the way: the body fits through the columns in between, on a
+                    # jump's arc or on the straight line between the two spots.
+                    arc_ok = np.ones_like(ok)
+                    line_ok = np.ones_like(ok)
+                    cells = 2 * max(abs(dx), abs(dz))  # every half cell: thin walls can't slip between
+                    seen_cells = set()
+                    for t in (k / cells for k in range(1, cells)):
+                        mx, mz = int(round(dx * t)), int(round(dz * t))
+                        if (mx, mz) in ((0, 0), (dx, dz)) or (mx, mz) in seen_cells:
+                            continue
+                        seen_cells.add((mx, mz))
+                        ym = Yg[:, sz0 + mz : sz1 + mz, sx0 + mx : sx1 + mx]
+                        hm = Hg[:, sz0 + mz : sz1 + mz, sx0 + mx : sx1 + mx]
+                        empty = np.isnan(ym).all(0)
+                        travel = t * d / WALK
+                        lift = min(JUMP, math.sqrt(2 * GRAVITY * JUMP) * travel - 0.5 * GRAVITY * travel * travel)
+                        for body, good in ((y1 + max(lift, 0), arc_ok), (y1 + (y2 - y1) * t, line_ok)):
+                            with np.errstate(invalid="ignore"):
+                                fits = ((ym <= body + 0.6) & (ym + hm >= body + HEADROOM - 0.3)).any(0)
+                            good &= fits | empty
+                    ok &= arc_ok | line_ok
+                    if not ok.any():
+                        continue
                 src_ids = ids[l1, sz0:sz1, sx0:sx1][ok]
                 dst_ids = ids[l2, sz0 + dz : sz1 + dz, sx0 + dx : sx1 + dx][ok]
                 rows.append(src_ids)
                 cols.append(dst_ids)
     reach = np.zeros(L * N, bool)
     if not rows:
-        return reach.reshape(L, N)
+        return (reach.reshape(L, N), None, []) if want_graph else reach.reshape(L, N)
     rows = np.concatenate(rows)
     cols = np.concatenate(cols)
     graph = coo_matrix((np.ones(len(rows), np.int8), (rows, cols)), shape=(L * N, L * N)).tocsr()
     x0, z0 = grid["x0"], grid["z0"]
+    starts = []
     for seed in seeds:
         sx, sy, sz = seed[1], seed[2], seed[3]
         ix = int(round((sx - x0) / step))
@@ -446,11 +485,12 @@ def flood(grid, Y, H, seeds, kill_y):
         if best is None:
             continue
         start = best * N + col
+        starts.append(start)
         if reach[start]:
             continue
         order = breadth_first_order(graph, start, directed=True, return_predecessors=False)
         reach[order] = True
-    return reach.reshape(L, N)
+    return (reach.reshape(L, N), graph, starts) if want_graph else reach.reshape(L, N)
 
 
 def visible_layers(parts, grid, skip=lambda p: False):
@@ -586,6 +626,8 @@ def analyse(snapshot, out_dir: Path | None, name: str, kill_y=None, verbose=Fals
     Y, P, H = decode_grid(grid)
     L, N = Y.shape
     nx, nz, step = grid["nx"], grid["nz"], grid["step"]
+    if kill_y is None:
+        kill_y = snapshot.get("killY")
     reach = flood(grid, Y, H, snapshot.get("seeds", []), kill_y)
     lines.append(
         f"  map {nx}x{nz} step {step} ({grid['rays']} rays, {snapshot.get('gridSeconds')}s), "
@@ -608,11 +650,13 @@ def analyse(snapshot, out_dir: Path | None, name: str, kill_y=None, verbose=Fals
         ok = (ix >= 0) & (ix < nx) & (iz >= 0) & (iz < nz)
         nb = np.where(ok, iz * nx + ix, col_idx)
         b2, _ = nearest_visible(vcols, vys, nb, ys)
-        best = np.minimum(best, np.where(ok, b2 + 0.25 * step, np.inf))
+        # (a drawn surface a little higher next door: the rounded edge of what you stand on)
+        best = np.minimum(best, np.where(ok, np.maximum(b2 - 0.25 * step, 0), np.inf))
     unseen = best > TOLERANCE
     by_part = defaultdict(list)
     for k in np.nonzero(unseen)[0]:
-        by_part[int(owner[k])].append(k)
+        if owner[k] != 65535:  # terrain: drawn by the engine, as it collides
+            by_part[int(owner[k])].append(k)
     status = np.zeros((nz, nx), np.uint8)  # 0 nothing, 1 unreachable, 2 ok, 3 invisible, 4 mesh above
     status[(~np.isnan(Y)).any(0).reshape(nz, nx)] = 1
     top_reach = reach.any(0).reshape(nz, nx)
@@ -651,11 +695,27 @@ def analyse(snapshot, out_dir: Path | None, name: str, kill_y=None, verbose=Fals
         for k in ks:
             status[col_idx[k] // nx, col_idx[k] % nx] = 3 if invisible else 4
 
-    # Invisible colliders whose top can be jumped onto (also thin ones the map may step over).
+    # Invisible colliders whose top can be jumped onto (also thin ones the map may step over). The
+    # highest a jump reaches over each map column, from any reachable spot within 11 studs.
     reach_cols = col_idx
     reach_y = ys
     rx = grid["x0"] + (reach_cols % nx) * step
     rz = grid["z0"] + (reach_cols // nx) * step
+    top_reach = np.full(nz * nx, -np.inf)
+    np.maximum.at(top_reach, reach_cols, reach_y)
+    top_reach = top_reach.reshape(nz, nx)
+    jump_to = np.full((nz, nx), -np.inf)
+    span = int(11 / step)
+    for dz in range(-span, span + 1):
+        for dx in range(-span, span + 1):
+            d = step * math.hypot(dx, dz)
+            if d > 11:
+                continue
+            rise = max_rise(d)
+            src = top_reach[max(0, dz) : nz + min(0, dz), max(0, dx) : nx + min(0, dx)]
+            dst = jump_to[max(0, -dz) : nz + min(0, -dz), max(0, -dx) : nx + min(0, -dx)]
+            np.maximum(dst, src + rise, out=dst)
+    jump_to = jump_to.ravel()
     for part in parts.values():
         if not part["cc"] or part["t"] < INVISIBLE:
             continue
@@ -668,73 +728,50 @@ def analyse(snapshot, out_dir: Path | None, name: str, kill_y=None, verbose=Fals
         tris = tris[upward]
         if len(tris) == 0:
             continue
-        # Sample the top at 0.5 studs.
+        # Sample the top every half stud (coarser on big floors).
         lo = tris.reshape(-1, 3).min(0)
         hi = tris.reshape(-1, 3).max(0)
-        fine = 0.5
+        fine = max(0.5, math.sqrt((hi[0] - lo[0] + 1) * (hi[2] - lo[2] + 1) / 60000))
         fnx = int((hi[0] - lo[0]) / fine) + 2
         fnz = int((hi[2] - lo[2]) / fine) + 2
-        if fnx * fnz > 400000:
-            fine = math.sqrt((hi[0] - lo[0]) * (hi[2] - lo[2]) / 400000) + 0.01
-            fnx = int((hi[0] - lo[0]) / fine) + 2
-            fnz = int((hi[2] - lo[2]) / fine) + 2
         c, ty, _ = raster_vertical(tris, lo[0], lo[2], fine, fnx, fnz)
         if len(c) == 0:
             continue
         tx = lo[0] + (c % fnx) * fine
         tz = lo[2] + (c // fnx) * fine
-        # Something else solid sitting right on it hides it (its top isn't a place to stand).
-        gx = np.clip(np.round((tx - grid["x0"]) / step).astype(int), 0, nx - 1)
-        gz = np.clip(np.round((tz - grid["z0"]) / step).astype(int), 0, nz - 1)
+        gx = np.round((tx - grid["x0"]) / step).astype(int)
+        gz = np.round((tz - grid["z0"]) / step).astype(int)
+        inside_map = (gx >= 0) & (gx < nx) & (gz >= 0) & (gz < nz)
+        tx, ty, tz, gx, gz = tx[inside_map], ty[inside_map], tz[inside_map], gx[inside_map], gz[inside_map]
         gcol = gz * nx + gx
-        covered = np.zeros(len(c), bool)
+        # Something else solid sitting right on it hides it (its top isn't a place to stand).
+        covered = np.zeros(len(gcol), bool)
         for layer in range(L):
             yl = Y[layer, gcol]
             with np.errstate(invalid="ignore"):
                 covered |= (yl > ty + 0.3) & (yl < ty + HEADROOM) & (P[layer, gcol] != part["i"])
-        tx, ty, tz = tx[~covered], ty[~covered], tz[~covered]
-        if len(tx) == 0:
+        # A drawn surface right at the top (a mesh floor over its invisible collider) is what you see
+        # standing there: not invisible.
+        drawn, _ = nearest_visible(vcols, vys, gcol, ty)
+        covered |= drawn <= TOLERANCE
+        hit = ~covered & (ty <= jump_to[gcol] + 0.2)
+        if not hit.any():
             continue
-        # Reachable spots within 11 studs that can jump up to it.
-        sel = (rx >= tx.min() - 11) & (rx <= tx.max() + 11) & (rz >= tz.min() - 11) & (rz <= tz.max() + 11)
-        if not sel.any():
-            continue
-        srx, srz, sry = rx[sel], rz[sel], reach_y[sel]
-        jumpable = 0
-        min_need = math.inf
-        sample = None
-        # Chunk to bound memory.
-        for start in range(0, len(tx), 2000):
-            ex, ey, ez = tx[start : start + 2000], ty[start : start + 2000], tz[start : start + 2000]
-            d = np.hypot(ex[:, None] - srx[None, :], ez[:, None] - srz[None, :])
-            need = ey[:, None] - sry[None, :]
-            rise = np.vectorize(max_rise)(np.minimum(d, 11)) if False else None
-            v0 = math.sqrt(2 * GRAVITY * JUMP)
-            t = d / WALK
-            apex = v0 / GRAVITY
-            allowed = np.where(t <= apex, JUMP, v0 * t - 0.5 * GRAVITY * t * t)
-            ok = (d <= 11) & (need <= allowed + 0.2) & (need > -60)
-            hit = ok.any(1)
-            jumpable += int(hit.sum())
-            if hit.any():
-                k = np.argmax(hit)
-                sample = (float(ex[k]), float(ey[k]), float(ez[k]))
-            if ok.any():
-                min_need = min(min_need, float(np.min(np.where(ok, need, np.inf))))
-        if jumpable:
-            flags.append(
-                {
-                    "kind": "JUMPABLE-INVISIBLE",
-                    "part": part["p"],
-                    "class": part["c"],
-                    "size": part["s"],
-                    "at": where(part),
-                    "t": part["t"],
-                    "area": jumpable * fine * fine,
-                    "sample": sample,
-                    "gap": f"top {min_need:+.1f} studs from a reachable floor",
-                }
-            )
+        k = int(np.argmax(hit))
+        need = ty[hit] - (jump_to[gcol][hit] - JUMP)
+        flags.append(
+            {
+                "kind": "JUMPABLE-INVISIBLE",
+                "part": part["p"],
+                "class": part["c"],
+                "size": part["s"],
+                "at": where(part),
+                "t": part["t"],
+                "area": int(hit.sum()) * fine * fine,
+                "sample": (float(tx[k]), float(ty[k]), float(tz[k])),
+                "gap": f"top up to {float(need.max()):+.1f} studs above the floor it's jumped from",
+            }
+        )
 
     # Collidable meshes and unions: collision vs drawing in their own frame.
     probe_rows = []
@@ -783,10 +820,24 @@ def analyse(snapshot, out_dir: Path | None, name: str, kill_y=None, verbose=Fals
                 }
             )
 
-    # Print.
+    # Print: one line per kind of thing (a prop's piece, or a part's path without its number), the
+    # worst case first; every instance with --verbose.
     order = {"INVISIBLE": 0, "JUMPABLE-INVISIBLE": 1, "UNDRAWN-TOP": 2, "HULL-BIGGER": 3}
     flags.sort(key=lambda f: (order.get(f["kind"], 9), -f.get("area", 0)))
+    groups: dict = {}
     for f in flags:
+        key = (f["kind"], re.sub(r"\d+", "#", f["part"]))
+        groups.setdefault(key, []).append(f)
+    for (kind, label), items in groups.items():
+        worst = items[0]
+        lines.append(
+            f"  {kind:18s} {label}  x{len(items)}, area {sum(i.get('area', 0) for i in items):.0f} sq studs; worst: "
+            f"[{worst['class']} {worst.get('size')} at {worst.get('at')} t={worst.get('t')} fid={worst.get('fid')}] "
+            f"{worst.get('gap', '')}"
+            + (f"  y {worst['y'][0]:.1f}..{worst['y'][1]:.1f}" if "y" in worst else "")
+            + (f"  e.g. {tuple(round(v, 1) for v in worst['sample'])}" if worst.get("sample") else "")
+        )
+    for f in flags if verbose else []:
         lines.append(
             f"  {f['kind']:18s} {f['part']}  [{f['class']} {f.get('size')} at {f.get('at')} t={f.get('t')} "
             f"fid={f.get('fid')}]  area {f.get('area', 0):.1f}  {f.get('gap', '')}"
@@ -829,7 +880,7 @@ def analyse(snapshot, out_dir: Path | None, name: str, kill_y=None, verbose=Fals
                     region = status[j0 : j1 + 1, i0 : i1 + 1]
                     sub = img[j0 : j1 + 1, i0 : i1 + 1]
                     sub[(region == 1) | (region == 0)] = colors[5]
-            scale = max(1, int(round(2 / step)))
+            scale = max(1, int(900 / max(nx, nz)))
             image = Image.fromarray(img[::-1, ::-1]).resize((nx * scale, nz * scale), Image.NEAREST)
             out_dir.mkdir(parents=True, exist_ok=True)
             image.save(out_dir / f"{name}.png")

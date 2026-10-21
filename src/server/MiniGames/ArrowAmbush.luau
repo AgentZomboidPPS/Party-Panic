@@ -33,6 +33,11 @@
 --
 -- Bug pass (owner: "it just has to work"): a runner who goes out without an arrow (a reset) reads
 -- "Out at 12s" in the standings and results instead of "Running".
+--
+-- Invisible walls (owner: "Theres invisible stuff you can jump on and hang on in several games"):
+-- the barrier over the courtyard's low wall stopped 2.4 studs above the archers' deck, so an archer
+-- could jump off the side of the tower onto it and walk round the whole arena on nothing. It now
+-- rises BARRIER studs over the wall, out of reach from the deck too.
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
@@ -50,6 +55,7 @@ local Z_MAX = 25
 local TOWER_Z = -26
 local TOWER_TOP = 16 -- the archers' deck height above the courtyard floor
 local WALL = 2.4 -- low courtyard wall height (an invisible barrier rises above it)
+local BARRIER = 40 -- the invisible barrier over it: its top far above anything you can jump from (the deck: 16)
 ArrowAmbush.RAIL_TOP = 0.42 -- the boards' wheels run on rails this high above the floor
 
 -- Seconds between an archer's shots: quicker when each archer has more runners to chase.
@@ -348,9 +354,9 @@ function ArrowAmbush:_buildArena()
 		Build.Barrier({
 			Name = "Barrier",
 			Size = if size.X > size.Z
-				then Vector3.new(barrierLength, 16, size.Z)
-				else Vector3.new(size.X, 16, barrierLength),
-			CFrame = CFrame.new(center + Vector3.new(0, size.Y + 8, 0)),
+				then Vector3.new(barrierLength, BARRIER, size.Z)
+				else Vector3.new(size.X, BARRIER, barrierLength),
+			CFrame = CFrame.new(center + Vector3.new(0, size.Y + BARRIER / 2, 0)),
 			Parent = ctx.Arena,
 		})
 		local alongX = size.X > size.Z
