@@ -22,6 +22,12 @@ return function(h)
 end
 ```
 
+Props don't collide unless `Collide = true`. Scenery the camera could slide inside (big props next to
+where players stand, or anything the default camera, 12.5 studs behind a player, can reach) gets
+`BlocksCamera = true`: still nothing collides with it, but the camera stops in front of it instead of
+showing its inside. A prop that turns in place lists only its round pieces (`BlocksCamera = { "Rim" }`);
+never use it on props that move around.
+
 Helpers: `rgb block ball pillar roller blob rounded capsule cluster Build Shapes` (see MeshLibrary).
 The meshes themselves come from `tools/meshgen/props/<Game>.py`.
 
