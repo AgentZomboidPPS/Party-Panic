@@ -359,6 +359,19 @@ function DataService.Changed(player: Player)
 	end)
 end
 
+-- The profile for this session: the save brought up to date (or a new one), and the visit counted.
+local function prepare(stored: any): (ProfileData, ProfileMigration.Report?)
+	local data, migration
+	if stored then
+		data, migration = migrate(stored)
+	else
+		data = newData()
+	end
+	data.Meta.LastJoin = os.time()
+	data.Meta.Sessions += 1
+	return data, migration
+end
+
 local function onPlayerAdded(player: Player)
 	if profiles[player] or loadingThreads[player] then
 		return
@@ -402,14 +415,17 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 
-	local data, migration
-	if stored then
-		data, migration = migrate(stored)
-	else
-		data = newData()
+	local ok, data, migration = pcall(prepare, stored)
+	if not ok then
+		-- A save this code can't read: never overwrite it. The player plays on a profile that isn't
+		-- saved (and is told so), and our lock goes at once.
+		Telemetry.Error("DataLoad", `{key}: unreadable save, not saving this session: {data}`)
+		data, migration = prepare(nil)
+		if canSave then
+			canSave = false
+			task.spawn(releaseLockOnly, key)
+		end
 	end
-	data.Meta.LastJoin = os.time()
-	data.Meta.Sessions += 1
 
 	local profile: Profile = {
 		Player = player,

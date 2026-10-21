@@ -502,6 +502,27 @@ test("back on the same server while their last save is still being tried: the lo
 	world.stop()
 end)
 
+test("a save this code can't read is never overwritten: the player plays on a temporary profile", function()
+	local store = newStore()
+	store.records.Player_111 = { Data = { Coins = 77, Meta = "broken" } }
+	local world = server(store)
+	local player = world.join(111)
+	local profile = loaded(world, player)
+	expectEqual(profile.CanSave, false)
+	expectTrue(released(world, "Player_111"), "the lock goes at once")
+	profile.Data.Coins += 5
+	wait(4)
+	expectEqual(
+		world.notices,
+		{ "Progress saving is unavailable right now. Your progress this session won't be saved." }
+	)
+	world.leave(player)
+	wait(2)
+	expectEqual(store.records.Player_111.Data, { Coins = 77, Meta = "broken" }, "the save is as it was")
+	expectEqual(store.log, { "write", "write" }, "the load and the lock release, nothing else")
+	world.stop()
+end)
+
 test("another server can't load a profile this one holds, and takes it over only from a dead server", function()
 	local store = newStore()
 	local a = server(store, { jobId = "server-A" })
