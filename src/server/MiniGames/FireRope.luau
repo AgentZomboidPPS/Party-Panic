@@ -28,6 +28,13 @@
 -- slowest sweep is in: everyone it hit goes out together (a tie, split by jumps like any other) and
 -- everyone who cleared it gets the jump at once. A pass still waiting when time runs out counts for
 -- nobody.
+--
+-- Off the bridge (owner: "invisible stuff you can jump on and hang on in several games"): someone
+-- who got onto scenery beside the bridge was never judged (no deck under them), each pass counted
+-- as cleared, and they stood above the fall-out height, so they could outlast everyone. Now being
+-- off the deck when the rope comes by is no jump, and anyone still in who has been off the deck
+-- for more than OFF_DECK_TIME is out ("fell"), bots included. Nobody standing on the bridge is
+-- ever off it: the deck counts 2 studs past its ends and 4 past its sides.
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
@@ -51,6 +58,7 @@ local SCAN_STEP = 0.01 -- radians per step of the sweep (under 0.1 studs of rope
 local SLACK = 0.02 -- seconds of leeway either way on a player's delay (ping jitter), in their favour
 local FIRST_PERIOD = 3.0
 local FASTEST_PERIOD = 1.05 -- a Roblox jump is ~0.5s in the air; this leaves time to land and go again
+local OFF_DECK_TIME = 2 -- seconds someone still in may spend off the bridge deck before they're out
 local LAVA_DROP = 24
 local TEMPLE_DISTANCE = 150 -- how far ahead of the bridge the Dragon Temple stands
 local TEMPLE_SCALE = 1.1 -- with the distance, puts the dragon's frills just under the round banner on screen
@@ -60,9 +68,11 @@ local CRATER_RADIUS = 172 -- the crater wall around the lake
 local rng = Random.new()
 
 type Segment = { T0: number, A0: number, W: number }
-type Sample = { T: number, F: number, Z: number } -- feet above the deck, place across it (z)
--- A bottom pass of the rope. Verdicts: "hit", "clear", or "away" (not on the deck: no jump, and the
--- fall check deals with them).
+-- Feet above the deck and place across it (z); Off when they weren't over the deck (or had no
+-- character) at that moment.
+type Sample = { T: number, F: number, Z: number, Off: boolean? }
+-- A bottom pass of the rope. Verdicts: "hit", "clear", or "away" (off the deck while the rope came
+-- by: no jump, not a hit; off it too long puts them out).
 type Pass = {
 	T: number,
 	Before: number,
@@ -141,6 +151,7 @@ function FireRope:Prepare()
 	ctx.EndWhenOneLeft = true
 	ctx.KillY = ctx.Origin.Y - 12
 	self.history = {} :: { [Player]: { Sample } }
+	self.onDeckAt = {} :: { [Player]: number } -- the last time each player was over the deck
 	self.standing = {} :: { [Player]: number }
 	self.jumps = {} :: { [Player]: number }
 	self.segments = {} :: { Segment }
@@ -316,13 +327,16 @@ local function standingHeight(humanoid: Humanoid?, root: BasePart, measured: num
 	return if measured > 1.5 and measured < 5 then measured else 3
 end
 
--- A player's feet height and place across the bridge at server time t, between two samples.
-local function sampleAt(samples: { Sample }, t: number): (number?, number?)
+-- A player's feet height and place across the bridge at server time t, between two samples. The
+-- third result is true when they weren't over the deck then.
+local function sampleAt(samples: { Sample }, t: number): (number?, number?, boolean?)
 	for index = #samples, 2, -1 do
 		local a, b = samples[index - 1], samples[index]
 		if a.T <= t and t <= b.T then
-			if b.T - a.T > 0.1 then
-				return nil, nil -- a gap (they were off the deck): nothing to judge there
+			if a.Off or b.Off then
+				return nil, nil, true -- no deck under them: no floor to judge a jump from
+			elseif b.T - a.T > 0.1 then
+				return nil, nil -- a gap (a server hitch): nothing to judge there
 			end
 			local k = if b.T > a.T then (t - a.T) / (b.T - a.T) else 0
 			return a.F + (b.F - a.F) * k, a.Z + (b.Z - a.Z) * k
@@ -342,12 +356,13 @@ local function touches(z: number, y: number, legZ: number, feet: number): boolea
 end
 
 -- Sweeps the rope through one bottom pass against one player, as far as their positions have
--- arrived. Returns "hit", "clear", "away", or nil while it still needs later positions.
+-- arrived. Returns "hit", "clear", "away" (off the deck while the rope came by: no jump; being off
+-- it too long puts them out), or nil while it still needs later positions.
 function FireRope:_sweep(player: Player, pass: Pass, now: number): string?
 	local samples = self.history[player]
 	local last = samples and samples[#samples]
 	if not last then
-		return if now - pass.T > 1.5 then "away" else nil -- off the deck: the fall check deals with them
+		return if now - pass.T > 1.5 then "away" else nil -- no positions: nothing to call a jump
 	end
 	local sweep = pass.Sweeps[player]
 	if not sweep then
@@ -363,7 +378,12 @@ function FireRope:_sweep(player: Player, pass: Pass, now: number): string?
 		end
 		-- Each delay in the leeway is swept on its own; the player is out only if the rope hits
 		-- them under all of them.
-		sweep = { Step = -math.round(SCAN / SCAN_STEP), Delays = { delay - slack, delay, delay + slack }, Hit = {} }
+		sweep = {
+			Step = -math.round(SCAN / SCAN_STEP),
+			Delays = { delay - slack, delay, delay + slack },
+			Hit = {},
+			Away = false, -- off the deck at some moment of the sweep
+		}
 		pass.Sweeps[player] = sweep
 	end
 	local latest = sweep.Delays[3]
@@ -373,7 +393,7 @@ function FireRope:_sweep(player: Player, pass: Pass, now: number): string?
 		local theta = sweep.Step * SCAN_STEP
 		local t = pass.T + theta / (if theta < 0 then pass.Before else pass.After)
 		if t + latest > last.T then
-			-- Not all here yet; give up waiting after a while (they left the deck).
+			-- Not all here yet; give up waiting after a while (no positions: nothing to call a jump).
 			return if now - pass.T > 1.5 then "away" else nil
 		end
 		local z = RADIUS * math.sin(theta)
@@ -381,8 +401,10 @@ function FireRope:_sweep(player: Player, pass: Pass, now: number): string?
 		local hits = 0
 		for index, delay in sweep.Delays do
 			if not sweep.Hit[index] then
-				local feet, legZ = sampleAt(samples, t + delay)
-				if feet and legZ and touches(z, y, legZ - axisZ, feet) then
+				local feet, legZ, off = sampleAt(samples, t + delay)
+				if off then
+					sweep.Away = true
+				elseif feet and legZ and touches(z, y, legZ - axisZ, feet) then
 					sweep.Hit[index] = true
 				end
 			end
@@ -395,7 +417,7 @@ function FireRope:_sweep(player: Player, pass: Pass, now: number): string?
 		end
 		sweep.Step += 1
 	end
-	return "clear"
+	return if sweep.Away then "away" else "clear"
 end
 
 -- Sweeps every waiting pass as far as each player's positions have arrived, then settles the passes
@@ -454,6 +476,7 @@ function FireRope:Start()
 		local _, humanoid, root = ctx:GetCharacter(player)
 		self.standing[player] = if root then standingHeight(humanoid, root, root.Position.Y - self.floorY) else 3
 		self.history[player] = {}
+		self.onDeckAt[player] = ctx:Now()
 	end
 
 	local t0 = ctx:Now() + 0.4
@@ -465,22 +488,30 @@ function FireRope:Start()
 	self:_publish(0)
 	ctx:SetStatus("Jump the fire rope!")
 
-	-- Feet height and place across the bridge for every player, in server time; then judge the
-	-- passes whose sweep has arrived.
+	-- Feet height and place across the bridge for every player, in server time (or that they're off
+	-- the deck); then judge the passes whose sweep has arrived.
 	ctx:Heartbeat(function()
 		local now = ctx:Now()
 		for _, player in ctx:GetAlivePlayers() do
 			local _, _, root = ctx:GetCharacter(player)
 			local samples = self.history[player]
-			if not root or not samples then
+			if not samples then
 				continue
 			end
-			local height = self:_floorHeight(root.Position)
-			if height then
+			local height = if root then self:_floorHeight(root.Position) else nil
+			if root and height then
 				table.insert(samples, { T = now, F = height - (self.standing[player] or 3), Z = root.Position.Z })
+				self.onDeckAt[player] = now
+			else
+				table.insert(samples, { T = now, F = 0, Z = 0, Off = true })
 			end
 			while samples[1] and now - samples[1].T > 2 do
 				table.remove(samples, 1)
+			end
+			-- Off the bridge and not falling out (on scenery, or anything else they can stand or hang
+			-- on): out after a moment, like a fall.
+			if now - (self.onDeckAt[player] or now) > OFF_DECK_TIME then
+				ctx:Eliminate(player, "fell")
 			end
 		end
 		self:_judge(now)
