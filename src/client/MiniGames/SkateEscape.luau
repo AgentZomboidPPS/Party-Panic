@@ -159,13 +159,7 @@ function SkateEscape.Start(api)
 	local fovPunch = 0
 
 	local function nextIndex(d: number): number
-		for index, o in obstacles do
-			local edge = if o.Kind == "Gap" then o.D + o.Len / 2 else o.D
-			if edge > d then
-				return index
-			end
-		end
-		return #obstacles + 1
+		return SkateCourse.NextIndex(obstacles, d)
 	end
 
 	local function setupRace(value)
@@ -369,7 +363,7 @@ function SkateEscape.Start(api)
 		end
 		if SkateCourse.Jump(me, now) then
 			lastJump = now
-			api:Action("Jump")
+			api:Action("Jump", me.D) -- the server counts the jump from this spot (see the server's Jump)
 			api:Sound("Boing")
 		end
 	end
@@ -842,7 +836,8 @@ function SkateEscape.Start(api)
 			return "Cheer", 0
 		elseif entry.W and entry.W > now then
 			return "Wipe", 0
-		elseif entry.A and now - entry.A < SkateCourse.AirTime then
+		elseif entry.A and now >= entry.A and now - entry.A < SkateCourse.AirTime then
+			-- (A jump the server holds until its skater reaches the spot it was pressed at starts later.)
 			return "Air", 0
 		end
 		local seen = kickSeen[key]
@@ -1008,7 +1003,8 @@ function SkateEscape.Start(api)
 					end
 					if me.D >= length then
 						me.Done = true
-					elseif SkateCourse.CollapseAt(collapse, now, length) > me.D + 1 then
+					elseif SkateCourse.Caught(SkateCourse.CollapseAt(collapse, now, length), me.D, 0, length) then
+						-- (The server's rule, from where I'm drawn: it adds the lead my screen has on it.)
 						outAt = now
 						me.Done = true
 					end

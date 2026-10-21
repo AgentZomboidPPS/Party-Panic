@@ -14,6 +14,12 @@
 -- server's skater reached an obstacle still counts if it would have cleared it, allowing for ping.
 -- Bots skate the same simulation and the server moves their characters; the collapse (animated on
 -- clients from the shared schedule MG_Collapse) is checked against everyone's distance here.
+--
+-- Judged by what the skater sees (hitbox pass, owner: "the precision games will feel super bad if we
+-- dont"): crates and barriers by the board's wheels over the whole obstacle, gaps and the collapse
+-- only once no wheel is left on the planks, boost pads wherever a wheel touches (Shared/Logic/
+-- SkateCourse). A jump counts from the spot the player pressed it on their own screen, and the
+-- collapse allows for how far ahead their screen draws them, so ping never decides a wipeout or a fall.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
@@ -791,6 +797,18 @@ function SkateEscape:_ping(player: any): number
 	return if ok and type(ping) == "number" then math.clamp(ping, 0, 0.3) else 0.1
 end
 
+-- How far ahead of the server's skater (in seconds of skating) a player's own client draws them: their
+-- pushes reach the server one trip later. The same estimate the client steers its skater by.
+function SkateEscape:_lag(player: any): number
+	if BotRegistry.IsBot(player) then
+		return 0
+	end
+	local ok, ping = pcall(function()
+		return player:GetNetworkPing()
+	end)
+	return math.clamp(if ok and type(ping) == "number" then ping * 0.5 else 0.05, 0, 0.3)
+end
+
 function SkateEscape:_wipe(racer, event)
 	-- As of the moment of the hit, however long the ping allowance held it.
 	SkateCourse.Apply(racer, event, self.obstacles, event.At)
@@ -829,30 +847,43 @@ function SkateEscape:Start()
 		end
 		racer.Tokens -= 1
 		racer.Leeway = 0.06 + self:_ping(player)
+		racer.Lag = self:_lag(player)
 		SkateCourse.Push(racer, ctx:Now())
 	end, { Interval = 0.04 })
 
-	ctx:OnAction("Jump", function(player)
+	-- `claimed` is where the player's own client had them (distance) when they pressed JUMP. The ollie
+	-- counts from the moment the server's skater is (or was) at that spot, so it clears exactly what it
+	-- cleared on their screen: ping, and the small drift between the two simulations, can't turn a
+	-- clean jump into a wipeout. It may move the take-off by at most the ping allowance either way.
+	ctx:OnAction("Jump", function(player, claimed)
 		local racer = self.racers[tostring(player.UserId)]
 		if not racer then
 			return
 		end
 		local at = ctx:Now()
 		racer.Leeway = 0.06 + self:_ping(player)
+		racer.Lag = self:_lag(player)
+		local start: number? = nil
+		if type(claimed) == "number" and claimed == claimed and racer.V >= 1 then
+			start = at + math.clamp((claimed - racer.D) / racer.V, -racer.Leeway, racer.Leeway)
+		end
 		local pending = racer.Pending
 		if pending then
-			-- The skater already reached the obstacle here; would a jump pressed up to `Leeway` ago
-			-- (and not before the last landing) have cleared it?
-			local start = math.max(at - racer.Leeway, racer.AirEnd or -math.huge)
+			-- The skater already reached the obstacle here; would this jump (without a spot: one
+			-- pressed up to `Leeway` ago), not before the last landing, have cleared it?
+			local from = math.max(start or (at - racer.Leeway), racer.AirEnd or -math.huge)
 			local o = self.obstacles[pending.Event.Index]
-			if o and start <= at and SkateCourse.WouldClear(o, start, pending.Event.At, pending.Speed) then
+			if o and from <= at and SkateCourse.WouldClear(o, from, pending.Event.At, pending.Speed) then
 				racer.Pending = nil
-				racer.Air = start
-				racer.AirEnd = start + SkateCourse.AirTime
+				racer.Air = from
+				racer.AirEnd = from + SkateCourse.AirTime
 				return
 			end
 		end
-		SkateCourse.Jump(racer, at)
+		if racer.Air and racer.Air > at then
+			return -- one is already waiting for the skater to reach its spot
+		end
+		SkateCourse.Jump(racer, at, if start then math.max(start, racer.AirEnd or -math.huge) else nil)
 	end, { Interval = 0.15 })
 
 	-- Small steps, so a server hitch doesn't cost anyone distance while the collapse runs on.
@@ -935,7 +966,8 @@ function SkateEscape:_tick(dt: number, now: number)
 			if event.Kind == "Boost" then
 				SkateCourse.Apply(racer, event, self.obstacles, now)
 				ctx:Fire(nil, "Boost", key)
-			elseif racer.Leeway > 0 and not racer.Pending then
+			elseif racer.Leeway > 0 and not racer.Pending and not event.Landed then
+				-- (Coming down inside a gap is the last jump's doing: no later press can change it.)
 				racer.Pending = { Event = event, Until = now + racer.Leeway, Speed = math.max(racer.V, 1) }
 			else
 				self:_wipe(racer, event)
@@ -947,7 +979,9 @@ function SkateEscape:_tick(dt: number, now: number)
 			racer.Wipe = nil
 			racer.Pending = nil
 			table.insert(crossed, { Key = key, Racer = racer, At = now - (racer.D - length) / math.max(racer.V, 1) })
-		elseif racer.D < front then
+		elseif SkateCourse.Caught(front, racer.D, racer.V * (racer.Lag or 0), length) then
+			-- Only once the front is past their front wheels as their own screen draws them (it shows
+			-- them `Lag` seconds of skating ahead of these numbers), as the client checks it.
 			racer.Out = true
 			racer.OutAt = now
 			racer.Done = true
