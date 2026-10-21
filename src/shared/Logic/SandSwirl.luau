@@ -29,6 +29,8 @@ SandSwirl.LEAD = 0.45 -- effects start this long after they're asked for (covers
 SandSwirl.EDGE = 1.5 -- a walker's drift fades out over this distance either side of the rim
 SandSwirl.LIP = 6 -- width of the extra suction ring round the hole (walkers only)
 SandSwirl.LIP_PULL = 3.5 -- extra inward speed at the very edge of the hole
+SandSwirl.WALK_SPIN = 0.4 -- walkers slide round with this much of the sand's spin (treasure rides all of it)
+SandSwirl.AIR_DRAG = 0.6 -- how much of the drag still reaches someone in the air (hopping isn't a free pass)
 SandSwirl.MIN_V = 0.4
 
 -- Base flow over the round (progress 0 -> 1).
@@ -223,7 +225,8 @@ function SandSwirl.SinkTime(segments: { Segment }, r: number, t0: number, factor
 end
 
 -- How the sand moves someone standing at radius `r`: inward and tangential speed (studs/s). Near the
--- hole the sand pulls harder; it lets go across the rim.
+-- hole the sand pulls harder; it lets go across the rim. The sand slides round under a walker's feet
+-- (WALK_SPIN) while it whips treasure along, so a SWIRL carries a coin away from a Diver.
 function SandSwirl.WalkerFlow(segments: { Segment }, r: number, t: number): (number, number)
 	local rim, edge = SandSwirl.RIM, SandSwirl.EDGE
 	if r >= rim + edge then
@@ -237,7 +240,7 @@ function SandSwirl.WalkerFlow(segments: { Segment }, r: number, t: number): (num
 		local k = 1 - math.max(0, fromHole) / SandSwirl.LIP
 		lip = SandSwirl.LIP_PULL * k * k
 	end
-	return (v + lip) * fade, s * fade
+	return (v + lip) * fade, s * SandSwirl.WALK_SPIN * fade
 end
 
 -- Polar <-> flat offsets from the funnel's center (x, z).

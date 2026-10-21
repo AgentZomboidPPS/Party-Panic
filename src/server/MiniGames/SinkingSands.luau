@@ -121,6 +121,8 @@ function SinkingSands:Prepare()
 	end
 	ctx.Hooks.CharacterReady = function(player, character)
 		if self.thrones[player] then
+			-- A King who reset comes back on the throne, still frozen.
+			ctx:Freeze(player, true)
 			task.defer(function()
 				self:_seatKing(player, character)
 			end)
@@ -134,6 +136,9 @@ function SinkingSands:Prepare()
 			if #self.kings == 0 then
 				ctx:Announce("The Sand Kings left: the sand plays on by itself!", "info", 3)
 			end
+		elseif #self.kings > 0 and ctx:IsRunning() and #ctx:GetPlayers() - #self.kings <= 0 then
+			ctx:Announce("The Divers left!", "info", 2)
+			ctx:End("TeamGone")
 		end
 	end
 
@@ -160,9 +165,19 @@ function SinkingSands:Prepare()
 	while done < #players and os.clock() < deadline do
 		task.wait(0.1)
 	end
+	self:_pruneKings()
 
 	ctx:SetStatus("Divers: grab the treasure! Sand Kings: sink it!")
 	self:_publish(ctx:Now())
+end
+
+-- Kings whose character never spawned (they left the round) play no part: the sand takes over.
+function SinkingSands:_pruneKings()
+	for index = #self.kings, 1, -1 do
+		if not self.context:State(self.kings[index]) then
+			table.remove(self.kings, index)
+		end
+	end
 end
 
 -- A spot on the mesa just outside the funnel, facing the hole.
@@ -273,7 +288,7 @@ function SinkingSands:_buildArena(kingCount: number)
 	Build.Barrier({
 		Name = "Pocket",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(1, SandSwirl.HOLE * 2 - 1, SandSwirl.HOLE * 2 - 1),
+		Size = Vector3.new(1, SandSwirl.HOLE * 2 + 2, SandSwirl.HOLE * 2 + 2),
 		CFrame = CFrame.new(center - Vector3.new(0, HOLD_DEPTH + 0.5, 0)) * CFrame.Angles(0, 0, math.rad(90)),
 		Parent = floor,
 	})
@@ -424,6 +439,26 @@ function SinkingSands:_seatKing(player: any, character: Model)
 	end
 end
 
+-- Kings stay on their thrones: one who hopped off is sat back down, one who got away is respawned.
+function SinkingSands:_keepKingsSeated()
+	local ctx = self.context
+	for _, king in self.kings do
+		local throne = self.thrones[king]
+		local character, humanoid, root = ctx:GetCharacter(king)
+		if not throne or not character or not humanoid or not root or not ctx:IsAlive(king) then
+			continue
+		end
+		local seat = throne.Seat.Position
+		if Vector2.new(root.Position.X - seat.X, root.Position.Z - seat.Z).Magnitude > 6 then
+			ctx:Respawn(king)
+			ctx:Freeze(king, true)
+		elseif humanoid.SeatPart ~= throne.Seat then
+			ctx:Freeze(king, true)
+			self:_seatKing(king, character)
+		end
+	end
+end
+
 -- Treasure ----------------------------------------------------------------------------------------
 
 -- Where a treasure is at server time `t`: radius, angle and the time it reached the hole (if it did).
@@ -544,8 +579,10 @@ end
 function SinkingSands:_scoreKings(amount: number)
 	local ctx = self.context
 	ctx:AddTeamScore(KINGS, amount)
+	-- Each King's own score is their share of the haul (the team total is what wins).
+	local share = math.max(1, math.round(amount / math.max(1, #self.kings)))
 	for _, king in self.kings do
-		ctx:AddScore(king, amount)
+		ctx:AddScore(king, share)
 	end
 end
 
@@ -575,8 +612,35 @@ function SinkingSands:IsGulped(player: any): boolean
 	return self.gulped[player] ~= nil
 end
 
+-- At the buzzer, anyone still down the hole comes back up for the podium.
+function SinkingSands:Stop()
+	local ctx = self.context
+	for player in self.gulped do
+		self.gulped[player] = nil
+		ctx:Respawn(player)
+		ctx:Freeze(player, false)
+	end
+end
+
+-- Team results with readable names; Kings' personal bests aren't counted (they share one haul).
+function SinkingSands:GetResults()
+	local results = self.context:TeamResults()
+	for _, entry in results.Entries do
+		local state = self.context:State(entry.Player)
+		local mine = if state then state.Score else 0
+		if entry.Team == KINGS then
+			entry.ScoreText = `Sand Kings {entry.Rank}`
+			entry.BestScore = nil
+		else
+			entry.ScoreText = `Divers {entry.Rank} • you {mine}`
+		end
+	end
+	return results
+end
+
 function SinkingSands:Start()
 	local ctx = self.context
+	self:_pruneKings()
 	self:_effects()
 	ctx:AddTeamScore(DIVERS, 0)
 	ctx:AddTeamScore(KINGS, 0)
@@ -626,6 +690,7 @@ function SinkingSands:Start()
 	local nextAuto = os.clock() + 4
 	local nextAutoPull = os.clock() + 9
 	ctx:Loop(function()
+		self:_keepKingsSeated()
 		if #self.kings == 0 then
 			local now = os.clock()
 			if now >= nextAuto then
@@ -698,17 +763,18 @@ function SinkingSands:_dragBots(dt: number, now: number, physics: boolean)
 		if r < 0.01 then
 			continue
 		end
-		local inward, spin = 0, 0
-		if not airborne then
-			inward, spin = SandSwirl.WalkerFlow(self.segments, r, now)
-		end
+		local inward, spin = SandSwirl.WalkerFlow(self.segments, r, now)
+		local k = if airborne then SandSwirl.AIR_DRAG else 1
 		local u = offset / r
-		local move = (-u * inward + Vector3.new(-u.Z, 0, u.X) * spin) * dt
+		local move = (-u * inward + Vector3.new(-u.Z, 0, u.X) * spin) * dt * k
 		if physics then
 			if move.Magnitude > 0 then
 				root.CFrame += move
 			end
-		elseif not airborne then
+		elseif airborne then
+			-- Mid-hop on the test servers: the bot service owns the height, the sand still drags.
+			root.CFrame += Vector3.new(move.X, 0, move.Z)
+		else
 			-- No physics on the test servers: keep the bot on the sand's surface too.
 			local after = offset + move
 			local y = center.Y + SandSwirl.Height(after.Magnitude) + HIP
@@ -735,7 +801,9 @@ function SinkingSands:_judge(now: number)
 		end
 		local position = root.Position
 		local r = Vector2.new(position.X - center.X, position.Z - center.Z).Magnitude
-		if r < SandSwirl.HOLE - 0.4 and position.Y < center.Y - SandSwirl.DEPTH + 4 then
+		-- In the hole: over it and low, or anywhere in the throat below the lip.
+		local belowLip = position.Y < center.Y - SandSwirl.DEPTH - 1 and r < SandSwirl.HOLE + 1.5
+		if belowLip or r < SandSwirl.HOLE - 0.4 and position.Y < center.Y - SandSwirl.DEPTH + 4 then
 			self:_gulp(player)
 		elseif r < SandSwirl.RIM + 4 then
 			local ping = math.clamp(player:GetNetworkPing(), 0, 0.3)

@@ -3,7 +3,7 @@
 -- Divers chase the best treasure they can reach: worth more, closer, and not too near the sinkhole
 -- (careful bots keep further from it; sloppy ones get greedy and sometimes slip in). They aim where
 -- the treasure will be when they get there and lean outward against the pull. When the sand drags
--- them towards the hole they turn and run out, and good bots hop (the sand can't drag you in the air).
+-- them towards the hole they turn and run out, and good bots hop (the sand drags less in the air).
 -- Sand Kings watch the Divers: SWIRL when one is about to grab something, PULL when Divers stray
 -- deep into the funnel or a rich prize nears the hole. Reaction time and Skill keep them beatable.
 -- The sand's drag on bots is applied by the mode itself (SinkingSands:_dragBots).

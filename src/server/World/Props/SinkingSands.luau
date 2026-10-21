@@ -12,7 +12,7 @@ return function(h)
 			Shadow = false,
 			Palette = {
 				Sand = sand,
-				Lip = h.rgb(200, 146, 88),
+				Lip = h.rgb(170, 94, 58), -- the danger ring round the hole: darker, redder sand
 				Throat = h.rgb(64, 40, 30),
 				Cliff = h.rgb(212, 124, 76),
 				Strata = h.rgb(240, 186, 130),
@@ -43,7 +43,7 @@ return function(h)
 			Collide = false,
 			Shadow = false,
 			Palette = {
-				Swirl1 = h.rgb(206, 150, 92),
+				Swirl1 = h.rgb(118, 60, 38), -- the innermost streaks, on the danger ring
 				Swirl2 = h.rgb(250, 222, 164),
 				Swirl3 = h.rgb(220, 172, 110),
 				Swirl4 = h.rgb(250, 224, 168),

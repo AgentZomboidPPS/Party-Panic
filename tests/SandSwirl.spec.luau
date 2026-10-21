@@ -103,3 +103,26 @@ test("walkers feel more pull near the hole and none outside the rim", function()
 	expectTrue(inwardNear > inwardMid, "the lip pulls harder")
 	expectTrue(inwardOut == 0, "no drift outside the funnel")
 end)
+
+test("a SWIRL carries treasure away from a Diver standing on it", function()
+	local fx = effects()
+	table.insert(fx.Surges, 1002)
+	local segments = SandSwirl.Build(fx, 1000, 8)
+	-- A walker and a coin start on the same spot just as the surge peaks; after a second apart.
+	local r, a, t0 = 20, 0.3, 1002.3
+	local x, z = SandSwirl.ToXZ(r, a)
+	local dt = 0.01
+	local t = t0
+	while t < t0 + 1 - 1e-9 do
+		local pr, pa = SandSwirl.ToPolar(x, z)
+		local inward, spin = SandSwirl.WalkerFlow(segments, pr, t)
+		local ux, uz = math.cos(pa), math.sin(pa)
+		x += (-ux * inward + -uz * spin) * dt
+		z += (-uz * inward + ux * spin) * dt
+		t += dt
+	end
+	local cr, ca = SandSwirl.Advance(segments, r, a, t0, t0 + 1)
+	local cx, cz = SandSwirl.ToXZ(cr, ca)
+	local apart = math.sqrt((cx - x) ^ 2 + (cz - z) ^ 2)
+	expectTrue(apart > 3, `walker and coin only {apart} studs apart`)
+end)

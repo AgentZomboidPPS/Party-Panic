@@ -3,6 +3,8 @@
 -- time), so they glide smoothly and match what the server judges. Drags this player's own character
 -- with the sand while they stand on it (the server does the same for bots). Shows the player's
 -- role, the sand's state (spin direction, PULL) and their haul; Sand Kings get SWIRL and PULL.
+-- Grabs are predicted: a coin this player runs through pops at once and comes back if the server
+-- says someone else got it first (or nobody did, within PENDING_TIME).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -17,18 +19,17 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 local SinkingSands = {}
 
 -- Must match the server's kinds (index = kind number).
+-- Mark is the landing marker's dot (the ring round it is always dark, so it reads on pale sand).
 local KINDS = {
-	{ Prop = "SandCoin", Value = 1, Factor = 1, Lift = 0.15 },
-	{ Prop = "SandGem", Value = 3, Factor = 0.92, Lift = 0.5 },
-	{ Prop = "CoinBag", Value = 5, Factor = 0.8, Lift = 0 },
-	{ Prop = "GoldenIdol", Value = 10, Factor = 0.62, Lift = 0 },
+	{ Prop = "SandCoin", Value = 1, Factor = 1, Lift = 0.15, Reach = 3.4, Mark = Color3.fromRGB(255, 214, 60) },
+	{ Prop = "SandGem", Value = 3, Factor = 0.92, Lift = 0.5, Reach = 3.4, Mark = Color3.fromRGB(70, 200, 255) },
+	{ Prop = "CoinBag", Value = 5, Factor = 0.8, Lift = 0, Reach = 3.7, Mark = Color3.fromRGB(255, 170, 30) },
+	{ Prop = "GoldenIdol", Value = 10, Factor = 0.62, Lift = 0, Reach = 3.9, Mark = Color3.fromRGB(255, 170, 30) },
 }
-local GEM_COLORS = {
-	Color3.fromRGB(70, 200, 255),
-	Color3.fromRGB(255, 80, 150),
-	Color3.fromRGB(120, 240, 120),
-	Color3.fromRGB(190, 110, 255),
-}
+local GEM_COLOR = Color3.fromRGB(70, 200, 255) -- every gem is worth the same, so they all look alike
+local MARK_RING = Color3.fromRGB(90, 55, 30)
+local PENDING_TIME = 0.6 -- a predicted grab the server hasn't confirmed by then comes back
+local ALARM_GAP = 2.5 -- Divers hear the sand's alarm at most this often
 local FALL_TIME = 1.1
 local FALL_HEIGHT = 26
 local SWIRL_COOLDOWN, PULL_COOLDOWN = 3, 5
@@ -41,7 +42,12 @@ type Treasure = {
 	T: number,
 	Model: Model,
 	Marker: BasePart?,
+	Dot: BasePart?,
 	Shown: Vector3?,
+	Pending: number?, -- when this player's device predicted grabbing it
+	PendingFrom: Vector3?,
+	Predicted: boolean?, -- the pickup sound already played
+	Missing: boolean?, -- no longer in the server's list (while pending)
 	Spin: number,
 	Gone: string?, -- "Grab" | "Sink" | "Lost" once the server removed it
 	GoneAt: number,
@@ -85,13 +91,15 @@ function SinkingSands.Start(api)
 
 	local segments: { SandSwirl.Segment } = {}
 	local treasures: { [number]: Treasure } = {}
-	local templates: { [string]: Instance } = {}
-	local gemIndex = 0
+	local templates: { [string]: Instance | false } = {}
 
+	-- The treasure models load in the background (during the countdown) so drawing never waits.
+	for _, kind in KINDS do
+		task.spawn(function()
+			templates[kind.Prop] = api:Template(kind.Prop, 10) or false
+		end)
+	end
 	local function template(name: string): Instance?
-		if templates[name] == nil then
-			templates[name] = api:Template(name, 5) or false :: any
-		end
 		local found = templates[name]
 		return if found then found:Clone() else nil
 	end
@@ -117,10 +125,8 @@ function SinkingSands.Start(api)
 			part.CastShadow = false
 		end
 		if kind == 2 then
-			gemIndex += 1
-			local color = GEM_COLORS[(gemIndex - 1) % #GEM_COLORS + 1]
 			for _, part in partsOf(built) do
-				part.Color = color
+				part.Color = GEM_COLOR
 			end
 		elseif kind == 4 then
 			local primary = built.PrimaryPart or partsOf(built)[1]
@@ -148,21 +154,29 @@ function SinkingSands.Start(api)
 		return built
 	end
 
-	local function newMarker(): BasePart
-		local marker = Instance.new("Part")
-		marker.Name = "Landing"
-		marker.Shape = Enum.PartType.Cylinder
-		marker.Size = Vector3.new(0.12, 3, 3)
-		marker.Anchored = true
-		marker.CanCollide = false
-		marker.CanQuery = false
-		marker.CanTouch = false
-		marker.CastShadow = false
-		marker.Material = Enum.Material.Neon
-		marker.Color = Color3.fromRGB(255, 244, 200)
-		marker.Transparency = 0.55
-		marker.Parent = api.World
-		return marker
+	-- Landing marker: a dark shadow ring that grows as the treasure falls, with a bright dot in the
+	-- treasure's color in the middle.
+	local function disc(name: string, color: Color3, material: Enum.Material): BasePart
+		local part = Instance.new("Part")
+		part.Name = name
+		part.Shape = Enum.PartType.Cylinder
+		part.Size = Vector3.new(0.1, 1, 1)
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanQuery = false
+		part.CanTouch = false
+		part.CastShadow = false
+		part.Material = material
+		part.Color = color
+		part.Parent = api.World
+		return part
+	end
+	local function newMarker(kind: number): (BasePart, BasePart)
+		local ring = disc("Landing", MARK_RING, Enum.Material.SmoothPlastic)
+		ring.Transparency = 0.3
+		local dot = disc("LandingDot", KINDS[kind].Mark, Enum.Material.Neon)
+		dot.Size = Vector3.new(0.1, 1.1, 1.1)
+		return ring, dot
 	end
 
 	local function polar(item: Treasure, t: number): (number, number, number?)
@@ -196,6 +210,7 @@ function SinkingSands.Start(api)
 				item.R, item.A, item.T = entry[3], entry[4], entry[5]
 			elseif KINDS[entry[2]] then
 				local kind = entry[2]
+				local ring, dot = newMarker(kind)
 				treasures[id] = {
 					Id = id,
 					Kind = kind,
@@ -203,7 +218,8 @@ function SinkingSands.Start(api)
 					A = entry[4],
 					T = entry[5],
 					Model = newModel(kind),
-					Marker = newMarker(),
+					Marker = ring,
+					Dot = dot,
 					Spin = math.random() * math.pi * 2,
 					GoneAt = 0,
 				}
@@ -212,9 +228,13 @@ function SinkingSands.Start(api)
 		local now = api:Now()
 		for id, item in treasures do
 			if not seen[id] and not item.Gone then
-				item.Gone = "Lost"
-				item.GoneAt = now
-				item.GoneFrom = item.Shown
+				if item.Pending then
+					item.Missing = true -- the Grab event says who got it (or it times out)
+				else
+					item.Gone = "Lost"
+					item.GoneAt = now
+					item.GoneFrom = item.Shown
+				end
 			end
 		end
 	end
@@ -254,14 +274,24 @@ function SinkingSands.Start(api)
 		CornerRadius = 20,
 		Parent = hud,
 	}, Color3.fromRGB(150, 96, 52), Color3.fromRGB(96, 56, 30))
+	-- The spin: an arrow glyph that turns the way the sand does (sped up so it reads).
+	local spinIcon = UIKit.Label({
+		Name = "Spin",
+		Text = "🔃",
+		TextSize = 32,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, 34, 0.5, 0),
+		Size = UDim2.fromOffset(42, 42),
+		Parent = panel,
+	})
 	local stateLabel = UIKit.Label({
 		Name = "Flow",
 		Text = "",
 		Font = Theme.Fonts.Display,
 		TextSize = 30,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(18, 0),
-		Size = UDim2.new(0.62, -18, 1, 0),
+		Position = UDim2.fromOffset(60, 0),
+		Size = UDim2.new(0.62, -54, 1, 0),
 		Parent = panel,
 		Children = { UIKit.TextStroke(0.2) },
 	})
@@ -342,11 +372,26 @@ function SinkingSands.Start(api)
 		if isKing and not swirlButton then
 			local swirl = api:Button({ Text = "SWIRL", Key = Enum.KeyCode.E, Color = Theme.Colors.Orange })
 			local pull = api:Button({ Text = "PULL", Key = Enum.KeyCode.Q, Color = Theme.Colors.Pink, Slot = 2 })
+			-- Instant feedback for the King's own press (the server's echo is then ignored).
+			local lastPress = { Swirl = 0, Pull = 0 }
+			local function press(name: string, readyAt: string)
+				local clock = os.clock()
+				if (api:Mine(readyAt) or 0) <= api:Now() and clock - lastPress[name] > 0.5 then
+					lastPress[name] = clock
+					api:Sound("Click")
+					if name == "Swirl" then
+						showFlash("🌀 SWIRL!", Theme.Colors.Orange, 0.7)
+					else
+						showFlash("⏬ PULL! ⏬", Theme.Colors.Red, 1.2)
+					end
+				end
+				api:Action(name)
+			end
 			swirl.Pressed:Connect(function()
-				api:Action("Swirl")
+				press("Swirl", "SwirlAt")
 			end)
 			pull.Pressed:Connect(function()
-				api:Action("Pull")
+				press("Pull", "PullAt")
 			end)
 			swirlButton, pullButton = swirl, pull
 		end
@@ -394,27 +439,46 @@ function SinkingSands.Start(api)
 		api:Track(connection)
 	end
 
+	local function unpend(item: Treasure)
+		if item.Pending then
+			item.Pending = nil
+			item.Model.Parent = api.World
+			item.Model:ScaleTo(1)
+		end
+	end
+
 	api:OnEvent("Grab", function(id: number, userId: number, value: number)
 		local item = treasures[id]
 		local now = api:Now()
+		local mine = userId == api.Player.UserId
+		local where = if item then item.PendingFrom or item.Shown else nil
 		if item then
-			item.Gone = "Grab"
-			item.GoneAt = now
-			item.GoneFrom = item.Shown
+			if mine and item.Pending then
+				-- Predicted right: the fly-to-me animation simply carries on.
+				item.Gone = "Grab"
+				item.GoneAt = item.Pending
+				item.GoneFrom = item.PendingFrom
+				item.Pending = nil
+			else
+				unpend(item)
+				item.Gone = "Grab"
+				item.GoneAt = now
+				item.GoneFrom = item.Shown
+			end
 			item.Taker = userId
 		end
-		local where = if item and item.Shown then item.Shown else nil
 		if where then
 			floatText(where, `+{value}`, Theme.Colors.Coin)
 			api:Effect("Sparkles", where, { Theme.Colors.Coin, Color3.new(1, 1, 1) })
 		end
-		if userId == api.Player.UserId then
+		if mine and not (item and item.Predicted) then
 			api:Sound("Pickup")
 		end
 	end)
 	api:OnEvent("Sink", function(id: number, value: number)
 		local item = treasures[id]
 		if item and item.Gone ~= "Grab" then
+			unpend(item)
 			item.Gone = "Sink"
 			item.GoneAt = api:Now()
 			item.GoneFrom = item.Shown
@@ -433,13 +497,19 @@ function SinkingSands.Start(api)
 			api:Sound("Splash")
 		end
 	end)
+	-- Divers get the alarm only when it matters (a PULL, or the spin reversing), and not too often;
+	-- the panel shows every SWIRL anyway. Kings see their own presses (flashed when pressed).
+	local lastAlarm = -math.huge
 	api:OnEvent("Power", function(kind: string, _start: number, userId: number, flipped: boolean)
-		if kind == "SWIRL" then
-			showFlash(if flipped then "🌀 SWIRL! 🔄" else "🌀 SWIRL!", Theme.Colors.Orange, 1.1)
-		else
-			showFlash("⏬ PULL! ⏬", Theme.Colors.Red, 1.4)
+		if not isKing and (kind == "PULL" or flipped) and os.clock() - lastAlarm >= ALARM_GAP then
+			lastAlarm = os.clock()
+			if kind == "SWIRL" then
+				showFlash("🌀 SWIRL! 🔄", Theme.Colors.Orange, 0.7)
+			else
+				showFlash("⏬ PULL! ⏬", Theme.Colors.Red, 1.2)
+			end
+			api:Sound("HazardWarning")
 		end
-		api:Sound("HazardWarning")
 		local root = rootOf(api, userId)
 		if root then
 			api:Effect("Poof", root.Position + Vector3.new(0, 3, 0))
@@ -449,13 +519,15 @@ function SinkingSands.Start(api)
 	-- Dragging this player's character with the sand (Heartbeat: after the humanoid moved) ----------
 
 	api:Track(RunService.Heartbeat:Connect(function(dt)
-		if isKing or not api:Alive() or #segments == 0 then
+		if isKing or not api:Alive() or #segments == 0 or GameState.Get("Phase") ~= "InRound" then
 			return
 		end
 		local _, humanoid, root = api:Character()
-		if not humanoid or not root or humanoid.FloorMaterial == Enum.Material.Air then
+		if not humanoid or not root then
 			return
 		end
+		-- Hopping only softens the drag (the server drags bots the same way).
+		local k = if humanoid.FloorMaterial == Enum.Material.Air then SandSwirl.AIR_DRAG else 1
 		local position = root.Position
 		if position.Y < center.Y - SandSwirl.DEPTH - 2 then
 			return -- down the sinkhole, waiting to come back
@@ -467,7 +539,7 @@ function SinkingSands.Start(api)
 		end
 		local inward, spin = SandSwirl.WalkerFlow(segments, r, api:Now())
 		local u = offset / r
-		local move = (-u * inward + Vector3.new(-u.Z, 0, u.X) * spin) * math.min(dt, 0.1)
+		local move = (-u * inward + Vector3.new(-u.Z, 0, u.X) * spin) * math.min(dt, 0.1) * k
 		root.CFrame += move
 	end))
 
@@ -483,8 +555,36 @@ function SinkingSands.Start(api)
 			ring.Part.CFrame = CFrame.new(center) * CFrame.Angles(0, -ring.Angle, 0) * ring.Offset
 		end
 
+		local inRound = GameState.Get("Phase") == "InRound"
+		local myRoot = if not isKing and inRound and api:Alive() then rootOf(api, api.Player.UserId) else nil
 		for id, item in treasures do
 			local kind = KINDS[item.Kind]
+			if item.Pending and not item.Gone then
+				-- Predicted grab: fly to me and vanish, or come back if the server disagrees.
+				local t = now - item.Pending
+				if t > PENDING_TIME then
+					if item.Missing then
+						item.Gone = "Lost"
+						item.GoneAt = now
+						item.GoneFrom = item.PendingFrom
+					end
+					unpend(item)
+				else
+					local from = item.PendingFrom :: Vector3
+					local to = if myRoot then myRoot.Position + Vector3.new(0, 1.5, 0) else from + Vector3.new(0, 4, 0)
+					local k = math.clamp(t / 0.3, 0, 1)
+					if k >= 1 then
+						item.Model.Parent = nil
+					else
+						item.Model:PivotTo(
+							CFrame.new(from:Lerp(to, k) + Vector3.new(0, math.sin(k * math.pi) * 2.5, 0))
+								* CFrame.Angles(0, item.Spin + t * 20, 0)
+						)
+						item.Model:ScaleTo(math.max(0.1, 1 - k * 0.8))
+					end
+					continue
+				end
+			end
 			if item.Gone then
 				local t = now - item.GoneAt
 				local from = item.GoneFrom or surface(item.R, item.A)
@@ -519,6 +619,10 @@ function SinkingSands.Start(api)
 					item.Marker:Destroy()
 					item.Marker = nil
 				end
+				if item.Dot then
+					item.Dot:Destroy()
+					item.Dot = nil
+				end
 				continue
 			end
 			local r, a, sunk = polar(item, now)
@@ -530,15 +634,26 @@ function SinkingSands.Start(api)
 				local k = math.clamp(1 - (item.T - now) / FALL_TIME, 0, 1)
 				target = ground + Vector3.new(0, FALL_HEIGHT * (1 - k * k) + kind.Lift, 0)
 				turn = CFrame.Angles(0, item.Spin + now * 6, 0)
-				if item.Marker then
-					item.Marker.CFrame = CFrame.new(ground + Vector3.new(0, 0.08, 0))
+				if item.Marker and item.Dot then
+					-- Lying on the slope (tilted to the funnel), the ring growing like a falling shadow.
+					local slope = SandSwirl.Height(r + 0.5) - SandSwirl.Height(r - 0.5)
+					local x, z = SandSwirl.ToXZ(1, a)
+					local flatOn = CFrame.lookAt(ground, ground + Vector3.new(x, 0, z))
+						* CFrame.Angles(math.atan(slope), 0, 0)
 						* CFrame.Angles(0, 0, math.rad(90))
-					item.Marker.Transparency = 0.85 - 0.4 * k
+					local size = 1.6 + 1.8 * k + (if item.Kind >= 3 then 0.8 else 0)
+					item.Marker.Size = Vector3.new(0.1, size, size)
+					item.Marker.CFrame = flatOn * CFrame.new(0.1, 0, 0)
+					item.Dot.CFrame = flatOn * CFrame.new(0.16, 0, 0)
 				end
 			else
 				if item.Marker then
 					item.Marker:Destroy()
 					item.Marker = nil
+				end
+				if item.Dot then
+					item.Dot:Destroy()
+					item.Dot = nil
 				end
 				local sinking = if sunk then math.clamp((now - sunk) / 0.6, 0, 1) else 0
 				-- Treasure bobs on the sand and slowly turns; it tips into the hole at the end.
@@ -555,20 +670,33 @@ function SinkingSands.Start(api)
 			end
 			item.Shown = shown
 			item.Model:PivotTo(CFrame.new(shown :: Vector3) * turn)
+
+			-- Ran through it: grab it now (the server confirms within a moment).
+			if myRoot and now >= item.T and not sunk and not item.Predicted then
+				local p = myRoot.Position
+				local dy = p.Y - ground.Y
+				if Vector2.new(p.X - ground.X, p.Z - ground.Z).Magnitude < kind.Reach and dy > -2 and dy < 7.5 then
+					item.Pending = now
+					item.PendingFrom = shown
+					item.Predicted = true
+					api:Sound("Pickup")
+				end
+			end
 		end
 
-		-- The sand's state: spin direction (an arrow as well as words) and PULL.
+		-- The sand's state: the arrow turns with the spin (seen from above, a positive spin turns
+		-- clockwise), and the words say SWIRL! / PULL! / CALM.
 		local pulling = v > baseDrain
-		-- Seen from above, a positive spin turns clockwise.
-		local arrow = if s >= 0 then "🔃" else "🔄"
+		spinIcon.Text = if s >= 0 then "🔃" else "🔄"
+		spinIcon.Rotation = (spinIcon.Rotation + math.deg(s / 6) * dt) % 360
 		if pulling then
-			stateLabel.Text = "⏬ PULL!"
+			stateLabel.Text = "PULL!"
 			stateLabel.TextColor3 = Theme.Colors.Red
 		elseif math.abs(s) > SandSwirl.SPIN[2] + 2 then
-			stateLabel.Text = `{arrow} SWIRL!`
+			stateLabel.Text = "SWIRL!"
 			stateLabel.TextColor3 = Theme.Colors.Orange
 		else
-			stateLabel.Text = `{arrow} SAND`
+			stateLabel.Text = "CALM"
 			stateLabel.TextColor3 = Theme.Colors.Text
 		end
 
@@ -598,8 +726,12 @@ function SinkingSands.Start(api)
 
 	api:Track(function()
 		for _, item in treasures do
-			if item.Model then
-				item.Model:Destroy()
+			item.Model:Destroy()
+			if item.Marker then
+				item.Marker:Destroy()
+			end
+			if item.Dot then
+				item.Dot:Destroy()
 			end
 		end
 	end)
