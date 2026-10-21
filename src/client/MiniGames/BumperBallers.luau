@@ -75,7 +75,7 @@ function BumperBallers.Start(api)
 	end
 	local player = api.Player or Players.LocalPlayer
 	local myId = player and player.UserId
-	local tuning = api:SharedJSON("Tuning") or { Accel = 46, MaxSpeed = 24, Relief = 0.5, ReliefDrag = 0.3 }
+	local tuning = api:SharedJSON("Tuning") or { Accel = 46, MaxSpeed = 24, Relief = 0.3, ReliefDrag = 0.6 }
 	local island = api:SharedJSON("Island")
 	local drag = tuning.Accel / tuning.MaxSpeed
 	local hud = api:TopHud()

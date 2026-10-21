@@ -43,15 +43,19 @@ local RIDER_GROUP = "BumperRider"
 local TUNING = {
 	Accel = 46, -- studs/s^2 at full input
 	MaxSpeed = 24, -- studs/s top rolling speed (Accel / drag)
-	Relief = 0.5, -- seconds after a bump with less drag, so bumps carry
-	ReliefDrag = 0.3, -- drag multiplier during that time
+	Relief = 0.3, -- seconds after a bump with less drag, so bumps carry
+	ReliefDrag = 0.6, -- drag multiplier during that time
 }
 local DRAG = TUNING.Accel / TUNING.MaxSpeed
-local BUMP_BASE = 10 -- studs/s a full-speed bump gives on top (less for a gentle touch)
-local BUMP_GAIN = 1.25 -- extra per stud/s of the other ball's speed into you
-local BUMP_SELF = 0.25 -- extra per stud/s of your own speed into them (you bounce back a bit)
-local BUMP_MAX = 62
-local BUMP_LIFT = 7
+-- A full-speed hit on a rider standing still slides them about 17 studs (about 5 if they steer
+-- against it), 24 with BIG BUMPS, on an island 44 studs from middle to edge: a ring-out takes a hit
+-- near the edge or a few in a row. (Owner, after playing: "you get bounced off way too quickly" -
+-- it used to be 33 and 46 studs.)
+local BUMP_BASE = 7 -- studs/s a full-speed bump gives on top (less for a gentle touch)
+local BUMP_GAIN = 0.85 -- extra per stud/s of the other ball's speed into you
+local BUMP_SELF = 0.2 -- extra per stud/s of your own speed into them (you bounce back a bit)
+local BUMP_MAX = 42
+local BUMP_LIFT = 5
 local BIG_BUMPS = 1.4
 local CLOSING_MIN = 4 -- closing speed (studs/s) that counts as a bump
 local PAIR_COOLDOWN = 0.4
@@ -499,7 +503,9 @@ function BumperBallers:Prepare()
 	-- One ball per rider in a ring facing the middle; riders stand on them, frozen until GO.
 	local players = ctx:GetPlayers()
 	local count = #players
-	local ringRadius = math.clamp(count * 2.1 + 4, 14, 27)
+	-- At most 22 from the middle: more than a full-speed bump's slide from the edge, so nobody goes
+	-- over to the first charge after GO.
+	local ringRadius = math.clamp(count * 1.6 + 4, 12, 22)
 	local spots = {}
 	local startAngle = rng:NextNumber(0, math.pi * 2)
 	for index, player in players do
