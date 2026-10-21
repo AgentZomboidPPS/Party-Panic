@@ -551,6 +551,35 @@ test("back on the same server while the load they left is still running: it wait
 	world.stop()
 end)
 
+test("the load they left answers after the 30 s wait: its lock release leaves the next visit's lock", function()
+	local store = newStore()
+	store.records.Player_115 = veteranRecord(1000)
+	store.plans.Player_115 = { { reply = 40 } } -- the first visit's load: lock taken, the answer 40 s late
+	local world = server(store)
+	local first = world.join(115)
+	wait(1)
+	world.leave(first)
+	wait(0.5)
+	local again = world.join(115) -- waits 30 s for that load, then loads anyway
+	local profile = loaded(world, again)
+	expectTrue(
+		waitFor(function()
+			return #store.log >= 3
+		end),
+		"the late answer came, and its lock release ran"
+	)
+	local lock = store.records.Player_115.Lock
+	expectTrue(lock ~= nil and lock.JobId == "server-A", "this visit still holds the lock")
+	expectEqual(lock.Session, profile.Session)
+	expectEqual(store.log, { "write", "write", "cancel" }, "the first load, this load, then that release refused")
+	profile.Data.Coins += 5
+	world.leave(again)
+	expectTrue(released(world, "Player_115"))
+	expectEqual(store.records.Player_115.Data.Coins, 105)
+	expectEqual(world.errors, {})
+	world.stop()
+end)
+
 test("a leave save slower than the wait on rejoining never clears the next visit's lock", function()
 	local store = newStore()
 	local world = server(store)
