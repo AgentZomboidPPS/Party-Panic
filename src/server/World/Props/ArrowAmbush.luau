@@ -40,7 +40,7 @@ return function(h)
 	return {
 		ArcherTower = {
 			Height = 34.84,
-			AssetId = 0, -- tools/upload_assets.py --only ArcherTower fills this in
+			AssetId = 130628218274897, -- tools/upload_assets.py --only ArcherTower fills this in
 			Collide = false, -- the game puts a solid core under the deck
 			Palette = {
 				Mortar = mortar,
@@ -103,7 +103,7 @@ return function(h)
 		},
 		TargetBoard = {
 			Height = 7.79,
-			AssetId = 0,
+			AssetId = 82765037973533,
 			Collide = false, -- the client moves boards; arrows are blocked by the server's own check
 			Palette = {
 				Wood = h.rgb(206, 156, 102),
@@ -226,7 +226,7 @@ return function(h)
 		-- shows through the gaps as grout.
 		ArrowAmbushCobbles = {
 			Height = 0.4,
-			AssetId = 0,
+			AssetId = 115358561546902,
 			Collide = false, -- the courtyard floor under it is what runners stand on
 			Shadow = false,
 			Palette = {
@@ -242,7 +242,7 @@ return function(h)
 		-- An 8.8 long section of the low courtyard wall: stone courses, coping and little merlons.
 		ArrowAmbushWall = {
 			Height = 3.31,
-			AssetId = 0,
+			AssetId = 138409413801657,
 			Collide = false, -- the mode keeps an invisible collider in the wall
 			Palette = { Mortar = mortar, Stone = stone, Cap = trim },
 			Materials = { Mortar = Enum.Material.Slate, Stone = Enum.Material.Slate, Cap = Enum.Material.Slate },
@@ -258,7 +258,7 @@ return function(h)
 		-- the castle's towers).
 		ArrowAmbushTurret = {
 			Height = 12.69,
-			AssetId = 0,
+			AssetId = 124059599614229,
 			Collide = false,
 			Palette = {
 				Mortar = mortar,
@@ -288,7 +288,7 @@ return function(h)
 		-- A 16 long section of the castle's curtain wall, its banner on the front (-Z).
 		ArrowAmbushCastleWall = {
 			Height = 12.6,
-			AssetId = 0,
+			AssetId = 80463230898713,
 			Collide = false,
 			Palette = {
 				Mortar = h.rgb(168, 156, 146),
@@ -320,7 +320,7 @@ return function(h)
 		-- A round festival tent in two-color stripes (StripeA is recolored per tent).
 		ArrowAmbushTent = {
 			Height = 9.62,
-			AssetId = 0,
+			AssetId = 124230307098304,
 			Collide = false,
 			Palette = {
 				StripeA = red,
@@ -341,7 +341,7 @@ return function(h)
 		-- A tall banner pole with a swallowtail banner and a gold crossed-arrows badge.
 		ArrowAmbushBanner = {
 			Height = 11.52,
-			AssetId = 0,
+			AssetId = 80606755230134,
 			Collide = false,
 			Palette = {
 				Foot = stone,
@@ -361,7 +361,7 @@ return function(h)
 		-- A round straw archery target on a wooden easel, three arrows in it.
 		ArrowAmbushHayTarget = {
 			Height = 5.47,
-			AssetId = 0,
+			AssetId = 113637795512437,
 			Collide = false,
 			Palette = {
 				Straw = h.rgb(242, 208, 112),
