@@ -278,10 +278,12 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 		})
 		local crayon = MeshLibrary.Get("TraceRaceCrayon", {
 			Colors = { Wax = info.Color, Wrapper = info.Color:Lerp(Color3.new(1, 1, 1), 0.3) },
-			CFrame = self:_tip(lane, 0, 0) * CFrame.new(0, 0, TIP),
 			Parent = arena,
 		})
 		crayon:SetAttribute("TraceRaceUser", player.UserId)
+		local toPivot = self:_tipToPivot(crayon)
+		crayon:SetAttribute("TipToPivot", toPivot)
+		crayon:PivotTo(self:_tip(lane, 0, 0) * CFrame.new(toPivot))
 		CollectionService:AddTag(crayon, "TraceRaceCrayon")
 		lane.Crayon = crayon
 	end
@@ -353,9 +355,9 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 		put(
 			"TraceRaceCrayon",
 			4,
-			side * (half + 30 + index * 6),
-			zStart - 120 - index * 70,
-			side * 70 + index * 13,
+			side * (half + 22 + index * 5),
+			zStart - 110 - index * 75,
+			side * 12 + index * 9,
 			{ Wax = color, Wrapper = color:Lerp(Color3.new(1, 1, 1), 0.3) }
 		)
 	end
@@ -373,6 +375,33 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 			Parent = arena,
 		})
 	end
+end
+
+-- Where a crayon's pivot is from its tip (the lowest point, at the front): measured, so the mesh and
+-- its primitive stand-in both draw from the tip.
+function TraceRace:_tipToPivot(crayon: Model): Vector3
+	crayon:PivotTo(CFrame.new())
+	local low, high = Vector3.one * math.huge, -Vector3.one * math.huge
+	for _, part in crayon:GetDescendants() do
+		if part:IsA("BasePart") then
+			for _, corner in { -1, 1 } do
+				for _, cy in { -1, 1 } do
+					for _, cz in { -1, 1 } do
+						local point = part.CFrame * (part.Size / 2 * Vector3.new(corner, cy, cz))
+						low = low:Min(point)
+						high = high:Max(point)
+					end
+				end
+			end
+		end
+	end
+	local offset = Vector3.new(0, 0, TIP)
+	if low.X < math.huge then
+		-- The tip's lowest point is a third of a stud behind the box's front (the rounded tip).
+		local tip = Vector3.new((low.X + high.X) / 2, low.Y, low.Z + 0.32)
+		offset = -tip
+	end
+	return offset
 end
 
 -- The guideline: short pencil dashes along the course (straight between guide points).
@@ -443,7 +472,9 @@ function TraceRace:Start()
 			end
 			local s, x = self:_where(player)
 			if lane.Crayon then
-				lane.Crayon:PivotTo(self:_tip(lane, s, x) * CFrame.new(0, 0, TIP))
+				lane.Crayon:PivotTo(
+					self:_tip(lane, s, x) * CFrame.new(lane.Crayon:GetAttribute("TipToPivot") or Vector3.new(0, 0, TIP))
+				)
 			end
 			if BotRegistry.IsBot(player) then
 				self:_placeBot(player)
@@ -566,15 +597,15 @@ end
 -- Bots ------------------------------------------------------------------------------------------------
 
 -- The next crayon positions for a bot (or a test player) of this skill (0..1), up to `now`, in the
--- same flat { t, x, ... } form a client sends. Skilled riders look further ahead (they start a turn
--- in time), react quicker and wobble less; clumsy ones turn late and wander.
+-- same flat { t, x, ... } form a client sends. A bot follows the guide a moment late (clumsy riders
+-- turn late and cut every bend), wobbles round it and now and then slips off the line and back;
+-- skilled riders are quicker and steadier (about 95%), clumsy ones wander (60s-70s).
 function TraceRace:BotSamples(player: any, skill: number, random: Random, now: number): { number }?
 	local race = self.race
 	if not race or now < race.T0 then
 		return nil
 	end
-	local track = self.tracks[player]
-	if not track then
+	if not self.tracks[player] then
 		return nil
 	end
 	local plan = self.botPlans[player]
@@ -585,16 +616,14 @@ function TraceRace:BotSamples(player: any, skill: number, random: Random, now: n
 			t += random:NextNumber(2, 5) / (0.3 + (1 - skill) * 1.3)
 			table.insert(
 				slips,
-				{ At = t, Size = random:NextNumber(1, 2.2) * (if random:NextNumber() < 0.5 then -1 else 1) }
+				{ At = t, Size = random:NextNumber(1.5, 3.3) * (if random:NextNumber() < 0.5 then -1 else 1) }
 			)
 		end
 		plan = {
 			Last = race.T0 - 0.07,
 			X = 0,
-			V = 0,
-			Lead = 0.05 + 0.2 * skill + random:NextNumber(-0.04, 0.04), -- seconds of look-ahead
-			Gain = 5 + 9 * skill,
-			Amp = 0.15 + 1.2 * (1 - skill) ^ 1.6,
+			Lag = Rules.SPEED * (0.06 + 0.3 * (1 - skill)), -- studs behind the guide
+			Amp = 1.3 + 1.6 * (1 - skill) ^ 1.2,
 			W1 = random:NextNumber(1.2, 2.2),
 			W2 = random:NextNumber(3.5, 5.5),
 			P1 = random:NextNumber(0, 6.28),
@@ -606,11 +635,10 @@ function TraceRace:BotSamples(player: any, skill: number, random: Random, now: n
 	local out = {}
 	local t = plan.Last
 	local dt = 0.07
-	local cap = Rules.STEER * (0.75 + 0.2 * skill)
+	local step = Rules.STEER * (0.75 + 0.2 * skill) * dt
 	while t + dt <= now and t + dt <= race.T1 and #out < Rules.MAX_CHUNK * 2 do
 		t += dt
 		local s = (t - race.T0) * Rules.SPEED
-		local target = Rules.GuideAt(self.course, s + Rules.SPEED * plan.Lead)
 		local w = math.sin(t * plan.W1 + plan.P1) * 0.65 + math.sin(t * plan.W2 + plan.P2) * 0.35
 		for _, slip in plan.Slips do
 			local f = (t - slip.At) / 0.6
@@ -618,10 +646,8 @@ function TraceRace:BotSamples(player: any, skill: number, random: Random, now: n
 				w += slip.Size * math.sin(f * math.pi)
 			end
 		end
-		target += w * plan.Amp
-		local want = math.clamp((target - plan.X) * plan.Gain, -cap, cap)
-		plan.V += (want - plan.V) * math.min(1, dt * 14)
-		plan.X = math.clamp(plan.X + plan.V * dt, -Rules.LIMIT, Rules.LIMIT)
+		local target = Rules.GuideAt(self.course, s - plan.Lag) + w * plan.Amp
+		plan.X = math.clamp(plan.X + math.clamp(target - plan.X, -step, step), -Rules.LIMIT, Rules.LIMIT)
 		table.insert(out, t)
 		table.insert(out, plan.X)
 	end

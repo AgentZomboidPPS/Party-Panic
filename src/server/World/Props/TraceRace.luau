@@ -15,10 +15,12 @@ return function(h)
 	return {
 		TraceRaceCrayon = {
 			Height = 6.46,
-			AssetId = 0, -- tools/upload_assets.py --only TraceRaceCrayon fills this in
+			AssetId = 81475717067386, -- tools/upload_assets.py --only TraceRaceCrayon fills this in
 			Palette = { Wax = h.rgb(235, 55, 60), Wrapper = h.rgb(200, 40, 50), Bands = h.rgb(40, 30, 35) },
 			Materials = { Wrapper = Enum.Material.Fabric },
 			Fallback = function(m)
+				-- (An upright piece first: the model's box is measured square to its first part.)
+				h.ball(m, "Wax", 0.7, Vector3.new(0, 0.35, -6.37))
 				tilted(m, "Wax", 0.7, 1.2, 0.5)
 				tilted(m, "Wax", 1.5, 2, 2)
 				tilted(m, "Wax", 2.3, 10.5, 8.6)
@@ -27,7 +29,7 @@ return function(h)
 		},
 		TraceRaceClip = {
 			Height = 7.2,
-			AssetId = 0,
+			AssetId = 137039929094291,
 			Palette = { Metal = h.rgb(200, 205, 215), Hinge = h.rgb(170, 175, 185), Rivets = h.rgb(150, 155, 165) },
 			Materials = { Metal = Enum.Material.Metal, Hinge = Enum.Material.Metal, Rivets = Enum.Material.Metal },
 			Fallback = function(m)
@@ -38,7 +40,7 @@ return function(h)
 		},
 		TraceRaceCrayonBox = {
 			Height = 26.6,
-			AssetId = 0,
+			AssetId = 131839364666527,
 			Palette = {
 				Box = h.rgb(250, 210, 40),
 				Band = h.rgb(40, 150, 70),
@@ -61,7 +63,7 @@ return function(h)
 		},
 		TraceRacePencil = {
 			Height = 4.3,
-			AssetId = 0,
+			AssetId = 73461830652650,
 			Palette = {
 				Body = h.rgb(250, 200, 40),
 				Wood = h.rgb(235, 200, 150),
@@ -81,7 +83,7 @@ return function(h)
 		},
 		TraceRaceEraser = {
 			Height = 4.5,
-			AssetId = 0,
+			AssetId = 96770399702903,
 			Palette = { Rubber = h.rgb(255, 150, 170), Sleeve = h.rgb(60, 110, 220), Stripe = h.rgb(255, 255, 255) },
 			Materials = { Sleeve = Enum.Material.Cardboard },
 			Fallback = function(m)
@@ -91,7 +93,7 @@ return function(h)
 		},
 		TraceRaceSharpener = {
 			Height = 7.7,
-			AssetId = 0,
+			AssetId = 103699295920848,
 			Palette = {
 				Body = h.rgb(185, 190, 200),
 				Hole = h.rgb(60, 60, 70),
@@ -106,7 +108,7 @@ return function(h)
 		},
 		TraceRacePaperClip = {
 			Height = 1,
-			AssetId = 0,
+			AssetId = 88357872996387,
 			Palette = { Wire = h.rgb(190, 195, 205) },
 			Materials = { Wire = Enum.Material.Metal },
 			Fallback = function(m)

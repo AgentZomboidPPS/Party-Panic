@@ -26,7 +26,7 @@ TraceRace.GUIDE_WIDTH = 0.7 -- the pencil guideline, as drawn
 TraceRace.LINE_WIDTH = 1.3 -- the crayon's line, as drawn
 -- The two lines touch while their middles are less than half of both widths apart.
 TraceRace.FULL = (TraceRace.GUIDE_WIDTH + TraceRace.LINE_WIDTH) / 2
-TraceRace.ZERO = 4.5
+TraceRace.ZERO = 3
 TraceRace.SAMPLE_GAP = 0.06 -- clients sample the crayon this often (seconds)
 TraceRace.MAX_CHUNK = 40 -- positions in one batch
 

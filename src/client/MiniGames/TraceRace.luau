@@ -491,7 +491,10 @@ function TraceRace.Start(api)
 			local turned = tip * CFrame.Angles(0, yaw, 0)
 			local crayon = rider.Crayon
 			if crayon and crayon.Parent then
-				crayon:PivotTo(turned * CFrame.new(0, 0, TIP))
+				local toPivot = crayon:GetAttribute("TipToPivot")
+				crayon:PivotTo(
+					turned * CFrame.new(if typeof(toPivot) == "Vector3" then toPivot else Vector3.new(0, 0, TIP))
+				)
 			end
 			-- The stroke from the last drawn point to the tip.
 			local drawn = rider.Drawn
