@@ -29,6 +29,7 @@ local FLOOR_COLORS = {
 	Color3.fromRGB(186, 222, 252),
 	Color3.fromRGB(120, 188, 246),
 }
+local FLOOR_MATERIALS = { Enum.Material.Snow, Enum.Material.Snow, Enum.Material.Glacier }
 local WARN_COLOR = Color3.fromRGB(150, 236, 255)
 
 type Block = {
@@ -39,8 +40,7 @@ type Block = {
 	Part: BasePart,
 	Base: CFrame,
 	Top: Vector3,
-	Gone: boolean, -- broken (on the server or by our own guess)
-	Guessed: number?, -- when we broke it ahead of the server
+	Gone: boolean, -- broken on the server (its part is gone, or going)
 	DropAt: number?,
 	Dust: ParticleEmitter?,
 }
@@ -284,7 +284,9 @@ function Spleef.Start(api)
 		end
 	end
 
-	-- Shows a block breaking: dug ones burst into chunks, crumbling ones drop out whole.
+	-- Shows a block the server broke: dug ones burst into chunks, crumbling ones drop out whole.
+	-- Only ever called once the server has destroyed it (its part is gone, or this is its "Broke"
+	-- cue, sent after), so the block's look and its collision go together for everyone.
 	local function breakVisual(block: Block, dropping: boolean, mine: boolean)
 		if block.Gone then
 			return
@@ -342,18 +344,6 @@ function Spleef.Start(api)
 		crunch(center, mine)
 	end
 
-	-- Puts back a block we broke ahead of the server when it says no (or never confirms).
-	local function restore(block: Block)
-		if not block.Gone or not block.Guessed or not block.Part.Parent then
-			return
-		end
-		block.Gone = false
-		block.Guessed = nil
-		block.Part.LocalTransparencyModifier = ghostOf(block)
-		block.Part.CanCollide = true
-		block.Part.CanQuery = true
-	end
-
 	task.spawn(function()
 		local holder = arena:WaitForChild("Blocks", 15)
 		local deadline = os.clock() + 10
@@ -378,7 +368,6 @@ function Spleef.Start(api)
 				local index = part:GetAttribute("Cell")
 				local block = if type(index) == "number" then blocks[index] else nil
 				if block then
-					block.Guessed = nil
 					breakVisual(block, block.DropAt ~= nil, false)
 				end
 			end))
@@ -427,7 +416,7 @@ function Spleef.Start(api)
 		end
 		local i0 = math.floor((position.X - layout.X) / BLOCK + 0.5)
 		local j0 = math.floor((position.Z - layout.Z) / BLOCK + 0.5)
-		local reach = BLOCK / 2 + 1
+		local reach = BLOCK / 2 + 1.1 -- the server's FOOT
 		for i = i0 - 1, i0 + 1 do
 			for j = j0 - 1, j0 + 1 do
 				local block = grid[floor][key(i, j)]
@@ -506,9 +495,20 @@ function Spleef.Start(api)
 		end
 		lastBreak = os.clock()
 		api:Action("Break", block.Index)
-		block.Guessed = os.clock()
-		breakVisual(block, false, true)
+		-- The swing and a dusting of snow right away; the block itself goes when the server breaks
+		-- it (a moment later, as the blade lands).
 		swing(api:Character())
+		burst(block.Top + Vector3.new(0, 0.3, 0), {
+			Texture = PUFF,
+			Color = ColorSequence.new(Color3.new(1, 1, 1)),
+			Transparency = NumberSequence.new(0.3, 1),
+			Size = NumberSequence.new(0.8, 1.8),
+			Lifetime = NumberRange.new(0.3, 0.5),
+			Speed = NumberRange.new(3, 6),
+			SpreadAngle = Vector2.new(60, 60),
+			EmissionDirection = Enum.NormalId.Top,
+			Drag = 3,
+		}, 4)
 		broken += 1
 		if hintShown and broken >= 2 then
 			hintShown = false
@@ -629,19 +629,15 @@ function Spleef.Start(api)
 			return
 		end
 		local mine = userId == myId
-		if block.Guessed then
-			block.Guessed = nil -- confirmed
-		else
-			breakVisual(block, false, mine)
-		end
+		breakVisual(block, false, mine)
 		if not mine then
 			swing(api:CharacterOf(userId))
 		end
 	end)
 	api:OnEvent("Denied", function(index)
 		local block = blocks[index]
-		if block then
-			restore(block)
+		if block and not block.Gone then
+			showBox(block, false, 0.35) -- too far after all (you moved, or lag)
 		end
 	end)
 	api:OnEvent("Crack", function(indices, dropAt)
@@ -813,29 +809,23 @@ function Spleef.Start(api)
 		end
 		showFloor(if humanoid and root and api:Alive() then floor else nil)
 
-		-- Our guesses the server never confirmed come back.
-		for _, block in blocks do
-			if block.Guessed and now - block.Guessed > 1.2 then
-				restore(block)
-			end
-		end
-
-		-- Cracking blocks shake and flash, harder as they're about to go; on time, they drop.
+		-- Cracking blocks shake and flash, harder as they're about to go, until the server drops
+		-- them (on their DropAt).
 		for block in cracking do
 			local part = block.Part
 			local dropAt = block.DropAt or 0
-			if not part.Parent or serverNow >= dropAt then
+			if not part.Parent then
 				breakVisual(block, true, false)
 				continue
 			end
 			local left = math.clamp((dropAt - serverNow) / 1.9, 0, 1)
-			local amount = 0.05 + 0.12 * (1 - left)
+			local amount = 0.04 + 0.08 * (1 - left)
 			local pulse = 0.5 + 0.5 * math.sin(now * (9 + 14 * (1 - left)))
 			part.CFrame = block.Base
 				* CFrame.new(rng:NextNumber(-amount, amount), 0, rng:NextNumber(-amount, amount))
 				* CFrame.Angles(0, rng:NextNumber(-0.02, 0.02), 0)
 			part.Color = (FLOOR_COLORS[block.Floor] or Color3.new(1, 1, 1)):Lerp(WARN_COLOR, pulse)
-			part.Material = if pulse > 0.72 then Enum.Material.Neon else Enum.Material.Snow
+			part.Material = if pulse > 0.72 then Enum.Material.Neon else FLOOR_MATERIALS[block.Floor]
 		end
 
 		-- Chunks and dropping blocks.

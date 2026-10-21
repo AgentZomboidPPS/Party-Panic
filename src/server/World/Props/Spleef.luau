@@ -19,7 +19,7 @@ return function(h)
 	return {
 		SpleefBlock = {
 			Height = 3,
-			AssetId = 0,
+			AssetId = 93166811023448,
 			Collide = true,
 			Shadow = false,
 			Palette = { Snow = SNOW },
@@ -30,7 +30,7 @@ return function(h)
 		},
 		SpleefShovel = {
 			Height = 3.6,
-			AssetId = 0,
+			AssetId = 106513613615382,
 			Palette = {
 				Blade = rgb(196, 206, 222),
 				Collar = rgb(92, 98, 116),
@@ -46,7 +46,7 @@ return function(h)
 		},
 		SpleefCliff = {
 			Height = 30,
-			AssetId = 0,
+			AssetId = 89712776862526,
 			Shadow = false,
 			Palette = { Ice = ICE, Snow = SNOW, Rock = rgb(104, 118, 146) },
 			Materials = { Ice = Enum.Material.Glacier, Snow = Enum.Material.Snow, Rock = Enum.Material.Slate },
@@ -63,7 +63,7 @@ return function(h)
 		},
 		SpleefPine = {
 			Height = 16,
-			AssetId = 0,
+			AssetId = 123535835931172,
 			Palette = { Trunk = rgb(112, 76, 52), Needles = rgb(38, 98, 80), Snow = SNOW },
 			Materials = { Trunk = Enum.Material.Wood, Needles = Enum.Material.Grass, Snow = Enum.Material.Snow },
 			Fallback = function(m)
@@ -75,7 +75,7 @@ return function(h)
 		},
 		SpleefCrystal = {
 			Height = 7,
-			AssetId = 0,
+			AssetId = 86111982411845,
 			Palette = { Crystal = rgb(170, 226, 255), Base = ICE },
 			Materials = { Crystal = Enum.Material.Glass, Base = Enum.Material.Glacier },
 			PostProcess = function(model)
@@ -94,7 +94,7 @@ return function(h)
 		},
 		SpleefFloe = {
 			Height = 1.4,
-			AssetId = 0,
+			AssetId = 109989673837877,
 			Shadow = false,
 			Palette = { Ice = rgb(170, 216, 242), Snow = SNOW },
 			Materials = { Ice = Enum.Material.Glacier, Snow = Enum.Material.Snow },
@@ -105,7 +105,7 @@ return function(h)
 		},
 		SpleefPeak = {
 			Height = 90,
-			AssetId = 0,
+			AssetId = 79658990894258,
 			Shadow = false,
 			Palette = { Rock = rgb(98, 110, 136), Snow = SNOW },
 			Materials = { Rock = Enum.Material.Slate, Snow = Enum.Material.Snow },

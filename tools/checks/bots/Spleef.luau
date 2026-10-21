@@ -22,8 +22,34 @@ return function(env)
 		return mode:Feet(humanoid, root), humanoid, root
 	end
 
+	-- Everything solid in the arena, once: nothing may be solid where nothing is drawn.
+	local function dumpColliders()
+		local groups = {}
+		for _, part in ctx.Arena:GetDescendants() do
+			if part:IsA("BasePart") and part.CanCollide then
+				local size = part.Size
+				local label =
+					`{part.ClassName} {part.Name} {math.floor(size.X * 10) / 10}x{math.floor(size.Y * 10) / 10}x{math.floor(
+						size.Z * 10
+					) / 10} transparency {part.Transparency}`
+				groups[label] = (groups[label] or 0) + 1
+			end
+		end
+		local lines = {}
+		for label, count in groups do
+			table.insert(lines, `{count} x {label}`)
+		end
+		table.sort(lines)
+		env.note(`collidable parts in the arena: {if #lines > 0 then table.concat(lines, "; ") else "none"}`)
+	end
+	local dumped = false
+
 	return function(elapsed)
 		local now = os.clock()
+		if not dumped then
+			dumped = true
+			dumpColliders()
+		end
 		local gone = 0
 		for _, cell in mode.cells do
 			if cell.State == "Gone" then
@@ -50,7 +76,7 @@ return function(env)
 				floorsSeen[floor] = true
 				env.note(`{player.Name} reached floor {floor} at {math.floor(elapsed)}s`)
 			end
-			local plan = plans[player] or { NextDig = now + env.rng:NextNumber(0.5, 1.5), NextMove = 0 }
+			local plan = plans[player] or { NextDig = now + env.rng:NextNumber(1, 3), NextMove = 0 }
 			plans[player] = plan
 			-- A rival on the same floor: the nearest one.
 			local rival, rivalRoot, best = nil, nil, math.huge
@@ -83,7 +109,7 @@ return function(env)
 			end
 			-- Ask to break the block under the rival's feet.
 			if rival and now >= plan.NextDig then
-				plan.NextDig = now + env.rng:NextNumber(0.35, 0.8)
+				plan.NextDig = now + env.rng:NextNumber(0.9, 2.2)
 				local supports = mode:Supports(floor, rivalRoot.Position)
 				local target = supports[1]
 				if target and mode:CanBreak(root, feet, target, 0) then
