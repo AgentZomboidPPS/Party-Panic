@@ -1,0 +1,17 @@
+newmtl FloatsA
+Kd 1.000 0.824 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FloatsB
+Kd 0.941 0.275 0.275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rope
+Kd 0.871 0.745 0.518
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

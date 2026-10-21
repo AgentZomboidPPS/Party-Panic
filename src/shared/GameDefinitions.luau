@@ -177,6 +177,19 @@ local list: { GameDefinition } = {
 		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "SharkBait",
+		Name = "Shark Bait",
+		Category = "Versus",
+		Icon = "🦈",
+		Color = Color3.fromRGB(40, 170, 225),
+		Objective = "Swimmers: grab coins together and hit the goal! The SHARK tips rafts and chomps anyone in the water.",
+		Controls = "Swimmers: hop raft to raft and stay dry. Shark: swim and tap CHOMP (E) at rafts and swimmers.",
+		Duration = 60,
+		MinPlayers = 2,
+		IsTeam = true,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 

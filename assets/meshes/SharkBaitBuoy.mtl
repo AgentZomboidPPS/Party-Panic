@@ -1,0 +1,35 @@
+newmtl Float
+Kd 0.863 0.235 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stripe
+Kd 0.871 0.588 0.463
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cage
+Kd 0.275 0.275 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Lamp
+Kd 1.000 0.667 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Flag
+Kd 1.000 0.824 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FlagMark
+Kd 0.098 0.098 0.118
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
