@@ -6,6 +6,21 @@
 --   * failed spawns retry once, then the player safely stays in the lobby (§4)
 --   * delayed callbacks are bound to this round and die with it (§4 "round ID")
 --   * cleanup is idempotent and restores characters (§7, §14)
+--
+-- Things that happen at the same moment (a bug pass; owner: "it just has to work"):
+--   * Players put out in the same server step go out together: they share the moment they went out,
+--     so they tie, and the checks that end the round run once, after all of them. The first of the
+--     last two to fall in one check (Hex Meltdown) or to be hit by one rope pass used to end the
+--     round, and the other was turned away because it had just stopped, so they won with
+--     "Survived!", picked by table order.
+--   * A death before GO (a reset during the rules card) doesn't count: a fresh character goes
+--     straight back to its spot, in every mode, instead of waiting in the lobby to be counted out
+--     ("fell") the moment the round started.
+--   * Bots never play on their own (Logic/Roster): WaitForStart tells the round manager when every
+--     person in a round left or couldn't be placed before GO, so it calls the round off.
+--   * At the buzzer, something already on its way to be judged (a rope pass, a landed arrow, a hit
+--     pressed just before) gets a moment (HoldEnd, half a second at most) instead of being dropped
+--     because the round had just ended.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,6 +40,7 @@ local Telemetry = require(script.Parent.Telemetry)
 
 local LOBBY_RADIUS = 600
 local PEOPLE_OUT_DELAY = 2 -- once every person is out, the round wraps up after this long
+local MAX_HOLD = 0.5 -- the longest a round's end waits at time-up for something in flight (HoldEnd)
 
 local actionRemote = Remotes.Get("MiniGameAction")
 local eventRemote = Remotes.Get("MiniGameEvent")
@@ -77,6 +93,8 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 	self.StartTime = 0
 	self.StartCount = 0
 	self.EndReason = nil :: string?
+	self.HoldUntil = 0 -- server time: at time-up the end waits until then (HoldEnd)
+	self.TimeUpAt = nil :: number? -- server time the round's time ran out, while its end is held (TimeRanOut)
 	self.PeopleOutPending = false
 	self.Destroyed = false
 	self.RespawnMode = "Eliminate" -- "Eliminate" | "Respawn"
@@ -89,6 +107,9 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 	self._sharedKeys = {} :: { [string]: boolean }
 	self._playerKeys = {} :: { [string]: boolean }
 	self._stunnedUntil = {} :: { [Player]: number }
+	self._outBatch = nil :: { At: number, CheckEnd: boolean }? -- this server step's eliminations (_outMoment)
+	self._spots = {} :: { [Player]: { CFrame: CFrame, Frozen: boolean } } -- where SpawnPlayer put each one
+	self._placing = {} :: { [Player]: Model } -- a new character on its way back to its spot (_backToSpot)
 	self.Hooks = {
 		Respawn = nil :: ((player: Player) -> CFrame?)?,
 		CharacterReady = nil :: ((player: Player, character: Model) -> ())?,
@@ -128,7 +149,9 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 		self:_onAction(player, name, ...)
 	end))
 
-	-- Fall / out-of-bounds check (server side so clients can't skip it).
+	-- Fall / out-of-bounds check (server side so clients can't skip it). Everyone below KillY in one
+	-- check goes out together (see Eliminate); a new character still on its way back to its spot is
+	-- left alone (it starts in the lobby, far below).
 	local accumulator = 0
 	self.Janitor:Add(RunService.Heartbeat:Connect(function(dt)
 		accumulator += dt
@@ -140,7 +163,7 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 			return
 		end
 		for player, state in self.Participants do
-			if not state.Alive then
+			if not state.Alive or self._placing[player] then
 				continue
 			end
 			local _, _, root = self:GetCharacter(player)
@@ -167,6 +190,19 @@ function RoundContext.IsRunning(self: RoundContext): boolean
 	return self.Active and self.Started and self.EndReason == nil
 end
 
+-- Waits for GO (`deadline`, os.clock() time) while the rules card shows. Returns false straight away
+-- once no person is left in the round (they all left, or none of them could be placed): bots never
+-- play on their own (Logic/Roster), so the round manager calls the round off instead of starting it.
+function RoundContext.WaitForStart(self: RoundContext, deadline: number): boolean
+	while os.clock() < deadline do
+		if not self:HasPeople() then
+			return false
+		end
+		task.wait(0.1)
+	end
+	return self:HasPeople()
+end
+
 function RoundContext.Begin(self: RoundContext)
 	self.Started = true
 	self.StartTime = os.clock()
@@ -182,6 +218,30 @@ function RoundContext.End(self: RoundContext, reason: string)
 	end
 	self.EndReason = reason
 	Telemetry.ServerEvent("RoundEnding", { round = self.RoundId, reason = reason })
+end
+
+-- Asks for a moment before the round ends at time-up, for something already on its way to be judged:
+-- an arrow that has just landed, a rope pass whose last positions are still coming in, a hit pressed
+-- just before the buzzer. If time runs out within the next `seconds`, the round goes on until then,
+-- but never more than MAX_HOLD past the buzzer; meanwhile nothing new should start (TimeIsUp), and an
+-- action should count only if it was made before TimeUpAt.
+function RoundContext.HoldEnd(self: RoundContext, seconds: number)
+	self.HoldUntil = math.max(self.HoldUntil, self:Now() + math.max(0, seconds))
+end
+
+-- Whether the round's time has run out (its end may be held a moment: HoldEnd).
+function RoundContext.TimeIsUp(self: RoundContext): boolean
+	return self.TimeUpAt ~= nil or self.EndReason ~= nil
+end
+
+-- The round manager calls this, again and again, once the round's time has run out: it ends the round
+-- straight away, or as soon as what HoldEnd asked for is over (MAX_HOLD at most).
+function RoundContext.TimeRanOut(self: RoundContext, reason: string)
+	local now = self:Now()
+	self.TimeUpAt = self.TimeUpAt or now
+	if now >= self.HoldUntil or now >= (self.TimeUpAt :: number) + MAX_HOLD then
+		self:End(reason)
+	end
 end
 
 function RoundContext.Elapsed(self: RoundContext): number
@@ -219,6 +279,16 @@ end
 
 function RoundContext.AliveCount(self: RoundContext): number
 	return #self:GetAlivePlayers()
+end
+
+-- Whether any person (not a bot) is in the round, out or not.
+function RoundContext.HasPeople(self: RoundContext): boolean
+	for _, player in self:GetPlayers() do
+		if not BotRegistry.IsBot(player) then
+			return true
+		end
+	end
+	return false
 end
 
 function RoundContext.IsAlive(self: RoundContext, player: Player): boolean
@@ -285,6 +355,7 @@ function RoundContext.SpawnPlayer(self: RoundContext, player: Player, cframe: CF
 			if root then
 				root.AssemblyLinearVelocity = Vector3.zero
 			end
+			self._spots[player] = { CFrame = cframe, Frozen = frozen == true } -- for a new character before GO
 			if frozen then
 				self:Freeze(player, true)
 			end
@@ -298,12 +369,14 @@ function RoundContext.SpawnPlayer(self: RoundContext, player: Player, cframe: CF
 		end
 	end
 	Telemetry.Error("SpawnFailed", `{player.Name} in round {self.RoundId}`)
-	self.Participants[player] = nil
 	if player.Parent then
 		player:SetAttribute("PP_InRound", false)
 		player:SetAttribute("PP_Alive", false)
 		Notifier.Send(player, "We couldn't place you in this round. You'll be in the next one!", "warning")
 	end
+	-- Out of the round as if they'd left (a spawn can fail after GO: the mode forgets them, a team
+	-- stops counting on them, and the round can end without them).
+	self:_onLeave(player)
 	return false
 end
 
@@ -372,26 +445,48 @@ function RoundContext.Respawn(self: RoundContext, player: Player)
 	end
 end
 
-function RoundContext.Eliminate(self: RoundContext, player: Player, reason: string)
+-- Puts a participant out. Everyone put out in the same server step goes out together: they share
+-- the moment they went out (so they tie in the results) and the checks that end the round run once,
+-- after all of them (_outMoment). A mode can simply eliminate everyone a hazard caught in one loop.
+--
+-- `showAfter` (seconds) is for a mode with its own show of someone going out (Honey Trap's bees):
+-- they're out at once for the rules (results, turns, a time-up or a leave all count it), while the
+-- "You're out!", the poof, the trip back to the lobby and the end-of-round checks wait for the show.
+function RoundContext.Eliminate(self: RoundContext, player: Player, reason: string, showAfter: number?)
 	local state = self.Participants[player]
 	if not state or not state.Alive or not self:IsRunning() then
 		return
 	end
 	state.Alive = false
-	state.EliminatedAt = self:Elapsed()
-	player:SetAttribute("PP_Alive", false)
+	state.EliminatedAt = self:_outMoment(showAfter == nil)
+	if showAfter == nil then
+		self:_showOut(player, state)
+	end
+	Telemetry.ServerEvent("Eliminated", { round = self.RoundId, player = player.UserId, reason = reason })
 
+	if self.Hooks.Eliminated then
+		self.Hooks.Eliminated(player, reason)
+	end
+	if showAfter then
+		self:Delay(showAfter, function()
+			if self.Participants[player] == state then
+				self:_showOut(player, state)
+			end
+			self:_checkAutoEnd()
+		end)
+	end
+end
+
+-- What everyone sees of someone going out: the effect where they stand, the "You're out!", and
+-- their trip back to the lobby a moment later.
+function RoundContext._showOut(self: RoundContext, player: Player, state: Participant)
+	player:SetAttribute("PP_Alive", false)
 	local _, _, root = self:GetCharacter(player)
 	if root then
 		CosmeticService.PlayElimination(player, root.Position)
 	end
 	Notifier.Sound({ player }, "Eliminated")
 	Notifier.Send(player, "You're out! Spectate from the HUD or explore the lobby - next vote soon.", "warning", 4)
-	Telemetry.ServerEvent("Eliminated", { round = self.RoundId, player = player.UserId, reason = reason })
-
-	if self.Hooks.Eliminated then
-		self.Hooks.Eliminated(player, reason)
-	end
 
 	-- Send them back to the lobby (a dead character respawns there on its own).
 	task.delay(1.2, function()
@@ -403,8 +498,32 @@ function RoundContext.Eliminate(self: RoundContext, player: Player, reason: stri
 			pcall(player.LoadCharacterAsync, player)
 		end
 	end)
+end
 
-	self:_checkAutoEnd()
+-- The moment (seconds into the round) an elimination happening now counts as: the same for every
+-- elimination in this server step, so they tie. With `checkEnd`, the checks that end the round run
+-- once at the end of the step, after all of them (task.defer: once this step's other handlers, the
+-- fall check and the modes' own, have run), so none of them is turned away because the first one
+-- just ended the round.
+function RoundContext._outMoment(self: RoundContext, checkEnd: boolean): number
+	local batch = self._outBatch
+	if not batch then
+		local fresh = { At = self:Elapsed(), CheckEnd = false }
+		batch = fresh
+		self._outBatch = fresh
+		task.defer(function()
+			if self._outBatch == fresh then
+				self._outBatch = nil
+			end
+			if fresh.CheckEnd then
+				self:_checkAutoEnd()
+			end
+		end)
+	end
+	if checkEnd then
+		batch.CheckEnd = true
+	end
+	return batch.At
 end
 
 -- Scoring --------------------------------------------------------------------------------------
@@ -843,10 +962,18 @@ function RoundContext._watchCharacter(self: RoundContext, player: Player, charac
 	end
 	self.Janitor:Add(humanoid.Died:Connect(function()
 		local state = self.Participants[player]
-		if not state or not state.Alive or not self:IsRunning() then
+		if not state or not state.Alive or not self.Active then
 			return
 		end
-		if self.RespawnMode == "Eliminate" then
+		if not self.Started then
+			-- Before GO a death doesn't count (a reset during the rules card): a fresh character right
+			-- away, which goes back on their spot (_watchPlayer). Not yet placed: SpawnPlayer retries.
+			if self._spots[player] and player.Character == character then
+				task.spawn(pcall, player.LoadCharacterAsync, player)
+			end
+			return
+		end
+		if self:IsRunning() and self.RespawnMode == "Eliminate" then
 			self:Eliminate(player, "died")
 		end
 	end))
@@ -862,7 +989,16 @@ function RoundContext._watchPlayer(self: RoundContext, player: Player)
 		if state and not state.Alive then
 			state.LobbyCharacter = character -- new characters start in the lobby, and nothing moves theirs
 		end
-		if not state or not state.Alive or not self.Active or self.RespawnMode ~= "Respawn" then
+		if not state or not state.Alive or not self.Active then
+			return
+		end
+		-- Before GO, in any mode, a new character goes back on its spot. So does one arriving after GO
+		-- in a mode where nobody respawns: the old one can only have died before GO.
+		if not self.Started or (self.RespawnMode ~= "Respawn" and self.EndReason == nil) then
+			self:_backToSpot(player, character)
+			return
+		end
+		if self.RespawnMode ~= "Respawn" then
 			return
 		end
 		-- Respawn-mode games put a fresh character straight back into the arena.
@@ -882,6 +1018,34 @@ function RoundContext._watchPlayer(self: RoundContext, player: Player)
 			end
 		end)
 	end))
+end
+
+-- Puts a participant's new character on the spot SpawnPlayer gave them: frozen until GO (if they
+-- were spawned frozen), free to play after it. The fall check leaves them alone until it's there.
+function RoundContext._backToSpot(self: RoundContext, player: Player, character: Model)
+	local spot = self._spots[player]
+	if not spot then
+		return -- not placed yet: SpawnPlayer does it
+	end
+	self._placing[player] = character
+	task.defer(function()
+		local root = character:WaitForChild("HumanoidRootPart", 5) :: BasePart?
+		if root and character.Parent and player.Character == character and self.Active and self:IsAlive(player) then
+			character:PivotTo(spot.CFrame + Vector3.new(0, 3, 0))
+			root.AssemblyLinearVelocity = Vector3.zero
+			if not self.Started then
+				self:Freeze(player, spot.Frozen)
+			else
+				self:Freeze(player, false)
+			end
+			if self.Hooks.CharacterReady then
+				self.Hooks.CharacterReady(player, character)
+			end
+		end
+		if self._placing[player] == character then
+			self._placing[player] = nil
+		end
+	end)
 end
 
 -- Whether a participant is already back in the lobby: their character is the one they got there

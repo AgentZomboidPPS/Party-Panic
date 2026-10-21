@@ -64,9 +64,10 @@ Optional overrides: `:Stop(reason)`, `:GetResults()`, `:Cleanup()`.
 | --- | --- |
 | Place players | `ctx:SpawnAll(points, true)` (frozen until GO), `ArenaKit.SpawnRing/SpawnGrid` |
 | Who's playing | `ctx:GetPlayers()`, `ctx:GetAlivePlayers()`, `ctx:GetCharacter(player)` |
-| Knock someone out | `ctx:Eliminate(player, "reason")` (also automatic below `ctx.KillY`) |
+| Knock someone out | `ctx:Eliminate(player, "reason")` (also automatic below `ctx.KillY`); everyone put out in the same server step ties. `ctx:Eliminate(player, "bees", 2.1)`: out now, the "You're out!" after the mode's own show |
 | Falling behavior | `ctx.RespawnMode = "Eliminate"` or `"Respawn"` + `ctx.Hooks.Respawn = function(player) return cframe end` |
 | End early | `ctx.EndWhenOneLeft = true`, or `ctx:End("reason")` |
+| At the buzzer | `ctx:HoldEnd(seconds)` for something already on its way to be judged (the end waits, 0.5 s at most); then `ctx:TimeIsUp()` is true: start nothing new, and count only actions made before `ctx.TimeUpAt` |
 | Score | `ctx:AddScore(player, n)`, `ctx:SetScoreText(player, "3 laps")` |
 | Teams | `ctx:AssignTeams({ "Red", "Blue" })`, `ctx:SetTeam(player, "Red")`, `ctx:AddTeamScore("Red", n)`, `Teams.CountFor(n, perTeam)` |
 | Controls from clients | `ctx:OnAction("Pump", function(player, ...) end, { Interval = 0.1 })` - validate everything |
