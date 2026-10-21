@@ -37,6 +37,8 @@ local LAVA_DROP = 34
 local START_BACK = 36 -- the start pad behind the line
 local GOAL_DEPTH = 70
 
+local PUSH_RATE = 12 -- pushes a second the server takes on average ...
+local PUSH_BURST = 3 -- ... and how many may arrive at once
 local KIND_PROP = { Crate = "SkateCrate", Barrier = "SkateBarrier", Boost = "SkateBoost" }
 
 local rng = Random.new()
@@ -189,17 +191,61 @@ function SkateEscape:_buildArena()
 		if cut and cursor >= cut[1] - 0.01 then
 			cursor = cut[2]
 			cutIndex += 1
-			-- Hazard stripes on both lips of the gap.
-			for _, lip in { cut[1] - 0.7, cut[2] + 0.7 } do
-				local stripe = Build.Decor({
+			-- A raised curb of yellow and black blocks on both lips, so the drop reads at speed.
+			local blocks = 14
+			local width = (DECK_WIDTH - 2) / blocks
+			for side, lip in { cut[1] - 0.8, cut[2] + 0.8 } do
+				for block = 0, blocks - 1 do
+					local curb = Build.Decor({
+						Name = "GapLip",
+						Size = Vector3.new(width, 0.3, 1.6),
+						CFrame = CFrame.new(
+							origin + Vector3.new(-(DECK_WIDTH - 2) / 2 + (block + 0.5) * width, 0.17, -lip)
+						),
+						Color = if (block + side) % 2 == 0 then rgb(255, 200, 40) else rgb(34, 28, 34),
+						Material = if (block + side) % 2 == 0 then Enum.Material.Neon else Enum.Material.Metal,
+						Parent = arena,
+					})
+					curb:SetAttribute("At", lip)
+				end
+			end
+			-- A warning banner across the deck well before the gap: it stands up, so it shows from far.
+			local at = cut[1] - 28
+			local banner = Build.Decor({
+				Name = "GapLip",
+				Size = Vector3.new(DECK_WIDTH - 4, 3.4, 0.5),
+				CFrame = CFrame.new(origin + Vector3.new(0, 16.1, -at)),
+				Color = rgb(34, 28, 34),
+				Material = Enum.Material.Metal,
+				Parent = arena,
+			})
+			banner:SetAttribute("At", at)
+			Build.SurfaceText(banner, Enum.NormalId.Back, "⚠  GAP AHEAD  •  JUMP!  ⚠", {
+				PixelsPerStud = 12,
+				TextColor3 = rgb(255, 210, 60),
+				TextStrokeTransparency = 0.4,
+			})
+			for _, y in { 14.15, 18.05 } do
+				local trim = Build.Decor({
 					Name = "GapLip",
-					Size = Vector3.new(DECK_WIDTH - 2, 0.08, 1.2),
-					CFrame = CFrame.new(origin + Vector3.new(0, 0.06, -lip)),
+					Size = Vector3.new(DECK_WIDTH - 4, 0.3, 0.6),
+					CFrame = CFrame.new(origin + Vector3.new(0, y, -at)),
 					Color = rgb(255, 200, 40),
 					Material = Enum.Material.Neon,
 					Parent = arena,
 				})
-				stripe:SetAttribute("At", lip)
+				trim:SetAttribute("At", at)
+			end
+			for _, sideX in { -1, 1 } do
+				local post = Build.Decor({
+					Name = "GapLip",
+					Size = Vector3.new(0.8, 18.2, 0.8),
+					CFrame = CFrame.new(origin + Vector3.new(sideX * (DECK_WIDTH / 2 - 1.5), 9.1, -at)),
+					Color = rgb(52, 44, 50),
+					Material = Enum.Material.Metal,
+					Parent = arena,
+				})
+				post:SetAttribute("At", at)
 			end
 		end
 	end
@@ -416,6 +462,16 @@ function SkateEscape:Prepare()
 	ctx.Hooks.PlayerLeft = function(player)
 		self.racers[tostring(player.UserId)] = nil
 	end
+	-- Out some other way (a reset, say): stop simulating them and count them as fallen.
+	ctx.Hooks.Eliminated = function(player)
+		local racer = self.racers[tostring(player.UserId)]
+		if racer and not racer.Done then
+			racer.Out = true
+			racer.OutAt = ctx:Now()
+			racer.Done = true
+			racer.Pending = nil
+		end
+	end
 	ctx:SpawnAll(points, true)
 	-- Bots wait on their boards in the skating stance (held still until GO).
 	for _, racer in self.racers do
@@ -427,6 +483,8 @@ function SkateEscape:Prepare()
 			end
 		end
 	end
+	self:_share() -- the progress bar shows every lane during the countdown
+	self.status = nil
 	ctx:SetStatus("Get ready to PUSH!")
 end
 
@@ -441,10 +499,9 @@ function SkateEscape:_ping(player: any): number
 end
 
 function SkateEscape:_wipe(racer, event)
-	local now = self.context:Now()
-	SkateCourse.Apply(racer, event, self.obstacles, now)
+	-- As of the moment of the hit, however long the ping allowance held it.
+	SkateCourse.Apply(racer, event, self.obstacles, event.At)
 	racer.Pending = nil
-	self.dirty = true
 	self.context:Fire(nil, "Wipe", tostring(racer.Player.UserId), event.Kind, event.Index)
 end
 
@@ -463,15 +520,24 @@ function SkateEscape:Start()
 		end
 	end
 
+	-- Pushes are capped by a small bucket (PUSH_RATE a second on average, a few at once) rather than
+	-- a fixed gap, so taps the network bunched together aren't dropped.
 	ctx:OnAction("Push", function(player)
 		local racer = self.racers[tostring(player.UserId)]
-		if racer then
-			racer.Leeway = 0.06 + self:_ping(player)
-			if SkateCourse.Push(racer, ctx:Now()) then
-				self.dirty = true
-			end
+		if not racer then
+			return
 		end
-	end, { Interval = 0.09 })
+		local clock = os.clock()
+		racer.Tokens =
+			math.min(PUSH_BURST, (racer.Tokens or PUSH_BURST) + (clock - (racer.TokenAt or clock)) * PUSH_RATE)
+		racer.TokenAt = clock
+		if racer.Tokens < 1 then
+			return
+		end
+		racer.Tokens -= 1
+		racer.Leeway = 0.06 + self:_ping(player)
+		SkateCourse.Push(racer, ctx:Now())
+	end, { Interval = 0.04 })
 
 	ctx:OnAction("Jump", function(player)
 		local racer = self.racers[tostring(player.UserId)]
@@ -490,17 +556,21 @@ function SkateEscape:Start()
 				racer.Pending = nil
 				racer.Air = start
 				racer.AirEnd = start + SkateCourse.AirTime
-				self.dirty = true
 				return
 			end
 		end
-		if SkateCourse.Jump(racer, at) then
-			self.dirty = true
-		end
+		SkateCourse.Jump(racer, at)
 	end, { Interval = 0.15 })
 
+	-- Small steps, so a server hitch doesn't cost anyone distance while the collapse runs on.
 	ctx:Heartbeat(function(dt)
-		self:_tick(math.min(dt, 0.1))
+		local now = ctx:Now()
+		local left = math.min(dt, 0.5)
+		while left > 1e-4 do
+			local h = math.min(left, 0.05)
+			left -= h
+			self:_tick(h, now - left)
+		end
 	end)
 	ctx:Loop(function()
 		self:_share()
@@ -528,15 +598,15 @@ function SkateEscape:_moveBot(racer, now: number)
 	root.AssemblyLinearVelocity = Vector3.new(0, 0, -racer.V)
 end
 
-function SkateEscape:_tick(dt: number)
+function SkateEscape:_tick(dt: number, now: number)
 	local ctx = self.context
 	if not ctx:IsRunning() then
 		return
 	end
-	local now = ctx:Now()
 	local length = SkateCourse.Length
 	local front = SkateCourse.CollapseAt(self.collapse, now)
 	local everyoneDone = true
+	local crossed = {}
 	for key, racer in self.racers do
 		local player = racer.Player
 		if not ctx:State(player) then
@@ -560,6 +630,9 @@ function SkateEscape:_tick(dt: number)
 			continue
 		end
 		everyoneDone = false
+		if racer.Done then
+			continue -- crossed the line this step, placed below
+		end
 		local pending = racer.Pending
 		if pending and now >= pending.Until then
 			self:_wipe(racer, pending.Event)
@@ -568,7 +641,6 @@ function SkateEscape:_tick(dt: number)
 		if event then
 			if event.Kind == "Boost" then
 				SkateCourse.Apply(racer, event, self.obstacles, now)
-				self.dirty = true
 				ctx:Fire(nil, "Boost", key)
 			elseif racer.Leeway > 0 and not racer.Pending then
 				racer.Pending = { Event = event, Until = now + racer.Leeway, Speed = math.max(racer.V, 1) }
@@ -577,30 +649,37 @@ function SkateEscape:_tick(dt: number)
 			end
 		end
 		if racer.D >= length then
-			self.finished += 1
-			racer.Place = self.finished
+			-- The exact moment they crossed, so two finishers in one step are ranked fairly.
 			racer.Done = true
 			racer.Wipe = nil
 			racer.Pending = nil
-			racer.Time = now - self.startAt
-			self.dirty = true
-			ctx:SetScoreText(player, `{SkateCourse.Ordinal(racer.Place)} • {string.format("%.1f", racer.Time)}s`)
-			ctx:Fire(nil, "Finish", key, racer.Place)
-			if racer.Place == 1 then
-				ctx:Announce(`🏁 {player.DisplayName} reached the goal first!`, "success", 3)
-			end
+			table.insert(crossed, { Key = key, Racer = racer, At = now - (racer.D - length) / math.max(racer.V, 1) })
 		elseif racer.D < front then
 			racer.Out = true
 			racer.OutAt = now
 			racer.Done = true
 			racer.Pending = nil
-			self.dirty = true
 			ctx:Fire(nil, "Out", key)
 			ctx:SetScoreText(player, `Fell at {math.floor(math.max(0, racer.D) / length * 100)}%`)
 			ctx:Eliminate(player, "collapse")
 		end
 		if racer.IsBot then
 			self:_moveBot(racer, now)
+		end
+	end
+	table.sort(crossed, function(a, b)
+		return a.At < b.At
+	end)
+	for _, entry in crossed do
+		local racer = entry.Racer
+		self.finished += 1
+		racer.Place = self.finished
+		racer.Time = entry.At - self.startAt
+		local player = racer.Player
+		ctx:SetScoreText(player, `{SkateCourse.Ordinal(racer.Place)} • {string.format("%.1f", racer.Time)}s`)
+		ctx:Fire(nil, "Finish", entry.Key, racer.Place)
+		if racer.Place == 1 then
+			ctx:Announce(`🏁 {player.DisplayName} reached the goal first!`, "success", 3)
 		end
 	end
 	if everyoneDone and not self.ending and next(self.racers) ~= nil then
@@ -628,6 +707,9 @@ function SkateEscape:_share()
 		if racer.Air then
 			entry.A = round(racer.Air, 0.001)
 		end
+		if racer.Pending then
+			entry.PW = 1 -- a hit the server is still deciding on (ping allowance)
+		end
 		if racer.Wipe and now < racer.Wipe then
 			entry.W = round(racer.Wipe, 0.001)
 			entry.WA = round(racer.WipeAt or now, 0.001)
@@ -641,10 +723,12 @@ function SkateEscape:_share()
 			entry.O = 1
 		else
 			skating += 1
-			ctx:SetScoreText(racer.Player, `{math.floor(math.clamp(racer.D / SkateCourse.Length, 0, 1) * 100)}%`)
+			if self.startAt then
+				ctx:SetScoreText(racer.Player, `{math.floor(math.clamp(racer.D / SkateCourse.Length, 0, 1) * 100)}%`)
+			end
 		end
 		-- The live standings sort by score: progress in percent, finishers above everyone by place.
-		local state = ctx:State(racer.Player)
+		local state = self.startAt and ctx:State(racer.Player)
 		if state then
 			local score = if racer.Place
 				then 200 - racer.Place
@@ -656,7 +740,6 @@ function SkateEscape:_share()
 		list[key] = entry
 	end
 	ctx:SetSharedJSON("Racers", list)
-	self.dirty = false
 	local status = if home > 0
 		then `🏁 {home} home  •  🛹 {skating} skating`
 		else `🛹 {skating} skating  •  outrun the collapse!`

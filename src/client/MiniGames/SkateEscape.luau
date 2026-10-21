@@ -149,6 +149,8 @@ function SkateEscape.Start(api)
 	local kickAt = -math.huge
 	local outAt: number? = nil
 	local lastJump = -math.huge
+	local lastPush = -math.huge
+	local wipeD: number? = nil -- where my last local wipeout's obstacle stands
 	local driving: Model? = nil
 	local shake = 0
 	local fovPunch = 0
@@ -333,6 +335,10 @@ function SkateEscape.Start(api)
 			return
 		end
 		local now = api:Now()
+		if now - lastPush < 0.09 then
+			return -- the server takes about this many a second; counting more would run ahead of it
+		end
+		lastPush = now
 		api:Action("Push")
 		if SkateCourse.Push(me, now) then
 			kickAt = now
@@ -356,6 +362,30 @@ function SkateEscape.Start(api)
 
 	push.Pressed:Connect(doPush)
 	api:Track(UserInputService.JumpRequest:Connect(doJump))
+	-- Also watch the driven humanoid's Jump flag (the phone jump button sets it), in case JumpRequest
+	-- doesn't fire while it's PlatformStanding; the lastJump guard keeps the two from doubling up.
+	local jumpWatch: RBXScriptConnection? = nil
+	local jumpWatched: Humanoid? = nil
+	local function watchJump(humanoid: Humanoid?)
+		if humanoid == jumpWatched then
+			return
+		end
+		if jumpWatch then
+			jumpWatch:Disconnect()
+			jumpWatch = nil
+		end
+		jumpWatched = humanoid
+		if humanoid then
+			jumpWatch = humanoid:GetPropertyChangedSignal("Jump"):Connect(function()
+				if humanoid.Jump then
+					doJump()
+				end
+			end)
+		end
+	end
+	api:Track(function()
+		watchJump(nil)
+	end)
 	api:Track(UserInputService.InputBegan:Connect(function(input, processed)
 		if processed then
 			return
@@ -395,10 +425,12 @@ function SkateEscape.Start(api)
 			return
 		end
 		local now = api:Now()
-		if mine.F and not me.Done then
-			me.Done = true
-			me.Place = mine.F
-			me.D = math.max(me.D, length)
+		if mine.F then
+			me.Place = mine.F -- even when my own prediction got me over the line first
+			if not me.Done then
+				me.Done = true
+				me.D = math.max(me.D, length)
+			end
 		end
 		if mine.O and not outAt then
 			outAt = now
@@ -409,7 +441,9 @@ function SkateEscape.Start(api)
 		end
 		local serverWiped = mine.W ~= nil and mine.W > now
 		local localWiped = SkateCourse.IsWiped(me, now)
-		if serverWiped and not (localWiped and math.abs((me.WipeAt or 0) - (mine.WA or 0)) < 1) then
+		-- The same wipeout if it started at about the same moment, whether or not mine has ended yet.
+		local known = me.WipeAt ~= nil and math.abs(me.WipeAt - (mine.WA or -math.huge)) < 1
+		if serverWiped and not known then
 			-- The server saw a wipeout this client didn't: take it.
 			drawOffset += me.D - mine.D
 			me.D = mine.D
@@ -420,13 +454,18 @@ function SkateEscape.Start(api)
 			me.WipeKind = mine.WK
 			me.FallD = mine.FD
 			me.Next = nextIndex(me.D)
+			wipeD = nil
 			shake = 0.5
 			api:Sound("Hit")
 			say("WIPEOUT!", Theme.Colors.Red, 1.2)
 			return
 		end
-		if localWiped and not serverWiped and (mine.T or 0) > (me.WipeAt or 0) + 0.35 then
-			-- The server let that one go (its ping allowance): carry on from its numbers.
+		if serverWiped then
+			return -- its wipeout is mine; nothing to correct until it's over
+		end
+		if localWiped and not mine.PW and wipeD and (mine.D or 0) > wipeD and (mine.T or 0) > (me.WipeAt or 0) then
+			-- The server's skater got past that obstacle with no wipeout and none pending (a jump
+			-- inside its ping allowance): carry on from its numbers.
 			me.Wipe = nil
 			me.WipeKind = nil
 			me.FallD = nil
@@ -436,14 +475,20 @@ function SkateEscape.Start(api)
 		if SkateCourse.IsWiped(me, now) then
 			return
 		end
-		local expected = mine.D + (mine.V or 0) * math.max(0, now - (mine.T or now))
+		-- My pushes reach the server one trip later, so I'm normally that far ahead of its skater.
+		local ok, ping = pcall(function()
+			return localPlayer:GetNetworkPing()
+		end)
+		local v = mine.V or 0
+		local lead = v * math.clamp(if ok and type(ping) == "number" then ping * 0.5 else 0.05, 0, 0.3)
+		local expected = mine.D + v * math.max(0, now - (mine.T or now)) + lead
 		local diff = expected - me.D
-		if math.abs(diff) > 14 then
+		if math.abs(diff) > 14 + 0.1 * v then
 			drawOffset -= diff
 			me.D = expected
 			me.V = mine.V or me.V
 			me.Next = nextIndex(me.D)
-		elseif math.abs(diff) > 5 then
+		elseif math.abs(diff) > 6 + 0.1 * v then
 			local step = diff * 0.12
 			drawOffset -= step
 			me.D += step
@@ -579,6 +624,7 @@ function SkateEscape.Start(api)
 	-- Posing every skater ------------------------------------------------------------------------------
 
 	local rigs: { [Model]: { [string]: { Motor: Motor6D, Current: CFrame } } } = {}
+	local welds: { [Model]: Weld } = {} -- each skater's board weld, found once
 	local function rigOf(character: Model)
 		local rig = rigs[character]
 		if rig then
@@ -667,6 +713,7 @@ function SkateEscape.Start(api)
 						joint.Motor.Transform = CFrame.identity
 					end
 					rigs[character] = nil
+					welds[character] = nil
 				end
 				continue
 			end
@@ -677,10 +724,16 @@ function SkateEscape.Start(api)
 				joint.Current = joint.Current:Lerp(want, alpha)
 				joint.Motor.Transform = joint.Current
 			end
-			local board = character:FindFirstChild("Skateboard")
-			local weld = board and board:FindFirstChild("BoardWeld", true)
+			local weld = welds[character]
+			if not weld or weld.Parent == nil then
+				-- Not found yet, or the board was replaced: look it up (only until it's found).
+				local board = character:FindFirstChild("Skateboard")
+				local found = board and board:FindFirstChild("BoardWeld", true)
+				weld = if found and found:IsA("Weld") then found else nil
+				welds[character] = weld
+			end
 			local humanoid = character:FindFirstChildOfClass("Humanoid")
-			if weld and weld:IsA("Weld") and humanoid then
+			if weld and humanoid then
 				local height = SkateCourse.RootHeight(humanoid, root)
 				weld.C0 = CFrame.new(0, -height, 0)
 					* CFrame.Angles(0, 0, rad(-boardPitch(key, now)))
@@ -748,14 +801,19 @@ function SkateEscape.Start(api)
 				end
 			end
 			if driving == character and not (outAt and now - outAt > 1.6) then
+				watchJump(humanoid)
 				if collapse and not me.Done then
 					if hintUntil == 0 then
 						hintUntil = os.clock() + 6
-						api:Hint("Mash PUSH • JUMP over everything!", hudY + 140)
+						api:Hint("Mash PUSH • JUMP crates, barriers & gaps • ride the ⚡ pads", hudY + 140)
 					end
 					local event = SkateCourse.Step(me, obstacles, now, dt)
 					if event then
-						SkateCourse.Apply(me, event, obstacles, now)
+						SkateCourse.Apply(me, event, obstacles, event.At)
+						if event.Kind ~= "Boost" then
+							local o = obstacles[event.Index]
+							wipeD = o and o.D
+						end
 						if event.Kind == "Boost" then
 							fovPunch = 10
 							api:Sound("Pickup")
@@ -844,7 +902,7 @@ function SkateEscape.Start(api)
 			local fraction = math.clamp(front / length, 0, 1)
 			fire.Size = UDim2.fromScale(fraction, 1)
 			fireIcon.Position = UDim2.fromScale(fraction, 0.5)
-			local danger = racing() and me.D - front < 45
+			local danger = racing() and now > collapse.T0 + 0.5 and me.D - front < 45
 			if danger and not dangerShown then
 				dangerShown = true
 				api:Sound("HazardWarning")

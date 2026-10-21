@@ -98,13 +98,14 @@ function SkateCourse.Generate(rng: Random, length: number?): { Obstacle }
 end
 
 -- The collapse front: everything behind it has fallen into the lava. It starts behind the start
--- line, speeds up steadily and reaches the finish line at T1.
+-- line a few seconds after GO, gently at first (a slow pusher who misses a couple of obstacles still
+-- has a chance), then speeds up steadily and reaches the finish line at T1.
 function SkateCourse.NewCollapse(start: number, length: number?): Collapse
 	local finish = length or SkateCourse.Length
-	local t0 = start + 3
+	local t0 = start + 5
 	local t1 = start + 42
 	local d0 = -30
-	local v0 = 27
+	local v0 = 18
 	local span = t1 - t0
 	local a = 2 * (finish - d0 - v0 * span) / (span * span)
 	return { T0 = t0, D0 = d0, V0 = v0, A = a, T1 = t1 }
@@ -246,7 +247,9 @@ function SkateCourse.Step(racer: Racer, obstacles: { Obstacle }, now: number, dt
 	return nil
 end
 
--- Applies an event from Step: a wipeout puts the racer past the obstacle, stopped for a moment.
+-- Applies an event from Step: a wipeout puts the racer just past the obstacle, stopped for a moment.
+-- `now` should be the moment of the hit (event.At), so a wipeout applied late (the server waits out
+-- the ping allowance first) ends when it would have and gives no extra distance.
 function SkateCourse.Apply(racer: Racer, event: Event, obstacles: { Obstacle }, now: number)
 	local o = obstacles[event.Index]
 	if not o then
@@ -263,11 +266,11 @@ function SkateCourse.Apply(racer: Racer, event: Event, obstacles: { Obstacle }, 
 	racer.Next = math.max(racer.Next, event.Index + 1)
 	if event.Kind == "Fall" then
 		racer.Wipe = now + SkateCourse.FallTime
-		racer.FallD = math.clamp(racer.D, o.D - o.Len / 2 + 1.5, o.D + o.Len / 2 - 1.5)
+		racer.FallD = o.D - o.Len / 2 + 1.5
 		racer.D = o.D + o.Len / 2 + 2
 	else
 		racer.Wipe = now + SkateCourse.WipeTime
-		racer.D = math.max(racer.D, o.D + o.Len / 2 + 1)
+		racer.D = o.D + o.Len / 2 + 1
 	end
 end
 
