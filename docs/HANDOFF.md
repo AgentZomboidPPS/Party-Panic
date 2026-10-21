@@ -1,28 +1,39 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-21 19:05 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-21 19:40 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (19:05 UTC)
+## Session B in flight (19:40 UTC)
 
 - **Live version 31** (published 19:03 UTC from `claude/upbeat-galileo-gvwq66` at 22735e3): everything in version 30,
   plus **Shark Bait** (built in the owner's other window on `claude/shark-bait`, merged at a595136 on the owner's word:
   "Merge the shark bait game into this now"), plus mode buttons that only show to players who can use them
   (`Api.CanAct` in `Kit/Api.luau`) and a readable Skate Escape race bar (`Logic/RaceBar.luau`). Owner must restart servers.
-- **Finished, being reviewed, then merged for version 32** (local worktree branches `worktree-agent-*`, not pushed):
-  Skee-Ball arcade (§2.2), payoffs + low coins incl. a one-time saved-coin conversion (§2.2; ships only after its
-  data-safety review and the DataService save fixes below), Bumper Ballers phone controls (§2.2), Sinking Sands bots
-  (§2.2), Fire Rope "chair" (the camera slid inside the back braziers and rope towers; fixed with a client-only camera
-  collision group, `BlocksCamera` in MeshLibrary specs).
+- **Merged on this branch since version 31 (ships in version 32):** Fire Rope "chair" (the camera slid inside the back
+  braziers and rope towers; fixed with a client-only camera collision group, `BlocksCamera` in MeshLibrary specs);
+  audits of Rake It In (two rakes after one veggie both get it), Bobsled Run (hint after GO, standings, results lines,
+  lean presses, slow phones), Skate Escape (last-instant finishes, standings order, no FALLING! after rejoining), Pump &
+  Pop (press spam can't beat rhythm), Arrow Ambush (out archers get camera/controls back, bots go round the boards),
+  Cake Factory (time-up packing, double taps, quick presses, hint, rules text); MiniGameController cancels a waiting
+  start-up with its round; Honey Trap's your-turn hint fits phones; backlog game 26 (Struggle).
+- **Finished, fixing review findings, then merged for version 32** (local worktree branches `worktree-agent-*`, not
+  pushed): Skee-Ball arcade (§2.2), payoffs + low coins incl. a one-time saved-coin conversion (§2.2; the data-safety
+  review found nothing; ships with the DataService save fixes below), Bumper Ballers phone controls (§2.2), Sinking Sands
+  bots (§2.2).
+- **CRITICAL, in progress:** the owner reports "invisible stuff you can jump on and hang on in several games" (Honey
+  Trap screenshot: a player standing ~4 studs above their flower). A sweep is dumping every collidable part per arena and
+  the lobby on test servers and fixing whatever is solid where nothing is drawn.
 - **Bug fixing in progress:** a read-only audit of 7 areas found 18 leads (saved in Session B's scratchpad); helpers are
   fixing Hex Meltdown (incl. the last call running into Results: survivors fall in the lava, bots float), round-end
   fairness (last players out in the same step, Honey Trap stings at time-up, Fire Rope same-pass verdicts),
   DataService saves lost at shutdown (BindToClose skips in-flight leave saves; leave save not retried), the phone team
   pill (only Red/Blue: role-team modes show 0 - 0), and fresh audits of Skate Escape, Arrow Ambush, Pump & Pop, Rake It
   In, Crazy Cutters, Cake Factory and Bobsled Run.
-- **Then:** games 13-25 (build instructions per game are generated from `tools/workflows/build-minigame.js` and the
-  backlog briefs) and custom music per game.
+- **New games, building now** (owner's order; builder per game in a worktree, then an independent review, a fix pass,
+  merge_check, mode_check, portal preview, publish): Tanks!, Spleef, Mecha-Marathon, Prime Cut, Stamp Out, Messy Memory;
+  then Parasol Plummet, Trace Race, Eatsa Pizza, Snowball Summit, Rockin' Raceway, Slaparazzi, Log Jam, Struggle. Custom
+  music per game is being composed (one round track per mode, AudioController plays the mode's own).
 - **Toolchain in a fresh container (GitHub downloads are blocked here):** `cargo install --locked stylua@2.6.0 --features
   luau`, `selene@0.31.0`, `rojo@7.7.1`, `lune@0.11.0` (crates.io works); luau-lsp from source: `git clone --depth 1
   --branch 1.70.1 https://github.com/JohnnyMorganz/luau-lsp`, `git submodule update --init --depth 1`, cmake Release with
