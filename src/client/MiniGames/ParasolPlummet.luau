@@ -38,7 +38,7 @@ local rad = math.rad
 local CAMERA_DISTANCE = 90
 local VIEW_HALF_W = 50 -- the sky and both throwers' clouds
 local VIEW_HALF_H = 24
-local VIEW_Y = 2.5 -- the middle of the view, above the sky's middle (the HUD sits over the top)
+local VIEW_Y = 1.5 -- the middle of the view, above the sky's middle (the HUD sits over the top)
 local HOLD_OFFSET = CFrame.new(0, Sim.UMBRELLA_BASE, -0.15)
 
 -- Each faller's colour, with a shape on their tag so colour is never the only cue.

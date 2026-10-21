@@ -118,11 +118,11 @@ function ParasolPlummet:_buildArena()
 		local holder = Instance.new("Model")
 		holder.Name = `Thrower{index}`
 		local base = CFrame.new(self:_world(x, y, 0))
-		MeshLibrary.Get("ParasolPlummetCloud", { Scale = 1.4, CFrame = base * CFrame.new(0, -3, 0), Parent = holder })
+		MeshLibrary.Get("ParasolPlummetCloud", { Scale = 1.2, CFrame = base * CFrame.new(0, -2.6, 0), Parent = holder })
 		-- Turned mostly to the camera, a little toward the middle of the sky.
 		MeshLibrary.Get("ParasolPlummetThrower", {
-			Scale = 1.4,
-			CFrame = base * CFrame.new(0, 2.2, 0) * CFrame.Angles(0, math.pi + side * math.rad(35), 0),
+			Scale = 1.2,
+			CFrame = base * CFrame.new(0, 1.6, 0) * CFrame.Angles(0, math.pi + side * math.rad(35), 0),
 			Parent = holder,
 		})
 		holder:PivotTo(base)
@@ -169,7 +169,7 @@ function ParasolPlummet:_buildArena()
 			})
 		end
 	end
-	for _, spot in { { -95, 35, -150, 1.4 }, { 120, -30, -210, 1.8 }, { 230, 55, -300, 2.2 } } do
+	for _, spot in { { -70, 40, -160, 1.4 }, { 95, 52, -300, 1.9 }, { -230, -15, -360, 2.2 } } do
 		MeshLibrary.Get("ParasolPlummetBalloon", {
 			Scale = spot[4],
 			CFrame = CFrame.new(center + Vector3.new(spot[1], spot[2], spot[3])),
@@ -525,8 +525,16 @@ function ParasolPlummet:_throw(): number?
 	local g = -Sim.GRAVITY
 	local vx, vy
 	if kind == "Hammer" then
-		-- At a faller (where they are now: they have the wind-up and the flight to dodge it).
+		-- At a faller (where they are now: they have the wind-up and the flight to dodge it), often
+		-- the one with the most coins.
 		local f = targets[rng:NextInteger(1, #targets)]
+		if rng:NextNumber() < 0.35 then
+			for _, other in targets do
+				if other.Coins > f.Coins then
+					f = other
+				end
+			end
+		end
 		local tx = math.clamp(f.X + rng:NextNumber(-2.5, 2.5), -Sim.HALF_W, Sim.HALF_W)
 		local ty = math.clamp(f.Y + rng:NextNumber(-1, 3), Sim.Y_MIN, Sim.Y_MAX + 4)
 		vx, vy = Sim.Aim(x0, y0, tx, ty, math.clamp(math.abs(tx - x0) / 26, 1.0, 1.8))
@@ -535,7 +543,8 @@ function ParasolPlummet:_throw(): number?
 		-- Arcs that peak anywhere from low to high in the sky (a coin lingers near its peak, so the
 		-- peaks are spread out: no height is the one place to wait). Most fly right across and out
 		-- the far side, at any height; some drop out of the bottom part way.
-		local peak = rng:NextNumber(Sim.Y_MIN + 3, Sim.Y_MAX + 4)
+		-- (Never right at the top: a faller parked up there mustn't be the one place every arc passes.)
+		local peak = rng:NextNumber(Sim.Y_MIN + 3, Sim.Y_MAX - 2)
 		vy = if peak > y0 then math.sqrt(2 * g * (peak - y0)) else rng:NextNumber(-3, 0)
 		local top = math.max(peak, y0)
 		local across = rng:NextNumber() < 0.7

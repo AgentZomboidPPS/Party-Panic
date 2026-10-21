@@ -20,7 +20,7 @@ local Sim = {}
 -- The sky box (a faller's root position, in studs from the play area's middle).
 Sim.HALF_W = 34
 Sim.Y_MIN = -15
-Sim.Y_MAX = 13
+Sim.Y_MAX = 10
 
 -- Faller motion (studs/s and 1/s).
 Sim.RISE = 5 -- umbrella open: a slow float upward
@@ -38,8 +38,8 @@ Sim.SAFE = 1.0 -- seconds after a stun when no hammer can hit again
 -- Thrown things.
 Sim.GRAVITY = -7
 Sim.THROWER_X = 43 -- the throwers' clouds, either side of the sky
-Sim.THROWER_BASE = { 3, -9 } -- their resting heights (upper and lower cloud on each side)
-Sim.THROWER_BOB = 4 -- how far their clouds bob up and down
+Sim.THROWER_BASE = { 1, -13 } -- their resting heights (upper and lower cloud on each side)
+Sim.THROWER_BOB = 2 -- how far their clouds bob up and down
 Sim.WINDUP = 0.55 -- seconds a thrower winds up before the throw leaves its hand
 Sim.LIFE = 7 -- no thrown thing lives longer than this
 
@@ -127,7 +127,7 @@ end
 -- The throwers are the same mesh turned to face the camera (not mirrored), so that hand is on the
 -- left of both: outside on the left cloud, inside on the right one.
 function Sim.HandOffset(side: number): (number, number)
-	return if side < 0 then -2.1 else -2.5, 8.1
+	return if side < 0 then -1.8 else -2.1, 6.6
 end
 
 -- Whether something of `radius` at (x, y) touches a faller at (fx, fy) with its umbrella `open` or
