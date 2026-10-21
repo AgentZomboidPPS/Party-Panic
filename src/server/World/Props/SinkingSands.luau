@@ -7,7 +7,7 @@ return function(h)
 		-- mode (invisible parts on the same profile), so the mesh never collides.
 		SandPit = {
 			Height = 40.4,
-			AssetId = 0,
+			AssetId = 77228243131686,
 			Collide = false,
 			Shadow = false,
 			Palette = {
@@ -39,7 +39,7 @@ return function(h)
 		-- each ring with the sand.
 		SandSwirl = {
 			Height = 20.1,
-			AssetId = 0,
+			AssetId = 99423756504362,
 			Collide = false,
 			Shadow = false,
 			Palette = {
@@ -58,7 +58,7 @@ return function(h)
 		},
 		SandCoin = {
 			Height = 2.3,
-			AssetId = 0,
+			AssetId = 108661375244125,
 			Shadow = false,
 			Palette = { Coin = h.rgb(255, 196, 40), Emblem = h.rgb(255, 238, 140) },
 			Materials = { Coin = Enum.Material.Metal, Emblem = Enum.Material.Neon },
@@ -69,7 +69,7 @@ return function(h)
 		},
 		SandGem = {
 			Height = 1.95,
-			AssetId = 0,
+			AssetId = 81961172880389,
 			Shadow = false,
 			Palette = { Gem = h.rgb(70, 200, 255) },
 			Materials = { Gem = Enum.Material.Glass },
@@ -80,7 +80,7 @@ return function(h)
 		},
 		CoinBag = {
 			Height = 3.2,
-			AssetId = 0,
+			AssetId = 74005376971390,
 			Shadow = false,
 			Palette = { Sack = h.rgb(200, 144, 88), Rope = h.rgb(120, 78, 46), Emblem = h.rgb(255, 204, 50) },
 			Materials = { Sack = Enum.Material.Fabric, Emblem = Enum.Material.Metal },
@@ -91,7 +91,7 @@ return function(h)
 		},
 		GoldenIdol = {
 			Height = 3.9,
-			AssetId = 0,
+			AssetId = 91937344897147,
 			Palette = { Gold = h.rgb(255, 200, 40), Eyes = h.rgb(60, 235, 160) },
 			Materials = { Gold = Enum.Material.Metal, Eyes = Enum.Material.Neon },
 			Fallback = function(m)
@@ -102,7 +102,7 @@ return function(h)
 		},
 		SandThrone = {
 			Height = 9.7,
-			AssetId = 0,
+			AssetId = 112007036462495,
 			Collide = true,
 			Palette = { Stone = h.rgb(226, 182, 124), Gold = h.rgb(255, 198, 50), Cushion = h.rgb(200, 60, 60) },
 			Materials = { Stone = Enum.Material.Sandstone, Gold = Enum.Material.Metal, Cushion = Enum.Material.Fabric },
@@ -116,7 +116,7 @@ return function(h)
 		},
 		SandCrown = {
 			Height = 1.05,
-			AssetId = 0,
+			AssetId = 99276892682303,
 			Shadow = false,
 			Palette = { Gold = h.rgb(255, 204, 50), Gems = h.rgb(230, 50, 90) },
 			Materials = { Gold = Enum.Material.Metal, Gems = Enum.Material.Neon },
@@ -126,7 +126,7 @@ return function(h)
 		},
 		Cactus = {
 			Height = 9.85,
-			AssetId = 0,
+			AssetId = 80365311469214,
 			Collide = true,
 			Palette = { Cactus = h.rgb(84, 150, 82), Flower = h.rgb(255, 120, 170) },
 			Materials = { Cactus = Enum.Material.Grass },
@@ -139,7 +139,7 @@ return function(h)
 		},
 		SandRuin = {
 			Height = 9,
-			AssetId = 0,
+			AssetId = 131429647301144,
 			Collide = true,
 			Palette = { Stone = h.rgb(232, 196, 142), Base = h.rgb(204, 160, 108) },
 			Materials = { Stone = Enum.Material.Sandstone, Base = Enum.Material.Sandstone },

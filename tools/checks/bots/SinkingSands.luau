@@ -2,13 +2,10 @@
 -- the sand, dragged by the sand exactly as a player's device drags its own character, and one in a
 -- while one wanders into the sinkhole; stand-in Sand Kings press SWIRL and PULL. Luau execution has
 -- no physics, so bots move rigs with env.Move (on the sand's surface).
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local SandSwirl = require(ReplicatedStorage.Shared.Logic.SandSwirl)
-
 return function(env)
 	local ctx = env.ctx
 	local mode = env.game
+	local SandSwirl = mode.Swirl
 	local center = mode.center
 	local step = 0.05
 	local plans = {}

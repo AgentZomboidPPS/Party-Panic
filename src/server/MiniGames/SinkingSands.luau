@@ -29,6 +29,7 @@ local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
 
 local SinkingSands = MiniGame.Define("SinkingSands", { Results = "Team" })
+SinkingSands.Swirl = SandSwirl -- the flow math, for the test bot
 
 local KINGS, DIVERS = "SandKings", "Divers"
 
