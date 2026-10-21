@@ -7,6 +7,12 @@
 -- skater moves by itself (players' clients and the server's bots) and is posed here from MG_Racers:
 -- the push kick, the ollie tuck, the wipeout flip. The bridge crumbles from the shared schedule
 -- MG_Collapse, the same one the server checks distances against.
+--
+-- The start (owner: "it spawns you when the game starts not on the bridge and you kinda just float to
+-- the bridge"): the server puts every skater exactly where this client draws them (lane, start line,
+-- riding height) and holds them there until GO, so taking over my skater never moves it; at GO the
+-- server hands it back to this device before the race's schedule arrives, and the bridge stays still
+-- until the collapse actually begins.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -738,6 +744,11 @@ function SkateEscape.Start(api)
 		for _, emitter in frontEmitters do
 			emitter.Enabled = crumbling
 		end
+		if now < collapse.T0 then
+			-- The bridge is still until the collapse begins: the front waits inside the start pad
+			-- (collapse.D0), and the pad used to tip back under the start line at GO.
+			return
+		end
 		for _, piece in pieces do
 			if piece.State == "Gone" or front < piece.D0 - 32 then
 				continue
@@ -754,8 +765,10 @@ function SkateEscape.Start(api)
 				end
 				piece.State = "Warn"
 			elseif front < piece.D1 then
-				-- The back end gives way first, hinging on the front, with a puff of splinters.
-				local t = (front - piece.D0) / math.max(1, piece.D1 - piece.D0)
+				-- The back end gives way first, hinging on the front, with a puff of splinters. (The
+				-- start pad tips from level: the front sets off from inside it.)
+				local from = math.max(piece.D0, collapse.D0)
+				local t = (front - from) / math.max(1, piece.D1 - from)
 				local tilt = CFrame.new(hinge) * CFrame.Angles(rad(28 * t), 0, 0) * CFrame.new(-hinge)
 				model:PivotTo(tilt * piece.Base)
 				if not piece.Cracked then
@@ -891,9 +904,12 @@ function SkateEscape.Start(api)
 			end
 			local mode, kick = poseFor(key, now)
 			local target = targetPose(mode, kick, now)
+			-- A skater just arrived on the course is in the stance from their first frame here (no
+			-- crouching into it on the start line); after that, poses blend.
+			local fresh = rigs[character] == nil
 			for name, joint in rigOf(character) do
 				local want = target[name] or CFrame.identity
-				joint.Current = joint.Current:Lerp(want, alpha)
+				joint.Current = if fresh then want else joint.Current:Lerp(want, alpha)
 				joint.Motor.Transform = joint.Current
 			end
 			local weld = welds[character]
