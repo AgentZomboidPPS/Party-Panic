@@ -101,16 +101,17 @@ def main():
         print("Dry run: nothing published.")
         return
 
-    # Asset privacy: new uploads are Restricted, and only the owner sees them until the game is
-    # granted permission. Re-grant every model and sound on each publish so nothing is invisible.
+    # Asset privacy: uploads are Restricted, and only the owner sees them. On every publish, let the
+    # game use every model and sound, and make every mesh file inside them Open Use, so all players
+    # see everything (tools/asset_permissions.py).
     sys.path.insert(0, str(ROOT / "tools"))
-    sys.path.insert(0, str(ROOT / "tools" / "checks"))
-    from asset_permissions import grant
-    from asset_status import collect
+    from asset_permissions import grant_all
 
-    asset_ids = list(collect().values())
-    granted, grant_errors = grant(asset_ids, args.universe_id)
-    print(f"The game may use {len(granted)} of {len(set(asset_ids))} models and sounds")
+    try:
+        summary, grant_errors = grant_all(args.universe_id)
+    except Exception as error:  # the mesh scan needs a test server; earlier grants still stand
+        summary, grant_errors = f"asset permissions not refreshed ({error})", []
+    print(summary[0].upper() + summary[1:])
     if grant_errors:
         sys.exit(f"Refusing to publish: couldn't grant asset permissions: {json.dumps(grant_errors)[:1000]}")
 

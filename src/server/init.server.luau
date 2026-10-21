@@ -11,6 +11,7 @@ local Services = script.Services
 
 local order = {
 	"DataService",
+	"ClientReports",
 	"CosmeticService",
 	"QuestService",
 	"ShopService",

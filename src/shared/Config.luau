@@ -66,6 +66,7 @@ Config.RateLimits = {
 	Claim = { 3, 2 },
 	Settings = { 10, 5 },
 	Tutorial = { 5, 5 },
+	ClientReport = { 3, 60 },
 }
 
 Config.EmoteCooldown = 1.5

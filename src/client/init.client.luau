@@ -55,6 +55,7 @@ local order = {
 	"SpectateController",
 	"OnboardingController",
 	"MiniGameController",
+	"AssetReportController",
 }
 
 local context = { Hud = hud, Overlay = overlay }

@@ -15,6 +15,7 @@ local NAMES = {
 	"SetSetting", -- (key: string, value: any)
 	"PromptVip", -- ()
 	"MiniGameAction", -- (action: string, ...) a mini-game control (pump, push, shoot...); see RoundContext:OnAction
+	"ClientReport", -- (report: table) which uploaded meshes this device couldn't load; see Services/ClientReports
 	-- server -> client
 	"ProfileData", -- (snapshot)
 	"Notify", -- (text, kind?, duration?)
