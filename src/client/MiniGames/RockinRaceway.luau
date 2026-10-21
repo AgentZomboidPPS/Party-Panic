@@ -462,6 +462,20 @@ function RockinRaceway.Start(api)
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.1) },
 	})
+	-- Phones: the start hint sits where the callouts go (right of the middle, clear of the stick's
+	-- corner and under the race bar), in two short lines.
+	local startHint = UIKit.Label({
+		Name = "StartHint",
+		Text = "Hold the left side to GALLOP\nTap HOP over blue hurdles",
+		Font = Theme.Fonts.Display,
+		TextSize = 22,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, shiftX, 0, meterY + meterHeight + 44),
+		Size = UDim2.fromOffset(360, 60),
+		Visible = false,
+		Parent = hud,
+		Children = { UIKit.TextStroke(0.15) },
+	})
 	local calloutUntil = 0
 	local function say(text: string, color: Color3, seconds: number)
 		callout.Text = text
@@ -513,7 +527,7 @@ function RockinRaceway.Start(api)
 			Name = "Sub",
 			Text = "◀ hold",
 			Font = Theme.Fonts.Bold,
-			TextSize = 16,
+			TextSize = 19,
 			Size = UDim2.new(0.9, 0, 0, 20),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.7),
@@ -940,19 +954,23 @@ function RockinRaceway.Start(api)
 		if callout.Visible and os.clock() > calloutUntil then
 			callout.Visible = false
 		end
-		if stage == "Race" and not hintShown then
+		if stage == "Race" and not hintShown and api.Gui.Enabled then -- (not while the rules card is up)
 			hintShown = true
-			hintUntil = os.clock() + 5
-			api:Hint(
-				if touch
-					then "Hold the left side to GALLOP · HOP the blue hurdles"
-					else "Hold W to GALLOP · let go in the red! SPACE hops the blue hurdles",
-				meterY + meterHeight + 92 -- (under the race bar, the meter and the callout)
-			)
+			hintUntil = os.clock() + 6
+			if not touch then
+				api:Hint(
+					"Hold W to GALLOP · let go in the red! SPACE hops the blue hurdles",
+					meterY + meterHeight + 92 -- (under the race bar, the meter and the callout)
+				)
+			end
 		end
+		-- (a callout takes the hint's place for a moment; the hint comes back after it)
+		startHint.Visible = touch and hintUntil > 0 and os.clock() <= hintUntil and not callout.Visible
 		if hintUntil > 0 and os.clock() > hintUntil then
 			hintUntil = -1
-			api:Hint("")
+			if not touch then
+				api:Hint("")
+			end
 		end
 
 		if carousel and carouselPivot and carousel.Parent then
