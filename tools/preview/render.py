@@ -72,11 +72,25 @@ def material(color, mat_name, transparency):
         bsdf.inputs["Metallic"].default_value = 0.35
     if mat_name == "Neon":
         bsdf.inputs["Emission Color"].default_value = (*rgb, 1)
-        bsdf.inputs["Emission Strength"].default_value = 4.0
+        # A see-through neon sheet (like a lava glow over the lava) only tints what's under it.
+        bsdf.inputs["Emission Strength"].default_value = 4.0 * min(1.0, 1.6 * (1 - transparency))
     if mat_name == "CrackedLava":
-        # Lava glows in the engine; unlit it reads as orange sand.
+        # The engine draws lava as dark rock with glowing cracks (flat orange reads as sand).
+        bsdf.inputs["Base Color"].default_value = (*(c * 0.12 for c in rgb), 1)
+        bsdf.inputs["Roughness"].default_value = 0.85
+        position = nodes.new("ShaderNodeNewGeometry")
+        cracks = nodes.new("ShaderNodeTexVoronoi")
+        cracks.feature = "DISTANCE_TO_EDGE"
+        cracks.inputs["Scale"].default_value = 0.09
+        links.new(position.outputs["Position"], cracks.inputs["Vector"])
+        glow = nodes.new("ShaderNodeMapRange")
+        glow.inputs["From Min"].default_value = 0.0
+        glow.inputs["From Max"].default_value = 0.08
+        glow.inputs["To Min"].default_value = 3.0
+        glow.inputs["To Max"].default_value = 0.15
+        links.new(cracks.outputs["Distance"], glow.inputs["Value"])
         bsdf.inputs["Emission Color"].default_value = (*rgb, 1)
-        bsdf.inputs["Emission Strength"].default_value = 0.5
+        links.new(glow.outputs["Result"], bsdf.inputs["Emission Strength"])
     if mat_name == "Glass":
         bsdf.inputs["Transmission Weight"].default_value = 0.8
     if transparency > 0.01:
@@ -307,6 +321,34 @@ def build_parts(parts):
         print("meshes drawn as boxes (no matching glb node):", sorted(unknown_meshes)[:20])
 
 
+def add_screen(part, image_path):
+    """What a client draws on a part's Back face (a SurfaceGui, e.g. a portal's preview), as a
+    glowing picture: stand-in for the GUI, which isn't drawn otherwise."""
+    sx, sy, sz = part["s"]
+    mesh = bpy.data.meshes.new("screen")
+    # Corners in the part's local Roblox axes, on its +Z (Back) face, seen from +Z: image left is -X.
+    corners = [(-sx / 2, -sy / 2), (sx / 2, -sy / 2), (sx / 2, sy / 2), (-sx / 2, sy / 2)]
+    mesh.from_pydata([(x, -(sz / 2 + 0.02), y) for x, y in corners], [], [(0, 1, 2, 3)])
+    uv = mesh.uv_layers.new()
+    for i, (u, v) in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
+        uv.data[i].uv = (u, v)
+    mat = bpy.data.materials.new("screen")
+    mat.use_nodes = True
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    nodes.clear()
+    tex = nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.load(str(Path(image_path).resolve()))
+    emit = nodes.new("ShaderNodeEmission")
+    emit.inputs["Strength"].default_value = 1.0
+    out = nodes.new("ShaderNodeOutputMaterial")
+    links.new(tex.outputs["Color"], emit.inputs["Color"])
+    links.new(emit.outputs["Emission"], out.inputs["Surface"])
+    mesh.materials.append(mat)
+    obj = bpy.data.objects.new("screen", mesh)
+    obj.matrix_world = cframe_matrix(part["cf"])
+    bpy.context.collection.objects.link(obj)
+
+
 def build_terrain(t):
     half, step = t["half"], t["step"]
     if not t.get("heights"):
@@ -504,6 +546,7 @@ def main():
     parser.add_argument("--height", type=int, help="image height (default: 16:9 to the width)")
     parser.add_argument("--cameras", help="json file with extra named cameras {name: [eye, target, fov]}")
     parser.add_argument("--dummies", help="json list of [x, y, z, yaw] avatar positions")
+    parser.add_argument("--screens", help="json {part name: image file}: draw the image on that part's Back face")
     args = parser.parse_args(argv)
 
     data = json.loads(Path(args.dump).read_text())
@@ -520,6 +563,10 @@ def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     setup_world(data.get("lighting", {}))
     build_parts(data["parts"])
+    screens = json.loads(Path(args.screens).read_text()) if args.screens else {}
+    for part in data["parts"] if screens else []:
+        if part["n"] in screens:
+            add_screen(part, screens[part["n"]])
     build_terrain(data["terrain"])
     dummies = json.loads(Path(args.dummies).read_text()) if args.dummies else [[0, 0.2, 26, 0], [4, 0.2, 22, 0.6], [-5, 0.2, 21, -0.4]]
     for d in dummies:

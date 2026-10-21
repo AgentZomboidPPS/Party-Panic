@@ -177,6 +177,23 @@ python3 tools/checks/ui_render.py ui.json out --sizes all                       
 phone, small phone and tablet sizes with Roblox's buttons, thumbstick and jump button, and lists
 overlaps and anything off-screen.
 
+## 8. Give it a portal preview
+
+The vote stage's portals play a little looping preview of each game in the vote. Make your mode's
+once it plays in the round harness (it needs `tools/checks/bots/<Mode>.luau`):
+
+```sh
+python3 tools/preview/make_preview.py MyGame --no-upload   # play a round, render the frames, make the sheet
+python3 tools/preview/make_preview.py MyGame --upload-only # happy with /tmp/pv_MyGame_frames? upload it
+```
+
+It plays a real round on a test server, snapshots the arena with the players in it, renders a short
+camera sway around that moment with Blender and packs the frames into `assets/previews/MyGame.jpg`.
+The upload goes to the owner's account (Open Use, and the game may use it), and the image id lands
+in `src/shared/GamePreviews.luau`. If the shot misses the action, give the mode a camera in the
+`CAMERAS` table at the top of the tool (or a later `--dump-at`) and re-run with `--reuse-dump`.
+Until a mode has a preview, its portal shows its icon and name on its color.
+
 ## Quality bar
 
 A mode should only join the live pool when it's fun in repeated tests, easy to explain in one

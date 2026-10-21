@@ -6,6 +6,7 @@ what the game actually is?").
     python3 tools/preview/make_preview.py FireRope --no-upload      # frames and sheet only, to look at
     python3 tools/preview/make_preview.py FireRope --reuse-dump     # skip the server run, re-render
     python3 tools/preview/make_preview.py FireRope --dump-at 14     # snapshot later in the round
+    python3 tools/preview/make_preview.py FireRope --upload-only    # upload the sheet you looked at
 
 What it does:
 
@@ -15,9 +16,11 @@ What it does:
 2. Renders FRAMES small frames with tools/preview/render.py (Blender) along a camera path that
    sways around the frozen moment and comes back to where it started, so the loop is seamless.
    The frames have the shape of a portal's opening and are packed into one sprite sheet,
-   assets/previews/<Id>.png (Roblox caps images at 1024x1024).
-3. Uploads the sheet to Roblox as an image under the owner's account (Open Cloud Assets API, like
-   tools/upload_assets.py), makes it Open Use and lets the game use it (tools/asset_permissions.py).
+   assets/previews/<Id>.jpg (Roblox caps images at 1024x1024).
+3. Uploads the sheet to Roblox under the owner's account (Open Cloud Assets API, like
+   tools/upload_assets.py). That makes a decal holding an image; a test server looks up the image
+   (ImageLabels show images, not decals), which is made Open Use, and the game may use both
+   (tools/asset_permissions.py).
 4. Records the image id and the sheet's layout in assets/previews/previews.json and rewrites
    src/shared/GamePreviews.luau from it. The client plays the sheet as a flipbook; a game with no
    entry there gets its icon-and-name card instead. Rebuild the place to ship the new entry.
@@ -48,9 +51,10 @@ RECORD = PREVIEWS / "previews.json"
 LUAU = ROOT / "src" / "shared" / "GamePreviews.luau"
 USER_ID = os.environ.get("PP_OWNER_USER_ID", "11690979745")  # the game owner's Roblox account
 
-# The portal opening is 14 x 19.8 studs (LobbyBuilder), so the frames are that shape: 6 x 4 frames
-# of 170 x 240 make a 1020 x 960 sheet.
-FRAME_W, FRAME_H = 170, 240
+# The portal opening is 14 x 19.8 studs (LobbyBuilder), so the frames are about that shape: 6 x 4
+# frames of 168 x 240 make a 1008 x 960 sheet. (Multiples of 8, so the JPEG's blocks never mix two
+# frames.)
+FRAME_W, FRAME_H = 168, 240
 COLUMNS = 6
 FRAMES = 24
 FPS = 8
@@ -66,23 +70,24 @@ DEFAULT_CAMERA = {"yaw": 0, "pitch": 30, "distance": 40, "fov": 50, "sway": 10, 
 CAMERAS: dict[str, dict] = {
     # Down the line of jumpers to the fire wheel, the rope sweeping along the bridge.
     "FireRope": {"yaw": 62, "pitch": 15, "distance": 34, "shift": [0, 1, 0]},
-    # Over the hexes, the called color still up and the rest sunk into the lava.
-    "HexMeltdown": {"yaw": 20, "pitch": 42, "distance": 46, "shift": [0, -4, 0]},
-    # The honey tree's vine of fruit and honeycombs, the players around it on their pads.
-    "HoneyTrap": {"yaw": 10, "pitch": 18, "distance": 36, "shift": [0, 6, -8]},
-    # A team pumping its balloon (with a face), the other teams' balloons beside it.
-    "PumpAndPop": {"yaw": 0, "pitch": 12, "distance": 34, "shift": [0, 6, 0], "sway": 12},
-    # Two riders bumping on the island, the sea all around.
-    "BumperBallers": {"look_at": "BoingRing", "yaw": 30, "pitch": 30, "distance": 34},
-    # Over the archers' shoulders on the tower, out over the target boards and the runners.
-    "ArrowAmbush": {"yaw": 180, "pitch": 28, "distance": 38, "shift": [0, -4, 10]},
-    # Chasing a bunch of skaters down the bridge, toward the crates and the finish.
-    "SkateEscape": {"yaw": 0, "pitch": 13, "distance": 24, "shift": [0, 0, -8]},
+    # Players on the hexes of the called color, the other colors sinking into the lava, the
+    # referee's flag behind.
+    "HexMeltdown": {"yaw": 20, "pitch": 40, "distance": 44, "shift": [0, -6, 0], "raise": 10},
+    # The honey tree's vine of fruit and honeycombs, bees chasing someone out, players on their pads.
+    "HoneyTrap": {"yaw": -20, "pitch": 24, "distance": 36, "shift": [-2, 1, -6], "raise": 10},
+    # A team pumping its balloon (with a face), a rival team's balloon beside it.
+    "PumpAndPop": {"yaw": 25, "pitch": 12, "distance": 36, "shift": [0, 4, 0], "sway": 8},
+    # Two riders who just bumped, the sea and a palm island behind.
+    "BumperBallers": {"look_at": "BoingRing", "yaw": 120, "pitch": 22, "distance": 30},
+    # The archers' tower from the field, a runner and a target board in front.
+    "ArrowAmbush": {"yaw": 15, "pitch": 22, "distance": 46, "shift": [0, -3, 2], "raise": 12},
+    # A skater mid-ollie, the crates and the leaders ahead, lava and spires around.
+    "SkateEscape": {"subject": "highest", "yaw": 50, "pitch": 10, "distance": 20, "sway": 8},
 }
 
 # Seconds into the round to take the snapshot, where the default (8) isn't the liveliest moment.
 DUMP_AT: dict[str, float] = {
-    "HexMeltdown": 15.2,  # the second call: the other colors are down in the lava
+    "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
     "PumpAndPop": 16,  # the balloons are big by now
     "SkateEscape": 10,
@@ -234,6 +239,8 @@ def pack_sheet(game: str, paths: list[Path]) -> Path:
     sheet = Image.new("RGB", (FRAME_W * COLUMNS, FRAME_H * rows), (20, 14, 40))
     for index, path in enumerate(paths):
         frame = Image.open(path).convert("RGB")
+        if frame.size != (FRAME_W, FRAME_H):
+            frame = frame.resize((FRAME_W, FRAME_H), Image.LANCZOS)
         # Roblox colors are bold: a little more color and snap than the renderer's soft look.
         frame = ImageEnhance.Color(frame).enhance(1.25)
         frame = ImageEnhance.Contrast(frame).enhance(1.08)
@@ -241,29 +248,58 @@ def pack_sheet(game: str, paths: list[Path]) -> Path:
         sheet.paste(frame, ((index % COLUMNS) * FRAME_W, (index // COLUMNS) * FRAME_H))
     assert sheet.width <= 1024 and sheet.height <= 1024, "Roblox caps images at 1024x1024"
     PREVIEWS.mkdir(parents=True, exist_ok=True)
-    out = PREVIEWS / f"{game}.png"
-    sheet.save(out, optimize=True)
+    out = PREVIEWS / f"{game}.jpg"
+    sheet.save(out, quality=90, subsampling=0, optimize=True)
     log(f"Sheet: {out.relative_to(ROOT)} ({sheet.width}x{sheet.height}, {out.stat().st_size // 1024} KB)")
     return out
 
 
-def upload_sheet(game: str, sheet: Path, name: str) -> int:
-    """Step 3: upload as an image, make it Open Use, and let the game use it."""
+# Runs on a test server: the image inside an uploaded decal.
+DECAL_IMAGE = """
+local ok, model = pcall(function()
+	return game:GetService("InsertService"):LoadAsset(%d)
+end)
+for _, item in if ok then model:GetDescendants() else {} do
+	if item:IsA("Decal") then
+		return item.Texture
+	end
+end
+return ""
+"""
+
+
+def image_in(decal_id: int) -> int:
+    sys.path.insert(0, str(ROOT / "tools" / "preview"))
+    from luau_task import run as run_luau
+
+    for _ in range(6):
+        task, _ = run_luau(DECAL_IMAGE % decal_id)
+        results = (task.get("output") or {}).get("results") or [""]
+        digits = "".join(ch for ch in str(results[0]) if ch.isdigit())
+        if digits:
+            return int(digits)
+        time.sleep(15)  # a brand-new decal can take a moment to load
+    raise SystemExit(f"Couldn't find the image in decal {decal_id}; try again with --upload-only later")
+
+
+def upload_sheet(game: str, sheet: Path, name: str) -> tuple[int, int]:
+    """Step 3: upload, find the image, make it Open Use, and let the game use it. Returns the
+    image and decal ids."""
     sys.path.insert(0, str(ROOT / "tools"))
     from asset_permissions import grant, open_use
-    from upload_assets import API, request, upload
+    from upload_assets import upload
 
     display = f"Party Panic preview: {name}"[:50]
-    asset_id = upload(sheet, "Decal", display, f"Party Panic: a looping preview of {name} for the vote stage.",
-                      {"userId": USER_ID}, "image/png")
-    info = request("GET", f"{API}/assets/{asset_id}")
-    log(f"Uploaded {sheet.name}: asset {asset_id} ({info.get('assetType', '?')})")
-    opened, errors = open_use([asset_id])
-    granted, grant_errors = grant([asset_id])
-    log(f"  Open Use: {'yes' if opened else 'no'}; the game may use it: {'yes' if granted else 'no'}")
+    decal = upload(sheet, "Decal", display, f"Party Panic: a looping preview of {name} for the vote stage.",
+                   {"userId": USER_ID}, "image/jpeg")
+    image = image_in(decal)
+    log(f"Uploaded {sheet.name}: decal {decal}, image {image}")
+    opened, errors = open_use([image])
+    granted, grant_errors = grant([image, decal])
+    log(f"  Open Use: {'yes' if image in opened else 'no'}; the game may use it: {'yes' if image in granted else 'no'}")
     if errors or grant_errors:
         log(f"  permission errors: {json.dumps(errors + grant_errors)[:600]}")
-    return asset_id
+    return image, decal
 
 
 def write_luau(record: dict):
@@ -319,6 +355,7 @@ def main():
     parser.add_argument("--players", type=int, default=8)
     parser.add_argument("--reuse-dump", action="store_true", help="re-render the last snapshot (/tmp/pv_<Id>_dump.json)")
     parser.add_argument("--no-upload", action="store_true", help="stop after the sheet: nothing is uploaded or recorded")
+    parser.add_argument("--upload-only", action="store_true", help="upload and record assets/previews/<Id>.jpg as it is")
     parser.add_argument("--frames", type=int, default=FRAMES)
     parser.add_argument("--samples", type=int, default=20)
     parser.add_argument("--python", default=os.environ.get("PP_BPY_PYTHON", "python3"),
@@ -335,18 +372,26 @@ def main():
     name = game_name(args.game)
     if args.frames > COLUMNS * (1024 // FRAME_H):
         raise SystemExit(f"At most {COLUMNS * (1024 // FRAME_H)} frames fit in a 1024x1024 sheet")
-    dump = Path(f"/tmp/pv_{args.game}_dump.json")
-    if not args.reuse_dump or not dump.exists():
-        dump = dump_round(args.game, args.dump_at or DUMP_AT.get(args.game, 8), args.players)
-    frames = render_frames(args.game, dump, args.frames, args.samples, args.python)
-    sheet = pack_sheet(args.game, frames)
-    if args.no_upload:
-        log("Not uploaded (--no-upload).")
-        return
-    asset_id = upload_sheet(args.game, sheet, name)
+    if args.upload_only:
+        sheet = PREVIEWS / f"{args.game}.jpg"
+        if not sheet.exists():
+            raise SystemExit(f"No {sheet.relative_to(ROOT)} yet: make it first (--no-upload)")
+        frame_count = args.frames
+    else:
+        dump = Path(f"/tmp/pv_{args.game}_dump.json")
+        if not args.reuse_dump or not dump.exists():
+            dump = dump_round(args.game, args.dump_at or DUMP_AT.get(args.game, 8), args.players)
+        frames = render_frames(args.game, dump, args.frames, args.samples, args.python)
+        sheet = pack_sheet(args.game, frames)
+        frame_count = len(frames)
+        if args.no_upload:
+            log("Not uploaded (--no-upload).")
+            return
+    image, decal = upload_sheet(args.game, sheet, name)
     record[args.game] = {
-        "image": asset_id,
-        "frames": len(frames),
+        "image": image,
+        "decal": decal,
+        "frames": frame_count,
         "columns": COLUMNS,
         "width": FRAME_W,
         "height": FRAME_H,

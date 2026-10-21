@@ -11,12 +11,12 @@ Outline*.
 | Area | Highlights |
 | --- | --- |
 | **Core loop** | A server-authoritative state machine (Waiting → Intermission → Voting → Preparing → In Round → Results → Cleanup) with a watchdog. Every mini-game call runs with a timeout, so a broken mode can't stall the server. |
-| **Voting** | Three options with live counts, change your vote until time runs out, random tie-breaks, an occasional *Mystery* card, recently played modes down-weighted, category mixing. Vote by tapping a card or stepping onto a portal pad. |
+| **Voting** | Four cards: three games and Random (a hidden pick, revealed if it wins), with live counts; change your vote until time runs out; random tie-breaks; recently played modes down-weighted; category mixing. Tap a card to vote. The stage's four portals play a little looping preview of each option (Random's spins through the games like a slot machine and lands on its game if it wins), and take turns showing every game between votes. |
 | **Mini-games** | Party classics rebuilt for 12 players: 🔥 Fire Rope · ⚡ Hex Meltdown · 🍯 Honey Trap · 🎈 Pump & Pop · 🛹 Skate Escape · 🏹 Arrow Ambush · 🏜️ Sinking Sands · 🔵 Bumper Ballers |
 | **Bots** | Friendly AI players fill empty spots so every round feels full (8 by default): they fade out when someone joins, fade back in when someone leaves, play every mode with their own brain at varied skill, and are clearly labelled 🤖 with a BOT nameplate. No rewards, no saved data. |
 | **Progression** | Coins, XP and levels, itemized round rewards, personal bests, daily and weekly quests, a daily gift with streaks, a hidden daily token, level and stat unlocks |
 | **Cosmetics** | Trails, titles, emotes (dances and effect emotes), victory and knockout effects, a coin shop with confirmation, an optional VIP pass (cosmetic only, never pay-to-win) |
-| **Lobby** | A sunny theme-park plaza built around the vote stage: three glowing portal bays under a scalloped carnival crown with neon tubes, flanked by candy-striped turrets; a scalloped stone fountain with rubber ducks, arcing water jets and a turning gold trophy (players can wade in); a sunburst court and patterned promenade on a grass lawn with flower beds and tree clusters; a turning Ferris wheel and drifting hot-air balloons on the skyline; beach balls to kick around (players pass through them and the server punts them, so there's no lag-bump on phones); a winner podium of gold, silver and bronze tiers under a bulb-lit candy arch; a shop with a mannequin gallery; a wooden quest kiosk and a giant gumball gift machine; a carnival shooting gallery (striped awning, bulbs, tin ducks) for the arcade target range; an emote stage with a dance floor under a fan-crowned arch with speakers and a circus confetti cannon; a spiral parkour tower to a view deck, lamp posts strung with bunting, floating confetti, and a ring of trees and hills |
+| **Lobby** | A sunny theme-park plaza built around the vote stage: four portal bays that play previews of the games under a scalloped carnival crown with neon tubes, flanked by candy-striped turrets; a scalloped stone fountain with rubber ducks, arcing water jets and a turning gold trophy (players can wade in); a sunburst court and patterned promenade on a grass lawn with flower beds and tree clusters; a turning Ferris wheel and drifting hot-air balloons on the skyline; beach balls to kick around (players pass through them and the server punts them, so there's no lag-bump on phones); a winner podium of gold, silver and bronze tiers under a bulb-lit candy arch; a shop with a mannequin gallery; a wooden quest kiosk and a giant gumball gift machine; a carnival shooting gallery (striped awning, bulbs, tin ducks) for the arcade target range; an emote stage with a dance floor under a fan-crowned arch with speakers and a circus confetti cannon; a spiral parkour tower to a view deck, lamp posts strung with bunting, floating confetti, and a ring of trees and hills |
 | **Look** | Rounded CSG geometry instead of blocks, 15 detailed original mesh props, ShadowMap lighting (sharp sun shadows, light on phones), bloom, sun rays, clouds, ambient particles and bobbing decorations |
 | **Audio** | An original soundtrack (two lobby tracks plus a round track that speeds up near the end) and 15 original sound effects |
 | **UI** | Mobile-first scaling, rounded glossy panels, toasts, rules card with a 3-2-1 countdown, standings, results breakdown, spectate, settings (music volume, reduced effects), onboarding tips |
@@ -110,6 +110,10 @@ python tools/preview/render.py dump.json shots/lobby --views spawn,overview   # 
 
 It catches runtime errors and warnings too (CSG failures, missing assets), and it's how the lobby
 layout was checked. `bundle.py my_check.luau` runs any script with the World modules loaded.
+
+The portals' game previews are made the same way: `python3 tools/preview/make_preview.py <GameId>`
+plays a round on a test server, renders a looping flyover of the arena and uploads it (see
+[docs/ADDING_MINIGAMES.md](docs/ADDING_MINIGAMES.md), step 8).
 
 ## Checks
 

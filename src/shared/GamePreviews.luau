@@ -14,6 +14,14 @@ export type Preview = {
 	Fps: number,
 }
 
-local previews: { [string]: Preview } = {}
+local previews: { [string]: Preview } = {
+	FireRope = {
+		Image = "rbxassetid://96774319824802",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
+}
 
 return previews

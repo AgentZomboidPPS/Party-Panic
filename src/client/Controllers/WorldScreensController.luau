@@ -302,9 +302,11 @@ local function refreshRibbon(portal: Portal)
 		local option = vote.Options[portal.index]
 		text, color = if option and option.Mystery then "🎲 RANDOM PICK!" else "🏆 WINNER!", Theme.Colors.Yellow
 	end
-	portal.ribbon.Text = text
-	portal.ribbon.BackgroundColor3 = color
-	portal.ribbon.Visible = text ~= ""
+	if portal.ribbon.Text ~= text then
+		portal.ribbon.Text = text
+		portal.ribbon.BackgroundColor3 = color
+		portal.ribbon.Visible = text ~= ""
+	end
 end
 
 local function updatePortal(portal: Portal, dt: number, now: number, reduced: boolean)
