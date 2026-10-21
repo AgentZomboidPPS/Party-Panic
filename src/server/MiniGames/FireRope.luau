@@ -19,6 +19,15 @@
 -- them; and someone standing near the front or back edge met the rope up to 0.15 s earlier or later
 -- (and higher) than the middle, so they were judged at the wrong moment. Feet now come from the
 -- character's hip height instead of where the root happened to be when the round started.
+--
+-- One pass, one verdict for everyone (the same owner words): each player's sweep waits for their
+-- own positions, so a bot's or a quick connection's verdict used to land first. The first of the
+-- last two hit by a pass was out and the round ended before the other was judged, so the other won
+-- although the rope went through their legs; and at time-up the last pass counted for whoever had
+-- been judged and not for the rest, which decided the winner by ping. A pass now settles once the
+-- slowest sweep is in: everyone it hit goes out together (a tie, split by jumps like any other) and
+-- everyone who cleared it gets the jump at once. A pass still waiting when time runs out counts for
+-- nobody.
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
@@ -52,7 +61,15 @@ local rng = Random.new()
 
 type Segment = { T0: number, A0: number, W: number }
 type Sample = { T: number, F: number, Z: number } -- feet above the deck, place across it (z)
-type Pass = { T: number, Before: number, After: number, Done: { [Player]: boolean }, Sweeps: { [Player]: any } }
+-- A bottom pass of the rope. Verdicts: "hit", "clear", or "away" (not on the deck: no jump, and the
+-- fall check deals with them).
+type Pass = {
+	T: number,
+	Before: number,
+	After: number,
+	Verdicts: { [Player]: string },
+	Sweeps: { [Player]: any },
+}
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -325,12 +342,12 @@ local function touches(z: number, y: number, legZ: number, feet: number): boolea
 end
 
 -- Sweeps the rope through one bottom pass against one player, as far as their positions have
--- arrived. Returns "hit", "clear", or nil while it still needs later positions.
+-- arrived. Returns "hit", "clear", "away", or nil while it still needs later positions.
 function FireRope:_sweep(player: Player, pass: Pass, now: number): string?
 	local samples = self.history[player]
 	local last = samples and samples[#samples]
 	if not last then
-		return if now - pass.T > 1.5 then "clear" else nil -- off the deck: the fall check deals with them
+		return if now - pass.T > 1.5 then "away" else nil -- off the deck: the fall check deals with them
 	end
 	local sweep = pass.Sweeps[player]
 	if not sweep then
@@ -357,7 +374,7 @@ function FireRope:_sweep(player: Player, pass: Pass, now: number): string?
 		local t = pass.T + theta / (if theta < 0 then pass.Before else pass.After)
 		if t + latest > last.T then
 			-- Not all here yet; give up waiting after a while (they left the deck).
-			return if now - pass.T > 1.5 then "clear" else nil
+			return if now - pass.T > 1.5 then "away" else nil
 		end
 		local z = RADIUS * math.sin(theta)
 		local y = ROPE_LOW + RADIUS * (1 - math.cos(theta))
@@ -381,44 +398,52 @@ function FireRope:_sweep(player: Player, pass: Pass, now: number): string?
 	return "clear"
 end
 
--- Judges every pass whose rope sweep has played out for each player still in.
+-- Sweeps every waiting pass as far as each player's positions have arrived, then settles the passes
+-- that everyone still in has a verdict for, oldest first (a pass never settles before the one
+-- before it).
 function FireRope:_judge(now: number)
 	local ctx = self.context
-	local index = 1
-	while self.pending[index] do
-		local pass = self.pending[index]
-		local waiting = false
+	for _, pass in self.pending do
 		for _, player in ctx:GetAlivePlayers() do
-			if pass.Done[player] then
-				continue
-			end
-			local verdict = self:_sweep(player, pass, now)
-			if verdict == nil then
-				waiting = true
-				continue
-			end
-			pass.Done[player] = true
-			if verdict == "clear" then
-				if self.history[player] and self.history[player][1] then
-					self.jumps[player] = (self.jumps[player] or 0) + 1
-					ctx:AddScore(player, 1)
-					ctx:SetScoreText(player, if self.jumps[player] == 1 then "1 jump" else `{self.jumps[player]} jumps`)
-					ctx:SetPlayerShared(player, "Jumps", self.jumps[player])
-				end
-			else
-				local _, _, root = ctx:GetCharacter(player)
-				if root then
-					Notifier.Effect("Fireworks", root.Position, { rgb(255, 120, 40), rgb(255, 210, 60) })
-					ctx:Knockback(player, Vector3.new(0, 55, 45), 1.2) -- thrown off the bridge, bots too
-				end
-				ctx:Eliminate(player, "rope")
+			if not pass.Verdicts[player] then
+				pass.Verdicts[player] = self:_sweep(player, pass, now)
 			end
 		end
-		if waiting then
-			index += 1
-		else
-			table.remove(self.pending, index)
+	end
+	while self.pending[1] do
+		local alive = ctx:GetAlivePlayers()
+		for _, player in alive do
+			if not self.pending[1].Verdicts[player] then
+				return -- still waiting for someone's positions (the slowest connection)
+			end
 		end
+		self:_settle(table.remove(self.pending, 1) :: Pass, alive)
+	end
+end
+
+-- One pass for everyone at once: whoever cleared it gets the jump, and whoever it hit goes out,
+-- all together (one server step: RoundContext.Eliminate makes them tie).
+function FireRope:_settle(pass: Pass, alive: { Player })
+	local ctx = self.context
+	local hit = {}
+	for _, player in alive do
+		local verdict = pass.Verdicts[player]
+		if verdict == "clear" then
+			self.jumps[player] = (self.jumps[player] or 0) + 1
+			ctx:AddScore(player, 1)
+			ctx:SetScoreText(player, if self.jumps[player] == 1 then "1 jump" else `{self.jumps[player]} jumps`)
+			ctx:SetPlayerShared(player, "Jumps", self.jumps[player])
+		elseif verdict == "hit" then
+			table.insert(hit, player)
+		end
+	end
+	for _, player in hit do
+		local _, _, root = ctx:GetCharacter(player)
+		if root then
+			Notifier.Effect("Fireworks", root.Position, { rgb(255, 120, 40), rgb(255, 210, 60) })
+			ctx:Knockback(player, Vector3.new(0, 55, 45), 1.2) -- thrown off the bridge, bots too
+		end
+		ctx:Eliminate(player, "rope")
 	end
 end
 
@@ -471,7 +496,8 @@ function FireRope:Start()
 		end
 		self.passes += 1
 		local before = self.segments[#self.segments - 1] or upcoming
-		table.insert(self.pending, { T = upcoming.T0, Before = before.W, After = upcoming.W, Done = {}, Sweeps = {} })
+		local pass: Pass = { T = upcoming.T0, Before = before.W, After = upcoming.W, Verdicts = {}, Sweeps = {} }
+		table.insert(self.pending, pass)
 		table.insert(self.segments, {
 			T0 = upcoming.T0 + 2 * math.pi / upcoming.W,
 			A0 = 0,
@@ -488,7 +514,8 @@ function FireRope:Start()
 	end)
 end
 
--- Survivors first, then whoever lasted longest; jumps break ties.
+-- Survivors first, then whoever lasted longest; jumps break ties (passes count only once settled
+-- for everyone, so a survivor's jumps never depend on their ping).
 function FireRope:GetResults()
 	local results = self.context:SurvivalResults()
 	for _, entry in results.Entries do
