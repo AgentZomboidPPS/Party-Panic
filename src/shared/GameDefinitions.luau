@@ -203,6 +203,19 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "RockinRaceway",
+		Name = "Rockin' Raceway",
+		Category = "Race",
+		Icon = "🐴",
+		Color = Color3.fromRGB(255, 140, 60),
+		Objective = "Race your hobby horse once round the track! Gallop, but let go before your carrots run out, or you spin out.",
+		Controls = "Hold GALLOP (W) to speed up, let go to refill carrots. HOP (Space) the blue hurdles, ride over orange carrots!",
+		Duration = 60,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
