@@ -17,6 +17,16 @@
 -- beside the lane. Phones put the MOVE stick and jump button away while you play (like Arrow
 -- Ambush's archers), so a stray thumb can't walk you off mid-game and the whole screen is for
 -- rolling; DONE sits beside the menu column and brings them back.
+--
+-- Review pass (same request): you can vote while you roll. The vote cards keep their places (a row
+-- under the top bar on phones, along the bottom on PC), so on phones DONE sits under that row, and
+-- on PC the controls sit on the left above it, DONE in the bottom-right corner past its end, and the
+-- camera eases to a framing that keeps your lane and rings clear of the cards (POSES). While the
+-- vote is on, the tip over the score says a round is coming and the sit-out switch keeps you
+-- rolling. When a round takes you, the game ends at once on this device (before the round's own
+-- camera and controls start), and while you play the camera is held on your lane every frame, so
+-- nothing else (a round's clean-up after you were knocked out) can pull it away; the move controls
+-- are put away again after each phase change for the same reason.
 
 local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
@@ -26,10 +36,10 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
+local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 local SkeeBall = require(Shared.Logic.SkeeBall)
 local Sounds = require(Shared.Sounds)
@@ -46,10 +56,17 @@ local remote: RemoteEvent
 
 -- The play camera, in the machine's frame: behind and above the player, looking down the lane. The
 -- ball waits three quarters of the way down the screen (phone toasts pop up below it) and the
--- 100 cups sit a quarter of the way down, under the top bar's pills.
-local CAMERA_EYE = Vector3.new(0, 10, -14.2)
-local CAMERA_LOOK = Vector3.new(0, 2.6, 0.9)
-local CAMERA_FOV = 54
+-- 100 cups sit a quarter of the way down, under the top bar's pills. While the vote cards show
+-- (they keep their places), phones tip the view up a little so the whole ring board sits under the
+-- cards' row (the ball goes 86% of the way down), and PC pulls it back so the ball and the lane
+-- stay above the cards along the bottom (the ball 59% down, the board's top 21%).
+type Pose = { Eye: Vector3, Look: Vector3, Fov: number }
+local POSES: { [string]: Pose } = {
+	Play = { Eye = Vector3.new(0, 10, -14.2), Look = Vector3.new(0, 2.6, 0.9), Fov = 54 },
+	VoteTouch = { Eye = Vector3.new(0, 10, -14.2), Look = Vector3.new(0, 3.6, 3), Fov = 54 },
+	VotePc = { Eye = Vector3.new(0, 12, -17), Look = Vector3.new(0, 2, -2), Fov = 58 },
+}
+local CAMERA_BLEND = 0.7 -- seconds the camera takes to swing in behind your lane, or to a new pose
 local SELF_FADE = 0.8 -- your own character fades while you play (it would hide the ball)
 local DRAG_POWER = 0.32 -- a drag this much of the screen's height is full power
 local DRAG_AIM = 0.17 -- and this much of its width sideways is full aim
@@ -62,9 +79,22 @@ local ANIMATE_RANGE = 220
 local COLUMN_WIDTH = 270
 local SCORE_HEIGHT = 86
 local ROLL_HEIGHT = 100
-local CONTROLS_HEIGHT = SCORE_HEIGHT + 12 + ROLL_HEIGHT
 local METER_WIDTH = 40
 local HINT_HEIGHT = 84
+-- PC: a lower ROLL button and tip (Space rolls too), so the column fits between the profile pill
+-- and the room the vote cards take along the bottom (VoteController: 214 tall cards, 34 over them
+-- for the YOUR VOTE tag, 18 from the bottom).
+local PC_ROLL_HEIGHT = 72
+local PC_HINT_HEIGHT = 66
+local PC_VOTE_ROOM = 18 + 34 + 214 + 10
+-- Phones: the room the vote cards take under the top bar (VoteController: 12 over the cards for
+-- the tag, 94 tall cards, then the sit-out note under them), so DONE sits below them.
+local TOUCH_VOTE_ROOM = 2 + 12 + 94 + 6 + 28 + 10
+local HINT_TEXT = {
+	Touch = "DRAG DOWN & LET GO\nor tap ROLL",
+	Pc = "DRAG DOWN & LET GO\nor press SPACE",
+	Soon = "ROUND SOON! SIT OUT\nto keep rolling",
+}
 
 local RING_COLORS = {
 	["10"] = Color3.fromRGB(156, 108, 255),
@@ -142,6 +172,10 @@ local play = {
 	Aim = 0,
 	Power = 0,
 	SavedFov = 70,
+	Pose = nil :: Pose?, -- the camera's pose (POSES), and where and when it set off toward it
+	CameraFrom = CFrame.identity,
+	FovFrom = 70,
+	CameraStart = 0,
 	MovingSince = 0,
 	Controls = nil :: any, -- the PlayerModule's move controls, while they're put away (phones)
 	Connections = {} :: { RBXScriptConnection },
@@ -149,6 +183,7 @@ local play = {
 
 local ui = {} :: { [string]: any }
 local refreshControls: () -> () -- the score, balls and ROLL button under your lane (below)
+local voteShowing = false -- the vote cards are up (the Voting phase): the camera makes room
 
 -- Sound ---------------------------------------------------------------------------------------------
 
@@ -892,6 +927,20 @@ function refreshControls()
 	ui.BestLabel.Text = if play.Best > 0 then `BEST {play.Best}` else "FIRST GAME!"
 end
 
+-- The tip over the score: how to roll (until your first ball), or, while the vote is on and you're
+-- down to play, that a round is coming (sitting out keeps you rolling).
+local function refreshHint()
+	local hint = ui.Hint
+	if not hint then
+		return
+	end
+	local showing = play.Active and not play.Over
+	local soon = showing and GameState.Get("Phase") == "Voting" and player:GetAttribute("PP_SitOut") ~= true
+	hint.Text = if soon then HINT_TEXT.Soon elseif UIKit.IsTouch() then HINT_TEXT.Touch else HINT_TEXT.Pc
+	hint.TextColor3 = if soon then Theme.Colors.Yellow else ui.HintColor
+	hint.Visible = showing and (soon or play.Rolled == 0)
+end
+
 local function roll(aim: number, power: number)
 	local machine = myMachine()
 	if not machine or not canAim() then
@@ -919,7 +968,7 @@ local function roll(aim: number, power: number)
 	if machine.Draw then
 		machine.Draw()
 	end
-	ui.Hint.Visible = false
+	refreshHint()
 	refreshControls()
 end
 
@@ -1079,6 +1128,19 @@ local function putControlsAway(away: boolean)
 	end
 end
 
+-- Puts the move controls away again a moment after a phase change, in case something else brought
+-- them back meanwhile (a round's clean-up hands back the controls it put away).
+local function holdControlsAway()
+	task.delay(0.1, function()
+		local controls = play.Controls
+		if play.Active and controls then
+			pcall(function()
+				controls:Disable()
+			end)
+		end
+	end)
+end
+
 local function exitPlay()
 	if not play.Active then
 		return
@@ -1133,7 +1195,7 @@ local function enterPlay(index: number, best: number)
 	ui.SkeeBallOver.Visible = false
 	ui.SkeeBallControls.Visible = true
 	ui.SkeeBallDone.Visible = true
-	ui.Hint.Visible = true
+	refreshHint()
 	refreshControls()
 	showWaiting(machine)
 	if not fresh then
@@ -1142,28 +1204,43 @@ local function enterPlay(index: number, best: number)
 	-- The first-join tips ("tap a card to vote") step aside while you play: on phones they share
 	-- the top of the screen with DONE (OnboardingController).
 	ui.Hud:SetAttribute("PP_TipsAside", true)
-	-- Step up to the machine, facing it, and frame the lane.
+	-- Step up to the machine (at the height you stand at), facing it, and frame the lane.
 	local _, _, root = character()
-	local stand = machine.Frame * CFrame.new(0, 3, SkeeBall.STAND_Z)
+	local stand = machine.Frame:PointToWorldSpace(Vector3.new(0, 0, SkeeBall.STAND_Z))
 	if root then
 		local model = player.Character :: Model
-		model:PivotTo(CFrame.lookAt(stand.Position, stand.Position + machine.Frame.LookVector * -1))
+		local at = Vector3.new(stand.X, root.Position.Y, stand.Z)
+		model:PivotTo(CFrame.lookAt(at, at - machine.Frame.LookVector))
 		root.AssemblyLinearVelocity = Vector3.zero
 	end
 	local camera = workspace.CurrentCamera
 	play.SavedFov = camera.FieldOfView
+	play.Pose = nil
 	camera.CameraType = Enum.CameraType.Scriptable
-	local goal =
-		CFrame.lookAt(machine.Frame:PointToWorldSpace(CAMERA_EYE), machine.Frame:PointToWorldSpace(CAMERA_LOOK))
-	TweenService:Create(
-		camera,
-		TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ CFrame = goal, FieldOfView = CAMERA_FOV }
-	):Play()
+	-- Held every frame while you play: it swings in behind your lane (and to the vote's pose and
+	-- back), then stays there whatever else touches the camera.
 	RunService:BindToRenderStep("SkeeBallCamera", Enum.RenderPriority.Camera.Value + 1, function()
-		if play.Active then
-			setFade(SELF_FADE)
+		local mine = myMachine()
+		if not mine then
+			return
 		end
+		local current = workspace.CurrentCamera
+		if current.CameraType ~= Enum.CameraType.Scriptable then
+			current.CameraType = Enum.CameraType.Scriptable
+		end
+		local pose = if not voteShowing then POSES.Play elseif UIKit.IsTouch() then POSES.VoteTouch else POSES.VotePc
+		if pose ~= play.Pose then
+			play.Pose = pose
+			play.CameraFrom = current.CFrame
+			play.FovFrom = current.FieldOfView
+			play.CameraStart = os.clock()
+		end
+		local goal = CFrame.lookAt(mine.Frame:PointToWorldSpace(pose.Eye), mine.Frame:PointToWorldSpace(pose.Look))
+		local k = math.clamp((os.clock() - play.CameraStart) / CAMERA_BLEND, 0, 1)
+		local eased = 1 - (1 - k) * (1 - k)
+		current.CFrame = play.CameraFrom:Lerp(goal, eased)
+		current.FieldOfView = play.FovFrom + (pose.Fov - play.FovFrom) * eased
+		setFade(SELF_FADE)
 	end)
 	-- Space, Enter or a controller's A press ROLL (and don't jump while you play).
 	pcall(function()
@@ -1234,12 +1311,16 @@ local function buildUi(hud: Instance)
 	-- Low on the left, beside the lane: what to do (until the first roll), your score and balls,
 	-- the big ROLL button, and the power meter between them and the lane. One scaled holder, so it
 	-- keeps its shape on every screen. (On phones that's the MOVE stick's corner: the stick is put
-	-- away while you play.)
+	-- away while you play.) On PC the holder keeps the vote cards' room free under the controls.
+	local rollHeight = if touch then ROLL_HEIGHT else PC_ROLL_HEIGHT
+	local hintHeight = if touch then HINT_HEIGHT else PC_HINT_HEIGHT
+	local below = if touch then 0 else PC_VOTE_ROOM
+	local controlsHeight = SCORE_HEIGHT + 12 + rollHeight
 	local holder = UIKit.new("Frame", {
 		Name = "SkeeBallControls",
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, if touch then 12 else 24, 1, if touch then -10 else -24),
-		Size = UDim2.fromOffset(COLUMN_WIDTH + 12 + METER_WIDTH, HINT_HEIGHT + CONTROLS_HEIGHT),
+		Position = if touch then UDim2.new(0, 12, 1, -10) else UDim2.new(0, 24, 1, 0),
+		Size = UDim2.fromOffset(COLUMN_WIDTH + 12 + METER_WIDTH, hintHeight + controlsHeight + below),
 		BackgroundTransparency = 1,
 		Visible = false,
 		Parent = hud,
@@ -1249,7 +1330,7 @@ local function buildUi(hud: Instance)
 	local card = UIKit.Panel({
 		Name = "ScoreCard",
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 0, 1, -(ROLL_HEIGHT + 12)),
+		Position = UDim2.new(0, 0, 1, -(rollHeight + 12 + below)),
 		Size = UDim2.fromOffset(COLUMN_WIDTH, SCORE_HEIGHT),
 		CornerRadius = 22,
 		Parent = holder,
@@ -1288,10 +1369,10 @@ local function buildUi(hud: Instance)
 	ui.Roll = UIKit.Button({
 		Name = "Roll",
 		Text = "ROLL",
-		TextSize = 40,
+		TextSize = if touch then 40 else 34,
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.fromScale(0, 1),
-		Size = UDim2.fromOffset(COLUMN_WIDTH, ROLL_HEIGHT),
+		Position = UDim2.new(0, 0, 1, -below),
+		Size = UDim2.fromOffset(COLUMN_WIDTH, rollHeight),
 		CornerRadius = 30,
 		Parent = holder,
 	}, pressRoll, Theme.Colors.Green, Color3.fromRGB(40, 160, 90))
@@ -1300,8 +1381,8 @@ local function buildUi(hud: Instance)
 	local meter = UIKit.new("Frame", {
 		Name = "Meter",
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.fromScale(1, 1),
-		Size = UDim2.fromOffset(METER_WIDTH, CONTROLS_HEIGHT),
+		Position = UDim2.new(1, 0, 1, -below),
+		Size = UDim2.fromOffset(METER_WIDTH, controlsHeight),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		Visible = false,
 		Parent = holder,
@@ -1320,32 +1401,36 @@ local function buildUi(hud: Instance)
 		},
 	})
 
-	-- What to do, on top of the column until the first roll.
+	-- What to do, on top of the column until the first roll (and that a round is coming, while the
+	-- vote is on: refreshHint).
 	local hint = UIKit.Label({
 		Name = "Hint",
-		Text = if touch then "DRAG DOWN & LET GO\nor tap ROLL" else "DRAG DOWN & LET GO\nor press SPACE",
+		Text = if touch then HINT_TEXT.Touch else HINT_TEXT.Pc,
 		Font = Theme.Fonts.Display,
-		TextSize = 26,
+		TextSize = if touch then 26 else 24,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Bottom,
 		Position = UDim2.fromOffset(4, 0),
-		Size = UDim2.fromOffset(COLUMN_WIDTH + 12 + METER_WIDTH - 4, HINT_HEIGHT - 10),
+		Size = UDim2.fromOffset(COLUMN_WIDTH + 12 + METER_WIDTH - 4, hintHeight - 10),
 		Visible = false,
 		Parent = holder,
 		Children = { UIKit.TextStroke(0.1) },
 	})
 	hint:SetAttribute("PP_Lines", 2)
 	ui.Hint = hint
+	ui.HintColor = hint.TextColor3
 
-	-- DONE: on phones top right, beside the menu column (one scaled holder with room for the
-	-- column, so the gap stays the same on every screen); on PC bottom right.
+	-- DONE: on phones top right, beside the menu column and under the vote cards' row (one scaled
+	-- holder with room for the column and the row, so the gaps stay the same on every screen); on
+	-- PC bottom right, past the end of the vote cards.
+	local doneWidth = if touch then 150 else 120
 	local doneHolder = UIKit.new("Frame", {
 		Name = "SkeeBallDone",
 		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(1, 1),
-		Position = if touch then UDim2.new(1, -8, 0, 6) else UDim2.new(1, -24, 1, -24),
+		Position = if touch then UDim2.new(1, -8, 0, 0) else UDim2.new(1, -24, 1, -24),
 		Size = UDim2.fromOffset(
-			if touch then 150 + 12 + Theme.Touch.Target + 20 else 150,
-			if touch then Theme.Touch.Target else 64
+			if touch then doneWidth + 12 + Theme.Touch.Target + 20 else doneWidth,
+			if touch then TOUCH_VOTE_ROOM + Theme.Touch.Target else 64
 		),
 		BackgroundTransparency = 1,
 		Visible = false,
@@ -1356,13 +1441,15 @@ local function buildUi(hud: Instance)
 		Name = "Done",
 		Text = "DONE",
 		TextSize = 30,
-		Size = UDim2.fromOffset(150, if touch then Theme.Touch.Target else 64),
+		Position = UDim2.fromOffset(0, if touch then TOUCH_VOTE_ROOM else 0),
+		Size = UDim2.fromOffset(doneWidth, if touch then Theme.Touch.Target else 64),
 		CornerRadius = 22,
 		Parent = doneHolder,
 	}, leave, Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
 	ui.SkeeBallDone = doneHolder
 
-	-- The score pop for each ball, over the machine's rings.
+	-- The score pop for each ball, over the machine's rings (on phones a little lower, under the
+	-- vote cards' row).
 	local pop = UIKit.Label({
 		Name = "SkeeBallPop",
 		Text = "",
@@ -1370,7 +1457,7 @@ local function buildUi(hud: Instance)
 		TextSize = 70,
 		TextWrapped = false,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.28),
+		Position = UDim2.fromScale(0.5, if touch then 0.34 else 0.28),
 		Size = UDim2.fromOffset(360, 110),
 		Visible = false,
 		Parent = hud,
@@ -1379,11 +1466,12 @@ local function buildUi(hud: Instance)
 	UIKit.AutoScale(pop)
 	ui.Pop = pop
 
-	-- The end of a game: final score, best, today's place, PLAY AGAIN / DONE.
+	-- The end of a game: final score, best, today's place, PLAY AGAIN / DONE (on PC clear of the
+	-- vote cards along the bottom).
 	local over = UIKit.new("Frame", {
 		Name = "SkeeBallOver",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.48),
+		Position = UDim2.fromScale(0.5, if touch then 0.48 else 0.42),
 		Size = UDim2.fromOffset(440, 260),
 		BackgroundTransparency = 1,
 		Visible = false,
@@ -1581,6 +1669,23 @@ function SkeeBallController.Start(context)
 	end)
 
 	remote.OnClientEvent:Connect(onEvent)
+
+	-- A round taking you ends your game here and now, so the round's own camera and controls start
+	-- from the lobby's (the server ends it too, and frees the machine).
+	player:GetAttributeChangedSignal("PP_InRound"):Connect(function()
+		if player:GetAttribute("PP_InRound") == true and play.Active then
+			exitPlay()
+		end
+	end)
+	voteShowing = GameState.Get("Phase") == "Voting"
+	GameState.Changed("Phase", function(phase)
+		voteShowing = phase == "Voting"
+		refreshHint()
+		if play.Active then
+			holdControlsAway()
+		end
+	end)
+	player:GetAttributeChangedSignal("PP_SitOut"):Connect(refreshHint)
 
 	local lastLights, lastScreens = 0, 0
 	RunService.RenderStepped:Connect(function()

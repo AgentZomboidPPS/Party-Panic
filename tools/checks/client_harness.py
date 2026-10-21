@@ -516,8 +516,9 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
 end
 
 -- 3b. Skee-Ball in the lobby's arcade (SkeeBallController): the player takes machine 1, charges the
--- ROLL meter, rolls a ball (its score pops), finishes a game (PLAY AGAIN / DONE) and leaves. A
--- stand-in machine, board and ball when the place's lobby is older than this client.
+-- ROLL meter, rolls a ball (its score pops), sees the vote open ("SkeeBall voting"), finishes a
+-- game (PLAY AGAIN / DONE) and leaves; then starts again and is taken into a round. A stand-in
+-- machine, board and ball when the place's lobby is older than this client.
 local skeeChecks = {}
 do
 	local CollectionService = game:GetService("CollectionService")
@@ -611,6 +612,30 @@ do
 	machineModel:SetAttribute("SkeeScore", 40)
 	machineModel:SetAttribute("SkeeBalls", 1)
 	task.wait(0.6)
+	-- The vote opens while you play: the cards keep their places, the play screen keeps clear of
+	-- them, and the tip over the score says a round is coming.
+	local phaseBefore, endsBefore = GameState.Get("Phase"), GameState.Get("PhaseEndsAt")
+	local voteOptions = {}
+	for _, def in GameDefinitions.List do
+		if #voteOptions < 3 then
+			table.insert(voteOptions, { Id = def.Id, Mystery = false })
+		end
+	end
+	table.insert(voteOptions, { Id = voteOptions[1].Id, Mystery = true })
+	GameState.SetJSON("VoteOptions", voteOptions)
+	GameState.SetJSON("VoteCounts", { 1, 0, 2, 1 })
+	GameState.Set("Phase", "Voting")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 12)
+	task.wait(1.2)
+	__ui["SkeeBall voting"] = __dumpGui(__playerGui, "SkeeBall voting")
+	local skeeHud = __playerGui:FindFirstChild("PartyPanicHUD")
+	local skeeHolder = skeeHud and skeeHud:FindFirstChild("SkeeBallControls")
+	local skeeTip = skeeHolder and skeeHolder:FindFirstChild("Hint")
+	skeeChecks.votingTip = if skeeTip and skeeTip.Visible then skeeTip.Text else "(hidden)"
+	GameState.Set("Phase", phaseBefore)
+	GameState.Set("PhaseEndsAt", endsBefore or 0)
+	task.wait(0.3)
+	skeeChecks.tipAfterVote = if skeeTip and skeeTip.Visible then skeeTip.Text else "(hidden)"
 	machineModel:SetAttribute("SkeeState", "Over")
 	__fire("SkeeBall", "Over", 1, 1, 310, 240, true, 2)
 	task.wait(1)
@@ -620,6 +645,19 @@ do
 	task.wait(0.5)
 	local controls = __playerGui:FindFirstChild("PartyPanicHUD") and __playerGui.PartyPanicHUD:FindFirstChild("SkeeBallControls")
 	skeeChecks.closed = controls ~= nil and not controls.Visible
+	-- A round taking you ends the game on this device at once and hands the camera back, before
+	-- the server's word comes.
+	machineModel:SetAttribute("SkeeState", "Playing")
+	__fire("SkeeBall", "Start", 1, 310)
+	task.wait(1)
+	local skeeCamera = workspace.CurrentCamera
+	skeeChecks.cameraPlaying = skeeCamera.CameraType.Name
+	skeeChecks.reopened = controls ~= nil and controls.Visible
+	__player:SetAttribute("PP_InRound", true)
+	task.wait(0.3)
+	skeeChecks.roundClosed = controls ~= nil and not controls.Visible
+	skeeChecks.cameraAfterRound = skeeCamera.CameraType.Name
+	__player:SetAttribute("PP_InRound", nil)
 	for key, value in { SkeeUser = 0, SkeeName = "", SkeeScore = 0, SkeeBalls = 0, SkeeState = "Idle", SkeeBest = 0 } do
 		machineModel:SetAttribute(key, value)
 	end
