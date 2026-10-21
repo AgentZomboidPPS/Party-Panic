@@ -8,6 +8,15 @@ return function(h)
 	local function wedge(m: Model, name: string, size: Vector3, cframe: CFrame)
 		h.Build.Wedge({ Name = name, Size = size, CFrame = cframe, Parent = m })
 	end
+	-- Every fallback ends on a level pivot: MeshLibrary measures a prop's height along its pivot's
+	-- axes, and a pivot that took after a turned part (an upright cylinder is a turned one) measured
+	-- the rafts 7 times too small and the sea stacks 2.5 times too big.
+	local function level(parts: (m: Model) -> ()): (m: Model) -> ()
+		return function(m: Model)
+			parts(m)
+			m.WorldPivot = CFrame.new()
+		end
+	end
 	return {
 		-- A cartoon great white, snout at -Z. The game floats it with y = 2.6 at the waterline.
 		SharkBaitShark = {
@@ -26,7 +35,7 @@ return function(h)
 				Gills = h.rgb(70, 85, 110),
 			},
 			Materials = { Eyes = Enum.Material.Glass, EyeShine = Enum.Material.Neon },
-			Fallback = function(m)
+			Fallback = level(function(m)
 				h.blob(m, "Body", Vector3.new(3.2, 3.3, 11), Vector3.new(0, 1.95, -0.4))
 				h.blob(m, "Belly", Vector3.new(2.7, 1.7, 9), Vector3.new(0, 1.15, -0.6))
 				wedge(m, "Body", Vector3.new(0.4, 2.7, 2.6), CFrame.new(0, 4.6, 0.6))
@@ -40,7 +49,7 @@ return function(h)
 					h.ball(m, "Eyes", 0.5, Vector3.new(side * 1.3, 2.5, -3.4))
 					h.blob(m, "Body", Vector3.new(2.6, 0.25, 1.2), Vector3.new(side * 2.0, 1.0, -1.3))
 				end
-			end,
+			end),
 		},
 		-- A round log raft: deck radius 7 (the game scales it per raft), the deck's top at y = 2.
 		SharkBaitRaft = {
@@ -60,14 +69,14 @@ return function(h)
 				Hoops = Enum.Material.Metal,
 				Rope = Enum.Material.Fabric,
 			},
-			Fallback = function(m)
+			Fallback = level(function(m)
 				h.pillar(m, "Deck", 14, 0.4, Vector3.new(0, 1.8, 0))
 				h.pillar(m, "Beams", 12, 0.3, Vector3.new(0, 1.45, 0))
 				for index = 0, 7 do
 					local angle = index / 8 * math.pi * 2
 					h.pillar(m, "Barrels", 1.7, 1.3, Vector3.new(math.cos(angle) * 5, 0.65, math.sin(angle) * 5))
 				end
-			end,
+			end),
 		},
 		SharkBaitCoin = {
 			Height = 2,
@@ -75,10 +84,10 @@ return function(h)
 			Shadow = false,
 			Palette = { Coin = h.rgb(255, 205, 50), Rim = h.rgb(230, 165, 30) },
 			Materials = { Coin = Enum.Material.Metal, Rim = Enum.Material.Metal },
-			Fallback = function(m)
+			Fallback = level(function(m)
 				local coin = h.roller(m, "Coin", 2, 0.32, Vector3.new(0, 1, 0))
 				coin.CFrame = CFrame.new(0, 1, 0) * CFrame.Angles(0, math.rad(90), 0)
-			end,
+			end),
 		},
 		SharkBaitPearl = {
 			Height = 1.6,
@@ -89,11 +98,11 @@ return function(h)
 				ShellInside = h.rgb(255, 225, 230),
 				Pearl = h.rgb(250, 245, 255),
 			},
-			Fallback = function(m)
+			Fallback = level(function(m)
 				h.blob(m, "Shell", Vector3.new(2.2, 0.5, 2), Vector3.new(0, 0.25, 0))
 				h.ball(m, "Pearl", 0.9, Vector3.new(0, 0.85, 0))
 				h.blob(m, "Shell", Vector3.new(2.2, 1.4, 0.4), Vector3.new(0, 0.9, 0.8))
-			end,
+			end),
 			PostProcess = function(model: Model)
 				local pearl = model:FindFirstChild("Pearl", true)
 				if pearl and pearl:IsA("BasePart") then
@@ -111,12 +120,12 @@ return function(h)
 				Lock = h.rgb(90, 90, 100),
 			},
 			Materials = { Wood = Enum.Material.WoodPlanks, Trim = Enum.Material.Metal, Lock = Enum.Material.Metal },
-			Fallback = function(m)
+			Fallback = level(function(m)
 				h.rounded(m, "Wood", Vector3.new(2.8, 1.5, 1.9), 0.15, Vector3.new(0, 0.75, 0))
 				h.blob(m, "Gold", Vector3.new(2.4, 0.6, 1.6), Vector3.new(0, 1.6, 0))
 				h.capsule(m, "Wood", 2.8, 0.9, CFrame.new(0, 2.0, 0.15) * CFrame.Angles(0, math.rad(90), 0))
 				h.block(m, "Lock", Vector3.new(0.4, 0.5, 0.15), Vector3.new(0, 1.4, -0.98))
-			end,
+			end),
 		},
 		-- An inflatable swim ring, worn by swimmers while they're in the water.
 		SharkBaitFloatie = {
@@ -124,7 +133,7 @@ return function(h)
 			AssetId = 0,
 			Shadow = false,
 			Palette = { Ring = h.rgb(255, 120, 60), Stripes = h.rgb(255, 255, 255) },
-			Fallback = function(m)
+			Fallback = level(function(m)
 				for index = 0, 7 do
 					local angle = index / 8 * math.pi * 2
 					h.ball(
@@ -134,7 +143,7 @@ return function(h)
 						Vector3.new(math.cos(angle) * 1.3, 0.5, math.sin(angle) * 1.3)
 					)
 				end
-			end,
+			end),
 		},
 		-- The float line round the lagoon (radius 44), centered on the arena.
 		SharkBaitFloatLine = {
@@ -143,7 +152,7 @@ return function(h)
 			Shadow = false,
 			Palette = { FloatsA = h.rgb(255, 210, 60), FloatsB = h.rgb(240, 70, 70), Rope = h.rgb(230, 225, 210) },
 			Materials = { Rope = Enum.Material.Fabric },
-			Fallback = function(m)
+			Fallback = level(function(m)
 				for index = 0, 59 do
 					local angle = index / 60 * math.pi * 2
 					h.ball(
@@ -153,7 +162,7 @@ return function(h)
 						Vector3.new(math.cos(angle) * 44, 0.6, math.sin(angle) * 44)
 					)
 				end
-			end,
+			end),
 		},
 		SharkBaitBuoy = {
 			Height = 7,
@@ -167,13 +176,13 @@ return function(h)
 				FlagMark = h.rgb(25, 25, 30),
 			},
 			Materials = { Cage = Enum.Material.Metal, Lamp = Enum.Material.Neon, Flag = Enum.Material.Fabric },
-			Fallback = function(m)
+			Fallback = level(function(m)
 				h.pillar(m, "Float", 3, 1.6, Vector3.new(0, 0.8, 0))
 				h.pillar(m, "Stripe", 3.05, 0.5, Vector3.new(0, 1.3, 0))
 				h.pillar(m, "Cage", 0.4, 4, Vector3.new(0, 3.6, 0))
 				h.ball(m, "Lamp", 0.8, Vector3.new(0, 5.8, 0))
 				h.block(m, "Flag", Vector3.new(0.1, 0.8, 1.2), Vector3.new(0, 6.5, 0.6))
-			end,
+			end),
 		},
 		-- A seagull gliding, wings spread (it circles high over the lagoon).
 		SharkBaitGull = {
@@ -187,12 +196,12 @@ return function(h)
 				Beak = h.rgb(255, 170, 40),
 				Eyes = h.rgb(20, 20, 30),
 			},
-			Fallback = function(m)
+			Fallback = level(function(m)
 				h.blob(m, "Body", Vector3.new(0.6, 0.6, 1.6), Vector3.new(0, 0.5, 0))
 				h.block(m, "Wings", Vector3.new(3.4, 0.08, 0.6), Vector3.new(0, 0.7, 0.1))
 				h.block(m, "WingTips", Vector3.new(4.2, 0.07, 0.4), Vector3.new(0, 0.72, 0.15))
 				h.block(m, "Beak", Vector3.new(0.15, 0.15, 0.4), Vector3.new(0, 0.55, -0.95))
-			end,
+			end),
 		},
 		-- Under the water: coral heads, kelp and starfish on the lagoon floor.
 		SharkBaitCoral = {
@@ -206,20 +215,20 @@ return function(h)
 				Fan = h.rgb(255, 90, 90),
 			},
 			Materials = { Rock = Enum.Material.Slate },
-			Fallback = function(m)
+			Fallback = level(function(m)
 				h.blob(m, "Rock", Vector3.new(8, 2, 6), Vector3.new(0, 1, 0))
 				h.blob(m, "CoralA", Vector3.new(2.4, 3.6, 2.4), Vector3.new(-1.8, 3.4, 0))
 				h.ball(m, "CoralB", 2.6, Vector3.new(1.6, 2.6, 0.6))
 				h.blob(m, "CoralC", Vector3.new(1.4, 4, 1.4), Vector3.new(0.4, 3.9, -1.4))
 				h.block(m, "Fan", Vector3.new(2.4, 2.6, 0.15), Vector3.new(-0.2, 3.2, 1.6))
-			end,
+			end),
 		},
 		SharkBaitKelp = {
 			Height = 12,
 			AssetId = 0,
 			Shadow = false,
 			Palette = { Kelp = h.rgb(60, 160, 90), Bulbs = h.rgb(150, 190, 70) },
-			Fallback = function(m)
+			Fallback = level(function(m)
 				for index = 0, 3 do
 					local angle = index / 4 * math.pi * 2
 					local height = 9 + index
@@ -231,14 +240,14 @@ return function(h)
 					)
 					h.ball(m, "Bulbs", 0.5, Vector3.new(math.cos(angle) * 0.9, height * 0.6, math.sin(angle) * 0.9))
 				end
-			end,
+			end),
 		},
 		SharkBaitStarfish = {
 			Height = 0.5,
 			AssetId = 0,
 			Shadow = false,
 			Palette = { Star = h.rgb(255, 130, 60), Dots = h.rgb(255, 220, 170) },
-			Fallback = function(m)
+			Fallback = level(function(m)
 				for index = 0, 4 do
 					local angle = index / 5 * math.pi * 2
 					local at = Vector3.new(math.sin(angle) * 0.65, 0.22, math.cos(angle) * 0.65)
@@ -246,7 +255,7 @@ return function(h)
 					arm.CFrame = CFrame.new(at) * CFrame.Angles(0, angle, 0)
 				end
 				h.ball(m, "Dots", 0.5, Vector3.new(0, 0.25, 0))
-			end,
+			end),
 		},
 		-- A low sand bar for the scenery; its base sits 2 studs under the water.
 		SharkBaitSandBar = {
@@ -255,10 +264,10 @@ return function(h)
 			Shadow = false,
 			Palette = { Sand = h.rgb(240, 220, 170), WetSand = h.rgb(200, 175, 130), Shells = h.rgb(255, 235, 220) },
 			Materials = { Sand = Enum.Material.Sand, WetSand = Enum.Material.Sand },
-			Fallback = function(m)
+			Fallback = level(function(m)
 				h.blob(m, "WetSand", Vector3.new(40, 4, 24), Vector3.new(0, 0.8, 0))
 				h.blob(m, "Sand", Vector3.new(34, 4.4, 19), Vector3.new(0, 0.8, 0))
-			end,
+			end),
 		},
 		-- A lifeguard tower on stilts, its warning sign facing -Z.
 		SharkBaitHut = {
@@ -281,7 +290,7 @@ return function(h)
 				Ladder = Enum.Material.Wood,
 				Flag = Enum.Material.Fabric,
 			},
-			Fallback = function(m)
+			Fallback = level(function(m)
 				for _, x in { -2.6, 2.6 } do
 					for _, z in { -2.6, 2.6 } do
 						h.pillar(m, "Stilts", 0.5, 9, Vector3.new(x, 4.5, z))
@@ -292,7 +301,7 @@ return function(h)
 				h.pillar(m, "Stilts", 0.25, 2.6, Vector3.new(0, 16.6, 0))
 				h.block(m, "Flag", Vector3.new(0.1, 1, 1.6), Vector3.new(0, 17.4, 0.8))
 				h.block(m, "Sign", Vector3.new(2.6, 2.6, 0.2), Vector3.new(0, 11.4, -3.3))
-			end,
+			end),
 		},
 		SharkBaitLighthouse = {
 			Height = 46,
@@ -314,7 +323,7 @@ return function(h)
 				Lantern = Enum.Material.Neon,
 				Door = Enum.Material.Wood,
 			},
-			Fallback = function(m)
+			Fallback = level(function(m)
 				h.blob(m, "Rock", Vector3.new(22, 10, 20), Vector3.new(0, 4, 0))
 				h.pillar(m, "Tower", 6, 26, Vector3.new(0, 21, 0))
 				for index = 0, 2 do
@@ -322,7 +331,7 @@ return function(h)
 				end
 				h.pillar(m, "Lantern", 4, 4, Vector3.new(0, 36, 0))
 				h.blob(m, "Roof", Vector3.new(5.4, 5, 5.4), Vector3.new(0, 40.5, 0))
-			end,
+			end),
 		},
 		SharkBaitShipwreck = {
 			Height = 34,
@@ -345,7 +354,7 @@ return function(h)
 				Flag = Enum.Material.Fabric,
 				Rope = Enum.Material.Fabric,
 			},
-			Fallback = function(m)
+			Fallback = level(function(m)
 				local tilt = CFrame.Angles(math.rad(-15), 0, 0)
 				local hull = h.rounded(m, "Hull", Vector3.new(13, 9, 46), 3, Vector3.new(0, 6, 0))
 				hull.CFrame = CFrame.new(0, 7, 0) * tilt
@@ -353,7 +362,7 @@ return function(h)
 				mast.CFrame = CFrame.new(0, 20, -2) * tilt * CFrame.Angles(0, 0, math.rad(90))
 				h.block(m, "Sail", Vector3.new(10, 8, 0.2), Vector3.new(0, 24, -1))
 				h.block(m, "Flag", Vector3.new(0.1, 2.2, 3.2), Vector3.new(0, 32.5, -1))
-			end,
+			end),
 		},
 		-- A tall limestone sea stack with jungle on top; its waterline is about 4 studs up.
 		SharkBaitSeaStack = {
@@ -362,12 +371,12 @@ return function(h)
 			Shadow = false,
 			Palette = { Rock = h.rgb(170, 160, 140), Jungle = h.rgb(70, 150, 70), Foam = h.rgb(240, 250, 255) },
 			Materials = { Rock = Enum.Material.Limestone, Jungle = Enum.Material.Grass },
-			Fallback = function(m)
+			Fallback = level(function(m)
 				h.blob(m, "Rock", Vector3.new(18, 30, 16), Vector3.new(0, 15, 0))
 				h.blob(m, "Rock", Vector3.new(13, 24, 12), Vector3.new(0, 32, 0))
 				h.blob(m, "Jungle", Vector3.new(15, 6, 14), Vector3.new(0, 45, 0))
 				h.pillar(m, "Foam", 19, 0.4, Vector3.new(0, 4, 0))
-			end,
+			end),
 		},
 	}
 end

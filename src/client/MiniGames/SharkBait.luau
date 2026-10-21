@@ -482,7 +482,7 @@ function SharkBait.Start(api)
 	local rafts: { RaftView } = {}
 	for index, entry in layout.Rafts do
 		local center = Vector3.new(entry.X, deckY, entry.Z)
-		local foam = disc("RaftFoam", entry.R * 2 + 1.4, Color3.fromRGB(235, 250, 255), 0.45)
+		local foam = disc("RaftFoam", entry.R * 2 + 1.4, Color3.fromRGB(235, 250, 255), 0.62)
 		foam.CFrame = flatAt(Vector3.new(center.X, waterY + 0.12, center.Z))
 		local warning = Instance.new("BillboardGui")
 		warning.Name = "RaftWarning"
@@ -1300,7 +1300,8 @@ function SharkBait.Start(api)
 				raft.Model:PivotTo(raftPose(raft, now))
 			end
 			local safe = raft.State == READY and now < raft.SafeUntil
-			raft.Foam.Transparency = if raft.State == FLIPPED then 0.15 else 0.45
+			-- Foam: a faint rim round a raft, churning white where one just went under.
+			raft.Foam.Transparency = if raft.State == FLIPPED then 0.3 + 0.12 * math.sin(clock * 7) else 0.62
 			raft.Foam.Color = if safe then Color3.fromRGB(150, 255, 210) else Color3.fromRGB(235, 250, 255)
 			if raft.State == WOBBLING then
 				local pulse = 1 + 0.18 * math.sin(clock * 18)
