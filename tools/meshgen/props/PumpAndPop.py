@@ -14,7 +14,8 @@ import math
 
 import numpy as np
 
-from generate_meshes import Mesh, capsule, cylinder, icosphere, lathe, merge, rounded_box, sphere, torus, tube
+from generate_meshes import (Mesh, capsule, cylinder, extrude, icosphere, lathe, merge, rounded_box, sphere, star, taper, torus,
+                             tube)
 
 # ---------------------------------------------------------------------------- the balloon
 
@@ -266,3 +267,529 @@ COLORS = {
     "Needle": (235, 40, 50), "PumpBase": (60, 55, 75), "Barrel": (255, 80, 95), "Chrome": (215, 220, 235),
     "Hose": (60, 55, 75), "Rod": (225, 230, 240), "Handle": (250, 250, 255), "Grips": (45, 40, 55),
 }
+
+
+# ============================================================================ the carnival
+# The fairground around the stage: a bandshell with telescoping striped arches and chasing bulbs
+# behind the balloons, a round striped stage deck, team grandstands with peg-doll fans, big-top
+# tents, game booths, candy-striped light poles strung with bunting and a Ferris wheel on the
+# skyline. Bulbs come in two pieces (BulbsA / BulbsB) so the client can chase them.
+
+def sheet(points: np.ndarray, normals: np.ndarray, thickness: float) -> Mesh:
+    """A closed slab around a curved grid of points (rows x cols x 3) with outward unit normals:
+    front faces along the normals, back faces against them and walls round the edges, all facing
+    outward. Walls get their own vertices so the slab keeps crisp edges."""
+    rows, cols = points.shape[0], points.shape[1]
+    top = (points + normals * thickness / 2).reshape(-1, 3)
+    bottom = (points - normals * thickness / 2).reshape(-1, 3)
+    allv = np.vstack([top, bottom])
+    count = rows * cols
+    faces = []
+
+    def oriented(tri, ref):
+        a, b, c = allv[tri[0]], allv[tri[1]], allv[tri[2]]
+        return tri if np.dot(np.cross(b - a, c - a), ref) >= 0 else (tri[0], tri[2], tri[1])
+
+    for i in range(rows - 1):
+        for j in range(cols - 1):
+            a, b, c, d = i * cols + j, (i + 1) * cols + j, i * cols + j + 1, (i + 1) * cols + j + 1
+            ref = normals[i, j] + normals[i + 1, j + 1] + normals[i + 1, j] + normals[i, j + 1]
+            for tri in ((a, b, d), (a, d, c)):
+                faces.append(oriented(tri, ref))
+                faces.append(oriented(tuple(t + count for t in tri), -ref))
+    # The rim: each wall quad faces away from the grid's inside.
+    edges = []
+    for i in range(rows - 1):
+        edges.append(((i, 0), (i + 1, 0), (i, 1)))
+        edges.append(((i, cols - 1), (i + 1, cols - 1), (i, cols - 2)))
+    for j in range(cols - 1):
+        edges.append(((0, j), (0, j + 1), (1, j)))
+        edges.append(((rows - 1, j), (rows - 1, j + 1), (rows - 2, j)))
+    wall_v = []
+    for (p, q, inner) in edges:
+        p0, q0 = points[p], points[q]
+        ref = (p0 + q0) / 2 - points[inner]
+        n0, n1 = normals[p], normals[q]
+        quad = np.array([p0 + n0 * thickness / 2, q0 + n1 * thickness / 2, q0 - n1 * thickness / 2, p0 - n0 * thickness / 2])
+        base = len(allv) + len(wall_v)
+        wall_v.extend(quad)
+        for tri in ((0, 1, 2), (0, 2, 3)):
+            a, b, c = quad[tri[0]], quad[tri[1]], quad[tri[2]]
+            normal = np.cross(b - a, c - a)
+            if np.linalg.norm(normal) < 1e-9:
+                continue
+            t = tri if np.dot(normal, ref) >= 0 else (tri[0], tri[2], tri[1])
+            faces.append(tuple(base + k for k in t))
+    v = np.vstack([allv, np.array(wall_v)]) if wall_v else allv
+    return Mesh(v, faces)
+
+
+def unit(v: np.ndarray) -> np.ndarray:
+    return v / (np.linalg.norm(v, axis=-1, keepdims=True) + 1e-12)
+
+
+def revolve_patch(profile: list[tuple[float, float]], a0: float, a1: float, steps: int, thickness: float) -> Mesh:
+    """A slab of a surface of revolution between angles a0..a1 (radians, 0 = +X, turning towards
+    +Z), from a (radius, y) profile running upward; its front faces point away from the axis."""
+    pts, nrm = [], []
+    prof = np.array(profile, dtype=float)
+    for k in range(steps + 1):
+        a = a0 + (a1 - a0) * k / steps
+        radial = np.array([math.cos(a), 0.0, math.sin(a)])
+        row_p, row_n = [], []
+        for i, (r, y) in enumerate(prof):
+            lo, hi = prof[max(i - 1, 0)], prof[min(i + 1, len(prof) - 1)]
+            dr, dy = hi[0] - lo[0], hi[1] - lo[1]
+            row_p.append(radial * r + np.array([0.0, y, 0.0]))
+            row_n.append(radial * dy - np.array([0.0, 1.0, 0.0]) * dr)
+        pts.append(row_p)
+        nrm.append(row_n)
+    return sheet(np.array(pts), unit(np.array(nrm)), thickness)
+
+
+def bulb_ring(points: list[np.ndarray], radius: float) -> tuple[Mesh, Mesh]:
+    """Bulbs at the given points, alternating between the A and B pieces."""
+    a = [sphere(radius, 5, 8).translate(*p) for p in points[0::2]]
+    b = [sphere(radius, 5, 8).translate(*p) for p in points[1::2]]
+    return merge(*a), merge(*b)
+
+
+def pennant(width: float, height: float, depth: float = 0.08) -> Mesh:
+    """A triangle flag hanging down from y = 0, in the XY plane."""
+    return extrude([(-width / 2, 0.0), (width / 2, 0.0), (0.0, -height)], depth)
+
+
+# ---------------------------------------------------------------------------- the bandshell
+
+SHELL_AX, SHELL_AY = 50.0, 42.0  # the front arch's half width and height
+SHELL_BANDS = 5
+SHELL_DEPTH = 4.0  # each band steps this far back
+
+
+def arch_point(scale: float, z: float, t: float) -> np.ndarray:
+    """A point on a half-ellipse arch (t = 0 at +X on the ground, pi at -X)."""
+    return np.array([SHELL_AX * scale * math.cos(t), SHELL_AY * scale * math.sin(t), z])
+
+
+def pump_bandshell():
+    """The stage's backdrop: a concert bandshell of telescoping half-arches, violet and cream, each
+    step trimmed in gold with chasing bulbs, a sunburst back wall, a crest star on top, a cream
+    outer shell and four stage spotlights. Open side faces -Z (towards the players)."""
+    ts = np.linspace(0.0, math.pi, 41)
+    facing = np.array([0.0, 0.0, -1.0])
+    bands_a, bands_b, steps, bulbs = [], [], [], []
+    scale = 1.0
+    for k in range(SHELL_BANDS):
+        z0, z1 = k * SHELL_DEPTH, (k + 1) * SHELL_DEPTH
+        s0, s1 = scale, scale - 0.035
+        pts = np.array([[arch_point(s0, z0, t), arch_point(s1, z1, t)] for t in ts])
+        # The inner face (towards the stage) points at the arch's middle and forward (-Z).
+        nrm = []
+        for t in ts:
+            inward = unit(-np.array([math.cos(t) / SHELL_AX, math.sin(t) / SHELL_AY, 0.0]))
+            n = unit(inward * SHELL_DEPTH + facing * (0.035 * (SHELL_AX + SHELL_AY) / 2))
+            nrm.append([n, n])
+        band = sheet(pts, np.array(nrm), 0.6)
+        (bands_a if k % 2 == 0 else bands_b).append(band)
+        # The step to the next (smaller) arch: a flat half-ring facing -Z, gold, with bulbs.
+        s2 = s1 - 0.065
+        step_pts = np.array([[arch_point(s1, z1, t), arch_point(s2, z1, t)] for t in ts])
+        steps.append(sheet(step_pts, np.tile(facing, (len(ts), 2, 1)), 0.5))
+        mid = (s1 + s2) / 2
+        count = max(8, int(math.pi * (SHELL_AX + SHELL_AY) / 2 * mid / 3.2))
+        bulbs += [arch_point(mid, z1 - 0.45, t) for t in np.linspace(0.04, math.pi - 0.04, count)]
+        scale = s2
+    back_scale = scale
+    back_z = SHELL_BANDS * SHELL_DEPTH
+
+    # Sunburst back wall: rays from the floor's middle, alternating colors, and a gold hub.
+    rays_a, rays_b = [], []
+    rays = 14
+    for i in range(rays):
+        t0, t1 = math.pi * i / rays, math.pi * (i + 1) / rays
+        poly = [(0.0, 0.0)] + [tuple(arch_point(back_scale + 0.01, 0, t)[:2]) for t in np.linspace(t0, t1, 4)]
+        ray = extrude(poly, 0.6).translate(0, 0, back_z + 0.2)
+        (rays_a if i % 2 == 0 else rays_b).append(ray)
+    hub = extrude([(math.cos(a) * 4.5, math.sin(a) * 4.5) for a in np.linspace(0, math.pi, 17)], 0.4).translate(0, 0, back_z - 0.3)
+
+    # The front frame: a thick violet arch around the outermost band, gold-edged, with big bulbs.
+    frame_pts = np.array([[arch_point(1.075, -0.5, t), arch_point(1.0, -0.5, t)] for t in ts])
+    frame = sheet(frame_pts, np.tile(facing, (len(ts), 2, 1)), 1.6)
+    edge = [tube([tuple(arch_point(s, -1.35, t)) for t in ts], 0.32, 8) for s in (1.075, 1.0)]
+    bulbs_front = [arch_point(1.0375, -1.5, t) for t in np.linspace(0.03, math.pi - 0.03, 46)]
+
+    # Outer shell (seen from the sides and above): one cream surface over the whole funnel.
+    outer = np.array([[arch_point(1.075, 0.3, t), arch_point(back_scale + 0.06, back_z + 0.9, t)] for t in ts])
+    outer_n = []
+    for t in ts:
+        out = unit(np.array([math.cos(t) / SHELL_AX, math.sin(t) / SHELL_AY, 0.0]))
+        n = unit(out * back_z + np.array([0.0, 0.0, 1.0]) * ((1.075 - back_scale) * (SHELL_AX + SHELL_AY) / 2))
+        outer_n.append([n, n])
+    facade = sheet(outer, np.array(outer_n), 0.8)
+    back = extrude([(0.0, 0.0)] + [tuple(arch_point(back_scale + 0.07, 0, t)[:2]) for t in ts], 0.6).translate(0, 0, back_z + 1.1)
+
+    # Crest: a big gold star on the top with two small ones.
+    crest = [extrude(star(6.5, 3.0), 1.4).translate(0, SHELL_AY * 1.075 + 5.0, -0.5)]
+    for side in (-1, 1):
+        crest.append(extrude(star(3.0, 1.4), 1.0).rotate("z", side * 12).translate(side * 13.5, SHELL_AY * 1.04 + 2.4, -0.4))
+    crest_bulb = sphere(0.75, 6, 10).translate(0.0, SHELL_AY * 1.075 + 5.0, -1.4)
+
+    # Stage spotlights on short stands either side of the arch, aimed at the middle of the stage.
+    cans, lenses = [], []
+    for side in (-1, 1):
+        for (x, z) in ((44.0, -5.0), (36.0, -9.0)):
+            stand = merge(cylinder(1.3, 0.4, 16, 0.1), cylinder(0.22, 3.6, 10))
+            body = merge(cylinder(1.25, 3.2, 18, 0.25).translate(0, -1.6, 0), torus(1.2, 0.18, 18, 6).translate(0, -1.6, 0))
+            lens = cylinder(1.0, 0.2, 18).translate(0, -1.75, 0)
+            for m in (body, lens):
+                m.rotate("x", -70).rotate("y", side * -40).translate(0, 4.6, 0)
+            yoke = torus(1.45, 0.16, 18, 6, 180).rotate("x", 90).rotate("y", side * -40 + 90).translate(0, 4.6, 0)
+            cans.append(merge(stand, body, yoke).translate(side * x, 0, z))
+            lenses.append(lens.translate(side * x, 0, z))
+
+    bulbs_a, bulbs_b = bulb_ring(bulbs + bulbs_front, 0.45)
+    return {
+        "ShellA": merge(*bands_a, *rays_a),
+        "ShellB": merge(*bands_b, *rays_b),
+        "Steps": merge(*steps, *edge, hub),
+        "Frame": frame,
+        "Facade": merge(facade, back),
+        "Crest": merge(*crest),
+        "BulbsA": merge(bulbs_a, crest_bulb),
+        "BulbsB": bulbs_b,
+        "Cans": merge(*cans),
+        "Lens": merge(*lenses),
+    }
+
+
+# ---------------------------------------------------------------------------- the stage deck
+
+DECK_RADIUS = 40.0
+DECK_TOP = 1.2
+
+
+def pump_stage_deck():
+    """The round stage floor (top at y = 1.2, radius 40; the server scales it to the stage): a soft
+    sunburst of cream and butter wedges, a gold lip, a striped skirt and a ring of bulbs."""
+    wedges_a, wedges_b = [], []
+    count = 20
+    for i in range(count):
+        a0, a1 = 2 * math.pi * i / count, 2 * math.pi * (i + 1) / count
+        poly = [(0.0, 0.0)] + [(math.cos(a) * (DECK_RADIUS - 1.6), math.sin(a) * (DECK_RADIUS - 1.6)) for a in np.linspace(a0, a1, 5)]
+        wedge = extrude(poly, 0.5).rotate("x", -90).translate(0, DECK_TOP - 0.25, 0)
+        (wedges_a if i % 2 == 0 else wedges_b).append(wedge)
+    lip = lathe([(DECK_RADIUS - 1.9, DECK_TOP - 0.4), (DECK_RADIUS + 0.05, DECK_TOP - 0.35), (DECK_RADIUS + 0.05, DECK_TOP - 0.1),
+                 (DECK_RADIUS - 0.25, DECK_TOP + 0.16), (DECK_RADIUS - 1.6, DECK_TOP + 0.16), (DECK_RADIUS - 1.9, DECK_TOP + 0.08),
+                 (DECK_RADIUS - 1.9, DECK_TOP - 0.4)], 96)
+    skirt_a, skirt_b = [], []
+    panels = 48
+    for i in range(panels):
+        a0, a1 = 2 * math.pi * i / panels, 2 * math.pi * (i + 1) / panels
+        panel = revolve_patch([(DECK_RADIUS - 0.2, 0.0), (DECK_RADIUS - 0.2, DECK_TOP - 0.3)], a0, a1, 2, 0.3)
+        (skirt_a if i % 2 == 0 else skirt_b).append(panel)
+    ring = [np.array([math.cos(a) * (DECK_RADIUS - 0.95), DECK_TOP + 0.36, math.sin(a) * (DECK_RADIUS - 0.95)])
+            for a in np.linspace(0, 2 * math.pi, 72, endpoint=False)]
+    bulbs_a, bulbs_b = bulb_ring(ring, 0.3)
+    return {
+        "DeckA": merge(*wedges_a),
+        "DeckB": merge(*wedges_b),
+        "Lip": lip,
+        "SkirtA": merge(*skirt_a),
+        "SkirtB": merge(*skirt_b),
+        "BulbsA": bulbs_a,
+        "BulbsB": bulbs_b,
+    }
+
+
+# ---------------------------------------------------------------------------- team grandstand
+
+def stripe_roof(x0: float, x1: float, stripes: int, front: tuple[float, float], back: tuple[float, float], thickness: float):
+    """A flat sloped roof of stripes along X, from front (z, y) to back (z, y). Returns (A, B)."""
+    a, b = [], []
+    slope = np.array([0.0, back[1] - front[1], back[0] - front[0]])
+    n = unit(np.cross(np.array([1.0, 0.0, 0.0]), slope))
+    if n[1] < 0:
+        n = -n
+    for i in range(stripes):
+        xa, xb = x0 + (x1 - x0) * i / stripes, x0 + (x1 - x0) * (i + 1) / stripes
+        pts = np.array([[[xa, front[1], front[0]], [xa, back[1], back[0]]], [[xb, front[1], front[0]], [xb, back[1], back[0]]]])
+        (a if i % 2 == 0 else b).append(sheet(pts, np.tile(n, (2, 2, 1)), thickness))
+    return a, b
+
+
+def scallops(x0: float, x1: float, count: int, y: float, z: float, radius: float) -> tuple[list[Mesh], list[Mesh]]:
+    """A valance of half-round flaps hanging from y along X, alternating (A, B)."""
+    a, b = [], []
+    width = (x1 - x0) / count
+    for i in range(count):
+        cx = x0 + width * (i + 0.5)
+        arc = [(cx + math.cos(t) * width / 2, y - math.sin(t) * radius) for t in np.linspace(math.pi, 0, 9)[1:-1]]
+        flap = extrude([(cx - width / 2, y)] + arc + [(cx + width / 2, y)], 0.2).translate(0, 0, z)
+        (a if i % 2 == 0 else b).append(flap)
+    return a, b
+
+
+def peg_fan(x: float, y: float, z: float, seed: int):
+    """A peg-doll fan: a capsule body and a ball head, some cheering with both arms up."""
+    rng = np.random.default_rng(seed)
+    body = capsule(1.7, 0.55, 10).translate(x, y + 0.85, z)
+    head = sphere(0.5, 6, 10).translate(x, y + 2.15, z)
+    arms = []
+    if rng.random() < 0.6:
+        for side in (-1, 1):
+            arms.append(taper([(x + side * 0.4, y + 1.3, z), (x + side * 0.8, y + 2.1, z - 0.1), (x + side * 0.9, y + 2.6, z - 0.15)], 0.16, 0.13, 6))
+    return body, head, arms
+
+
+def pump_grandstand():
+    """A team's grandstand facing -Z: four tiers of team-colored benches on a white frame, a
+    striped canopy with a scalloped valance and pennants, and a crowd of peg-doll fans."""
+    width = 24.0
+    frame, seats, heads = [], [], []
+    fans = [[], [], []]
+    tiers = 4
+    fan = 0
+    for i in range(tiers):
+        y = 0.9 + 1.6 * i
+        z = -4.2 + 2.5 * i
+        frame.append(rounded_box(width - 1.0, y, 2.5, 0.12, 2).translate(0, y / 2, z + 0.1))
+        seats.append(rounded_box(width - 1.4, 0.45, 1.3, 0.18, 3).translate(0, y + 0.22, z - 0.2))
+        for j, x in enumerate(np.linspace(-width / 2 + 2.2, width / 2 - 2.2, 7)):
+            if (i * 7 + j) % 5 == 3:
+                continue  # a few empty seats
+            body, head, arms = peg_fan(x + (0.4 if i % 2 else -0.4), y + 0.45, z + 0.35, i * 13 + j)
+            fans[fan % 3].extend([body, *arms])
+            heads.append(head)
+            fan += 1
+    top = 0.9 + 1.6 * tiers
+    for side in (-1, 1):  # stepped side walls
+        wall = extrude([(-5.8, 0.0), (5.6, 0.0), (5.6, top + 0.3), (3.2, top + 0.3), (-5.8, 1.4)], 0.6)
+        frame.append(wall.rotate("y", -90).translate(side * (width / 2 - 0.2), 0, 0))
+    frame.append(rounded_box(width, top + 0.4, 0.6, 0.15, 2).translate(0, (top + 0.4) / 2, 5.7))
+    posts = []
+    for x in (-width / 2 + 0.4, 0.0, width / 2 - 0.4):
+        posts.append(cylinder(0.28, 15.2, 10, 0.05).translate(x, 0, -6.2))
+        posts.append(cylinder(0.28, 16.6, 10, 0.05).translate(x, 0, 5.8))
+    roof_a, roof_b = stripe_roof(-width / 2 - 0.8, width / 2 + 0.8, 10, (-7.2, 15.0), (6.4, 16.8), 0.35)
+    val_a, val_b = scallops(-width / 2 - 0.8, width / 2 + 0.8, 14, 15.0, -7.25, 1.1)
+    flags, poles = [], []
+    for x in (-width / 2 + 0.4, 0.0, width / 2 - 0.4):
+        poles.append(cylinder(0.12, 3.6, 8).translate(x, 16.6, 5.8))
+        poles.append(sphere(0.26, 5, 8).translate(x, 20.3, 5.8))
+        flags.append(extrude([(0.0, 0.0), (2.6, -0.65), (0.0, -1.3)], 0.08).translate(x + 0.1, 20.0, 5.8))
+    return {
+        "Frame": merge(*frame, *posts, *poles),
+        "Seats": merge(*seats),
+        "CanopyA": merge(*roof_a, *val_a),
+        "CanopyB": merge(*roof_b, *val_b),
+        "Flags": merge(*flags),
+        "FansA": merge(*fans[0]),
+        "FansB": merge(*fans[1]),
+        "FansC": merge(*fans[2]),
+        "Heads": merge(*heads),
+    }
+
+
+# ---------------------------------------------------------------------------- big top tent
+
+def pump_big_top():
+    """A circus big top: striped walls and a drooping striped roof, a scalloped valance, a dark
+    doorway on the front (-Z), a gold-tipped king pole and a pennant."""
+    radius, wall = 14.0, 7.0
+    stripes = 18
+    tent_a, tent_b = [], []
+    roof_profile = [(radius + 0.9 - (radius - 0.3) * t, wall + 0.4 + 15.5 * (t ** 1.45)) for t in np.linspace(0, 1, 12)]
+    for i in range(stripes):
+        a0, a1 = 2 * math.pi * i / stripes, 2 * math.pi * (i + 1) / stripes
+        side = revolve_patch([(radius, 0.0), (radius, wall + 0.6)], a0, a1, 3, 0.3)
+        roof = revolve_patch(roof_profile, a0, a1, 3, 0.3)
+        (tent_a if i % 2 == 0 else tent_b).extend([side, roof])
+    flaps_a, flaps_b = [], []
+    flaps = 36
+    for i in range(flaps):
+        a = 2 * math.pi * (i + 0.5) / flaps
+        w = 2 * math.pi * (radius + 1.0) / flaps
+        arc = [(math.cos(t) * w / 2, -math.sin(t) * 1.1) for t in np.linspace(math.pi, 0, 9)[1:-1]]
+        flap = extrude([(-w / 2, 0.0)] + arc + [(w / 2, 0.0)], 0.15).rotate("y", -math.degrees(a) - 90)
+        flap = flap.translate(math.cos(a) * (radius + 1.0), wall + 0.45, math.sin(a) * (radius + 1.0))
+        (flaps_a if i % 2 == 0 else flaps_b).append(flap)
+    trim = [torus(radius + 0.95, 0.18, 72, 6).translate(0, wall + 0.42, 0), torus(radius + 0.05, 0.2, 72, 6).translate(0, 0.15, 0)]
+    arch = [(math.cos(t) * 2.6, 4.2 + math.sin(t) * 2.0) for t in np.linspace(0, math.pi, 9)[1:-1]]
+    door = extrude([(-2.6, 0.0), (2.6, 0.0), (2.6, 4.2)] + arch + [(-2.6, 4.2)], 0.8).translate(0, 0, -radius + 0.15)
+    door_trim = tube([(2.75, 0.0, -radius - 0.3)] + [(math.cos(t) * 2.75, 4.2 + math.sin(t) * 2.15, -radius - 0.3) for t in np.linspace(0, math.pi, 13)]
+                     + [(-2.75, 0.0, -radius - 0.3)], 0.2, 6)
+    pole = merge(cylinder(0.35, 5.5, 10).translate(0, wall + 15.0, 0), sphere(0.7, 6, 10).translate(0, wall + 20.7, 0))
+    flag = extrude([(0.0, 0.0), (4.0, -1.0), (0.0, -2.0)], 0.1).translate(0.2, wall + 20.4, 0)
+    return {
+        "TentA": merge(*tent_a, *flaps_a),
+        "TentB": merge(*tent_b, *flaps_b),
+        "Trim": merge(*trim, pole, door_trim),
+        "Door": door,
+        "Flag": flag,
+    }
+
+
+# ---------------------------------------------------------------------------- game booth
+
+def pump_game_booth():
+    """A carnival game booth facing -Z: a striped counter, a striped awning with a scalloped
+    valance, a sign star and two shelves of round plush prizes."""
+    width, depth = 10.0, 6.0
+    counter_a, counter_b = [], []
+    panels = 6
+    for i in range(panels):
+        x0 = -width / 2 + width * i / panels
+        panel = rounded_box(width / panels, 3.4, 0.5, 0.08, 2).translate(x0 + width / panels / 2, 1.7, -depth / 2)
+        (counter_a if i % 2 == 0 else counter_b).append(panel)
+    frame = [rounded_box(width + 0.6, 0.35, 1.6, 0.12, 2).translate(0, 3.55, -depth / 2 + 0.2),
+             rounded_box(width, 8.0, 0.4, 0.1, 2).translate(0, 4.0, depth / 2)]
+    for side in (-1, 1):
+        frame.append(rounded_box(0.4, 3.4, depth, 0.1, 2).translate(side * (width / 2 - 0.2), 1.7, 0))
+        frame.append(cylinder(0.25, 8.2, 10).translate(side * (width / 2 - 0.1), 0, -depth / 2 + 0.1))
+    shelves = [rounded_box(width - 1.0, 0.25, 1.2, 0.08, 2).translate(0, y, depth / 2 - 0.8) for y in (3.4, 5.4)]
+    prizes_a, prizes_b = [], []
+    for row, y in enumerate((3.55, 5.55)):
+        for i, x in enumerate(np.linspace(-width / 2 + 1.4, width / 2 - 1.4, 6)):
+            z = depth / 2 - 0.8
+            plush = merge(sphere(0.7, 6, 10).translate(x, y + 0.7, z), sphere(0.25, 4, 8).translate(x - 0.45, y + 1.35, z),
+                          sphere(0.25, 4, 8).translate(x + 0.45, y + 1.35, z))
+            (prizes_a if (i + row) % 2 == 0 else prizes_b).append(plush)
+    roof_a, roof_b = stripe_roof(-width / 2 - 0.6, width / 2 + 0.6, 7, (-depth / 2 - 1.4, 8.2), (depth / 2 + 0.2, 9.4), 0.25)
+    val_a, val_b = scallops(-width / 2 - 0.6, width / 2 + 0.6, 9, 8.2, -depth / 2 - 1.45, 0.8)
+    sign = extrude(star(1.5, 0.7), 0.4).translate(0, 10.6, -depth / 2 - 0.2)
+    return {
+        "BoothA": merge(*counter_a, *roof_a, *val_a),
+        "BoothB": merge(*counter_b, *roof_b, *val_b),
+        "Frame": merge(*frame, *shelves),
+        "PrizesA": merge(*prizes_a),
+        "PrizesB": merge(*prizes_b),
+        "Sign": sign,
+    }
+
+
+# ---------------------------------------------------------------------------- light pole + bunting
+
+POLE_HEIGHT = 15.0
+POLE_HOOK = 13.6  # where bunting ties on
+
+
+def pump_light_pole():
+    """A candy-striped lamp pole: a gold foot, red and cream bands, a crown of bulbs and a star."""
+    foot = merge(cylinder(0.9, 0.35, 16, 0.1), cylinder(0.55, 0.9, 14, 0.1).translate(0, 0.3, 0))
+    bands_a, bands_b = [], []
+    bands = 9
+    for i in range(bands):
+        y0 = 1.1 + (POLE_HOOK - 1.1) * i / bands
+        y1 = 1.1 + (POLE_HOOK - 1.1) * (i + 1) / bands
+        (bands_a if i % 2 == 0 else bands_b).append(cylinder(0.3, y1 - y0, 12).translate(0, y0, 0))
+    crown = merge(torus(1.1, 0.13, 24, 6).translate(0, POLE_HOOK + 0.2, 0), cylinder(0.4, 0.4, 12, 0.08).translate(0, POLE_HOOK, 0),
+                  cylinder(0.12, 0.8, 8).translate(0, POLE_HOOK + 0.4, 0))
+    ring = [np.array([math.cos(a) * 1.1, POLE_HOOK + 0.55, math.sin(a) * 1.1]) for a in np.linspace(0, 2 * math.pi, 8, endpoint=False)]
+    bulbs_a, bulbs_b = bulb_ring(ring, 0.3)
+    top = extrude(star(0.9, 0.42), 0.3).translate(0, POLE_HEIGHT - 0.9, 0)
+    return {
+        "Foot": merge(foot, crown, top),
+        "PoleA": merge(*bands_a),
+        "PoleB": merge(*bands_b),
+        "BulbsA": bulbs_a,
+        "BulbsB": bulbs_b,
+    }
+
+
+BUNTING_SPAN = 24.0
+BUNTING_SAG = 3.0
+
+
+def pump_bunting():
+    """A string of pennants spanning 24 studs along X (both ends at the top of the mesh), sagging
+    3 studs; four flag pieces in turn, so each string can take any colors."""
+    def at(x: float) -> float:
+        u = x / (BUNTING_SPAN / 2)
+        return -BUNTING_SAG * (1 - u * u)
+
+    xs = np.linspace(-BUNTING_SPAN / 2, BUNTING_SPAN / 2, 25)
+    string = tube([(x, at(x), 0.0) for x in xs], 0.07, 6)
+    flags = [[], [], [], []]
+    count = 12
+    for i in range(count):
+        x = -BUNTING_SPAN / 2 + BUNTING_SPAN * (i + 0.5) / count
+        slope = math.degrees(math.atan((at(x + 0.1) - at(x - 0.1)) / 0.2))
+        flags[i % 4].append(pennant(1.55, 2.0).rotate("z", slope).translate(x, at(x) + 0.02, 0))
+    return {
+        "String": string,
+        "FlagA": merge(*flags[0]),
+        "FlagB": merge(*flags[1]),
+        "FlagC": merge(*flags[2]),
+        "FlagD": merge(*flags[3]),
+    }
+
+
+# ---------------------------------------------------------------------------- Ferris wheel
+
+def pump_ferris_wheel():
+    """A Ferris wheel for the skyline, facing -Z: white A-frame legs, a double rim with spokes and
+    bulbs, a gold hub and twelve gondolas in three colors."""
+    hub_y, rim = 34.0, 28.0
+    legs = []
+    for z in (-3.2, 3.2):
+        for side in (-1, 1):
+            legs.append(taper([(side * 17.0, 0.0, z * 1.6), (side * 0.6, hub_y, z)], 0.9, 0.55, 10))
+        legs.append(tube([(-11.0, 11.0, z * 1.4), (11.0, 11.0, z * 1.4)], 0.35, 8))
+    legs.append(tube([(0, hub_y, -3.6), (0, hub_y, 3.6)], 0.6, 12))
+    feet = [rounded_box(5.0, 0.8, 13.0, 0.2, 2).translate(side * 17.0, 0.4, 0) for side in (-1, 1)]
+    wheel = []
+    for z in (-2.0, 2.0):
+        wheel.append(torus(rim, 0.35, 96, 8).rotate("x", 90).translate(0, hub_y, z))
+        wheel.append(torus(rim * 0.62, 0.22, 64, 6).rotate("x", 90).translate(0, hub_y, z))
+        for i in range(24):
+            a = 2 * math.pi * i / 24
+            wheel.append(tube([(0, hub_y, z), (math.cos(a) * rim, hub_y + math.sin(a) * rim, z)], 0.16, 5))
+    hub = merge(cylinder(2.0, 5.6, 24, 0.4).rotate("x", 90).translate(0, hub_y, 2.8), extrude(star(2.6, 1.3), 0.5).translate(0, hub_y, -3.0))
+    cars = [[], [], []]
+    for i in range(12):
+        a = 2 * math.pi * i / 12 + math.pi / 12
+        px, py = math.cos(a) * rim, hub_y + math.sin(a) * rim
+        car = merge(
+            rounded_box(3.2, 2.0, 3.4, 0.5, 3).translate(px, py - 3.4, 0),
+            lathe([(0.0, -1.6), (1.9, -1.6), (1.7, -1.2), (1.0, -0.8), (0.0, -0.7)], 16).translate(px, py, 0),
+            cylinder(0.12, 1.2, 6).translate(px, py - 2.4, 0),
+            tube([(px, py - 0.8, -2.0), (px, py, -2.0), (px, py, 2.0), (px, py - 0.8, 2.0)], 0.14, 6),
+        )
+        cars[i % 3].append(car)
+    ring = [np.array([math.cos(a) * (rim + 0.55), hub_y + math.sin(a) * (rim + 0.55), -2.0]) for a in np.linspace(0, 2 * math.pi, 48, endpoint=False)]
+    bulbs_a, bulbs_b = bulb_ring(ring, 0.42)
+    return {
+        "Frame": merge(*legs, *feet),
+        "Wheel": merge(*wheel),
+        "Hub": hub,
+        "CarsA": merge(*cars[0]),
+        "CarsB": merge(*cars[1]),
+        "CarsC": merge(*cars[2]),
+        "BulbsA": bulbs_a,
+        "BulbsB": bulbs_b,
+    }
+
+
+PROPS.update({
+    "PumpBandshell": pump_bandshell,
+    "PumpStageDeck": pump_stage_deck,
+    "PumpGrandstand": pump_grandstand,
+    "PumpBigTop": pump_big_top,
+    "PumpGameBooth": pump_game_booth,
+    "PumpLightPole": pump_light_pole,
+    "PumpBunting": pump_bunting,
+    "PumpFerrisWheel": pump_ferris_wheel,
+})
+
+COLORS.update({
+    "ShellA": (128, 82, 214), "ShellB": (255, 240, 214), "Steps": (255, 196, 64), "Frame": (250, 248, 255),
+    "Facade": (255, 244, 226), "Crest": (255, 200, 60), "BulbsA": (255, 246, 190), "BulbsB": (255, 214, 120),
+    "Cans": (60, 52, 80), "Lens": (255, 250, 210), "DeckA": (255, 244, 222), "DeckB": (255, 226, 170), "Lip": (255, 196, 64),
+    "SkirtA": (128, 82, 214), "SkirtB": (255, 240, 214), "Seats": (255, 80, 95), "CanopyA": (255, 80, 95),
+    "CanopyB": (255, 250, 245), "Flags": (255, 80, 95), "FansA": (255, 170, 80), "FansB": (120, 200, 255),
+    "FansC": (190, 140, 255), "Heads": (255, 214, 180), "TentA": (235, 60, 75), "TentB": (255, 246, 230), "Trim": (255, 196, 64),
+    "Door": (70, 40, 90), "Flag": (255, 200, 60), "BoothA": (60, 170, 230), "BoothB": (255, 250, 240), "PrizesA": (255, 140, 190),
+    "PrizesB": (120, 220, 160), "Sign": (255, 200, 60), "Foot": (255, 196, 64), "PoleA": (235, 60, 75), "PoleB": (255, 246, 230),
+    "String": (250, 250, 250), "FlagA": (235, 60, 75), "FlagB": (255, 200, 60), "FlagC": (60, 170, 230), "FlagD": (90, 200, 120),
+    "Wheel": (250, 248, 255), "Hub": (255, 196, 64), "CarsA": (235, 60, 75), "CarsB": (60, 170, 230), "CarsC": (255, 200, 60),
+})

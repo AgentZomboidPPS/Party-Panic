@@ -1,0 +1,29 @@
+newmtl String
+Kd 0.980 0.980 0.980
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FlagA
+Kd 0.922 0.235 0.294
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FlagB
+Kd 1.000 0.784 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FlagC
+Kd 0.235 0.667 0.902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FlagD
+Kd 0.353 0.784 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
