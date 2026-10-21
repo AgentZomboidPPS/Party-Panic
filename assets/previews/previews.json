@@ -79,6 +79,16 @@
     "made": "2026-10-21",
     "width": 168
   },
+  "MechaMarathon": {
+    "columns": 6,
+    "decal": 113416807612907,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 87302706174193,
+    "made": "2026-10-21",
+    "width": 168
+  },
   "PumpAndPop": {
     "columns": 6,
     "decal": 95124395902329,

@@ -76,6 +76,9 @@ CAMERAS: dict[str, dict] = {
     "HexMeltdown": {"yaw": 20, "pitch": 46, "distance": 86, "shift": [0, -6, 8], "raise": 5},
     # The honey tree's vine of fruit and honeycombs, bees chasing someone out, players on their pads.
     "HoneyTrap": {"yaw": -15, "pitch": 26, "distance": 44, "fov": 55, "shift": [-1, 5, -5], "raise": 12},
+    # Low in front of the launch line: two wind-up toys just launched, flying toward the camera, the
+    # players who wound them behind their pads.
+    "MechaMarathon": {"yaw": 200, "pitch": 13, "distance": 26, "fov": 46, "shift": [-3, 4, -15], "raise": 9, "sway": 8},
     # The turning field from a player's corner: lanes, veggies and bombs, the silo in the middle.
     "RakeItIn": {"look_at": "SiloBody", "yaw": 30, "pitch": 30, "distance": 50, "shift": [0, -4, 0], "raise": 2},
     # Over the cutters' shoulders: their boards with the dotted outlines half cut, the giant glass of
@@ -104,6 +107,7 @@ DUMP_AT: dict[str, float] = {
     "CakeFactory": 14,  # cakes with a few layers on every belt
     "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
+    "MechaMarathon": 12.5,  # a second after lift-off: the toys climbing away from their pads
     "PumpAndPop": 16,  # the balloons are big by now
     "SkateEscape": 10,
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole
