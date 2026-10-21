@@ -23,8 +23,13 @@
 --   * Knockback: ctx:Knockback for people (their device flies them). Bots are flown by the server on
 --     the same arc (anchored, self.flights), so they fall off exactly like a person would, also on
 --     the test server, which has no physics.
---   * Falls: anyone whose root is past the rim and dropping (or past it for a while) is out, and
---     ctx.KillY catches the rest. A knock-off within CREDIT_TIME of a hit counts for the thrower.
+--     A flown bot slides SLIDE_TIME on landing, about as far as a person tumbles. People knocked
+--     can't start a ball until they're back up (knockedUntil).
+--   * Falls: anyone whose root is past the rim and dropping, or well past it (OUT_FAR: a root can
+--     rest about a stud past the drawn edge) for OUT_TIME, is out; ctx.KillY catches the rest. A
+--     knock-off within CREDIT_TIME of a hit counts for the thrower. Everyone out in one step goes
+--     out together, and the last-one-standing end (_checkEnd, the mode's own) waits for anyone
+--     still teetering past the rim.
 -- Bots (Bots/SnowballSummit.luau) roll balls round the summit, throw at rivals near the edge, and
 -- sidestep or hop over balls coming at them.
 
@@ -51,8 +56,13 @@ local COOLDOWN = 0.45 -- after a throw, before the next ball can be started
 local SLACK = 0.03 -- seconds of leeway either way on a person's delay (ping jitter), in their favour
 local PING_MAX = 0.4
 local CREDIT_TIME = 5
-local OUT_DROP = 2.5 -- past the rim and this far below standing height: out
-local OUT_TIME = 0.9 -- past the rim this long (falling or not): out
+local OUT_DROP = 2.5 -- past the rim (OUT_NEAR) and this far below standing height: out
+local OUT_NEAR = 0.6 -- root this far past the rim and dropping: falling
+local OUT_FAR = 1.2 -- root this far past the rim (a root can rest ~1 stud out on the drawn edge)...
+local OUT_TIME = 0.9 -- ...this long, falling or not: out
+local KNOCKED = 0.35 -- after a knock lands (stun), before a person can start a ball again
+local SLIDE_TIME = 0.6 -- a flown bot's slide after landing (people tumble on their own device)
+local SLIDE_SHARE = 0.45 -- of its knock's ground speed it slides off with
 local G = 196.2
 
 SnowballSummit.MIN_R = MIN_R
@@ -114,7 +124,9 @@ end
 function SnowballSummit:Prepare()
 	local ctx = self.context
 	ctx.RespawnMode = "Eliminate"
-	ctx.EndWhenOneLeft = true
+	-- The last-one-standing end is this mode's own (_checkEnd): everyone a step puts out goes out
+	-- together, and the round waits for anyone still mid-fall off the rim.
+	ctx.EndWhenOneLeft = false
 	local origin = ctx.Origin.Position
 	self.center = origin
 	self.topY = origin.Y
@@ -127,7 +139,9 @@ function SnowballSummit:Prepare()
 	self.flights = {} :: { [any]: Flight }
 	self.knocks = {} :: { [any]: { Start: number, P0: Vector3, V: Vector3 } } -- people's knocks (the test bot replays them)
 	self.lastHit = {} :: { [any]: { By: any, T: number } }
-	self.outSince = {} :: { [any]: number }
+	self.outSince = {} :: { [any]: number } -- past the rim (OUT_NEAR) since
+	self.farSince = {} :: { [any]: number } -- past OUT_FAR since
+	self.knockedUntil = {} :: { [any]: number }
 	self.kos = {} :: { [any]: number }
 	self.blizzard = false
 
@@ -354,11 +368,11 @@ function SnowballSummit:_build(player: any)
 	if self.held[player] or self.flights[player] or ctx:IsStunned(player) then
 		return
 	end
-	if (self.cooldown[player] or 0) > ctx:Now() then
+	if (self.cooldown[player] or 0) > ctx:Now() or (self.knockedUntil[player] or 0) > ctx:Now() then
 		return
 	end
-	local _, _, root = ctx:GetCharacter(player)
-	if not root or math.abs(root.Position.Y - self.topY) > 8 then
+	local _, humanoid, root = ctx:GetCharacter(player)
+	if not root or math.abs(root.Position.Y - self.topY) > 8 or (humanoid and humanoid.PlatformStand) then
 		return
 	end
 	self.held[player] = { R = MIN_R, Last = flat(root.Position) }
@@ -395,7 +409,9 @@ function SnowballSummit:_throw(player: any, dx: any, dz: any)
 			end
 		end
 	end
-	local start = self:_heldCenter(root, held.R)
+	-- It sets off from in front of the thrower along the throw (the held ball swings round to it).
+	local spot = root.Position + dir * (BODY + HOLD_GAP + held.R)
+	local start = Vector3.new(spot.X, self.topY + held.R, spot.Z)
 	local speed = THROW_SPEED - THROW_SLOW * held.R
 	self.nextId += 1
 	local ball: Ball = {
@@ -442,8 +458,11 @@ function SnowballSummit:_knock(victim: any, ball: Ball, at: Vector3)
 	local dir = (ball.Dir * 0.6 + away * 0.4)
 	dir = if dir.Magnitude > 0.05 then dir.Unit else ball.Dir
 	local r = ball.R
-	local velocity = dir * (26 + 20 * r) + Vector3.new(0, 28 + 7 * r, 0)
-	local stun = 0.5 + 0.15 * r
+	-- Steeper with size at the small end, so a stream of tiny balls never beats rolling a big one
+	-- (smallest ~10 studs of flight, biggest ~50).
+	local velocity = dir * (10 + 28 * r) + Vector3.new(0, 22 + 9 * r, 0)
+	local stun = 0.35 + 0.1 * r
+	self.knockedUntil[victim] = ctx:Now() + 2 * velocity.Y / G + stun + KNOCKED
 	self:_dropHeld(victim, true)
 	self.lastHit[victim] = { By = ball.Owner, T = ctx:Now() }
 	if BotRegistry.IsBot(victim) then
@@ -509,10 +528,10 @@ function SnowballSummit:FlightAt(flight: { Start: number, P0: Vector3, V: Vector
 		local fall = dt - airTime
 		return landing + hv * fall + Vector3.new(0, -vy * fall - 0.5 * G * fall * fall, 0)
 	end
-	-- A slide on the snow, slowing to a stop over SLIDE seconds.
-	local slide = 0.4
+	-- A slide on the snow, slowing to a stop over SLIDE_TIME (a person's tumble is about this long).
+	local slide = SLIDE_TIME
 	local s = math.min(dt - airTime, slide)
-	local slideSpeed = hv * 0.3
+	local slideSpeed = hv * SLIDE_SHARE
 	local spot = landing + slideSpeed * (s - 0.5 * s * s / slide)
 	if not inside(spot) then
 		local fall = dt - airTime - s
@@ -572,13 +591,15 @@ function SnowballSummit:_grow(dt: number)
 	local ctx = self.context
 	local factor = if self.blizzard then BLIZZARD_GROW else 1
 	for player, held in self.held do
-		local _, _, root = ctx:GetCharacter(player)
+		local _, humanoid, root = ctx:GetCharacter(player)
 		if not root or not ctx:IsAlive(player) then
 			self.held[player] = nil
 			continue
 		end
 		local here = flat(root.Position)
-		local moved = math.min((here - held.Last).Magnitude, 30 * math.max(dt, 1 / 60))
+		-- Only walking grows it: never faster than the holder can walk (a little slack for lag).
+		local speed = if humanoid then humanoid.WalkSpeed else ctx.WalkSpeed
+		local moved = math.min((here - held.Last).Magnitude, speed * math.max(dt, 1 / 60) * 1.3)
 		held.Last = here
 		if held.R < MAX_R and moved > 0.01 then
 			local before = held.R
@@ -705,21 +726,37 @@ end
 -- Knocked (or walked) off the summit: out.
 function SnowballSummit:_falls(now: number)
 	local ctx = self.context
+	local out = {}
 	for _, player in ctx:GetAlivePlayers() do
 		local _, _, root = ctx:GetCharacter(player)
 		if not root then
 			continue
 		end
 		local position = root.Position
-		local off = flat(position - self.center).Magnitude > self.radius + 0.6
-		if not off then
+		local reach = flat(position - self.center).Magnitude
+		if reach <= self.radius + OUT_NEAR then
 			self.outSince[player] = nil
+			self.farSince[player] = nil
 			continue
 		end
 		self.outSince[player] = self.outSince[player] or now
+		if reach > self.radius + OUT_FAR then
+			self.farSince[player] = self.farSince[player] or now
+		else
+			self.farSince[player] = nil
+		end
 		local dropped = position.Y < self.topY + (self.standing[player] or 3) - OUT_DROP
-		if dropped or now - self.outSince[player] > OUT_TIME then
+		local stranded = self.farSince[player] ~= nil and now - self.farSince[player] > OUT_TIME
+		if dropped or stranded then
+			table.insert(out, player)
+		end
+	end
+	if #out > 0 then
+		-- Everyone this step puts out goes out together (credit first), then the end rule runs once.
+		for _, player in out do
 			self:_dropHeld(player, false)
+			self.outSince[player] = nil
+			self.farSince[player] = nil
 			local hit = self.lastHit[player]
 			if hit and now - hit.T <= CREDIT_TIME and hit.By ~= player and ctx:State(hit.By) then
 				self.kos[hit.By] = (self.kos[hit.By] or 0) + 1
@@ -730,9 +767,31 @@ function SnowballSummit:_falls(now: number)
 			else
 				ctx:Fire(nil, "KnockOff", player.UserId, 0)
 			end
+		end
+		for _, player in out do
 			ctx:Eliminate(player, "fell")
 		end
 	end
+	self:_checkEnd()
+end
+
+-- Last one standing: once at most one is left (of a round that started with two or more) and nobody
+-- still in is mid-fall off the rim, the round ends.
+function SnowballSummit:_checkEnd()
+	local ctx = self.context
+	if not ctx:IsRunning() or (ctx.StartCount or 0) < 2 then
+		return
+	end
+	local alive = ctx:GetAlivePlayers()
+	if #alive > 1 then
+		return
+	end
+	for _, player in alive do
+		if self.outSince[player] then
+			return -- teetering or falling: wait and see
+		end
+	end
+	ctx:End(if #alive == 0 then "AllEliminated" else "LastSurvivor")
 end
 
 -- Survivors first, then whoever lasted longest; knock-offs break ties.

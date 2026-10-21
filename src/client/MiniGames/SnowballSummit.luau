@@ -6,11 +6,13 @@
 --   * Held balls (MG_Held: radius per UserId) sit in front of their holder's character, rolling as
 --     they walk and swelling smoothly as the radius grows.
 --   * HUD: the snowball's size (a bar and a number) while you roll one, a little feed of knock-offs,
---     and the ROLL button (hold to roll, let go to throw; E on a keyboard). A dotted line on the snow
+--     and the ROLL button (hold to roll, let go to throw; E on a keyboard). On phones the throw
+--     comes when the finger holding ROLL lifts, even if it drifted off the button. A dotted line on the snow
 --     shows where your ball will go.
 --   * Falling snow (heavier in the blizzard), off with reduced effects.
 
 local CollectionService = game:GetService("CollectionService")
+local UserInputService = game:GetService("UserInputService")
 
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -238,11 +240,18 @@ function SnowballSummit.Start(api)
 	end
 
 	-- Controls ------------------------------------------------------------------------------------
+	-- Hold ROLL: start a ball (asked again every 0.2 s while held without one, so a press during the
+	-- throw cooldown or a knock still gets a ball once allowed); let go: throw it.
 	local roll = api:Button({ Text = "ROLL", Key = Enum.KeyCode.E, Color = Theme.Colors.Cyan })
-	roll.Pressed:Connect(function()
+	local rollDown = false
+	local lastBuild = 0
+	local activeTouch: InputObject? = nil -- the finger holding ROLL on a phone
+	local function build()
+		lastBuild = os.clock()
 		api:Action("Build")
-	end)
-	roll.Released:Connect(function()
+	end
+	local function throw()
+		rollDown = false
 		local _, _, root = api:Character()
 		local look = if root then flat(root.CFrame.LookVector) else Vector3.zero
 		if look.Magnitude > 0.01 then
@@ -250,6 +259,41 @@ function SnowballSummit.Start(api)
 			api:Action("Throw", look.X, look.Z)
 		else
 			api:Action("Throw")
+		end
+	end
+	roll.Pressed:Connect(function()
+		rollDown = true
+		build()
+	end)
+	roll.Released:Connect(function()
+		if activeTouch then
+			return -- a phone thumb that drifts off the button isn't a release; its touch ending is
+		end
+		throw()
+	end)
+	local holder = api.Gui:FindFirstChild("Action_ROLL")
+	local button = holder and holder:FindFirstChild("Button") :: GuiButton?
+	if button then
+		api:Track(button.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch and not activeTouch then
+				activeTouch = input
+				if not rollDown then
+					rollDown = true
+					build()
+				end
+			end
+		end))
+		api:Track(UserInputService.InputEnded:Connect(function(input)
+			if activeTouch and input == activeTouch then
+				activeTouch = nil
+				throw()
+			end
+		end))
+	end
+	api:OnCanAct(function(canAct)
+		if not canAct then
+			rollDown = false
+			activeTouch = nil
 		end
 	end)
 
@@ -359,6 +403,10 @@ function SnowballSummit.Start(api)
 			look = if look.Magnitude > 0.01 then look.Unit else Vector3.new(0, 0, -1)
 			local spot = root.Position + look * (BODY + HOLD_GAP + entry.R)
 			place(entry.Shown, Vector3.new(spot.X, top + entry.R, spot.Z), entry.R)
+		end
+
+		if rollDown and not mine and os.clock() - lastBuild > 0.2 then
+			build()
 		end
 
 		-- My ball: the size meter and the aim dots.
