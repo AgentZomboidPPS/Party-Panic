@@ -15,7 +15,7 @@ return function(h)
 		-- The tree. "Anchor" is the tip of the front branch, where the vine hangs.
 		HoneyOak = {
 			Height = 64.259,
-			AssetId = 0,
+			AssetId = 80244830886492,
 			Collide = true,
 			Palette = {
 				Trunk = h.rgb(139, 94, 62),
@@ -64,7 +64,7 @@ return function(h)
 		-- The vine the fruit hangs on (the client places it under the branch tip).
 		HoneyVine = {
 			Height = 25.545,
-			AssetId = 0,
+			AssetId = 127242230376684,
 			Shadow = false,
 			Palette = { Vine = h.rgb(78, 140, 52), VineLeaves = h.rgb(118, 198, 78) },
 			Materials = { Vine = smooth, VineLeaves = smooth },
@@ -75,7 +75,7 @@ return function(h)
 		-- The flower each player stands on (petals are recolored per pad).
 		HoneyDaisyPad = {
 			Height = 0.413,
-			AssetId = 0,
+			AssetId = 86600152445852,
 			Shadow = false,
 			Palette = {
 				Petals = h.rgb(255, 255, 255),
@@ -93,7 +93,7 @@ return function(h)
 		},
 		HoneyBasket = {
 			Height = 1.695,
-			AssetId = 0,
+			AssetId = 124702206684663,
 			Palette = {
 				Basket = h.rgb(190, 132, 74),
 				Weave = h.rgb(226, 174, 106),
@@ -109,7 +109,7 @@ return function(h)
 		-- The clearing: lawn, sand crescent, stepping stones, flower beds, toadstools, tufts.
 		HoneyGlade = {
 			Height = 2.488,
-			AssetId = 0,
+			AssetId = 123644092688627,
 			Shadow = false,
 			Palette = {
 				Lawn = h.rgb(136, 206, 90),
@@ -142,7 +142,7 @@ return function(h)
 		-- Tall storybook sunflowers around the meadow, facing the front (-Z).
 		HoneySunflower = {
 			Height = 14.094,
-			AssetId = 0,
+			AssetId = 71469977575955,
 			Palette = {
 				Stem = h.rgb(92, 160, 62),
 				SunLeaves = h.rgb(104, 182, 70),
@@ -158,7 +158,7 @@ return function(h)
 		-- A straw beehive on a stool (entrance at the front, -Z).
 		HoneySkep = {
 			Height = 5.037,
-			AssetId = 0,
+			AssetId = 101982584421193,
 			Collide = true,
 			Palette = {
 				Straw = h.rgb(236, 188, 98),
@@ -175,7 +175,7 @@ return function(h)
 		-- The 1-or-2 block (the client colors "Block" and writes the number on its sides).
 		HoneyDice = {
 			Height = 5.16,
-			AssetId = 0,
+			AssetId = 98913426865255,
 			Palette = {
 				Block = h.rgb(255, 210, 60),
 				Trim = h.rgb(255, 246, 222),

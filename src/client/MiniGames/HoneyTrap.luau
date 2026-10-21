@@ -728,8 +728,8 @@ function HoneyTrap.Start(api)
 			local ahead = Vector3.new(math.cos(angle), 0, -math.sin(angle)) * math.sign(fly.Speed)
 			local body = CFrame.lookAt(spot, spot + ahead)
 			local flap = math.sin(t * 16 + fly.Phase) * 0.9
-			fly.Wings[1].CFrame = body * CFrame.Angles(0, 0, flap) * CFrame.new(-0.42, 0, 0)
-			fly.Wings[2].CFrame = body * CFrame.Angles(0, 0, -flap) * CFrame.new(0.42, 0, 0)
+			fly.Wings[1].CFrame = body * CFrame.Angles(0, 0, flap) * CFrame.new(-0.5, 0, 0)
+			fly.Wings[2].CFrame = body * CFrame.Angles(0, 0, -flap) * CFrame.new(0.5, 0, 0)
 		end
 
 		-- The block and the turn HUD.

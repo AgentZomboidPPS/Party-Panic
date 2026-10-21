@@ -18,10 +18,10 @@ from generate_meshes import (
     sdf_mesh,
     smin,
     sphere,
-    taper,
     torus,
-    tube,
 )
+from generate_meshes import taper as _taper
+from generate_meshes import tube as _tube
 
 # The vine hangs from here (the tip of the oak's front branch). Honey Trap's server reads the
 # "Anchor" piece, so the vine, the items and the falling fruit all line up with the branch.
@@ -55,10 +55,36 @@ def sd_round_cone(p, a, b, r1, r2):
 
 
 def outward(mesh: Mesh) -> Mesh:
-    """sdf_mesh winds its triangles inside-out (normals point in); turn them round so the surface
-    isn't culled in Roblox."""
-    mesh.f = mesh.f[:, ::-1].copy()
+    """Makes a closed mesh face outwards (sdf_mesh's triangles can come out inside-out, and Roblox
+    culls back faces): flips it if its signed volume is negative."""
+    tri = mesh.v[mesh.f]
+    volume = np.einsum("ij,ij->i", tri[:, 0], np.cross(tri[:, 1], tri[:, 2])).sum()
+    if volume < 0:
+        mesh.f = mesh.f[:, ::-1].copy()
     return mesh
+
+
+def _sides_outward(mesh: Mesh, points, sides: int) -> Mesh:
+    """Turns each side triangle of a tube so it faces away from its stretch of the polyline."""
+    pts = np.asarray(points, float)
+    count = (len(pts) - 1) * sides * 2
+    faces = mesh.f[:count]
+    tri = mesh.v[faces]
+    normal = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    segment = np.repeat(np.arange(len(pts) - 1), sides * 2)
+    middle = (pts[segment] + pts[segment + 1]) / 2
+    inward = np.einsum("ij,ij->i", tri.mean(axis=1) - middle, normal) < 0
+    faces[inward] = faces[inward][:, ::-1]
+    mesh.f[:count] = faces
+    return mesh
+
+
+def tube(points, radius, sides=8):
+    return _sides_outward(_tube(points, radius, sides), points, sides)
+
+
+def taper(points, r0, r1, sides=8):
+    return _sides_outward(_taper(points, r0, r1, sides), points, sides)
 
 
 def limb(p, points, radii):
@@ -587,8 +613,8 @@ def honey_glade():
         x, z = math.cos(a) * dist, TRUNK_Z + math.sin(a) * dist
         h = 0.9 * scale
         stalks.append(lathe([(0.0, 0.0), (0.32 * scale, 0.0), (0.26 * scale, h * 0.6), (0.3 * scale, h), (0.0, h)], 12).translate(x, 0, z))
-        cap = lathe([(0.0, h + 0.75 * scale), (0.5 * scale, h + 0.68 * scale), (0.85 * scale, h + 0.4 * scale), (0.95 * scale, h + 0.1 * scale),
-                     (0.6 * scale, h + 0.05 * scale), (0.0, h + 0.1 * scale)], 18)
+        cap = lathe([(0.0, h + 0.1 * scale), (0.6 * scale, h + 0.05 * scale), (0.95 * scale, h + 0.1 * scale), (0.85 * scale, h + 0.4 * scale),
+                     (0.5 * scale, h + 0.68 * scale), (0.0, h + 0.75 * scale)], 18)
         tilt = rng.uniform(-8, 8)
         caps.append(cap.rotate("z", tilt).translate(x, 0, z))
         for k in range(5):
@@ -691,31 +717,28 @@ def skep():
 
 def honey_dice():
     """The 1-or-2 block: a soft cube (the client colors it and writes the number on its sides)
-    with a honey-gold trim on its edges and little bee wings on top."""
+    with a cream piping along its rounded edges, bobbles on the corners and little bee wings."""
     block = rounded_box(4.0, 4.0, 4.0, 0.75, 8)
     trim = []
-    h = 2.0 - 0.06
-    for axis in ("x", "y", "z"):
-        for s1 in (-1, 1):
-            for s2 in (-1, 1):
-                bar = rounded_box(0.42, 0.42, 2.9, 0.2, 3)
-                if axis == "x":
-                    bar = rounded_box(2.9, 0.42, 0.42, 0.2, 3).translate(0, s1 * (h - 0.42), s2 * (h - 0.42))
-                elif axis == "y":
-                    bar = rounded_box(0.42, 2.9, 0.42, 0.2, 3).translate(s1 * (h - 0.42), 0, s2 * (h - 0.42))
-                else:
-                    bar = bar.translate(s1 * (h - 0.42), s2 * (h - 0.42), 0)
-                trim.append(bar)
+    e = 1.25 + 0.75 * math.sqrt(0.5) - 0.1  # on the rounded edge
+    for s1 in (-1, 1):
+        for s2 in (-1, 1):
+            trim.append(rounded_box(2.6, 0.46, 0.46, 0.22, 3).translate(0, s1 * e, s2 * e))
+            trim.append(rounded_box(0.46, 2.6, 0.46, 0.22, 3).translate(s1 * e, 0, s2 * e))
+            trim.append(rounded_box(0.46, 0.46, 2.6, 0.22, 3).translate(s1 * e, s2 * e, 0))
+    c = 1.25 + 0.75 / math.sqrt(3) - 0.08
     for sx in (-1, 1):
         for sy in (-1, 1):
             for sz in (-1, 1):
-                trim.append(icosphere(0.42, 2).translate(sx * (h - 0.42), sy * (h - 0.42), sz * (h - 0.42)))
+                trim.append(icosphere(0.42, 2).translate(sx * c, sy * c, sz * c))
     wings = []
     for side in (-1, 1):
-        wing = icosphere(1.0, 2).scale(1.3, 0.08, 0.75).rotate("z", side * -28).translate(side * 1.25, 2.55, 0.3)
-        wings.append(wing)
-    pieces = {"Block": block.translate(0, 2.0, 0), "Trim": merge(*trim).translate(0, 2.0, 0), "Wings": merge(*wings).translate(0, 2.0, 0)}
-    return pieces
+        wings.append(icosphere(1.0, 2).scale(1.3, 0.08, 0.75).rotate("z", side * -28).translate(side * 1.25, 2.55, 0.3))
+    return {
+        "Block": block.translate(0, 2.0, 0),
+        "Trim": merge(*trim).translate(0, 2.0, 0),
+        "Wings": merge(*wings).translate(0, 2.0, 0),
+    }
 
 
 PROPS = {
