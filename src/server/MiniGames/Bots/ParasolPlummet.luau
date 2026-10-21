@@ -88,19 +88,32 @@ function Brain.Step(bot, ctx, mode, _dt)
 				if iy < Sim.Y_MIN + 1 then
 					score *= 0.6 -- (caught at the floor of the sky: possible, but that's where bots pile up)
 				end
-				-- Someone nearer will likely get it first: look for a coin of its own instead.
+				-- Someone as near or nearer will likely get it first: look for a coin of its own instead
+				-- (and every bot fancies different coins a little, so a crowd never chases one coin).
 				local mine = math.abs(ix - f.X) + math.abs(iy - f.Y)
 				for _, other in mode.fallers do
-					if other ~= f and math.abs(ix - other.X) + math.abs(iy - other.Y) < mine - 1 then
-						score *= 0.45
+					if other ~= f and math.abs(ix - other.X) + math.abs(iy - other.Y) < mine + 2 then
+						score *= 0.3
 						break
 					end
 				end
+				memory.Fancy = memory.Fancy or {}
+				local fancy = memory.Fancy[id]
+				if not fancy then
+					fancy = bot.Rng:NextNumber(0.6, 1.4)
+					memory.Fancy[id] = fancy
+				end
+				score *= fancy
 				if score > bestScore then
 					best, bestScore, bestX, bestY = item, score, ix, iy
 				end
 				break
 			end
+		end
+	end
+	for id in memory.Fancy or {} do
+		if not mode.items[id] then
+			memory.Fancy[id] = nil
 		end
 	end
 	for id in memory.Notice do
