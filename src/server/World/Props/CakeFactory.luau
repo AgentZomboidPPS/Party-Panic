@@ -63,7 +63,7 @@ return function(h)
 	return {
 		CakePlate = {
 			Height = 0.37,
-			AssetId = 0,
+			AssetId = 139405542176293,
 			Palette = { Plate = rgb(250, 250, 252), Doily = rgb(255, 214, 228) },
 			Fallback = function(m)
 				h.pillar(m, "Plate", 4.2, 0.17, Vector3.new(0, 0.085, 0))
@@ -73,7 +73,7 @@ return function(h)
 		},
 		CakeSponge = {
 			Height = 1.25,
-			AssetId = 0,
+			AssetId = 126954810574497,
 			Palette = { Sponge = rgb(246, 196, 112), Filling = rgb(255, 244, 232) },
 			Fallback = function(m)
 				h.pillar(m, "Sponge", 3.2, 0.56, Vector3.new(0, 0.28, 0))
@@ -83,7 +83,7 @@ return function(h)
 		},
 		CakeCream = {
 			Height = 1.24,
-			AssetId = 0,
+			AssetId = 114344963803893,
 			Palette = {
 				Cream = rgb(255, 246, 240),
 				SprinklesA = rgb(255, 120, 170),
@@ -105,7 +105,7 @@ return function(h)
 		},
 		CakeBerry = {
 			Height = 1.1,
-			AssetId = 0,
+			AssetId = 77899735720044,
 			Palette = { Berry = rgb(232, 40, 60), Seeds = rgb(255, 226, 120), BerryLeaves = rgb(80, 190, 80) },
 			Fallback = function(m)
 				h.blob(m, "Berry", Vector3.new(1.1, 1.05, 1.1), Vector3.new(0, 0.58, 0))
@@ -114,7 +114,7 @@ return function(h)
 		},
 		CakeBox = {
 			Height = 5.07,
-			AssetId = 0,
+			AssetId = 80114061986876,
 			Palette = { Box = rgb(255, 250, 245), Window = rgb(190, 230, 255), Stripe = rgb(255, 80, 90) },
 			Materials = { Window = Enum.Material.Glass },
 			Fallback = function(m)
@@ -127,7 +127,7 @@ return function(h)
 		},
 		CakeBelt = {
 			Height = 3.56,
-			AssetId = 0,
+			AssetId = 78386516739179,
 			Collide = true,
 			Palette = {
 				Belt = rgb(70, 64, 86),
@@ -152,7 +152,7 @@ return function(h)
 		},
 		CakePress = {
 			Height = 14.4,
-			AssetId = 0,
+			AssetId = 131841845142522,
 			Collide = true,
 			Palette = machine({
 				Window = rgb(255, 190, 110),
@@ -174,7 +174,7 @@ return function(h)
 		},
 		CakeNozzle = {
 			Height = 14.57,
-			AssetId = 0,
+			AssetId = 96214481764512,
 			Collide = true,
 			Palette = machine({
 				Tank = rgb(210, 235, 255),
@@ -196,7 +196,7 @@ return function(h)
 		},
 		CakeHopper = {
 			Height = 13.29,
-			AssetId = 0,
+			AssetId = 123272792324644,
 			Collide = true,
 			Palette = machine({
 				Hopper = rgb(255, 110, 120),
@@ -220,7 +220,7 @@ return function(h)
 		},
 		CakeStacker = {
 			Height = 12.95,
-			AssetId = 0,
+			AssetId = 135606329232971,
 			Collide = true,
 			Palette = machine({
 				Glass = rgb(210, 235, 255),
@@ -243,7 +243,7 @@ return function(h)
 		},
 		CakeBoxer = {
 			Height = 13.3,
-			AssetId = 0,
+			AssetId = 73344471196114,
 			Collide = true,
 			Palette = machine({
 				Lamp = rgb(140, 255, 160),
@@ -262,7 +262,7 @@ return function(h)
 		},
 		CakeBin = {
 			Height = 5.54,
-			AssetId = 0,
+			AssetId = 97159669784158,
 			Collide = true,
 			Palette = {
 				Bin = rgb(120, 210, 200),
@@ -287,7 +287,7 @@ return function(h)
 		},
 		CakeShelf = {
 			Height = 11.8,
-			AssetId = 0,
+			AssetId = 88862121708237,
 			Collide = true,
 			Palette = {
 				Frame = rgb(255, 225, 190),
@@ -315,7 +315,7 @@ return function(h)
 		},
 		CakeTiered = {
 			Height = 17.15,
-			AssetId = 0,
+			AssetId = 76469774015382,
 			Collide = true,
 			Palette = {
 				Board = rgb(255, 225, 140),
@@ -342,7 +342,7 @@ return function(h)
 		},
 		CakeMixer = {
 			Height = 18.33,
-			AssetId = 0,
+			AssetId = 100560005165048,
 			Collide = true,
 			Palette = {
 				Body = rgb(130, 215, 230),
@@ -363,7 +363,7 @@ return function(h)
 		},
 		CakeCupcake = {
 			Height = 5.09,
-			AssetId = 0,
+			AssetId = 128328045858326,
 			Collide = true,
 			Palette = {
 				Wrapper = rgb(140, 200, 255),
