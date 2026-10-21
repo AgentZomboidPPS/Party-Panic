@@ -396,6 +396,10 @@ function PrimeCut:Prepare()
 	ctx.Hooks.Respawn = function(player)
 		return self:_standAt(player)
 	end
+	-- Everyone stays at their grill, a late or respawned character too (no prop here is solid).
+	ctx.Hooks.CharacterReady = function(player)
+		ctx:Freeze(player, true)
+	end
 	ctx.Hooks.PlayerLeft = function(player)
 		self:_leave(player)
 	end
@@ -411,8 +415,10 @@ function PrimeCut:Prepare()
 	end
 	self.layout = stations
 	ctx:SetSharedJSON("Layout", { Stations = stations })
+	-- (Spots in ctx:GetPlayers() order, as SpawnAll hands them out: someone may have left while
+	-- the meshes loaded.)
 	local points = {}
-	for _, player in players do
+	for _, player in ctx:GetPlayers() do
 		table.insert(points, self:_standAt(player) or CFrame.new(self.origin + Vector3.new(0, 0, STAND_Z)))
 	end
 	ctx:SpawnAll(points, true)
@@ -586,7 +592,7 @@ function PrimeCut:_tick(now: number)
 		end
 	elseif self.phase == "Reveal" then
 		if now >= self.nextAt then
-			if self.cut >= PrimeCutLogic.CUTS then
+			if self.cut >= PrimeCutLogic.CUTS or self:_unopposed() then
 				self:_finish()
 			else
 				-- (Ready first: a steak's mesh can yield on its first load, and this runs every frame.)
@@ -622,7 +628,8 @@ function PrimeCut:_judge(now: number)
 		local station = self.stations[team]
 		local percent = PrimeCutLogic.Percent(self.steak.Outline, station.X)
 		local off = PrimeCutLogic.Off(percent)
-		results[team] = { P = round(percent, 0.0001), O = off, X = round(station.X, 0.001) }
+		-- (P as it's shown, from the same rounding as O, so "PERFECT" never sits next to 50.1%.)
+		results[team] = { P = PrimeCutLogic.Round(percent), O = off, X = round(station.X, 0.001) }
 		table.insert(station.Results, { P = percent, O = off })
 		if not station.Gone then
 			station.Off += off
@@ -662,6 +669,20 @@ function PrimeCut:_judge(now: number)
 			)
 		end
 	end)
+end
+
+-- Whether every rival team has left (a round that started with rivals then ends after this steak).
+function PrimeCut:_unopposed(): boolean
+	if #self.order < 2 then
+		return false
+	end
+	local left = 0
+	for _, team in self.order do
+		if not self.stations[team].Gone then
+			left += 1
+		end
+	end
+	return left <= 1
 end
 
 -- Exact order: steaks won, then the smaller total miss (teams whose players all left come last).

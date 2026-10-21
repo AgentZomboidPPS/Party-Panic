@@ -29,7 +29,7 @@ local REPEAT_DELAY = 0.3 -- a held button starts repeating after this long...
 local REPEAT_RATE, REPEAT_FAST = 12, 20 -- ...this many nudges a second, speeding up to this
 local SEND_GAP = 0.05 -- at most this often a batch goes out
 local CARD_GAP = 0.32 -- the reveal shows one team's pieces after another
-local WORLD_W = 19 -- studs of grill a reveal picture spans
+local FRAME_PAD = 0.8 -- studs of grill shown round a steak in a reveal picture
 
 type Station = {
 	Team: string,
@@ -304,34 +304,50 @@ function PrimeCut.Start(api)
 	end
 
 	-- Camera: over my steak, looking down at it from behind the knife's handle.
+	-- (Only while I'm really at my grill: someone whose character never spawned is back in the lobby,
+	-- and someone the server took off the team gets their camera and controls back.)
 	local camera = workspace.CurrentCamera
 	local shake = 0
-	if myStation and camera then
-		local savedType, savedFov = camera.CameraType, camera.FieldOfView
-		camera.CameraType = Enum.CameraType.Scriptable
-		camera.FieldOfView = 42
-		api:Track(function()
-			camera.CameraType = savedType
-			camera.FieldOfView = savedFov
-		end)
+	local claimed = false
+	local savedType, savedFov = nil, nil
+	local controls = nil
+	local function atMyGrill(): boolean
+		return myStation ~= nil and api:Alive() and table.find((myStation :: Station).Members, myId) ~= nil
+	end
+	local function claim(want: boolean)
+		if want == claimed or not camera then
+			return
+		end
+		claimed = want
+		if want then
+			savedType, savedFov = camera.CameraType, camera.FieldOfView
+			camera.CameraType = Enum.CameraType.Scriptable
+			camera.FieldOfView = 42
+		else
+			camera.CameraType = savedType or Enum.CameraType.Custom
+			camera.FieldOfView = savedFov or 70
+		end
 		-- You stand at your grill: the move controls go away, the screen is for the knife.
-		local controls = nil
 		pcall(function()
-			local scripts = me:FindFirstChild("PlayerScripts")
-			local module = scripts and scripts:FindFirstChild("PlayerModule")
-			if module then
-				controls = (require(module :: any) :: any):GetControls()
-				controls:Disable()
+			if not controls then
+				local scripts = me:FindFirstChild("PlayerScripts")
+				local module = scripts and scripts:FindFirstChild("PlayerModule")
+				if module then
+					controls = (require(module :: any) :: any):GetControls()
+				end
 			end
-		end)
-		api:Track(function()
 			if controls then
-				pcall(function()
+				if want then
+					controls:Disable()
+				else
 					controls:Enable()
-				end)
+				end
 			end
 		end)
 	end
+	api:Track(function()
+		claim(false)
+	end)
 	local function cameraTarget(): CFrame
 		local frame = (myStation :: Station).Frame
 		local pitch = math.rad(if touch then 70 else 72)
@@ -341,7 +357,8 @@ function PrimeCut.Start(api)
 		local eye = look + Vector3.new(0, math.sin(pitch) * distance, math.cos(pitch) * distance)
 		return CFrame.lookAt(eye, look)
 	end
-	if myStation and camera then
+	if atMyGrill() and camera then
+		claim(true)
 		camera.CFrame = cameraTarget()
 	end
 
@@ -387,7 +404,7 @@ function PrimeCut.Start(api)
 		Children = {
 			UIKit.List(
 				Enum.FillDirection.Horizontal,
-				8,
+				if touch then 5 else 8,
 				Enum.HorizontalAlignment.Center,
 				Enum.VerticalAlignment.Center
 			),
@@ -404,7 +421,7 @@ function PrimeCut.Start(api)
 			Text = "",
 			Font = Theme.Fonts.Bold,
 			TextSize = 24,
-			Size = UDim2.fromOffset(150, 32),
+			Size = UDim2.fromOffset(if touch then 100 else 150, 32),
 			BackgroundColor3 = Color3.fromRGB(30, 22, 50),
 			BackgroundTransparency = 0.35,
 			TextWrapped = false,
@@ -473,6 +490,8 @@ function PrimeCut.Start(api)
 		Visible = false,
 		Parent = hud,
 	})
+	-- (Shown for a few seconds between steaks, while the move stick is off: it may cover its corner.)
+	cardsFrame:SetAttribute("PP_Popup", true)
 	type Card = {
 		Frame: Frame,
 		Team: string,
@@ -500,8 +519,15 @@ function PrimeCut.Start(api)
 	end
 
 	-- One half of a team's steak drawn from above, clipped at the cut (x studs right of its middle).
-	local function steakPicture(parent: Frame, team: string, width: number, height: number, cutX: number, left: boolean)
-		local scale = width / WORLD_W -- pixels per stud
+	local function steakPicture(
+		parent: Frame,
+		team: string,
+		width: number,
+		height: number,
+		scale: number, -- pixels per stud
+		cutX: number,
+		left: boolean
+	)
 		local cutPx = width / 2 + cutX * scale
 		local clip = UIKit.new("Frame", {
 			Name = if left then "Left" else "Right",
@@ -529,7 +555,7 @@ function PrimeCut.Start(api)
 		end
 		-- Straight down from high up with a narrow lens: nearly flat, so the clip edge is the cut.
 		local fov = 10
-		local worldH = WORLD_W * height / width
+		local worldH = height / scale
 		local distance = (worldH / 2) / math.tan(math.rad(fov / 2)) + PrimeCutLogic.HEIGHT
 		local lens = UIKit.new("Camera", {
 			FieldOfView = fov,
@@ -557,20 +583,36 @@ function PrimeCut.Start(api)
 		if count == 0 then
 			return
 		end
+		-- (On phones 3-4 teams go on two rows, so the cards and their text stay big.)
 		local gap = 8
-		local width = math.min(190, math.floor((612 - (count - 1) * gap) / count))
+		local perRow = if touch and count >= 3 then 2 else count
+		local rows = math.ceil(count / perRow)
+		local width = math.min(if touch then 230 else 190, math.floor((612 - (perRow - 1) * gap) / perRow))
 		local pictureW = width - 12
-		local pictureH = math.floor(pictureW * 0.6)
-		local height = 30 + pictureH + 56
-		cardsFrame.Size = UDim2.fromOffset(612, height + 6)
-		local total = count * width + (count - 1) * gap
+		local pictureH = math.floor(pictureW * (if rows > 1 then 0.56 else 0.66))
+		local height = 34 + pictureH + 64
+		cardsFrame.Size = UDim2.fromOffset(612, rows * (height + gap))
+		-- The whole steak in every picture: framed from its outline as it lies on the grill.
+		local reachX, reachZ = 1, 1
+		for _, point in outline do
+			reachX = math.max(reachX, math.abs(point.X))
+			reachZ = math.max(reachZ, math.abs(point.Y))
+		end
+		local scale = math.min(pictureW / (2 * (reachX + FRAME_PAD)), pictureH / (2 * (reachZ + FRAME_PAD)))
 		for index, team in shown do
 			local result = results[team]
 			local color = Teams.Colors[team] or Color3.new(1, 1, 1)
+			local row = math.ceil(index / perRow)
+			local inRow = math.min(perRow, count - (row - 1) * perRow)
+			local column = index - (row - 1) * perRow
+			local total = inRow * width + (inRow - 1) * gap
 			local frame = UIKit.new("Frame", {
 				Name = `Card_{team}`,
 				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromOffset(306 - total / 2 + (index - 1) * (width + gap) + width / 2, 0),
+				Position = UDim2.fromOffset(
+					306 - total / 2 + (column - 1) * (width + gap) + width / 2,
+					(row - 1) * (height + gap)
+				),
 				Size = UDim2.fromOffset(width, height),
 				BackgroundColor3 = Color3.fromRGB(32, 24, 54),
 				BackgroundTransparency = 0.15,
@@ -583,20 +625,20 @@ function PrimeCut.Start(api)
 			})
 			UIKit.Label({
 				Name = "Team",
-				Text = `{SHAPES[team] or ""} {string.upper(team)}{if team == mine then " (YOU)" else ""}`,
+				Text = `{SHAPES[team] or ""} {string.upper(team)}`,
 				Font = Theme.Fonts.Display,
 				TextSize = 20,
 				TextColor3 = color,
 				TextWrapped = false,
 				TextScaled = true,
-				Position = UDim2.fromOffset(8, 4),
-				Size = UDim2.new(1, -16, 0, 24),
+				Position = UDim2.fromOffset(8, 3),
+				Size = UDim2.new(1, -16, 0, 28),
 				Parent = frame,
 				Children = { UIKit.TextStroke(0.1) },
 			})
 			local picture = UIKit.new("Frame", {
 				Name = "Picture",
-				Position = UDim2.fromOffset(6, 30),
+				Position = UDim2.fromOffset(6, 34),
 				Size = UDim2.fromOffset(pictureW, pictureH),
 				BackgroundColor3 = Color3.fromRGB(58, 52, 60),
 				BackgroundTransparency = 0.2,
@@ -605,8 +647,8 @@ function PrimeCut.Start(api)
 				Children = { UIKit.Corner(10) },
 			})
 			local cutX = result.X or 0
-			local left = steakPicture(picture, team, pictureW, pictureH, cutX, true)
-			local right = steakPicture(picture, team, pictureW, pictureH, cutX, false)
+			local left = steakPicture(picture, team, pictureW, pictureH, scale, cutX, true)
+			local right = steakPicture(picture, team, pictureW, pictureH, scale, cutX, false)
 			local leftShare, rightShare = PrimeCutLogic.Format(result.P or 50)
 			local shares = UIKit.Label({
 				Name = "Shares",
@@ -615,8 +657,8 @@ function PrimeCut.Start(api)
 				TextSize = 22,
 				TextScaled = true,
 				TextWrapped = false,
-				Position = UDim2.fromOffset(6, 32 + pictureH),
-				Size = UDim2.new(1, -12, 0, 26),
+				Position = UDim2.fromOffset(6, 36 + pictureH),
+				Size = UDim2.new(1, -12, 0, 30),
 				Visible = false,
 				Parent = frame,
 				Children = { UIKit.TextStroke(0.1) },
@@ -624,14 +666,14 @@ function PrimeCut.Start(api)
 			local off = result.O or 0
 			local miss = UIKit.Label({
 				Name = "Miss",
-				Text = if off <= 0 then "PERFECT 50 : 50!" else `OFF BY {string.format("%.1f", off)}`,
+				Text = if off <= 0 then "PERFECT 50 : 50!" else `OFF BY {string.format("%.1f", off)}%`,
 				Font = Theme.Fonts.Bold,
 				TextSize = 18,
 				TextScaled = true,
 				TextWrapped = false,
 				TextColor3 = if off <= 0 then Theme.Colors.Yellow else Theme.Colors.TextDim,
-				Position = UDim2.fromOffset(6, 58 + pictureH),
-				Size = UDim2.new(1, -12, 0, 22),
+				Position = UDim2.fromOffset(6, 66 + pictureH),
+				Size = UDim2.new(1, -12, 0, 28),
 				Visible = false,
 				Parent = frame,
 				Children = { UIKit.TextStroke(0.2) },
@@ -647,7 +689,7 @@ function PrimeCut.Start(api)
 				BackgroundColor3 = Theme.Colors.Yellow,
 				BackgroundTransparency = 0,
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.new(0.5, 0, 0, 30 + pictureH / 2),
+				Position = UDim2.new(0.5, 0, 0, 34 + pictureH / 2),
 				Size = UDim2.fromOffset(math.min(130, width - 16), 28),
 				ZIndex = 3,
 				Visible = false,
@@ -698,8 +740,15 @@ function PrimeCut.Start(api)
 		end
 	end
 	local function release(dir: number)
+		local was = held[dir]
 		held[dir] = false
 		nextRepeat[dir] = math.huge
+		if was and held[-dir] then
+			-- (the other button takes over from now, not from when it was pressed)
+			local now = api:Now()
+			heldSince[-dir] = now
+			nextRepeat[-dir] = now + REPEAT_DELAY
+		end
 	end
 	local leftButton, rightButton = nil, nil
 	if myStation then
@@ -739,9 +788,20 @@ function PrimeCut.Start(api)
 			end
 		end))
 	end
-	local buttonsLive = nil
+	local buttonsLive, buttonsShown = nil, nil
 	local function setButtons(live: boolean)
-		if buttonsLive == live or not leftButton or not rightButton then
+		if not leftButton or not rightButton then
+			return
+		end
+		-- (Out of the way of the reveal between steaks.)
+		local phase = cut.Ph
+		local shown = phase ~= "Chop" and phase ~= "Reveal" and phase ~= "Done"
+		if shown ~= buttonsShown then
+			buttonsShown = shown
+			leftButton:SetVisible(shown)
+			rightButton:SetVisible(shown)
+		end
+		if buttonsLive == live then
 			return
 		end
 		buttonsLive = live
@@ -799,7 +859,7 @@ function PrimeCut.Start(api)
 	api:RenderStep(function(dt)
 		local now = api:Now()
 		local live = steering(now)
-		setButtons(live and api:CanAct())
+		setButtons(live and api:CanAct() and atMyGrill())
 
 		-- Held buttons repeat, quicker the longer they're held; batches go out every SEND_GAP.
 		for _, dir in { -1, 1 } do
@@ -927,6 +987,10 @@ function PrimeCut.Start(api)
 			end
 		end
 		refreshChips(now, live or phase == "Wait" or phase == "Ready")
+		if hintShown and (phase == "Chop" or phase == "Reveal" or phase == "Done") then
+			hintShown = false
+			api:Hint("")
+		end
 
 		-- The reveal: cards appear one after another, then the best cut is crowned.
 		if (phase == "Reveal" or phase == "Done") and cut.R and revealOf ~= (cut.N or 0) then
@@ -971,7 +1035,9 @@ function PrimeCut.Start(api)
 		end
 
 		-- Camera (a respawn puts it back to following the character: take it back).
-		if myStation and camera then
+		local here = atMyGrill()
+		claim(here)
+		if here and camera then
 			if camera.CameraType ~= Enum.CameraType.Scriptable then
 				camera.CameraType = Enum.CameraType.Scriptable
 			end
