@@ -165,7 +165,7 @@ function StampOut:BuildArena()
 	})
 	for _, wall in
 		{
-			{ CFrame.new(origin + Vector3.new(59, 46, -300)), Vector3.new(782, 340, 4) },
+			{ CFrame.new(origin + Vector3.new(59.5, 46, -300)), Vector3.new(781, 340, 4) },
 			{ CFrame.new(origin + Vector3.new(-330, 46.5, 74)), Vector3.new(4, 340, 752) },
 		}
 	do
@@ -188,12 +188,13 @@ function StampOut:BuildArena()
 	})
 	for _, bar in
 		{
-			{ Vector3.new(40, 70, -296), Vector3.new(6, 136, 2) }, -- (each bar its own depth: no shared faces)
-			{ Vector3.new(40, 70, -296), Vector3.new(226, 6, 2.2) },
-			{ Vector3.new(40, 138, -296), Vector3.new(232, 8, 2.5) },
-			{ Vector3.new(40, 2, -296), Vector3.new(232, 8, 2.9) },
-			{ Vector3.new(-73, 70, -296), Vector3.new(8, 136, 3) },
-			{ Vector3.new(153, 70, -296), Vector3.new(8, 136, 3.2) },
+			-- (each bar its own depth, 0.2 apart: no two faces share a plane)
+			{ Vector3.new(40, 70, -295), Vector3.new(6, 136, 2) },
+			{ Vector3.new(40, 70, -295), Vector3.new(226, 6, 2.4) },
+			{ Vector3.new(40, 138, -295), Vector3.new(232, 8, 2.8) },
+			{ Vector3.new(40, 2, -295), Vector3.new(232, 8, 3.2) },
+			{ Vector3.new(-73, 70, -295), Vector3.new(8, 136, 3.6) },
+			{ Vector3.new(153, 70, -295), Vector3.new(8, 136, 4) },
 		}
 	do
 		Build.Decor({
@@ -208,8 +209,8 @@ function StampOut:BuildArena()
 	-- The paper pad: a cardboard back, the paper block and a red cloth binding along the far edge.
 	Build.Part({
 		Name = "Cardboard",
-		Size = Vector3.new(PAD + 4, 0.45, PAD + 4),
-		CFrame = CFrame.new(origin + Vector3.new(0, 0.175, 0)),
+		Size = Vector3.new(PAD + 4, 0.6, PAD + 4),
+		CFrame = CFrame.new(origin + Vector3.new(0, 0.1, 0)),
 		Color = rgb(150, 120, 92),
 		Material = Enum.Material.Cardboard,
 		Parent = arena,
@@ -223,27 +224,33 @@ function StampOut:BuildArena()
 	})
 	Build.Part({
 		Name = "Binding",
-		Size = Vector3.new(PAD + 4.4, PAPER_TOP + 0.7, 4),
-		CFrame = CFrame.new(origin + Vector3.new(0, (PAPER_TOP + 0.7) / 2 - 0.05, -PAD / 2 - 2)),
+		Size = Vector3.new(PAD + 4.4, PAPER_TOP + 0.95, 4),
+		CFrame = CFrame.new(origin + Vector3.new(0, (PAPER_TOP + 0.95) / 2 - 0.35, -PAD / 2 - 2)),
 		Color = rgb(200, 44, 52),
 		Material = Enum.Material.Fabric,
 		Parent = arena,
 	})
-	-- Notebook ruling: pale blue lines and a red margin, flat on the paper (under the ink).
-	local lineY = PAPER_TOP + 0.02
+	-- Notebook ruling: pale blue lines and a red margin, flat on the paper (under the ink). One layer
+	-- 0.1 above the paper (the rules stop at the margin, so nothing overlaps), the ink tiles 0.1 above
+	-- that: every layer clear of the next, nothing flickers.
+	local lineY = PAPER_TOP + 0.1
+	local marginX = -PAD / 2 + 14
 	for index = 1, 15 do
-		Build.Decor({
-			Name = "Rule",
-			Size = Vector3.new(PAD - 0.2, 0.02, 0.3),
-			CFrame = CFrame.new(origin + Vector3.new(0, lineY, -PAD / 2 + index * PAD / 16)),
-			Color = rgb(150, 190, 240),
-			Parent = arena,
-		})
+		local z = -PAD / 2 + index * PAD / 16
+		for _, span in { { -PAD / 2 + 0.1, marginX - 0.3 }, { marginX + 0.3, PAD / 2 - 0.1 } } do
+			Build.Decor({
+				Name = "Rule",
+				Size = Vector3.new(span[2] - span[1], 0.02, 0.3),
+				CFrame = CFrame.new(origin + Vector3.new((span[1] + span[2]) / 2, lineY, z)),
+				Color = rgb(150, 190, 240),
+				Parent = arena,
+			})
+		end
 	end
 	Build.Decor({
 		Name = "Margin",
 		Size = Vector3.new(0.35, 0.02, PAD - 0.2),
-		CFrame = CFrame.new(origin + Vector3.new(-PAD / 2 + 14, lineY + 0.03, 0)),
+		CFrame = CFrame.new(origin + Vector3.new(marginX, lineY, 0)),
 		Color = rgb(236, 120, 130),
 		Parent = arena,
 	})
