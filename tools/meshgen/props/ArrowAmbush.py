@@ -166,6 +166,12 @@ def target_board():
         rounded_box(0.36, height, 0.56, 0.1, 2).translate(-BOARD_W / 2, BOARD_BOTTOM + height / 2, 0.05),
         rounded_box(0.36, height, 0.56, 0.1, 2).translate(BOARD_W / 2, BOARD_BOTTOM + height / 2, 0.05),
     ]
+    # A Z-brace on the back, like a barn door (what the runners hiding behind it see).
+    batten_y = (BOARD_BOTTOM + 1.0, BOARD_TOP - 1.0)
+    braces_back = [rounded_box(BOARD_W - 0.5, 0.55, 0.22, 0.08, 2).translate(0, y, 0.36) for y in batten_y]
+    dx, dy = BOARD_W - 1.4, batten_y[1] - batten_y[0]
+    diagonal = rounded_box(math.hypot(dx, dy), 0.5, 0.2, 0.08, 2).rotate("z", math.degrees(math.atan2(dy, dx)))
+    braces_back.append(diagonal.translate(0, (batten_y[0] + batten_y[1]) / 2, 0.34))
     caps = [rounded_box(0.7, 0.7, 0.66, 0.12, 2).translate(sx * BOARD_W / 2, y, 0.05)
             for sx in (-1, 1) for y in (BOARD_BOTTOM + 0.1, BOARD_TOP - 0.1)]
     studs = [sphere(0.1, 5, 8).translate(sx * BOARD_W / 2, y, -0.28) for sx in (-1, 1) for y in (BOARD_BOTTOM + 0.1, BOARD_TOP - 0.1)]
@@ -182,7 +188,7 @@ def target_board():
     rim = torus(2.9, 0.09, 48, 8).rotate("x", 90).translate(0, cy, front - 0.03)
     return {
         "Wood": merge(cart, *posts, *braces, *planks),
-        "Frame": merge(*frame),
+        "Frame": merge(*frame, *braces_back),
         "Iron": merge(*caps, *studs, *hubs, *axles),
         "Wheels": merge(*wheels),
         "Face": face,

@@ -59,7 +59,7 @@ return function(h)
 		},
 		TargetBoard = {
 			Height = 7.79,
-			AssetId = 107116054753075,
+			AssetId = 110516461206126,
 			Collide = false, -- the client moves boards; arrows are blocked by the server's own check
 			Palette = {
 				Wood = h.rgb(196, 146, 96),
