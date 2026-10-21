@@ -80,8 +80,10 @@ return function(env)
 			end
 			local after = offset + move
 			local y = center.Y + SandSwirl.Height(after.Magnitude) + 3
-			if after.Magnitude < SandSwirl.HOLE then
-				y = center.Y - SandSwirl.DEPTH -- falls into the sinkhole
+			if after.Magnitude < SandSwirl.HOLE - 1 then
+				-- The whole body over the hole: nothing to stand on, so it falls in (on the lip it
+				-- still stands on the sand, as a real character does).
+				y = center.Y - SandSwirl.DEPTH - 2
 			end
 			env.Move(player, Vector3.new(center.X + after.X, y, center.Z + after.Z), center)
 		end
