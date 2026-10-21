@@ -21,6 +21,11 @@
 -- hasn't relayed back, so a batch lost on the way (or two arriving in one frame, which the action
 -- limit drops) never turns a traced curve into a straight shortcut. Positions are judged at the
 -- time they were traced, so ping never costs a cut.
+--
+-- Bug pass (owner: "it just has to work"): the first position may be traced the moment cutting
+-- starts. The order check used to turn down anything within 15 ms of CUT!, so a finger already
+-- moving at CUT! started its cut on the server with a straight line from the start, and the score
+-- shown live could end a point off the final one.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -249,7 +254,9 @@ function CrazyCutters:_startShape(index: number)
 	self.botPlans = {}
 	for _, player in ctx:GetPlayers() do
 		local track = Rules.Tracker(shape) :: Track
-		track.LastT = t0
+		-- The first position may be traced the moment cutting starts (a finger already moving at
+		-- CUT!), so it must pass the "in order" check in _onCut like it does on the player's screen.
+		track.LastT = t0 - Rules.SAMPLE_GAP
 		self.tracks[player] = track
 	end
 	self:_shareRound()
