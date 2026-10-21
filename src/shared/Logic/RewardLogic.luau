@@ -1,7 +1,8 @@
 --!strict
 -- Round reward calculation (design doc §9 "Example reward model").
 -- Everyone who finishes a round earns something; strong play earns visible bonuses,
--- and every line of the breakdown says exactly why it was earned.
+-- and every line of the breakdown says exactly why it was earned. The first win of each day pays
+-- a bonus on top (owner: "Also we need cool payoffs for players that keep playing the game.").
 -- Leaf module: no requires, no Roblox APIs.
 
 local RewardLogic = {}
@@ -13,12 +14,14 @@ export type RewardTable = {
 	TopHalf: RewardValue,
 	Winner: RewardValue,
 	PersonalBest: RewardValue,
+	FirstWin: RewardValue?,
 }
 
 export type RoundOutcome = {
 	Place: number,
 	PlayerCount: number,
 	PersonalBest: boolean?,
+	FirstWin: boolean?, -- this win is the player's first today (DailyLogic.ClaimFirstWin)
 }
 
 export type Line = { Label: string, Coins: number, XP: number }
@@ -55,6 +58,10 @@ function RewardLogic.ForRound(outcome: RoundOutcome, rewards: RewardTable): Rewa
 
 	if outcome.PersonalBest then
 		add("New personal best", rewards.PersonalBest)
+	end
+
+	if winner and outcome.FirstWin and rewards.FirstWin then
+		add("First win today!", rewards.FirstWin)
 	end
 
 	local coins, xp = 0, 0

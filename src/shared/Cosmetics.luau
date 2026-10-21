@@ -1,5 +1,12 @@
 -- Cosmetic catalog (design doc §10). Cosmetics never change gameplay.
 -- Unlock sources: coin Price, account level (UnlockLevel), lifetime stat (UnlockStat), or the VIP pass.
+-- Prices are on the low coin scale (owner: "Also lets balance the shop down. I want low currency
+-- not high."): a round pays 2-6 coins, so the cheapest items take a few rounds and the best a few
+-- dozen. Level and stat items can't be bought: they are the Rewards Road (one at most milestone
+-- levels) and the career milestones (owner: "Also we need cool payoffs for players that keep
+-- playing the game."). Every UnlockStat must be a stat Logic/ProgressionLogic.RecordRound keeps.
+
+local GameDefinitions = require(script.Parent.GameDefinitions)
 
 export type Cosmetic = {
 	Id: string,
@@ -18,6 +25,14 @@ export type Cosmetic = {
 	Effect: string?, -- visual effect played by emotes / victory / elimination
 }
 
+-- Every game, for the Game Explorer milestone ("play every game once").
+local gameCount = 0
+for _, definition in GameDefinitions.List do
+	if definition.Enabled ~= false then
+		gameCount += 1
+	end
+end
+
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
 end
@@ -30,7 +45,7 @@ local list: { Cosmetic } = {
 		Name = "Bubble Stream",
 		Description = "A soft trail of soapy blues.",
 		Icon = "🔵", -- not 🫧: newer than Roblox's emoji font, blank on phones
-		Price = 150,
+		Price = 12,
 		Colors = { rgb(160, 230, 255), rgb(255, 255, 255) },
 	},
 	{
@@ -39,7 +54,7 @@ local list: { Cosmetic } = {
 		Name = "Pixel Dust",
 		Description = "Retro green sparkle dust.",
 		Icon = "👾",
-		Price = 150,
+		Price = 12,
 		Colors = { rgb(90, 255, 120), rgb(20, 160, 80) },
 	},
 	{
@@ -48,7 +63,7 @@ local list: { Cosmetic } = {
 		Name = "Confetti Streak",
 		Description = "Party colors wherever you run.",
 		Icon = "🎊",
-		Price = 200,
+		Price = 20,
 		Colors = { rgb(255, 90, 170), rgb(255, 220, 60), rgb(80, 200, 255) },
 	},
 	{
@@ -57,7 +72,7 @@ local list: { Cosmetic } = {
 		Name = "Comic Speed Lines",
 		Description = "Zoom like a cartoon.",
 		Icon = "💨",
-		Price = 200,
+		Price = 20,
 		Colors = { rgb(255, 255, 255), rgb(40, 40, 60) },
 	},
 	{
@@ -66,7 +81,7 @@ local list: { Cosmetic } = {
 		Name = "Hot Sauce",
 		Description = "Spicy orange flames.",
 		Icon = "🔥",
-		Price = 250,
+		Price = 25,
 		Colors = { rgb(255, 230, 80), rgb(255, 110, 30), rgb(200, 30, 30) },
 	},
 	{
@@ -75,17 +90,62 @@ local list: { Cosmetic } = {
 		Name = "Rainbow Dash",
 		Description = "Every color, all at once.",
 		Icon = "🌈",
-		Price = 300,
+		Price = 30,
 		Colors = { rgb(255, 80, 80), rgb(255, 200, 60), rgb(90, 230, 110), rgb(80, 170, 255), rgb(190, 110, 255) },
+	},
+	{
+		Id = "Trail_Bubblegum",
+		Slot = "Trail",
+		Name = "Bubblegum Swirl",
+		Description = "Sweet pink swirls.",
+		Icon = "🍬",
+		UnlockLevel = 3,
+		Colors = { rgb(255, 150, 210), rgb(255, 255, 255), rgb(255, 100, 175) },
+	},
+	{
+		Id = "Trail_Starry",
+		Slot = "Trail",
+		Name = "Starry Night",
+		Description = "A sky full of stars.",
+		Icon = "🌌",
+		UnlockLevel = 10,
+		Colors = { rgb(60, 60, 160), rgb(150, 100, 240), rgb(255, 255, 255) },
 	},
 	{
 		Id = "Trail_Gold",
 		Slot = "Trail",
 		Name = "Golden Glory",
-		Description = "Reach level 15 to unlock.",
+		Description = "Shine like a champion.",
 		Icon = "🏅",
 		UnlockLevel = 15,
 		Colors = { rgb(255, 230, 120), rgb(230, 160, 30) },
+	},
+	{
+		Id = "Trail_Comet",
+		Slot = "Trail",
+		Name = "Comet Tail",
+		Description = "Streak across the sky.",
+		Icon = "💫",
+		UnlockLevel = 35,
+		Colors = { rgb(255, 255, 255), rgb(120, 220, 255), rgb(170, 110, 255) },
+	},
+	{
+		Id = "Trail_Solar",
+		Slot = "Trail",
+		Name = "Solar Flare",
+		Description = "Hot as the sun.",
+		Icon = "🌞",
+		UnlockLevel = 60,
+		Colors = { rgb(255, 250, 180), rgb(255, 180, 40), rgb(255, 90, 40) },
+	},
+	{
+		Id = "Trail_Hearts",
+		Slot = "Trail",
+		Name = "Loyal Hearts",
+		Description = "Party on 30 different days.",
+		Icon = "💖",
+		UnlockStat = { Stat = "DaysPlayed", Value = 30, Label = "Days" },
+		Colors = { rgb(255, 130, 190), rgb(255, 60, 110) },
 	},
 	{
 		Id = "Trail_VIP",
@@ -111,7 +171,7 @@ local list: { Cosmetic } = {
 		Id = "Title_Regular",
 		Slot = "Title",
 		Name = "Party Regular",
-		Description = "Reach level 5.",
+		Description = "A familiar face at the party.",
 		Icon = "🎉",
 		UnlockLevel = 5,
 		Colors = { rgb(140, 230, 255) },
@@ -120,7 +180,7 @@ local list: { Cosmetic } = {
 		Id = "Title_Pro",
 		Slot = "Title",
 		Name = "Party Pro",
-		Description = "Reach level 10.",
+		Description = "You know every trick.",
 		Icon = "⭐",
 		UnlockLevel = 10,
 		Colors = { rgb(255, 220, 90) },
@@ -129,10 +189,91 @@ local list: { Cosmetic } = {
 		Id = "Title_Legend",
 		Slot = "Title",
 		Name = "Party Legend",
-		Description = "Reach level 25.",
+		Description = "They tell stories about you.",
 		Icon = "👑",
 		UnlockLevel = 25,
 		Colors = { rgb(255, 170, 60) },
+	},
+	{
+		Id = "Title_Superstar",
+		Slot = "Title",
+		Name = "Party Superstar",
+		Description = "All eyes on you.",
+		Icon = "🌟",
+		UnlockLevel = 45,
+		Colors = { rgb(255, 240, 120) },
+	},
+	{
+		Id = "Title_Icon",
+		Slot = "Title",
+		Name = "Party Icon",
+		Description = "Shines like a diamond.",
+		Icon = "💎",
+		UnlockLevel = 50,
+		Colors = { rgb(150, 240, 255) },
+	},
+	{
+		Id = "Title_Immortal",
+		Slot = "Title",
+		Name = "Party Immortal",
+		Description = "Level 100. The party never ends.",
+		Icon = "🌈",
+		UnlockLevel = 100,
+		Colors = { rgb(255, 150, 230) },
+	},
+	{
+		Id = "Title_Animal",
+		Slot = "Title",
+		Name = "Party Animal",
+		Description = "Play 50 rounds.",
+		Icon = "🐾",
+		UnlockStat = { Stat = "RoundsPlayed", Value = 50, Label = "Rounds" },
+		Colors = { rgb(255, 190, 120) },
+	},
+	{
+		Id = "Title_Veteran",
+		Slot = "Title",
+		Name = "Party Veteran",
+		Description = "Play 250 rounds.",
+		Icon = "🎖️",
+		UnlockStat = { Stat = "RoundsPlayed", Value = 250, Label = "Rounds" },
+		Colors = { rgb(255, 200, 90) },
+	},
+	{
+		Id = "Title_WinnerWinner",
+		Slot = "Title",
+		Name = "Winner Winner",
+		Description = "Win 10 rounds.",
+		Icon = "🍗",
+		UnlockStat = { Stat = "Wins", Value = 10, Label = "Wins" },
+		Colors = { rgb(255, 210, 120) },
+	},
+	{
+		Id = "Title_PodiumPro",
+		Slot = "Title",
+		Name = "Podium Pro",
+		Description = "Make the podium (top 3) 25 times.",
+		Icon = "🥇",
+		UnlockStat = { Stat = "Podiums", Value = 25, Label = "Podiums" },
+		Colors = { rgb(255, 225, 90) },
+	},
+	{
+		Id = "Title_Explorer",
+		Slot = "Title",
+		Name = "Game Explorer",
+		Description = `Play all {gameCount} games.`,
+		Icon = "🗺️",
+		UnlockStat = { Stat = "GamesTried", Value = gameCount, Label = "Games" },
+		Colors = { rgb(120, 230, 200) },
+	},
+	{
+		Id = "Title_WeekWarrior",
+		Slot = "Title",
+		Name = "Week Warrior",
+		Description = "Party on 7 different days.",
+		Icon = "📅",
+		UnlockStat = { Stat = "DaysPlayed", Value = 7, Label = "Days" },
+		Colors = { rgb(160, 200, 255) },
 	},
 	{
 		Id = "Title_HazardDodger",
@@ -147,18 +288,18 @@ local list: { Cosmetic } = {
 		Id = "Title_TeamMVP",
 		Slot = "Title",
 		Name = "Team MVP",
-		Description = "Deliver 50 treasure for your team.",
+		Description = "Win 10 rounds with your team.",
 		Icon = "🤝",
-		UnlockStat = { Stat = "TreasureDelivered", Value = 50, Label = "Treasure delivered" },
+		UnlockStat = { Stat = "TeamWins", Value = 10, Label = "Team wins" },
 		Colors = { rgb(130, 240, 130) },
 	},
 	{
 		Id = "Title_SpeedDemon",
 		Slot = "Title",
 		Name = "Speed Demon",
-		Description = "Finish 10 races.",
+		Description = "Make the podium in 5 races.",
 		Icon = "🏎️",
-		UnlockStat = { Stat = "RaceFinishes", Value = 10, Label = "Races finished" },
+		UnlockStat = { Stat = "RacePodiums", Value = 5, Label = "Race podiums" },
 		Colors = { rgb(90, 200, 255) },
 	},
 	{
@@ -167,7 +308,7 @@ local list: { Cosmetic } = {
 		Name = "Confetti Connoisseur",
 		Description = "For the true party animal.",
 		Icon = "🎊",
-		Price = 250,
+		Price = 25,
 		Colors = { rgb(255, 120, 200) },
 	},
 	{
@@ -176,7 +317,7 @@ local list: { Cosmetic } = {
 		Name = "Chaos Champion",
 		Description = "Thrives in the panic.",
 		Icon = "🌀",
-		Price = 400,
+		Price = 40,
 		Colors = { rgb(200, 130, 255) },
 	},
 	{
@@ -223,7 +364,7 @@ local list: { Cosmetic } = {
 		Name = "Laugh",
 		Description = "That was hilarious.",
 		Icon = "😂",
-		Price = 100,
+		Price = 8,
 		Animation = 507770818,
 	},
 	{
@@ -232,7 +373,7 @@ local list: { Cosmetic } = {
 		Name = "Groove",
 		Description = "A classic dance.",
 		Icon = "🕺",
-		Price = 150,
+		Price = 15,
 		Animation = 507771019,
 		Looped = true,
 	},
@@ -242,7 +383,7 @@ local list: { Cosmetic } = {
 		Name = "Bounce",
 		Description = "Feel the beat.",
 		Icon = "💃",
-		Price = 200,
+		Price = 20,
 		Animation = 507776043,
 		Looped = true,
 	},
@@ -252,7 +393,7 @@ local list: { Cosmetic } = {
 		Name = "Disco",
 		Description = "Saturday night moves.",
 		Icon = "🎶", -- not 🪩: newer than Roblox's emoji font, blank on phones
-		Price = 250,
+		Price = 25,
 		Animation = 507777268,
 		Looped = true,
 	},
@@ -262,7 +403,7 @@ local list: { Cosmetic } = {
 		Name = "Confetti Pop",
 		Description = "Burst of confetti.",
 		Icon = "🎉",
-		Price = 120,
+		Price = 10,
 		Effect = "Confetti",
 	},
 	{
@@ -271,7 +412,7 @@ local list: { Cosmetic } = {
 		Name = "Heart Burst",
 		Description = "Spread the love.",
 		Icon = "💖",
-		Price = 120,
+		Price = 10,
 		Effect = "Hearts",
 	},
 	{
@@ -280,8 +421,35 @@ local list: { Cosmetic } = {
 		Name = "Star Shower",
 		Description = "You're a star.",
 		Icon = "✨",
-		Price = 200,
+		Price = 20,
 		Effect = "Stars",
+	},
+	{
+		Id = "Emote_Balloons",
+		Slot = "Emote",
+		Name = "Balloon Bash",
+		Description = "Let a bunch of balloons go.",
+		Icon = "🎈",
+		UnlockLevel = 2,
+		Effect = "Balloons",
+	},
+	{
+		Id = "Emote_Sing",
+		Slot = "Emote",
+		Name = "Sing Along",
+		Description = "Everybody sing!",
+		Icon = "🎵",
+		UnlockLevel = 18,
+		Effect = "Notes",
+	},
+	{
+		Id = "Emote_Crowns",
+		Slot = "Emote",
+		Name = "Crown Shower",
+		Description = "Make it rain crowns.",
+		Icon = "👑",
+		UnlockLevel = 30,
+		Effect = "Crowns",
 	},
 
 	-- Victory effects
@@ -300,7 +468,7 @@ local list: { Cosmetic } = {
 		Name = "Golden Sparkles",
 		Description = "Shine on the podium.",
 		Icon = "✨",
-		Price = 250,
+		Price = 25,
 		Effect = "Sparkles",
 	},
 	{
@@ -309,8 +477,46 @@ local list: { Cosmetic } = {
 		Name = "Fireworks",
 		Description = "Light up the sky.",
 		Icon = "🎆",
-		Price = 300,
+		Price = 30,
 		Effect = "Fireworks",
+	},
+	{
+		Id = "Victory_GoldFireworks",
+		Slot = "Victory",
+		Name = "Golden Fireworks",
+		Description = "Gold sparks for a gold finish.",
+		Icon = "🎇",
+		UnlockLevel = 12,
+		Effect = "Fireworks",
+		Colors = { rgb(255, 230, 120), rgb(255, 190, 60), rgb(255, 250, 210) },
+	},
+	{
+		Id = "Victory_RainbowFireworks",
+		Slot = "Victory",
+		Name = "Rainbow Fireworks",
+		Description = "Every color in the sky.",
+		Icon = "🌈",
+		UnlockLevel = 20,
+		Effect = "Fireworks",
+		Colors = { rgb(255, 80, 80), rgb(255, 200, 60), rgb(90, 230, 110), rgb(80, 170, 255), rgb(190, 110, 255) },
+	},
+	{
+		Id = "Victory_Finale",
+		Slot = "Victory",
+		Name = "Grand Finale",
+		Description = "Confetti, sparkles AND fireworks.",
+		Icon = "🎆",
+		UnlockLevel = 75,
+		Effect = "Finale",
+	},
+	{
+		Id = "Victory_Trophies",
+		Slot = "Victory",
+		Name = "Trophy Rain",
+		Description = "Win 50 rounds.",
+		Icon = "🏆",
+		UnlockStat = { Stat = "Wins", Value = 50, Label = "Wins" },
+		Effect = "Trophies",
 	},
 
 	-- Elimination effects
@@ -329,7 +535,7 @@ local list: { Cosmetic } = {
 		Name = "Seeing Stars",
 		Description = "Dizzy little stars.",
 		Icon = "💫",
-		Price = 150,
+		Price = 12,
 		Effect = "Stars",
 	},
 	{
@@ -338,8 +544,26 @@ local list: { Cosmetic } = {
 		Name = "Bubble Pop",
 		Description = "Pop!",
 		Icon = "🔵", -- not 🫧: newer than Roblox's emoji font, blank on phones
-		Price = 150,
+		Price = 12,
 		Effect = "Bubbles",
+	},
+	{
+		Id = "Elim_Ghost",
+		Slot = "Elimination",
+		Name = "Ghosted",
+		Description = "Float away as a little ghost.",
+		Icon = "👻",
+		UnlockLevel = 7,
+		Effect = "Ghosts",
+	},
+	{
+		Id = "Elim_Kaboom",
+		Slot = "Elimination",
+		Name = "Kaboom",
+		Description = "Go out with a bang.",
+		Icon = "💥",
+		UnlockLevel = 40,
+		Effect = "Fireworks",
 	},
 }
 
@@ -348,6 +572,14 @@ local Cosmetics = {
 	ById = {} :: { [string]: Cosmetic },
 	-- Slots a player equips one item into (emotes are not equipped; every owned emote is usable).
 	EquipSlots = { "Trail", "Title", "Victory", "Elimination" },
+	-- What each slot is called on reward cards ("TRAIL", "KNOCKOUT").
+	SlotNames = {
+		Trail = "Trail",
+		Title = "Title",
+		Emote = "Emote",
+		Victory = "Victory",
+		Elimination = "Knockout",
+	} :: { [string]: string },
 	ShopTabs = {
 		{ Slot = "Trail", Label = "Trails", Icon = "🌈" },
 		{ Slot = "Title", Label = "Titles", Icon = "🏷️" },

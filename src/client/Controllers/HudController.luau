@@ -6,6 +6,9 @@
 -- pill (level, name, XP) with the coins tucked under it at the top left, which makes way for the
 -- standings during a round; the round's status line under the top bar; the menu down the right
 -- edge, with 44 pt buttons. Nothing goes in the thumbstick's corner or near the jump button.
+-- Tapping the profile chip opens the Rewards screen (owner: "Also we need cool payoffs for players
+-- that keep playing the game."); RewardsController adds the next reward beside the coins and colors
+-- the level badge for the player's prestige tier.
 
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -88,19 +91,31 @@ local function followProfile(
 	end)
 end
 
+-- The profile chip's holder: a see-through button that opens the Rewards screen.
+local function profileHolder(props: { [string]: any }): TextButton
+	props.Name = "ProfileChip"
+	props.Text = ""
+	props.AutoButtonColor = false
+	props.BackgroundTransparency = 1
+	local holder = UIKit.new("TextButton", props)
+	holder.Activated:Connect(function()
+		State.OpenScreen:Fire("Rewards")
+	end)
+	return holder
+end
+
 local function buildProfileChip(parent: Instance)
 	local width = 310
-	local holder = UIKit.new("Frame", {
-		Name = "ProfileChip",
+	local holder = profileHolder({
 		Position = UDim2.fromOffset(16, 12),
 		Size = UDim2.fromOffset(width, 130),
-		BackgroundTransparency = 1,
 		Parent = parent,
 	})
 	UIKit.AutoScale(holder)
 
 	local chip = UIKit.Panel({ Size = UDim2.fromOffset(width, 74), CornerRadius = 37, Parent = holder })
 	local badge = UIKit.new("Frame", {
+		Name = "LevelBadge",
 		Size = UDim2.fromOffset(62, 62),
 		Position = UDim2.fromOffset(6, 6),
 		BackgroundColor3 = Color3.new(1, 1, 1),
@@ -153,11 +168,13 @@ local function buildProfileChip(parent: Instance)
 		Children = { UIKit.TextStroke(0.3) },
 	})
 
-	local coins = UIKit.Panel(
-		{ Position = UDim2.fromOffset(0, 82), Size = UDim2.fromOffset(200, 46), CornerRadius = 23, Parent = holder },
-		Color3.fromRGB(255, 196, 60),
-		Color3.fromRGB(230, 130, 30)
-	)
+	local coins = UIKit.Panel({
+		Name = "Coins",
+		Position = UDim2.fromOffset(0, 82),
+		Size = UDim2.fromOffset(200, 46),
+		CornerRadius = 23,
+		Parent = holder,
+	}, Color3.fromRGB(255, 196, 60), Color3.fromRGB(230, 130, 30))
 	UIKit.Coin({ Position = UDim2.fromOffset(12, 8), Size = UDim2.fromOffset(30, 30), Parent = coins })
 	local coinLabel = UIKit.Label({
 		Text = "0",
@@ -177,17 +194,16 @@ end
 -- Phones: a small pill (level badge, name, XP bar) with the coins tucked under it, in the top left
 -- corner under Roblox's buttons. During a round the standings take its place (RoundController).
 local function buildTouchProfile(parent: Instance)
-	local holder = UIKit.new("Frame", {
-		Name = "ProfileChip",
+	local holder = profileHolder({
 		Position = UDim2.fromOffset(8, 6),
 		Size = UDim2.fromOffset(196, 96),
-		BackgroundTransparency = 1,
 		Parent = parent,
 	})
 	UIKit.AutoScale(holder)
 
 	local chip = UIKit.Panel({ Size = UDim2.fromOffset(192, 62), CornerRadius = 31, ZIndex = 2, Parent = holder })
 	local badge = UIKit.new("Frame", {
+		Name = "LevelBadge",
 		Size = UDim2.fromOffset(52, 52),
 		Position = UDim2.fromOffset(5, 5),
 		BackgroundColor3 = Color3.new(1, 1, 1),
@@ -242,6 +258,7 @@ local function buildTouchProfile(parent: Instance)
 
 	-- The coins: a gold tab under the pill, as wide as the number.
 	local coins = UIKit.Panel({
+		Name = "Coins",
 		Position = UDim2.fromOffset(12, 52),
 		Size = UDim2.fromOffset(110, 42),
 		CornerRadius = 18,

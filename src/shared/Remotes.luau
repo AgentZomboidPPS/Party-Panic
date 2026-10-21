@@ -24,6 +24,8 @@ local NAMES = {
 	"Knockback", -- (velocity: Vector3, stunTime: number)
 	"PlaySound", -- (soundName)
 	"MiniGameEvent", -- (event: string, ...) mini-game specific cue for the client half of a mode
+	"Celebrate", -- (payload) a level up or career milestone to celebrate; see Services/ProgressionService
+	"LevelPop", -- (character: Model, level: number) the "Lv 10!" that pops over a player's head
 }
 
 local Remotes = {}

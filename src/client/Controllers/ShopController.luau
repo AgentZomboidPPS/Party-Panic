@@ -4,6 +4,8 @@
 -- phones get three wider cards a row so names fit on one line, 44 pt buttons and 11 pt or bigger
 -- text, and the tabs scroll if the window is short.
 -- State.OpenScreen:Fire("Shop", "Emote") opens it on a tab (the emote picker's "Get more").
+-- Prices are low (owner: "Also lets balance the shop down. I want low currency not high."); what
+-- coins buy comes first, then the Rewards Road and career rewards, which say how to unlock them.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -34,7 +36,7 @@ local tabButtons: { [string]: TextButton } = {}
 
 local function lockReason(item: Cosmetics.Cosmetic): string?
 	if item.UnlockLevel then
-		return `🔒 Reach level {item.UnlockLevel}`
+		return `🔒 Level {item.UnlockLevel}`
 	elseif item.UnlockStat then
 		local profile = State.Profile
 		local have = profile and profile.Stats[item.UnlockStat.Stat] or 0
@@ -95,8 +97,29 @@ local function render()
 			table.insert(items, item)
 		end
 	end
+	-- Free items, then what coins buy (cheapest first), then the rewards coins can't buy: the
+	-- Rewards Road by level, career milestones, VIP.
+	local function rank(item: Cosmetics.Cosmetic): (number, number)
+		if item.Default then
+			return 0, 0
+		elseif item.Price then
+			return 1, item.Price
+		elseif item.UnlockLevel then
+			return 2, item.UnlockLevel
+		elseif item.UnlockStat then
+			return 3, item.UnlockStat.Value
+		end
+		return 4, 0
+	end
 	table.sort(items, function(a, b)
-		return (a.Price or 0) < (b.Price or 0)
+		local groupA, valueA = rank(a)
+		local groupB, valueB = rank(b)
+		if groupA ~= groupB then
+			return groupA < groupB
+		elseif valueA ~= valueB then
+			return valueA < valueB
+		end
+		return a.Name < b.Name
 	end)
 
 	for order, item in items do

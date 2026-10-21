@@ -31,7 +31,12 @@ local function purchase(player: Player, itemId: any)
 	end
 	local price = item.Price
 	if price == nil then
-		Notifier.Send(player, `{item.Name} can't be bought with coins. {item.Description}`, "warning")
+		local how = if item.UnlockLevel
+			then `It's a Rewards Road reward: reach level {item.UnlockLevel}.`
+			elseif item.UnlockStat then `It's a career reward: {item.Description}`
+			elseif item.Vip then "It comes with the VIP pass."
+			else item.Description
+		Notifier.Send(player, `{item.Name} can't be bought with coins. {how}`, "warning")
 		return
 	end
 	if not Economy.SpendCoins(player, price, "Shop") then
