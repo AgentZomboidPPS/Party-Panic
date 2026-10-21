@@ -331,9 +331,10 @@ end
 
 -- Geometry the brain and the test bot use too --------------------------------------------------
 
--- How high a character's feet are.
+-- How high a character's feet are (R6 bodies have no hip height: their legs are 2 under a 2-tall root).
 function Spleef.Feet(_self, humanoid: Humanoid, root: BasePart): number
-	return root.Position.Y - humanoid.HipHeight - root.Size.Y / 2
+	local legs = if humanoid.RigType == Enum.HumanoidRigType.R6 then 3 else humanoid.HipHeight + root.Size.Y / 2
+	return root.Position.Y - legs
 end
 
 -- The floor whose top the feet are at (standing on it, or just over a hole in it), if any.
@@ -507,7 +508,8 @@ function Spleef:Start()
 		ctx:Announce("The ice is cracking!", "warning", 2.5)
 		ctx:Sound("HazardWarning")
 		ctx:Loop(function()
-			local progress = math.clamp((ctx:Elapsed() - startAt) / math.max(1, duration * CRUMBLE_DONE - startAt), 0, 1)
+			local progress =
+				math.clamp((ctx:Elapsed() - startAt) / math.max(1, duration * CRUMBLE_DONE - startAt), 0, 1)
 			self:_crumble(progress)
 			return ArenaKit.Lerp(0.9, 0.45, progress)
 		end)
@@ -677,8 +679,16 @@ function Spleef:_falls(dt: number)
 		end
 	end
 
-	for _, player in out do
-		self:_out(player)
+	-- Everyone out in this step goes together: the round can't end (and crown one of them) halfway
+	-- through the list; if that leaves nobody standing, they share the finish.
+	if #out > 0 then
+		local endWhenOneLeft = ctx.EndWhenOneLeft
+		ctx.EndWhenOneLeft = false
+		for _, player in out do
+			self:_out(player)
+		end
+		ctx.EndWhenOneLeft = endWhenOneLeft
+		ctx:_checkAutoEnd()
 	end
 end
 

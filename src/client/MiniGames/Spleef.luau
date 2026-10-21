@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 
+local GameState = require(ReplicatedStorage.Shared.GameState)
 local Sounds = require(ReplicatedStorage.Shared.Sounds)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -364,21 +365,29 @@ function Spleef.Start(api)
 				local index = part:GetAttribute("Cell")
 				local block = if type(index) == "number" then blocks[index] else nil
 				if block then
+					-- Dug (by you, or well before its drop time) bursts; crumbled drops out whole.
 					local mine = block.Asked ~= nil and os.clock() - block.Asked < 1.5
-					breakVisual(block, block.DropAt ~= nil, mine)
+					local crumbled = block.DropAt ~= nil and not mine and api:Now() > block.DropAt - 0.3
+					breakVisual(block, crumbled, mine)
 				end
 			end))
 		end
 	end)
 
 	-- Where everyone is, as on this screen ----------------------------------------------------
+	-- Feet height, the server's way (Spleef.Feet: R6 bodies have no hip height).
+	local function feetFrom(humanoid: Humanoid, root: BasePart): number
+		local legs = if humanoid.RigType == Enum.HumanoidRigType.R6 then 3 else humanoid.HipHeight + root.Size.Y / 2
+		return root.Position.Y - legs
+	end
+
 	local function feetOf(character: Model?): (number?, BasePart?)
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if not humanoid or not root then
 			return nil, nil
 		end
-		return root.Position.Y - humanoid.HipHeight - root.Size.Y / 2, root
+		return feetFrom(humanoid, root), root
 	end
 
 	local function floorAt(feet: number): number?
@@ -436,7 +445,7 @@ function Spleef.Start(api)
 		if block.Gone or not humanoid or not root or not layout then
 			return false
 		end
-		local feet = root.Position.Y - humanoid.HipHeight - root.Size.Y / 2
+		local feet = feetFrom(humanoid, root)
 		if block.Top.Y > feet + 1 then
 			return false
 		end
@@ -485,7 +494,13 @@ function Spleef.Start(api)
 	end
 	local hintShown = true
 	local function tryBreak(block: Block, quiet: boolean?): boolean
-		if os.clock() - lastBreak < COOLDOWN or not api:CanAct() or asked(block) then
+		-- (Not during the countdown: the server only takes digs once the round is on.)
+		if
+			os.clock() - lastBreak < COOLDOWN
+			or not api:CanAct()
+			or GameState.Get("Phase") ~= "InRound"
+			or asked(block)
+		then
 			return false
 		end
 		if not canBreak(block) then
@@ -734,7 +749,7 @@ function Spleef.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 58,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, api:HudY() + 112),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + 136),
 		Size = UDim2.fromOffset(420, 70),
 		TextColor3 = Theme.Colors.Cyan,
 		Visible = false,
@@ -803,7 +818,7 @@ function Spleef.Start(api)
 		local character, humanoid, root = api:Character()
 		local floor: number? = nil
 		if humanoid and root and api:Alive() then
-			floor = floorBelow(root.Position.Y - humanoid.HipHeight - root.Size.Y / 2)
+			floor = floorBelow(feetFrom(humanoid, root))
 		end
 		myFloor = floor
 		showFloor(if humanoid and root and api:Alive() then floor else nil)
