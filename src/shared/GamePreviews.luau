@@ -86,14 +86,14 @@ local previews: { [string]: Preview } = {
 		Fps = 8,
 	},
 	SinkingSands = {
-		Image = "rbxassetid://116850072518143",
+		Image = "rbxassetid://116325926755099",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),
 		Fps = 8,
 	},
 	SkateEscape = {
-		Image = "rbxassetid://84838781366141",
+		Image = "rbxassetid://80674223190404",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),

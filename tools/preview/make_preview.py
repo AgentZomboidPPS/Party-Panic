@@ -89,8 +89,8 @@ CAMERAS: dict[str, dict] = {
     "BumperBallers": {"look_at": "BoingRing", "yaw": 120, "pitch": 22, "distance": 34, "shift": [0, 6, 0]},
     # The archers' tower from the field, a runner and a target board in front.
     "ArrowAmbush": {"yaw": 15, "pitch": 22, "distance": 40, "shift": [0, -3, 2], "raise": 12},
-    # A skater mid-ollie, the crates and the leaders ahead, lava and spires around.
-    "SkateEscape": {"subject": "highest", "yaw": 50, "pitch": 10, "distance": 20, "sway": 8},
+    # Behind the pack, down the bridge: crates ahead, the viaduct towers and the canyon either side.
+    "SkateEscape": {"yaw": 12, "pitch": 15, "distance": 30, "shift": [0, 2, 0], "raise": 5, "sway": 8},
     # Divers at the rim of the swirling sinkhole, treasure on the sand around it.
     "SinkingSands": {"yaw": 30, "pitch": 30, "distance": 36, "shift": [0, 2, 6]},
 }
