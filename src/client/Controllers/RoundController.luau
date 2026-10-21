@@ -30,12 +30,13 @@ local board: Frame
 local outPanel: Frame
 
 local function buildRules(parent: Instance)
+	-- Phones: narrower and a little lower, clear of the round banner and the tip under the coins.
+	local touch = UIKit.IsTouch()
 	rules = UIKit.Panel({
 		Name = "Rules",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		-- Phones: a little lower, clear of the round banner.
-		Position = UDim2.fromScale(0.5, if UIKit.IsTouch() then 0.52 else 0.45),
-		Size = UDim2.fromOffset(620, 330),
+		Position = UDim2.fromScale(0.5, if touch then 0.5 else 0.45),
+		Size = UDim2.fromOffset(if touch then 520 else 620, 330),
 		CornerRadius = 26,
 		Visible = false,
 		Parent = parent,

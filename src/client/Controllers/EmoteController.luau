@@ -144,29 +144,32 @@ function EmoteController.Start(context)
 		Parent = context.Hud,
 	})
 	UIKit.AutoScale(panel)
+	-- Phones: a taller title row, so the close button is big enough for a thumb.
+	local header = if touch then 56 else 44
+	local closeSize = if touch then 46 else 34
 	UIKit.Label({
 		Text = if touch then "🕺 Emotes" else "🕺 Emotes  (G)",
 		Font = Theme.Fonts.Display,
 		TextSize = 24,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(PADDING + 4, 4),
+		Position = UDim2.fromOffset(PADDING + 4, (header - 40) / 2),
 		Size = UDim2.new(1, -70, 0, 40),
 		Parent = panel,
 	})
 	UIKit.Button({
 		Name = "Close",
 		Text = "✕",
-		TextSize = 20,
+		TextSize = if touch then 24 else 20,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -PADDING, 0, 8),
-		Size = UDim2.fromOffset(34, 34),
+		Position = UDim2.new(1, -PADDING, 0, (header - closeSize) / 2),
+		Size = UDim2.fromOffset(closeSize, closeSize),
 		CornerRadius = "round",
 		Parent = panel,
 	}, function()
 		setOpen(false)
 	end, Theme.Colors.Red, Color3.fromRGB(190, 40, 60))
 	grid = UIKit.new("ScrollingFrame", {
-		Position = UDim2.fromOffset(0, 44),
+		Position = UDim2.fromOffset(0, header),
 		Size = UDim2.new(1, 0, 0, CELL + 2 * PADDING),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,

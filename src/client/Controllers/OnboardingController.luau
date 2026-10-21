@@ -90,7 +90,7 @@ function OnboardingController.Start(context)
 		Text = "",
 		TextSize = 17,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -90, 0, 30),
+		Size = UDim2.new(1, -90, 0, if touch then 40 else 30),
 		Parent = panel,
 		Children = { UIKit.TextStroke(0.4) },
 	})
@@ -99,18 +99,19 @@ function OnboardingController.Start(context)
 		TextSize = 20,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		Position = UDim2.fromOffset(0, 36),
+		Position = UDim2.fromOffset(0, if touch then 44 else 36),
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = panel,
 		Children = { UIKit.TextStroke(0.5) },
 	})
+	-- Phones: a bigger Skip button for thumbs.
 	UIKit.Button({
 		Text = "Skip",
-		TextSize = 17,
+		TextSize = if touch then 19 else 17,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.fromScale(1, 0),
-		Size = UDim2.fromOffset(80, 32),
+		Size = if touch then UDim2.fromOffset(90, 40) else UDim2.fromOffset(80, 32),
 		CornerRadius = 16,
 		Parent = panel,
 	}, finish, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
