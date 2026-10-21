@@ -101,7 +101,7 @@ return function(h)
 		},
 		TanksBall = {
 			Height = 16.06,
-			AssetId = 0,
+			AssetId = 78105391753459,
 			Collide = false,
 			Palette = {
 				Red = h.rgb(235, 60, 60),
