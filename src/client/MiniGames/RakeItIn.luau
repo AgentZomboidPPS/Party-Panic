@@ -19,6 +19,7 @@ local BOMB = 5
 local SWING = 0.62 -- seconds a rake swing takes
 local FLY = 0.55 -- seconds raked produce takes to reach the basket
 local SOCKET = Vector3.new(0, 6.25, 0.5) -- where the handle meets the rake head, from the rake's pivot
+local CAMERA_OFFSET = Vector3.new(0, 2.5, 0) -- the camera looks over the player's head at their lane
 
 type Seg = { T: number, A: number, W0: number, W1: number, Ramp: number }
 
@@ -91,6 +92,14 @@ function RakeItIn.Start(api)
 		layout = api:SharedJSON("Layout")
 	end
 	local effects = not State.ReducedEffects()
+	local stopped = false -- set when the round's cleanup runs (delayed effects check it)
+	local function later(seconds: number, callback: () -> ())
+		task.delay(seconds, function()
+			if not stopped then
+				callback()
+			end
+		end)
+	end
 	local rng = Random.new()
 	local me = api.Player.UserId
 	local center = vec(layout.Center)
@@ -231,6 +240,7 @@ function RakeItIn.Start(api)
 		if effects then
 			local blast = Instance.new("Explosion")
 			blast.BlastPressure = 0
+			blast.ExplosionType = Enum.ExplosionType.NoCraters
 			blast.BlastRadius = 3
 			blast.DestroyJointRadiusPercent = 0
 			blast.Position = position
@@ -274,7 +284,10 @@ function RakeItIn.Start(api)
 			local by = goneBy[id]
 			local station = by and stations[by]
 			local from = item.Model:GetPivot().Position
-			if station and by ~= 0 then
+			if station and by ~= 0 and item.Kind == BOMB then
+				boom(from + Vector3.new(0, 1, 0))
+				item.Model:Destroy()
+			elseif station and by ~= 0 then
 				table.insert(flying, {
 					Model = item.Model,
 					From = from,
@@ -439,7 +452,8 @@ function RakeItIn.Start(api)
 	})
 	local function showRush()
 		if rush then
-			legendText.Text = "🎃 GOLDEN RUSH! 🎃"
+			legendText.Text = "RUSH! 🥕+1 🎃+3 💣-3"
+			legendText.TextSize = 26
 			legendText.TextColor3 = Theme.Colors.Yellow
 			UIKit.PopIn(legend, 0.3)
 		end
@@ -451,6 +465,7 @@ function RakeItIn.Start(api)
 	end)
 
 	local readyAt = 0 -- server time this player's rake is ready again (as far as this client knows)
+	local readyFor = layout.Cooldown -- how long the current wait is (for the button's fill)
 	local button = api:Button({ Text = "RAKE!", Key = Enum.KeyCode.E, Color = Theme.Colors.Orange })
 	button:SetVisible(mine ~= nil)
 	local function rake()
@@ -462,6 +477,7 @@ function RakeItIn.Start(api)
 			return
 		end
 		readyAt = t + layout.Cooldown
+		readyFor = layout.Cooldown
 		mine.SwingAt = os.clock()
 		api:Action("Rake", t)
 		api:Sound("Click")
@@ -475,12 +491,15 @@ function RakeItIn.Start(api)
 		end))
 	end
 	api:OnMine("Jammed", function(value)
-		if type(value) == "number" then
-			readyAt = math.max(readyAt, value)
+		if type(value) == "number" and value > readyAt then
+			readyFor = layout.Jam
+			readyAt = value
 		end
 	end)
 
-	api:OnEvent("Rake", function(userId, _t, value, bomb)
+	-- value is the change to the raker's score; ids are the items raked; ready is when that rake can
+	-- be used again (later after a bomb or an empty rake).
+	api:OnEvent("Rake", function(userId, t, value, bomb, ids, ready)
 		local station = stations[userId]
 		if not station then
 			return
@@ -488,30 +507,56 @@ function RakeItIn.Start(api)
 		if userId ~= me or os.clock() - station.SwingAt > 0.5 then
 			station.SwingAt = os.clock()
 		end
-		local spot = station.Basket + Vector3.new(0, 4.2, 0)
-		if bomb then
-			task.delay(0.25, function()
-				boom(center + station.Out * (rOut - 1) + Vector3.new(0, soilY - center.Y + 1, 0))
-			end)
+		-- Raked items leave the field right away (the field update comes a moment later): produce flies
+		-- to the basket while the rake drags back, a bomb goes off where it was.
+		for _, id in (if type(ids) == "table" then ids else {}) do
+			local item = items[id]
+			if not item then
+				continue
+			end
+			items[id] = nil
+			local model = item.Model
+			if item.Kind == BOMB then
+				later(0.15, function()
+					boom(model:GetPivot().Position + Vector3.new(0, 1, 0))
+					model:Destroy()
+				end)
+			else
+				table.insert(flying, {
+					Model = model,
+					From = model:GetPivot().Position,
+					To = station.Basket + Vector3.new(0, 2.6, 0),
+					Start = os.clock() + 0.15,
+					Spin = item.Yaw,
+				})
+			end
 		end
-		if value ~= 0 then
-			task.delay(FLY, function()
+		local spot = station.Basket + Vector3.new(0, 4.2, 0)
+		local empty = type(ids) == "table" and #ids == 0
+		if value ~= 0 or bomb then
+			later(FLY, function()
 				popup(
 					spot,
 					if value > 0 then `+{value}` else `{value} 💣`,
 					if value > 0 then Theme.Colors.Green else Theme.Colors.Red
 				)
 			end)
+		elseif empty and userId == me then
+			popup(spot, "MISS", Theme.Colors.TextDim)
 		end
 		if userId == me then
+			if type(ready) == "number" and type(t) == "number" and ready > readyAt then
+				readyAt = ready
+				readyFor = ready - t
+			end
 			if bomb then
 				api:Sound("Hit")
 				api:Hint("💣 Your rake is jammed!", y + 60)
-				task.delay(layout.Jam, function()
+				later(layout.Jam, function()
 					api:Hint("", y + 60)
 				end)
 			elseif value > 0 then
-				task.delay(FLY, function()
+				later(FLY, function()
 					api:Sound("Pickup")
 				end)
 			end
@@ -521,6 +566,7 @@ function RakeItIn.Start(api)
 	syncField()
 
 	local bombHighlights = {}
+	local cameraHumanoid: Humanoid? = nil
 	api:RenderStep(function()
 		local t = api:Now()
 		local clock = os.clock()
@@ -597,22 +643,33 @@ function RakeItIn.Start(api)
 		-- HUD: what raking now would get, and the rake's recharge.
 		if mine then
 			if laneCount == 0 then
-				laneText.Text = "LANE -"
+				laneText.Text = "EMPTY"
 				laneText.TextColor3 = Theme.Colors.TextDim
 			else
 				laneText.Text = if laneBomb then `💣 {laneValue}` else `LANE +{laneValue}`
 				laneText.TextColor3 = if laneBomb or laneValue < 0 then Theme.Colors.Red else Theme.Colors.Green
 			end
 			local wait = readyAt - t
-			button:SetFill(if wait > 0 then 1 - math.clamp(wait / layout.Cooldown, 0, 1) else 0)
+			button:SetFill(if wait > 0 then 1 - math.clamp(wait / math.max(readyFor, 0.1), 0, 1) else 0)
 			button:SetEnabled(wait <= 0)
 			if myLane then
 				myLane.Transparency = 0.62 + 0.12 * math.sin(clock * 4)
+			end
+			-- The camera looks over your head, so your own character doesn't hide your lane.
+			local character = api.Player.Character
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid ~= cameraHumanoid then
+				cameraHumanoid = humanoid
+				humanoid.CameraOffset = CAMERA_OFFSET
 			end
 		end
 	end)
 
 	api:Track(function()
+		stopped = true
+		if cameraHumanoid and cameraHumanoid.Parent then
+			cameraHumanoid.CameraOffset = Vector3.zero
+		end
 		for _, item in items do
 			item.Model:Destroy()
 		end

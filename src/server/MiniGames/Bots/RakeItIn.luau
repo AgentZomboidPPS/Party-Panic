@@ -5,7 +5,8 @@
 --
 -- Skilled bots wait for a fuller lane (2+ when the field is busy), catch the haul at its fullest and
 -- nearly always let bombs pass. Less skilled bots take whatever is there, often don't notice a bomb
--- in the pile and press a little early or late, so the produce has sometimes moved on. Another
+-- in the pile (each bomb is noticed or not once, when the bot first sees it; one it missed looks like
+-- a veggie to it) and press a little early or late, so the produce has sometimes moved on. Another
 -- player can always rake the produce first: a bot's plan isn't redone, just like a real press.
 
 local RakeItInBrain = {}
@@ -19,11 +20,36 @@ local function bell(rng: Random): number
 	return math.sqrt(-2 * math.log(1 - rng:NextNumber())) * math.cos(2 * math.pi * rng:NextNumber())
 end
 
+-- What the bot thinks raking its lane at time t would get: the value as it sees it, and whether it
+-- spotted a bomb in there.
+local function haul(bot, mode, station, t: number): (number, number, boolean)
+	local seen = bot.Memory.Seen
+	local count, value, bomb = 0, 0, false
+	for _, item in mode.items do
+		if mode:InLane(station, item, t) then
+			count += 1
+			local worth = mode.Kinds[item.Kind].Value
+			if worth < 0 then
+				if seen[item.Id] == nil then
+					seen[item.Id] = bot:Chance(0.4 + 0.6 * bot.Skill)
+				end
+				if seen[item.Id] then
+					bomb = true
+				else
+					worth = 1 -- didn't notice it: looks like any other veggie
+				end
+			end
+			value += worth
+		end
+	end
+	return count, value, bomb
+end
+
 local function plan(bot, mode, station, now: number): number?
 	local rng = bot.Rng
 	local skill = bot.Skill
-	local from = math.max(now + bot:Reaction(), mode:ReadyAt(bot))
-	local avoidBombs = rng:NextNumber() < 0.4 + 0.6 * skill
+	local ready = mode:ReadyAt(bot)
+	local from = math.max(now + bot:Reaction(), ready)
 	local busy = 0
 	for _ in mode.items do
 		busy += 1
@@ -32,8 +58,9 @@ local function plan(bot, mode, station, now: number): number?
 	local best, bestValue = nil, 0
 	local t = from
 	while t <= from + LOOK do
-		local taken, value, bomb = mode:LaneHaul(station, t)
-		local acceptable = #taken > 0 and value >= want and not (bomb and avoidBombs)
+		local count, value, bomb = haul(bot, mode, station, t)
+		-- A bomb it spotted is a no-go for a decent bot; a weak one still takes a big enough pile.
+		local acceptable = count > 0 and value >= want and not (bomb and skill >= 0.5)
 		if acceptable and value > bestValue then
 			best, bestValue = t, value
 		elseif best and value < bestValue then
@@ -44,8 +71,8 @@ local function plan(bot, mode, station, now: number): number?
 	if not best then
 		return nil
 	end
-	-- Unskilled bots press a little off the moment they wanted.
-	return best + bell(rng) * (1 - skill) * 0.22
+	-- Unskilled bots press a little off the moment they wanted (never before the rake is ready).
+	return math.max(best + bell(rng) * (1 - skill) * 0.22, ready)
 end
 
 function RakeItInBrain.Step(bot, ctx, mode, _dt)
@@ -54,6 +81,10 @@ function RakeItInBrain.Step(bot, ctx, mode, _dt)
 		return
 	end
 	local memory = bot.Memory
+	if memory.SeenFor ~= mode then
+		memory.SeenFor = mode
+		memory.Seen = {}
+	end
 	local now = ctx:Now()
 	if memory.PressAt then
 		if now >= memory.PressAt then

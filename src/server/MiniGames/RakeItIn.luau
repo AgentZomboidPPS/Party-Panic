@@ -3,8 +3,8 @@
 -- gold one 3 and a poison one takes 3 away. Here the table is a big round field turning around a red
 -- harvest silo that keeps popping produce onto it. Everyone stands at the rim with a lane in front of
 -- them: press RAKE and the rake sweeps your lane, pulling in everything in it. 🥕🍅🥦 are worth 1, a
--- golden 🎃 3, and a 💣 takes 3 away (and jams your rake for a moment). Time it so your lane is full
--- and bomb-free. The last stretch is a GOLDEN RUSH: the field turns faster and pumpkins rain down.
+-- golden 🎃 3, and a 💣 takes 3 away (and jams your rake for a moment). An empty rake (a MISS) also
+-- takes longer to come back, so time it so your lane is full and bomb-free. The last stretch is a GOLDEN RUSH: the field turns faster and pumpkins rain down.
 --
 -- How it works: the field's turn is a shared schedule (MG_Spin: angle, speed and a smooth ramp to a
 -- new speed), so every client spins its copy of the field and the produce on it in step with the
@@ -37,6 +37,7 @@ local VENT_Y = SILO_Y + 19.5 * 0.95 -- its vent cap, where produce pops out
 local FLIGHT = 0.9 -- seconds from the silo to the field
 local COOLDOWN = 0.8 -- between rakes
 local JAM = 1.6 -- a bomb jams your rake this long
+local MISS = 1.3 -- a rake that catches nothing takes this long to come back (so mashing doesn't pay)
 local GONE_FOR = 2.5 -- how long a raked item stays listed (so clients can fly it to the basket)
 local RUSH = 0.7 -- the share of the round after which the GOLDEN RUSH starts
 
@@ -60,9 +61,9 @@ local COLORS = {
 	Color3.fromRGB(255, 150, 60),
 	Color3.fromRGB(90, 225, 220),
 	Color3.fromRGB(255, 130, 200),
-	Color3.fromRGB(170, 230, 70),
-	Color3.fromRGB(140, 150, 255),
-	Color3.fromRGB(255, 240, 150),
+	Color3.fromRGB(150, 100, 60),
+	Color3.fromRGB(0, 140, 140),
+	Color3.fromRGB(220, 40, 160),
 	Color3.fromRGB(240, 240, 250),
 }
 
@@ -187,10 +188,33 @@ function RakeItIn:Prepare()
 		Parent = ctx.Arena,
 	})
 
-	-- Hay bales stacked out among the bushes (well behind the cameras at the stands).
+	-- Hay bales stacked out among the bushes (well behind the cameras at the stands), never inside one.
+	local bushes = {}
+	for _, child in ctx.Arena:GetChildren() do
+		if child.Name == "Bush" and child:IsA("Model") then
+			table.insert(bushes, child:GetPivot().Position)
+		end
+	end
 	for index = 0, 7 do
-		local angle = (index + 0.5) / 8 * math.pi * 2 + rng:NextNumber(-0.15, 0.15)
-		local spot = origin + Vector3.new(math.cos(angle), 0, math.sin(angle)) * rng:NextNumber(39, 41)
+		local spot
+		for _ = 1, 12 do
+			local angle = (index + 0.5) / 8 * math.pi * 2 + rng:NextNumber(-0.3, 0.3)
+			local try = origin + Vector3.new(math.cos(angle), 0, math.sin(angle)) * rng:NextNumber(38, 43)
+			local clear = true
+			for _, bush in bushes do
+				if Vector3.new(bush.X - try.X, 0, bush.Z - try.Z).Magnitude < 6 then
+					clear = false
+					break
+				end
+			end
+			if clear then
+				spot = try
+				break
+			end
+		end
+		if not spot then
+			continue
+		end
 		local facing = CFrame.lookAt(spot, origin) * CFrame.Angles(0, math.pi / 2 + rng:NextNumber(-0.2, 0.2), 0)
 		for layer = 0, if index % 2 == 0 then 1 else 0 do
 			MeshLibrary.Get("HayBale", {
@@ -338,8 +362,8 @@ function RakeItIn:_publish()
 			item.Kind,
 			math.floor(item.R * 100 + 0.5) / 100,
 			math.floor(item.Th * 10000 + 0.5) / 10000,
-			item.Land,
-			item.Fuse or 0,
+			math.floor(item.Land * 100 + 0.5) / 100,
+			math.floor((item.Fuse or 0) * 100 + 0.5) / 100,
 		})
 	end
 	self.context:SetSharedJSON("Field", { Items = list, Gone = self.gone })
@@ -436,21 +460,24 @@ function RakeItIn:_rake(player: Player, t: number)
 	if not station then
 		return
 	end
-	local now = ctx:Now()
 	local taken, value, bomb = self:LaneHaul(station, t)
 	for _, item in taken do
 		self:_remove(item, player.UserId)
 	end
-	local score = math.max(0, (self.scores[player] or 0) + value)
+	local old = self.scores[player] or 0
+	local score = math.max(0, old + value)
 	self:_setScore(player, score)
-	self.readyAt[player] = now + (if bomb then JAM else COOLDOWN)
+	-- The wait is measured from the press itself (not when it arrived), so network jitter never eats
+	-- a rake; an empty rake or a bomb costs extra time.
+	local wait = if bomb then JAM elseif #taken == 0 then MISS else COOLDOWN
+	self.readyAt[player] = t + wait
 	local ids = {}
 	for _, item in taken do
 		table.insert(ids, item.Id)
 	end
-	ctx:Fire(nil, "Rake", player.UserId, t, value, bomb, ids)
+	ctx:Fire(nil, "Rake", player.UserId, t, score - old, bomb, ids, t + wait)
 	if bomb then
-		ctx:SetPlayerShared(player, "Jammed", now + JAM)
+		ctx:SetPlayerShared(player, "Jammed", t + JAM)
 	end
 end
 
@@ -470,9 +497,6 @@ function RakeItIn:Start()
 			return
 		end
 		local now = ctx:Now()
-		if now < self:ReadyAt(player) - 0.05 then
-			return
-		end
 		local _, _, root = ctx:GetCharacter(player)
 		if not root then
 			return
@@ -481,14 +505,18 @@ function RakeItIn:Start()
 		if flat.Magnitude > 9 then
 			return -- not at their stand
 		end
-		-- Judge the rake when the player pressed it, allowing for their ping.
+		-- Judge the rake when the player pressed it, allowing for their ping (a round trip; the press
+		-- only travelled one way).
 		local ok, ping = pcall(function()
 			return (player :: any):GetNetworkPing()
 		end)
 		local lag = if ok and type(ping) == "number" then math.clamp(ping, 0, 0.35) else 0.15
 		local t = now - lag / 2
 		if type(claimed) == "number" and claimed == claimed then
-			t = math.clamp(claimed, now - lag - 0.12, now)
+			t = math.clamp(claimed, now - lag / 2 - 0.1, now)
+		end
+		if t < self:ReadyAt(player) - 0.05 then
+			return
 		end
 		self:_rake(player, t)
 	end, { Interval = 0.3 })
