@@ -621,12 +621,14 @@ local function buildVoteStage(root: Model)
 			Parent = stage,
 		})
 		-- The preview screen (clients draw on its Back face, toward the plaza), halfway into the
-		-- arch's depth and just behind the film.
-		local screen = Build.Decor({
+		-- arch's depth and just behind the film. Solid, so nobody walks into the picture.
+		local screen = Build.Part({
 			Name = "PortalScreen" .. index,
 			Size = Vector3.new(openWidth, openHeight, 0.2),
 			CFrame = CFrame.new(x, STAGE_TOP + openHeight / 2, backZ + 2.5),
 			Color = PALETTE.Bay,
+			CanTouch = false,
+			CastShadow = false,
 			Parent = stage,
 		})
 		screen:SetAttribute("VoteIndex", index)
