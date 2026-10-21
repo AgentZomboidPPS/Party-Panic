@@ -26,7 +26,7 @@ return function(h)
 	return {
 		PumpBalloon = {
 			Height = 15,
-			AssetId = 0,
+			AssetId = 75995227503745,
 			Shadow = true,
 			Palette = {
 				Skin = rgb(255, 80, 95),
@@ -38,6 +38,7 @@ return function(h)
 				Brows = rgb(90, 30, 40),
 				Blush = rgb(255, 150, 170),
 				Sweat = rgb(120, 200, 255),
+				Gleam = rgb(255, 255, 255),
 			},
 			Materials = { Skin = Enum.Material.Glass, Sweat = Enum.Material.Glass },
 			Fallback = function(m)
@@ -57,7 +58,7 @@ return function(h)
 		},
 		AirTank = {
 			Height = 4.7,
-			AssetId = 0,
+			AssetId = 92699226368322,
 			Collide = true,
 			Palette = {
 				Feet = rgb(70, 60, 90),
@@ -85,7 +86,7 @@ return function(h)
 		},
 		Plunger = {
 			Height = 4.18,
-			AssetId = 0,
+			AssetId = 88794158561404,
 			Palette = {
 				PumpBase = rgb(60, 55, 75),
 				Barrel = rgb(255, 80, 95),
