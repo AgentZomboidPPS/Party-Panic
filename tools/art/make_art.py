@@ -1183,7 +1183,7 @@ def icon_scream(args, out):
     """A big screaming face, hands up beside it, party hat flying off, the fire rope swinging over
     its head and confetti everywhere."""
     icon_scene(args, sun=(0.45, -0.8, 0.5))
-    look = {"skin": 0, "shirt": (90, 215, 70), "pants": (40, 52, 110), "shoes": (250, 250, 250), "hat": None, "sleeve": -0.7}
+    look = {"skin": 0, "shirt": (90, 215, 70), "pants": (40, 52, 110), "shoes": (250, 250, 250), "hat": None, "sleeve": 0.45}
     avatar((0, 0, 0), math.radians(-10), "panic", look, "scream", head_scale=1.5,
            pose_extra={"arm_l": (-6, 150), "arm_r": (-6, 152), "head": (-5, 5, -4)})
     # The party hat, knocked off and flying.
@@ -1226,7 +1226,7 @@ def icon_leap(args, out):
     lamp((0, -0.6, 0.6), 90, (1.0, 0.5, 0.15), 1.5)
     lamp((-3, -6, 8), 60, (0.75, 0.85, 1.0), 2.0)
     confetti(36, (0, 0, 6.5), (5.5, 3, 2.2), seed=4, size=0.3, avoid=[((0, -1, 6.3), 1.8)])
-    camera((1.6, -8.8, 2.9), (0, 0, 4.15), fov=44)
+    camera((1.4, -9.6, 4.6), (0, 0, 4.3), fov=44)
     render_to(out / "raw_icon_leap.png")
     render_glow(out / "raw_icon_leap_glow.png")
     background = sunburst((ICON_SIZE, ICON_SIZE), (ICON_SIZE * 0.5, ICON_SIZE * 0.42), (255, 200, 90), (200, 40, 110),
@@ -1263,6 +1263,143 @@ def icon_duo(args, out):
 ICONS = {"scream": icon_scream, "leap": icon_leap, "duo": icon_duo}
 
 
+# Thumbnails -------------------------------------------------------------------------------------
+
+
+def part_named(parts, name, prop=None):
+    for part in parts:
+        if part["n"] == name and (prop is None or part.get("prop") == prop):
+            return part
+    raise SystemExit(f"no part {name} ({prop}) in the snapshot")
+
+
+def swing_parts(parts, names, axis_y, axis_z, angle):
+    """Turns the named parts about the Roblox X axis through (axis_y, axis_z) to `angle` (radians
+    from straight down, toward +Z): the fire rope at the moment we want."""
+    for part in parts:
+        if part["n"] not in names:
+            continue
+        cf = part["cf"]
+        dy, dz = cf[1] - axis_y, cf[2] - axis_z
+        turn = angle - math.atan2(dz, -dy)
+        c, s = math.cos(turn), math.sin(turn)
+        cf[1], cf[2] = axis_y + dy * c + dz * s, axis_z - dy * s + dz * c
+        rows = [cf[3:6], cf[6:9], cf[9:12]]
+        rows[1], rows[2] = ([rows[1][i] * c + rows[2][i] * s for i in range(3)],
+                            [-rows[1][i] * s + rows[2][i] * c for i in range(3)])
+        cf[3:12] = rows[0] + rows[1] + rows[2]
+
+
+def thumb_finish(out, name, glow_strength=0.5, saturation=1.12, contrast=1.06, vignette_strength=0.28):
+    image = grade(out / f"raw_{name}.png", saturation, contrast)
+    glow_path = out / f"raw_{name}_glow.png"
+    if glow_path.exists():
+        image = add_glow(image, glow_path, radius=0.012, strength=glow_strength)
+    return vignette(image, vignette_strength)
+
+
+def scene_firerope(args, out):
+    """Jumpers in mid-air over the burning rope, the Dragon Temple pouring lava behind them."""
+    data = load_dump(args, "FireRope")
+    parts, rigs = split_rigs(data["parts"])
+    eye = part_named(parts, "Eye", "SunWheel")["cf"]
+    swing_parts(parts, {"Core", "Halo", "Fireball"}, eye[1], eye[2], math.radians(6))
+    new_scene(args.samples, args.width, args.height, top=(0.16, 0.22, 0.62), horizon=(1.0, 0.62, 0.36),
+              sun=(0.55, -0.35, 0.55), sun_energy=3.6, sun_color=(1.0, 0.9, 0.75))
+    build_arena(data, parts)
+    rope = [p for p in parts if p["n"] == "Fireball"]
+    rng = random.Random(7)
+    hot = fire_material(strength=2.2)
+    for ball_part in rope[::2]:
+        x, y, z = ball_part["cf"][:3]
+        flame(B(x, y, z), rng.uniform(1.8, 3.0), (rng.uniform(-0.2, 0.2), -0.5, 1), material=hot, seed=int(x * 10))
+    cast = [
+        ("tuck", "scream", 2.6), ("jump", "panic", 3.2), ("flail", "shock", 2.2), ("jump", "laugh", 3.4),
+        ("tuck", "determined", 2.8), ("jump", "grin", 3.0), ("cheer", "laugh", 2.4), ("flail", "panic", 2.0),
+    ]
+    eye_at = B(6, 253, 1414)
+    rigs.sort(key=lambda rig: rig["x"])
+    for index, rig in enumerate(rigs):
+        pose, face, lift = cast[index % len(cast)]
+        spot = B(rig["x"], 250.0 + lift, rig["z"])
+        avatar(spot, face_to(spot, eye_at) + math.radians(rng.uniform(-10, 10)), pose, index + 1, face)
+    confetti(60, B(4, 263, 1404), (22, 4, 6), seed=4, size=0.55)
+    embers(50, B(0, 258, 1395), (40, 10, 8), seed=5, size=(0.15, 0.35))
+    camera(eye_at, B(-3, 258.5, 1385), fov=54)
+    render_to(out / "raw_firerope.png")
+    render_glow(out / "raw_firerope_glow.png")
+    image = thumb_finish(out, "firerope", glow_strength=0.45)
+    lettering(image, "JUMP THE", (args.width * 0.27, args.height * 0.1), int(args.height * 0.1), angle=-3,
+              top=(255, 255, 255), bottom=(255, 225, 200), outline=(140, 20, 20))
+    lettering(image, "FIRE ROPE!", (args.width * 0.27, args.height * 0.235), int(args.height * 0.16), angle=-3,
+              top=(255, 230, 80), bottom=(255, 90, 20), outline=(110, 10, 10))
+    save_jpg(image, out / "thumb_2_firerope.jpg")
+
+
+def snow_spray(origin, direction, count=60, seed=3, spread=1.0, length=6.0):
+    """Ice spraying off a sled's runners: white puffs fanning out along `direction`."""
+    rng = random.Random(seed)
+    direction = V(direction).normalized()
+    side = direction.cross(V((0, 0, 1))).normalized()
+    for _ in range(count):
+        t = rng.random() ** 0.7
+        point = V(origin) + direction * (t * length) + side * rng.gauss(0, spread * (0.3 + t)) + V((0, 0, abs(rng.gauss(0, 0.5 + t))))
+        ball("spray", rng.uniform(0.12, 0.45) * (1.2 - t * 0.6), (255, 255, 255), point, emission=0.6)
+
+
+def sled_crew(body, riders, lean=0.0):
+    """Riders seated in a snapshot sled (its Body part), facing down the run. `riders` is a list of
+    (distance forward from the sled's middle, pose, look, face). `lean` tips them (radians, + to
+    the sled's left)."""
+    frame = empty("sled", (0, 0, 0))
+    frame.matrix_world = R.cframe_matrix(body["cf"])
+    bpy.context.view_layer.update()
+    for forward, pose, look, face, *extra in riders:
+        # The seat is a little above the body's middle; the hips sit on it (2 studs above the feet).
+        rider = avatar((0, -forward, 0.35 - 2.0), 0.0, pose, look, face, tilt=(0, lean),
+                       pose_extra=extra[0] if extra else None)
+        rider.parent = frame
+    return frame
+
+
+def scene_bobsled(args, out):
+    """A crew leaning hard through a banked curve, ice spraying, the run and the peaks behind."""
+    data = load_dump(args, "BobsledRun")
+    parts, rigs = split_rigs(data["parts"])
+    new_scene(args.samples, args.width, args.height, top=(0.1, 0.32, 0.85), horizon=(0.7, 0.86, 1.0),
+              sun=(0.35, -0.55, 0.7), sun_energy=4.2)
+    build_arena(data, parts)
+    sleds = [p for p in parts if p.get("prop") == "BobsledSled" and p["n"] == "Body"]
+    # The leader (lowest down the run) comes at the camera; the others chase it down the curves.
+    leader = min(sleds, key=lambda p: p["cf"][1])
+    look_left = {"head": (-6, 0, 68)}
+    for body in sleds:
+        if body is leader:
+            crew = [(3.2, "lean_left", 2, "scream", {"head": (-8, 4, 62)}),
+                    (0.3, "sit", 7, "laugh", {"arm_l": (40, 12), "arm_r": (5, 150), "head": (-6, 0, 68)}),
+                    (-2.6, "lean_left", 5, "determined", look_left)]
+        else:
+            crew = [(1.6, "lean_right", 4, "determined"), (-1.2, "cheer", 9, "grin")]
+        sled_crew(body, crew, lean=math.radians(12) if body is leader else 0.0)
+    cf = leader["cf"]
+    forward = V((cf[5], cf[8], cf[11]))  # down the run (the mesh is turned around in its part)
+    left = V((cf[3], cf[6], cf[9]))  # the riders' left
+    center = V(cf[:3])
+    for runner in (-1, 1):
+        snow_spray(B(*(center - forward * 6 + left * runner * 1.6)), B(*(-forward + left * runner * 0.4)), count=45,
+                   spread=0.5, length=7, seed=runner + 5)
+    streaks(B(*(center - forward * 8 + V((0, 2.0, 0)))), B(*forward), count=7, length=7, seed=2, spread=1.8, width=0.1)
+    eye_r = center + left * 12.5 + forward * 6 + V((0, 4.4, 0))
+    camera(B(*eye_r), B(*(center + V((0, 2.6, 0)) + forward * 0.5)), fov=46, roll=-6)
+    render_to(out / "raw_bobsled.png")
+    image = thumb_finish(out, "bobsled", saturation=1.15)
+    lettering(image, "LEAN TO WIN THE", (args.width * 0.5, args.height * 0.1), int(args.height * 0.085), angle=-2,
+              top=(255, 255, 255), bottom=(210, 235, 255), outline=(30, 60, 150))
+    lettering(image, "BOBSLED RUN!", (args.width * 0.5, args.height * 0.225), int(args.height * 0.16), angle=-2,
+              top=(255, 255, 255), bottom=(120, 200, 255), outline=(20, 40, 120))
+    save_jpg(image, out / "thumb_3_bobsled.jpg")
+
+
 def scene_icon(args, out):
     return ICONS[ICON](args, out)
 
@@ -1286,7 +1423,8 @@ def scene_sheet(args, out):
     print("wrote", out / "icon_sheet.png", flush=True)
 
 
-SCENES = {"icon": scene_icon, **{f"icon_{name}": fn for name, fn in ICONS.items()}, "sheet": scene_sheet}
+SCENES = {"firerope": scene_firerope, "bobsled": scene_bobsled, "icon": scene_icon,
+          **{f"icon_{name}": fn for name, fn in ICONS.items()}, "sheet": scene_sheet}
 
 
 def main():
