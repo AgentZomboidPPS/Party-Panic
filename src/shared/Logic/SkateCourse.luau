@@ -76,7 +76,11 @@ function SkateCourse.Generate(rng: Random, length: number?): { Obstacle }
 			kind = "Gap"
 		else
 			local roll = rng:NextNumber()
-			kind = if roll < 0.32 then "Crate" elseif roll < 0.58 then "Barrier" elseif roll < 0.82 then "Gap" else "Boost"
+			kind = if roll < 0.32
+				then "Crate"
+				elseif roll < 0.58 then "Barrier"
+				elseif roll < 0.82 then "Gap"
+				else "Boost"
 			if kind == last and kind ~= "Crate" then
 				kind = "Crate"
 			end
@@ -98,9 +102,9 @@ end
 function SkateCourse.NewCollapse(start: number, length: number?): Collapse
 	local finish = length or SkateCourse.Length
 	local t0 = start + 3
-	local t1 = start + 46
+	local t1 = start + 42
 	local d0 = -30
-	local v0 = 22
+	local v0 = 27
 	local span = t1 - t0
 	local a = 2 * (finish - d0 - v0 * span) / (span * span)
 	return { T0 = t0, D0 = d0, V0 = v0, A = a, T1 = t1 }
@@ -292,6 +296,33 @@ end
 function SkateCourse.LaneX(lane: number, lanes: number): number
 	return (lane - (lanes + 1) / 2) * SkateCourse.LaneWidth
 end
+
+-- Where a skater's root goes: a sideways stance (facing +X) riding toward -Z, `lift` above the track
+-- (include the root's own height), flipped forward by `tumble` radians in a wipeout.
+function SkateCourse.StanceCFrame(origin: Vector3, laneX: number, d: number, lift: number, tumble: number): CFrame
+	local position = origin + Vector3.new(laneX, lift, -d)
+	local facing = CFrame.lookAt(Vector3.zero, Vector3.xAxis)
+	if tumble ~= 0 then
+		return CFrame.new(position) * CFrame.fromAxisAngle(Vector3.xAxis, -tumble) * facing
+	end
+	return CFrame.new(position) * facing
+end
+
+-- Lane colors, always shown with the lane number so color is never the only cue.
+SkateCourse.LaneColors = {
+	Color3.fromRGB(255, 92, 92),
+	Color3.fromRGB(255, 150, 60),
+	Color3.fromRGB(255, 212, 70),
+	Color3.fromRGB(160, 225, 80),
+	Color3.fromRGB(80, 210, 120),
+	Color3.fromRGB(60, 200, 190),
+	Color3.fromRGB(80, 205, 255),
+	Color3.fromRGB(80, 130, 255),
+	Color3.fromRGB(150, 110, 255),
+	Color3.fromRGB(210, 100, 255),
+	Color3.fromRGB(255, 100, 200),
+	Color3.fromRGB(240, 240, 250),
+}
 
 function SkateCourse.Ordinal(n: number): string
 	local suffix = "th"
