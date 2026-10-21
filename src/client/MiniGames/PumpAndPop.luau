@@ -302,7 +302,7 @@ function PumpAndPop.Start(api)
 			TextWrapped = false,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			Position = UDim2.fromOffset(10, 3),
-			Size = UDim2.new(1, -60, 0, 26),
+			Size = UDim2.new(1, -72, 0, 26), -- clear of the percentage on the right
 			Parent = pill,
 			Children = { UIKit.TextStroke(0.3) },
 		})
@@ -339,10 +339,10 @@ function PumpAndPop.Start(api)
 				Name = "You",
 				Text = "▲ YOU",
 				Font = Theme.Fonts.Display,
-				TextSize = 16,
+				TextSize = 20, -- still readable after the phone HUD scale
 				AnchorPoint = Vector2.new(0.5, 0),
 				Position = UDim2.new(0.5, 0, 1, 2),
-				Size = UDim2.fromOffset(80, 18),
+				Size = UDim2.fromOffset(90, 22),
 				Parent = pill,
 				Children = { UIKit.TextStroke(0.2) },
 			})
