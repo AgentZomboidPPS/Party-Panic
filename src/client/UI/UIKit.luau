@@ -1,12 +1,19 @@
 -- Small declarative UI helpers so every screen shares the same rounded, glossy, animated style.
 
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local Theme = require(script.Parent.Theme)
 
 local UIKit = {}
 
 export type Props = { [string]: any }
+
+-- Phones and tablets without a keyboard: layouts keep clear of the thumbstick (bottom left) and the
+-- jump button (bottom right), and use bigger text.
+function UIKit.IsTouch(): boolean
+	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+end
 
 -- Creates an instance, applies props, parents children. `Parent` is applied last.
 function UIKit.new(className: string, props: Props?, children: { Instance }?): any

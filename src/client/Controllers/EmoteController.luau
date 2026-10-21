@@ -1,6 +1,9 @@
 -- Emote picker: every owned emote, one tap to play. Dances loop until you move or jump.
 -- Animations play on the local character (and replicate like any character animation); the
 -- server validates ownership for effect emotes and quest progress.
+-- The picker pops up in the middle of the screen, clear of the thumbstick, the jump button and the
+-- vote cards; two rows show at a time (the rest scroll), and it closes when the game moves on to
+-- the next phase or a window opens, so it's never left covering the vote.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8,17 +11,26 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage.Shared
 local Cosmetics = require(Shared.Cosmetics)
+local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 
 local State = require(script.Parent.Parent.State)
+local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local EmoteController = {}
 
+local COLUMNS = 4
+local CELL = 84
+local GAP = 10
+local PADDING = 12
+local MAX_ROWS = 2
+
 local player = Players.LocalPlayer
 local panel: Frame
-local grid: Frame
+local grid: ScrollingFrame
+local touch = false
 local currentTrack: AnimationTrack? = nil
 local lastUse = 0
 
@@ -54,54 +66,78 @@ local function play(item: Cosmetics.Cosmetic)
 	currentTrack = track
 end
 
+-- One square button: a big icon with its name underneath.
+local function cell(order: number, icon: string, name: string, onClick: () -> (), top: Color3, bottom: Color3)
+	local button = UIKit.Button({
+		Text = icon,
+		TextSize = 38,
+		Size = UDim2.fromOffset(CELL, CELL),
+		CornerRadius = 22,
+		LayoutOrder = order,
+		Parent = grid,
+	}, onClick, top, bottom)
+	UIKit.Label({
+		Text = name,
+		TextSize = if touch then 17 else 15,
+		TextScaled = true,
+		TextWrapped = false,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -3),
+		Size = UDim2.new(1, -8, 0, 18),
+		Parent = button,
+		Children = {
+			UIKit.TextStroke(0.2),
+			UIKit.new("UITextSizeConstraint", { MaxTextSize = if touch then 17 else 15 }),
+		},
+	})
+end
+
+local setOpen: (boolean) -> ()
+
 local function render()
 	for _, child in grid:GetChildren() do
 		if child:IsA("GuiObject") then
 			child:Destroy()
 		end
 	end
-	local order = 0
+	local count = 0
 	for _, item in Cosmetics.List do
 		if item.Slot == "Emote" and State.Owns(item.Id) then
-			order += 1
-			local button = UIKit.Button({
-				Text = item.Icon,
-				TextSize = 38,
-				Size = UDim2.fromOffset(84, 84),
-				CornerRadius = 22,
-				LayoutOrder = order,
-				Parent = grid,
-			}, function()
+			count += 1
+			cell(count, item.Icon, item.Name, function()
 				play(item)
-				panel.Visible = false
+				setOpen(false)
 			end, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
-			UIKit.Label({
-				Text = item.Name,
-				TextSize = 14,
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.new(0.5, 0, 1, -2),
-				Size = UDim2.new(1, 0, 0, 16),
-				Parent = button,
-				Children = { UIKit.TextStroke(0.2) },
-			})
 		end
 	end
-	UIKit.Label({
-		Text = "More emotes in the 🛍️ Shop",
-		TextSize = 16,
-		TextColor3 = Theme.Colors.TextDim,
-		Size = UDim2.fromOffset(180, 84),
-		LayoutOrder = order + 1,
-		Parent = grid,
-	})
+	count += 1
+	cell(count, "🛍️", "Get more", function()
+		setOpen(false)
+		State.OpenScreen:Fire("Shop", "Emote")
+	end, Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
+	local rows = math.min(math.ceil(count / COLUMNS), MAX_ROWS)
+	grid.Size = UDim2.new(1, 0, 0, rows * CELL + (rows - 1) * GAP + 2 * PADDING)
+end
+
+setOpen = function(open: boolean)
+	if open == panel.Visible then
+		return
+	end
+	panel.Visible = open
+	if open then
+		render()
+		grid.CanvasPosition = Vector2.zero
+		UIKit.PopIn(panel, 0.3)
+	end
 end
 
 function EmoteController.Start(context)
+	touch = UIKit.IsTouch()
 	panel = UIKit.Panel({
 		Name = "Emotes",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -24),
-		Size = UDim2.fromOffset(600, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.45),
+		Size = UDim2.fromOffset(COLUMNS * CELL + (COLUMNS - 1) * GAP + 2 * PADDING, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		CornerRadius = 24,
 		Visible = false,
@@ -109,41 +145,64 @@ function EmoteController.Start(context)
 	})
 	UIKit.AutoScale(panel)
 	UIKit.Label({
-		Text = "🕺 Emotes  (G)",
+		Text = if touch then "🕺 Emotes" else "🕺 Emotes  (G)",
 		Font = Theme.Fonts.Display,
 		TextSize = 24,
-		Size = UDim2.new(1, 0, 0, 40),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(PADDING + 4, 4),
+		Size = UDim2.new(1, -70, 0, 40),
 		Parent = panel,
 	})
-	grid = UIKit.new("Frame", {
-		Position = UDim2.fromOffset(0, 40),
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
+	UIKit.Button({
+		Name = "Close",
+		Text = "✕",
+		TextSize = 20,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -PADDING, 0, 8),
+		Size = UDim2.fromOffset(34, 34),
+		CornerRadius = "round",
+		Parent = panel,
+	}, function()
+		setOpen(false)
+	end, Theme.Colors.Red, Color3.fromRGB(190, 40, 60))
+	grid = UIKit.new("ScrollingFrame", {
+		Position = UDim2.fromOffset(0, 44),
+		Size = UDim2.new(1, 0, 0, CELL + 2 * PADDING),
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 6,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
 		Parent = panel,
 		Children = {
 			UIKit.new("UIGridLayout", {
-				CellSize = UDim2.fromOffset(84, 84),
-				CellPadding = UDim2.fromOffset(10, 10),
+				CellSize = UDim2.fromOffset(CELL, CELL),
+				CellPadding = UDim2.fromOffset(GAP, GAP),
 				HorizontalAlignment = Enum.HorizontalAlignment.Center,
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
-			UIKit.Padding(12),
+			UIKit.Padding(PADDING),
 		},
 	})
 
 	State.OpenScreen:Connect(function(name)
 		if name == "Emotes" then
-			panel.Visible = not panel.Visible
-			if panel.Visible then
-				render()
-				UIKit.PopIn(panel, 0.3)
-			end
+			setOpen(not panel.Visible)
 		end
 	end)
 	State.ProfileChanged:Connect(function()
 		if panel.Visible then
 			render()
+		end
+	end)
+	-- Out of the way when the vote opens, a round starts or a window (shop, quests...) opens.
+	GameState.Changed("Phase", function()
+		setOpen(false)
+	end)
+	Modal.AnyOpenChanged:Connect(function(open)
+		if open then
+			setOpen(false)
 		end
 	end)
 

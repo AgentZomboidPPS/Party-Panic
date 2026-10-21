@@ -1,6 +1,10 @@
 -- Toast notifications: short, icon-led messages that slide in and fade out (design doc §12).
+-- They draw above the HUD and mode HUDs (but under pop-ups) in a spot nothing else uses: the top
+-- right corner on PC (above the side menu), and on phones the bottom middle like Android toasts,
+-- between the thumbstick and the jump button, lifted above the "you're out" and spectate panels.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -15,7 +19,12 @@ local KINDS = {
 	reward = { Icon = "🎁", Color = Theme.Colors.Yellow },
 }
 
-local MAX_TOASTS = 4
+-- Bottom-middle HUD panels (RoundController, SpectateController) the phone toasts stay above:
+-- name -> their height plus a gap, in the same scaled units.
+local BOTTOM_PANELS = { OutPanel = 120 + 24, Spectate = 76 + 24, SpectateButton = 56 + 24 }
+
+local maxToasts = 3
+local newestLast = false -- phones: the newest toast sits at the bottom of the stack
 local stack: Frame
 local active: { Frame } = {}
 local order = 0
@@ -28,7 +37,7 @@ function NotificationController.Show(text: string, kind: string?, duration: numb
 		Name = "Toast",
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = -order,
+		LayoutOrder = if newestLast then order else -order,
 		BackgroundTransparency = 0.05,
 		CornerRadius = 14,
 		Parent = stack,
@@ -51,7 +60,7 @@ function NotificationController.Show(text: string, kind: string?, duration: numb
 		Children = { UIKit.Padding(10, 18) },
 	})
 	table.insert(active, toast)
-	while #active > MAX_TOASTS do
+	while #active > maxToasts do
 		local oldest = table.remove(active, 1)
 		if oldest then
 			oldest:Destroy()
@@ -83,17 +92,73 @@ function NotificationController.Show(text: string, kind: string?, duration: numb
 end
 
 function NotificationController.Start(context)
-	stack = UIKit.new("Frame", {
-		Name = "Toasts",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -16, 0, 96),
-		Size = UDim2.fromOffset(380, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1,
-		Parent = context.Hud,
-		Children = { UIKit.List(Enum.FillDirection.Vertical, 8, Enum.HorizontalAlignment.Right) },
+	local touch = UIKit.IsTouch()
+	-- Their own layer: above the HUD (5) and mode HUDs (6), under pop-ups (10).
+	local gui = UIKit.new("ScreenGui", {
+		Name = "PartyPanicToasts",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = false,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		DisplayOrder = 8,
+		Parent = context.Hud.Parent,
 	})
-	UIKit.AutoScale(stack, 0.95)
+	if touch then
+		maxToasts = 2
+		newestLast = true
+		local holder = UIKit.new("Frame", {
+			Name = "ToastArea",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -16),
+			Size = UDim2.fromOffset(440, 400),
+			BackgroundTransparency = 1,
+			Parent = gui,
+		})
+		UIKit.AutoScale(holder)
+		stack = UIKit.new("Frame", {
+			Name = "Toasts",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.fromScale(0.5, 1),
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			Parent = holder,
+			Children = {
+				UIKit.List(Enum.FillDirection.Vertical, 8, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Bottom),
+			},
+		})
+		local function lift()
+			local height = 0
+			for name, panelHeight in BOTTOM_PANELS do
+				local panel = context.Hud:FindFirstChild(name)
+				if panel and panel:IsA("GuiObject") and panel.Visible then
+					height = math.max(height, panelHeight)
+				end
+			end
+			stack.Position = UDim2.new(0.5, 0, 1, -height)
+		end
+		local elapsed = 0
+		RunService.Heartbeat:Connect(function(dt)
+			elapsed += dt
+			if elapsed > 0.2 then
+				elapsed = 0
+				lift()
+			end
+		end)
+		lift()
+	else
+		stack = UIKit.new("Frame", {
+			Name = "Toasts",
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -12, 0, 8),
+			Size = UDim2.fromOffset(360, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			Parent = gui,
+			Children = { UIKit.List(Enum.FillDirection.Vertical, 8, Enum.HorizontalAlignment.Right) },
+		})
+		UIKit.AutoScale(stack, 0.95)
+	end
 
 	Remotes.Get("Notify").OnClientEvent:Connect(function(text, kind, duration)
 		if type(text) == "string" then

@@ -1,5 +1,7 @@
 -- Cosmetic shop (design doc §10 "Shop layout"): tabs, large previews, price, ownership, a clear
 -- purchase confirmation and an equip button. Every lock says exactly how to unlock the item.
+-- Four cards fill each row at any window size (the window shrinks on phones and the grid scrolls).
+-- State.OpenScreen:Fire("Shop", "Emote") opens it on a tab (the emote picker's "Get more").
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -13,6 +15,8 @@ local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local ShopController = {}
+
+local CARD_WIDTH, CARD_HEIGHT, CARD_GAP = 176, 236, 12
 
 local modal: Modal.Modal
 local grid: ScrollingFrame
@@ -92,7 +96,7 @@ local function render()
 		local owned = profile.Owned[item.Id] == true
 		local equipped = profile.Equipped[item.Slot] == item.Id
 		local card = UIKit.Panel(
-			{ Size = UDim2.fromOffset(176, 236), LayoutOrder = order, CornerRadius = 18, Parent = grid },
+			{ Size = UDim2.fromOffset(CARD_WIDTH, CARD_HEIGHT), LayoutOrder = order, CornerRadius = 18, Parent = grid },
 			Theme.Colors.Card,
 			Theme.Colors.PanelDark
 		)
@@ -108,7 +112,7 @@ local function render()
 		})
 		UIKit.Label({
 			Text = item.Description,
-			TextSize = 15,
+			TextSize = 17,
 			TextColor3 = Theme.Colors.TextDim,
 			Position = UDim2.fromOffset(8, 132),
 			Size = UDim2.new(1, -16, 0, 40),
@@ -197,7 +201,7 @@ function ShopController.Start(context)
 	end
 	UIKit.Label({
 		Text = "Cosmetics only - no gameplay advantages.",
-		TextSize = 15,
+		TextSize = 16,
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, 0, 0, 40),
 		LayoutOrder = 99,
@@ -210,16 +214,24 @@ function ShopController.Start(context)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 8,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		Parent = content,
 		Children = {
 			UIKit.new("UIGridLayout", {
-				CellSize = UDim2.fromOffset(176, 236),
-				CellPadding = UDim2.fromOffset(12, 12),
+				-- A quarter of the row each (less the gaps, with a little slack), so four always fit.
+				CellSize = UDim2.new(0.25, -(CARD_GAP + 4), 0, CARD_HEIGHT),
+				CellPadding = UDim2.fromOffset(CARD_GAP, CARD_GAP),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
-			UIKit.Padding(6),
+			-- The right side leaves room for the scroll bar.
+			UIKit.new("UIPadding", {
+				PaddingLeft = UDim.new(0, 4),
+				PaddingRight = UDim.new(0, 14),
+				PaddingTop = UDim.new(0, 6),
+				PaddingBottom = UDim.new(0, 6),
+			}),
 		},
 	})
 
@@ -266,10 +278,18 @@ function ShopController.Start(context)
 		confirm.Visible = false
 	end, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 
-	State.OpenScreen:Connect(function(name)
-		if name == "Shop" then
-			modal:Toggle()
+	State.OpenScreen:Connect(function(name, tab)
+		if name ~= "Shop" then
+			return
 		end
+		if type(tab) == "string" and tabButtons[tab] then
+			currentSlot = tab
+			if modal.IsOpen then
+				render()
+				return
+			end
+		end
+		modal:Toggle()
 	end)
 	modal.Opened:Connect(render)
 	modal.Closed:Connect(function()

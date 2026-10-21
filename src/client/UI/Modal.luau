@@ -1,4 +1,6 @@
 -- Centered modal window with a title bar and close button. Only one modal is open at a time.
+-- The window sits inside the screen's safe area (clear of Roblox's top bar and phone notches) and
+-- shrinks to fit small screens; its content lays out to the window, so lists scroll on phones.
 
 local GuiService = game:GetService("GuiService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,6 +13,9 @@ local Modal = {}
 Modal.__index = Modal
 
 local openModal = nil
+
+-- Room left around a window that has been shrunk to fit the screen (screen pixels).
+local FIT_MARGIN = 8
 
 -- Fires with true/false whenever any modal opens or the last one closes (used to duck music).
 Modal.AnyOpenChanged = Signal.new()
@@ -27,20 +32,25 @@ export type Modal = typeof(setmetatable(
 	Modal
 ))
 
+-- `parent` is a ScreenGui that keeps to the safe area (init.client.luau's overlay).
 function Modal.new(parent: Instance, title: string, icon: string, size: Vector2): Modal
+	local touch = UIKit.IsTouch()
 	local root = UIKit.new("Frame", {
 		Name = title .. "Modal",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.45,
+		BackgroundTransparency = 1,
 		Visible = false,
 		ZIndex = 20,
 		Parent = parent,
 	})
-	-- Clicking the dim backdrop closes the window.
+	-- The dim backdrop reaches past the safe area to cover the whole screen; tapping it closes.
 	local backdrop = UIKit.new("TextButton", {
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
+		Name = "Backdrop",
+		Position = UDim2.fromOffset(-300, -300),
+		Size = UDim2.new(1, 600, 1, 600),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.45,
+		AutoButtonColor = false,
 		Text = "",
 		ZIndex = 20,
 		Parent = root,
@@ -55,7 +65,23 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 		CornerRadius = 22,
 		Parent = root,
 	})
-	UIKit.AutoScale(window)
+	local windowScale = UIKit.AutoScale(window)
+	window:SetAttribute("PP_Fit", size) -- tools/checks/ui_render.py fits it the same way
+	-- Shrink (never grow) the window so it fits the safe area at the current UI scale.
+	local function fit()
+		local area = root.AbsoluteSize
+		if area.X < 100 or area.Y < 100 then
+			return -- not laid out yet
+		end
+		local scale = windowScale.Scale
+		window.Size = UDim2.fromOffset(
+			math.min(size.X, (area.X - 2 * FIT_MARGIN) / scale),
+			math.min(size.Y, (area.Y - 2 * FIT_MARGIN) / scale)
+		)
+	end
+	root:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	windowScale:GetPropertyChangedSignal("Scale"):Connect(fit)
+	fit()
 
 	local titleBar = UIKit.new("Frame", {
 		Name = "TitleBar",
@@ -68,9 +94,11 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 		Text = `{icon}  {title}`,
 		Font = Theme.Fonts.Display,
 		TextSize = 34,
+		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(24, 10),
-		Size = UDim2.new(1, -100, 0, 44),
+		Size = UDim2.fromOffset(0, 44),
+		AutomaticSize = Enum.AutomaticSize.X,
 		ZIndex = 22,
 		Parent = titleBar,
 		Children = { UIKit.TextStroke(0.3) },
@@ -92,13 +120,15 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 		Closed = Signal.new(),
 	}, Modal)
 
+	-- A bigger close button for thumbs.
+	local closeSize = if touch then 56 else 46
 	UIKit.Button({
 		Name = "Close",
 		Text = "✕",
-		TextSize = 26,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -14, 0, 12),
-		Size = UDim2.fromOffset(46, 46),
+		TextSize = if touch then 30 else 26,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -14, 0, 34),
+		Size = UDim2.fromOffset(closeSize, closeSize),
 		CornerRadius = "round",
 		ZIndex = 23,
 		Parent = titleBar,
@@ -109,6 +139,7 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 	backdrop.Activated:Connect(function()
 		self:Close()
 	end)
+	self.Opened:Connect(fit)
 	return self
 end
 

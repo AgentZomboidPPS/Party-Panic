@@ -9,7 +9,8 @@ local UIKit = require(script.UI.UIKit)
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- One ScreenGui for the whole HUD; modals use a second one so they draw on top.
+-- One ScreenGui for the whole HUD; modals use a second one so they draw on top. Both keep to the
+-- safe area (clear of Roblox's top bar and phone notches); a modal's dim backdrop reaches past it.
 local hud = UIKit.new("ScreenGui", {
 	Name = "PartyPanicHUD",
 	ResetOnSpawn = false,
@@ -22,7 +23,8 @@ local hud = UIKit.new("ScreenGui", {
 local overlay = UIKit.new("ScreenGui", {
 	Name = "PartyPanicOverlay",
 	ResetOnSpawn = false,
-	IgnoreGuiInset = true,
+	IgnoreGuiInset = false,
+	ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	DisplayOrder = 10,
 	Parent = playerGui,
