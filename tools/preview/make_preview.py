@@ -76,6 +76,8 @@ CAMERAS: dict[str, dict] = {
     "HexMeltdown": {"yaw": 20, "pitch": 46, "distance": 86, "shift": [0, -6, 8], "raise": 5},
     # The honey tree's vine of fruit and honeycombs, bees chasing someone out, players on their pads.
     "HoneyTrap": {"yaw": -15, "pitch": 26, "distance": 44, "fov": 55, "shift": [-1, 5, -5], "raise": 12},
+    # The turning field from a player's corner: lanes, veggies and bombs, the silo in the middle.
+    "RakeItIn": {"look_at": "SiloBody", "yaw": 30, "pitch": 30, "distance": 50, "shift": [0, -4, 0], "raise": 2},
     # A team pumping its balloon (with a face), a rival team's balloon beside it.
     "PumpAndPop": {"yaw": 25, "pitch": 12, "distance": 40, "shift": [0, 8.5, -4], "sway": 8},
     # Two riders who just bumped, the sea and a palm island behind.
