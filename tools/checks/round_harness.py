@@ -103,6 +103,7 @@ LOBBY_MODES = {"FireRope", "HexMeltdown", "HoneyTrap", "BumperBallers"}
 
 
 PRELUDE = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (Path(__file__).resolve().parent / "harness_prelude.luau").read_text()
+COLLIDERS = (Path(__file__).resolve().parent / "colliders.luau").read_text()
 
 
 def main():
@@ -120,17 +121,21 @@ def main():
                         "names or groups; default: touch with --touch, else pc)")
     parser.add_argument("--client-sits-out", action="store_true", help="with --client: Bot1 sits this round out and watches")
     parser.add_argument("--client-out-at", type=float, default=None, help="with --client: knock Bot1 out this many seconds in")
+    parser.add_argument("--colliders-at", help="snapshot every part characters collide with at these round times (0 = after "
+                        "Prepare), e.g. 0,5,80, for tools/checks/colliders.py; with LOBBY: the lobby's")
+    parser.add_argument("--colliders-reach", type=float, default=600, help="with --colliders-at: map this far from the arena's middle")
     args = parser.parse_args()
 
     header = "__touchMode = true\n" if args.touch else "__touchMode = false\n"
     if args.ui_at:
         header += devices_luau(size_names(args.sizes or ("touch" if args.touch else "pc")))
-    out = [header + PRELUDE]
+    prelude = PRELUDE + ("\n" + COLLIDERS if args.colliders_at is not None else "")
+    out = [header + prelude]
     paths = module_paths()
     if args.client:
         paths.update(client_paths())
     line_map = []  # (first line of the module body in the bundle, module name)
-    line = PRELUDE.count("\n") + header.count("\n") + 1  # the __touchMode (and __devices) lines come first
+    line = prelude.count("\n") + header.count("\n") + 1  # the __touchMode (and __devices) lines come first
     for module, path in paths.items():
         if module == "Shared/Remotes":
             continue  # replaced by the harness's recording stand-in
@@ -157,14 +162,20 @@ def main():
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)
     ui = "nil" if not args.ui_at else "{" + ", ".join(str(float(t)) for t in args.ui_at.split(",")) + "}"
-    if args.game == "LOBBY":
+    if args.game == "LOBBY" and args.colliders_at is not None:
+        out.append("return __runLobbyColliders()")
+    elif args.game == "LOBBY":
         out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8}, 10)")
     else:
         watch = "{ sitOut = %s, outAt = %s }" % (
             "true" if args.client_sits_out else "false",
             "nil" if args.client_out_at is None else str(args.client_out_at),
         )
-        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots}, {watch})')
+        colliders = "nil"
+        if args.colliders_at is not None:
+            times = ", ".join(str(float(t)) for t in args.colliders_at.split(","))
+            colliders = "{ times = { %s }, reach = %s }" % (times, args.colliders_reach)
+        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots}, {watch}, {colliders})')
     sys.stdout.write("\n".join(out))
 
 
