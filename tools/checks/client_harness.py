@@ -40,7 +40,8 @@ ScreenGuis are made like init.client.luau makes them. Shared modules come from t
 (except Remotes), and so does the profile snapshot (DataService and the two services it needs).
 Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", "Rewards Career")
 and shows a level-up, a career milestone and a returning player's celebration ("LevelUp",
-"LevelUp2", "Milestone", "Welcome").
+"LevelUp2", "Milestone", "Welcome"). After the round a level-up card shows while the last
+first-join tip is due; the result's "tipChecks" says what was on screen while it was up and after.
 """
 
 import argparse
@@ -965,12 +966,40 @@ if #bots > 0 then
 	botChecks.headshotsAskedFor = __thumbnailIds
 end
 
+-- The round levelled the player up (a new player's first win does): the card waits for the lobby.
+__fire("Celebrate", { Kind = "LevelUp", Level = 2, From = 1, Coins = 3, Items = { "Emote_Balloons" } })
 phase("Cleanup", 3, function()
 	for _, who in everyone() do
 		who:SetAttribute("PP_InRound", false)
 		who:SetAttribute("PP_Alive", false)
 	end
 end)
+-- Back in the lobby the card shows while the last first-join tip is due: on phones the tip steps
+-- aside while the card is up and comes back after it, its 8 s counted only while it's on screen
+-- (the tips never finish behind the card). tipChecks: what was on screen, and whether the client
+-- had told the server the tips were done.
+local tipChecks = {}
+do
+	local function tipPanel()
+		local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+		local holder = hud and hud:FindFirstChild("Onboarding", true)
+		return holder and (holder:FindFirstChild("Tip") or holder)
+	end
+	local function look(label)
+		local celebrate = __playerGui:FindFirstChild("PartyPanicCelebrate")
+		local tip = tipPanel()
+		local tipText = tip and tip:FindFirstChildWhichIsA("TextLabel", true)
+		tipChecks[label] = {
+			card = if celebrate and celebrate:FindFirstChild("Celebration") then "shown" else "none",
+			tip = if tip and tip.Visible then "shown" else "hidden",
+			tipText = if tipText then string.sub(tipText.Text, 1, 60) else nil,
+			tutorialDone = table.find(__sent, "TutorialDone") ~= nil,
+		}
+	end
+	look("cardUp")
+	task.wait(10) -- the card closes itself after 9 s
+	look("afterCard")
+end
 phase("Waiting", 0)
 task.wait(1)
 
@@ -1114,6 +1143,7 @@ return game:GetService("HttpService"):JSONEncode({
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
 	sitOutChecks = sitOutChecks,
+	tipChecks = tipChecks,
 	textReport = __textReport,
 	portals = __portals,
 })
