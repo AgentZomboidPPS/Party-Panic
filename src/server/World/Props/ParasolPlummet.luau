@@ -98,7 +98,7 @@ return function(h)
 			end,
 		},
 		ParasolPlummetThrower = {
-			Height = 5.2,
+			Height = 5.4,
 			AssetId = 0,
 			Palette = {
 				Body = h.rgb(120, 200, 110),
@@ -119,7 +119,7 @@ return function(h)
 			end,
 		},
 		ParasolPlummetSun = {
-			Height = 60,
+			Height = 59,
 			AssetId = 0,
 			Shadow = false,
 			Palette = { Sun = h.rgb(255, 236, 140), Rays = h.rgb(255, 205, 90) },
@@ -137,7 +137,7 @@ return function(h)
 			end,
 		},
 		ParasolPlummetBalloon = {
-			Height = 22,
+			Height = 21.6,
 			AssetId = 0,
 			Shadow = false,
 			Palette = {
