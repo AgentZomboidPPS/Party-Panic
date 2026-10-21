@@ -1,10 +1,11 @@
 -- Client half of Spleef: picks the block you click or tap (or DIG's pick: the block under the
--- nearest rival in reach) and asks the server to break it, showing the break at once (puff, chunks,
--- crunch, your shovel's swing) and putting the block back if the server says no. Draws everyone
--- else's breaks, shakes and flashes the blocks that are cracking until they drop (the server's
--- DropAt schedule), splashes whoever hits the water, and shows which floor you're on.
--- Floors above you turn see-through (and the camera fades what's in its way instead of zooming in),
--- so being under a floor never hides the game.
+-- nearest rival in reach) and asks the server to break it. Your shovel swings and the snow dusts at
+-- once; the block itself bursts (puff, chunks, crunch) when the server has broken it, so its look
+-- and its collision always go together, for everyone (a block is never hidden while still solid).
+-- Draws everyone else's breaks and swings, shakes and flashes the blocks that are cracking until
+-- the server drops them (its DropAt schedule), splashes whoever hits the water, and shows which
+-- floor you're on. Under a floor, the camera fades whatever is in its way (Invisicam) instead of
+-- zooming in.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -22,7 +23,6 @@ local Spleef = {}
 local PUFF = "rbxasset://textures/particles/smoke_main.dds"
 local SPARKLE = "rbxasset://textures/particles/sparkles_main.dds"
 local COOLDOWN = 0.2 -- between your breaks (the server allows a little faster)
-local GHOST = 0.6 -- floors above you are this see-through
 local GRAVITY = 110 -- for chunks and dropping blocks (a little floaty: they read better)
 local FLOOR_COLORS = {
 	Color3.fromRGB(248, 251, 255),
@@ -41,6 +41,7 @@ type Block = {
 	Base: CFrame,
 	Top: Vector3,
 	Gone: boolean, -- broken on the server (its part is gone, or going)
+	Asked: number?, -- when we last asked the server to break it
 	DropAt: number?,
 	Dust: ParticleEmitter?,
 }
@@ -220,10 +221,6 @@ function Spleef.Start(api)
 	local myFloor: number? = nil
 	local cracking: { [Block]: boolean } = {}
 
-	local function ghostOf(block: Block): number
-		return if myFloor and block.Floor < myFloor then GHOST else 0
-	end
-
 	local function startCrack(block: Block, dropAt: number)
 		if block.Gone or block.DropAt then
 			return
@@ -270,7 +267,6 @@ function Spleef.Start(api)
 		}
 		blocks[index] = block
 		grid[floor][key(block.I, block.J)] = block
-		part.LocalTransparencyModifier = ghostOf(block)
 		if not templates[floor] then
 			local copy = part:Clone()
 			for name in copy:GetAttributes() do
@@ -482,9 +478,13 @@ function Spleef.Start(api)
 
 	local lastBreak = 0
 	local broken = 0
+	-- Already asked for (and waiting on the server): don't spend another dig on it.
+	local function asked(block: Block): boolean
+		return block.Asked ~= nil and os.clock() - block.Asked < 0.6
+	end
 	local hintShown = true
 	local function tryBreak(block: Block, quiet: boolean?): boolean
-		if os.clock() - lastBreak < COOLDOWN or not api:CanAct() then
+		if os.clock() - lastBreak < COOLDOWN or not api:CanAct() or asked(block) then
 			return false
 		end
 		if not canBreak(block) then
@@ -494,6 +494,7 @@ function Spleef.Start(api)
 			return false
 		end
 		lastBreak = os.clock()
+		block.Asked = lastBreak
 		api:Action("Break", block.Index)
 		-- The swing and a dusting of snow right away; the block itself goes when the server breaks
 		-- it (a moment later, as the blade lands).
@@ -561,7 +562,7 @@ function Spleef.Start(api)
 				return (a.Top - otherRoot.Position).Magnitude < (b.Top - otherRoot.Position).Magnitude
 			end)
 			for _, block in under do
-				if not mine[block] and canBreak(block) then
+				if not mine[block] and not asked(block) and canBreak(block) then
 					best, bestDistance = block, distance
 					break
 				end
@@ -573,7 +574,7 @@ function Spleef.Start(api)
 		local look = root.CFrame.LookVector
 		local ahead = root.Position + Vector3.new(look.X, 0, look.Z).Unit * BLOCK * 1.6
 		for _, block in supports(myFloor, ahead) do
-			if not mine[block] and canBreak(block) then
+			if not mine[block] and not asked(block) and canBreak(block) then
 				return block
 			end
 		end
@@ -637,6 +638,7 @@ function Spleef.Start(api)
 	api:OnEvent("Denied", function(index)
 		local block = blocks[index]
 		if block and not block.Gone then
+			block.Asked = nil
 			showBox(block, false, 0.35) -- too far after all (you moved, or lag)
 		end
 	end)
@@ -731,7 +733,7 @@ function Spleef.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 58,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, api:HudY() + 70),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + 112),
 		Size = UDim2.fromOffset(420, 70),
 		TextColor3 = Theme.Colors.Cyan,
 		Visible = false,
@@ -748,7 +750,10 @@ function Spleef.Start(api)
 		end
 	end)
 
-	api:Hint(if api:IsTouch() then "Tap blocks near you to break them!" else "Click blocks near you to break them!")
+	api:Hint(
+		if api:IsTouch() then "Tap blocks near you to break them!" else "Click blocks near you to break them!",
+		api:HudY() + 66
+	)
 	task.delay(8, function()
 		if hintShown then
 			hintShown = false
@@ -793,20 +798,13 @@ function Spleef.Start(api)
 			sky.CFrame = CFrame.new(layout.X, layout.Tops[1] + 45, layout.Z)
 		end
 
-		-- Which floor I'm on (or falling to): floors above me go see-through.
+		-- Which floor I'm on (or falling to).
 		local character, humanoid, root = api:Character()
 		local floor: number? = nil
 		if humanoid and root and api:Alive() then
 			floor = floorBelow(root.Position.Y - humanoid.HipHeight - root.Size.Y / 2)
 		end
-		if floor ~= myFloor then
-			myFloor = floor
-			for _, block in blocks do
-				if not block.Gone and block.Part.Parent then
-					block.Part.LocalTransparencyModifier = ghostOf(block)
-				end
-			end
-		end
+		myFloor = floor
 		showFloor(if humanoid and root and api:Alive() then floor else nil)
 
 		-- Cracking blocks shake and flash, harder as they're about to go, until the server drops
@@ -844,15 +842,15 @@ function Spleef.Start(api)
 			bit.Part.Transparency = fade
 		end
 
-		-- Shovel swings.
+		-- Shovel swings: the blade comes up, then chops down, then back to rest.
 		for weld, entry in swings do
-			local t = (now - entry.Start) / 0.3
+			local t = (now - entry.Start) / 0.32
 			if t >= 1 or not weld.Parent then
 				weld.C0 = entry.Base
 				swings[weld] = nil
 				continue
 			end
-			weld.C0 = entry.Base * CFrame.Angles(math.rad(-75 * math.sin(t * math.pi)), 0, 0)
+			weld.C0 = entry.Base * CFrame.Angles(math.rad(42 * math.sin(t * math.pi * 2)), 0, 0)
 		end
 
 		-- Splashes where anyone hits the water.

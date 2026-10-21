@@ -42,6 +42,9 @@ local WATER_BELOW = 47 -- the pool's surface under the top floor
 local CRUMBLE_AT = 0.4 -- share of the round before the floors start cracking
 local FALL_MAX = 120 -- the fastest a dropped character falls (studs/s)
 local CREDIT_TIME = 5 -- a fall this soon after a rival broke your block is their spleef
+-- No bot moves faster than walking, jumping or falling could make it (a player landing on a bot's
+-- head mustn't launch it off the floors).
+local BOT_MAX_UP, BOT_MAX_FLAT = 60, 30
 -- The crater rim (World/Props/Spleef.luau, SpleefCliff): each arc is authored around the crater's
 -- middle with its mesh bottom CLIFF_BASE under the water; its pivot (bounding box bottom center)
 -- sits at CLIFF_PIVOT from there. The cliff face rises out of the water CLIFF_INNER out.
@@ -484,6 +487,7 @@ function Spleef:Start()
 	local shownStatus = ""
 	ctx:Heartbeat(function(dt)
 		self:_falls(dt)
+		self:_limitBots()
 		local status = `Players left: {ctx:AliveCount()}`
 		if self.crumbling then
 			status = `❄ The ice is cracking!  •  {status}`
@@ -527,7 +531,7 @@ end
 function Spleef:_crumble(progress: number)
 	local ctx = self.context
 	local warn = ArenaKit.Lerp(1.9, 1.2, progress)
-	local keep = 1 - 0.94 * progress ^ 1.15 -- share of each floor still standing by now
+	local keep = 1 - 0.97 * progress ^ 1.1 -- share of each floor still standing by now
 	local batch = {}
 	for floor = 1, FLOORS do
 		local solid = {}
@@ -668,6 +672,28 @@ function Spleef:_falls(dt: number)
 
 	for _, player in out do
 		self:_out(player)
+	end
+end
+
+-- A safety net under the bots: whatever shoves one, it goes no faster than walking or jumping would.
+function Spleef:_limitBots()
+	local ctx = self.context
+	for _, player in ctx:GetAlivePlayers() do
+		if not BotRegistry.IsBot(player) or self.falling[player] then
+			continue
+		end
+		local _, _, root = ctx:GetCharacter(player)
+		if not root or root.Anchored then
+			continue
+		end
+		local velocity = root.AssemblyLinearVelocity
+		local flat = Vector3.new(velocity.X, 0, velocity.Z)
+		if velocity.Y > BOT_MAX_UP or flat.Magnitude > BOT_MAX_FLAT then
+			if flat.Magnitude > BOT_MAX_FLAT then
+				flat = flat.Unit * BOT_MAX_FLAT
+			end
+			root.AssemblyLinearVelocity = Vector3.new(flat.X, math.min(velocity.Y, BOT_MAX_UP), flat.Z)
+		end
 	end
 end
 
