@@ -483,7 +483,7 @@ function SharkBait.Start(api)
 	for index, entry in layout.Rafts do
 		local center = Vector3.new(entry.X, deckY, entry.Z)
 		local foam = disc("RaftFoam", entry.R * 2 + 1.4, Color3.fromRGB(235, 250, 255), 0.45)
-		foam.CFrame = flatAt(Vector3.new(center.X, waterY + 0.04, center.Z))
+		foam.CFrame = flatAt(Vector3.new(center.X, waterY + 0.12, center.Z))
 		local warning = Instance.new("BillboardGui")
 		warning.Name = "RaftWarning"
 		warning.Size = UDim2.fromOffset(110, 110)
@@ -817,7 +817,7 @@ function SharkBait.Start(api)
 			end
 			-- The shark sees its dinner: a pulsing red ring round every swimmer in the water.
 			entry.Prey.Transparency = if isShark then 0.45 + 0.2 * math.sin(now * 8) else 1
-			entry.Prey.CFrame = flatAt(Vector3.new(p.X, waterY + 0.06, p.Z))
+			entry.Prey.CFrame = flatAt(Vector3.new(p.X, waterY + 0.18, p.Z))
 		end
 		for userId, entry in floaties do
 			if not seen[userId] then
@@ -1175,9 +1175,29 @@ function SharkBait.Start(api)
 		end
 	end)
 
+	-- The water moves: each texture layer drifts its own way (ripples on top, caustics on the sand).
+	local drifting: { { Texture: Texture, U: number, V: number } } = {}
+	local speeds = {
+		Ripples1 = { 0.9, 0.45 },
+		Ripples2 = { -0.55, 0.8 },
+		Caustics1 = { 0.55, 0.3 },
+		Caustics2 = { -0.4, 0.5 },
+	}
+	local arena = api:Arena(10)
+	for _, name in { "Ripples", "Caustics" } do
+		local plane = if arena then arena:FindFirstChild(name) else nil
+		if plane then
+			for _, texture in plane:GetChildren() do
+				local speed = speeds[texture.Name]
+				if texture:IsA("Texture") and speed then
+					table.insert(drifting, { Texture = texture, U = speed[1], V = speed[2] })
+				end
+			end
+		end
+	end
+
 	-- Ambient: buoys and floats bob on the swell, sun glints dance on the water.
 	local bobbers: { { Model: Model, Base: CFrame, Phase: number } } = {}
-	local arena = api:Arena(10)
 	local floatsFolder = arena and arena:FindFirstChild("Floats")
 	if floatsFolder and not reduced then
 		for _, model in floatsFolder:GetChildren() do
@@ -1411,7 +1431,7 @@ function SharkBait.Start(api)
 			if coin.Ring then
 				local landed = not coin.SpillAt or now >= coin.SpillAt + SPILL_TIME
 				coin.Ring.Transparency = if water and landed then 0.55 + 0.15 * math.sin(now * 3 + coin.Spin) else 1
-				coin.Ring.CFrame = flatAt(Vector3.new(position.X, waterY + 0.05, position.Z))
+				coin.Ring.CFrame = flatAt(Vector3.new(position.X, waterY + 0.15, position.Z))
 			end
 
 			-- Ran through it (or hopped through it): grab it now; the server confirms in a moment.
@@ -1491,9 +1511,14 @@ function SharkBait.Start(api)
 			cameraHumanoid = humanoid
 		end
 
-		-- Buoys and floats bob (a 0.2-stud bob reads fine at 30 Hz).
+		-- Buoys and floats bob and the water drifts (both read fine at 30 Hz).
 		if clock >= nextBob then
 			nextBob = clock + 1 / 30
+			for _, layer in drifting do
+				local texture = layer.Texture
+				texture.OffsetStudsU = (clock * layer.U) % texture.StudsPerTileU
+				texture.OffsetStudsV = (clock * layer.V) % texture.StudsPerTileV
+			end
 			for _, bob in bobbers do
 				local t = clock * 1.4 + bob.Phase
 				bob.Model:PivotTo(

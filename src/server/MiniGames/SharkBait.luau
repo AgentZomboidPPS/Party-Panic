@@ -112,6 +112,14 @@ SharkBait.WATER_COIN = 0.4
 
 SharkBait.READY, SharkBait.WOBBLING, SharkBait.FLIPPED = 0, 1, 2
 
+-- Seamless water textures (tools/art/water_textures.py, uploaded with --upload): light caustics on
+-- the sea floor and ripple lines on the surface, two layers of each drifting different ways (the
+-- client half scrolls them).
+SharkBait.Textures = {
+	Caustics = "rbxassetid://123272338089068",
+	Ripples = "rbxassetid://123824947073819",
+}
+
 local physics = RunService:IsRunning()
 local rng = Random.new()
 local decor = Random.new(9177) -- the cove's dressing is laid out the same every round
@@ -545,6 +553,36 @@ function SharkBait:_buildArena()
 		Material = Enum.Material.Sand,
 		Parent = arena,
 	})
+	-- Moving water: ripple lines drifting over the surface, light dancing on the lagoon floor.
+	local function textured(name: string, size: number, y: number, image: string, layers: { { number } })
+		local plane = Build.Decor({
+			Name = name,
+			Size = Vector3.new(size, 0.05, size),
+			CFrame = CFrame.new(origin.X, y, origin.Z),
+			Transparency = 1,
+			Parent = arena,
+		})
+		for index, layer in layers do
+			local texture = Instance.new("Texture")
+			texture.Name = `{name}{index}`
+			texture.Texture = image
+			texture.Face = Enum.NormalId.Top
+			texture.StudsPerTileU = layer[1]
+			texture.StudsPerTileV = layer[1]
+			texture.Transparency = layer[2]
+			texture.Color3 = Color3.fromRGB(layer[3], layer[4], layer[5])
+			texture.Parent = plane
+		end
+	end
+	textured("Ripples", 260, waterY + 0.06, SharkBait.Textures.Ripples, {
+		{ 34, 0.5, 255, 255, 255 },
+		{ 53, 0.68, 220, 248, 255 },
+	})
+	textured("Caustics", 150, bedY + 0.06, SharkBait.Textures.Caustics, {
+		{ 17, 0.3, 235, 255, 250 },
+		{ 26, 0.5, 210, 245, 255 },
+	})
+
 	-- The shark's belly: a hidden ledge under the sea bed, where swallowed swimmers wait (out of sight
 	-- under the deep sea floor) until they're spat out.
 	Build.Part({
