@@ -381,6 +381,7 @@ local function buildChampions()
 			Parent = gui,
 			Children = { UIKit.TextStroke(0.2) },
 		})
+		label:SetAttribute("PP_Lines", 2) -- a long name takes two lines under the picture
 		tags[place] = { image = image, robot = robot, glow = glow, label = label, gui = gui, userId = nil }
 		refresh()
 	end)

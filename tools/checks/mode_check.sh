@@ -38,5 +38,5 @@ run() { # name, harness args...
 run players12 --players 12 --client --dump-at 8
 run bots --players 2 --bots 10 --client
 run phone --players 6 --client --touch --seconds 20 --ui-at 5,15
-python3 tools/checks/ui_render.py "$OUT/phone.json" "$OUT/ui" --sizes phone,phone-small,tablet 2>&1 | grep -v "^wrote" | sed 's/^ */   ui: /' | sort | uniq -c | head -20
+python3 tools/checks/ui_render.py "$OUT/phone.json" "$OUT/ui" 2>&1 | grep -v "^wrote" | sed 's/^ */   ui: /' | sort | uniq -c | head -20
 echo "files in $OUT"

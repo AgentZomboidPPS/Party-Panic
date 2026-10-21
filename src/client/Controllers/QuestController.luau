@@ -17,34 +17,36 @@ local QuestController = {}
 local modal: Modal.Modal
 local list: ScrollingFrame
 
+-- The quest on the first line (whole, never cut short), then its bar and reward.
 local function questRow(order: number, def, quest)
 	local row = UIKit.Panel(
-		{ Size = UDim2.new(1, -8, 0, 74), LayoutOrder = order, CornerRadius = 16, Parent = list },
+		{ Size = UDim2.new(1, -8, 0, 84), LayoutOrder = order, CornerRadius = 16, Parent = list },
 		Theme.Colors.Card,
 		Theme.Colors.PanelDark
 	)
 	UIKit.Label({
 		Text = (if quest.Done then "✅ " else "🎯 ") .. def.Text,
 		TextSize = 21,
+		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(14, 6),
-		Size = UDim2.new(1, -200, 0, 30),
-		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.fromOffset(14, 8),
+		Size = UDim2.new(1, -28, 0, 30),
 		Parent = row,
 	})
 	UIKit.Label({
-		Text = `+{def.RewardCoins} 🪙  +{def.RewardXP} XP`,
-		TextSize = 18,
+		Text = `+{def.RewardCoins} {Theme.CoinIcon}  +{def.RewardXP} XP`,
+		TextSize = 19,
+		TextWrapped = false,
 		TextColor3 = Theme.Colors.Yellow,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -14, 0, 8),
-		Size = UDim2.fromOffset(180, 26),
+		Position = UDim2.new(1, -14, 0, 46),
+		Size = UDim2.fromOffset(190, 26),
 		Parent = row,
 	})
 	local back = UIKit.new("Frame", {
-		Position = UDim2.fromOffset(14, 42),
-		Size = UDim2.new(1, -28, 0, 20),
+		Position = UDim2.fromOffset(14, 48),
+		Size = UDim2.new(1, -228, 0, 22),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		Parent = row,
 		Children = { UIKit.Round() },
@@ -58,7 +60,8 @@ local function questRow(order: number, def, quest)
 	})
 	UIKit.Label({
 		Text = `{quest.Progress} / {def.Target}`,
-		TextSize = if UIKit.IsTouch() then 17 else 15,
+		TextSize = if UIKit.IsTouch() then Theme.Touch.MinText else 15,
+		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		Parent = back,
 		Children = { UIKit.TextStroke(0.2) },
@@ -116,11 +119,11 @@ local function render()
 	})
 	if daily.CanClaim then
 		UIKit.Button({
-			Text = `Claim 🪙 {daily.NextReward}`,
+			Text = `Claim {Theme.CoinIcon} {daily.NextReward}`,
 			TextSize = 22,
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -16, 0.5, 0),
-			Size = UDim2.fromOffset(210, 58),
+			Size = UDim2.fromOffset(210, if UIKit.IsTouch() then Theme.Touch.Target else 58),
 			Parent = card,
 		}, function()
 			Remotes.Get("ClaimDaily"):FireServer()
@@ -157,7 +160,7 @@ local function render()
 	order += 1
 	UIKit.Label({
 		Text = "Quests pay out automatically when you finish them.",
-		TextSize = 16,
+		TextSize = if UIKit.IsTouch() then Theme.Touch.MinText else 16,
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, 0, 0, 26),
 		LayoutOrder = order,

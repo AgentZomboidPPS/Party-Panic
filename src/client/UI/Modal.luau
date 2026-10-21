@@ -1,6 +1,8 @@
 -- Centered modal window with a title bar and close button. Only one modal is open at a time.
 -- The window sits inside the screen's safe area (clear of Roblox's top bar and phone notches) and
 -- shrinks to fit small screens; its content lays out to the window, so lists scroll on phones.
+-- Phones: a 44 pt close button and a slightly smaller title (Modal.TitleHeight() says where the
+-- content starts).
 
 local GuiService = game:GetService("GuiService")
 local UserInputService = game:GetService("UserInputService")
@@ -83,9 +85,10 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 	windowScale:GetPropertyChangedSignal("Scale"):Connect(fit)
 	fit()
 
+	local titleHeight = Modal.TitleHeight()
 	local titleBar = UIKit.new("Frame", {
 		Name = "TitleBar",
-		Size = UDim2.new(1, 0, 0, 64),
+		Size = UDim2.new(1, 0, 0, titleHeight),
 		BackgroundTransparency = 1,
 		ZIndex = 22,
 		Parent = window,
@@ -93,10 +96,10 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 	UIKit.Label({
 		Text = `{icon}  {title}`,
 		Font = Theme.Fonts.Display,
-		TextSize = 34,
+		TextSize = if touch then 30 else 34,
 		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(24, 10),
+		Position = UDim2.fromOffset(24, (titleHeight - 44) / 2),
 		Size = UDim2.fromOffset(0, 44),
 		AutomaticSize = Enum.AutomaticSize.X,
 		ZIndex = 22,
@@ -109,8 +112,8 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 		Window = window,
 		Content = UIKit.new("Frame", {
 			Name = "Content",
-			Position = UDim2.fromOffset(20, 70),
-			Size = UDim2.new(1, -40, 1, -88),
+			Position = UDim2.fromOffset(20, titleHeight + 6),
+			Size = UDim2.new(1, -40, 1, -(titleHeight + 24)),
 			BackgroundTransparency = 1,
 			ZIndex = 22,
 			Parent = window,
@@ -121,13 +124,13 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 	}, Modal)
 
 	-- A bigger close button for thumbs.
-	local closeSize = if touch then 56 else 46
+	local closeSize = if touch then Theme.Touch.Target else 46
 	UIKit.Button({
 		Name = "Close",
 		Text = "✕",
 		TextSize = if touch then 30 else 26,
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -14, 0, 34),
+		Position = UDim2.new(1, -12, 0, titleHeight / 2 + 2),
 		Size = UDim2.fromOffset(closeSize, closeSize),
 		CornerRadius = "round",
 		ZIndex = 23,
@@ -141,6 +144,11 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 	end)
 	self.Opened:Connect(fit)
 	return self
+end
+
+-- Height of the title bar (scaled units): the content starts just under it.
+function Modal.TitleHeight(): number
+	return if UIKit.IsTouch() then 80 else 64
 end
 
 function Modal.Open(self: Modal)

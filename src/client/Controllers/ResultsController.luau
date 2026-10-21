@@ -84,7 +84,7 @@ local function show(data)
 			Parent = row,
 		})
 		UIKit.Label({
-			Text = `+{line.Coins} 🪙  +{line.XP} XP`,
+			Text = `+{line.Coins} {Theme.CoinIcon}  +{line.XP} XP`,
 			TextSize = 19,
 			TextColor3 = Theme.Colors.Yellow,
 			TextXAlignment = Enum.TextXAlignment.Right,
@@ -95,7 +95,7 @@ local function show(data)
 		UIKit.PopIn(row, 0.25 + index * 0.08)
 	end
 	UIKit.Label({
-		Text = `Total: +{data.Coins} 🪙   +{data.XP} XP`,
+		Text = `Total: +{data.Coins} {Theme.CoinIcon}   +{data.XP} XP`,
 		Font = Theme.Fonts.Display,
 		TextSize = 26,
 		TextColor3 = Theme.Colors.Green,

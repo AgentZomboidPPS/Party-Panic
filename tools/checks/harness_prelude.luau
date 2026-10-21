@@ -435,6 +435,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 			end)
 		end
 		clientGuis = __localPlayer.PlayerGui
+		__uiScaleFor = __require("Client/UI/UIKit").ScaleFor -- gui_dump.luau: the scale per screen
 	end
 
 	-- Real bots (Services/BotService) driven by the mode's brain, alongside the scripted stand-ins.
@@ -640,6 +641,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		end
 	end
 	summary.errors = __errors
+	summary.textReport = if summary.ui then __textReport else nil
 	summary.log = __log
 	summary.eventCounts = __eventCounts
 	summary.events = __events

@@ -1,6 +1,8 @@
 -- Cosmetic shop (design doc §10 "Shop layout"): tabs, large previews, price, ownership, a clear
 -- purchase confirmation and an equip button. Every lock says exactly how to unlock the item.
--- Four cards fill each row at any window size (the window shrinks on phones and the grid scrolls).
+-- Four cards fill each row at any window size (the window shrinks on phones and the grid scrolls);
+-- phones get three wider cards a row so names fit on one line, 44 pt buttons and 11 pt or bigger
+-- text, and the tabs scroll if the window is short.
 -- State.OpenScreen:Fire("Shop", "Emote") opens it on a tab (the emote picker's "Get more").
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,10 +19,13 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 local ShopController = {}
 
 local CARD_WIDTH, CARD_HEIGHT, CARD_GAP = 176, 236, 12
+local TOUCH_CARD_HEIGHT = 252
+local touch = false
 
 local modal: Modal.Modal
 local grid: ScrollingFrame
 local coinLabel: TextLabel
+local coinIcon: Frame
 local confirm: Frame
 local confirmText: TextLabel
 local pendingItem: Cosmetics.Cosmetic? = nil
@@ -72,7 +77,9 @@ local function render()
 	if not profile then
 		return
 	end
-	coinLabel.Text = "🪙 " .. UIKit.FormatNumber(profile.Coins)
+	coinLabel.Text = UIKit.FormatNumber(profile.Coins)
+	local coinWidth = UIKit.TextWidth(coinLabel.Text, 28, Theme.Fonts.Display)
+	coinIcon.Position = UDim2.new(1, -70 - coinWidth - 8, coinIcon.Position.Y.Scale, coinIcon.Position.Y.Offset)
 	for slot, button in tabButtons do
 		local gradient = button:FindFirstChildOfClass("UIGradient")
 		if gradient then
@@ -95,30 +102,33 @@ local function render()
 	for order, item in items do
 		local owned = profile.Owned[item.Id] == true
 		local equipped = profile.Equipped[item.Slot] == item.Id
-		local card = UIKit.Panel(
-			{ Size = UDim2.fromOffset(CARD_WIDTH, CARD_HEIGHT), LayoutOrder = order, CornerRadius = 18, Parent = grid },
-			Theme.Colors.Card,
-			Theme.Colors.PanelDark
-		)
+		local card = UIKit.Panel({
+			Size = UDim2.fromOffset(CARD_WIDTH, if touch then TOUCH_CARD_HEIGHT else CARD_HEIGHT),
+			LayoutOrder = order,
+			CornerRadius = 18,
+			Parent = grid,
+		}, Theme.Colors.Card, Theme.Colors.PanelDark)
 		preview(card, item)
 		UIKit.Label({
 			Text = item.Name,
 			Font = Theme.Fonts.Display,
 			TextSize = 20,
-			TextScaled = true, -- long names shrink a little to fit the card
+			TextScaled = not touch, -- PC: long names shrink a little to fit the card
 			TextWrapped = false,
-			Position = UDim2.fromOffset(8, 106),
+			Position = UDim2.fromOffset(8, if touch then 100 else 106),
 			Size = UDim2.new(1, -16, 0, 26),
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = card,
-			Children = { UIKit.new("UITextSizeConstraint", { MaxTextSize = 20, MinTextSize = 15 }) },
+			Children = if touch
+				then {}
+				else { UIKit.new("UITextSizeConstraint", { MaxTextSize = 20, MinTextSize = 15 }) },
 		})
 		UIKit.Label({
 			Text = item.Description,
-			TextSize = 17,
+			TextSize = if touch then Theme.Touch.MinText else 17,
 			TextColor3 = Theme.Colors.TextDim,
-			Position = UDim2.fromOffset(8, 132),
-			Size = UDim2.new(1, -16, 0, 40),
+			Position = UDim2.fromOffset(8, if touch then 126 else 132),
+			Size = UDim2.new(1, -16, 0, if touch then 44 else 40),
 			Parent = card,
 		})
 
@@ -139,15 +149,14 @@ local function render()
 			actionText, top, bottom = "Owned ✓", Theme.Colors.Green, Color3.fromRGB(60, 160, 90)
 		elseif item.Price then
 			local affordable = profile.Coins >= item.Price
-			actionText = `🪙 {UIKit.FormatNumber(item.Price)}`
+			actionText = `{Theme.CoinIcon} {UIKit.FormatNumber(item.Price)}`
 			top = if affordable then Theme.Colors.Yellow else Theme.Colors.PanelLight
 			bottom = if affordable then Theme.Colors.Orange else Theme.Colors.PanelDark
 			onClick = function()
 				pendingItem = item
-				confirmText.Text =
-					`Buy {item.Icon} {item.Name} for 🪙 {UIKit.FormatNumber(item.Price :: number)}?\nYou have 🪙 {UIKit.FormatNumber(
-						profile.Coins
-					)}.`
+				confirmText.Text = `Buy {item.Icon} {item.Name} for {Theme.CoinIcon} {UIKit.FormatNumber(
+					item.Price :: number
+				)}?\nYou have {Theme.CoinIcon} {UIKit.FormatNumber(profile.Coins)}.`
 				confirm.Visible = true
 				UIKit.PopIn(confirm, 0.25)
 			end
@@ -156,10 +165,10 @@ local function render()
 		end
 		UIKit.Button({
 			Text = actionText,
-			TextSize = 18,
+			TextSize = if touch then 20 else 18,
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -10),
-			Size = UDim2.new(1, -20, 0, 44),
+			Size = UDim2.new(1, -20, 0, if touch then 68 else 44),
 			CornerRadius = 14,
 			Parent = card,
 		}, onClick, top, bottom)
@@ -167,34 +176,52 @@ local function render()
 end
 
 function ShopController.Start(context)
+	touch = UIKit.IsTouch()
 	modal = Modal.new(context.Overlay, "Shop", "🛍️", Vector2.new(960, 600))
 	local content = modal.Content
+	local title = Modal.TitleHeight()
 
+	-- Your coins, in the title bar left of the close button.
 	coinLabel = UIKit.Label({
-		Text = "🪙 0",
+		Text = "0",
 		Font = Theme.Fonts.Display,
 		TextSize = 28,
+		TextWrapped = false,
 		TextColor3 = Theme.Colors.Coin,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -70, 0, -58),
-		Size = UDim2.fromOffset(220, 40),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -70, 0, -(title + 6) + title / 2 + 2),
+		Size = UDim2.fromOffset(190, 40),
 		ZIndex = 25,
 		Parent = content,
 		Children = { UIKit.TextStroke(0.2) },
 	})
+	coinIcon = UIKit.Coin({
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -110, 0, -(title + 6) + title / 2 + 2),
+		Size = UDim2.fromOffset(30, 30),
+		ZIndex = 25,
+		Parent = content,
+	})
 
-	local tabs = UIKit.new("Frame", {
+	local tabGap = if touch then 6 else 10
+	local tabs = UIKit.new(if touch then "ScrollingFrame" else "Frame", {
 		Size = UDim2.new(0, 170, 1, 0),
 		BackgroundTransparency = 1,
 		Parent = content,
-		Children = { UIKit.List(Enum.FillDirection.Vertical, 10) },
+		Children = { UIKit.List(Enum.FillDirection.Vertical, tabGap) },
 	})
+	if touch then
+		tabs.BorderSizePixel = 0
+		tabs.ScrollBarThickness = 4
+		tabs.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		tabs.CanvasSize = UDim2.new()
+	end
 	for order, tab in Cosmetics.ShopTabs do
 		tabButtons[tab.Slot] = UIKit.Button({
 			Text = `{tab.Icon} {tab.Label}`,
 			TextSize = 21,
-			Size = UDim2.new(1, 0, 0, 54),
+			Size = UDim2.new(1, if touch then -6 else 0, 0, if touch then 66 else 54),
 			LayoutOrder = order,
 			Parent = tabs,
 		}, function()
@@ -204,9 +231,9 @@ function ShopController.Start(context)
 	end
 	UIKit.Label({
 		Text = "Cosmetics only - no gameplay advantages.",
-		TextSize = 17,
+		TextSize = if touch then Theme.Touch.MinText else 17,
 		TextColor3 = Theme.Colors.TextDim,
-		Size = UDim2.new(1, 0, 0, 40),
+		Size = UDim2.new(1, if touch then -6 else 0, 0, if touch then 60 else 40),
 		LayoutOrder = 99,
 		Parent = tabs,
 	})
@@ -223,8 +250,11 @@ function ShopController.Start(context)
 		Parent = content,
 		Children = {
 			UIKit.new("UIGridLayout", {
-				-- A quarter of the row each (less the gaps, with a little slack), so four always fit.
-				CellSize = UDim2.new(0.25, -(CARD_GAP + 4), 0, CARD_HEIGHT),
+				-- A quarter of the row each (less the gaps, with a little slack), so four always fit
+				-- (phones: a third, so names fit on one line).
+				CellSize = if touch
+					then UDim2.new(1 / 3, -(CARD_GAP + 4), 0, TOUCH_CARD_HEIGHT)
+					else UDim2.new(0.25, -(CARD_GAP + 4), 0, CARD_HEIGHT),
 				CellPadding = UDim2.fromOffset(CARD_GAP, CARD_GAP),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
@@ -238,10 +268,11 @@ function ShopController.Start(context)
 		},
 	})
 
+	local confirmButton = if touch then Theme.Touch.Target else 56
 	confirm = UIKit.Panel({
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(460, 220),
+		Size = UDim2.fromOffset(460, if touch then 236 else 220),
 		CornerRadius = 20,
 		Visible = false,
 		ZIndex = 30,
@@ -259,7 +290,7 @@ function ShopController.Start(context)
 		Text = "Buy",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(0.5, -8, 1, -18),
-		Size = UDim2.fromOffset(170, 56),
+		Size = UDim2.fromOffset(170, confirmButton),
 		ZIndex = 31,
 		Parent = confirm,
 	}, function()
@@ -273,7 +304,7 @@ function ShopController.Start(context)
 		Text = "Cancel",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0.5, 8, 1, -18),
-		Size = UDim2.fromOffset(170, 56),
+		Size = UDim2.fromOffset(170, confirmButton),
 		ZIndex = 31,
 		Parent = confirm,
 	}, function()

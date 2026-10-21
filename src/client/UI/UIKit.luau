@@ -1,5 +1,6 @@
 -- Small declarative UI helpers so every screen shares the same rounded, glossy, animated style.
 
+local TextService = game:GetService("TextService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
@@ -187,21 +188,25 @@ function UIKit.Button(props: Props, onClick: (() -> ())?, top: Color3?, bottom: 
 end
 
 -- Keeps a container at a comfortable size on every screen, from phones to 4K monitors.
--- The scale UIKit.AutoScale gives the current screen (layouts that line up with scaled HUD parts).
-function UIKit.CurrentScale(bias: number?): number
-	local viewport = workspace.CurrentCamera.ViewportSize
+-- The scale for a screen this size (in points): the design size fitted to it, kept between
+-- Theme.MinScale and Theme.MaxScale. Every phone gets MinScale (see Theme).
+function UIKit.ScaleFor(viewport: Vector2, bias: number?): number
 	local raw = math.min(viewport.X / Theme.DesignSize.X, viewport.Y / Theme.DesignSize.Y)
 	return math.clamp(raw * (bias or 1), Theme.MinScale, Theme.MaxScale)
 end
 
+-- The scale UIKit.AutoScale gives the current screen (layouts that line up with scaled HUD parts).
+function UIKit.CurrentScale(bias: number?): number
+	return UIKit.ScaleFor(workspace.CurrentCamera.ViewportSize, bias)
+end
+
 function UIKit.AutoScale(container: GuiObject, bias: number?): UIScale
 	local uiScale = UIKit.new("UIScale", { Parent = container })
-	uiScale:SetAttribute("AutoScale", bias or 1) -- lets tools/checks/ui_render.py redo the layout per screen
+	-- Lets the UI checks redo the scale per screen (tools/checks/gui_dump.luau, ui_render.py).
+	uiScale:SetAttribute("AutoScale", bias or 1)
 	local camera = workspace.CurrentCamera
 	local function update()
-		local viewport = camera.ViewportSize
-		local raw = math.min(viewport.X / Theme.DesignSize.X, viewport.Y / Theme.DesignSize.Y)
-		uiScale.Scale = math.clamp(raw * (bias or 1), Theme.MinScale, Theme.MaxScale)
+		uiScale.Scale = UIKit.ScaleFor(camera.ViewportSize, bias)
 	end
 	camera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
 	update()
@@ -233,6 +238,53 @@ function UIKit.PopIn(gui: GuiObject, time: number?)
 	local popScale = scale :: UIScale
 	popScale.Scale = 0.6
 	UIKit.Tween(popScale, time or 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+end
+
+-- A drawn coin (gold disc with a rim). Used instead of the 🪙 emoji, which phones don't show
+-- (Roblox's emoji font is older than it).
+function UIKit.Coin(props: Props): Frame
+	local defaults: Props = {
+		Name = "Coin",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(24, 24),
+	}
+	for key, value in props do
+		defaults[key] = value
+	end
+	local coin = UIKit.new("Frame", defaults, {
+		UIKit.Round(),
+		UIKit.Gradient(Color3.fromRGB(255, 236, 120), Color3.fromRGB(240, 160, 30)),
+		UIKit.new("UIStroke", { Color = Color3.fromRGB(150, 85, 10), Thickness = 2, Transparency = 0.1 }),
+	})
+	UIKit.new("Frame", {
+		Name = "Shine",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Parent = coin,
+		Children = {
+			UIKit.Round(),
+			UIKit.new("UIStroke", { Color = Color3.fromRGB(255, 250, 200), Thickness = 1.5, Transparency = 0.3 }),
+		},
+	})
+	return coin
+end
+
+-- How wide a line of text is, in the units of the layout it sits in (before any UIScale).
+-- A font that hasn't loaded yet measures a little narrow, so callers re-measure now and then.
+function UIKit.TextWidth(text: string, size: number, font: Enum.Font): number
+	local ok, bounds = pcall(TextService.GetTextSize, TextService, text, size, font, Vector2.new(1e4, 1e4))
+	return if ok then bounds.X else #text * size * 0.6
+end
+
+-- How many lines text wraps onto in a box this wide (with a little slack for a font still loading).
+function UIKit.TextLines(text: string, size: number, font: Enum.Font, width: number): number
+	local ok, bounds =
+		pcall(TextService.GetTextSize, TextService, text, size, font, Vector2.new(math.max(1, width * 0.94), 1e4))
+	local height = if ok then bounds.Y else size
+	return math.max(1, math.floor(height / size + 0.5))
 end
 
 function UIKit.FormatTime(seconds: number): string

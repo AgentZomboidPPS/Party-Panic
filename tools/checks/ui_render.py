@@ -1,19 +1,25 @@
 """Draws the player's on-screen UI from a harness snapshot at several screen sizes (PC and phones),
 with Roblox's own buttons, the touch thumbstick and the jump button drawn on top, and reports
-overlaps, anything off-screen or outside the safe area, text that's cut off, and text too small to
-read on a phone, so layouts can be checked without a device.
+overlaps, anything off-screen or outside the safe area, text that's cut off or wraps where it
+shouldn't, text too small to read on a phone, small touch targets, anything in the thumbstick zone,
+and emoji phones don't show, so layouts can be checked without a device.
 
-    python3 tools/checks/round_harness.py HoneyTrap --client --ui-at 2,12 ... > run.luau
-    python3 tools/preview/luau_task.py run.luau - run.json
-    python3 tools/checks/ui_render.py run.json /tmp/honey_ui            # every snapshot, every size
+    python3 tools/checks/client_harness.py --touch --bots 8 > client.luau     # phones (or no --touch: PC)
+    python3 tools/preview/luau_task.py client.luau - client.json
+    python3 tools/checks/ui_render.py client.json /tmp/screens --sizes touch   # every snapshot, those sizes
+
+    python3 tools/checks/round_harness.py HoneyTrap --client --touch --ui-at 2,12 ... > run.luau
     python3 tools/checks/ui_render.py run.json /tmp/honey_ui --sizes phone
 
-Layout follows Roblox's rules for what the HUD uses: UDim2 position/size/anchor, AutomaticSize,
-UIScale (the UIKit.AutoScale ones are recomputed for each screen), UIListLayout, UIGridLayout,
-UIPadding, UIAspectRatioConstraint, ScrollingFrame canvases and clipping, sibling ZIndex order,
-UICorner, UIGradient, UIStroke and text (TextScaled, wrapping, truncation, alignment). Text is laid
-out with the engine's own measurements when the snapshot has them (tools/checks/gui_dump.luau) and
-drawn with stand-in fonts squeezed to those widths. Images are drawn as placeholders.
+The harness lays the UI out with the ENGINE for each screen size it was asked for (--sizes on the
+harness, default: the touch sizes with --touch, else the PC ones; tools/checks/gui_dump.luau): real
+positions, sizes, text measurements, wrapping and whether each text fits, with the fonts loaded.
+Those are what's drawn and checked. For a size the snapshot has no engine layout for, the layout is
+redone here following Roblox's rules (UDim2, AutomaticSize, UIScale with the UIKit.AutoScale ones
+recomputed for the screen, UIListLayout, UIGridLayout, UIPadding, UIAspectRatioConstraint,
+ScrollingFrame canvases, ZIndex order, text with the engine's word widths), which can be off by a
+few points: trust the engine sizes. Text is drawn with stand-in fonts squeezed to the engine's
+widths; images are placeholders.
 """
 
 from __future__ import annotations
@@ -31,21 +37,94 @@ ROOT = Path(__file__).resolve().parents[2]
 FONTS = ROOT / "tools" / "art" / "fonts"
 DESIGN = (1280, 720)
 MIN_SCALE, MAX_SCALE = 0.62, 1.35
-TOPBAR = 58
-SMALL_TEXT = 10  # px: smaller text is reported on touch screens
+SMALL_TEXT = 11  # pt: smaller text is reported on touch screens
+TOUCH_TARGET = 40  # pt: smaller buttons are reported on touch screens (aim for 44)
 FIT_MARGIN = 8  # UI/Modal.luau: room around a window shrunk to fit the screen
 
-# name: (width, height, side safe inset, touch controls)
+# Screens, in points: size, the safe area's insets in landscape (left, right, bottom: notch or
+# Dynamic Island, home bar) and the top inset Roblox's top bar takes (CoreUISafeInsets).
 SIZES = {
-    "pc": (1280, 720, 0, False),
-    "pc-hd": (1920, 1080, 0, False),
-    "phone": (844, 390, 47, True),  # notched phone, landscape
-    "phone-small": (667, 375, 0, True),
-    "tablet": (1024, 768, 0, True),
+    "pc": dict(w=1280, h=720, l=0, r=0, b=0, t=58, touch=False),
+    "pc-hd": dict(w=1920, h=1080, l=0, r=0, b=0, t=58, touch=False),
+    "phone-large": dict(w=932, h=430, l=59, r=59, b=21, t=56, touch=True),  # iPhone Pro Max (the owner's phone)
+    "phone": dict(w=844, h=390, l=47, r=47, b=21, t=56, touch=True),  # iPhone 12 to 16
+    "phone-android": dict(w=800, h=360, l=32, r=0, b=0, t=56, touch=True),  # 20:9 Android, camera hole on one side
+    "phone-small": dict(w=667, h=375, l=0, r=0, b=0, t=56, touch=True),  # iPhone SE / 8
+    "tablet": dict(w=1024, h=768, l=0, r=0, b=0, t=56, touch=True),  # iPad
 }
-SIZE_GROUPS = {"phone": ["phone", "phone-small"], "pc": ["pc", "pc-hd"], "touch": ["phone", "phone-small", "tablet"], "all": list(SIZES)}
+SIZE_GROUPS = {
+    "phone": ["phone-large", "phone", "phone-android", "phone-small"],
+    "pc": ["pc", "pc-hd"],
+    "touch": ["phone-large", "phone", "phone-android", "phone-small", "tablet"],
+    "all": list(SIZES),
+}
 MODIFIERS = ("UIScale", "UICorner", "UIStroke", "UIGradient", "UIListLayout", "UIGridLayout", "UIPadding",
              "UIAspectRatioConstraint", "UITextSizeConstraint", "UISizeConstraint")
+DISPLAY_FONTS = ("Fredoka", "Luckiest")  # headline fonts: their text stays on one line unless PP_Lines says
+
+
+def core_buttons(dev: dict) -> list:
+    """Roblox's own top bar buttons as phones show them today (measured on an iPhone Pro Max): the
+    round Roblox button, then the menu and chat pill, 43 pt tall at the top left of the safe area."""
+    left = dev["l"]
+    return [(left + 18, 12, left + 60, 55, "Roblox"), (left + 68, 12, left + 161, 55, "menu chat")]
+
+
+def jump_button(dev: dict) -> tuple:
+    """Roblox's TouchJump rule: (left, top, size). Its frame spans the safe area's width and the
+    whole height (measured on an iPhone Pro Max)."""
+    width, height = dev["w"] - dev["l"] - dev["r"], dev["h"]
+    small = min(width, height) <= 500
+    size = 70 if small else 120
+    x0 = dev["w"] - dev["r"] - (size * 1.5 - 10)
+    y0 = height - size - 20 if small else height - size * 1.75
+    return x0, y0, size
+
+
+def thumbstick_zone(dev: dict) -> tuple:
+    """Where a touch starts the DynamicThumbstick: the left 40% of the safe area, bottom two thirds."""
+    return dev["l"], dev["h"] / 3, dev["l"] + 0.4 * (dev["w"] - dev["l"] - dev["r"]), dev["h"]
+
+
+def screen_area(dev: dict, insets: str, inset: bool = True) -> tuple:
+    """(x, y, w, h) a ScreenGui's contents get, by its ScreenInsets (like gui_dump.luau's)."""
+    w, h = dev["w"], dev["h"]
+    if insets == "None" or (not inset and insets in ("CoreUISafeInsets", "")):
+        return 0, 0, w, h
+    if insets == "DeviceSafeInsets":
+        return dev["l"], 0, w - dev["l"] - dev["r"], h - dev["b"]
+    if insets == "TopbarSafeInsets":
+        bar = core_buttons(dev)[-1][2] + 12
+        return bar, 0, w - dev["r"] - 12 - bar, dev["t"]
+    return dev["l"], dev["t"], w - dev["l"] - dev["r"], h - dev["t"] - dev["b"]
+
+
+def devices_luau(names: list) -> str:
+    """The screens as a Luau table for gui_dump.luau's engine layout (__devices)."""
+    rows = []
+    for name in names:
+        dev = SIZES[name]
+        jx, jy, js = jump_button(dev)
+        bar = core_buttons(dev)[-1][2] + 12
+        rows.append(f'{{ n = "{name}", w = {dev["w"]}, h = {dev["h"]}, l = {dev["l"]}, r = {dev["r"]}, t = {dev["t"]}, '
+                    f'b = {dev["b"]}, bar = {bar}, touch = {str(dev["touch"]).lower()}, jump = {{ {jx}, {jy}, {js} }} }}')
+    return "__devices = { " + ", ".join(rows) + " }\n"
+
+
+def size_names(spec: str) -> list:
+    names = SIZE_GROUPS.get(spec) or spec.split(",")
+    unknown = [name for name in names if name not in SIZES]
+    if unknown:
+        raise SystemExit(f"unknown screen size(s) {unknown}: use {', '.join(list(SIZES) + list(SIZE_GROUPS))}")
+    return names
+
+
+# Emoji newer than Roblox's emoji font (Unicode 13 and later): phones show nothing for them (the
+# coin 🪙, Unicode 13, was missing on the owner's iPhone; Unicode 12 ones like 🟢 are left alone).
+NEW_EMOJI = re.compile("[\U0001FA74-\U0001FA77\U0001FA7B-\U0001FA7F\U0001FA83-\U0001FA8F\U0001FA96-\U0001FAFF"
+                       "\U0001F6D6-\U0001F6D7\U0001F6DC-\U0001F6DF\U0001F6FB-\U0001F6FC\U0001F90C\U0001F972"
+                       "\U0001F977-\U0001F979\U0001F9A3-\U0001F9A4\U0001F9AB-\U0001F9AD\U0001F9CB-\U0001F9CC"
+                       "\U0001F7F0]")
 
 # Each character is drawn with the node's font when that has the glyph; pictographs prefer the
 # emoji font; anything else falls back to the emoji font, then DejaVu (which has most symbols).
@@ -101,7 +180,7 @@ def runs(text: str, name: str) -> list[tuple[str, str]]:
     main = font_path(name)
     out: list[tuple[str, str]] = []
     for ch in text:
-        if ch in "\ufe0f\u200d":
+        if ch in "️‍":
             continue
         if EMOJI.match(ch) and covers(NOTO, ch):
             path = NOTO
@@ -194,8 +273,14 @@ def intersect(a, b):
     return (max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3]))
 
 
+def area_of(box) -> float:
+    return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
+
+
 def render(nodes: list, size_name: str, out: Path):
-    vw, vh, side, touch = SIZES[size_name]
+    dev = SIZES[size_name]
+    vw, vh, touch = dev["w"], dev["h"], dev["touch"]
+    engine = any(size_name in (n.get("L") or {}) for n in nodes)
     children = defaultdict(list)
     for index, node in enumerate(nodes, start=1):
         children[node["p"]].append(index)
@@ -213,9 +298,9 @@ def render(nodes: list, size_name: str, out: Path):
         return [c for c in children[i] if node(c)["c"] not in MODIFIERS]
 
     raw_scale = min(vw / DESIGN[0], vh / DESIGN[1])
-    auto_scale = max(MIN_SCALE, min(MAX_SCALE, raw_scale))  # UIKit.CurrentScale()
+    auto_scale = max(MIN_SCALE, min(MAX_SCALE, raw_scale))  # UIKit.ScaleFor()
     draws = []  # (paint order, node, screen rect, scale, clip rect, text layout)
-    boxes = []  # content boxes for the checks: (screen, path, x0, y0, x1, y1, label, paint order)
+    boxes = []  # what the overlap checks compare
     dimmers = []  # paint order of full-screen dimmers (pop-up backdrops)
     problems = []
     counter = [0]
@@ -323,9 +408,53 @@ def render(nodes: list, size_name: str, out: Path):
             w = max(w, need_w)
         return w, h
 
-    def text_layout(n, w, h, k):
-        """(size, lines, overflow note) for a text node in a w x h box at scale k."""
+    def text_padding(i, w, h, k):
+        """A text node's UIPadding in screen points (its box is w x h on screen at scale k)."""
+        left, right, top, bottom = padding_of(i, w / max(k, 1e-6), h / max(k, 1e-6))
+        return left * k, right * k, top * k, bottom * k
+
+    def allowed_lines(n, text):
+        """How many lines a text may take: PP_Lines, else one per paragraph for headlines and
+        scaled text that isn't meant to wrap, else as many as fit its box."""
+        if n.get("lines"):
+            return n["lines"]
+        if any(word in n.get("font", "") for word in DISPLAY_FONTS) or (n.get("scaled") and not n.get("wrap")):
+            return len(text.paragraphs)
+        return None
+
+    def text_layout(n, w, h, k, record):
+        """(size, lines, line height, problem) for a text node in a w x h box at scale k."""
         text = Text(n)
+        if record and len(record) >= 11:
+            # The engine's measurements (gui_dump.luau): size, line count and whether it fits.
+            _, _, _, _, _, _, fits, size, count, need_w, need_h = record[:11]
+            wrapping = bool(n.get("wrap") or n.get("scaled"))
+            width, lines = w, text.wrap(size, w, wrapping)
+            for _ in range(12):  # wrap where the engine does (its small sizes run a little wider)
+                if not wrapping or len(lines) >= count:
+                    break
+                width *= 0.96
+                lines = text.wrap(size, width, wrapping)
+            line_h = size * text.line
+            note = None
+            if not fits:
+                if wrapping:  # the engine leaves out the lines that don't fit
+                    lines = lines[: max(1, int((h + 1) // max(line_h, 1e-6)))]
+                if n.get("trunc", "None") != "None":
+                    last, last_w = lines[-1]
+                    while last and text_width(last + "...", text.name, size) > w:
+                        last = last[:-1]
+                    lines[-1] = (last.rstrip() + "...", min(w, last_w))
+                    if not n.get("truncOk"):
+                        note = f"truncated (needs {need_w:.0f}x{need_h:.0f}, has {w:.0f}x{h:.0f})"
+                else:
+                    note = f"cut off (needs {need_w:.0f}x{need_h:.0f}, has {w:.0f}x{h:.0f})"
+            else:
+                allowed = allowed_lines(n, text)
+                if allowed and count > allowed:
+                    note = f"wraps onto {count} lines"
+            return size, lines, line_h, note
+
         limits = None
         for c in children.get(n["_id"], []):
             if node(c)["c"] == "UITextSizeConstraint":
@@ -352,13 +481,15 @@ def render(nodes: list, size_name: str, out: Path):
                         last = last[:-1]
                     cut[-1] = (last.rstrip() + "...", text_width(last.rstrip() + "...", text.name, size) * ratio)
                 lines = cut
-                note = "truncated"
+                note = None if n.get("truncOk") else "truncated"
             else:
                 need_w = max(lw for _, lw in lines)
                 note = f"cut off (needs {need_w:.0f}x{len(lines) * line_h:.0f}, has {w:.0f}x{h:.0f})"
+        elif (allowed := allowed_lines(n, text)) and len(lines) > allowed:
+            note = f"wraps onto {len(lines)} lines"
         return size, lines, line_h, note
 
-    def place(i, rect, transform, screen, visible, clip):
+    def place(i, rect, transform, screen, visible, clip, popup):
         n = node(i)
         n["_id"] = i
         px, py, pw, ph = rect
@@ -374,15 +505,12 @@ def render(nodes: list, size_name: str, out: Path):
         psx, pox, psy, poy = n["pos"]
         if n.get("touchSlot") and touch:
             # Api.Button on touch screens: beside the jump button (same rule as Api.jumpButtonSpot).
-            small = min(pw, ph) <= 500
-            jump = 70 if small else 120
-            left = pw - (jump * 1.5 - 10)
-            center = (ph - jump - 20 if small else ph - jump * 1.75) + jump / 2
+            jx, jy, jump = jump_button(dev)
             width = w * node_scale(i)
             ax, ay = 1, 0.5
             psx, psy = 0, 0
-            pox = left - 12 - (n["touchSlot"] - 1) * (width + 12)
-            poy = center - jump * 0.15
+            pox = jx - px - 12 - (n["touchSlot"] - 1) * (width + 12)
+            poy = jy + jump / 2 - py - jump * 0.15
         if n.get("underProfile"):
             psx, psy, pox, poy = 0, 0, 14, 12 + 130 * auto_scale + 8  # RoundController: under the profile chip
         x = px + psx * pw + pox - ax * w
@@ -393,25 +521,37 @@ def render(nodes: list, size_name: str, out: Path):
         if modifier(i, "UIScale"):
             own = transform.then_scale_about(x + ax * w, y + ay * h, node_scale(i))
         visible = visible and n.get("vis", True)
+        popup = popup or bool(n.get("popup"))
         x0, y0 = own.apply(x, y)
         x1, y1 = own.apply(x + w, y + h)
+        record = (n.get("L") or {}).get(size_name) if engine else None
+        if record:
+            x0, y0, x1, y1 = record[0], record[1], record[0] + record[2], record[1] + record[3]
         if visible:
             counter[0] += 1
             seq = counter[0]
-            text_info = text_layout(n, x1 - x0, y1 - y0, own.k) if "text" in n else None
+            pl, pr, pt, pb = text_padding(i, x1 - x0, y1 - y0, own.k)
+            text_info = text_layout(n, x1 - x0 - pl - pr, y1 - y0 - pt - pb, own.k, record) if "text" in n else None
             draws.append((seq, i, (x0, y0, x1, y1), own.k, clip, text_info))
             if x1 - x0 >= vw * 0.9 and y1 - y0 >= vh * 0.9 and n.get("bgt", 1) < 0.9 and not n.get("text"):
                 dimmers.append(seq)
             shown = intersect((x0, y0, x1, y1), clip)
-            if (n.get("text", "") != "" or n["c"] in ("TextButton", "ImageButton")) and shown[2] - shown[0] > 1 and shown[3] - shown[1] > 1:
-                label = (re.sub(r"<[^>]+>", "", n.get("text") or "") or n["n"])[:40]
-                boxes.append((screen, path_of(i), *shown, label, seq))
-                if text_info and n.get("text", "").strip():
+            is_button = n["c"] in ("TextButton", "ImageButton")
+            if (n.get("text", "") != "" or is_button) and shown[2] - shown[0] > 1 and shown[3] - shown[1] > 1:
+                raw_text = re.sub(r"<[^>]+>", "", n.get("text") or "")
+                label = (raw_text or n["n"])[:40]
+                boxes.append(dict(screen=screen, path=path_of(i), box=shown, label=label, seq=seq, popup=popup))
+                if is_button and touch and min(x1 - x0, y1 - y0) < TOUCH_TARGET and (x1 - x0) * (y1 - y0) < vw * vh / 2:
+                    problems.append(f"small touch target {x1 - x0:.0f}x{y1 - y0:.0f}: {path_of(i)} '{label}'")
+                if text_info and raw_text.strip() and n.get("tt", 0) < 0.9:
                     size, _, _, note = text_info
                     if note:
                         problems.append(f"text {note}: {path_of(i)} '{label}'")
-                    if touch and size < SMALL_TEXT and n.get("tt", 0) < 0.9:
-                        problems.append(f"small text {size:.1f}px: {path_of(i)} '{label}'")
+                    if touch and size < SMALL_TEXT - 0.05:
+                        problems.append(f"small text {size:.1f}pt: {path_of(i)} '{label}'")
+                    missing = sorted(set(NEW_EMOJI.findall(raw_text)))
+                    if touch and missing:
+                        problems.append(f"emoji phones don't show ({''.join(missing)}): {path_of(i)} '{label}'")
         # Children's content rect (padding, and a scrolling frame's canvas).
         left, right, top, bottom = padding_of(i, w, h)
         cx, cy, cw, ch = x + left, y + top, w - left - right, h - top - bottom
@@ -461,17 +601,18 @@ def render(nodes: list, size_name: str, out: Path):
                     cursor += sw + gap
         # Sibling ZIndex order: children paint after their parent, siblings by ZIndex (stable).
         for c in sorted(kids, key=lambda c: node(c).get("z", 1)):
-            place(c, (cx, cy, cw, ch), own, screen, visible, child_clip)
+            place(c, (cx, cy, cw, ch), own, screen, visible, child_clip, popup)
 
     screens = [i for i in children[0] if node(i)["c"] == "ScreenGui" and node(i).get("enabled", True)]
     screens.sort(key=lambda i: node(i).get("order", 0))
-    screen_inset = {}
+    screen_rect = {}
+    billboards = {node(i)["n"] for i in screens if node(i).get("billboards")}
     for i in screens:
         n = node(i)
-        screen_inset[n["n"]] = n.get("inset", True)
-        area = (side, TOPBAR, vw - 2 * side, vh - TOPBAR) if n.get("inset", True) else (0, 0, vw, vh)
+        area = screen_area(dev, n.get("insets", "CoreUISafeInsets"), n.get("inset", True))
+        screen_rect[n["n"]] = area
         for c in sorted(gui_kids(i), key=lambda c: node(c).get("z", 1)):
-            place(c, area, Transform(), n["n"], True, None)
+            place(c, area, Transform(), n["n"], True, None, False)
 
     # Paint.
     image = Image.new("RGBA", (vw, vh), (120, 170, 120, 255))
@@ -531,6 +672,9 @@ def render(nodes: list, size_name: str, out: Path):
             size, lines, line_h, _ = layout
             name = n.get("font", "")
             total = line_h * len(lines)
+            pl, pr, pt, pb = text_padding(i, w, h, k)
+            box = [box[0] + pl, box[1] + pt, box[2] - pr, box[3] - pb]
+            w, h = box[2] - box[0], box[3] - box[1]
             ty = {"Top": box[1], "Center": box[1] + (h - total) / 2, "Bottom": box[3] - total}.get(n.get("ya", "Center"), box[1])
             text_stroke = None
             if stroke and stroke.get("enabled", True) and stroke.get("mode") != "Border":
@@ -552,65 +696,76 @@ def render(nodes: list, size_name: str, out: Path):
     # Roblox's own UI on top: top bar buttons, and touch controls on phones/tablets.
     overlay = Image.new("RGBA", (vw, vh), (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
-    core = [(side + 12, 7, side + 56, 51, "R"), (side + 64, 7, side + 108, 51, "chat"), (vw - side - 56, 7, vw - side - 12, 51, "...")]
     top = counter[0] + 1
-    for x0, y0, x1, y1, label in core:
-        od.rounded_rectangle([x0, y0, x1, y1], radius=22, fill=(20, 20, 30, 150))
-        od.text(((x0 + x1) / 2, (y0 + y1) / 2), label, font=font("Bold", 13), fill=(255, 255, 255, 220), anchor="mm")
-        boxes.append(("RobloxCore", "TopBar/" + label, x0, y0, x1, y1, label, top))
+    core = []
+    for x0, y0, x1, y1, label in core_buttons(dev):
+        od.rounded_rectangle([x0, y0, x1, y1], radius=(y1 - y0) / 2, fill=(255, 255, 255, 235))
+        od.text(((x0 + x1) / 2, (y0 + y1) / 2), label, font=font("Bold", 11), fill=(30, 30, 40, 255), anchor="mm")
+        core.append(dict(screen="RobloxCore", path="TopBar/" + label, box=(x0, y0, x1, y1), label=label, seq=top, popup=False))
+    zone = None
     if touch:
-        # Roblox's TouchJump rule, and the DynamicThumbstick's touch zone (left 40%, bottom 2/3).
-        cw, ch = vw - 2 * side, vh - TOPBAR
-        small = min(cw, ch) <= 500
-        jump = 70 if small else 120
-        jx0 = side + cw - (jump * 1.5 - 10)
-        jy0 = TOPBAR + (ch - jump - 20 if small else ch - jump * 1.75)
+        jx0, jy0, jump = jump_button(dev)
         od.ellipse([jx0, jy0, jx0 + jump, jy0 + jump], fill=(255, 255, 255, 70), outline=(255, 255, 255, 160), width=2)
         od.text((jx0 + jump / 2, jy0 + jump / 2), "JUMP", font=font("Bold", 12), fill=(255, 255, 255, 230), anchor="mm")
-        boxes.append(("RobloxCore", "Touch/Jump", jx0, jy0, jx0 + jump, jy0 + jump, "JUMP", top))
-        zone = (side, TOPBAR + ch / 3, side + cw * 0.4, vh)
-        od.rectangle(zone, outline=(255, 255, 255, 60), width=1)
+        core.append(dict(screen="RobloxCore", path="Touch/Jump", box=(jx0, jy0, jx0 + jump, jy0 + jump), label="JUMP", seq=top, popup=False))
+        zone = thumbstick_zone(dev)
+        od.rectangle(zone, outline=(255, 255, 255, 70), width=1)
+        od.text((zone[0] + 6, zone[1] + 4), "thumbstick zone", font=font("Bold", 10), fill=(255, 255, 255, 140))
+        small = min(dev["w"] - dev["l"] - dev["r"], vh) <= 500
         ring = 90 if small else 140
-        rx, ry = side + 40 + ring / 2, vh - 40 - ring / 2
+        rx, ry = dev["l"] + 40 + ring / 2, vh - 40 - ring / 2
         od.ellipse([rx - ring / 2, ry - ring / 2, rx + ring / 2, ry + ring / 2], fill=(255, 255, 255, 45), outline=(255, 255, 255, 140), width=2)
         od.text((rx, ry), "MOVE", font=font("Bold", 12), fill=(255, 255, 255, 220), anchor="mm")
-        boxes.append(("RobloxCore", "Touch/Thumbstick", rx - ring / 2, ry - ring / 2, rx + ring / 2, ry + ring / 2, "MOVE", top))
-    if side:
-        od.rectangle([0, 0, side, vh], fill=(0, 0, 0, 90))
-        od.rectangle([vw - side, 0, vw, vh], fill=(0, 0, 0, 90))
+    if dev["l"]:
+        od.rectangle([0, 0, dev["l"], vh], fill=(0, 0, 0, 90))
+    if dev["r"]:
+        od.rectangle([vw - dev["r"], 0, vw, vh], fill=(0, 0, 0, 90))
+    if dev["b"]:
+        od.rectangle([0, vh - dev["b"], vw, vh], fill=(0, 0, 0, 40))
     image = Image.alpha_composite(image, overlay)
     image.convert("RGB").save(out)
 
     # Checks.
     # Full-screen backdrops behind pop-ups (the click-to-close dimmer) cover everything on purpose,
     # and what's under a dimmer is only compared with what's under it too.
-    boxes = [b for b in boxes if not ((b[4] - b[2]) >= vw * 0.9 and (b[5] - b[3]) >= vh * 0.9)]
+    boxes = [b for b in boxes if not ((b["box"][2] - b["box"][0]) >= vw * 0.9 and (b["box"][3] - b["box"][1]) >= vh * 0.9)]
 
     def layer_of(b):
-        return math.inf if b[0] == "RobloxCore" else sum(1 for s in dimmers if s < b[7])
+        return math.inf if b["screen"] == "RobloxCore" else sum(1 for s in dimmers if s < b["seq"])
 
-    for a in range(len(boxes)):
-        sa, pa, ax0, ay0, ax1, ay1, la, _ = boxes[a]
+    everything = [b for b in boxes if b["screen"] not in billboards] + core
+    for a in range(len(everything)):
+        A = everything[a]
+        ax0, ay0, ax1, ay1 = A["box"]
         if ax1 < 0 or ay1 < 0 or ax0 > vw or ay0 > vh:
             continue
-        if sa != "RobloxCore" and (ax0 < -1 or ay0 < -1 or ax1 > vw + 1 or ay1 > vh + 1):
-            problems.append(f"off-screen: {pa} '{la}' at ({ax0:.0f},{ay0:.0f})-({ax1:.0f},{ay1:.0f})")
-        elif sa != "RobloxCore" and side and not screen_inset.get(sa, True) and (ax0 < side - 1 or ax1 > vw - side + 1):
-            problems.append(f"outside the safe area (notch): {pa} '{la}' at ({ax0:.0f},{ay0:.0f})-({ax1:.0f},{ay1:.0f})")
-        for b in range(a + 1, len(boxes)):
-            sb, pb, bx0, by0, bx1, by1, lb, _ = boxes[b]
-            if pa.startswith(pb + "/") or pb.startswith(pa + "/"):
+        if A["screen"] != "RobloxCore":
+            sx, sy, sw, sh = screen_rect.get(A["screen"], (0, 0, vw, vh))
+            if ax0 < -1 or ay0 < -1 or ax1 > vw + 1 or ay1 > vh + 1:
+                problems.append(f"off-screen: {A['path']} '{A['label']}' at ({ax0:.0f},{ay0:.0f})-({ax1:.0f},{ay1:.0f})")
+            elif ax0 < dev["l"] - 1 or ax1 > vw - dev["r"] + 1 or ay1 > vh - dev["b"] + 1:
+                problems.append(f"outside the safe area (notch/home bar): {A['path']} '{A['label']}' at ({ax0:.0f},{ay0:.0f})-({ax1:.0f},{ay1:.0f})")
+            if zone and layer_of(A) == 0 and not A["popup"]:
+                inside = area_of(intersect(A["box"], zone))
+                if inside > 0.15 * max(1.0, area_of(A["box"])):
+                    problems.append(f"in the thumbstick zone {inside / max(1.0, area_of(A['box'])):.0%}: {A['path']} '{A['label']}'")
+        for b in range(a + 1, len(everything)):
+            B = everything[b]
+            if A["path"].startswith(B["path"] + "/") or B["path"].startswith(A["path"] + "/"):
                 continue  # a label inside its own button/panel
-            la_, lb_ = layer_of(boxes[a]), layer_of(boxes[b])
+            la_, lb_ = layer_of(A), layer_of(B)
             if la_ != lb_ and math.inf not in (la_, lb_):
                 continue  # one is under a pop-up's dimmer
+            if math.inf in (la_, lb_) and max(la_, lb_) == math.inf and min(la_, lb_) > 0:
+                continue  # Roblox's buttons over a pop-up's dimmed backdrop
+            bx0, by0, bx1, by1 = B["box"]
             ix = min(ax1, bx1) - max(ax0, bx0)
             iy = min(ay1, by1) - max(ay0, by0)
             if ix > 2 and iy > 2:
-                area = ix * iy
-                smaller = min((ax1 - ax0) * (ay1 - ay0), (bx1 - bx0) * (by1 - by0))
-                if smaller > 0 and area / smaller > 0.15:
-                    problems.append(f"overlap {area / smaller:.0%}: {pa} '{la}'  x  {pb} '{lb}'")
+                inter = ix * iy
+                smaller = min(area_of(A["box"]), area_of(B["box"]))
+                if smaller > 0 and inter / smaller > 0.15:
+                    problems.append(f"overlap {inter / smaller:.0%}: {A['path']} '{A['label']}'  x  {B['path']} '{B['label']}'")
     return problems
 
 
@@ -641,7 +796,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("results", help="what luau_task.py saved for a round_harness --ui-at run or a client_harness run")
     parser.add_argument("out", help="output prefix: <out>_<time>_<size>.png")
-    parser.add_argument("--sizes", default="all", help="all, pc, phone, touch, or comma-separated names: " + ", ".join(SIZES))
+    parser.add_argument("--sizes", default="measured", help="measured (the sizes the harness laid out with the engine), "
+                        "all, pc, phone, touch, or comma-separated names: " + ", ".join(SIZES))
     parser.add_argument("--only", help="comma-separated snapshot names to draw (default: all of them)")
     args = parser.parse_args()
     data = json.load(open(args.results))
@@ -650,7 +806,11 @@ def main():
     snapshots = (data or {}).get("ui") or {}
     if not snapshots:
         raise SystemExit("No UI snapshots: run round_harness.py with --client --ui-at <seconds>")
-    names = SIZE_GROUPS.get(args.sizes) or args.sizes.split(",")
+    if args.sizes == "measured":
+        measured = {name for nodes in snapshots.values() for n in nodes for name in (n.get("L") or {})}
+        names = [name for name in SIZES if name in measured] or SIZE_GROUPS["all"]
+    else:
+        names = size_names(args.sizes)
     only = set(args.only.split(",")) if args.only else None
 
     def order(key):
@@ -660,15 +820,24 @@ def main():
             return (1, 0.0, key)
 
     total = 0
+    # The harness's own list of texts the engine says don't fit (gui_dump.luau), for every screen
+    # it laid out, drawn or not.
+    report = [line for line in (data.get("textReport") or []) if not only or line.split(" ")[0] in only]
+    if report:
+        print(f"engine text report ({len(report)}):")
+        for line in report:
+            print("    ", line)
+        total += len(report)
     for at, nodes in sorted(snapshots.items(), key=lambda kv: order(kv[0])):
         if only and at not in only:
             continue
         label = f"{float(at):g}s" if order(at)[0] == 0 else at
         for size_name in names:
-            out = Path(f"{args.out}_{label}_{size_name}.png")
+            out = Path(f"{args.out}_{label.replace(' ', '-')}_{size_name}.png")
             problems = render(json.loads(json.dumps(nodes)), size_name, out)
+            engine = any(size_name in (n.get("L") or {}) for n in nodes)
             total += len(problems)
-            print(f"wrote {out}")
+            print(f"wrote {out}" + ("" if engine else "   (no engine layout for this size: estimated)"))
             for problem in problems:
                 print("    ", problem)
     print(f"{total} problem(s)")
