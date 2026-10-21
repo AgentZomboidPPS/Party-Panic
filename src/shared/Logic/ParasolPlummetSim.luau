@@ -49,14 +49,17 @@ Sim.Kinds = {
 	Hammer = { Value = 0, Radius = 1.3 },
 }
 
--- Hit shapes, relative to the faller's root (the umbrella is held straight up over the head).
+-- Hit shapes, relative to the faller's root. The umbrella is held up over the head in both hands,
+-- its base (the handle's hook) UMBRELLA_BASE above the root; the mesh is 5.6 tall with the canopy's
+-- rim 3.9 up and its top at 5.4, 3.8 across either way, furled from 1.2 to 5.2.
+Sim.UMBRELLA_BASE = 2.6
 Sim.BODY_Y = -0.4
 Sim.BODY_R = 2.0
-Sim.CANOPY_Y = 5.9 -- middle of the open canopy
+Sim.CANOPY_Y = 7.2 -- middle of the open canopy
 Sim.CANOPY_W = 3.8 -- its half width
-Sim.CANOPY_H = 1.0 -- its half height
-Sim.FURL_Y0 = 2.4 -- the furled umbrella, a capsule from here...
-Sim.FURL_Y1 = 6.4 -- ...to here
+Sim.CANOPY_H = 0.9 -- its half height
+Sim.FURL_Y0 = 3.8 -- the furled umbrella, a capsule from here...
+Sim.FURL_Y1 = 7.8 -- ...to here
 Sim.FURL_R = 0.55
 
 export type Faller = { X: number, Y: number, VX: number, VY: number }

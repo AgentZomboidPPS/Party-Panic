@@ -361,6 +361,7 @@ function ParasolPlummet:Start()
 	local ctx = self.context
 	self.startAt = ctx:Now()
 	self.endAt = self.startAt + self.duration
+	ctx:SetShared("Go", self.startAt) -- (clients start predicting their own faller from here)
 	-- Fallers whose character never loaded aren't in the round.
 	for player in table.clone(self.fallers) do
 		if not ctx:State(player) then
@@ -574,7 +575,9 @@ function ParasolPlummet:_share()
 	end
 	ctx:SetSharedJSON("Fallers", { T = round(now, 0.001), F = list })
 	if self.startAt then
-		local status = if best and bestCoins > 0 and not tie
+		local status = if best
+				and bestCoins > 0
+				and not tie
 			then `👑 {best.Player.DisplayName} leads with {coinText(bestCoins)}`
 			elseif bestCoins > 0 then `👑 Tied at {coinText(bestCoins)}!`
 			else "Catch the coins!"
