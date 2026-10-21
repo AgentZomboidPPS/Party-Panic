@@ -271,18 +271,32 @@ function PumpAndPop.Start(api)
 
 	-- HUD: one pill per team (shape, name, how full), yours outlined. With 3-4 teams the pills are
 	-- compact (shape and %; the name floats over each station) so they clear the Standings panel.
+	-- Phones draw the HUD at 75%, so there the text is bigger, the pills wider and at most two to a
+	-- row (3-4 teams take two rows), which keeps the left ones clear of the move stick.
 	local hud = api:TopHud()
 	local y = api:HudY()
+	local touch = api:IsTouch()
 	local count = #order
 	local compact = count >= 3
-	local pillWidth = if compact then math.min(150, math.floor(470 / count) - 10) else 150
+	local columns = if touch then 2 else count
+	local pillWidth = if touch
+		then (if compact then 150 else 200)
+		elseif compact then math.min(150, math.floor(470 / count) - 10)
+		else 150
+	local textSize = if touch then 26 else 20
+	local percentWidth = if touch then 64 else 52
+	local rowStep = 78 -- a pill and the YOU tag under it
+	local pillsBottom = y + (math.ceil(count / columns) - 1) * rowStep + 48
 	for index, team in order do
 		local station = stations[team]
 		local mine = team == myTeam
+		local row = (index - 1) // columns
+		local inRow = math.min(columns, count - row * columns)
+		local column = (index - 1) % columns + 1
 		local pill = UIKit.new("Frame", {
 			Name = "Team_" .. team,
 			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, (index - (count + 1) / 2) * (pillWidth + 10), 0, y),
+			Position = UDim2.new(0.5, (column - (inRow + 1) / 2) * (pillWidth + 10), 0, y + row * rowStep),
 			Size = UDim2.fromOffset(pillWidth, 48),
 			BackgroundColor3 = Theme.Colors.PanelDark,
 			BackgroundTransparency = 0.15,
@@ -296,13 +310,13 @@ function PumpAndPop.Start(api)
 			Name = "Name",
 			Text = if compact then station.Shape else `{station.Shape} {string.upper(team)}`,
 			Font = Theme.Fonts.Display,
-			TextSize = 20,
+			TextSize = textSize,
 			TextColor3 = station.Color,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextWrapped = false,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			Position = UDim2.fromOffset(10, 3),
-			Size = UDim2.new(1, -72, 0, 26), -- clear of the percentage on the right
+			Size = UDim2.new(1, -(percentWidth + 20), 0, 26), -- clear of the percentage on the right
 			Parent = pill,
 			Children = { UIKit.TextStroke(0.3) },
 		})
@@ -310,11 +324,11 @@ function PumpAndPop.Start(api)
 			Name = "Percent",
 			Text = "0%",
 			Font = Theme.Fonts.Display,
-			TextSize = 20,
+			TextSize = textSize,
 			TextXAlignment = Enum.TextXAlignment.Right,
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -10, 0, 3),
-			Size = UDim2.fromOffset(52, 26),
+			Size = UDim2.fromOffset(percentWidth, 26),
 			Parent = pill,
 			Children = { UIKit.TextStroke(0.3) },
 		})
@@ -339,10 +353,10 @@ function PumpAndPop.Start(api)
 				Name = "You",
 				Text = "▲ YOU",
 				Font = Theme.Fonts.Display,
-				TextSize = 20, -- still readable after the phone HUD scale
+				TextSize = if touch then 24 else 20, -- still readable after the phone HUD scale
 				AnchorPoint = Vector2.new(0.5, 0),
 				Position = UDim2.new(0.5, 0, 1, 2),
-				Size = UDim2.fromOffset(90, 22),
+				Size = UDim2.fromOffset(90, if touch then 26 else 22),
 				Parent = pill,
 				Children = { UIKit.TextStroke(0.2) },
 			})
@@ -367,11 +381,8 @@ function PumpAndPop.Start(api)
 		live = true
 		if pump then
 			pump:SetEnabled(true)
-			api:Hint("Hold PUMP, let go in the green ✓", y + 74)
-			local hint = api:TopHud():FindFirstChild("Hint") :: TextLabel?
-			if hint then
-				hint.Size = UDim2.fromOffset(300, 64) -- narrow, so it clears the Standings panel on phones
-			end
+			-- Under the pills and the YOU tag (phones: the hint is only as wide as its words).
+			api:Hint("Hold PUMP, let go in the green ✓", pillsBottom + (if touch then 28 else 26))
 			hintUntil = now + 8
 		end
 	end
