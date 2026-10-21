@@ -203,6 +203,19 @@ local list: { GameDefinition } = {
 		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "TraceRace",
+		Name = "Trace Race",
+		Category = "Reaction",
+		Icon = "🖍️",
+		Color = Color3.fromRGB(120, 170, 255),
+		Objective = "Ride your giant crayon down the dotted line. The most accurate line wins!",
+		Controls = "Steer left and right with the MOVE stick, A / D or the arrow keys. The crayon goes forward by itself.",
+		Duration = 45,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 

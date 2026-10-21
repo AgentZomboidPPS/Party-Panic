@@ -1,0 +1,29 @@
+newmtl Body
+Kd 0.980 0.784 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Wood
+Kd 0.922 0.784 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Lead
+Kd 0.235 0.235 0.275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Ferrule
+Kd 0.784 0.784 0.824
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Eraser
+Kd 1.000 0.549 0.627
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
