@@ -27,8 +27,17 @@ return {
 		Body = Enum.Font.BuilderSansBold,
 	},
 	Corner = 16,
+	-- Coins in running text ("+25 💰"). The 🪙 coin emoji is newer than Roblox's emoji font and
+	-- shows as nothing on phones; the HUD draws its coins (UIKit.Coin).
+	CoinIcon = "💰",
 	-- Layout is authored at this resolution and scaled to the device (see UIKit.AutoScale).
 	DesignSize = Vector2.new(1280, 720),
 	MinScale = 0.62,
 	MaxScale = 1.35,
+	-- Every phone in landscape gets MinScale (0.62 points per unit), so phone layouts use these:
+	-- a 44 pt touch target and 11 pt text, the smallest that reads well on a phone.
+	Touch = {
+		Target = 72,
+		MinText = 18,
+	},
 }

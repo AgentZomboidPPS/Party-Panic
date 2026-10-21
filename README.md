@@ -119,6 +119,18 @@ selene src tests            # lint
 stylua --check src tests    # formatting
 ```
 
+The screens are checked on phones, a tablet and PC by running the whole client on a real Roblox
+server, which lays the UI out with the engine itself at each screen size (fonts loaded, real text
+measurements), then drawing every screen with Roblox's own buttons, the thumbstick and the jump
+button on top and listing text that's cut off or wraps, text under 11 pt on phones, small touch
+targets, overlaps and anything in the thumbstick's corner:
+
+```sh
+python3 tools/checks/client_harness.py --touch --bots 8 > client.luau   # leave out --touch for PC
+python3 tools/preview/luau_task.py client.luau - client.json
+python3 tools/checks/ui_render.py client.json /tmp/screens              # PNGs + the problem list
+```
+
 Type checking uses [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp) with the Roblox API
 definitions:
 

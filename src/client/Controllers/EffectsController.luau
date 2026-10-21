@@ -156,7 +156,7 @@ local EFFECTS: { [string]: (position: Vector3, colors: { Color3 }?, scale: numbe
 		emojiBurst(position, "⭐", math.max(2, math.floor(6 * scale)))
 	end,
 	Bubbles = function(position, _colors, scale)
-		emojiBurst(position, "🫧", math.max(2, math.floor(7 * scale)))
+		emojiBurst(position, "🔵", math.max(2, math.floor(7 * scale))) -- 🫧 is blank on phones
 	end,
 }
 

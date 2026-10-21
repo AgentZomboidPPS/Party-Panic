@@ -8,6 +8,9 @@ Errors and warnings from all of it come back in the result.
     python3 tools/checks/ui_render.py client.json /tmp/screens    # draw every screen and phase
 
 --touch makes the stand-in client a phone (touch, no keyboard), for the phone layouts.
+--sizes lists the screens every snapshot is laid out on by the ENGINE (gui_dump.luau: real sizes,
+text measurements and wrapping, with the fonts loaded); default: the touch sizes with --touch, else
+the PC ones. The result's "textReport" lists every text that doesn't fit on one of them.
 --rich gives the player a well-used profile (every emote, lots of coins, a long name, a claimable
 daily gift) to check the layouts at their fullest; the default is a brand-new player.
 --bots N adds N stand-in bots, shaped like BotService's (a Configuration in
@@ -28,6 +31,9 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ui_render import devices_luau, size_names  # noqa: E402  (the screens the engine lays the UI out on)
 
 ROOT = Path(__file__).resolve().parents[2]
 CLIENT = ROOT / "src" / "client"
@@ -283,15 +289,24 @@ local DataService = require(Services.DataService)
 local QuestDefinitions = require(Shared.QuestDefinitions)
 
 local step = "start"
+-- The banner messages RoundManager sets with each phase (the game's name from Preparing to Results).
+local MESSAGES = {
+	Intermission = "Next vote soon!",
+	Voting = "Vote for the next game!",
+	Cleanup = "Back to the lobby!",
+	Waiting = "Waiting for 1 more player...",
+}
 local function phase(name, seconds, extra)
 	step = "phase " .. name
 	if extra then
 		extra()
 	end
+	local definition = GameDefinitions.Get(GameState.Get("GameId") or "")
+	GameState.Set("Message", MESSAGES[name] or (definition and definition.Name) or "")
 	GameState.Set("Phase", name)
-	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + seconds)
+	GameState.Set("PhaseEndsAt", if seconds > 0 then workspace:GetServerTimeNow() + seconds else 0) -- 0: no timer, like RoundManager
 	task.wait(1.2)
-	__ui[name] = __dumpGui(__playerGui)
+	__ui[name] = __dumpGui(__playerGui, name)
 end
 
 -- 1. Start every controller like init.client.luau does.
@@ -388,7 +403,7 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
 	step = "OpenScreen " .. screen
 	State.OpenScreen:Fire(screen)
 	task.wait(1)
-	__ui[screen] = __dumpGui(__playerGui)
+	__ui[screen] = __dumpGui(__playerGui, screen)
 	local Modal = __require("Client/UI/Modal")
 	if Modal.CloseAll then
 		pcall(Modal.CloseAll)
@@ -400,8 +415,9 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
 end
 
 -- 4. A whole round, phase by phase, with three toasts on screen in the lobby. The vote shows the
--- options with the longest objectives (the fullest cards). The stand-in players play it (round
--- attributes, as RoundContext sets them), with the stand-in bots if there are any (--bots N).
+-- fullest cards: the two longest names and the longest objective (that game is the one played).
+-- The stand-in players play it (round attributes, as RoundContext sets them), with the stand-in
+-- bots if there are any (--bots N).
 local ids = {}
 for _, def in GameDefinitions.List do
 	table.insert(ids, def.Id)
@@ -409,6 +425,18 @@ end
 table.sort(ids, function(a, b)
 	return #GameDefinitions.Get(a).Objective > #GameDefinitions.Get(b).Objective
 end)
+local byName = table.clone(ids)
+table.sort(byName, function(a, b)
+	local la, lb = utf8.len(GameDefinitions.Get(a).Name) or 0, utf8.len(GameDefinitions.Get(b).Name) or 0
+	return if la == lb then a < b else la > lb
+end)
+local longNames = {}
+for _, id in byName do
+	if id ~= ids[1] and #longNames < 2 then
+		table.insert(longNames, id)
+	end
+end
+__uiScaleFor = __require("Client/UI/UIKit").ScaleFor
 __fire("Notify", "Daily gift ready! Open 📜 Quests to claim it.", "reward", 6)
 __fire("Notify", "Bubbles joined the party", "info", 6)
 __fire("Notify", "Not enough coins yet - play a round to earn more!", "warning", 6)
@@ -483,13 +511,13 @@ local function everyone()
 	end
 	return list
 end
--- The standings rows as they read on screen.
+-- The standings rows as they read on screen (a row is a title label, or a name and a score).
 local function boardRows()
 	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
 	local board = hud and hud:FindFirstChild("Leaderboard")
 	local rows = {}
 	for _, child in if board then board:GetChildren() else {} do
-		if child:IsA("TextLabel") then
+		if child:IsA("TextLabel") or child:IsA("Frame") then
 			table.insert(rows, child)
 		end
 	end
@@ -498,7 +526,17 @@ local function boardRows()
 	end)
 	local texts = {}
 	for _, row in rows do
-		table.insert(texts, row.Text)
+		if row:IsA("TextLabel") then
+			table.insert(texts, row.Text)
+		else
+			local parts = {}
+			for _, label in row:GetChildren() do
+				if label:IsA("TextLabel") then
+					table.insert(parts, label.Text)
+				end
+			end
+			table.insert(texts, table.concat(parts, "  ·  "))
+		end
 	end
 	return texts
 end
@@ -506,9 +544,9 @@ end
 phase("Intermission", 20)
 phase("Voting", 12, function()
 	GameState.SetJSON("VoteOptions", {
+		{ Id = longNames[1], Mystery = false },
 		{ Id = ids[1], Mystery = false },
-		{ Id = ids[2], Mystery = false },
-		{ Id = ids[3], Mystery = false },
+		{ Id = longNames[2], Mystery = false },
 		{ Id = ids[1], Mystery = true },
 	})
 	GameState.SetJSON("VoteCounts", { 1, 0, 2, 1 })
@@ -570,7 +608,7 @@ if #bots > 0 then
 		who:SetAttribute("PP_Team", if index % 2 == 0 then "Red" else "Blue")
 	end
 	task.wait(0.8)
-	__ui["InRound teams"] = __dumpGui(__playerGui)
+	__ui["InRound teams"] = __dumpGui(__playerGui, "InRound teams")
 	local outlined = 0
 	for _, bot in bots do
 		if bot.rig and bot.rig:FindFirstChildOfClass("Highlight") then
@@ -589,7 +627,7 @@ end
 step = "Out"
 __player:SetAttribute("PP_Alive", false)
 task.wait(1.2)
-__ui.Out = __dumpGui(__playerGui)
+__ui.Out = __dumpGui(__playerGui, "Out")
 local outPanel = __playerGui.PartyPanicHUD:FindFirstChild("OutPanel")
 if outPanel then
 	outPanel.Visible = false -- what its 👀 Spectate button does
@@ -597,7 +635,7 @@ end
 step = "Spectate"
 State.OpenScreen:Fire("Spectate")
 task.wait(1.2)
-__ui.Spectate = __dumpGui(__playerGui)
+__ui.Spectate = __dumpGui(__playerGui, "Spectate")
 
 if #bots > 0 then
 	step = "bots spectating"
@@ -710,6 +748,7 @@ if #bots > 0 then
 	local folder = Instance.new("Folder")
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "PodiumTags"
+	screen:SetAttribute("PP_Billboards", true) -- ui_render.py: check the text, not where they sit
 	screen.Parent = folder
 	local podium = {}
 	for _, gui in __playerGui:GetChildren() do
@@ -747,7 +786,7 @@ if #bots > 0 then
 	table.sort(podium, function(a, b)
 		return a.place < b.place
 	end)
-	__ui.Podium = __dumpGui(folder)
+	__ui.Podium = __dumpGui(folder, "Podium")
 	botChecks.podium = podium
 	botChecks.headshotsAskedFor = __thumbnailIds
 end
@@ -758,9 +797,7 @@ phase("Cleanup", 3, function()
 		who:SetAttribute("PP_Alive", false)
 	end
 end)
-phase("Waiting", 0, function()
-	GameState.Set("Message", "Waiting for 1 more player")
-end)
+phase("Waiting", 0)
 task.wait(1)
 
 local guiCount = #__playerGui:GetDescendants()
@@ -772,6 +809,7 @@ return game:GetService("HttpService"):JSONEncode({
 	guiInstances = guiCount,
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
+	textReport = __textReport,
 })
 '''
 
@@ -795,12 +833,16 @@ def main():
     parser.add_argument("--touch", action="store_true", help="the stand-in client is a phone (touch, no keyboard)")
     parser.add_argument("--rich", action="store_true", help="a well-used profile, to check the layouts at their fullest")
     parser.add_argument("--bots", type=int, default=0, help="stand-in bots that play the round with the player")
+    parser.add_argument("--sizes", help="screens to lay the UI out on with the engine (ui_render.py's names or "
+                        "groups; default: touch with --touch, else pc; none to skip)")
     args = parser.parse_args()
     gui_dump = (Path(__file__).resolve().parent / "gui_dump.luau").read_text()
+    sizes = args.sizes or ("touch" if args.touch else "pc")
     flags = (
         f"__touchMode = {'true' if args.touch else 'false'}\n"
         f"__richMode = {'true' if args.rich else 'false'}\n"
         f"__botCount = {args.bots}\n"
+        + (devices_luau(size_names(sizes)) if sizes != "none" else "")
     )
     out = [flags + gui_dump + PRELUDE + screen_guis()]
     for module, path in module_paths().items():

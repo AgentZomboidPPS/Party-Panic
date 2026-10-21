@@ -16,6 +16,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ui_render import devices_luau, size_names  # noqa: E402  (the screens the engine lays the UI out on)
+
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 BOTS = Path(__file__).resolve().parent / "bots"
@@ -93,14 +96,19 @@ def main():
     parser.add_argument("--touch", action="store_true", help="the stand-in client is a phone (touch, no keyboard)")
     parser.add_argument("--bots", type=int, default=0, help="also add this many real bots, played by the mode's brain (MiniGames/Bots/<Id>)")
     parser.add_argument("--ui-at", help="with --client: snapshot the player's screen UI at these round times, e.g. 2,10 (see ui_render.py)")
+    parser.add_argument("--sizes", help="with --ui-at: screens to lay the UI out on with the engine (ui_render.py's "
+                        "names or groups; default: touch with --touch, else pc)")
     args = parser.parse_args()
 
-    out = [("__touchMode = true\n" if args.touch else "__touchMode = false\n") + PRELUDE]
+    header = "__touchMode = true\n" if args.touch else "__touchMode = false\n"
+    if args.ui_at:
+        header += devices_luau(size_names(args.sizes or ("touch" if args.touch else "pc")))
+    out = [header + PRELUDE]
     paths = module_paths()
     if args.client:
         paths.update(client_paths())
     line_map = []  # (first line of the module body in the bundle, module name)
-    line = PRELUDE.count("\n") + 2  # the __touchMode line comes first
+    line = PRELUDE.count("\n") + header.count("\n") + 1  # the __touchMode (and __devices) lines come first
     for module, path in paths.items():
         if module == "Shared/Remotes":
             continue  # replaced by the harness's recording stand-in

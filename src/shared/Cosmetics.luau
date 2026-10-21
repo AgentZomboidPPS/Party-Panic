@@ -29,7 +29,7 @@ local list: { Cosmetic } = {
 		Slot = "Trail",
 		Name = "Bubble Stream",
 		Description = "A soft trail of soapy blues.",
-		Icon = "🫧",
+		Icon = "🔵", -- not 🫧: newer than Roblox's emoji font, blank on phones
 		Price = 150,
 		Colors = { rgb(160, 230, 255), rgb(255, 255, 255) },
 	},
@@ -251,7 +251,7 @@ local list: { Cosmetic } = {
 		Slot = "Emote",
 		Name = "Disco",
 		Description = "Saturday night moves.",
-		Icon = "🪩",
+		Icon = "🎶", -- not 🪩: newer than Roblox's emoji font, blank on phones
 		Price = 250,
 		Animation = 507777268,
 		Looped = true,
@@ -337,7 +337,7 @@ local list: { Cosmetic } = {
 		Slot = "Elimination",
 		Name = "Bubble Pop",
 		Description = "Pop!",
-		Icon = "🫧",
+		Icon = "🔵", -- not 🫧: newer than Roblox's emoji font, blank on phones
 		Price = 150,
 		Effect = "Bubbles",
 	},
