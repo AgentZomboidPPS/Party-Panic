@@ -9,7 +9,7 @@ return function(h)
 		-- (Logic/Slaparazzi.luau RINGS: 3.6, 7.2, 11); the whole frame is 24.35 studs across.
 		SlaparazziFrame = {
 			Height = 0.12
-			AssetId = 0,
+			AssetId = 113926669652250,
 			Shadow = false,
 			Palette = {
 				Gold = h.rgb(255, 200, 60),
@@ -43,7 +43,7 @@ return function(h)
 		-- The photographer bent to a vintage press camera on a wooden tripod, flash dish up.
 		SlaparazziCamera = {
 			Height = 8.62,
-			AssetId = 0,
+			AssetId = 134203015201267,
 			BlocksCamera = { "Coat", "Body", "Pants" },
 			Palette = {
 				Tripod = h.rgb(150, 100, 60),
@@ -82,7 +82,7 @@ return function(h)
 		-- A stage spotlight on a stand, its can tilted down toward the front (-Z).
 		SlaparazziSpotlight = {
 			Height = 8.62,
-			AssetId = 0,
+			AssetId = 115870061864485,
 			Palette = { Stand = h.rgb(60, 60, 66), Can = h.rgb(30, 30, 34), Lens = h.rgb(255, 244, 214) },
 			Materials = { Stand = Enum.Material.Metal, Lens = Enum.Material.Neon },
 			Fallback = function(m)
@@ -94,7 +94,7 @@ return function(h)
 		-- A section of cheering fans on a three-tier riser (16 wide), facing -Z.
 		SlaparazziCrowd = {
 			Height = 6.15,
-			AssetId = 0,
+			AssetId = 131036744580945,
 			BlocksCamera = { "Riser" },
 			Palette = {
 				Riser = h.rgb(90, 50, 120),
@@ -122,7 +122,7 @@ return function(h)
 		-- The big open glove a slap swings (a client effect, shared with ctx:ShareTemplate).
 		SlaparazziGlove = {
 			Height = 3.16,
-			AssetId = 0,
+			AssetId = 127215886299352,
 			Shadow = false,
 			Palette = { Glove = h.rgb(250, 250, 250), Cuff = h.rgb(255, 120, 180), Stitch = h.rgb(40, 40, 50) },
 			Fallback = function(m)
@@ -133,7 +133,7 @@ return function(h)
 		-- Two brass stanchions with a velvet rope between them (along X), beside the red carpet.
 		SlaparazziRope = {
 			Height = 3.2,
-			AssetId = 0,
+			AssetId = 82051580058496,
 			Palette = { Brass = h.rgb(215, 175, 70), Rope = h.rgb(170, 20, 40) },
 			Materials = { Brass = Enum.Material.Metal, Rope = Enum.Material.Fabric },
 			Fallback = function(m)
