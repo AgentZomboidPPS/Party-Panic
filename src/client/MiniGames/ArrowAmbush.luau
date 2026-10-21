@@ -33,7 +33,7 @@ local function pointAt(from: Vector3, to: Vector3, arc: number, s: number): Vect
 end
 
 local function flight(distance: number): (number, number)
-	return 0.32 + distance / 95, 1.5 + distance * 0.04
+	return 0.28 + distance / 105, 1.5 + distance * 0.04 -- the server's ArrowAmbush.Flight
 end
 
 local function v3(t: { number }): Vector3

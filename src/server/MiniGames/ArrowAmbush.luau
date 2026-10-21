@@ -39,7 +39,7 @@ ArrowAmbush.RAIL_TOP = 0.42 -- the boards' wheels run on rails this high above t
 function ArrowAmbush.Cooldown(runnersPerArcher: number): number
 	return math.clamp(1 - 0.07 * (runnersPerArcher - 1), 0.68, 0.95)
 end
-ArrowAmbush.HIT_RADIUS = 2.7 -- a runner this close to where an arrow lands is tagged
+ArrowAmbush.HIT_RADIUS = 3 -- a runner this close to where an arrow lands is tagged
 local SHOVE_RADIUS = 5.5 -- near misses get a little shove
 ArrowAmbush.BOARD_HALF = 3.6 -- half the width of a target board (what blocks arrows)
 ArrowAmbush.BOARD_HEIGHT = 8 -- boards block arrows below this height above the floor
@@ -67,7 +67,7 @@ end
 
 -- Flight time and arc height of a shot covering `distance` studs.
 function ArrowAmbush.Flight(distance: number): (number, number)
-	return 0.32 + distance / 95, 1.5 + distance * 0.04
+	return 0.28 + distance / 105, 1.5 + distance * 0.04 -- keep in step with the client half
 end
 
 -- Where an arrow is `s` of the way through its flight (0..1).
@@ -109,10 +109,8 @@ function ArrowAmbush:Prepare()
 		local other = rng:NextInteger(1, index)
 		players[index], players[other] = players[other], players[index]
 	end
+	-- (A lone player in Studio is the archer, so they can try the bow; bots fill real rounds.)
 	local archerCount = if #players >= 6 then 2 else 1
-	if #players < 2 then
-		archerCount = 0 -- a lone player (Studio) just runs from... nobody; bots fill real rounds
-	end
 	local archers, runners = {}, {}
 	for index, player in players do
 		if index <= archerCount then
