@@ -5,6 +5,11 @@
 -- spectate panels (and only the newest while the rules card is up).
 -- Two at a time (a new one pushes the oldest out), so they never reach the menu or the vote.
 -- A toast is as tall as its lines (measured, not AutomaticSize, which cut text short on phones).
+--
+-- Phones in a round: a mode's action buttons (HIT, RAKE!, PUMP, Bobsled's LEFT...: Api.Button) sit
+-- beside the jump button, right in that low gap, and the toasts drew over them just when an
+-- announcement told players to press ("GOLDEN RUSH!"). While any is showing, the toasts sit above
+-- the buttons' row instead (still clear of the thumbstick's corner and the menu column).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -31,6 +36,7 @@ local WIDTH, TEXT, PAD_X, PAD_Y = 360, 21, 18, 10
 local TOUCH_WIDTH, TOUCH_TEXT, TOUCH_PAD_X, TOUCH_PAD_Y = 440, 19, 16, 8
 
 local MAX_TOASTS = 2
+local ACTION_GAP = 8 -- phones: between the toasts and the mode's action buttons under them (pixels)
 local touch = false
 local newestLast = false -- phones: the newest toast sits at the bottom of the stack
 local stack: Frame
@@ -143,15 +149,42 @@ function NotificationController.Start(context)
 				),
 			},
 		})
-		local function lift()
-			local height = 0
-			for name, panelHeight in BOTTOM_PANELS do
-				local panel = context.Hud:FindFirstChild(name)
-				if panel and panel:IsA("GuiObject") and panel.Visible then
-					height = math.max(height, panelHeight)
+		-- The top of the mode's action buttons (Api.Button holders, beside the jump button) in the
+		-- toasts' ScreenGui, or nil when none is showing.
+		local playerGui = context.Hud.Parent
+		local function actionsTop(): number?
+			local top: number? = nil
+			for _, other in playerGui:GetChildren() do
+				if not (other:IsA("ScreenGui") and other.Enabled and string.sub(other.Name, 1, 9) == "MiniGame_") then
+					continue
+				end
+				for _, child in other:GetChildren() do
+					if child:IsA("GuiObject") and child.Visible and string.sub(child.Name, 1, 7) == "Action_" then
+						local y = child.AbsolutePosition.Y - gui.AbsolutePosition.Y
+						top = if top then math.min(top, y) else y
+					end
 				end
 			end
-			stack.Position = UDim2.new(0.5, 0, 1, -height)
+			return top
+		end
+		local function lift()
+			local top = actionsTop()
+			-- tools/checks (gui_dump.luau, ui_render.py) place it the same way on each screen they draw.
+			holder:SetAttribute("PP_AboveActions", if top then true else nil)
+			if top then
+				holder.Position = UDim2.new(0.62, 0, 0, top - ACTION_GAP)
+				stack.Position = UDim2.fromScale(0.5, 1)
+			else
+				holder.Position = UDim2.new(0.62, 0, 1, -8)
+				local height = 0
+				for name, panelHeight in BOTTOM_PANELS do
+					local panel = context.Hud:FindFirstChild(name)
+					if panel and panel:IsA("GuiObject") and panel.Visible then
+						height = math.max(height, panelHeight)
+					end
+				end
+				stack.Position = UDim2.new(0.5, 0, 1, -height)
+			end
 			-- Under the rules card there's only room for one: the newest.
 			local rules = context.Hud:FindFirstChild("Rules")
 			local crowded = rules ~= nil and rules:IsA("GuiObject") and rules.Visible

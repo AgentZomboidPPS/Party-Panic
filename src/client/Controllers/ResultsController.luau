@@ -4,6 +4,10 @@
 -- The breakdown includes the first win of the day's bonus, and a round that levels you up says so
 -- in place of the "next vote" cue (owner: "Also we need cool payoffs for players that keep playing
 -- the game.").
+--
+-- Each standings row has the place and name on the left and the result on the right, in its own
+-- column like the standings board: a long name ends in "..." and the result always reads whole. It
+-- used to be one line ("🥇  name  ·  result") that a 15-character name cut short in every mode.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -22,6 +26,11 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 local ResultsController = {}
 
 local MEDALS = { "🥇", "🥈", "🥉" }
+
+-- The standings rows (units: the column is about 374 wide on every screen): the result column is as
+-- wide as the widest result shown, up to RESULT_MAX (the rest stays for the place and name). A
+-- result that's wider still is drawn smaller, down to RESULT_MIN_TEXT (11 pt on a phone).
+local ROW_TEXT, RESULT_MAX, RESULT_MIN_TEXT = 21, 232, 18
 
 local modal: Modal.Modal
 local headline: TextLabel
@@ -51,20 +60,51 @@ local function show(data)
 		else `{medal} {Placement.Ordinal(data.Place)} of {data.PlayerCount}{teamLine}`
 
 	clear(standings)
+	local resultWidth = 0
+	for _, entry in data.Standings do
+		resultWidth = math.max(resultWidth, UIKit.TextWidth(entry.ScoreText or "", ROW_TEXT, Theme.Fonts.Bold))
+	end
+	resultWidth = math.min(math.ceil(resultWidth) + 4, RESULT_MAX)
 	for index, entry in data.Standings do
 		local isMe = entry.UserId == game:GetService("Players").LocalPlayer.UserId
 		local place = MEDALS[entry.Place] or Placement.Ordinal(entry.Place)
 		local name = Participants.ListName(entry.Name, Participants.IsBotId(entry.UserId))
-		UIKit.Label({
-			Text = `{place}  {name}  ·  {Participants.Escape(entry.ScoreText or "")}`,
-			RichText = true,
-			TextSize = 21,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			TextColor3 = if isMe then Theme.Colors.Yellow else Theme.Colors.Text,
+		local color = if isMe then Theme.Colors.Yellow else Theme.Colors.Text
+		local row = UIKit.new("Frame", {
 			Size = UDim2.new(1, 0, 0, 30),
+			BackgroundTransparency = 1,
 			LayoutOrder = index,
 			Parent = standings,
+		})
+		local nameLabel = UIKit.Label({
+			Text = `{place}  {name}`,
+			RichText = true,
+			TextSize = ROW_TEXT,
+			TextWrapped = false,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextColor3 = color,
+			Size = UDim2.new(1, -(resultWidth + 10), 1, 0),
+			Parent = row,
+		})
+		nameLabel:SetAttribute("PP_TruncateOk", true) -- a long name ends in "..."
+		local result = entry.ScoreText or ""
+		local textSize = ROW_TEXT
+		while textSize > RESULT_MIN_TEXT and UIKit.TextWidth(result, textSize, Theme.Fonts.Bold) > resultWidth do
+			textSize -= 1
+		end
+		UIKit.Label({
+			Name = "Result",
+			Text = result,
+			TextSize = textSize,
+			TextWrapped = false,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			TextTruncate = Enum.TextTruncate.AtEnd, -- (only past RESULT_MAX at the smallest size)
+			TextColor3 = color,
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.fromScale(1, 0),
+			Size = UDim2.new(0, resultWidth, 1, 0),
+			Parent = row,
 		})
 	end
 

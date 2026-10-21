@@ -513,6 +513,10 @@ def render(nodes: list, size_name: str, out: Path):
             poy = jy + jump / 2 - py - jump * 0.15
         if n.get("underProfile"):
             psx, psy, pox, poy = 0, 0, 14, 12 + 130 * auto_scale + 8  # RoundController: under the profile chip
+        if n.get("aboveActions") and touch:
+            # NotificationController: the toasts sit above the mode's action buttons (their row, as above).
+            jx, jy, jump = jump_button(dev)
+            psy, poy = 0, jy + jump / 2 - py - jump * 0.15 - 118 * auto_scale / 2 - 8
         x = px + psx * pw + pox - ax * w
         y = py + psy * ph + poy - ay * h
         if "_listpos" in n:

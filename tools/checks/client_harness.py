@@ -775,12 +775,15 @@ if #bots > 0 then
 	botChecks.escape = Participants.Escape("a<b&c>")
 	botChecks.board = boardRows()
 
-	-- Team outlines go on bots too.
+	-- Team outlines go on bots too, and the team pill under the status line shows all four teams
+	-- (with 3-digit scores, its widest).
 	for index, who in everyone() do
 		who:SetAttribute("PP_Team", if index % 2 == 0 then "Red" else "Blue")
 	end
+	GameState.SetJSON("TeamScores", { Red = 100, Blue = 64, Green = 109, Yellow = 7 })
 	task.wait(0.8)
 	snap("InRound teams")
+	GameState.SetJSON("TeamScores", {})
 	local outlined = 0
 	for _, bot in bots do
 		if bot.rig and bot.rig:FindFirstChildOfClass("Highlight") then
@@ -890,13 +893,25 @@ phase("Results", 8, function()
 			table.insert(champions, { Name = bots[3].display, UserId = bots[3].userId, Place = 3 })
 		end
 	else
+		-- The longest results lines the modes write, beside long names: the result always reads whole
+		-- and a name gives way ("..."), like the standings board.
+		local longest = {
+			"🏊 20 coins • never chomped!",
+			"Yellow 12 🎂 3 ⭐ • 14 layers",
+			"Yellow 100% • 22 perfect",
+			"Green 97% • 6/11 leans",
+			"🦈 12 chomps • 3 dunked",
+			"Survived! • 120 jumps",
+			"🏹 12 tags • +12 boards",
+			"Divers 1200 • you 450",
+		}
 		for index = 1, 8 do
 			local other = __players[index]
 			table.insert(standings, {
 				Name = other.DisplayName,
 				UserId = other.UserId,
 				Place = index,
-				ScoreText = if index == 1 then "Last one standing" else `Out at {80 - index * 7}s`,
+				ScoreText = longest[index],
 			})
 		end
 	end
