@@ -41,7 +41,7 @@ MessyMemory.TRAY_X = { -3.9, -1.3, 1.3, 3.9 }
 MessyMemory.TRAY_Z = { -3.4, -1.6 } -- back row, front row
 MessyMemory.STAND_Z = 7.5 -- the player stands here, facing the shelf
 MessyMemory.EYE = Vector3.new(0, 12.5, 10) -- the player's camera (booth frame)
-MessyMemory.LOOK = Vector3.new(0, 7, -6) -- ...looking here
+MessyMemory.LOOK = Vector3.new(0, 8.72, -6) -- ...looking here (PC; phones look a little lower)
 MessyMemory.RING = 27.5 -- booth fronts from the arena's middle
 
 -- Timings (seconds).

@@ -368,6 +368,15 @@ function MessyMemory.Start(api)
 	local peekButton = api:Button({ Text = "PEEK 👀", Key = Enum.KeyCode.Q, Color = Theme.Colors.Cyan, Slot = 2 })
 	curtainButton:SetVisible(false)
 	peekButton:SetVisible(false)
+	if not api:IsTouch() then
+		-- PC: in the bottom-right corner instead of the bottom middle, where the counter's toys are.
+		for slot, name in { "Action_CLOSE", "Action_PEEK 👀" } do
+			local holder = api.Gui:FindFirstChild(name) :: Frame?
+			if holder then
+				holder.Position = UDim2.new(1, -24 - (slot - 1) * 150, 1, -24)
+			end
+		end
+	end
 
 	local peekUser: number? = nil
 	local peekUntil = 0
@@ -535,16 +544,18 @@ function MessyMemory.Start(api)
 
 	-- Camera ----------------------------------------------------------------------------------------
 	local savedType, savedFov = camera.CameraType, camera.FieldOfView
-	-- (Phones: a little wider and lower, so the counter's toys sit clear of the buttons in the
-	-- bottom corner and the top shelf clear of the HUD.)
+	-- Framed so the top shelf sits under the HUD and the counter's toys above the bottom edge; on
+	-- phones a touch lower and shifted right, so the counter stays clear of the buttons there.
 	local touch = api:IsTouch()
-	local look = if touch then Rules.LOOK - Vector3.new(0, 0.8, 0) else Rules.LOOK
+	local shift = if touch then Vector3.new(2.4, 0, 0) else Vector3.zero
+	local eye = Rules.EYE + shift
+	local look = (if touch then Vector3.new(0, 7.76, Rules.LOOK.Z) else Rules.LOOK) + shift
 	local function viewOf(booth: Booth): CFrame
-		return CFrame.lookAt(booth.Frame * Rules.EYE, booth.Frame * look)
+		return CFrame.lookAt(booth.Frame * eye, booth.Frame * look)
 	end
 	if mine then
 		camera.CameraType = Enum.CameraType.Scriptable
-		camera.FieldOfView = if touch then 58 else 52
+		camera.FieldOfView = 60
 		camera.CFrame = viewOf(mine)
 		api:Track(function()
 			camera.CameraType = savedType
@@ -609,20 +620,24 @@ function MessyMemory.Start(api)
 		if type(data) ~= "table" then
 			return
 		end
-		local old = phase.N
+		local old: string? = phase.N
+		local new: string? = data.N
 		phase = data
-		if data.N == "Study" and old ~= "Study" then
+		if old == new then
+			new = nil -- (the same phase again: nothing new to announce)
+		end
+		if new == "Study" then
 			shout("Remember every toy's spot!", Theme.Colors.Yellow, 2.2)
 			api:Sound("RoundStart")
-		elseif data.N == "Mess" and old ~= "Mess" then
+		elseif new == "Mess" then
 			burstSmoke()
 			shout("💨 MISCHIEF!", Theme.Colors.Pink, 1.6)
 			api:Sound("Hit")
-		elseif data.N == "Place" and old ~= "Place" then
+		elseif new == "Place" then
 			if mine then
 				shout("Put them back!", Theme.Colors.Green, 1.4)
 			end
-		elseif data.N == "Reveal" and old ~= "Reveal" then
+		elseif new == "Reveal" then
 			peekUser = nil
 			selected = nil
 			revealShown = 0

@@ -342,7 +342,7 @@ function MessyMemory:Start()
 
 	ctx:OnAction("Move", function(player, seq, toy, target)
 		self:_onMove(player, seq, toy, target)
-	end, { Interval = 0.06 })
+	end, { Interval = 0.03 })
 	ctx:OnAction("Curtain", function(player, open)
 		self:_onCurtain(player, open)
 	end, { Interval = 0.25 })
