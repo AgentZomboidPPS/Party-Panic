@@ -13,7 +13,8 @@
 -- Logic/HoneyBlock, shared with the client. A hit pressed just before the block's last flip that
 -- reached the server after the deadline used to find the block already stopped by the server, on
 -- the next face; the server now waits a moment past the deadline (LATE_HIT) and judges it on the
--- faces up to the deadline. And someone who takes a honeycomb is out from that moment: their
+-- faces up to the deadline, and the round's end waits the same moment at the buzzer for a hit pressed
+-- just before it (RoundContext.HoldEnd). And someone who takes a honeycomb is out from that moment: their
 -- elimination used to wait for the bees (2.1 s), so a time-up, or the last other player leaving,
 -- in that window counted them as a survivor, and they could win. The bees still play out first.
 --
@@ -313,7 +314,7 @@ end
 function HoneyTrap:_startTurn(after: Player?)
 	local ctx = self.context
 	local player = self:_nextPlayer(after)
-	if not player or not ctx:IsRunning() then
+	if not player or not ctx:IsRunning() or ctx:TimeIsUp() then
 		return
 	end
 	self.turnId += 1
@@ -342,15 +343,19 @@ function HoneyTrap:_startTurn(after: Player?)
 	ctx:SetStatus(`{player.DisplayName}'s turn  •  Players left: {ctx:AliveCount()}`)
 end
 
+-- A player's round trip in seconds (a bot's is 0), for judging what their screen showed.
+local function lagOf(player: Player): number
+	local ok, ping = pcall(function()
+		return (player :: any):GetNetworkPing()
+	end)
+	return if ok and type(ping) == "number" then math.clamp(ping, 0, 0.4) else 0.15
+end
+
 -- Which face a hit gets: the one the player says they saw if it really showed during the last
 -- moment (allowing for their ping), otherwise the face showing when the hit was sent. Never a face
 -- from after the deadline (Logic/HoneyBlock.Judge).
 function HoneyTrap:_judgeFace(player: Player, turn: Turn, claimed: any, now: number): number
-	local ok, ping = pcall(function()
-		return (player :: any):GetNetworkPing()
-	end)
-	local lag = if ok and type(ping) == "number" then math.clamp(ping, 0, 0.4) else 0.15
-	return HoneyBlock.Judge(turn, claimed, now, lag)
+	return HoneyBlock.Judge(turn, claimed, now, lagOf(player))
 end
 
 function HoneyTrap:_resolve(turn: Turn, face: number)
@@ -432,7 +437,18 @@ function HoneyTrap:Start()
 		if now < turn.T0 - 0.1 then
 			return -- the block isn't up yet
 		end
-		self:_resolve(turn, self:_judgeFace(player, turn, claimed, now))
+		-- Past the buzzer (the round's end waits a moment for this), only a hit pressed before it, on
+		-- a face shown before it.
+		local timeUp = ctx.TimeUpAt
+		if timeUp and now - lagOf(player) / 2 - 0.05 > timeUp then
+			return
+		end
+		local judged = turn
+		if timeUp and timeUp < turn.Deadline then
+			judged = table.clone(turn)
+			judged.Deadline = timeUp -- for this hit the block stopped at the buzzer
+		end
+		self:_resolve(turn, self:_judgeFace(player, judged, claimed, now))
 	end, { Interval = 0.25 })
 
 	ctx:Delay(1, function()
@@ -440,15 +456,20 @@ function HoneyTrap:Start()
 	end)
 
 	-- The block stops by itself when time runs out (after a moment for a hit still on its way, which
-	-- is judged on the faces up to the deadline), and a turn passes on if its player is gone.
+	-- is judged on the faces up to the deadline), and a turn passes on if its player is gone. While a
+	-- turn is on, the round's end waits that same moment at the buzzer (RoundContext.HoldEnd).
 	ctx:Loop(function(): number?
 		local turn = self.current
 		if turn and not turn.Done then
+			local timeUp = ctx.TimeUpAt
 			if not turn.Player.Parent or not ctx:IsAlive(turn.Player) then
 				turn.Done = true
 				self:_startTurn(turn.Player)
-			elseif ctx:Now() >= turn.Deadline + HoneyBlock.LATE_HIT then
+			elseif ctx:Now() >= turn.Deadline + HoneyBlock.LATE_HIT and (not timeUp or turn.Deadline <= timeUp) then
 				self:_resolve(turn, HoneyTrap.FaceAt(turn, turn.Deadline))
+			end
+			if not timeUp then
+				ctx:HoldEnd(HoneyBlock.LATE_HIT + 0.05)
 			end
 		end
 		return 0.05

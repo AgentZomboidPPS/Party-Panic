@@ -26,8 +26,8 @@
 -- although the rope went through their legs; and at time-up the last pass counted for whoever had
 -- been judged and not for the rest, which decided the winner by ping. A pass now settles once the
 -- slowest sweep is in: everyone it hit goes out together (a tie, split by jumps like any other) and
--- everyone who cleared it gets the jump at once. A pass still waiting when time runs out counts for
--- nobody.
+-- everyone who cleared it gets the jump at once. A pass just before the buzzer holds the round's end
+-- until it has settled (RoundContext.HoldEnd, half a second at most), and passes after it don't count.
 --
 -- Off the bridge (owner: "invisible stuff you can jump on and hang on in several games"): someone
 -- who got onto scenery beside the bridge was never judged (no deck under them), each pass counted
@@ -59,6 +59,7 @@ local SLACK = 0.02 -- seconds of leeway either way on a player's delay (ping jit
 local FIRST_PERIOD = 3.0
 local FASTEST_PERIOD = 1.05 -- a Roblox jump is ~0.5s in the air; this leaves time to land and go again
 local OFF_DECK_TIME = 2 -- seconds someone still in may spend off the bridge deck before they're out
+local MAX_PING = 0.5 -- round trips above this are judged as this
 local LAVA_DROP = 24
 local TEMPLE_DISTANCE = 150 -- how far ahead of the bridge the Dragon Temple stands
 local TEMPLE_SCALE = 1.1 -- with the distance, puts the dragon's frills just under the round banner on screen
@@ -373,7 +374,7 @@ function FireRope:_sweep(player: Player, pass: Pass, now: number): string?
 			local ok, ping = pcall(function()
 				return (player :: any):GetNetworkPing()
 			end)
-			delay = 0.03 + (if ok and type(ping) == "number" then math.clamp(ping, 0, 0.5) / 2 else 0.05)
+			delay = 0.03 + (if ok and type(ping) == "number" then math.clamp(ping, 0, MAX_PING) / 2 else 0.05)
 			slack = SLACK
 		end
 		-- Each delay in the leeway is swept on its own; the player is out only if the rope hits
@@ -527,8 +528,12 @@ function FireRope:Start()
 		end
 		self.passes += 1
 		local before = self.segments[#self.segments - 1] or upcoming
-		local pass: Pass = { T = upcoming.T0, Before = before.W, After = upcoming.W, Verdicts = {}, Sweeps = {} }
-		table.insert(self.pending, pass)
+		if not ctx:TimeIsUp() then
+			local pass: Pass = { T = upcoming.T0, Before = before.W, After = upcoming.W, Verdicts = {}, Sweeps = {} }
+			table.insert(self.pending, pass)
+			-- If time runs out now, the round's end waits until the slowest sweep can be in.
+			ctx:HoldEnd(SCAN / upcoming.W + 0.03 + MAX_PING / 2 + SLACK + 0.05)
+		end
 		table.insert(self.segments, {
 			T0 = upcoming.T0 + 2 * math.pi / upcoming.W,
 			A0 = 0,

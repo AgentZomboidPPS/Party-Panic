@@ -196,13 +196,16 @@ local function runRound(definition, participants: { Player })
 	while not context.EndReason do
 		local now = os.clock()
 		if now >= timeUp then
-			context:End("TimeUp")
+			context:TimeRanOut("TimeUp") -- now, or after a moment for anything in flight (RoundContext.HoldEnd)
 		elseif #context:GetPlayers() == 0 then
 			context:End("NoPlayers")
 		elseif now >= hardStop then
 			context:End("Watchdog")
 		end
-		task.wait(0.1)
+		if context.EndReason then
+			break -- Stop right away, so nothing keeps moving on screen after scoring has closed
+		end
+		task.wait() -- every frame: however the round ends, Stop follows within one
 	end
 	guarded("Stop:" .. definition.Id, 5, miniGame.Stop, miniGame, context.EndReason)
 	Telemetry.ServerEvent("RoundEnded", {

@@ -18,6 +18,9 @@
 --     ("fell") the moment the round started.
 --   * Bots never play on their own (Logic/Roster): WaitForStart tells the round manager when every
 --     person in a round left or couldn't be placed before GO, so it calls the round off.
+--   * At the buzzer, something already on its way to be judged (a rope pass, a landed arrow, a hit
+--     pressed just before) gets a moment (HoldEnd, half a second at most) instead of being dropped
+--     because the round had just ended.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -37,6 +40,7 @@ local Telemetry = require(script.Parent.Telemetry)
 
 local LOBBY_RADIUS = 600
 local PEOPLE_OUT_DELAY = 2 -- once every person is out, the round wraps up after this long
+local MAX_HOLD = 0.5 -- the longest a round's end waits at time-up for something in flight (HoldEnd)
 
 local actionRemote = Remotes.Get("MiniGameAction")
 local eventRemote = Remotes.Get("MiniGameEvent")
@@ -89,6 +93,8 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 	self.StartTime = 0
 	self.StartCount = 0
 	self.EndReason = nil :: string?
+	self.HoldUntil = 0 -- server time: at time-up the end waits until then (HoldEnd)
+	self.TimeUpAt = nil :: number? -- server time the round's time ran out, while its end is held (TimeRanOut)
 	self.PeopleOutPending = false
 	self.Destroyed = false
 	self.RespawnMode = "Eliminate" -- "Eliminate" | "Respawn"
@@ -212,6 +218,30 @@ function RoundContext.End(self: RoundContext, reason: string)
 	end
 	self.EndReason = reason
 	Telemetry.ServerEvent("RoundEnding", { round = self.RoundId, reason = reason })
+end
+
+-- Asks for a moment before the round ends at time-up, for something already on its way to be judged:
+-- an arrow that has just landed, a rope pass whose last positions are still coming in, a hit pressed
+-- just before the buzzer. If time runs out within the next `seconds`, the round goes on until then,
+-- but never more than MAX_HOLD past the buzzer; meanwhile nothing new should start (TimeIsUp), and an
+-- action should count only if it was made before TimeUpAt.
+function RoundContext.HoldEnd(self: RoundContext, seconds: number)
+	self.HoldUntil = math.max(self.HoldUntil, self:Now() + math.max(0, seconds))
+end
+
+-- Whether the round's time has run out (its end may be held a moment: HoldEnd).
+function RoundContext.TimeIsUp(self: RoundContext): boolean
+	return self.TimeUpAt ~= nil or self.EndReason ~= nil
+end
+
+-- The round manager calls this, again and again, once the round's time has run out: it ends the round
+-- straight away, or as soon as what HoldEnd asked for is over (MAX_HOLD at most).
+function RoundContext.TimeRanOut(self: RoundContext, reason: string)
+	local now = self:Now()
+	self.TimeUpAt = self.TimeUpAt or now
+	if now >= self.HoldUntil or now >= (self.TimeUpAt :: number) + MAX_HOLD then
+		self:End(reason)
+	end
 end
 
 function RoundContext.Elapsed(self: RoundContext): number
