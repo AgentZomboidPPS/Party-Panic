@@ -1,51 +1,123 @@
 --!strict
--- One-time changes to saved profiles, run when a profile loads (before DataService fills in the
--- template's new fields).
+-- What loading a saved profile changes, and the mark every save leaves, so the move to the low coin
+-- scale (owner: "Also lets balance the shop down. I want low currency not high.") happens exactly
+-- once for every player and nothing is ever lost. DataService runs Load on every profile it loads
+-- from the DataStore (never on a failed load: that player gets a fresh profile that is never saved)
+-- and Stamp just before every save. Both only change the profile in memory; the server writes it
+-- back with its usual locked UpdateAsync save, so a load that's never saved changes nothing.
 --
--- Economy v2 (owner: "Also lets balance the shop down. I want low currency not high."): coins moved
--- to a low scale, so a saved balance is divided by 10 and rounded up, exactly once. Owned items are
--- never touched. The step is keyed on its own marker, EconomyVersion, not on Version: a server
--- still running older code writes its own (lower) Version back when it saves, and that must never
--- cause a second rescale.
--- Also on every load: stats that are worked out from other saved stats (GamesTried).
+-- The rule, in plain words:
+--   * A profile not yet on the low scale (no EconomyVersion 2) gets its coins divided by 10,
+--     rounded up (1234 -> 124, 5 -> 1, 0 -> 0), and is marked EconomyVersion 2 in the same save.
+--     Never twice: servers still running the old code keep fields they don't know, so the mark stays.
+--     Owned items, equipped items, XP and levels are never touched.
+--   * Servers still running the old code (until the owner restarts them after a publish) pay
+--     coins on the old scale. They write Version 1 back when they save; every save from this code
+--     writes Version 2 and the coin balance it saved (CoinStamp). So a profile marked
+--     EconomyVersion 2 that comes back with Version 1 had a session on an old server: what its
+--     coins went up (or down) there is divided by 10 too, once (the next save stamps again).
+--   * Counts worked out from other saved stats (GamesTried) are redone on every load.
+-- The career milestones count from the update on, except podiums: every win saved so far was one.
 -- Leaf module: no requires, no Roblox APIs.
 
 local ProfileMigration = {}
 
-ProfileMigration.EconomyVersion = 2
+ProfileMigration.EconomyVersion = 2 -- coins on the low scale
+ProfileMigration.SchemaVersion = 2 -- the Version this code saves (Logic/ProfileTemplate's)
+ProfileMigration.LowScaleSchema = 2 -- the first Version saved by code on the low scale
 ProfileMigration.CoinScale = 10 -- old coins per new coin
 
 export type Report = {
 	CoinsBefore: number?, -- set when this load moved the balance to the low scale
 	CoinsAfter: number?,
+	OldServerChange: number?, -- set when it converted a session on an old server: its coins there
+	OldServerAfter: number?, -- ... and the balance after converting them
 }
 
+-- A saved coin count as a whole number, never below 0 (missing or broken values count as 0).
+local function whole(value: any): number
+	local number = tonumber(value)
+	if number == nil or number ~= number or number == math.huge or number == -math.huge then
+		return 0
+	end
+	return math.max(0, math.floor(number))
+end
+
+-- Old-scale coins on the low scale: a tenth, rounded in the player's favour (up; a loss rounds
+-- toward zero).
+function ProfileMigration.ToLowScale(oldCoins: number): number
+	return math.ceil(oldCoins / ProfileMigration.CoinScale)
+end
+
+-- The one-time changes, before anything else touches the profile.
 function ProfileMigration.Run(data: { [string]: any }): Report
 	local report: Report = {}
 	local stats = if type(data.Stats) == "table" then data.Stats else nil
 
 	if (tonumber(data.EconomyVersion) or 1) < ProfileMigration.EconomyVersion then
-		local before = math.max(0, math.floor(tonumber(data.Coins) or 0))
-		local after = math.ceil(before / ProfileMigration.CoinScale)
+		local before = whole(data.Coins)
+		local after = ProfileMigration.ToLowScale(before)
 		data.Coins = after
 		data.EconomyVersion = ProfileMigration.EconomyVersion
+		data.CoinStamp = nil -- (an old server never writes one; nothing to compare with)
 		report.CoinsBefore, report.CoinsAfter = before, after
 		if stats then
 			-- Podiums are counted from now on; every win saved so far was one.
-			stats.Podiums = math.max(tonumber(stats.Podiums) or 0, tonumber(stats.Wins) or 0)
+			stats.Podiums = math.max(whole(stats.Podiums), whole(stats.Wins))
 		end
-	end
-
-	if stats and type(stats.ModePlays) == "table" then
-		local tried = 0
-		for _, plays in stats.ModePlays do
-			if (tonumber(plays) or 0) > 0 then
-				tried += 1
-			end
+	elseif (tonumber(data.Version) or 1) < ProfileMigration.LowScaleSchema and data.CoinStamp ~= nil then
+		-- On the low scale already, but last saved by a server on the old code.
+		local stamp = whole(data.CoinStamp)
+		local change = whole(data.Coins) - stamp
+		if change ~= 0 then
+			local after = math.max(0, stamp + ProfileMigration.ToLowScale(change))
+			data.Coins = after
+			report.OldServerChange, report.OldServerAfter = change, after
 		end
-		stats.GamesTried = tried
 	end
 	return report
+end
+
+-- How many of the games a ModePlays table has played (only games in `known`, when given).
+function ProfileMigration.GamesTried(modePlays: any, known: { [string]: boolean }?): number
+	local count = 0
+	if type(modePlays) ~= "table" then
+		return count
+	end
+	for id, plays in modePlays do
+		if (tonumber(plays) or 0) > 0 and (known == nil or known[id] == true) then
+			count += 1
+		end
+	end
+	return count
+end
+
+-- Everything loading a saved profile does, in this order:
+--   1. the one-time changes (Run). First: filling in defaults would give an old save today's
+--      EconomyVersion, and its coins would never move to the low scale;
+--   2. every field `template` has and the save doesn't gets its default (`fill`: TableUtil.Reconcile,
+--      which never overwrites a saved value);
+--   3. the counts worked out from other stats;
+--   4. Version: this code's, never lowered (a newer server may have saved it).
+function ProfileMigration.Load(
+	data: { [string]: any },
+	template: { [string]: any },
+	fill: (target: { [any]: any }, template: { [any]: any }) -> any,
+	knownGames: { [string]: boolean }?
+): Report
+	local report = ProfileMigration.Run(data)
+	fill(data, template)
+	if type(data.Stats) == "table" then
+		data.Stats.GamesTried = ProfileMigration.GamesTried(data.Stats.ModePlays, knownGames)
+	end
+	data.Version = math.max(tonumber(data.Version) or 1, ProfileMigration.SchemaVersion)
+	return report
+end
+
+-- Just before every save: the balance this save writes, so a later load can tell what a session
+-- on a server still running the old code changed (Run).
+function ProfileMigration.Stamp(data: { [string]: any })
+	data.CoinStamp = data.Coins
 end
 
 return ProfileMigration

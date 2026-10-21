@@ -1,10 +1,9 @@
 -- The low coin scale, the payoffs for players who keep playing (the Rewards Road, prestige colors,
--- career milestones), the one-time move of saved coins to the low scale, and checks that every
--- reward points at something the server really keeps (a stat, a quest event).
+-- career milestones), and checks that every reward points at something the server really keeps (a
+-- stat, a quest event). The move of saved coins to the low scale: ProfileMigration.spec.
 local fs = require("@lune/fs")
 
 local TestKit = require("./TestKit")
-local ProfileMigration = require("../src/shared/Logic/ProfileMigration")
 local ProgressionLogic = require("../src/shared/Logic/ProgressionLogic")
 local RewardLogic = require("../src/shared/Logic/RewardLogic")
 
@@ -177,7 +176,6 @@ test("RecordRound keeps the career stats", function()
 	expectEqual(stats.RoundsPlayed, 3)
 	expectEqual(stats.ModePlays, { SkateEscape = 2, FireRope = 1 })
 	expectEqual(stats.CategoryPlays, { Race = 1, Survival = 2 })
-	expectEqual(ProgressionLogic.GamesTried(stats.ModePlays), 2)
 end)
 
 test("every career milestone is a stat the server keeps", function()
@@ -220,48 +218,6 @@ test("every quest event is one the server reports", function()
 	for event in string.gmatch(questsSource, 'Event = "(%w+)"') do
 		expectTrue(tracked[event], `a quest waits for "{event}", which the server never reports`)
 	end
-end)
-
-test("ProfileMigration moves saved coins to the low scale exactly once", function()
-	local saved: { [string]: any } = {
-		Version = 1,
-		Coins = 1234,
-		Owned = { Trail_Fire = true, Title_Rookie = true },
-		Stats = { Wins = 7, ModePlays = { FireRope = 3, HexMeltdown = 1, Gone = 0 } },
-	}
-	local report = ProfileMigration.Run(saved)
-	expectEqual(saved.Coins, 124, "1234 old coins round up to 124")
-	expectEqual(report, { CoinsBefore = 1234, CoinsAfter = 124 })
-	expectEqual(saved.EconomyVersion, 2)
-	expectEqual(saved.Owned, { Trail_Fire = true, Title_Rookie = true }, "owned items are never touched")
-	expectEqual(saved.Stats.Podiums, 7, "every saved win was a podium")
-	expectEqual(saved.Stats.GamesTried, 2)
-
-	-- Loaded again: nothing changes.
-	expectEqual(ProfileMigration.Run(saved), {})
-	expectEqual(saved.Coins, 124)
-
-	-- Saved again by a server still on the old code (it writes its own Version back): still once.
-	saved.Version = 1
-	saved.Coins += 25
-	expectEqual(ProfileMigration.Run(saved), {})
-	expectEqual(saved.Coins, 149)
-end)
-
-test("ProfileMigration rounds up and leaves new profiles alone", function()
-	for before, after in { [0] = 0, [1] = 1, [9] = 1, [10] = 1, [11] = 2, [155] = 16, [99999] = 10000 } do
-		local data: { [string]: any } = { Coins = before }
-		ProfileMigration.Run(data)
-		expectEqual(data.Coins, after, `{before} old coins`)
-	end
-	local odd: { [string]: any } = { Coins = -5 }
-	ProfileMigration.Run(odd)
-	expectEqual(odd.Coins, 0, "never below zero")
-
-	local fresh: { [string]: any } = { EconomyVersion = 2, Coins = 37, Stats = { Wins = 3, Podiums = 1 } }
-	expectEqual(ProfileMigration.Run(fresh), {})
-	expectEqual(fresh.Coins, 37)
-	expectEqual(fresh.Stats.Podiums, 1, "a profile on the new scale keeps its own podium count")
 end)
 
 return nil

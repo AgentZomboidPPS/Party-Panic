@@ -160,18 +160,4 @@ function ProgressionLogic.RecordRound(stats: { [string]: any }, record: RoundRec
 	return { Podium = podium, NewGame = newGame, NewDay = newDay }
 end
 
--- How many different games a ModePlays table has been played.
-function ProgressionLogic.GamesTried(modePlays: { [string]: any }?): number
-	local count = 0
-	if not modePlays then
-		return count
-	end
-	for _, plays in modePlays do
-		if (tonumber(plays) or 0) > 0 then
-			count += 1
-		end
-	end
-	return count
-end
-
 return ProgressionLogic

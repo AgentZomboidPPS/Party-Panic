@@ -6,7 +6,9 @@
 -- When DataStores are unavailable (e.g. an unpublished place in Studio) players get a temporary
 -- profile that is never saved, and they are told so.
 -- Saved profiles go through Logic/ProfileMigration on load (the move to the low coin scale, owner:
--- "I want low currency not high"); a player whose coins were just converted is told so, once.
+-- "I want low currency not high"); a player whose coins were just converted is told so, once. Every
+-- save stamps the balance it writes, so coins paid by a server still running the old code (before
+-- the owner restarts servers after a publish) are converted too, on the next load.
 
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
@@ -16,8 +18,10 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local DailyLogic = require(Shared.Logic.DailyLogic)
+local GameDefinitions = require(Shared.GameDefinitions)
 local LevelCurve = require(Shared.Logic.LevelCurve)
 local ProfileMigration = require(Shared.Logic.ProfileMigration)
+local ProfileTemplate = require(Shared.Logic.ProfileTemplate)
 local Remotes = require(Shared.Remotes)
 local TableUtil = require(Shared.Logic.TableUtil)
 
@@ -26,61 +30,8 @@ local Telemetry = require(script.Parent.Telemetry)
 
 local DataService = {}
 
-DataService.Template = {
-	Version = 2, -- 2: the low coin scale and the career stats
-	EconomyVersion = ProfileMigration.EconomyVersion, -- coins are on the low scale (see ProfileMigration)
-	Coins = 0,
-	XP = 0,
-	Owned = {} :: { [string]: boolean },
-	Equipped = {
-		Trail = "",
-		Title = "Title_Rookie",
-		Victory = "Victory_Confetti",
-		Elimination = "Elim_Poof",
-	},
-	Stats = {
-		RoundsPlayed = 0,
-		Wins = 0,
-		TopHalf = 0,
-		Votes = 0,
-		ItemsCollected = 0,
-		TimeSurvived = 0,
-		SurvivalWins = 0,
-		TreasureDelivered = 0,
-		RaceFinishes = 0,
-		Knockouts = 0,
-		-- Career milestones (Logic/ProgressionLogic.RecordRound keeps these)
-		Podiums = 0, -- 1st to 3rd
-		TeamWins = 0, -- on the winning team
-		RacePodiums = 0, -- 1st to 3rd in race games
-		GamesTried = 0, -- different games played (worked out from ModePlays on load)
-		DaysPlayed = 0, -- different days (UTC) with a round played
-		LastPlayDay = 0,
-		ModePlays = {} :: { [string]: number },
-		CategoryPlays = {} :: { [string]: number },
-		Best = {} :: { [string]: number },
-	},
-	Daily = {
-		LastClaimDay = 0,
-		Streak = 0,
-		SecretDay = 0,
-		FirstWinDay = 0, -- the day the first-win-of-the-day bonus was last paid
-	},
-	Quests = {
-		Daily = { Number = 0, Active = {} },
-		Weekly = { Number = 0, Active = {} },
-	},
-	Tutorial = { Done = false },
-	Settings = {
-		ReducedEffects = false,
-		MusicVolume = 0.5, -- 0 = off; the client also starts quiet and fades in
-	},
-	Meta = {
-		FirstJoin = 0,
-		LastJoin = 0,
-		Sessions = 0,
-	},
-}
+-- Every field a profile has and its default (Logic/ProfileTemplate, where the Lune tests load it).
+DataService.Template = ProfileTemplate
 
 export type ProfileData = typeof(DataService.Template)
 
@@ -117,14 +68,19 @@ local function newData(): ProfileData
 	return data
 end
 
--- Brings a saved profile up to date: the one-time changes first (keyed on their own markers, see
--- ProfileMigration), then any field the template has and the save doesn't gets its default.
--- Saved values always win over defaults, and owned items are never touched.
+-- The games a profile's GamesTried counts (the Game Explorer milestone: "Play all 12 games").
+local knownGames: { [string]: boolean } = {}
+for _, definition in GameDefinitions.List do
+	if definition.Enabled ~= false then
+		knownGames[definition.Id] = true
+	end
+end
+
+-- Brings a saved profile up to date (Logic/ProfileMigration.Load: the one-time move to the low coin
+-- scale first, then the template's defaults for missing fields, then the worked-out stats). Saved
+-- values always win over defaults, and owned items are never touched.
 local function migrate(data: any): (ProfileData, ProfileMigration.Report)
-	local report = ProfileMigration.Run(data)
-	TableUtil.Reconcile(data, DataService.Template)
-	-- Never lower it: a newer server may have saved this profile.
-	data.Version = math.max(tonumber(data.Version) or 1, DataService.Template.Version)
+	local report = ProfileMigration.Load(data, DataService.Template, TableUtil.Reconcile, knownGames)
 	return data, report
 end
 DataService.Migrate = migrate
@@ -206,6 +162,9 @@ local function saveRecord(profile: Profile, release: boolean): boolean
 				lostLock = true
 				return nil
 			end
+			-- The balance this save writes (stamped here, where nothing can change it before it's
+			-- written), so a later load can spot coins paid by a server still running the old code.
+			ProfileMigration.Stamp(profile.Data)
 			stored.Data = profile.Data
 			stored.Lock = if release then nil else { JobId = game.JobId, Time = os.time() }
 			return stored
@@ -391,6 +350,21 @@ local function onPlayerAdded(player: Player)
 			end
 		end)
 		Telemetry.PlayerEvent(player, "EconomyMigrated", before)
+	elseif migration and migration.OldServerChange then
+		-- Their last game was on a server still running the old version (big coins): those coins
+		-- moved to the small scale too.
+		local after = migration.OldServerAfter
+		task.delay(6, function()
+			if player.Parent then
+				Notifier.Send(
+					player,
+					`Coins from your last game (on an older server) are on the new small scale too: you have {after}.`,
+					"info",
+					9
+				)
+			end
+		end)
+		Telemetry.PlayerEvent(player, "EconomyOldServer", migration.OldServerChange)
 	end
 
 	if not canSave then
