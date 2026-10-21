@@ -9,10 +9,24 @@ return function(env)
 		careless[player] = index % 3 == 0
 	end
 	local reported = {}
+	local left = false
 	return function(elapsed)
 		local entries = mode.entries
 		if not entries then
 			return
+		end
+		-- Someone leaves mid-round (their ball must go with them).
+		if not left and elapsed > 2 and #env.players >= 5 then
+			left = true
+			local leaver = env.players[#env.players]
+			env.Leave(leaver)
+			-- env.Leave's PlayerRemoving goes through a BindableEvent, which copies the stand-in
+			-- table, so the round never recognises it: hand the real one to the round directly.
+			ctx:_onLeave(leaver)
+			table.remove(env.players)
+			task.delay(0.5, function()
+				env.note(`{leaver.Name} left: ball removed {entries[leaver] == nil}`)
+			end)
 		end
 		for _, player in env.players do
 			local me = entries[player]

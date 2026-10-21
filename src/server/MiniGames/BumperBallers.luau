@@ -387,8 +387,8 @@ function BumperBallers:_attachRider(entry: Entry)
 	if self.groupReady then
 		setRiderCollision(character, RIDER_GROUP)
 	end
-	if not entry.ClientDriven and physics then
-		pcall(root.SetNetworkOwner, root, nil)
+	if physics and typeof(entry.Player) ~= "Instance" then
+		pcall(root.SetNetworkOwner, root, nil) -- a bot's rider is the server's, like its ball
 	end
 end
 
