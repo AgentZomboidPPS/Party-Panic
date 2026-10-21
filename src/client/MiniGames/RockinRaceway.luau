@@ -352,13 +352,15 @@ function RockinRaceway.Start(api)
 	end
 
 	-- The carrot meter: a bar of carrots, the left quarter red (the red line).
-	local meterWidth = if touch then 380 else 340
+	-- (on phones the meter and what's under it sit right of the middle, clear of the thumbstick zone)
+	local shiftX = if touch then 100 else 0
+	local meterWidth = 340
 	local meterHeight = if touch then 44 else 34
 	local meterY = hudY + barHeight + 10
 	local meter = UIKit.Panel({
 		Name = "Carrots",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, meterY),
+		Position = UDim2.new(0.5, shiftX, 0, meterY),
 		Size = UDim2.fromOffset(meterWidth, meterHeight),
 		CornerRadius = 12,
 		Parent = hud,
@@ -424,7 +426,7 @@ function RockinRaceway.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = if touch then 30 else 30,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, meterY + meterHeight + 6),
+		Position = UDim2.new(0.5, shiftX, 0, meterY + meterHeight + 6),
 		Size = UDim2.fromOffset(300, 36),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.15) },
@@ -435,8 +437,8 @@ function RockinRaceway.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = if touch then 34 else 40,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, meterY + meterHeight + 44),
-		Size = UDim2.fromOffset(if touch then 440 else 520, 46),
+		Position = UDim2.new(0.5, shiftX, 0, meterY + meterHeight + 44),
+		Size = UDim2.fromOffset(if touch then 360 else 520, 46),
 		Visible = false,
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.1) },
@@ -452,6 +454,13 @@ function RockinRaceway.Start(api)
 	-- Controls ---------------------------------------------------------------------------------------
 
 	local gallop = api:Button({ Text = "GALLOP", Key = Enum.KeyCode.W, Color = Theme.Colors.Orange, Slot = 1 })
+	-- (GALLOP is the longest label: it shrinks to fit instead of wrapping onto two lines)
+	local gallopHolder = api.Gui:FindFirstChild("Action_GALLOP")
+	local gallopLabel = gallopHolder and gallopHolder:FindFirstChildWhichIsA("TextLabel", true)
+	if gallopLabel then
+		gallopLabel.TextWrapped = false
+		gallopLabel.Size = UDim2.fromScale(0.96, 0.5) -- (a little wider than the usual 0.86)
+	end
 	local hop = api:Button({ Text = "HOP", Key = Enum.KeyCode.Space, Color = Theme.Colors.Cyan, Slot = 2 })
 	local function racing(): boolean
 		local entry = snapshot.R[myKey]
