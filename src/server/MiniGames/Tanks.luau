@@ -155,8 +155,9 @@ function Tanks:_buildArena()
 	for _, spec in
 		{
 			{ Vector3.new(width + 2 * 70 + 7.8, 72, 4), Vector3.new(0, 36, northZ - 2) },
-			{ Vector3.new(4, 72, depth + 220), Vector3.new(-sideX - 2, 36, 46) },
-			{ Vector3.new(4, 72, depth + 220), Vector3.new(sideX + 2, 36, 46) },
+			-- (the side walls sit 0.1 lower than the north one: no flush faces where they meet)
+			{ Vector3.new(4, 72, depth + 220), Vector3.new(-sideX - 2, 35.9, 46) },
+			{ Vector3.new(4, 72, depth + 220), Vector3.new(sideX + 2, 35.9, 46) },
 		}
 	do
 		Build.Part({
@@ -176,11 +177,13 @@ function Tanks:_buildArena()
 		Color = rgb(250, 248, 240),
 		Parent = room,
 	})
+	-- The side ones run from just behind the north one's front to just short of the walls' ends.
+	local boardZ0, boardZ1 = northZ + 0.2, 46 + (depth + 220) / 2 - 1
 	for _, side in { -1, 1 } do
 		Build.Decor({
 			Name = "Baseboard",
-			Size = Vector3.new(1.2, 5.2, depth + 220 - 4), -- (not flush with the north one's faces)
-			CFrame = self:_at(side * (sideX - 0.7), floorY + 2.5, 46 + 2),
+			Size = Vector3.new(1.2, 5.2, boardZ1 - boardZ0), -- (not flush with the north one's faces)
+			CFrame = self:_at(side * (sideX - 0.7), floorY + 2.5, (boardZ0 + boardZ1) / 2),
 			Color = rgb(250, 248, 240),
 			Parent = room,
 		})
