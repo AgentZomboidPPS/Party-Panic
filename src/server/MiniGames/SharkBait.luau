@@ -45,13 +45,14 @@
 -- every tick brings back anyone below the sea floor, lifts a swimmer caught inside a raft that's up
 -- onto its deck, and every move the server makes stops the character dead (no leftover throw or spin
 -- carries it off again). A watchdog catches the rest: a device that sees its character trying to
--- move without getting anywhere, with nothing in the way, says so ("Stuck", with what it sees),
--- and the server looks for a humanoid stuck sitting, ragdolled or the like, for someone with
--- somewhere to go who isn't moving, and for a shark it keeps having to put back. They're moved
--- somewhere free (a fresh character if that didn't do it a moment ago), and everything seen goes
--- to the server log (Telemetry) and to the player's client report (PP_ClientReports, read with
--- tools/checks/client_reports.py), so the next report says what held them. Heights are measured
--- from each character's own feet (its hip height), so tall and short avatars play by the same rules.
+-- move without getting anywhere, with nothing in the way, says so ("Stuck", with what it sees; only
+-- the device knows where its player is trying to go), and the server looks for a humanoid stuck
+-- sitting, ragdolled or the like, for a bot with somewhere to go that isn't moving, and for a
+-- shark it keeps having to put back. They're moved somewhere free (a fresh character if that didn't
+-- do it a moment ago), and everything seen goes to the server log (Telemetry) and to the player's
+-- client report (PP_ClientReports, read with tools/checks/client_reports.py), so the next report
+-- says what held them. Heights are measured from each character's own feet (its hip height), so
+-- tall and short avatars play by the same rules.
 
 local PhysicsService = game:GetService("PhysicsService")
 local RunService = game:GetService("RunService")
@@ -122,7 +123,7 @@ local FREE = 2.6 -- a shark taken off a raft is put this far out past its edge (
 local CLEAR = 1.2 -- a shark's middle this close to a raft's edge is touching it
 local SURFACE_SLACK = 2 -- a raft coming back up moves sharks this close to its edge out too
 local SUNK = 1.5 -- feet this far under the sea floor have gone through it
-local STILL_TIME = 3 -- this long trying to go somewhere, nothing in the way, not moving: stuck
+local STILL_TIME = 3 -- a bot this long trying to go somewhere, nothing in the way, not moving: stuck
 local ODD_TIME = 2.5 -- this long sitting, ragdolled or the like, not moving: stuck
 local FREE_AGAIN = 6 -- stuck again this soon after being freed: a fresh character instead
 local PIN_LIMIT, PIN_TIME = 12, 4 -- a shark put back this often this quickly is stuck too
@@ -1238,7 +1239,10 @@ function SharkBait:_surface(raft: Raft)
 		end
 		local dir = if offset.Magnitude > 0.2 then offset.Unit else self:_randomDir()
 		if shark then
-			self:_place(player, raft.Center + dir * (raft.Radius + FREE), false, dir)
+			-- (One that was inside it is turned to face out; one just outside its edge keeps facing
+			-- its own way, so a shark waiting by the raft isn't spun round with its jaws away from it.)
+			local face = if offset.Magnitude <= raft.Radius then dir else nil
+			self:_place(player, raft.Center + dir * (raft.Radius + FREE), false, face)
 		else
 			self:_place(player, raft.Center + dir * math.min(offset.Magnitude, raft.Radius - 1.2), true)
 		end
@@ -1311,25 +1315,23 @@ function SharkBait:_insideRaft(root: BasePart): Raft?
 	return if raft and raft.State ~= SharkBait.FLIPPED then raft else nil
 end
 
--- Where a character is trying to go (flat, unit), if anywhere: a player's stick or keys (their
--- humanoid's MoveDirection), a bot's goal.
+-- Where a bot is trying to go (flat, unit), if anywhere: its goal. Only bots: a player's own device
+-- says when they're pushing and getting nowhere ("Stuck"). The server's copy of their humanoid can't
+-- tell: its MoveDirection may never come over from the device, and what does come is only as fresh
+-- as the device's last update, so a phone whose connection stalled for a few seconds mid-run would
+-- look stuck (moved, then a fresh character) with nothing wrong.
 function SharkBait:_wayOf(player: any, humanoid: Humanoid, root: BasePart): Vector3?
-	if humanoid.WalkSpeed <= 1 then
-		return nil -- frozen on purpose
+	if humanoid.WalkSpeed <= 1 or not isBot(player) then
+		return nil -- frozen on purpose, or a player
 	end
-	if isBot(player) then
-		local goal = player.Goal
-		local to = if typeof(goal) == "Vector3" then flat(goal - root.Position) else Vector3.zero
-		return if to.Magnitude > 2 then to.Unit else nil
-	end
-	local move = flat(humanoid.MoveDirection)
-	return if move.Magnitude > 0.5 then move.Unit else nil
+	local goal = player.Goal
+	local to = if typeof(goal) == "Vector3" then flat(goal - root.Position) else Vector3.zero
+	return if to.Magnitude > 2 then to.Unit else nil
 end
 
--- Whether something solid is right in front of a character going `way`: a raft's side (from the
--- water), the float line, or another player (players bump each other). Pushing into those is just
--- being in the way, not stuck.
-function SharkBait:_blocked(player: any, root: BasePart, feet: number, way: Vector3): boolean
+-- Whether something solid is right in front of a bot going `way`: a raft's side (from the water) or
+-- the float line (bots pass through everyone). Pushing into those is just being in the way, not stuck.
+function SharkBait:_blocked(root: BasePart, feet: number, way: Vector3): boolean
 	local position = root.Position
 	if feet < self.deckY - 0.5 then
 		for _, raft in self.rafts do
@@ -1344,30 +1346,11 @@ function SharkBait:_blocked(player: any, root: BasePart, feet: number, way: Vect
 		end
 	end
 	local out = flat(position - self.origin)
-	if out.Magnitude > SharkBait.LAGOON - 2.5 and way:Dot(out.Unit) > 0.2 then
-		return true
-	end
-	if isBot(player) or self.role[player] == "Shark" then
-		return false -- (bots and sharks pass through everyone)
-	end
-	for _, other in self.context:GetAlivePlayers() do
-		local _, _, otherRoot = self.context:GetCharacter(other)
-		if other ~= player and otherRoot and not isBot(other) and self.role[other] ~= "Shark" then
-			local to = flat(otherRoot.Position - position)
-			if
-				to.Magnitude < 3.5
-				and math.abs(otherRoot.Position.Y - position.Y) < 5
-				and (to.Magnitude < 0.1 or way:Dot(to.Unit) > 0.3)
-			then
-				return true
-			end
-		end
-	end
-	return false
+	return out.Magnitude > SharkBait.LAGOON - 2.5 and way:Dot(out.Unit) > 0.2
 end
 
 -- The watchdog, each tick for everyone the rules didn't just move: stuck in a state they can't
--- walk in, or trying to go somewhere with nothing in the way and not moving.
+-- walk in, or (bots) trying to go somewhere with nothing in the way and not moving.
 function SharkBait:_watch(player: any, humanoid: Humanoid, root: BasePart, now: number)
 	local position = root.Position
 	local entry = self.watch[player]
@@ -1384,7 +1367,7 @@ function SharkBait:_watch(player: any, humanoid: Humanoid, root: BasePart, now: 
 		return
 	end
 	local way = if still >= STILL_TIME then self:_wayOf(player, humanoid, root) else nil
-	if way and not self:_blocked(player, root, position.Y - legsOf(humanoid, root), way) then
+	if way and not self:_blocked(root, position.Y - legsOf(humanoid, root), way) then
 		self:_rescue(player, "trying to move, not moving, nothing in the way", nil)
 	end
 end

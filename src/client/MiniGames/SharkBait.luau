@@ -22,6 +22,10 @@
 -- anything holding it here. And every part of the frame (rafts, each shark, each coin, the camera...)
 -- and every event runs on its own: one that goes wrong can't stop the others (the sharks keep
 -- following their characters), and its first error goes to the server, which logs it.
+--
+-- Phone pass (ui_render: the swimmers' hint reached into the thumbstick's corner on the smallest
+-- phone): each role hint is two short lines ("🏊 Grab coins!" / "Stay out of the water!"), and on
+-- phones its box is only as wide as the longer one.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1035,7 +1039,16 @@ function SharkBait.Start(api)
 		end
 		isShark = role == "Shark"
 		roleIcon.Text = if isShark then "🦈" else "🏊"
-		hint.Text = if isShark then "🦈 CHOMP swimmers and rafts!" else "🏊 Grab coins! Stay out of the water!"
+		hint.Text = if isShark then "🦈 CHOMP swimmers\nand rafts!" else "🏊 Grab coins!\nStay out of the water!"
+		if api:IsTouch() then
+			-- Phones: two short lines in a box only as wide as the longer one, so the hint stays clear
+			-- of the thumbstick's corner even on the smallest phones.
+			local widest = 0
+			for _, line in string.split(hint.Text, "\n") do
+				widest = math.max(widest, UIKit.TextWidth(line, 26, Theme.Fonts.Display))
+			end
+			hint.Size = UDim2.fromOffset(math.ceil(widest) + 16, 66)
+		end
 		hint.Visible = true
 		hintUntil = math.huge -- counted from GO (below)
 		if isShark and not chompButton then
@@ -1728,7 +1741,7 @@ function SharkBait.Start(api)
 		return seen
 	end
 
-	local function stepStuck(clock: number, humanoid: Humanoid?, root: BasePart?)
+	local function stepStuck(clock: number, dt: number, humanoid: Humanoid?, root: BasePart?)
 		local way = Vector3.zero
 		if
 			humanoid
@@ -1741,7 +1754,10 @@ function SharkBait.Start(api)
 		then
 			way = flat(humanoid.MoveDirection)
 		end
-		if way.Magnitude < 0.5 or not humanoid or not root then
+		-- (A frame this slow is the device pausing, not the character stuck: the count starts over. Else
+		-- a phone that froze for a moment would be moved, and one that kept freezing, given fresh
+		-- characters.)
+		if way.Magnitude < 0.5 or not humanoid or not root or dt > 0.25 then
 			stuckSince = nil
 			return
 		end
@@ -1787,7 +1803,7 @@ function SharkBait.Start(api)
 		guard("camera", stepCamera, clock, dt, myHumanoid)
 		guard("scenery", stepScenery, clock)
 		guard("hud", stepHud, now, clock, inRound)
-		guard("stuck check", stepStuck, clock, myHumanoid, myRoot)
+		guard("stuck check", stepStuck, clock, dt, myHumanoid, myRoot)
 		-- The first error from each part goes to the server, one at a time (it logs them).
 		if #troubles > 0 and inRound and clock >= nextTrouble then
 			nextTrouble = clock + 2.5
