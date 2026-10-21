@@ -805,7 +805,7 @@ function SkateEscape.Start(api)
 				if collapse and not me.Done then
 					if hintUntil == 0 then
 						hintUntil = os.clock() + 6
-						api:Hint("Mash PUSH • JUMP crates, barriers & gaps • ride the ⚡ pads", hudY + 140)
+						api:Hint("Mash PUSH • JUMP crates & gaps • ride ⚡ pads", hudY + 140)
 					end
 					local event = SkateCourse.Step(me, obstacles, now, dt)
 					if event then
