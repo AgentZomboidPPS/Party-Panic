@@ -3,7 +3,7 @@ execution), so client code can be exercised without a player: every controller s
 script opens each screen, plays through every game phase, and fires every server->client remote.
 Errors and warnings from all of it come back in the result.
 
-    python3 tools/checks/client_harness.py [--touch] [--rich] [--bots N] > client.luau
+    python3 tools/checks/client_harness.py [--touch] [--rich] [--bots N] [--sit-out] > client.luau
     python3 tools/preview/luau_task.py client.luau - client.json
     python3 tools/checks/ui_render.py client.json /tmp/screens    # draw every screen and phase
 
@@ -23,9 +23,13 @@ The result's "portals" says what each of the vote stage's portals shows in each 
 "✓ YOUR VOTE", Random's spinning reel, the winner), as text.
 After the round the player sits out (the sit-out switch by the banner): a tap with no answer from
 the server (it slides back), then the server's answer, and the screens that change for someone
-sitting out ("Intermission sitting out", "Voting sitting out", "Waiting everyone on a break",
-"Preparing sitting out", "InRound sitting out", "InRound back in", "Settings sitting out"). The
-result's "sitOutChecks" says what the switches, the vote note and the round HUD showed.
+sitting out. The result's "sitOutChecks" says what the switches, the vote note and the round HUD
+showed. --sit-out draws those screens ("Intermission sitting out", "Voting sitting out", "Waiting
+everyone on a break", "Preparing sitting out", "InRound sitting out", "InRound back in", "Settings
+sitting out") next to the playing ones to compare (Intermission, Voting, Preparing, InRound,
+Results, Settings), and leaves the rest out. Open Cloud caps the size of a task's result, and every
+screen in one run is over it (about 3 MB of snapshots): Roblox then reports "Task timed out due to
+an internal error" and returns nothing.
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
@@ -366,6 +370,29 @@ local function portalReport()
 	return rows
 end
 
+-- The snapshots this run returns (Open Cloud caps a task's result, and every screen at once is
+-- over it): the sit-out screens only with --sit-out (true: drawn then; false: never), and then
+-- just the playing screens to compare them with.
+local SIT_OUT_SHOTS = {
+	["Intermission sitting out"] = true,
+	["Voting sitting out"] = true,
+	["Waiting everyone on a break"] = true,
+	["Preparing sitting out"] = true,
+	["InRound sitting out"] = true,
+	["InRound back in"] = true,
+	["Settings sitting out"] = true,
+	["Cleanup sitting out"] = false,
+}
+local SIT_OUT_COMPARE =
+	{ Intermission = true, Voting = true, Preparing = true, InRound = true, Results = true, Settings = true }
+local function snap(key, root)
+	local sitOut = SIT_OUT_SHOTS[key]
+	local wanted = if __sitOutMode then sitOut == true or SIT_OUT_COMPARE[key] == true else sitOut == nil
+	if wanted then
+		__ui[key] = __dumpGui(root or __playerGui, key)
+	end
+end
+
 -- `label` names the snapshot when it isn't the phase's own (e.g. "Voting sitting out"); `message`
 -- is the banner's line when it isn't the usual one.
 local function phase(name, seconds, extra, label, message)
@@ -379,7 +406,7 @@ local function phase(name, seconds, extra, label, message)
 	GameState.Set("Phase", name)
 	GameState.Set("PhaseEndsAt", if seconds > 0 then workspace:GetServerTimeNow() + seconds else 0) -- 0: no timer, like RoundManager
 	task.wait(1.2)
-	__ui[key] = __dumpGui(__playerGui, key)
+	snap(key)
 	__portals[key] = portalReport()
 end
 
@@ -477,7 +504,7 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
 	step = "OpenScreen " .. screen
 	State.OpenScreen:Fire(screen)
 	task.wait(1)
-	__ui[screen] = __dumpGui(__playerGui, screen)
+	snap(screen)
 	local Modal = __require("Client/UI/Modal")
 	if Modal.CloseAll then
 		pcall(Modal.CloseAll)
@@ -684,7 +711,7 @@ if #bots > 0 then
 		who:SetAttribute("PP_Team", if index % 2 == 0 then "Red" else "Blue")
 	end
 	task.wait(0.8)
-	__ui["InRound teams"] = __dumpGui(__playerGui, "InRound teams")
+	snap("InRound teams")
 	local outlined = 0
 	for _, bot in bots do
 		if bot.rig and bot.rig:FindFirstChildOfClass("Highlight") then
@@ -703,7 +730,7 @@ end
 step = "Out"
 __player:SetAttribute("PP_Alive", false)
 task.wait(1.2)
-__ui.Out = __dumpGui(__playerGui, "Out")
+snap("Out")
 local outPanel = __playerGui.PartyPanicHUD:FindFirstChild("OutPanel")
 if outPanel then
 	outPanel.Visible = false -- what its 👀 Spectate button does
@@ -711,7 +738,7 @@ end
 step = "Spectate"
 State.OpenScreen:Fire("Spectate")
 task.wait(1.2)
-__ui.Spectate = __dumpGui(__playerGui, "Spectate")
+snap("Spectate")
 
 if #bots > 0 then
 	step = "bots spectating"
@@ -862,7 +889,7 @@ if #bots > 0 then
 	table.sort(podium, function(a, b)
 		return a.place < b.place
 	end)
-	__ui.Podium = __dumpGui(folder, "Podium")
+	snap("Podium", folder)
 	botChecks.podium = podium
 	botChecks.headshotsAskedFor = __thumbnailIds
 end
@@ -985,7 +1012,7 @@ sitOutChecks.inRound = { lines = statusLines(), outPanel = hudText("OutPanel"), 
 step = "sit out: back in"
 __player:SetAttribute("PP_SitOut", false)
 task.wait(1.2)
-__ui["InRound back in"] = __dumpGui(__playerGui, "InRound back in")
+snap("InRound back in")
 sitOutChecks.backIn = { lines = statusLines(), switches = switches() }
 
 -- The second switch, in Settings.
@@ -999,7 +1026,7 @@ phase("Cleanup", 3, function()
 end, "Cleanup sitting out")
 State.OpenScreen:Fire("Settings")
 task.wait(1)
-__ui["Settings sitting out"] = __dumpGui(__playerGui, "Settings sitting out")
+snap("Settings sitting out")
 sitOutChecks.settings = switches()
 pcall(__require("Client/UI/Modal").CloseAll)
 __player:SetAttribute("PP_SitOut", false)
@@ -1041,6 +1068,8 @@ def main():
     parser.add_argument("--touch", action="store_true", help="the stand-in client is a phone (touch, no keyboard)")
     parser.add_argument("--rich", action="store_true", help="a well-used profile, to check the layouts at their fullest")
     parser.add_argument("--bots", type=int, default=0, help="stand-in bots that play the round with the player")
+    parser.add_argument("--sit-out", action="store_true", help="draw the screens of a player sitting out (and the "
+                        "playing ones to compare) instead of every screen")
     parser.add_argument("--sizes", help="screens to lay the UI out on with the engine (ui_render.py's names or "
                         "groups; default: touch with --touch, else pc; none to skip)")
     args = parser.parse_args()
@@ -1050,6 +1079,7 @@ def main():
         f"__touchMode = {'true' if args.touch else 'false'}\n"
         f"__richMode = {'true' if args.rich else 'false'}\n"
         f"__botCount = {args.bots}\n"
+        f"__sitOutMode = {'true' if args.sit_out else 'false'}\n"
         + (devices_luau(size_names(sizes)) if sizes != "none" else "")
     )
     out = [flags + gui_dump + PRELUDE + screen_guis()]

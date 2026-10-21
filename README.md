@@ -140,6 +140,8 @@ python3 tools/preview/luau_task.py client.luau - client.json
 python3 tools/checks/ui_render.py client.json /tmp/screens              # PNGs + the problem list
 ```
 
+Add `--sit-out` to draw the screens of a player sitting out instead (next to the playing ones).
+
 Type checking uses [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp) with the Roblox API
 definitions:
 
