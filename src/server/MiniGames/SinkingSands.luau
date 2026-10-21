@@ -204,27 +204,7 @@ function SinkingSands:_buildArena(kingCount: number)
 		Material = Enum.Material.Sand,
 		Parent = arena,
 	})
-	for index = 1, 14 do
-		local angle = index / 14 * math.pi * 2 + rng:NextNumber(-0.15, 0.15)
-		local distance = rng:NextNumber(260, 420)
-		local width = rng:NextNumber(150, 300)
-		local dune = Build.Decor({
-			Name = "Dune",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(width, width * rng:NextNumber(0.1, 0.16), width * rng:NextNumber(0.45, 0.7)),
-			CFrame = CFrame.new(
-				center.X + math.cos(angle) * distance,
-				floorY - 4,
-				center.Z + math.sin(angle) * distance
-			) * CFrame.Angles(0, -angle + math.pi / 2, 0),
-			Color = Color3.fromRGB(232, 176, 104):Lerp(Color3.fromRGB(246, 206, 140), rng:NextNumber()),
-			Material = Enum.Material.Sand,
-			Parent = arena,
-		})
-		local mesh = Instance.new("SpecialMesh")
-		mesh.MeshType = Enum.MeshType.Sphere
-		mesh.Parent = dune
-	end
+	self:_buildBackdrop(floorY)
 
 	-- The mesa and its funnel (one mesh), and the swirl streaks the clients turn.
 	local pit =
@@ -233,6 +213,8 @@ function SinkingSands:_buildArena(kingCount: number)
 	swirl.Name = "SandSwirl"
 	local showFloor = MeshLibrary.Source("SandPit") == "Fallback"
 	pit.Name = "SandPit"
+	-- The temple courtyard's paving round the funnel (its stones stand a hair proud of the sand).
+	MeshLibrary.Get("SandMosaic", { CFrame = CFrame.new(center - Vector3.new(0, 0.24, 0)), Parent = arena })
 
 	-- Walkable collision on the same profile as the mesh: tilted slabs in rings round the funnel and
 	-- a flat ring for the mesa top. The sinkhole itself has no floor.
@@ -377,29 +359,172 @@ function SinkingSands:_buildArena(kingCount: number)
 		self.thrones[king] = { CFrame = cframe, Seat = seat, Angle = angle }
 	end
 
-	-- Desert dressing on the mesa top (clear of thrones and spawns) and below the cliffs.
-	local placed = {}
-	local function clear(position: Vector3, gap: number): boolean
-		for _, other in placed do
-			if (other - position).Magnitude < gap then
-				return false
-			end
-		end
-		for _, throne in self.thrones do
-			if (throne.CFrame.Position - position).Magnitude < 12 then
-				return false
-			end
-		end
-		return true
+	self:_buildCourtyard()
+end
+
+-- The temple courtyard on the mesa top: a ring of painted columns with royal banners and four
+-- gateways framing the funnel, palms flanking each gateway and heaps of treasure that sparkle.
+local COLONNADE_R = 66
+local BANNER_RED, BANNER_BLUE = Color3.fromRGB(214, 38, 62), Color3.fromRGB(40, 86, 210)
+
+function SinkingSands:_buildCourtyard()
+	local center = self.center
+	local arena = self.context.Arena
+	local function facing(angle: number, radius: number, y: number?): CFrame
+		local position = center + Vector3.new(math.cos(angle) * radius, y or 0, math.sin(angle) * radius)
+		return CFrame.lookAt(position, Vector3.new(center.X, position.Y, center.Z))
 	end
-	local function scatter(prop: string, count: number, r0: number, r1: number, y: number, scale: { number })
+	for slot = 0, 15 do
+		local angle = slot / 16 * math.pi * 2
+		if slot % 4 == 2 then
+			MeshLibrary.Get("SandArch", { CFrame = facing(angle, COLONNADE_R), Parent = arena })
+			for side = -1, 1, 2 do
+				MeshLibrary.Get("SandPalm", {
+					CFrame = facing(angle + side * 0.2, 71.5) * CFrame.Angles(0, side * 2.2, 0),
+					Scale = 0.9 + (slot % 3) * 0.08,
+					Parent = arena,
+				})
+			end
+		elseif slot % 4 == 1 and slot ~= 5 or slot == 15 then
+			MeshLibrary.Get("SandColumnBroken", {
+				CFrame = facing(angle, COLONNADE_R) * CFrame.Angles(0, slot * 1.7, 0),
+				Parent = arena,
+			})
+		else
+			MeshLibrary.Get("SandColumn", {
+				CFrame = facing(angle, COLONNADE_R),
+				Colors = { Cloth = if slot % 4 == 0 then BANNER_RED else BANNER_BLUE },
+				Parent = arena,
+			})
+		end
+		if slot % 4 == 0 then
+			local hoard = MeshLibrary.Get("SandHoard", {
+				CFrame = facing(angle, 58) * CFrame.Angles(0, math.pi + slot * 0.3, 0),
+				Parent = arena,
+			})
+			self:_sparkle(hoard)
+		end
+	end
+end
+
+-- Gold glints rising off a heap of treasure (ambient: reduced-effects aware).
+function SinkingSands:_sparkle(model: Model)
+	local box, size = model:GetBoundingBox()
+	local source = Build.Decor({
+		Name = "Glints",
+		Size = Vector3.new(size.X * 0.7, 1, size.Z * 0.7),
+		CFrame = box,
+		Transparency = 1,
+		Parent = model,
+	})
+	local glints = Instance.new("ParticleEmitter")
+	glints.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	glints.Color = ColorSequence.new(Color3.fromRGB(255, 236, 140))
+	glints.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.3, 0.7),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	glints.Lifetime = NumberRange.new(0.7, 1.2)
+	glints.Rate = 5
+	glints.Speed = NumberRange.new(0.5, 1.5)
+	glints.SpreadAngle = Vector2.new(60, 60)
+	glints.LightEmission = 1
+	self:_ambient(glints, source)
+end
+
+-- Beyond the cliffs: a golden step-temple, a colossal sphinx, far pyramids, an oasis with palms,
+-- rolling dunes in layers that pale with distance, and ruins and cacti on the desert floor.
+local TEMPLE_ANGLE = -math.pi / 2 -- the temple stands on the -Z side
+local SPHINX_ANGLE = 0
+local OASIS_ANGLE = math.rad(140)
+
+function SinkingSands:_buildBackdrop(floorY: number)
+	local center = self.center
+	local arena = self.context.Arena
+	local function at(angle: number, distance: number): Vector3
+		return Vector3.new(center.X + math.cos(angle) * distance, floorY, center.Z + math.sin(angle) * distance)
+	end
+	local function facingCenter(position: Vector3): CFrame
+		return CFrame.lookAt(position, Vector3.new(center.X, position.Y, center.Z))
+	end
+
+	-- The temple's pivot (its footprint's middle) sits 12.8 studs (unscaled) in front of its core.
+	local templeScale = 1.5
+	MeshLibrary.Get("SandTemple", {
+		CFrame = facingCenter(at(TEMPLE_ANGLE, 240 - 12.8 * templeScale)),
+		Scale = templeScale,
+		Parent = arena,
+	})
+	MeshLibrary.Get("SandSphinx", {
+		CFrame = facingCenter(at(SPHINX_ANGLE, 270)),
+		Scale = 2.1,
+		Parent = arena,
+	})
+	for _, pyramid in
+		{
+			{ math.rad(75), 470, 2.0 },
+			{ math.rad(205), 430, 1.6 },
+			{ math.rad(228), 520, 1.3 },
+			{ math.rad(320), 480, 1.5 },
+		}
+	do
+		MeshLibrary.Get("SandPyramid", {
+			CFrame = CFrame.new(at(pyramid[1], pyramid[2])) * CFrame.Angles(0, pyramid[1] * 0.7, 0),
+			Scale = pyramid[3],
+			Parent = arena,
+		})
+	end
+
+	-- The oasis with its palms.
+	local oasis = at(OASIS_ANGLE, 140)
+	MeshLibrary.Get("SandOasis", { CFrame = facingCenter(oasis), Scale = 1.1, Parent = arena })
+	for index = 1, 6 do
+		local angle = OASIS_ANGLE + index * 1.05
+		local position = oasis + Vector3.new(math.cos(angle), 0, math.sin(angle)) * (26 + index % 2 * 4)
+		MeshLibrary.Get("SandPalm", {
+			CFrame = CFrame.new(position) * CFrame.Angles(0, index * 1.3, 0),
+			Scale = 1.3 + (index % 3) * 0.15,
+			Parent = arena,
+		})
+	end
+
+	-- Dunes in rings: the near ones warm, the far ones paler (as if seen through the heat haze).
+	local near, far = Color3.fromRGB(234, 172, 98), Color3.fromRGB(248, 218, 172)
+	for index = 1, 18 do
+		local ring = index % 3
+		local angle = index / 18 * math.pi * 2 + ring * 0.21
+		local distance = 200 + ring * 110 + rng:NextNumber(0, 40)
+		if distance < 400 and (math.cos(angle - TEMPLE_ANGLE) > 0.88 or math.cos(angle - SPHINX_ANGLE) > 0.88) then
+			continue -- keep the temple and the sphinx in view
+		end
+		local dune = MeshLibrary.Get("SandDune", {
+			CFrame = CFrame.new(at(angle, distance))
+				* CFrame.Angles(0, -angle + math.pi / 2 + rng:NextNumber(-0.4, 0.4), 0),
+			Scale = 1 + ring * 0.3 + rng:NextNumber(0, 0.25),
+			Colors = { Dune = near:Lerp(far, ring / 2) },
+			Parent = arena,
+		})
+		dune.Name = "Dune"
+	end
+
+	-- Ruins, fallen columns and cacti on the desert floor round the mesa.
+	local placed = {}
+	local function scatter(prop: string, count: number, r0: number, r1: number, scale: { number })
 		local tries = 0
 		while count > 0 and tries < 80 do
 			tries += 1
 			local angle = rng:NextNumber(0, math.pi * 2)
-			local radius = rng:NextNumber(r0, r1)
-			local position = center + Vector3.new(math.cos(angle) * radius, y, math.sin(angle) * radius)
-			if clear(position, 11) then
+			local position = at(angle, rng:NextNumber(r0, r1))
+			local ok = (position - at(OASIS_ANGLE, 140)).Magnitude > 45
+				and math.abs(math.cos(angle - TEMPLE_ANGLE)) < 0.9
+				and math.abs(math.cos(angle - SPHINX_ANGLE)) < 0.94
+			for _, other in placed do
+				if (other - position).Magnitude < 16 then
+					ok = false
+				end
+			end
+			if ok then
 				table.insert(placed, position)
 				MeshLibrary.Get(prop, {
 					CFrame = CFrame.new(position) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
@@ -410,10 +535,9 @@ function SinkingSands:_buildArena(kingCount: number)
 			end
 		end
 	end
-	scatter("SandRuin", 6, SandSwirl.RIM + 18, PLAZA - 8, 0, { 0.9, 1.3 })
-	scatter("Cactus", 9, SandSwirl.RIM + 14, PLAZA - 6, 0, { 0.7, 1.1 })
-	scatter("Cactus", 10, PLAZA + 25, 190, -MESA, { 1.2, 2 })
-	scatter("SandRuin", 5, PLAZA + 30, 170, -MESA, { 1.6, 2.6 })
+	scatter("SandColumnBroken", 4, 100, 170, { 1.2, 1.6 })
+	scatter("SandRuin", 4, 100, 180, { 1.6, 2.4 })
+	scatter("Cactus", 7, 100, 200, { 1.3, 2 })
 end
 
 function SinkingSands:_ambient(emitter: ParticleEmitter, parent: Instance)

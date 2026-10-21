@@ -926,7 +926,8 @@ def sand_sphinx():
     blue_stripes = split_faces(nemes, ~stripe)
     eyes = merge(*(solid(icosphere(0.26, 2), True).scale(1.0, 1.25, 0.55).translate(s * 0.58, 5.55, -3.72) for s in (-1, 1)))
     nose = solid(icosphere(0.17, 1), True).scale(1.3, 0.8, 0.8).translate(0, 5.0, -4.08)
-    collar = solid(torus(1.55, 0.2, 40, 8), True).rotate("x", 70).translate(0, 3.5, -2.0)
+    collar_ring = lathe([(1.2, 0.4), (1.25, 0.55), (2.1, -0.15), (2.05, -0.35), (1.2, 0.4)], 48)
+    collar = solid(collar_ring, True).rotate("x", -28).translate(0, 3.75, -2.15)
     gem = solid(icosphere(0.32, 1)).translate(0, 3.1, -3.55)
     plinth = merge(box(7.2, 0.5, 13.6, y=-0.25, bevel=0.1), box(7.8, 0.3, 14.2, y=-0.6, bevel=0.08))
     for piece in (body, gold_stripes, blue_stripes, eyes, nose, collar, gem, plinth):
@@ -955,7 +956,7 @@ def sand_pyramid():
 def sand_dune():
     """A big crescent dune (200 x 110, 26 tall): a gentle windward back (+Z), a steep lee face and a
     sharp curved crest. Its edges sink just below the desert floor."""
-    nx, nz = 56, 34
+    nx, nz = 64, 52
     xs = np.linspace(-1, 1, nx)
     zs = np.linspace(-1, 1, nz)
     verts = []
@@ -963,7 +964,7 @@ def sand_dune():
         for x in xs:
             crest = 0.28 * math.sin(1.6 * x) - 0.18 * x * x
             d = z - crest
-            prof = math.exp(-(d / 0.62) ** 2) if d > 0 else math.exp(-(d / 0.28) ** 2)
+            prof = math.exp(-(d / 0.62) ** 2) if d > 0 else math.exp(-(d / 0.34) ** 2)
             spread = math.exp(-(x / 0.78) ** 4)
             y = 26.0 * prof * spread - 0.8
             verts.append((x * 100, y, z * 55))
