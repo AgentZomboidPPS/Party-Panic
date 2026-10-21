@@ -659,9 +659,19 @@ function __runLobby(botCount, intermission, voteTime)
 	local okLobby, refs = pcall(LobbyBuilder.Build)
 	summary.lobby = if okLobby then "ok" else tostring(refs)
 	if okLobby then
-		for index, pad in refs.VotePads do
-			VotingService.BindPad(pad, index)
+		-- The vote stage: one portal (with its preview screen) per vote card, and no vote pads.
+		local stage = refs.Root:FindFirstChild("VoteStage")
+		local portals, padCount = {}, 0
+		for _, item in (if stage then stage:GetDescendants() else {}) do
+			if item:IsA("BasePart") and item:HasTag("PortalScreen") then
+				table.insert(portals, item:GetAttribute("VoteIndex"))
+			elseif item:IsA("BasePart") and string.find(item.Name, "VotePad", 1, true) then
+				padCount += 1
+			end
 		end
+		table.sort(portals)
+		summary.portalScreens = portals
+		summary.votePads = padCount
 	end
 	BotService.Setup()
 	local bots = {}
@@ -698,6 +708,7 @@ function __runLobby(botCount, intermission, voteTime)
 		{ Id = "FireRope", Mystery = false },
 		{ Id = "HexMeltdown", Mystery = false },
 		{ Id = "HoneyTrap", Mystery = false },
+		{ Id = "PumpAndPop", Mystery = true },
 	})
 	summary.botVoteRefused = not VotingService.Cast(bots[1], 1)
 	task.wait(voteTime)

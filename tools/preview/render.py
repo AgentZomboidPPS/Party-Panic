@@ -2,6 +2,7 @@
 lobby can be checked visually without opening Roblox.
 
     python render.py dump.json out_prefix [--views spawn,overview,...] [--samples 32] [--width 1280]
+                     [--height 720] [--cameras cams.json] [--dummies dummies.json]
 
 Coordinates: Roblox is Y-up, Blender is Z-up. A Roblox point (x, y, z) maps to Blender (x, -z, y).
 Parts are redrawn from their primitive shapes (unions from the PP_Pieces attribute that
@@ -496,6 +497,7 @@ def main():
     parser.add_argument("--views", default="spawn,overview")
     parser.add_argument("--samples", type=int, default=24)
     parser.add_argument("--width", type=int, default=1280)
+    parser.add_argument("--height", type=int, help="image height (default: 16:9 to the width)")
     parser.add_argument("--cameras", help="json file with extra named cameras {name: [eye, target, fov]}")
     parser.add_argument("--dummies", help="json list of [x, y, z, yaw] avatar positions")
     args = parser.parse_args(argv)
@@ -531,8 +533,10 @@ def main():
     scene = bpy.context.scene
     scene.cycles.samples = args.samples
     scene.render.resolution_x = args.width
-    scene.render.resolution_y = int(args.width * 9 / 16)
+    scene.render.resolution_y = args.height or int(args.width * 9 / 16)
     scene.render.image_settings.file_format = "PNG"
+    # Many views of one scene (a preview's frames): keep the scene loaded between them.
+    scene.render.use_persistent_data = True
     for name in args.views.split(","):
         eye, target, fov = views[name]
         scene.camera = camera(name, eye, target, fov)
