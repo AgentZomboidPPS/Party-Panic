@@ -304,7 +304,7 @@ local function phase(name, seconds, extra)
 	local definition = GameDefinitions.Get(GameState.Get("GameId") or "")
 	GameState.Set("Message", MESSAGES[name] or (definition and definition.Name) or "")
 	GameState.Set("Phase", name)
-	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + seconds)
+	GameState.Set("PhaseEndsAt", if seconds > 0 then workspace:GetServerTimeNow() + seconds else 0) -- 0: no timer, like RoundManager
 	task.wait(1.2)
 	__ui[name] = __dumpGui(__playerGui, name)
 end
