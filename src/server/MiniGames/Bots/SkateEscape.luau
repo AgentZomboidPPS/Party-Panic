@@ -41,7 +41,7 @@ function Brain.Step(bot, ctx, mode, _dt)
 	if SkateCourse.IsWiped(racer, now) then
 		memory.NextPush = (racer.Wipe or now) + bot:Reaction() * 0.6
 	else
-		local rate = 2.8 + 3.6 * skill
+		local rate = 2.5 + 3.5 * skill
 		while memory.NextPush < now + STEP do
 			ctx:Delay(math.max(0, memory.NextPush - now), function()
 				ctx:BotAction(bot, "Push")

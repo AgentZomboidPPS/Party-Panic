@@ -74,7 +74,7 @@ end
 function SkateEscape:_deckPiece(index: number, d0: number, d1: number): Model
 	local ctx = self.context
 	local origin = self.origin
-	local model = Build.Model(`Seg{index}`, ctx.Arena)
+	local model = Build.Model(`Seg{index}`) -- parented once its distances are set (clients read them)
 	model:SetAttribute("D0", d0)
 	model:SetAttribute("D1", d1)
 	local length = d1 - d0
@@ -105,6 +105,7 @@ function SkateEscape:_deckPiece(index: number, d0: number, d1: number): Model
 		end
 	end
 	model.PrimaryPart = deck.PrimaryPart
+	model.Parent = ctx.Arena
 	return model
 end
 
@@ -247,7 +248,7 @@ function SkateEscape:_buildArena()
 	end
 
 	-- The start pad (it crumbles first), with the start gate and lane numbers.
-	local start = Build.Model("Seg0", arena)
+	local start = Build.Model("Seg0")
 	start:SetAttribute("D0", -START_BACK)
 	start:SetAttribute("D1", 0)
 	local pad = Shapes.Slab(Vector3.new(DECK_WIDTH + 24, 5, START_BACK), 2, {
@@ -258,6 +259,7 @@ function SkateEscape:_buildArena()
 		Parent = start,
 	})
 	start.PrimaryPart = pad
+	start.Parent = arena
 	MeshLibrary.Get("SkateArch", {
 		CFrame = CFrame.new(origin + Vector3.new(0, 0, 5)),
 		Colors = { Dark = rgb(40, 170, 90), Pennant = rgb(80, 220, 120) },

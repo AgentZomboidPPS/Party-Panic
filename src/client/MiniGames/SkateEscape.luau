@@ -492,15 +492,17 @@ function SkateEscape.Start(api)
 	-- The crumbling bridge ------------------------------------------------------------------------------
 
 	local pieces = {}
+	local added: { [Instance]: boolean } = {}
 	local arena = api:Arena()
 	local function addPiece(child: Instance)
 		if not child:IsA("Model") or not string.match(child.Name, "^Seg%d+$") then
 			return
 		end
 		local d0, d1 = child:GetAttribute("D0"), child:GetAttribute("D1")
-		if type(d0) ~= "number" or type(d1) ~= "number" then
+		if type(d0) ~= "number" or type(d1) ~= "number" or added[child] then
 			return
 		end
+		added[child] = true
 		local planks = nil
 		for _, part in child:GetDescendants() do
 			if part.Name == "Planks" or part.Name == "StartPad" then
