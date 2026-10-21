@@ -138,6 +138,19 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "CrazyCutters",
+		Name = "Crazy Cutters",
+		Category = "Reaction",
+		Icon = "🍪",
+		Color = Color3.fromRGB(240, 170, 90),
+		Objective = "Cut 3 cookies by tracing the dotted line. Most accurate cutter wins!",
+		Controls = "Drag your finger or hold the mouse to steer the cutter. Keys / stick work too.",
+		Duration = 80,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
