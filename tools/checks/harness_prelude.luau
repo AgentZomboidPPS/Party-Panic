@@ -677,8 +677,15 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		while not ctx.EndReason do
 			local now = os.clock()
 			if now - begin >= limit then
-				ctx:End(if now - begin >= definition.Duration then "TimeUp" else "HarnessStop")
-				break
+				local reason = if now - begin >= definition.Duration then "TimeUp" else "HarnessStop"
+				if ctx.TimeRanOut then
+					ctx:TimeRanOut(reason) -- as RoundManager: a moment for anything in flight (HoldEnd)
+				else
+					ctx:End(reason)
+				end
+				if ctx.EndReason then
+					break
+				end
 			end
 			if watch and watch.outAt and clientMode and not watcher and not summary.clientOutAt then
 				if now - begin >= watch.outAt then
@@ -725,6 +732,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 			task.wait(0.05)
 		end
 		summary.endReason = ctx.EndReason
+		if ctx.TimeUpAt then
+			summary.endHeld = __round(ctx:Now() - ctx.TimeUpAt) -- seconds the end waited at time-up
+		end
 		summary.roundSeconds = __round(os.clock() - begin)
 		local okStop, stopErr = pcall(miniGame.Stop, miniGame, ctx.EndReason)
 		summary.stop = if okStop then "ok" else tostring(stopErr)
