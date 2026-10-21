@@ -13,6 +13,7 @@ local Config = require(Shared.Config)
 local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
+local Teams = require(Shared.Teams)
 
 local State = require(script.Parent.Parent.State)
 local Modal = require(script.Parent.Parent.UI.Modal)
@@ -241,7 +242,22 @@ local function buildPhaseBanner(parent: Instance)
 			return
 		end
 		teams.Visible = true
-		teamsLabel.Text = `🔴 {scores.Red or 0}   —   {scores.Blue or 0} 🔵`
+		if scores.Red ~= nil or scores.Blue ~= nil then
+			teamsLabel.Text = `🔴 {scores.Red or 0}   —   {scores.Blue or 0} 🔵`
+			return
+		end
+		-- Versus roles ("Divers", "SandKings"...): each team's icon and score, in a stable order.
+		local names = {}
+		for name in scores do
+			table.insert(names, name)
+		end
+		table.sort(names)
+		local parts = {}
+		for index, name in names do
+			local icon = Teams.Icons[name] or "•"
+			table.insert(parts, if index == 1 then `{icon} {scores[name]}` else `{scores[name]} {icon}`)
+		end
+		teamsLabel.Text = table.concat(parts, "   —   ")
 	end
 	GameState.Changed("TeamScores", refreshTeams)
 	refreshTeams()

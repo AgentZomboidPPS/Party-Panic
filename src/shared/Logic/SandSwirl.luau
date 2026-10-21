@@ -38,6 +38,7 @@ SandSwirl.DRAIN = { 1.3, 2.2 }
 -- What the Sand Kings' powers do.
 SandSwirl.FLIP_TIME = 0.5 -- the spin passes through zero over this long when it reverses
 SandSwirl.SURGE = 7 -- extra spin of a SWIRL at its peak
+SandSwirl.SURGE_CAP = 1.5 -- overlapping SWIRLs never spin faster than this many surges
 SandSwirl.PULL = 5 -- extra drain of a PULL at its peak
 SandSwirl.PULL_CAP = 8 -- overlapping PULLs never drain faster than this extra
 
@@ -121,9 +122,11 @@ end
 function SandSwirl.Sample(effects: Effects, t: number): (number, number)
 	local progress = math.clamp((t - effects.Start) / math.max(1, effects.Length), 0, 1)
 	local spin = lerp(SandSwirl.SPIN[1], SandSwirl.SPIN[2], progress)
+	local surge = 0
 	for _, start in effects.Surges do
-		spin += SandSwirl.SURGE * SandSwirl.SurgeEnvelope(t - start)
+		surge += SandSwirl.SurgeEnvelope(t - start)
 	end
+	spin += SandSwirl.SURGE * math.min(surge, SandSwirl.SURGE_CAP)
 	local pull = 0
 	for _, start in effects.Pulls do
 		pull += SandSwirl.PULL * SandSwirl.PullEnvelope(t - start)

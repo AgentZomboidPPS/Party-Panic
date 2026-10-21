@@ -160,6 +160,19 @@ def surface_lathe(profile, segments, desired, noise=None):
     return oriented(mesh, desired)
 
 
+def anchors(mesh, radius, y):
+    """Adds four tiny triangles at +-radius on X and Z (hidden under the ground) so the piece's bounding
+    box is centered on the funnel's axis: Roblox places a MeshPart by its bounding box, and the game
+    turns the swirl rings about that axis."""
+    extra = []
+    for x, z in ((radius, 0.0), (-radius, 0.0), (0.0, radius), (0.0, -radius)):
+        extra.append(Mesh([(x, y, z), (x + 0.04, y, z), (x, y, z + 0.04)], [(0, 2, 1)]))
+    smooth = mesh.smooth
+    out = merge(mesh, *extra)
+    out.smooth = smooth
+    return out
+
+
 # ---------------------------------------------------------------- the pit
 
 def sand_pit():
@@ -236,6 +249,7 @@ def sand_pit():
         band = oriented(band, lambda c, mid=mid: np.stack([c[:, 0], (c[:, 1] - mid) * 40.0, c[:, 2]], 1))
         band.smooth = False
         bands.append(band)
+    cliff = anchors(cliff, PLAZA + 22.0, -0.3)
     return {"Sand": sand, "Lip": lip_mesh, "Throat": throat_mesh, "Cliff": cliff, "Strata": merge(*bands)}
 
 
@@ -318,7 +332,10 @@ def sand_swirl():
     whirl.v[:, 1] = np.maximum(whirl.v[:, 1], WHIRL_BOTTOM)
     pieces["Whirl"] = oriented(whirl, lambda c: np.stack([-c[:, 0], np.zeros(len(c)), -c[:, 2]], 1))
 
-    # Put the lowest point (the whirl's foot, exactly WHIRL_BOTTOM below the rim) on y = 0.
+    # Center every piece on the axis, then put the lowest point (the whirl's foot, exactly
+    # WHIRL_BOTTOM below the rim) on y = 0.
+    for name in pieces:
+        pieces[name] = anchors(pieces[name], RIM + 0.5, -1.0)
     for mesh in pieces.values():
         mesh.v[:, 1] -= WHIRL_BOTTOM
     return pieces
