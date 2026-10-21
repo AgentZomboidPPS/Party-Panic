@@ -1,0 +1,17 @@
+newmtl Sand
+Kd 0.933 0.769 0.478
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Jungle
+Kd 0.235 0.588 0.294
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rock
+Kd 0.275 0.204 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

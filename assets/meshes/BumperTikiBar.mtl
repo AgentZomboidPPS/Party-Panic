@@ -1,0 +1,29 @@
+newmtl Wood
+Kd 0.706 0.471 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bamboo
+Kd 0.843 0.745 0.431
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Thatch
+Kd 0.863 0.706 0.392
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bottles
+Kd 0.235 0.745 0.627
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cups
+Kd 1.000 0.745 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
