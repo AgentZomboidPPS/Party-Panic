@@ -32,7 +32,9 @@ task, _ = run(SCRIPT)
 results = (task.get("output") or {}).get("results") or []
 if not results:
     sys.exit(f"Couldn't read the reports: {json.dumps(task.get('error'))[:500]}")
-reports = json.loads(results[0])
+reports = json.loads(results[0]) or {}
+if isinstance(reports, list):  # an empty Luau table encodes as []
+    reports = {}
 if not reports:
     print("No reports yet (a player's device sends one ~15 s after joining, and one per round).")
 for key, entry in sorted(reports.items(), key=lambda item: -(item[1] or {}).get("Time", 0) if isinstance(item[1], dict) else 0):
