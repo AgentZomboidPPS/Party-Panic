@@ -119,7 +119,7 @@ return function(h)
 			end,
 		},
 		BushelBasket = {
-			Height = 3.6,
+			Height = 3.04,
 			AssetId = 136309655092045,
 			Collide = true,
 			Palette = {

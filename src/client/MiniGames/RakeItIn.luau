@@ -319,7 +319,7 @@ function RakeItIn.Start(api)
 		local grip = Instance.new("Part")
 		grip.Name = "RakeGrip"
 		grip.Shape = Enum.PartType.Cylinder
-		grip.Size = Vector3.new(1, 0.46, 0.46)
+		grip.Size = Vector3.new(1, 0.56, 0.56)
 		grip.Color = station.Color
 		settle(grip)
 		grip.Parent = api.World

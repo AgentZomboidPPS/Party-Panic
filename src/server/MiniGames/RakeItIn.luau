@@ -25,9 +25,9 @@ local RakeItIn = MiniGame.Define("RakeItIn", { Results = "Score" })
 -- from R_IN to R_OUT and is HALF wide on each side of its middle line.
 local BASE_Y = 0.9 -- the field mesh's base above the ground
 local SOIL_Y = 2.2 -- where produce sits, above the ground
-local R_IN = 9.4
+local R_IN = 9.4 -- (further out with many players, so neighbouring lanes never overlap)
 local R_OUT = 20.6
-local R_SPAWN_IN = 10.6
+local R_SPAWN_IN = 11.0
 local R_SPAWN_OUT = 18.6
 local HALF = 2.6 -- half a lane's width (the rake head is 4.3 wide; a little generous)
 local STAND = 23.4 -- where players stand, from the middle
@@ -112,7 +112,7 @@ function RakeItIn:InLane(station: Station, item: Item, t: number): boolean
 	local d = item.Th + self:AngleAt(t) - station.Angle
 	local along = item.R * math.cos(d)
 	local across = item.R * math.sin(d)
-	return math.abs(across) <= HALF and along >= R_IN and along <= R_OUT
+	return math.abs(across) <= HALF and along >= self.rIn and along <= R_OUT
 end
 
 -- What raking a station's lane at time t would take: the items, their total value, and whether a
@@ -209,6 +209,8 @@ function RakeItIn:Prepare()
 		players[index], players[other] = players[other], players[index]
 	end
 	local count = #players
+	self.rIn = if count >= 3 then math.max(R_IN, (HALF + 0.15) / math.sin(math.pi / count)) else R_IN
+	local rIn = self.rIn
 	local spawnAt = {}
 	local layout = {}
 	for index, player in players do
@@ -216,7 +218,7 @@ function RakeItIn:Prepare()
 		local out = Vector3.new(math.cos(angle), 0, math.sin(angle))
 		local side = Vector3.new(-out.Z, 0, out.X) -- to the player's right when facing the middle
 		local stand = origin + out * STAND
-		local basket = origin + out * (STAND + 0.6) - side * 3.6
+		local basket = origin + out * (STAND + 1.4) - side * 3.1
 		local color = COLORS[(index - 1) % #COLORS + 1]
 		local station: Station = { Player = player, Index = index, Angle = angle, Stand = stand, Basket = basket }
 		self.stations[player] = station
@@ -239,18 +241,18 @@ function RakeItIn:Prepare()
 			local label = Build.Billboard(basketModel.PrimaryPart, "0", {
 				Name = "Score",
 				Size = UDim2.fromOffset(110, 56),
-				StudsOffset = Vector3.new(0, 3.6, 0),
+				StudsOffset = Vector3.new(0, 3.4, 0),
 				MaxDistance = 140,
 				TextColor3 = color,
 			})
 			self.labels[player] = label
 		end
 		-- The lane on the field in front of the stand: a tinted strip with white edges.
-		local mid = origin + out * ((R_IN + R_OUT) / 2) + Vector3.new(0, SOIL_Y + 0.28, 0)
+		local mid = origin + out * ((rIn + R_OUT) / 2) + Vector3.new(0, SOIL_Y + 0.28, 0)
 		local laneFrame = CFrame.lookAt(mid, mid + out)
 		Build.Decor({
 			Name = "Lane_" .. player.UserId,
-			Size = Vector3.new(HALF * 2 - 0.22, 0.06, R_OUT - R_IN),
+			Size = Vector3.new(HALF * 2 - 0.3, 0.06, R_OUT - rIn),
 			CFrame = laneFrame,
 			Color = color,
 			Material = Enum.Material.SmoothPlastic,
@@ -261,7 +263,7 @@ function RakeItIn:Prepare()
 		for _, edge in { -1, 1 } do
 			Build.Decor({
 				Name = "LaneEdge",
-				Size = Vector3.new(0.22, 0.08, R_OUT - R_IN),
+				Size = Vector3.new(0.22, 0.08, R_OUT - rIn),
 				CFrame = laneFrame * CFrame.new(edge * HALF, 0.01, 0),
 				Color = Color3.new(1, 1, 1),
 				Material = Enum.Material.SmoothPlastic,
@@ -307,7 +309,7 @@ function RakeItIn:Prepare()
 		BaseY = BASE_Y,
 		SoilY = SOIL_Y,
 		VentY = VENT_Y,
-		RIn = R_IN,
+		RIn = self.rIn,
 		ROut = R_OUT,
 		Half = HALF,
 		Flight = FLIGHT,
