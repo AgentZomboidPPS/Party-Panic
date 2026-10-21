@@ -55,6 +55,7 @@ CakeFactory.Shapes = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" 
 
 local LINE_GAP = 64 -- between neighboring lines' middles
 local STAND_Z = -6.4 -- where players stand, in front of their belt
+local SIDESTEP = 3.6 -- ...and this far upstream of their machine
 local REACH = 12 -- how far from their spot a player may be and still press
 local FLOOR_Y = 0
 
@@ -175,7 +176,7 @@ function CakeFactory:StationsOf(player: Player): (Line?, { number })
 end
 
 -- Hands out a line's stations round-robin to its members and puts each member at their spot:
--- in front of their machine, or between their machines when they run more than one.
+-- by their machine, or between their machines when they run more than one.
 function CakeFactory:_assign(line: Line)
 	local members = line.Members
 	for index, station in line.Stations do
@@ -190,7 +191,9 @@ function CakeFactory:_assign(line: Line)
 				count += 1
 			end
 		end
-		table.insert(spots, if count > 0 then sum / count else 22)
+		-- A little upstream of the machine, so the player's own character never hides the cake
+		-- under it (the camera sits behind them).
+		table.insert(spots, (if count > 0 then sum / count else 22) - SIDESTEP)
 	end
 	-- Two members standing at the same place shuffle apart.
 	for a = 1, #spots do
@@ -446,8 +449,8 @@ function CakeFactory:_buildHall(origin: Vector3, lineCount: number)
 	end
 	Build.Part({
 		Name = "WallBase",
-		Size = Vector3.new(floorWidth + 2, 2.4, 3),
-		CFrame = CFrame.new(floorCenter.X, origin.Y + 1.2, wallZ - 0.3),
+		Size = Vector3.new(floorWidth + 2, 2.4, 3.6),
+		CFrame = CFrame.new(floorCenter.X, origin.Y + 1.25, wallZ - 0.3),
 		Color = rgb(255, 120, 150),
 		Material = Enum.Material.SmoothPlastic,
 		Parent = ctx.Arena,
@@ -558,14 +561,14 @@ function CakeFactory:_buildLine(line: Line)
 	Build.Decor({
 		Name = "Mat",
 		Size = Vector3.new(CakeFactory.BELT_LENGTH + 10, 0.2, 7),
-		CFrame = CFrame.new(self:World(line, CakeFactory.BELT_LENGTH / 2, FLOOR_Y + 0.1, STAND_Z)),
+		CFrame = CFrame.new(self:World(line, CakeFactory.BELT_LENGTH / 2, FLOOR_Y + 0.13, STAND_Z)),
 		Color = color:Lerp(Color3.new(1, 1, 1), 0.5),
 		Parent = folder,
 	})
 	Build.Decor({
 		Name = "MatEdge",
-		Size = Vector3.new(CakeFactory.BELT_LENGTH + 10.6, 0.1, 7.6),
-		CFrame = CFrame.new(self:World(line, CakeFactory.BELT_LENGTH / 2, FLOOR_Y + 0.05, STAND_Z)),
+		Size = Vector3.new(CakeFactory.BELT_LENGTH + 10.6, 0.11, 7.6),
+		CFrame = CFrame.new(self:World(line, CakeFactory.BELT_LENGTH / 2, FLOOR_Y + 0.065, STAND_Z)),
 		Color = color,
 		Parent = folder,
 	})
@@ -595,7 +598,7 @@ function CakeFactory:_buildLine(line: Line)
 			for _, side in { -1, 1 } do
 				Build.Decor({
 					Name = `Gate_{index}`,
-					Size = Vector3.new(0.3, 1.1, 0.3),
+					Size = Vector3.new(0.34, 1.1, 0.56),
 					CFrame = CFrame.new(
 						self:World(
 							line,
