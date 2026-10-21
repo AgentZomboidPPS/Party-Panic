@@ -1,0 +1,23 @@
+newmtl Barrel
+Kd 0.627 0.412 0.243
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Hoops
+Kd 0.314 0.314 0.361
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Shafts
+Kd 0.824 0.651 0.439
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Feathers
+Kd 1.000 0.431 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

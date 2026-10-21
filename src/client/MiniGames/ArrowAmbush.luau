@@ -539,9 +539,10 @@ function ArrowAmbush.Start(api)
 		local camera = workspace.CurrentCamera
 		local savedType, savedFov = camera.CameraType, camera.FieldOfView
 		camera.CameraType = Enum.CameraType.Scriptable
-		camera.FieldOfView = 55
-		local eye = tower + Vector3.new(0, 16, -18)
-		local focus = Vector3.new(origin.X, floorY, origin.Z + 5)
+		camera.FieldOfView = 52
+		-- High over the front of the tower, so the whole courtyard shows over the parapet.
+		local eye = tower + Vector3.new(0, 22, 4)
+		local focus = Vector3.new(origin.X, floorY, origin.Z + 2)
 		camera.CFrame = CFrame.lookAt(eye, focus)
 		api:Track(function()
 			camera.CameraType = savedType

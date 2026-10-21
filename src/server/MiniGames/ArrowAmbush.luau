@@ -263,6 +263,55 @@ function ArrowAmbush:_buildArena()
 		end
 	end
 
+	-- Bunting from post to post along the side and back walls, held up by a pole halfway.
+	local hang = WALL + 2.6
+	local function bunting(a: Vector3, b: Vector3)
+		local scale = (b - a).Magnitude / 20
+		local mid = (a + b) / 2
+		MeshLibrary.Get("Bunting", {
+			Scale = scale,
+			CFrame = CFrame.lookAt(mid, mid + (b - a).Unit:Cross(Vector3.yAxis))
+				+ Vector3.new(0, hang - 2.23 * scale, 0),
+			Parent = ctx.Arena,
+		})
+	end
+	local runs = {
+		{ Vector3.new(-wx, 0, z0), Vector3.new(-wx, 0, z1) },
+		{ Vector3.new(wx, 0, z0), Vector3.new(wx, 0, z1) },
+		{ Vector3.new(-wx, 0, z1), Vector3.new(wx, 0, z1) },
+	}
+	for _, run in runs do
+		local a, b = origin + run[1], origin + run[2]
+		local mid = (a + b) / 2
+		Build.Part({
+			Name = "BuntingPole",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(hang + 0.4, 0.3, 0.3),
+			CFrame = CFrame.new(mid + Vector3.new(0, (hang + 0.4) / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = rgb(255, 205, 80),
+			Material = Enum.Material.Metal,
+			Parent = ctx.Arena,
+		})
+		bunting(a, mid)
+		bunting(mid, b)
+	end
+
+	-- Hay bales outside the walls and barrels of arrows at the tower's foot.
+	local bales =
+		{ { -wx - 4, z1 + 2.5, 20 }, { wx + 4.5, z1 + 1.5, -15 }, { -wx - 3.5, z0 + 6, 80 }, { wx + 3.5, z0 + 9, 100 } }
+	for _, spot in bales do
+		MeshLibrary.Get("HayBale", {
+			CFrame = CFrame.new(origin + Vector3.new(spot[1], 0, spot[2])) * CFrame.Angles(0, math.rad(spot[3]), 0),
+			Parent = ctx.Arena,
+		})
+	end
+	for _, x in { -6.2, 6.2 } do
+		MeshLibrary.Get("ArrowBarrel", {
+			CFrame = CFrame.new(origin + Vector3.new(x, 0, TOWER_Z + 5.4)) * CFrame.Angles(0, x, 0),
+			Parent = ctx.Arena,
+		})
+	end
+
 	-- The archers' tower behind the north wall, with a solid core to stand on.
 	MeshLibrary.Get("ArcherTower", {
 		CFrame = CFrame.new(origin + Vector3.new(0, 0, TOWER_Z)) * CFrame.Angles(0, math.pi, 0),

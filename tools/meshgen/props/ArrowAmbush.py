@@ -244,11 +244,78 @@ def ambush_arrow():
     return mesh
 
 
+# ---------------------------------------------------------------------------- courtyard dressing
+
+def hay_bale():
+    """A straw bale with two twine bands and loose straws poking out."""
+    rnd = random.Random(3)
+    bale = rounded_box(4.0, 2.4, 2.6, 0.45, 6).translate(0, 1.2, 0)
+    bale.v += np.array([[rnd.uniform(-0.04, 0.04) for _ in range(3)] for _ in range(len(bale.v))])
+    bands = [rounded_box(0.22, 2.52, 2.72, 0.5, 4).translate(x, 1.2, 0) for x in (-1.1, 1.1)]
+    straws = []
+    for _ in range(40):
+        x, y = rnd.uniform(-1.8, 1.8), rnd.uniform(0.4, 2.2)
+        side = rnd.choice((-1, 1))
+        z0 = side * 1.22
+        tip = (x + rnd.uniform(-0.3, 0.3), y + rnd.uniform(-0.2, 0.3), z0 + side * rnd.uniform(0.2, 0.5))
+        straws.append(tube([(x, y, z0), tip], 0.03, 4))
+    return {"Straw": merge(bale, *straws), "Twine": merge(*bands)}
+
+
+def arrow_barrel():
+    """A wooden barrel full of arrows."""
+    rnd = random.Random(5)
+    profile = [(0.0, 0.0), (1.05, 0.0)] + [(1.05 + 0.22 * math.sin(math.pi * t), 2.6 * t) for t in np.linspace(0, 1, 12)] + [(1.0, 2.6), (0.9, 2.45), (0.0, 2.45)]
+    barrel = lathe(profile, 32)
+    hoops = [torus(1.05 + 0.22 * math.sin(math.pi * t) + 0.03, 0.06, 32, 6).translate(0, 2.6 * t, 0) for t in (0.12, 0.3, 0.7, 0.88)]
+    shafts, heads, feathers = [], [], []
+    for _ in range(9):
+        a, r = rnd.uniform(0, 2 * math.pi), rnd.uniform(0.0, 0.7)
+        base = np.array([math.cos(a) * r, 1.4, math.sin(a) * r])
+        lean = np.array([math.cos(a) * 0.25 + rnd.uniform(-0.1, 0.1), 1.0, math.sin(a) * 0.25 + rnd.uniform(-0.1, 0.1)])
+        lean /= np.linalg.norm(lean)
+        top = base + lean * rnd.uniform(2.3, 2.8)
+        shafts.append(tube([tuple(base), tuple(top)], 0.05, 6))
+        side = np.cross(lean, np.array([0.0, 0.0, 1.0]))
+        side /= np.linalg.norm(side) + 1e-9
+        for k in (-1, 1):
+            p0 = top - lean * 0.75
+            vane = [tuple(top - lean * 0.05), tuple(p0 + side * k * 0.22), tuple(p0 - lean * 0.15)]
+            feathers.append(Mesh(vane, [(0, 1, 2), (0, 2, 1)]))
+    return {"Barrel": barrel, "Hoops": merge(*hoops), "Shafts": merge(*shafts), "Feathers": merge(*feathers)}
+
+
+def bunting():
+    """A sagging rope 20 studs long (along X, ends at the top) with pennants in three colors."""
+    span, sag = 20.0, 1.0
+    def rope_y(x):
+        return 2.4 - sag * (1 - (2 * x / span) ** 2)
+    rope = tube([(x, rope_y(x), 0.0) for x in np.linspace(-span / 2, span / 2, 33)], 0.05, 6)
+    pennants = {"PennantA": [], "PennantB": [], "PennantC": []}
+    keys = list(pennants)
+    count = 9
+    for i in range(count):
+        x = -span / 2 + span * (i + 1) / (count + 1)
+        y = rope_y(x)
+        tri = extrude([(-0.55, 0.0), (0.55, 0.0), (0.0, -1.2)], 0.04).translate(x, y - 0.03, 0)
+        pennants[keys[i % 3]].append(tri)
+    pieces = {"Rope": rope}
+    for key, meshes in pennants.items():
+        pieces[key] = merge(*meshes)
+    lowest = min(float(m.v[:, 1].min()) for m in pieces.values())
+    for m in pieces.values():
+        m.translate(0, -lowest, 0)
+    return pieces
+
+
 PROPS = {
     "ArcherTower": archer_tower,
     "TargetBoard": target_board,
     "AmbushBow": ambush_bow,
     "AmbushArrow": ambush_arrow,
+    "HayBale": hay_bale,
+    "ArrowBarrel": arrow_barrel,
+    "Bunting": bunting,
 }
 COLORS = {
     "Mortar": (150, 140, 132),
@@ -274,4 +341,14 @@ COLORS = {
     "Head": (170, 180, 195),
     "Fletching": (255, 110, 60),
     "Nock": (255, 205, 80),
+    "Straw": (232, 200, 110),
+    "Twine": (150, 100, 60),
+    "Barrel": (160, 105, 62),
+    "Hoops": (80, 80, 92),
+    "Shafts": (210, 166, 112),
+    "Feathers": (255, 110, 60),
+    "Rope": (240, 235, 220),
+    "PennantA": (255, 90, 80),
+    "PennantB": (255, 205, 60),
+    "PennantC": (80, 170, 255),
 }

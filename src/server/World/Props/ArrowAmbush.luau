@@ -16,7 +16,7 @@ return function(h)
 	return {
 		ArcherTower = {
 			Height = 25.62,
-			AssetId = 0, -- tools/upload_assets.py --only ArcherTower fills this in
+			AssetId = 83900902103473, -- tools/upload_assets.py --only ArcherTower fills this in
 			Collide = false, -- the game puts a solid core under the deck
 			Palette = {
 				Mortar = h.rgb(150, 140, 132),
@@ -59,7 +59,7 @@ return function(h)
 		},
 		TargetBoard = {
 			Height = 7.79,
-			AssetId = 0,
+			AssetId = 107116054753075,
 			Collide = false, -- the client moves boards; arrows are blocked by the server's own check
 			Palette = {
 				Wood = h.rgb(196, 146, 96),
@@ -91,7 +91,7 @@ return function(h)
 		},
 		AmbushBow = {
 			Height = 4.84,
-			AssetId = 0,
+			AssetId = 94235542385657,
 			Palette = {
 				Limbs = h.rgb(156, 98, 56),
 				Grip = h.rgb(92, 52, 42),
@@ -107,7 +107,7 @@ return function(h)
 		},
 		AmbushArrow = {
 			Height = 0.63,
-			AssetId = 0,
+			AssetId = 87077821272468,
 			Shadow = false,
 			Palette = {
 				Shaft = h.rgb(210, 166, 112),
@@ -120,6 +120,53 @@ return function(h)
 				h.capsule(m, "Shaft", 3.8, 0.15, CFrame.new(0, 0.315, 0.2) * CFrame.Angles(0, math.rad(90), 0))
 				h.block(m, "Head", Vector3.new(0.36, 0.42, 0.7), Vector3.new(0, 0.315, -1.95))
 				h.block(m, "Fletching", Vector3.new(0.36, 0.63, 1), Vector3.new(0, 0.315, 1.45))
+			end,
+		},
+		HayBale = {
+			Height = 2.52,
+			AssetId = 87956010572806,
+			Palette = { Straw = h.rgb(234, 202, 112), Twine = h.rgb(150, 100, 60) },
+			Materials = { Straw = Enum.Material.Fabric },
+			Fallback = function(m)
+				h.rounded(m, "Straw", Vector3.new(4, 2.4, 2.6), 0.45, Vector3.new(0, 1.26, 0))
+			end,
+		},
+		ArrowBarrel = {
+			Height = 4.14,
+			AssetId = 71958171764252,
+			Palette = {
+				Barrel = h.rgb(160, 105, 62),
+				Hoops = h.rgb(80, 80, 92),
+				Shafts = h.rgb(210, 166, 112),
+				Feathers = h.rgb(255, 110, 60),
+			},
+			Materials = { Barrel = Enum.Material.Wood, Hoops = Enum.Material.Metal },
+			Fallback = function(m)
+				h.pillar(m, "Barrel", 2.5, 2.6, Vector3.new(0, 1.3, 0))
+				h.block(m, "Shafts", Vector3.new(0.12, 2.6, 0.12), Vector3.new(0, 2.84, 0))
+			end,
+		},
+		Bunting = {
+			Height = 2.28,
+			AssetId = 106651535892450,
+			Shadow = false,
+			Palette = {
+				Rope = h.rgb(240, 235, 220),
+				PennantA = h.rgb(255, 90, 80),
+				PennantB = h.rgb(255, 205, 60),
+				PennantC = h.rgb(80, 170, 255),
+			},
+			Materials = {
+				PennantA = Enum.Material.Fabric,
+				PennantB = Enum.Material.Fabric,
+				PennantC = Enum.Material.Fabric,
+			},
+			Fallback = function(m)
+				h.block(m, "Rope", Vector3.new(20, 0.1, 0.1), Vector3.new(0, 2.2, 0))
+				local names = { "PennantA", "PennantB", "PennantC" }
+				for k = 0, 8 do
+					h.block(m, names[k % 3 + 1], Vector3.new(0.9, 1, 0.04), Vector3.new(-8 + k * 2, 1.6, 0))
+				end
 			end,
 		},
 	}
