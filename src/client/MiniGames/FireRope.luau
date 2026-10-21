@@ -4,9 +4,10 @@
 --
 -- The look (art pass; owner: "I saw the lava rope one and that one kinda sucks"): a golden-hour sky
 -- over the Dragon Temple, fires in the braziers and tower bowls, steam where lava falls meet the
--- lake, and a rope that reads from anywhere: a white-hot core threaded through fireballs inside a
--- glow, licked by flames, going from gold to angry red as it speeds up. Particles stay off with
--- reduced effects.
+-- lake, and a rope that reads from anywhere: white-gold fireballs threaded on a white-hot core inside
+-- a deep-red rim (a bright line with a dark edge against both the orange lava and the cream deck),
+-- licked by flames; the heat shows in the rim and flames going angry red as it speeds up. Particles
+-- stay off with reduced effects.
 
 local Lighting = game:GetService("Lighting")
 
@@ -21,7 +22,8 @@ local COLD = Color3.fromRGB(255, 205, 60)
 local WARM = Color3.fromRGB(255, 120, 30)
 local HOT = Color3.fromRGB(255, 40, 30)
 local WHITE_HOT = Color3.fromRGB(255, 250, 215)
-local CLOCK_TIME = 16.9 -- golden hour: low warm sun, still bright enough on phones
+local EMBER = Color3.fromRGB(90, 10, 10) -- the rope's outline darkens towards this as it heats up
+local CLOCK_TIME = 15.6 -- warm afternoon: high enough sun for short shadows and a bright phone screen
 
 local FIRE_TEXTURE = "rbxasset://textures/particles/fire_main.dds"
 local SMOKE_TEXTURE = "rbxasset://textures/particles/smoke_main.dds"
@@ -149,8 +151,8 @@ function FireRope.Start(api)
 		Name = "Halo",
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(rope.Length - 1, 1.8, 1.8), -- top at 1.8 at the pass: a cleared jump looks cleared
-		Color = WARM, -- one step hotter than the fireballs: an orange-red outline against the cream deck
-		Transparency = 0.65,
+		Color = HOT, -- a red rim around the bright balls; darkens with heat (see below)
+		Transparency = 0.45,
 		CFrame = low,
 	})
 	halo.Parent = model
@@ -162,7 +164,7 @@ function FireRope.Start(api)
 			Name = "Fireball",
 			Shape = Enum.PartType.Ball,
 			Size = Vector3.one * (if index % 2 == 0 then 1.9 else 1.5), -- alternating, like a braid of flame
-			Color = COLD,
+			Color = WHITE_HOT:Lerp(COLD, 0.45),
 			CFrame = CFrame.new(axis + Vector3.new(x, -radius, 0)),
 		})
 		ball.Parent = model
@@ -223,12 +225,12 @@ function FireRope.Start(api)
 	light.Parent = balls[math.floor(#balls / 2)]
 	model.Parent = api.World
 
-	-- The rope's shadow on the bridge: where it will sweep, darker as it comes down. Above the
-	-- bridge's borders, so it shows the whole way across.
+	-- The rope's glow on the bridge: where it will sweep, stronger as it comes down. A heat glow, not a
+	-- dark stripe, so it can't be mistaken for a player's shadow. Well above the bridge's borders, so
+	-- it shows the whole way across.
 	local shadow = visualPart({
 		Name = "RopeShadow",
-		Material = Enum.Material.SmoothPlastic,
-		Color = Color3.fromRGB(50, 16, 12),
+		Color = Color3.fromRGB(255, 90, 30),
 		Size = Vector3.new(rope.Length - 14, 0.05, 1.4),
 	})
 	shadow.Parent = api.World
@@ -282,15 +284,16 @@ function FireRope.Start(api)
 		local z = radius * math.sin(theta)
 		local y = -radius * math.cos(theta)
 		local below = math.clamp(-y / radius, 0, 1) -- 1 at the bottom, 0 at axis height
-		shadow.CFrame = CFrame.new(rope.Axis[1], rope.FloorY + 0.17, rope.Axis[3] + z)
-		shadow.Transparency = 1 - below * 0.65
+		shadow.CFrame = CFrame.new(rope.Axis[1], rope.FloorY + 0.22, rope.Axis[3] + z)
+		shadow.Transparency = 1 - below * 0.55
 		if rope.Heat ~= lastHeat then
 			lastHeat = rope.Heat
 			local color = heatColor(rope.Heat)
-			for _, ball in balls do
-				ball.Color = color
+			-- The balls stay bright (white-gold, a little warmer on the small ones); the rim carries the heat.
+			for index, ball in balls do
+				ball.Color = WHITE_HOT:Lerp(color, if index % 2 == 1 then 0.45 else 0.7)
 			end
-			halo.Color = heatColor(math.min(1, rope.Heat + 0.5))
+			halo.Color = HOT:Lerp(EMBER, rope.Heat * 0.6)
 			core.Color = WHITE_HOT:Lerp(color, 0.25)
 			light.Color = color
 			if flames then

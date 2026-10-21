@@ -12,18 +12,19 @@ return function(h)
 	return {
 		-- Backdrop centerpiece; faces -Z (turn it to face the bridge).
 		DragonTemple = {
-			AssetId = 83617265330246,
-			Height = 85.6,
+			AssetId = 72888548645103,
+			Height = 97.5,
 			Shadow = false,
 			Palette = {
 				Stone = Stone,
 				Trim = Gold,
-				Dark = h.rgb(84, 56, 78),
+				Dark = h.rgb(58, 40, 54), -- the dragon and stair walls: darker than the lava-fall basalt, so the gold and lava pop
 				Glow = h.rgb(255, 176, 60),
 				Eyes = h.rgb(255, 246, 150),
 				Teeth = h.rgb(252, 244, 224),
 				Lava = Lava,
-				Cloth = h.rgb(220, 38, 62),
+				Crust = h.rgb(200, 64, 30),
+				Cloth = h.rgb(220, 38, 62), -- banners and the dragon's frills
 				Emblem = Gold,
 			},
 			Materials = {
@@ -33,16 +34,18 @@ return function(h)
 				Eyes = Neon,
 				Lava = Neon,
 				Cloth = Enum.Material.Fabric,
+				Crust = Enum.Material.Basalt,
 			},
 			Fallback = function(m)
 				h.block(m, "Stone", Vector3.new(100, 14, 70), Vector3.new(0, 7, 0))
 				h.block(m, "Stone", Vector3.new(82, 13, 56), Vector3.new(0, 20.5, 3))
 				h.block(m, "Stone", Vector3.new(64, 12, 44), Vector3.new(0, 33, 6))
 				h.block(m, "Stone", Vector3.new(46, 11, 32), Vector3.new(0, 44.5, 9))
-				h.blob(m, "Dark", Vector3.new(20, 22, 30), Vector3.new(0, 62, -2))
+				h.block(m, "Cloth", Vector3.new(44, 22, 1), Vector3.new(0, 72, 17)) -- frills
+				h.blob(m, "Dark", Vector3.new(28, 30, 40), Vector3.new(0, 72, -2))
 				h.block(m, "Lava", Vector3.new(7, 0.8, 40), Vector3.new(0, 26, -26))
-				for _, x in { -8, 8 } do -- horns
-					h.block(m, "Trim", Vector3.new(2.5, 13.6, 2.5), Vector3.new(x, 78.8, 10))
+				for _, x in { -12, 12 } do -- horns
+					h.block(m, "Trim", Vector3.new(2.5, 14, 2.5), Vector3.new(x, 90.5, 30))
 				end
 			end,
 		},
@@ -136,6 +139,22 @@ return function(h)
 				h.block(m, "Rock", Vector3.new(24, 40, 7), Vector3.new(0, 20, 2.5))
 				h.block(m, "Rock", Vector3.new(30, 53.1, 6), Vector3.new(0, 53.1 / 2, 13))
 				h.block(m, "Lava", Vector3.new(9, 40, 1), Vector3.new(0, 21, -5))
+			end,
+		},
+		-- A stretch of the crater's basalt wall with a lava trickle, curving to fit a 172-stud circle;
+		-- faces -Z.
+		CraterWall = {
+			AssetId = 86197193526885,
+			Height = 59.2,
+			Shadow = false,
+			Palette = { Rock = h.rgb(74, 54, 66), Lava = Lava, Crust = h.rgb(200, 64, 30) },
+			Materials = { Rock = Enum.Material.Basalt, Lava = Neon, Crust = Enum.Material.Basalt },
+			Fallback = function(m)
+				-- (bottoms at different depths, so they never share a plane)
+				h.block(m, "Rock", Vector3.new(92, 52, 8), Vector3.new(0, 26, 7))
+				h.block(m, "Rock", Vector3.new(80, 59.6, 4), Vector3.new(0, 29.4, 10))
+				h.block(m, "Rock", Vector3.new(84, 34.8, 7), Vector3.new(0, 16.6, 0))
+				h.block(m, "Rock", Vector3.new(70, 15.2, 6), Vector3.new(0, 6.4, -6))
 			end,
 		},
 		-- Arches, piers and the rune fascia under the bridge deck (the deck is the arena's own part).

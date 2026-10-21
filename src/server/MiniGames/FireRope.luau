@@ -29,9 +29,10 @@ local CLEAR_WINDOW = 0.07 -- a jumper must be that high from this long before th
 local FIRST_PERIOD = 3.0
 local FASTEST_PERIOD = 1.05 -- a Roblox jump is ~0.5s in the air; this leaves time to land and go again
 local LAVA_DROP = 24
-local TEMPLE_DISTANCE = 175 -- how far ahead of the bridge the Dragon Temple stands
-local TEMPLE_SCALE = 1.35
-local TEMPLE_SINK = 10 -- (unscaled) how deep the temple's bottom tier sits in the lava: keeps the dragon head below the HUD
+local TEMPLE_DISTANCE = 150 -- how far ahead of the bridge the Dragon Temple stands
+local TEMPLE_SCALE = 1.1 -- with the distance, puts the dragon's frills just under the round banner on screen
+local TEMPLE_SINK = 10 -- (unscaled) how deep the temple's bottom tier sits in the lava; its splash mound is made for this
+local CRATER_RADIUS = 172 -- the crater wall around the lake
 
 local rng = Random.new()
 
@@ -42,8 +43,9 @@ local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
 end
 
--- An invisible marker the client lights a fire on (size in the "Flame" attribute), with a glow.
-local function flameSpot(ctx, position: Vector3, size: number)
+-- An invisible marker the client lights a fire on (size in the "Flame" attribute), with a glow
+-- unless `light` is false (phones get few lights).
+local function flameSpot(ctx, position: Vector3, size: number, light: boolean?)
 	local spot = Build.Decor({
 		Name = "FlameSpot",
 		Size = Vector3.one,
@@ -52,7 +54,9 @@ local function flameSpot(ctx, position: Vector3, size: number)
 		Parent = ctx.Arena,
 	})
 	spot:SetAttribute("Flame", size)
-	Build.Light(spot, rgb(255, 150, 60), size * 3.4, 2)
+	if light ~= false then
+		Build.Light(spot, rgb(255, 150, 60), size * 3.4, 2)
+	end
 end
 
 -- An invisible marker the client puffs steam from, where lava falls into the lake.
@@ -67,12 +71,26 @@ local function steamSpot(ctx, position: Vector3, size: number)
 	spot:SetAttribute("Steam", size)
 end
 
--- Rock spires around the lake (like Scenery.RockRim), leaving the view to the temple (-Z) open.
-local function rockRim(ctx, center: Vector3, radius: number, count: number)
+-- How far apart two angles are (radians, 0..pi).
+local function angleBetween(a: number, b: number): number
+	return math.abs((a - b + math.pi) % (2 * math.pi) - math.pi)
+end
+
+-- Rock spires around the lake (like Scenery.RockRim), leaving the view to the temple (-Z) open and
+-- the lava-fall cliffs (at `keepClear` angles) unblocked.
+local function rockRim(ctx, center: Vector3, radius: number, count: number, keepClear: { number })
 	for index = 0, count - 1 do
 		local angle = (index + rng:NextNumber(-0.3, 0.3)) / count * math.pi * 2
-		local fromTemple = math.abs((angle + math.pi / 2 + math.pi) % (2 * math.pi) - math.pi)
-		if fromTemple < math.rad(40) then
+		if angleBetween(angle, -math.pi / 2) < math.rad(40) then
+			continue
+		end
+		local blocking = false
+		for _, clear in keepClear do
+			if angleBetween(angle, clear) < math.rad(14) then
+				blocking = true
+			end
+		end
+		if blocking then
 			continue
 		end
 		local distance = radius * rng:NextNumber(0.94, 1.08)
@@ -109,16 +127,36 @@ function FireRope:Prepare()
 	end
 	Scenery.LavaLake(ctx, lake, 300)
 	Scenery.Ground(ctx, lake)
-	rockRim(ctx, lake, 150, 22)
+	local cliffs =
+		{ Vector3.new(-102, 0, -112), Vector3.new(102, 0, -112), Vector3.new(-104, 0, 112), Vector3.new(104, 0, 112) }
+	local cliffAngles = {}
+	for _, spot in cliffs do
+		table.insert(cliffAngles, math.atan2(spot.Z, spot.X))
+	end
+	rockRim(ctx, lake, 150, 22, cliffAngles)
+	-- The crater's basalt wall all around the lake, open only behind the temple (-Z), so the lava
+	-- meets rock wherever a spectator looks.
+	local gap = math.rad(22)
+	local walls = 11
+	for index = 0, walls - 1 do
+		local angle = -math.pi / 2 + gap + (index + 0.5) / walls * (2 * math.pi - 2 * gap)
+		local distance = CRATER_RADIUS + rng:NextNumber(-5, 6)
+		-- Sunk a little, each to its own depth: their (hidden) bottoms never share a plane.
+		local sink = 1 + (index % 3) * 0.6
+		local position = base + Vector3.new(math.cos(angle) * distance, -sink, math.sin(angle) * distance)
+		MeshLibrary.Get("CraterWall", {
+			Scale = rng:NextNumber(0.95, 1.15),
+			CFrame = facingBridge(position),
+			Parent = ctx.Arena,
+		})
+	end
 	-- The temple rises out of the lava (its bottom tier mostly under it), which keeps the dragon head
 	-- low enough on screen to stay clear of the round banner.
 	local temple = facingBridge(base + Vector3.new(0, -TEMPLE_SINK * TEMPLE_SCALE, -TEMPLE_DISTANCE))
 	MeshLibrary.Get("DragonTemple", { Scale = TEMPLE_SCALE, CFrame = temple, Parent = ctx.Arena })
 	-- Steam where its lava cascade meets the lake.
-	steamSpot(ctx, (temple * CFrame.new(0, TEMPLE_SINK * TEMPLE_SCALE + 2, -36.5 * TEMPLE_SCALE)).Position, 3)
-	for _, spot in
-		{ Vector3.new(-102, 0, -112), Vector3.new(102, 0, -112), Vector3.new(-104, 0, 112), Vector3.new(104, 0, 112) }
-	do
+	steamSpot(ctx, (temple * CFrame.new(0, TEMPLE_SINK * TEMPLE_SCALE + 2, -42 * TEMPLE_SCALE)).Position, 3)
+	for _, spot in cliffs do
 		local scale = if spot.Z < 0 then 1.25 else 1.05
 		local cframe = facingBridge(base + spot)
 		MeshLibrary.Get("LavaFall", { Scale = scale, CFrame = cframe, Parent = ctx.Arena })
@@ -139,8 +177,8 @@ function FireRope:Prepare()
 	for _, side in { -1, 1 } do
 		Build.Decor({
 			Name = "Border",
-			Size = Vector3.new(LENGTH - 2.4, 0.12, 0.9),
-			CFrame = CFrame.new(origin + Vector3.new(0, 0.04, side * (DEPTH / 2 - 0.85))),
+			Size = Vector3.new(LENGTH - 2.4, 0.11, 0.9), -- top at +0.09: clear of the deck, well under the rope's glow
+			CFrame = CFrame.new(origin + Vector3.new(0, 0.035, side * (DEPTH / 2 - 0.85))),
 			Color = rgb(222, 100, 66),
 			Parent = ctx.Arena,
 		})
@@ -162,7 +200,7 @@ function FireRope:Prepare()
 			CFrame = CFrame.lookAt(tower, tower - Vector3.new(side, 0, 0)), -- medallion towards the wheel
 			Parent = ctx.Arena,
 		})
-		flameSpot(ctx, tower + Vector3.new(0, 43, 0), 7)
+		flameSpot(ctx, tower + Vector3.new(0, 43, 0), 7, false) -- the fire and the glowing coals read; no light
 	end
 
 	-- Fire braziers rising out of the lava either side of the bridge, clear of the rope. The pair in

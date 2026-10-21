@@ -10,8 +10,20 @@ Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
+newmtl Cloth
+Kd 0.863 0.157 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Crust
+Kd 0.784 0.251 0.118
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
 newmtl Dark
-Kd 0.282 0.196 0.251
+Kd 0.227 0.157 0.212
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
@@ -36,12 +48,6 @@ d 1
 
 newmtl Lava
 Kd 1.000 0.471 0.157
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Cloth
-Kd 0.863 0.157 0.235
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1

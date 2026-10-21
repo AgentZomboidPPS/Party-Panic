@@ -1,6 +1,6 @@
 """Fire Rope's arena props: the Dragon Temple of the fire festival.
 
-    python3 tools/meshgen/generate_meshes.py --only DragonTemple,RopeTower,SunWheel,FireBrazier,LavaFall,TempleBridge
+    python3 tools/meshgen/generate_meshes.py --only DragonTemple,RopeTower,SunWheel,FireBrazier,LavaFall,CraterWall,TempleBridge
 
 Units are studs, +Y up, base on y = 0, -Z is the front. The arena drops the props whose base is
 "lake level - 1" on the lava (the bridge floor is 25 studs above that base).
@@ -77,6 +77,30 @@ def flat_tube(points, widths, thickness, sides=12):
     return Mesh(verts, faces)
 
 
+def crusted_stream(path, widths, x0, phase, offsets, thickness=1.0, wobble=0.45):
+    """A lava stream (flat tube) that wobbles side to side as it falls, with darker crust ribbons
+    riding a hair in front of its face (never touching it, so no z-fighting). Returns (stream, ribbons)."""
+    pts = []
+    for i, (_, y, z) in enumerate(path):
+        sway = 0.0 if i == 0 else wobble * math.sin(i * 1.3 + phase)
+        pts.append((x0 + sway, y, z))
+    stream = flat_tube(pts, widths, thickness, 12)
+    ribbons = []
+    for k, dx in enumerate(offsets):
+        ribbon = []
+        for i in range(2, len(pts) - 1):
+            a, b = np.array(pts[i - 1]), np.array(pts[i + 1])
+            tangent = (b - a) / (np.linalg.norm(b - a) + 1e-9)
+            normal = np.cross(np.array([1.0, 0, 0]), tangent)
+            normal /= np.linalg.norm(normal) + 1e-9
+            across = (dx + 0.06 * math.sin(i * 0.9 + phase + k * 2.0)) * widths[i]
+            face = thickness / 2 * math.sqrt(max(0.0, 1 - (2 * across / widths[i]) ** 2))  # follow the curved front
+            ribbon.append(np.array(pts[i]) + np.array([across, 0, 0]) + normal * (face + 0.08))
+        n = len(ribbon)
+        ribbons.append(flat_tube(ribbon, [0.4 + 0.5 * math.sin(math.pi * (i + 0.5) / n) for i in range(n)], 0.16, 6))
+    return stream, ribbons
+
+
 def glyph(kind, size):
     """A rune shape (polygon in XY, centered) for glowing inlays."""
     if kind == 0:  # diamond
@@ -111,6 +135,25 @@ def banner(width, height, depth=0.3):
     mesh = extrude(dense, depth)
     # A gentle ripple, so it reads as cloth.
     mesh.v[:, 2] += np.sin(mesh.v[:, 0] * 1.3 + mesh.v[:, 1] * 0.35) * 0.18
+    return mesh
+
+
+def fan(pivot, rim, depth):
+    """A thin webbed fan (frills): a triangle fan from `pivot` through the `rim` points, `depth` thick along Z."""
+    verts, faces = [], []
+    half = np.array([0, 0, depth / 2])
+    for p in [pivot] + rim:
+        verts += [np.array(p) - half, np.array(p) + half]
+    n = len(rim)
+    for i in range(n - 1):
+        a, b = 2 + 2 * i, 2 + 2 * (i + 1)
+        faces += [(0, a, b), (1, b + 1, a + 1)]  # front (-Z), back (+Z)
+        faces += [(a, a + 1, b + 1), (a, b + 1, b)]  # outer edge
+    for a in (2, 2 * n):  # the two edges back to the pivot
+        faces += [(0, 1, a + 1), (0, a + 1, a)]
+    mesh = Mesh(verts, faces, smooth=False)
+    if np.mean(mesh.v[[2 + 2 * i for i in range(n)], 0]) - pivot[0] < 0:  # mirrored side: flip winding
+        mesh.f = mesh.f[:, ::-1]
     return mesh
 
 
@@ -173,8 +216,23 @@ def dragon_head():
         spot = start + direction * (t - 0.55)
         eyes.append(icosphere(1.0, 2).scale(1.35, 0.85, 1.25).translate(*spot))
 
+    # Webbed frills fanning out behind the cheeks (facing forward): the dragon's silhouette at phone size.
+    frills = []
+    for side in (-1, 1):
+        pivot = np.array([side * 6.0, 2.6, 5.5])
+        rim = []
+        angles = np.linspace(-45, 75, 9)
+        for k, a in enumerate(angles):
+            r = 11.5 - abs(a - 15) * 0.03 if k % 2 == 0 else 7.2
+            d = np.array([side * math.cos(math.radians(a)), math.sin(math.radians(a)), 0.0])
+            rim.append(pivot + d * r + np.array([0, 0, 0.12 * r]))  # swept back a little
+            if k % 2 == 0:  # a gold spike along each rib, poking out past the web
+                horns.append(taper([tuple(pivot + d * 3.0 + np.array([0, 0, 0.36])), tuple(pivot + d * (r + 2.2) + np.array([0, 0, 0.12 * (r + 2.2)]))],
+                                   0.55, 0.06, 6))
+        frills.append(fan(pivot, rim, 0.5))
     mouth_lava = icosphere(1.0, 2).scale(3.0, 1.0, 6.5).translate(0, -3.4, -9.0)
-    return {"Skin": skin, "Horns": merge(*horns), "Teeth": merge(*teeth), "Eyes": merge(*eyes), "MouthLava": mouth_lava}
+    return {"Skin": skin, "Horns": merge(*horns), "Teeth": merge(*teeth), "Eyes": merge(*eyes), "MouthLava": mouth_lava,
+            "Frills": merge(*frills)}
 
 
 def place(mesh, scale, offset):
@@ -186,7 +244,7 @@ def place(mesh, scale, offset):
 def dragon_temple():
     """Backdrop centerpiece: a stepped temple rising from the lava, a dragon head on top pouring lava
     down a cascade between twin stairs, gold cornices, rune inlays, obelisks and banners. Faces -Z."""
-    stone, trim, glow, lava, cloth, emblem, dark = [], [], [], [], [], [], []
+    stone, trim, glow, lava, cloth, emblem, dark, crust = [], [], [], [], [], [], [], []
     tiers = [  # width, height, depth, z center, y bottom
         (100, 14, 70, 0.0, 0.0),
         (82, 13, 56, 3.0, 14.0),
@@ -219,13 +277,22 @@ def dragon_temple():
             length = math.hypot(40, 50)
             wall = box(1.4, 2.6, length + 2).rotate("x", -math.degrees(math.atan2(50, 40))).translate(x, 26.2, -27.4)
             dark.append(wall)
-    # Lava cascade from the dragon's mouth: falls, tier tops, falls, into a pool at the foot.
-    path = [(0, 56.6, -17.0), (0, 54.0, -19.6), (0, 47.0, -20.5), (0, 36.0, -20.8), (0, 28.6, -20.8), (0, 27.6, -22.4),
+    # Lava cascade from the dragon's mouth: falls, tier tops, falls, into the lake, crusted and wobbling
+    # like the cliffs' lava falls. The arena sinks the temple so the lake meets it at about y = 10.7
+    # (see TEMPLE_SINK); a churning splash mound rises out of the lake at the cascade's foot.
+    path = [(0, 54.5, -19.5), (0, 52.0, -21.0), (0, 46.0, -21.6), (0, 36.0, -21.8), (0, 28.6, -21.8), (0, 27.6, -23.0),
             (0, 27.5, -25.0), (0, 26.0, -26.3), (0, 20.0, -26.9), (0, 15.2, -27.2), (0, 14.65, -29.0), (0, 14.6, -34.4),
             (0, 13.2, -35.9), (0, 7.0, -36.7), (0, 2.2, -37.6), (0, 1.5, -40.0)]
-    widths = [4.2, 4.6, 5.2, 5.6, 6.0, 6.4, 6.8, 7.0, 7.2, 7.4, 7.8, 8.2, 8.4, 8.6, 9.0, 9.4]
-    lava.append(flat_tube(path, widths, 0.9, 12))
-    lava.append(icosphere(1.0, 2).scale(11, 0.7, 6.5).translate(0, 1.5, -42))
+    widths = [4.6, 5.0, 5.4, 5.8, 6.2, 6.6, 7.0, 7.2, 7.4, 7.6, 8.0, 8.4, 8.6, 8.8, 9.0, 9.4]
+    stream, ribbons = crusted_stream(path, widths, 0.0, 0.6, (-0.22, 0.2), thickness=0.9, wobble=0.35)
+    lava.append(stream)
+    crust += ribbons
+    for k, (x, y, z, rx, ry, rz) in enumerate(((0, 9.0, -40.0, 5.6, 4.6, 4.4), (-3.8, 8.2, -42.4, 3.6, 4.2, 3.2),
+                                               (3.8, 8.0, -42.0, 3.4, 4.2, 3.2), (0, 7.4, -45.0, 5.0, 4.0, 3.4))):
+        lava.append(icosphere(1.0, 2, 0.12, seed=21 + k).scale(rx, ry, rz).translate(x, y, z))
+    for k in range(7):  # droplets thrown up by the splash
+        a = k / 7 * 2 * math.pi
+        lava.append(icosphere(0.55 + 0.2 * (k % 3), 1).translate(math.cos(a) * 6.5, 13.5 + 1.6 * ((k * 5) % 3), -42 + math.sin(a) * 4.5))
 
     # Obelisks on the first tier's front corners, gold tips and a rune stripe.
     for side in (-1, 1):
@@ -244,16 +311,17 @@ def dragon_temple():
         trim.append(cylinder(0.35, 8.0, 10).rotate("z", 90).translate(side * 14.5 + 4.0, 49.8, -7.6))
 
     head = dragon_head()
-    s, at = 1.35, (0, 63.0, 2.0)
+    s, at = 1.89, (0, 66.0, 6.0)  # the head is big for the tiers on purpose: it has to read from the bridge
     return {
         "Stone": merge(*stone),
         "Trim": merge(*trim, place(head["Horns"], s, at)),
+        "Cloth": merge(*cloth, place(head["Frills"], s, at)),
+        "Crust": merge(*crust),
         "Dark": merge(*dark, place(head["Skin"], s, at)),
         "Glow": merge(*glow),
         "Eyes": place(head["Eyes"], s, at),
         "Teeth": place(head["Teeth"], s, at),
         "Lava": merge(*lava, place(head["MouthLava"], s, at)),
-        "Cloth": merge(*cloth),
         "Emblem": merge(*emblem),
     }
 
@@ -376,30 +444,46 @@ def lava_fall():
         (-5.0, [2.4, 2.5, 2.6, 2.8, 3.0, 3.2, 3.4, 3.4], 2, 1.7),
         (5.0, [2.4, 2.5, 2.6, 2.8, 3.0, 3.2, 3.4, 3.4], 2, 3.1),
     )
-    thickness = 1.0
     falls, crust = [], []
     for x0, widths, first, phase in streams:
-        pts = []
-        for i, (_, y, z) in enumerate(path[first:]):
-            wobble = 0.0 if i == 0 else 0.45 * math.sin(i * 1.3 + phase)
-            pts.append((x0 + wobble, y, z))
-        falls.append(flat_tube(pts, widths, thickness, 12))
-        # Crust ribbons a hair in front of the stream's face (never touching it, so no z-fighting).
         offsets = (-0.2, 0.18) if x0 == 0.0 else (0.04,)  # fractions of the stream's width
-        for k, dx in enumerate(offsets):
-            ribbon = []
-            for i in range(2, len(pts) - 1):
-                a, b = np.array(pts[i - 1]), np.array(pts[i + 1])
-                tangent = (b - a) / (np.linalg.norm(b - a) + 1e-9)
-                normal = np.cross(np.array([1.0, 0, 0]), tangent)
-                normal /= np.linalg.norm(normal) + 1e-9
-                across = (dx + 0.06 * math.sin(i * 0.9 + phase + k * 2.0)) * widths[i]
-                face = thickness / 2 * math.sqrt(max(0.0, 1 - (2 * across / widths[i]) ** 2))  # follow the curved front
-                ribbon.append(np.array(pts[i]) + np.array([across, 0, 0]) + normal * (face + 0.08))
-            n = len(ribbon)
-            crust.append(flat_tube(ribbon, [0.4 + 0.5 * math.sin(math.pi * (i + 0.5) / n) for i in range(n)], 0.16, 6))
+        stream, ribbons = crusted_stream(path[first:], widths, x0, phase, offsets)
+        falls.append(stream)
+        crust += ribbons
     pool = icosphere(1.0, 2).scale(11.0, 0.6, 7.5).translate(0, 1.2, -14.0)
     return {"Rock": rock, "Lava": merge(*falls, pool), "Crust": merge(*crust)}
+
+
+def crater_wall():
+    """A stretch of the crater's basalt wall (about 92 wide, curving towards the lake's center 172
+    studs in front of it), with a thin crusted lava trickle down its middle. Faces -Z."""
+    rng = np.random.default_rng(29)
+    bend = 172.0
+    columns = []
+    rows = ((7.0, (40.0, 62.0), 3.8), (0.5, (24.0, 42.0), 3.5), (-6.0, (6.0, 20.0), 3.0))  # z, heights, radius
+    for row, (z, (low, high), radius) in enumerate(rows):
+        x = -46.0 + rng.uniform(0, 2)
+        while x <= 46.0:
+            h = rng.uniform(low, high) * (1.0 - 0.25 * (abs(x) / 46.0) ** 2)  # lower towards the ends
+            r = radius * rng.uniform(0.85, 1.15)
+            if row == 2 and abs(x) < 4.0:
+                x += r * 1.7
+                continue  # the trickle runs here
+            if row == 1 and abs(x) < 3.5:
+                h = 33.6  # the lip it pours over
+            col = lathe([(r, 0.0), (r, h), (r * 0.8, h + 0.8), (0.0, h + 1.0)], 6).rotate("y", rng.uniform(0, 60))
+            col.translate(x + rng.uniform(-0.5, 0.5), 0, z + rng.uniform(-1.0, 1.0) - x * x / (2 * bend))
+            columns.append(col)
+            x += r * 1.7
+    rubble = [icosphere(r, 1, 0.3, seed=40 + k).scale(1.2, 0.7, 1.1).translate(x, 0.5, -10.5 - x * x / (2 * bend))
+              for k, (x, r) in enumerate(((-30.0, 2.6), (-12.0, 2.2), (9.0, 2.8), (27.0, 2.3)))]
+    rock = merge(*columns, *rubble)
+    rock.smooth = False
+    # The trickle pours from a notch in the middle row and runs down the front row.
+    path = [(0, 35.2, 2.0), (0, 34.6, -1.0), (0, 33.6, -3.0), (0, 26.0, -4.4), (0, 16.0, -5.6), (0, 8.0, -7.0),
+            (0, 2.4, -9.0), (0, 0.6, -12.0)]
+    stream, ribbons = crusted_stream(path, [2.8, 3.0, 3.2, 3.5, 3.8, 4.0, 4.2, 4.4], 0.0, 2.2, (0.0,), thickness=0.8)
+    return {"Rock": rock, "Lava": stream, "Crust": merge(*ribbons)}
 
 
 def temple_bridge():
@@ -483,12 +567,13 @@ PROPS = {
     "SunWheel": sun_wheel,
     "FireBrazier": fire_brazier,
     "LavaFall": lava_fall,
+    "CraterWall": crater_wall,
     "TempleBridge": temple_bridge,
 }
 COLORS = {
     "Stone": (196, 120, 92),
     "Trim": (255, 196, 64),
-    "Dark": (72, 50, 64),
+    "Dark": (58, 40, 54),
     "Eyes": (255, 240, 120),
     "Teeth": (250, 240, 215),
     "Cloth": (220, 40, 60),
