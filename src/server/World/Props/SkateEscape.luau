@@ -68,11 +68,11 @@ return function(h)
 		},
 		SkateDeck = {
 			Height = 2.26,
-			AssetId = 127288643783365,
+			AssetId = 130808942087961,
 			Collide = true,
 			Palette = {
-				Planks = h.rgb(222, 164, 104),
-				PlanksB = h.rgb(192, 132, 82),
+				Planks = h.rgb(214, 148, 90),
+				PlanksB = h.rgb(180, 116, 70),
 				Beams = h.rgb(96, 64, 44),
 				CurbRed = h.rgb(236, 66, 54),
 				CurbWhite = h.rgb(250, 246, 236),
@@ -111,8 +111,8 @@ return function(h)
 		-- A 200-stud stretch of the lava canyon's side (faces -Z, foot 2 studs under the lava): layered
 		-- rock bands stepping back as they rise, with two lava falls.
 		SkateCanyonWall = {
-			Height = 99.33,
-			AssetId = 96246544403492,
+			Height = 99.34,
+			AssetId = 123918182497538,
 			Shadow = false,
 			Palette = {
 				Basalt = h.rgb(72, 50, 58),

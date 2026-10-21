@@ -44,7 +44,7 @@ local GOAL_DEPTH = 70
 local LAVA_DEPTH = 64 -- the lava river's surface below the deck
 local FOOT = -(LAVA_DEPTH + 2) -- canyon walls and piers stand with their foot 2 studs under the lava
 local WALL_X = 92 -- the canyon walls' foot, either side of the middle
-local WALL_PIVOT = 28.92 -- a canyon wall's pivot sits this far behind its foot (unscaled)
+local WALL_PIVOT = 28.94 -- a canyon wall's pivot sits this far behind its foot (unscaled)
 local CABLE_PIVOT = 2.54 -- a swag rope's pivot sits this far outside the rail
 local CABLE_SPAN = 96 -- a swag rope's authored length
 local RAIL_X = DECK_WIDTH / 2 - 0.6
@@ -213,7 +213,7 @@ function SkateEscape:_canyon()
 	for _, side in { -1, 1 } do
 		local d = CANYON_BACK + rng:NextNumber(0, 40)
 		while d < CANYON_END do
-			local scale = rng:NextNumber(0.94, 1.1)
+			local scale = rng:NextNumber(0.96, 1.04)
 			local foot = WALL_X + rng:NextNumber(-5, 5)
 			local position = Vector3.new(
 				origin.X + side * (foot + WALL_PIVOT * scale),
@@ -231,16 +231,16 @@ function SkateEscape:_canyon()
 	-- Both ends closed by a wall facing down the canyon.
 	for _, ending in { { D = CANYON_BACK - 12, Turn = 0 }, { D = CANYON_END + 12, Turn = math.pi } } do
 		local back = if ending.Turn == 0 then 1 else -1 -- which way (in Z) the wall's pivot sits from its foot
-		local position = origin + Vector3.new(0, FOOT - 0.7, -ending.D + back * WALL_PIVOT * 1.15)
+		local position = origin + Vector3.new(0, FOOT - 0.7, -ending.D + back * WALL_PIVOT * 1.04)
 		MeshLibrary.Get("SkateCanyonWall", {
-			Scale = 1.15,
+			Scale = 1.04,
 			CFrame = CFrame.new(position) * CFrame.Angles(0, ending.Turn, 0),
 			Parent = arena,
 		})
 	end
 
 	-- The plateau around the canyon's rim, out to the horizon (four slabs round the canyon).
-	local rimY = origin.Y + 8
+	local rimY = origin.Y + 6
 	local outer = 1000
 	for _, side in { -1, 1 } do
 		for _, half in { -1, 1 } do
@@ -249,7 +249,7 @@ function SkateEscape:_canyon()
 				Name = "Plateau",
 				Size = Vector3.new(outer - inner, 4, (span + 1400) / 2),
 				CFrame = CFrame.new(origin.X + side * (inner + outer) / 2, rimY, middleZ + half * (span + 1400) / 4),
-				Color = rgb(184, 98, 66),
+				Color = rgb(160, 86, 58),
 				Material = Enum.Material.Sandstone,
 				CanCollide = false,
 				CanQuery = false,
@@ -260,13 +260,13 @@ function SkateEscape:_canyon()
 		end
 	end
 	for _, ending in
-		{ { From = CANYON_BACK - 70, To = CANYON_BACK - 700 }, { From = CANYON_END + 70, To = CANYON_END + 700 } }
+		{ { From = CANYON_BACK - 70, To = CANYON_BACK - 690 }, { From = CANYON_END + 70, To = CANYON_END + 690 } }
 	do
 		Build.Part({
 			Name = "Plateau",
 			Size = Vector3.new(2 * (WALL_X + 48) + 2, 4, math.abs(ending.To - ending.From)),
 			CFrame = CFrame.new(origin.X, rimY - 0.4, origin.Z - (ending.From + ending.To) / 2),
-			Color = rgb(184, 98, 66),
+			Color = rgb(160, 86, 58),
 			Material = Enum.Material.Sandstone,
 			CanCollide = false,
 			CanQuery = false,
@@ -298,6 +298,25 @@ function SkateEscape:_canyon()
 				Parent = arena,
 			})
 			d += rng:NextNumber(90, 160)
+		end
+	end
+
+	-- Layered buttes out on the plateau, facing the canyon, for a rugged horizon.
+	for _, side in { -1, 1 } do
+		local d = CANYON_BACK + rng:NextNumber(-100, 100)
+		while d < CANYON_END do
+			local scale = rng:NextNumber(0.55, 0.85)
+			local position = Vector3.new(
+				origin.X + side * (rng:NextNumber(330, 520) + WALL_PIVOT * scale),
+				top - rng:NextNumber(8, 30),
+				origin.Z - d
+			)
+			MeshLibrary.Get("SkateCanyonWall", {
+				Scale = scale,
+				CFrame = CFrame.lookAt(position, position - Vector3.new(side, 0, 0)),
+				Parent = arena,
+			})
+			d += rng:NextNumber(330, 480)
 		end
 	end
 

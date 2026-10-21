@@ -371,22 +371,25 @@ def noise1(x, seed, amps=(1.0, 0.55, 0.3), freqs=(0.045, 0.11, 0.27)):
 
 
 def deck():
-    """One 24-stud piece of the bridge: a board per lane, in two alternating tones so the twelve lanes
-    read at speed, red and white curbs along both edges, stringers and cross beams underneath."""
+    """One 24-stud piece of the bridge: long planks running down each lane (three a lane, joints
+    staggered), the lanes in two alternating tones so all twelve read at speed and their seams make
+    speed lines, red and white curbs along both edges, stringers and cross beams underneath."""
     rng = np.random.default_rng(11)
     top = 2.0
     planks, planks_b = [], []
-    count = 12
-    pitch = SEGMENT / count
     stringers = [-DECK_WIDTH / 2 + 3, -DECK_WIDTH / 4, 0.0, DECK_WIDTH / 4, DECK_WIDTH / 2 - 3]
-    for i in range(count):
-        z = -SEGMENT / 2 + pitch * (i + 0.5)
-        for lane in range(LANES):
-            x = -LANES * LANE / 2 + LANE * (lane + 0.5)
-            h = 0.42 + rng.uniform(-0.03, 0.03)
-            board = fbox(LANE - 0.34, h, pitch - 0.16, 0, 0, 0)
-            board.rotate("y", rng.uniform(-0.5, 0.5)).translate(x + rng.uniform(-0.05, 0.05), top - h / 2, z)
-            (planks if lane % 2 == 0 else planks_b).append(board)
+    per_lane = 3
+    width = (LANE - 0.3) / per_lane
+    for lane in range(LANES):
+        x0 = -LANES * LANE / 2 + LANE * lane + 0.15
+        for k in range(per_lane):
+            x = x0 + width * (k + 0.5)
+            joint = rng.uniform(-8.0, 8.0)
+            for z0, z1 in ((-SEGMENT / 2, joint), (joint, SEGMENT / 2)):
+                h = 0.42 + rng.uniform(-0.04, 0.0)
+                board = fbox(width - 0.12, h, z1 - z0 - 0.12)
+                board.rotate("y", rng.uniform(-0.12, 0.12)).translate(x + rng.uniform(-0.02, 0.02), top - h / 2, (z0 + z1) / 2)
+                (planks if lane % 2 == 0 else planks_b).append(board)
     # The outer edge boards carry the curbs.
     edge = []
     for sx in (-1, 1):
@@ -448,27 +451,31 @@ def torch():
 
 WALL_LENGTH = 200.0
 WALL_BACK = 64.0  # how deep the wall's top runs back from its foot
+WALL_RIM = 79.0  # the height its top comes down to at the back (the plateau around the canyon)
 # Rock bands from the lava up: piece, bottom, top, how far the face is set back, bumpiness.
 WALL_BANDS = (
     ("Basalt", 0.0, 22.0, 0.0, 3.2),
     ("RockLow", 22.0, 47.0, 5.0, 3.0),
-    ("RockMid", 47.0, 73.0, 10.0, 2.8),
-    ("Stripe", 73.0, 78.0, 13.5, 1.6),
-    ("RockTop", 78.0, 100.0, 15.5, 2.8),
+    ("RockMid", 47.0, 58.0, 10.0, 2.8),
+    ("Stripe", 58.0, 60.5, 11.0, 1.4),  # thin cream line
+    ("RockMid", 60.5, 73.0, 11.5, 2.8),
+    ("Stripe", 73.0, 78.0, 14.0, 1.6),  # the wide cream stripe the lava falls start from
+    ("RockTop", 78.0, 87.0, 15.5, 2.6),
+    ("RockLow", 87.0, 89.5, 16.5, 1.4),  # thin red line
+    ("RockTop", 89.5, 100.0, 17.0, 2.6),
 )
+CAVE_BAND = 5
 
 
 def band_y(band, top, x):
-    """The height of a band's bottom (top=False) or top at x: the strata wave up and down, the cream
-    stripe keeps its thickness and the skyline rises and dips."""
+    """The height of a band's bottom (top=False) or top at x: the strata wave up and down together
+    (a little each of their own) and the skyline rises and dips."""
     k = band + 1 if top else band
     if k == 0:
         return 0.0
     if k == len(WALL_BANDS):
         return 92.0 + 8.0 * max(-1.0, min(1.0, noise1(x, 400, (1.0, 0.5), (0.03, 0.09)) / 1.2))
-    if k in (3, 4):  # both edges of the stripe move together
-        return WALL_BANDS[k][1] + 2.6 * noise1(x, 303, (1.0, 0.4), (0.025, 0.07))
-    return WALL_BANDS[k][1] + 2.6 * noise1(x, 300 + k, (1.0, 0.4), (0.025, 0.07))
+    return WALL_BANDS[k][1] + 2.6 * noise1(x, 303, (1.0, 0.4), (0.025, 0.07)) + 0.4 * noise1(x, 300 + k, (1.0,), (0.05,))
 
 
 def wall_front(x, band, row):
@@ -484,7 +491,7 @@ def canyon_wall():
     """A 200-stud stretch of the canyon's side: layered toy rock bands (dark basalt at the lava, red,
     orange, a cream stripe, terracotta on top) stepping back as they rise, boulders on the ledges and
     two lava falls pouring down the face. Faces -Z; its foot (z = 0) stands in the lava."""
-    xs = list(np.linspace(-WALL_LENGTH / 2, WALL_LENGTH / 2, 64))
+    xs = list(np.linspace(-WALL_LENGTH / 2, WALL_LENGTH / 2, 50))
     pieces = {}
     for band, (name, _, _, _, _) in enumerate(WALL_BANDS):
         sections = []
@@ -496,15 +503,21 @@ def canyon_wall():
             fade = end * end * 9
             f = [wall_front(x, band, r) + fade for r in (0.0, 0.33, 0.7, 0.96)]
             lip = min(1.4, h * 0.2)
-            sections.append([
+            section = [
                 (y0, f[0]),
                 (y0 + h * 0.33, f[1]),
                 (y0 + h * 0.7, f[2]),
                 (y1 - lip * 0.4, f[3] + 0.25),
                 (y1, f[3] + lip),
-                (y1, WALL_BACK),
-                (y0, WALL_BACK),
-            ])
+            ]
+            if band == len(WALL_BANDS) - 1:
+                # The top rolls back down to the plateau (y = WALL_RIM at the back).
+                rim = max(WALL_RIM, y0 + 1.5)
+                section += [(y1 - 1.5, f[3] + 14.0), (rim + 3.0, WALL_BACK - 14.0), (rim, WALL_BACK)]
+            else:
+                section.append((y1, WALL_BACK))
+            section.append((y0, WALL_BACK))
+            sections.append(section)
         pieces.setdefault(name, []).append(loft_x(xs, sections))
     # Boulders resting on the ledges.
     rng = np.random.default_rng(23)
@@ -521,17 +534,18 @@ def canyon_wall():
     # Lava falls: each pours from a cave mouth in the cream stripe, over every ledge into the river.
     falls, crust, caves = [], [], []
     for x0, width, phase in ((-52.0, 9.0, 0.4), (61.0, 7.0, 2.1)):
-        stripe = wall_front(x0, 3, 0.5)
-        mouth = (band_y(3, False, x0) + band_y(3, True, x0)) / 2
+        stripe = wall_front(x0, CAVE_BAND, 0.5)
+        mouth = (band_y(CAVE_BAND, False, x0) + band_y(CAVE_BAND, True, x0)) / 2
         path = [(x0, mouth + 0.5, stripe + 5.0), (x0, mouth, stripe - 1.0)]  # out of the cave in the cream stripe
-        for band in range(2, -1, -1):
+        for band in range(CAVE_BAND - 1, -1, -1):
             y0, y1 = band_y(band, False, x0), band_y(band, True, x0)
             front_top = wall_front(x0, band, 1.0)
             front_mid = wall_front(x0, band, 0.5)
             front_low = wall_front(x0, band, 0.0)
             path.append((x0, y1 + 0.5, front_top + 0.4))  # across the ledge
-            path.append((x0, y1 - 1.5, front_top - 1.8))  # over the lip
-            path.append((x0, (y0 + y1) / 2, front_mid - 2.2))
+            if y1 - y0 > 5:
+                path.append((x0, y1 - 1.5, front_top - 1.8))  # over the lip
+                path.append((x0, (y0 + y1) / 2, front_mid - 2.2))
             path.append((x0, y0 + 1.0, front_low - 2.4))
         path.append((x0, 0.6, wall_front(x0, 0, 0.0) - 6.0))
         widths = [width * (0.8 + 0.4 * i / (len(path) - 1)) for i in range(len(path))]
