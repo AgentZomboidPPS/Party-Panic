@@ -195,12 +195,13 @@ function SkateEscape.Start(api)
 
 	local hud = api:TopHud()
 	local hudY = api:HudY()
+	local touch = api:IsTouch() -- the HUD is scaled down on phones: bigger dots keep the numbers readable
 	local barWidth = 560
 	local bar = UIKit.Panel({
 		Name = "RaceBar",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, hudY + 4),
-		Size = UDim2.fromOffset(barWidth, 30),
+		Size = UDim2.fromOffset(barWidth, if touch then 40 else 30),
 		CornerRadius = 15,
 		Parent = hud,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
@@ -245,7 +246,7 @@ function SkateEscape.Start(api)
 			return existing
 		end
 		local mine = key == myKey
-		local size = if mine then 26 else 18
+		local size = if touch then (if mine then 34 else 26) else (if mine then 26 else 18)
 		local dot = UIKit.new("Frame", {
 			Name = "Racer" .. key,
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -261,7 +262,7 @@ function SkateEscape.Start(api)
 		})
 		UIKit.Label({
 			Text = tostring(lane),
-			TextSize = if mine then 16 else 12,
+			TextSize = if touch then (if mine then 22 else 18) else (if mine then 16 else 12),
 			Font = Theme.Fonts.Bold,
 			TextColor3 = Color3.fromRGB(30, 24, 40),
 			Size = UDim2.fromScale(1, 1),
