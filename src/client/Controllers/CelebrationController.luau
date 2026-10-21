@@ -53,7 +53,7 @@ local CHIP_Y, CHIP_H = 126, 128
 local COIN_CHIP_W, ITEM_CHIP_W, MORE_CHIP_W, CHIP_GAP = 116, 150, 96, 10
 local BOTTOM_Y = 262 -- the next goal (left) and the buttons (right half: clear of the thumbstick)
 local BUTTONS_LEFT = 296
-local PC_BIAS = 1.1
+local PC_BIAS = 1 -- PC: 600 x 344 in the middle, clear of the first-join tip under the coins
 local CONFETTI = {
 	Color3.fromRGB(255, 90, 140),
 	Color3.fromRGB(90, 190, 255),

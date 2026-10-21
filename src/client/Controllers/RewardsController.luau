@@ -510,7 +510,7 @@ local function milestoneRow(parent: Instance, order: number, item: Cosmetics.Cos
 	local profile = State.Profile
 	local owned = profile ~= nil and profile.Owned[item.Id] == true
 	local have, target = Progression.MilestoneProgress(item, profile and profile.Stats)
-	local rowHeight = if touch then 100 else 88
+	local rowHeight = if touch then 100 else 96 -- the progress bar sits under the description
 	local right = 214
 	local row = UIKit.Panel({
 		Name = item.Id,
@@ -656,7 +656,8 @@ function RewardsController.Start(context)
 	buildNextTab(context)
 	followBadge(context)
 
-	modal = Modal.new(context.Overlay, "Rewards", "🎁", Vector2.new(980, 620))
+	-- PC: as tall as the road needs (phones shrink it to fit anyway).
+	modal = Modal.new(context.Overlay, "Rewards", "🎁", Vector2.new(980, if touch then 620 else 500))
 	local content = modal.Content
 	local title = Modal.TitleHeight()
 	body = UIKit.new("Frame", {
