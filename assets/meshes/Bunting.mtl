@@ -1,0 +1,23 @@
+newmtl Rope
+Kd 0.941 0.922 0.863
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl PennantA
+Kd 1.000 0.353 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl PennantB
+Kd 1.000 0.804 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl PennantC
+Kd 0.314 0.667 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

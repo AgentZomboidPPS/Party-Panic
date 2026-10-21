@@ -243,7 +243,8 @@ local function buildPhaseBanner(parent: Instance)
 			return
 		end
 		teams.Visible = true
-		-- Two teams read "A — B"; with three or four, every team present gets its icon and score.
+		-- Colour teams: two read "A — B"; with three or four, every team present gets its icon and
+		-- score. Versus roles (Archers / Runners, ...): each side's icon and score, in name order.
 		local present = {}
 		for _, team in Teams.Order do
 			if scores[team] ~= nil then
@@ -252,8 +253,20 @@ local function buildPhaseBanner(parent: Instance)
 		end
 		if #present > 2 then
 			teamsLabel.Text = table.concat(present, "   ")
-		else
+		elseif #present > 0 then
 			teamsLabel.Text = `🔴 {scores.Red or 0}   —   {scores.Blue or 0} 🔵`
+		else
+			local names = {}
+			for name in scores do
+				table.insert(names, name)
+			end
+			table.sort(names)
+			local parts = {}
+			for index, name in names do
+				local icon = Teams.Icons[name] or ""
+				table.insert(parts, if index == 1 then `{icon} {scores[name]}` else `{scores[name]} {icon}`)
+			end
+			teamsLabel.Text = table.concat(parts, "   —   ")
 		end
 	end
 	GameState.Changed("TeamScores", refreshTeams)
