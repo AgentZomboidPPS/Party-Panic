@@ -277,8 +277,8 @@ local function runCycle()
 	end
 
 	-- Voting
-	local voters = participantsNow()
-	local options = VotingService.BuildOptions(#voters, recentGames, ignoreModeLimits())
+	-- Only people vote, but the options have to fit everyone who'll play, bots included.
+	local options = VotingService.BuildOptions(#participantsNow(), recentGames, ignoreModeLimits())
 	local forced = Config.Debug.ForceGame
 	if isStudio() and forced ~= "" then
 		if GameDefinitions.Get(forced) then

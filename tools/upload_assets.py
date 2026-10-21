@@ -213,7 +213,16 @@ def main():
             set_luau_value(AUDIO_CONFIG, ["SfxSprite"], asset_id)
 
     if not args.dry_run:
-        print("\nDone. Rebuild the place (rojo build) to use the uploaded assets.")
+        # New uploads are Restricted (asset privacy): without this, only the owner would see them.
+        sys.path.insert(0, str(ROOT / "tools"))
+        from asset_permissions import grant
+
+        uploaded = [int(v) for v in record.values()]
+        for path in (ROOT / "src" / "server" / "World" / "Props").glob("*.luau"):
+            uploaded += [int(v) for v in re.findall(r"\bAssetId = (\d+)", path.read_text()) if int(v) > 0]
+        granted, errors = grant(uploaded)
+        print(f"\nThe game may use {len(granted)} uploaded assets" + (f" (errors: {errors})" if errors else "."))
+        print("Done. Rebuild the place (rojo build) to use the uploaded assets.")
 
 
 if __name__ == "__main__":

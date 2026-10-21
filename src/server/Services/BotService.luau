@@ -10,8 +10,9 @@
 -- Character, Parent, attributes, CharacterAdded, LoadCharacterAsync), so RoundContext and every
 -- mode treat it like anyone else. Its attributes live on a Configuration in
 -- ReplicatedStorage.PartyBots, so clients can list bots next to players. In a round the mode's
--- brain (MiniGames/Bots/<Id>.luau) drives it with the helpers below; in the lobby it wanders and
--- walks to a portal to vote.
+-- brain (MiniGames/Bots/<Id>.luau) drives it with the helpers below; in the lobby it wanders. Bots
+-- never vote: only people pick the next game (owner: "remove the option for bots voting on the next
+-- game mode").
 --
 -- Movement goes through the Humanoid. Where physics isn't running (the Open Cloud test servers),
 -- bots walk and jump by moving their rig directly, so the same brains can be tested there.
@@ -23,12 +24,10 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
-local GameState = require(Shared.GameState)
 local Signal = require(Shared.Signal)
 
 local BotRegistry = require(script.Parent.BotRegistry)
 local Notifier = require(script.Parent.Notifier)
-local VotingService = require(script.Parent.VotingService)
 
 local BotService = {}
 
@@ -557,43 +556,6 @@ function BotService.LobbyStep(bot: Bot, now: number)
 		return
 	end
 	local memory = bot.Lobby
-	local phase = GameState.Get("Phase")
-	if phase ~= memory.Phase then
-		memory.Phase = phase
-		memory.VoteIndex = nil
-		memory.VoteAt = now + bot.Rng:NextNumber(1.2, 6)
-	end
-
-	if phase == "Voting" and VotingService.IsActive() then
-		if not memory.VoteIndex and now >= memory.VoteAt then
-			-- Half follow the crowd, half pick what they like.
-			local counts = GameState.GetJSON("VoteCounts") or {}
-			local options = #VotingService.Options()
-			local best, bestCount = bot.Rng:NextInteger(1, math.max(1, options)), -1
-			if bot:Chance(0.5) then
-				for index = 1, options do
-					if (counts[index] or 0) > bestCount then
-						best, bestCount = index, counts[index] or 0
-					end
-				end
-			end
-			memory.VoteIndex = best
-		end
-		local index = memory.VoteIndex
-		local pad = index and VotingService.PadPosition(index)
-		if index and pad then
-			local offset = Vector3.new(bot.Rng:NextNumber(-2, 2), 0, bot.Rng:NextNumber(-2, 2))
-			memory.PadSpot = memory.PadSpot or pad + offset
-			bot:MoveTo(memory.PadSpot)
-			if (Vector3.new(root.Position.X, 0, root.Position.Z) - Vector3.new(pad.X, 0, pad.Z)).Magnitude < 5 then
-				VotingService.Cast(bot :: any, index)
-			end
-		elseif index then
-			VotingService.Cast(bot :: any, index)
-		end
-		return
-	end
-	memory.PadSpot = nil
 
 	-- Wander the plaza: stroll somewhere, look around for a bit, sometimes hop.
 	if not memory.Goal or now > (memory.GoalUntil or 0) then

@@ -76,9 +76,6 @@ function VotingService.Begin(newOptions: { VoteOption })
 	for _, player in Players:GetPlayers() do
 		player:SetAttribute("PP_Vote", 0)
 	end
-	for _, bot in BotRegistry.List() do
-		bot:SetAttribute("PP_Vote", 0)
-	end
 	GameState.SetJSON("VoteOptions", options)
 	publishCounts()
 	Notifier.Sound(nil, "VoteOpen")
@@ -96,13 +93,7 @@ function VotingService.Cast(player: Player, index: any): boolean
 		return false
 	end
 	if BotRegistry.IsBot(player) then
-		-- Bots count like anyone else, without stats, quests or sounds.
-		if votes[player] ~= index then
-			votes[player] = index
-			player:SetAttribute("PP_Vote", index)
-			publishCounts()
-		end
-		return true
+		return false -- only people pick the next game (owner: "remove the option for bots voting"); bots play whatever wins
 	end
 	if not DataService.Get(player) then
 		return false -- profile still loading
@@ -155,7 +146,7 @@ function VotingService.Options(): { VoteOption }
 	return options
 end
 
--- Where the portal pad for option `index` is (bots walk there to vote).
+-- Where the portal pad for option `index` is.
 function VotingService.PadPosition(index: number): Vector3?
 	local pad = pads[index]
 	return if pad then pad.Position else nil
@@ -170,7 +161,7 @@ function VotingService.BindPad(pad: BasePart, index: number)
 			return
 		end
 		local character = hit.Parent
-		local player = character and (Players:GetPlayerFromCharacter(character) or BotRegistry.FromCharacter(character))
+		local player = character and Players:GetPlayerFromCharacter(character) -- bots walking over a pad don't vote
 		if not player then
 			return
 		end
@@ -204,7 +195,6 @@ function VotingService.Init()
 		votedThisRound[player] = nil
 	end
 	Players.PlayerRemoving:Connect(forget)
-	BotRegistry.Removed:Connect(forget)
 end
 
 return VotingService

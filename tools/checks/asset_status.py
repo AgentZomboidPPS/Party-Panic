@@ -7,6 +7,10 @@ can see and hear it (an asset that is pending or rejected shows for nobody, or o
 The mesh files inside a model are moderated on their own, and they are what other players' devices
 download, so run --meshes before publishing. That step loads each model on a Roblox server (Open
 Cloud Luau execution), like the game does. Exits with status 1 if anything isn't approved.
+
+Approval isn't enough on its own: with asset privacy, new uploads are Restricted, and other players
+only see them once the game has been granted permission (tools/asset_permissions.py, which
+upload_assets.py and publish_place.py run automatically).
 """
 
 from __future__ import annotations

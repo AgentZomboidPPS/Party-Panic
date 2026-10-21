@@ -646,8 +646,8 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	return HttpService:JSONEncode(summary)
 end
 
--- The lobby with bots (round_harness.py --lobby): builds the lobby, adds bots, and plays an
--- intermission and a vote so their wandering and portal voting can be checked.
+-- The lobby with bots (round_harness.py LOBBY): builds the lobby, adds bots, and plays an
+-- intermission and a vote, to check their wandering and that they never vote (people pick games).
 function __runLobby(botCount, intermission, voteTime)
 	local GameState = __require("Shared/GameState")
 	GameState.Folder()
@@ -699,6 +699,7 @@ function __runLobby(botCount, intermission, voteTime)
 		{ Id = "HexMeltdown", Mystery = false },
 		{ Id = "HoneyTrap", Mystery = false },
 	})
+	summary.botVoteRefused = not VotingService.Cast(bots[1], 1)
 	task.wait(voteTime)
 	summary.voteCounts = GameState.GetJSON("VoteCounts")
 	summary.afterVote = positions()
