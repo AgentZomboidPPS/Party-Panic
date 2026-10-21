@@ -6,6 +6,10 @@
 build/
 sourcemap.json
 
+# Store art renders and snapshots (tools/art/make_art.py; the finished art goes in assets/store)
+/art/
+/art_dumps/
+
 # Tooling caches
 roblox.yml
 globalTypes.d.luau

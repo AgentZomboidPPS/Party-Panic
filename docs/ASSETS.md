@@ -67,14 +67,18 @@ How the client plays music (`AudioController`):
 ## Store art
 
 `assets/store/` holds the experience icon (512×512) and five thumbnails (1920×1080): the lobby
-key art, Yeet Arena, Shopping Cart Grand Prix, Floor Is Lava and Don't Get Flattened. They're
-rendered from the game's own meshes and a dump of the real lobby (see the README, "Seeing the game
-without Studio"):
+key art, Fire Rope, Bobsled Run, Hex Meltdown and a "12 players" collage of Honey Trap, Rake It In
+and Crazy Cutters, plus two other icon ideas. [assets/store/README.md](../assets/store/README.md)
+says which is which and where to upload them (by hand in the Creator Hub: the API key can't).
+
+They're rendered with Blender from snapshots of the real lobby and arenas (a few seconds of a round
+played on a test server, like the portal previews), with the stand-in players swapped for posed
+blocky avatars whose faces are drawn like Roblox face decals:
 
 ```sh
-python tools/art/make_art.py --lobby dump.json --out art/ --samples 64   # needs bpy and Pillow
+python tools/art/make_art.py --dumps art_dumps --fetch     # the snapshots (Open Cloud Luau execution)
+python tools/art/make_art.py --dumps art_dumps --out art   # needs bpy and Pillow
 ```
 
 Lettering uses Luckiest Guy (Apache 2.0, `tools/art/fonts/LICENSE.txt`), the same face as the
-in-game signs. Upload them in the Creator Hub: your experience > **Places** > the start place >
-**Thumbnails**, and the icon under the experience's **Basic Settings**.
+in-game signs.
