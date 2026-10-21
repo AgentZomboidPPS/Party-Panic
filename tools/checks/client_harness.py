@@ -19,6 +19,8 @@ the standings, team outlines, spectating (you get knocked out), a bot leaving an
 mid-round, the results and a bot champion on the podium. The result's "botChecks" says what the
 client did with them, and the extra snapshots ("InRound teams", "Podium") show it. The stand-in
 players are in the round either way, and the player is always knocked out ("Out", "Spectate").
+The result's "portals" says what each of the vote stage's portals shows in each phase (its game,
+"✓ YOUR VOTE", Random's spinning reel, the winner), as text.
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
