@@ -37,7 +37,8 @@ local MessyMemory = MiniGame.Define("MessyMemory", { Results = "Score" })
 
 local WALL_RADIUS = 46
 local FLOOR_RADIUS = 47
-local LATE = 0.15 -- moves may still arrive this long (plus ping, up to 0.25 s) after placing ends
+local LATE = 0.15 -- moves may still arrive this long (plus ping) after placing ends...
+local LATE_MAX = 0.4 -- ...but never longer than this
 
 local rng = Random.new()
 
@@ -342,10 +343,10 @@ function MessyMemory:Start()
 
 	ctx:OnAction("Move", function(player, seq, toy, target)
 		self:_onMove(player, seq, toy, target)
-	end, { Interval = 0.03 })
+	end, { Interval = 0 }) -- (move numbers already turn down stale or repeated moves)
 	ctx:OnAction("Curtain", function(player, open)
 		self:_onCurtain(player, open)
-	end, { Interval = 0.25 })
+	end, { Interval = 0.1 })
 	ctx:OnAction("Peek", function(player, userId)
 		self:_onPeek(player, userId)
 	end, { Interval = 0.6 })
@@ -396,15 +397,20 @@ function MessyMemory:Start()
 end
 
 function MessyMemory:_placing(player: Player): boolean
-	if self.phase ~= "Place" then
+	if self.phase == "Place" then
+		return true
+	end
+	-- The reveal starts the moment placing ends: a move that was already on its way still lands
+	-- for as long as this player's ping (plus a little, at most LATE_MAX), before the right spots
+	-- are sent out or any toy is scored.
+	if self.phase ~= "Reveal" or not self.revealAt then
 		return false
 	end
-	local info = self.phaseInfo
 	local ok, ping = pcall(function()
 		return (player :: any):GetNetworkPing()
 	end)
-	local lag = if ok and type(ping) == "number" then math.clamp(ping, 0, 0.25) else 0.15
-	return self.context:Now() <= info.T1 + lag + LATE
+	local lag = if ok and type(ping) == "number" then math.clamp(ping, 0, LATE_MAX) else 0.15
+	return self.context:Now() <= self.revealAt + math.min(LATE + lag, LATE_MAX)
 end
 
 local function wholeNumber(value: any, low: number, high: number): number?
@@ -416,12 +422,11 @@ end
 
 function MessyMemory:_onMove(player: Player, seq: any, toy: any, target: any)
 	local booth = self.booths[player]
-	if not booth or booth.Left or not booth.Open then
+	if not booth or booth.Left then
 		return
 	end
-	-- The reveal starts the moment placing ends: a move that was already on its way (ping) still
-	-- lands for a moment (lateOk), before any toy is scored.
-	if not self:_placing(player) and not (self.phase == "Reveal" and self.lateOk) then
+	if not booth.Open or not self:_placing(player) then
+		self:_shareBooth(player) -- turned down: put the owner's device right (curtain, positions)
 		return
 	end
 	local n = wholeNumber(seq, 1, 1e6)
@@ -431,7 +436,8 @@ function MessyMemory:_onMove(player: Player, seq: any, toy: any, target: any)
 		return
 	end
 	if n <= booth.Seq then
-		return -- an old move arriving late (the device already moved on)
+		self:_shareBooth(player) -- an old move arriving late (the device already moved on)
+		return
 	end
 	booth.Seq = n
 	Rules.Move(booth.Positions, booth.Homes, t, to)
@@ -440,10 +446,11 @@ end
 
 function MessyMemory:_onCurtain(player: Player, open: any)
 	local booth = self.booths[player]
-	if type(open) ~= "boolean" or not booth or booth.Left or self.phase ~= "Place" then
+	if type(open) ~= "boolean" or not booth or booth.Left then
 		return
 	end
-	if booth.Open == open then
+	if self.phase ~= "Place" or booth.Open == open then
+		self:_shareBooth(player) -- nothing to change: put the owner's device right
 		return
 	end
 	booth.Open = open
@@ -477,6 +484,14 @@ function MessyMemory:_checkAllLocked()
 	self.earlyReveal = true
 	self.context:SetStatus("Everyone's locked in!")
 	self.context:Delay(Rules.ALL_LOCKED_GRACE, function()
+		-- Someone opened up again during the grace: keep placing.
+		for player, booth in self.booths do
+			if player.Parent and not booth.Left and booth.Open then
+				self.earlyReveal = false
+				self.context:SetStatus("Put every toy back on its spot!")
+				return
+			end
+		end
 		self:_startReveal()
 	end)
 end
@@ -495,24 +510,24 @@ function MessyMemory:_startReveal()
 		return self.answer[a] < self.answer[b]
 	end)
 	local t0 = ctx:Now() + 0.8
-	self:_setPhase({
-		N = "Reveal",
-		T0 = t0,
-		Step = Rules.REVEAL_STEP,
-		Order = order,
-		Answer = self.answer,
-	})
-	-- Moves already on their way when the clock ran out still land (ping leeway), for a moment.
-	self.lateOk = true
-	ctx:Delay(0.4, function()
-		self.lateOk = false
-		for player in self.booths do
-			self:_shareBooth(player) -- every shelf on show, with its final answers
-		end
-	end)
+	self.revealAt = ctx:Now()
+	-- The right spots go out only once the late moves are in (see _placing).
+	self:_setPhase({ N = "Reveal", T0 = t0, Step = Rules.REVEAL_STEP })
 	for player in self.booths do
-		self:_shareBooth(player)
+		self:_shareBooth(player) -- every shelf on show
 	end
+	ctx:Delay(LATE_MAX + 0.02, function()
+		for player in self.booths do
+			self:_shareBooth(player) -- ...with its final answers
+		end
+		self:_setPhase({
+			N = "Reveal",
+			T0 = t0,
+			Step = Rules.REVEAL_STEP,
+			Order = order,
+			Answer = self.answer,
+		})
+	end)
 	ctx:SetStatus("Let's see who remembered...")
 	for step, toy in order do
 		ctx:Delay(t0 - ctx:Now() + (step - 1) * Rules.REVEAL_STEP, function()
@@ -547,12 +562,24 @@ end
 function MessyMemory:GetResults()
 	local ctx = self.context
 	local entries = {}
+	local tied = {}
+	for player, booth in self.booths do
+		if player.Parent then
+			local correct = Rules.Correct(booth.Positions, self.answer)
+			tied[correct] = (tied[correct] or 0) + 1
+		end
+	end
 	for _, player in ctx:GetPlayers() do
 		local booth = self.booths[player]
 		if not player.Parent or not booth then
 			continue
 		end
 		local correct = Rules.Correct(booth.Positions, self.answer)
+		-- Equal scores: the one who shut their curtain sooner places higher, and the text says so.
+		local text = `{correct}/{#Rules.TOYS} right`
+		if (tied[correct] or 0) > 1 and booth.LockedAt and self.placeStart then
+			text ..= ` · locked {math.max(0, math.floor(booth.LockedAt - self.placeStart + 0.5))}s`
+		end
 		local bonus = 0
 		if booth.LockedAt and self.placeStart then
 			bonus = math.clamp(1 - (booth.LockedAt - self.placeStart) / Rules.PLACE, 0, 1) * 0.9
@@ -560,7 +587,7 @@ function MessyMemory:GetResults()
 		table.insert(entries, {
 			Player = player,
 			Rank = correct + bonus,
-			ScoreText = `{correct}/{#Rules.TOYS} right`,
+			ScoreText = text,
 			BestScore = correct,
 		})
 	end

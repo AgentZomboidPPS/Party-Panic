@@ -39,6 +39,7 @@ local CURTAIN_OPEN = 0.2 -- an open half's width, as a share of shut
 local CURTAIN_Y = 0.1
 local CURTAIN_Z = 0.2
 local PEEK_TIME = 3.5
+local CURTAIN_COOLDOWN = 0.35 -- CLOSE/OPEN presses at least this far apart
 local MOVE_TIME = 0.28
 local PICK_RADIUS = 0.11 -- of the screen's height: a tap this close to a toy or spot picks it
 
@@ -216,6 +217,7 @@ function MessyMemory.Start(api)
 	local mySeq = 0
 	local myOpen = false
 	local curtainSentAt = -10
+	local curtainRecheck = false -- re-read the server's state once the curtain's grace is over
 	local selected: number? = nil
 
 	local function positionsFor(booth: Booth): { number }?
@@ -267,7 +269,8 @@ function MessyMemory.Start(api)
 		local data = api:Decode(raw)
 		booth.State = data
 		if booth == mine and data then
-			if data.P and (data.S or 0) >= mySeq then
+			-- (At the reveal the server's shelf is the one that's scored: always take it.)
+			if data.P and ((data.S or 0) >= mySeq or phase.N == "Reveal") then
 				myPositions = table.clone(data.P)
 				for toy, pos in data.P do
 					if not Rules.IsSlot(pos) then
@@ -382,11 +385,12 @@ function MessyMemory.Start(api)
 	local peekUntil = 0
 
 	local function setCurtain(open: boolean)
-		if not mine or phase.N ~= "Place" then
+		if not mine or phase.N ~= "Place" or os.clock() - curtainSentAt < CURTAIN_COOLDOWN then
 			return
 		end
 		myOpen = open
 		curtainSentAt = os.clock()
+		curtainRecheck = true
 		selected = nil
 		api:Action("Curtain", open)
 		api:Sound(if open then "Click" else "Boing")
@@ -543,7 +547,7 @@ function MessyMemory.Start(api)
 	end
 
 	-- Camera ----------------------------------------------------------------------------------------
-	local savedType, savedFov = camera.CameraType, camera.FieldOfView
+	local savedFov = camera.FieldOfView
 	-- Framed so the top shelf sits under the HUD and the counter's toys above the bottom edge; on
 	-- phones a touch lower and shifted right, so the counter stays clear of the buttons there.
 	local touch = api:IsTouch()
@@ -558,8 +562,14 @@ function MessyMemory.Start(api)
 		camera.FieldOfView = 60
 		camera.CFrame = viewOf(mine)
 		api:Track(function()
-			camera.CameraType = savedType
+			-- Back to Roblox's own camera, following this player's character.
+			camera.CameraType = Enum.CameraType.Custom
 			camera.FieldOfView = savedFov
+			local character = me.Character
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			if humanoid then
+				camera.CameraSubject = humanoid
+			end
 		end)
 		-- No walking: you stand at your booth and the screen is for tapping toys.
 		local controls = nil
@@ -732,6 +742,14 @@ function MessyMemory.Start(api)
 	-- Every frame -------------------------------------------------------------------------------------
 	api:RenderStep(function(dt)
 		local clock = os.clock()
+		if curtainRecheck and mine and clock - curtainSentAt > 0.8 then
+			-- The server may have turned the press down: take what it says now.
+			curtainRecheck = false
+			local current = api:Shared("B" .. me.UserId)
+			if current then
+				onBooth(mine, current)
+			end
+		end
 		local now = api:Now()
 		local name = phase.N
 
