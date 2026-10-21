@@ -1297,7 +1297,10 @@ phase("Results", 8, function()
 		end
 	end
 	__fire("RoundResults", {
-		GameId = ids[1],
+		-- A win draws the widest headline: "You won SINKING SANDS!  •  Your team won!"
+		GameId = if place == 1 then "SinkingSands" else ids[1],
+		MyTeam = if place == 1 then "Divers" else nil,
+		WinningTeam = if place == 1 then "Divers" else nil,
 		Place = place,
 		PlayerCount = #__players + #bots,
 		ScoreText = if place == 1 then "Last one standing" else "12 pts",

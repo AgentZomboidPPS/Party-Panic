@@ -5,6 +5,9 @@
 -- in place of the "next vote" cue (owner: "Also we need cool payoffs for players that keep playing
 -- the game.").
 --
+-- The headline names the game in capitals, like every other screen, on one line: a long name with
+-- "Your team won!" draws a little smaller rather than wrapping out of its box.
+--
 -- Each standings row has the place and name on the left and the result on the right, in its own
 -- label: the result always reads whole and a long name gives way ("..."), only as far as its own
 -- row's result needs. It used to be one line ("🥇  name  ·  result") that a 15-character name cut
@@ -63,7 +66,7 @@ local function show(data)
 			else ""
 	end
 	headline.Text = if data.Place == 1
-		then `{medal} You won {definition and definition.Name or "the round"}!{teamLine}`
+		then `{medal} You won {if definition then string.upper(definition.Name) else "the round"}!{teamLine}`
 		else `{medal} {Placement.Ordinal(data.Place)} of {data.PlayerCount}{teamLine}`
 
 	clear(standings)
@@ -194,10 +197,11 @@ function ResultsController.Start(context)
 	headline = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 34,
+		TextScaled = true, -- one line: a long game name with "Your team won!" shrinks a little
+		TextWrapped = false,
 		Size = UDim2.new(1, 0, 0, 44),
 		Parent = modal.Content,
-		Children = { UIKit.TextStroke(0.2) },
+		Children = { UIKit.TextStroke(0.2), UIKit.new("UITextSizeConstraint", { MaxTextSize = 34 }) },
 	})
 	standings = UIKit.new("Frame", {
 		Position = UDim2.fromOffset(0, 54),
