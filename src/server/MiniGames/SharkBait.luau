@@ -101,7 +101,7 @@ SharkBait.Kinds = {
 local COIN, PEARL, CHEST = 1, 2, 3
 -- Coin heights over the deck (rafts and gaps) or the water.
 SharkBait.DECK_COIN = 1.4
-SharkBait.GAP_COIN = 3.2
+SharkBait.GAP_COIN = 7.5 -- where a running hop across a gap passes (the root rises 7.2 in a jump)
 SharkBait.WATER_COIN = 0.4
 
 SharkBait.READY, SharkBait.WOBBLING, SharkBait.FLIPPED = 0, 1, 2
@@ -330,6 +330,7 @@ function SharkBait:Prepare()
 	ctx:ShareTemplate("SharkBaitShark", MeshLibrary.Get("SharkBaitShark"))
 	ctx:ShareTemplate("SharkBaitRaft", MeshLibrary.Get("SharkBaitRaft"))
 	ctx:ShareTemplate("SharkBaitFloatie", MeshLibrary.Get("SharkBaitFloatie"))
+	ctx:ShareTemplate("SharkBaitGull", MeshLibrary.Get("SharkBaitGull"))
 
 	local rafts = {}
 	for _, raft in self.rafts do
@@ -1222,7 +1223,7 @@ function SharkBait:_status()
 		return
 	end
 	local left = self:SwimmersLeft()
-	self.context:SetStatus(`🏊 {left} left • 💰 {self.haul}/{self.goal}`)
+	self.context:SetStatus(if left == 1 then "🏊 1 swimmer left!" else `🏊 {left} swimmers left`)
 end
 
 -- The end of the round once one side is gone.

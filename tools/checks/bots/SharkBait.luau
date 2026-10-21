@@ -126,7 +126,7 @@ return function(env)
 			if plan.HopTo then
 				-- Mid-hop: arc over the gap at jump height, land on the far deck.
 				local over = raftUnder(position, -0.8)
-				local y = if over and over ~= plan.HopFrom then deck else deck + 2.2
+				local y = if over and over ~= plan.HopFrom then deck else deck + 5
 				local nextPosition = step(position, plan.HopTo, 0.8, y)
 				env.Move(player, nextPosition)
 				if flatDistance(nextPosition, plan.HopTo) < 0.5 then

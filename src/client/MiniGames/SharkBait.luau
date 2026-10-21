@@ -215,6 +215,7 @@ function SharkBait.Start(api)
 	end
 	loadTemplate("SharkBaitShark")
 	loadTemplate("SharkBaitFloatie")
+	loadTemplate("SharkBaitGull")
 	local function copy(name: string): Instance?
 		local found = templates[name]
 		return if found then found:Clone() else nil
@@ -947,9 +948,7 @@ function SharkBait.Start(api)
 		end
 		isShark = role == "Shark"
 		roleIcon.Text = if isShark then "🦈" else "🏊"
-		hint.Text = if isShark
-			then "🦈 CHOMP swimmers in the water! CHOMP rafts to tip them!"
-			else "🏊 Grab coins with your team! Stay out of the water!"
+		hint.Text = if isShark then "🦈 CHOMP swimmers and rafts!" else "🏊 Grab coins! Stay out of the water!"
 		hint.Visible = true
 		hintUntil = math.huge -- counted from GO (below)
 		if isShark and not chompButton then
@@ -1120,6 +1119,43 @@ function SharkBait.Start(api)
 		CollectionService:AddTag(sparkle, "PP_Ambient")
 	end
 
+	-- Seagulls wheel high over the lagoon, banking round their circles.
+	local gulls: { { Model: Model, Center: Vector3, Radius: number, Speed: number, Height: number, Phase: number } } =
+		{}
+	local function buildGulls()
+		for index = 1, if reduced then 3 else 6 do
+			local model = copy("SharkBaitGull") :: Model?
+			if not model then
+				return
+			end
+			for _, part in partsOf(model) do
+				quiet(part)
+			end
+			model:ScaleTo(model:GetScale() * (1.4 + (index % 3) * 0.15))
+			model.Parent = api.World
+			local angle = index * 2.1
+			table.insert(gulls, {
+				Model = model,
+				Center = origin + Vector3.new(math.cos(angle) * 14, 0, math.sin(angle) * 14),
+				Radius = 22 + (index * 7) % 30,
+				Speed = (0.22 + (index % 4) * 0.05) * (if index % 2 == 0 then 1 else -1),
+				Height = deckY + 26 + (index * 5) % 16,
+				Phase = index * 1.3,
+			})
+		end
+	end
+	local function drawGulls(clock: number)
+		for _, gull in gulls do
+			local angle = gull.Phase + clock * gull.Speed
+			local position = gull.Center + Vector3.new(math.cos(angle) * gull.Radius, 0, math.sin(angle) * gull.Radius)
+			position = Vector3.new(position.X, gull.Height + math.sin(clock * 0.8 + gull.Phase) * 1.5, position.Z)
+			-- Flying along the circle (its tangent), banked into the turn.
+			local tangent = Vector3.new(-math.sin(angle), 0, math.cos(angle)) * math.sign(gull.Speed)
+			local bank = math.rad(22) * math.sign(gull.Speed)
+			gull.Model:PivotTo(CFrame.lookAt(position, position + tangent) * CFrame.Angles(0, 0, bank))
+		end
+	end
+
 	-- The shark's camera sits a little higher, so it sees over the rafts.
 	local cameraHumanoid: Humanoid? = nil
 	api:Track(function()
@@ -1164,8 +1200,12 @@ function SharkBait.Start(api)
 			drawShark(view, now, dt)
 		end
 
-		-- Swim rings.
+		-- Swim rings and gulls.
 		drawFloaties(now)
+		if #gulls == 0 and templates.SharkBaitGull then
+			buildGulls()
+		end
+		drawGulls(clock)
 
 		-- Coins.
 		local inRound = GameState.Get("Phase") == "InRound"
