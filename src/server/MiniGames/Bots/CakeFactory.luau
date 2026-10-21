@@ -5,9 +5,12 @@
 --
 -- Skill sets how close to the middle of the gate a press lands (an unskilled bot's error is several
 -- times the gate at full speed, so it splats cakes as the belt speeds up), how often it misses a
--- cake it should have done, and how often it carelessly presses on a cake that's missing a layer
--- (which ruins it). A bot that runs two machines plans each one on its own. Bots hop for joy when
--- their team wins. The belt carries no hazards, so there's nothing for the server to check on them.
+-- cake it should have done, and how often it carelessly presses on a cake that isn't ready (one
+-- that already has its layer gets ruined). Even the best bot has a floor of error, runs a little
+-- late as the belt speeds up and skips one cake in twenty, so a sharp human team beats a team of
+-- them (a full-skill team finishes about 22-24 of the 27 plates, few of them ★). A bot that runs
+-- two machines plans each one on its own. (Bots on the winning team hop in CakeFactory:Stop.)
+-- The belt carries no hazards, so there's nothing for the server to check on them.
 
 local CakeFactoryBrain = {}
 
@@ -15,15 +18,7 @@ local LOOK_AHEAD = 0.9 -- seconds before a cake arrives that a bot makes up its 
 
 function CakeFactoryBrain.Step(bot, ctx, mode, _dt)
 	local memory = bot.Memory
-	if mode.stopAt then
-		local worker = mode.workers[bot]
-		if worker and not memory.Cheered and mode:_leader() == worker.Team then
-			memory.Cheered = true
-			bot:Jump()
-		end
-		return
-	end
-	if not mode.t0 or not bot:Root() then
+	if mode.stopAt or not mode.t0 or not bot:Root() then
 		return
 	end
 	local line, owned = mode:StationsOf(bot)
@@ -52,13 +47,15 @@ function CakeFactoryBrain.Step(bot, ctx, mode, _dt)
 		local ready = not (cake and cake.Bad) and layers == index - 1
 		local press
 		if ready then
-			press = not bot:Chance((1 - skill) * 0.25) -- now and then a bot just misses one
+			press = not bot:Chance(math.max(0.05, (1 - skill) * 0.25)) -- now and then a bot just misses one
 		else
 			press = bot:Chance((1 - skill) * 0.22) -- a careless press on a cake that isn't ready
 		end
 		if press then
-			local spread = (1 - skill) * 0.6
-			local err = (bot.Rng:NextNumber() + bot.Rng:NextNumber() - 1) * spread + (1 - skill) * 0.03
+			local spread = 0.12 + (1 - skill) * 0.5
+			local err = (bot.Rng:NextNumber() + bot.Rng:NextNumber() - 1) * spread
+				+ (1 - skill) * 0.03
+				+ 0.03 * mode:Speed(now) / mode.V_END -- a little late as the belt speeds up
 			ctx:Delay(math.max(at - now + err, 0.02), function()
 				ctx:BotAction(bot, "Add")
 			end)

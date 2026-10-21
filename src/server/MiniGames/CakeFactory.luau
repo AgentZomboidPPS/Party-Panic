@@ -9,26 +9,35 @@
 -- recipe has as many steps as the biggest team (2 or 3); every station has exactly one owner, so a
 -- short-handed team's players run more than one machine (their one ADD button works whichever of
 -- their machines has a cake under it). The machines stand off the cakes' rhythm (a gap of
--- SPACING * (1 + 1/steps)), so a player's machines never want a press at the same moment.
+-- SPACING * (1 + 1/steps)), so a player's machines never want a press at the same moment. A press
+-- is matched to the cake that needs this player (not a ruined one, not one that already has their
+-- layer) before the nearest one, so running two or three machines never ruins a cake by accident.
 --
 -- A press is good when a cake's middle is within WINDOW studs of the machine, and only if the
 -- cake has every earlier layer. Pressing on a cake that's missing a layer ("WRONG"), adding a layer
 -- twice, or pressing with a cake only near the machine ("SPLAT") ruins it; pressing with no cake
--- near jams the machine for a moment ("MISS"). Ruined and unfinished cakes are tipped into the bin.
+-- near jams the machine for a moment ("MISS"; a press by a ruined cake does nothing). Ruined and
+-- unfinished cakes are tipped into the bin.
 --
 -- The server owns the belt: its distance is a shared schedule (V0, Acc from T0), clients slide the
 -- cakes along it every frame and the server judges each press against the same schedule, a little
 -- in the past for the player's ping. The state of the cakes on each belt is shared as a string
 -- ("Cakes_<Team>"), and the "Add"/"Missed"/"Boxed" events animate the machines for everyone.
--- Team scores are finished cakes; a tie is broken by the good layers each team placed, then by
--- their perfect presses.
+-- Every team gets the same plates, so a good team could finish them all: skill shows in the score
+-- through ★ cakes. A finished cake scores 1, a ★ cake (every layer a PERFECT press) scores 2, and
+-- the pills show both counts (🎂 cakes, ★ cakes). A tie on points is broken by perfect presses, then
+-- good layers (the results say so).
 --
--- Bots press through ctx:BotAction with skill-based timing on the same schedule (Bots/CakeFactory).
--- There are no moving hazards: the belt only carries cakes, so nothing needs a separate bot check.
+-- Bots press through ctx:BotAction with skill-based timing on the same schedule (Bots/CakeFactory);
+-- even the best bots slip now and then, so a sharp human team beats them. There are no moving
+-- hazards: the belt only carries cakes, so nothing needs a separate bot check. Bots on the winning
+-- team hop for joy when the belts stop.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Teams = require(ReplicatedStorage.Shared.Teams)
+
+local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
@@ -61,7 +70,7 @@ local REACH = 12 -- how far from their spot a player may be and still press
 local FLOOR_Y = 0
 
 type Station = { X: number, Kind: string, Owner: Player? }
-type Cake = { N: number, Bad: boolean }
+type Cake = { N: number, Bad: boolean, P: number } -- layers, ruined, perfect layers
 type Line = {
 	Team: string,
 	Index: number,
@@ -73,6 +82,7 @@ type Line = {
 	Passed: { number }, -- per station, the highest cake that has gone past it
 	Low: number, -- the lowest cake still on the belt (for sharing)
 	Done: number,
+	Stars: number, -- finished cakes with every layer perfect (worth 2)
 	Ruined: number,
 	Layers: number,
 	Perfect: number,
@@ -156,7 +166,7 @@ end
 function CakeFactory:Cake(line: Line, k: number): Cake
 	local cake = line.Cakes[k]
 	if not cake then
-		cake = { N = 0, Bad = false }
+		cake = { N = 0, Bad = false, P = 0 }
 		line.Cakes[k] = cake
 	end
 	return cake
@@ -177,13 +187,18 @@ function CakeFactory:StationsOf(player: Player): (Line?, { number })
 	return line, list
 end
 
--- Hands out a line's stations round-robin to its members and puts each member at their spot:
--- by their machine, or between their machines when they run more than one.
+-- Hands out a line's stations round-robin to its members and puts each member at their spot.
 function CakeFactory:_assign(line: Line)
 	local members = line.Members
 	for index, station in line.Stations do
 		station.Owner = if #members > 0 then members[((index - 1) % #members) + 1] else nil
 	end
+	self:_spots(line)
+end
+
+-- Each member's spot: by their machine, or between their machines when they run more than one.
+function CakeFactory:_spots(line: Line)
+	local members = line.Members
 	local spots = {}
 	for _, player in members do
 		local sum, count = 0, 0
@@ -274,7 +289,10 @@ function CakeFactory:_shareCakes(line: Line)
 		local n = cake and cake.N or 0
 		table.insert(chars, if cake and cake.Bad then string.char(97 + n) else tostring(n))
 	end
-	self.context:SetSharedJSON("Cakes_" .. line.Team, { K = line.Low, S = table.concat(chars) })
+	self.context:SetSharedJSON(
+		"Cakes_" .. line.Team,
+		{ K = line.Low, S = table.concat(chars), D = line.Done, St = line.Stars }
+	)
 end
 
 function CakeFactory:Prepare()
@@ -282,6 +300,7 @@ function CakeFactory:Prepare()
 	ctx.RespawnMode = "Respawn"
 	ctx.EndWhenOneLeft = false
 	ctx.KillY = ctx.Origin.Y - 30
+	ctx.WalkSpeed = 0 -- everyone works at their machine (the framework keeps it on unfreeze/respawn)
 	local origin = ctx.Origin.Position
 	local duration = (ctx.Definition and ctx.Definition.Duration) or 45
 	self.acc = (CakeFactory.V_END - CakeFactory.V0) / duration
@@ -329,6 +348,7 @@ function CakeFactory:Prepare()
 			Passed = table.create(steps, -1),
 			Low = 0,
 			Done = 0,
+			Stars = 0,
 			Ruined = 0,
 			Layers = 0,
 			Perfect = 0,
@@ -713,8 +733,15 @@ function CakeFactory:_buildLine(line: Line)
 	})
 end
 
--- Someone left: their machines go to their teammates (a team with nobody left keeps its cakes but
--- drops out of the running).
+-- How far apart two machines are in the cakes' rhythm (0: they'd want a press at the same moment).
+local function phaseGap(a: number, b: number): number
+	local gap = math.abs(a - b) % CakeFactory.SPACING
+	return math.min(gap, CakeFactory.SPACING - gap)
+end
+
+-- Someone left: only their machines change hands, each to the teammate running the fewest (the one
+-- whose machines are furthest off its rhythm on a tie), who walks over and is told. A team with
+-- nobody left keeps its cakes but drops out of the running.
 function CakeFactory:_leave(player: Player)
 	local worker = self.workers[player]
 	self.workers[player] = nil
@@ -726,14 +753,53 @@ function CakeFactory:_leave(player: Player)
 	if index then
 		table.remove(line.Members, index)
 	end
-	self:_assign(line)
-	-- Teammates who now run other machines walk to their new spot.
+	local before = {}
 	for _, member in line.Members do
 		local other = self.workers[member]
+		before[member] = other and other.Spot
+	end
+	local gained = {} :: { [Player]: boolean }
+	for _, orphan in line.Stations do
+		if orphan.Owner and table.find(line.Members, orphan.Owner) then
+			continue
+		end
+		local best, bestCount, bestGap = nil, math.huge, -1
+		for _, member in line.Members do
+			local count, gap = 0, math.huge
+			for _, station in line.Stations do
+				if station.Owner == member then
+					count += 1
+					gap = math.min(gap, phaseGap(station.X, orphan.X))
+				end
+			end
+			if count < bestCount or (count == bestCount and gap > bestGap) then
+				best, bestCount, bestGap = member, count, gap
+			end
+		end
+		orphan.Owner = best
+		if best then
+			gained[best] = true
+		end
+	end
+	self:_spots(line)
+	-- Only teammates whose spot changed walk over (and are told what they run now).
+	for _, member in line.Members do
+		local other = self.workers[member]
+		local old = before[member]
+		if not other or (old and (old.Position - other.Spot.Position).Magnitude < 0.5 and not gained[member]) then
+			continue
+		end
 		local character, _, root = self.context:GetCharacter(member)
-		if other and character and root then
+		if character and root then
 			character:PivotTo(other.Spot + Vector3.new(0, 3, 0))
 		end
+		local kinds = {}
+		for _, station in line.Stations do
+			if station.Owner == member then
+				table.insert(kinds, station.Kind)
+			end
+		end
+		self.context:Fire(member, "Reassigned", kinds)
 	end
 	self:_shareBelt()
 end
@@ -747,7 +813,7 @@ function CakeFactory:_add(player: Player)
 	end
 	local now = ctx:Now()
 	if now < worker.JamUntil then
-		return
+		return -- the client shows ✕ JAMMED (and holds presses) for as long
 	end
 	local line, owned = self:StationsOf(player)
 	if not line or #owned == 0 then
@@ -772,27 +838,49 @@ function CakeFactory:_add(player: Player)
 	local slack = self:Speed(at) * 0.05 -- a little more for the message's own jitter
 	local distance = self:Distance(at)
 
-	-- The nearest cake under any of this player's machines.
+	-- Which cake this press is for: one under any of this player's machines that needs exactly that
+	-- machine's layer and is in its window, the nearest such; else the nearest cake that isn't
+	-- ruined. (A player running several machines has their windows close together.)
 	local best, bestK, bestOffset = nil, nil, math.huge
+	local near, nearK, nearOffset = nil, nil, math.huge
+	local ruinedAt = nil
 	for _, index in owned do
 		local station = line.Stations[index]
 		local k = math.floor((CakeFactory.START + distance - station.X) / CakeFactory.SPACING + 0.5)
-		if k >= 0 and k * CakeFactory.SPACING <= distance + 1e-6 then
-			local offset = CakeFactory.START + distance - k * CakeFactory.SPACING - station.X
-			if math.abs(offset) < math.abs(bestOffset) then
-				best, bestK, bestOffset = index, k, offset
-			end
+		if k < 0 or k * CakeFactory.SPACING > distance + 1e-6 then
+			continue
 		end
+		local offset = CakeFactory.START + distance - k * CakeFactory.SPACING - station.X
+		if math.abs(offset) > CakeFactory.RUIN then
+			continue
+		end
+		local cake = line.Cakes[k]
+		if cake and cake.Bad then
+			ruinedAt = ruinedAt or index
+			continue
+		end
+		local layers = if cake then cake.N else 0
+		if
+			layers == index - 1
+			and math.abs(offset) <= CakeFactory.WINDOW + slack
+			and math.abs(offset) < math.abs(bestOffset)
+		then
+			best, bestK, bestOffset = index, k, offset
+		end
+		if math.abs(offset) < math.abs(nearOffset) then
+			near, nearK, nearOffset = index, k, offset
+		end
+	end
+	if not best then
+		best, bestK, bestOffset = near, nearK, nearOffset
 	end
 	local station = best and line.Stations[best]
 	local kind
-	if not station or not bestK or math.abs(bestOffset) > CakeFactory.RUIN then
-		kind = "miss"
+	if not station or not bestK then
+		kind = if ruinedAt then "ruined" else "miss"
 	else
 		local cake = self:Cake(line, bestK)
-		if cake.Bad then
-			kind = "miss"
-		elseif math.abs(bestOffset) > CakeFactory.WINDOW + slack then
+		if math.abs(bestOffset) > CakeFactory.WINDOW + slack then
 			kind = "splat"
 		elseif cake.N ~= best - 1 then
 			kind = if cake.N >= best then "double" else "wrong"
@@ -804,12 +892,13 @@ function CakeFactory:_add(player: Player)
 			worker.Good += 1
 			line.Layers += 1
 			if kind == "perfect" then
+				cake.P += 1
 				worker.Perfect += 1
 				line.Perfect += 1
 			end
 			ctx:AddScore(player, if kind == "perfect" then 2 else 1)
 			ctx:SetScoreText(player, `{worker.Good} layers`)
-		elseif kind ~= "miss" then
+		else
 			cake.Bad = true
 			worker.Bad += 1
 		end
@@ -817,8 +906,8 @@ function CakeFactory:_add(player: Player)
 	if kind == "miss" then
 		worker.JamUntil = now + CakeFactory.JAM
 	end
-	ctx:Fire(nil, "Add", line.Team, best or owned[1], bestK or -1, kind, player.UserId)
-	if kind ~= "miss" then
+	ctx:Fire(nil, "Add", line.Team, best or ruinedAt or owned[1], bestK or -1, kind, player.UserId)
+	if kind ~= "miss" and kind ~= "ruined" then
 		self:_shareCakes(line)
 	end
 end
@@ -828,12 +917,6 @@ function CakeFactory:Start()
 	self.started = true
 	self.t0 = ctx:Now() + 0.2
 	self:_shareBelt()
-	for _, player in ctx:GetPlayers() do
-		ctx:SetWalkSpeed(player, 0)
-	end
-	ctx.Hooks.CharacterReady = function(player)
-		ctx:SetWalkSpeed(player, 0)
-	end
 	ctx:OnAction("Add", function(player)
 		self:_add(player)
 	end, { Interval = 0.12 })
@@ -850,18 +933,20 @@ function CakeFactory:Start()
 	end
 
 	-- The packer judges every cake that reaches it, and the machines note cakes that went by
-	-- without their layer.
-	local lastStatus, faster = 0, 1
+	-- without their layer (judged where the belt was 0.3 s ago, the most a press can be lag-
+	-- compensated, so no press still on its way could have counted).
+	local lastStatus, status, faster = 0, nil, 1
 	ctx:Loop(function(): number?
 		local now = ctx:Now()
 		local distance = self:Distance(now)
+		local late = self:Distance(now - 0.3)
 		for _, team in self.order do
 			local line = self.lines[team]
 			local changed = false
 			for index, station in line.Stations do
 				local passed =
-					math.floor((CakeFactory.START + distance - station.X - CakeFactory.RUIN) / CakeFactory.SPACING)
-				passed = math.min(passed, math.floor(distance / CakeFactory.SPACING))
+					math.floor((CakeFactory.START + late - station.X - CakeFactory.RUIN) / CakeFactory.SPACING)
+				passed = math.min(passed, math.floor(late / CakeFactory.SPACING))
 				for k = line.Passed[index] + 1, passed do
 					local cake = self:Cake(line, k)
 					if not cake.Bad and cake.N == index - 1 and #line.Members > 0 then
@@ -874,13 +959,17 @@ function CakeFactory:Start()
 			for k = line.Judged + 1, judged do
 				local cake = self:Cake(line, k)
 				local good = not cake.Bad and cake.N == #line.Stations
+				local star = good and cake.P >= #line.Stations
 				if good then
 					line.Done += 1
-					ctx:AddTeamScore(team, 1)
+					if star then
+						line.Stars += 1
+					end
+					ctx:AddTeamScore(team, if star then 2 else 1)
 				else
 					line.Ruined += 1
 				end
-				ctx:Fire(nil, "Boxed", team, k, good, line.Done)
+				ctx:Fire(nil, "Boxed", team, k, good, line.Done, star, line.Stars)
 				changed = true
 			end
 			line.Judged = math.max(line.Judged, judged)
@@ -890,11 +979,12 @@ function CakeFactory:Start()
 		end
 		if now - lastStatus > 0.9 then
 			lastStatus = now
-			local leader = self:_leader()
-			local entry = leader and self.lines[leader]
-			if entry and entry.Done > 0 then
-				ctx:SetStatus(`{CakeFactory.Shapes[leader]} {string.upper(leader)} leads: {entry.Done} 🎂`)
-			end
+		end
+		-- The status says who's ahead on points (the numbers on the score bar), ties included.
+		local text = self:_statusText()
+		if text and text ~= status then
+			status = text
+			ctx:SetStatus(text)
 		end
 		-- The belts speed up: say so at each step up.
 		local speed = self:Speed(now)
@@ -907,7 +997,37 @@ function CakeFactory:Start()
 	end)
 end
 
--- The team with the most cakes (ties broken by good layers, then perfect presses) among teams
+-- A team's points: 1 per finished cake, 2 per ★ cake.
+function CakeFactory:Points(team: string): number
+	local line = self.lines[team]
+	return if line then line.Done + line.Stars else 0
+end
+
+-- "★ RED leads 12–9" or "TIED at 12" (points among teams with players), nil before anyone scores.
+function CakeFactory:_statusText(): string?
+	local top, second, leader, shared = -1, -1, nil, false
+	for _, team in self.order do
+		if #self.lines[team].Members == 0 then
+			continue
+		end
+		local points = self:Points(team)
+		if points > top then
+			second, top, leader, shared = top, points, team, false
+		elseif points == top then
+			second, shared = points, true
+		elseif points > second then
+			second = points
+		end
+	end
+	if not leader or top <= 0 then
+		return nil
+	elseif shared then
+		return `TIED at {top}!`
+	end
+	return `{CakeFactory.Shapes[leader]} {string.upper(leader)} leads {top}–{math.max(second, 0)}`
+end
+
+-- The team with the most points (ties broken by perfect presses, then good layers) among teams
 -- with players, or nil on a dead heat.
 function CakeFactory:_leader(): string?
 	local best, bestRank, tie = nil, -1, false
@@ -931,7 +1051,7 @@ function CakeFactory:_rank(team: string): number
 	if not line then
 		return 0
 	end
-	return line.Done + math.min(line.Layers, 9999) / 1e4 + math.min(line.Perfect, 9999) / 1e8
+	return self:Points(team) + math.min(line.Perfect, 9999) / 1e4 + math.min(line.Layers, 9999) / 1e8
 end
 
 function CakeFactory:Stop(_reason: string?)
@@ -941,14 +1061,27 @@ function CakeFactory:Stop(_reason: string?)
 	local ctx = self.context
 	self.stopAt = ctx:Now()
 	self:_shareBelt()
+	for _, team in self.order do
+		self:_shareCakes(self.lines[team])
+	end
 	local team = self:_leader()
 	if team then
 		ctx:Announce(`{CakeFactory.Shapes[team]} {string.upper(team)} WINS!`, "success", 2.5)
 		ctx:Fire(nil, "Winner", team)
+		-- The winning team's bots hop for joy (the bot loop has already stopped).
+		for _, bot in self.lines[team].Members do
+			if BotRegistry.IsBot(bot) then
+				task.delay(0.15 + math.random() * 0.4, function()
+					pcall(function()
+						bot:Jump()
+					end)
+				end)
+			end
+		end
 	end
 end
 
--- Team results (most cakes first, then good layers); each player's line shows their own work.
+-- Team results (most points first, then perfect presses); each player's line shows their own work.
 function CakeFactory:GetResults()
 	local results = self.context:TeamResults()
 	for _, entry in results.Entries do
@@ -958,7 +1091,8 @@ function CakeFactory:GetResults()
 		end
 		local worker = self.workers[entry.Player]
 		if worker and line then
-			entry.ScoreText = `{entry.Team} {line.Done} cakes • {worker.Good} layers, {worker.Perfect} perfect`
+			entry.ScoreText =
+				`{entry.Team} {line.Done} cakes, {line.Stars} ★ • {worker.Good} layers, {worker.Perfect} perfect`
 		end
 	end
 	results.WinningTeam = self:_leader()
