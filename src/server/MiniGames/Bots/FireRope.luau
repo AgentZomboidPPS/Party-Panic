@@ -5,7 +5,7 @@
 -- exactly like a player's (its height around each pass), so bots really can be beaten.
 local FireRope = {}
 
-local LEAD = 0.27 -- jump this long before a pass: the jump is at its highest as the rope goes under
+local LEAD = 0.33 -- jump this long before a pass: the middle of the time a jump clears the rope
 local PLAN_AHEAD = 1 -- a bot settles on its timing this long before each pass
 local AIR_TIME = 0.8 -- after a jump, a bot is back on its feet by then
 local SLOW, FAST = 3, 1.05 -- the mode's rope speeds (seconds per turn), for how hard a pass is

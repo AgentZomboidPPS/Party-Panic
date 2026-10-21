@@ -24,6 +24,7 @@ local Notifier = require(script.Parent.Notifier)
 local Telemetry = require(script.Parent.Telemetry)
 
 local LOBBY_RADIUS = 600
+local PEOPLE_OUT_DELAY = 2 -- once every person is out, the round wraps up after this long
 
 local actionRemote = Remotes.Get("MiniGameAction")
 local eventRemote = Remotes.Get("MiniGameEvent")
@@ -75,6 +76,7 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 	self.StartTime = 0
 	self.StartCount = 0
 	self.EndReason = nil :: string?
+	self.PeopleOutPending = false
 	self.Destroyed = false
 	self.RespawnMode = "Eliminate" -- "Eliminate" | "Respawn"
 	self.EndWhenOneLeft = false
@@ -790,12 +792,37 @@ end
 
 -- Internals ------------------------------------------------------------------------------------
 
+-- Whether any person (not a bot) is still in the round and not out.
+function RoundContext._anyPersonAlive(self: RoundContext): boolean
+	for _, player in self:GetAlivePlayers() do
+		if not BotRegistry.IsBot(player) then
+			return true
+		end
+	end
+	return false
+end
+
 function RoundContext._checkAutoEnd(self: RoundContext)
 	if not self:IsRunning() then
 		return
 	end
 	if #self:GetPlayers() == 0 then
 		self:End("NoPlayers")
+		return
+	end
+	-- Rounds are for people: once every person in it is out (or has left), wrap up after a moment
+	-- instead of leaving them watching bots play on (owner: "The round should end if all human
+	-- players are eliminated"). Modes where people respawn never get here while anyone is playing.
+	if not self:_anyPersonAlive() then
+		if not self.PeopleOutPending then
+			self.PeopleOutPending = true
+			self:Delay(PEOPLE_OUT_DELAY, function()
+				self.PeopleOutPending = false
+				if not self:_anyPersonAlive() then
+					self:End("PeopleOut")
+				end
+			end)
+		end
 		return
 	end
 	if self.EndWhenOneLeft then

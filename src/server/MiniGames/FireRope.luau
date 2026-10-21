@@ -5,8 +5,10 @@
 --
 -- The rope's angle follows a schedule shared with every client (MG_Rope): a list of segments that
 -- each start at a bottom pass and are announced one full turn ahead, so clients draw it perfectly
--- in sync. At every pass the server checks each player's recent height, with a little leeway for
--- network lag, so a jump that looked right on your screen counts. Bots are judged the same way
+-- in sync. At every pass the server checks that each player is in the air as the rope goes under
+-- them (a short moment either side of the pass, shifted by half their ping so a jump that looked
+-- right on their screen counts). Being in the air at some other moment doesn't count, so holding
+-- jump isn't a way through (owner: "its super easy right now not to get hit"). Bots are judged the same way
 -- (Bots/FireRope.luau times their jumps from the same schedule).
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
@@ -22,7 +24,8 @@ local LENGTH = 72 -- bridge length (x)
 local DEPTH = 8 -- bridge depth (z)
 local RADIUS = 9.5 -- rope swing radius
 local ROPE_LOW = 0.9 -- rope height above the floor at the bottom of its swing
-local CLEAR = 1.4 -- how far a player's root must rise above standing height to clear the rope
+local CLEAR = 1.6 -- how far a player's root must rise above standing height to clear the rope
+local CLEAR_WINDOW = 0.07 -- a jumper must be that high from this long before the pass to this long after
 local FIRST_PERIOD = 3.0
 local FASTEST_PERIOD = 1.05 -- a Roblox jump is ~0.5s in the air; this leaves time to land and go again
 local LAVA_DROP = 24
@@ -213,20 +216,26 @@ function FireRope:_judge(passTime: number)
 		local ok, ping = pcall(function()
 			return (player :: any):GetNetworkPing()
 		end)
-		local lag = if ok and type(ping) == "number" then math.clamp(ping, 0, 0.35) else 0.1
-		local highest = -math.huge
-		local seen = false
+		-- What their screen showed at the pass reaches the server about half a round trip later.
+		local at = passTime + 0.03 + (if ok and type(ping) == "number" then math.clamp(ping, 0, 0.5) / 2 else 0.05)
+		local lowest = math.huge
+		local nearest, nearestGap = nil, 0.15
 		for _, sample in samples do
-			if sample.T >= passTime - 0.16 and sample.T <= passTime + 0.18 + lag then
-				seen = true
-				highest = math.max(highest, sample.H)
+			local gap = math.abs(sample.T - at)
+			if gap <= CLEAR_WINDOW then
+				lowest = math.min(lowest, sample.H)
+			elseif gap < nearestGap then
+				nearest, nearestGap = sample.H, gap
 			end
 		end
-		if not seen then
-			continue -- off the bridge (falling): the fall check deals with it
+		if lowest == math.huge then
+			if not nearest then
+				continue -- off the bridge (falling): the fall check deals with it
+			end
+			lowest = nearest
 		end
 		local need = (self.standing[player] or 3) + CLEAR
-		if highest >= need then
+		if lowest >= need then
 			self.jumps[player] = (self.jumps[player] or 0) + 1
 			ctx:AddScore(player, 1)
 			ctx:SetScoreText(player, if self.jumps[player] == 1 then "1 jump" else `{self.jumps[player]} jumps`)
