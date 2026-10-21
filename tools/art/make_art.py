@@ -13,7 +13,7 @@ access) and saves the snapshots in --dumps. The icons need no snapshot.
 
 Scenes (--only, comma-separated; default: all of them):
     lobby, firerope, bobsled, hexmeltdown, party    thumb_1_lobby.jpg ... thumb_5_party.jpg
-    icon                                            icon_512.png: the chosen icon concept (ICON below)
+    icon                                            icon_512.png: the chosen icon concept (ICON in this file)
     icon_scream, icon_leap, icon_duo                one icon concept each: the chosen one writes
                                                     icon_512.png, the others icon_alt_<name>.png
     sheet                                           icon_sheet.png: the icons in --out at 512, 128 and
@@ -33,12 +33,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from itertools import pairwise
 from pathlib import Path
 
 import bpy
-import bmesh  # noqa: I001  (after bpy: the bpy package puts it on the path)
 import mathutils
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont
+
+import bmesh  # after bpy, whose package puts it on the path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -593,7 +595,7 @@ def head_mesh():
             continue
         rings.append([bm.verts.new((math.sin(math.tau * i / segments) * r, -math.cos(math.tau * i / segments) * r, z))
                       for i in range(segments)])
-    for lower, upper in zip(rings, rings[1:]):
+    for lower, upper in pairwise(rings):
         for i in range(segments):
             j = (i + 1) % segments
             if len(lower) == 1:
@@ -875,7 +877,7 @@ def flame_mesh():
         else:
             rings.append([bm.verts.new((math.cos(math.tau * i / segments) * r, math.sin(math.tau * i / segments) * r, z))
                           for i in range(segments)])
-    for lower, upper in zip(rings, rings[1:]):
+    for lower, upper in pairwise(rings):
         for i in range(segments):
             j = (i + 1) % segments
             if len(lower) == 1:
@@ -923,7 +925,7 @@ def fire_rope(points, radius=0.42, flames=1.0, seed=5, trail=(0, 0, 1), heat=1.0
     tube("rope_rim", points, radius * 1.9, glow((230, 40, 25), 2.0 * heat, alpha=0.65))
     curve_points = [V(p) for p in points]
     samples = []
-    for a, b in zip(curve_points, curve_points[1:]):
+    for a, b in pairwise(curve_points):
         steps = max(1, int((b - a).length / (radius * 2.6)))
         samples += [a.lerp(b, i / steps) for i in range(steps)]
     hot = fire_material(strength=2.2 * heat)
@@ -998,6 +1000,7 @@ def fetch(dumps: Path):
     """Snapshots of the lobby and the featured arenas, made on a test server."""
     from make_preview import dump_round  # tools/preview
 
+    dumps = dumps.resolve()
     dumps.mkdir(parents=True, exist_ok=True)
     task = Path(tempfile.gettempdir()) / "pp_art_lobby.luau"
     task.write_text(subprocess.run([sys.executable, str(PREVIEW / "bundle.py")], cwd=ROOT, check=True,
@@ -1186,7 +1189,7 @@ def icon_scream(args, out):
     avatar((0, 0, 0), math.radians(-10), "panic", look, "scream", head_scale=1.5, shoulders="top",
            pose_extra={"arm_l": (-4, 146), "arm_r": (-4, 148), "head": (-5, 5, -4)})
     # The party hat, knocked off and flying.
-    holder = empty("hat", (-1.5, -1.0, 5.75), (math.radians(14), math.radians(-48), 0))
+    holder = empty("hat", (-0.45, -0.7, 6.0), (math.radians(10), math.radians(-38), 0))
     cone("hat", 0.48, 1.25, striped((110, 226, 140), (255, 230, 90), frequency=9, twist=1.0), (0, 0, 0), parent=holder)
     ball("pompom", 0.36, (255, 84, 150), (0, 0, 1.3), holder)
     # The fire rope sweeping in across the bottom.
@@ -1198,7 +1201,7 @@ def icon_scream(args, out):
     # Rim lights from behind: cool on one side, warm on the other, so the outline glows.
     lamp((-3.2, 2.8, 6.2), 260, (0.45, 0.8, 1.0), 1.2)
     lamp((3.4, 2.6, 5.4), 260, (1.0, 0.62, 0.3), 1.2)
-    face_line = [((0, -0.6 - k, 4.9 - k * 0.05), 1.4 + k * 0.1) for k in (0, 1, 2, 3, 4)]
+    face_line = [((0, -0.6 - k, 4.9 - k * 0.05), 1.4 + k * 0.1) for k in (0, 1, 2, 3, 4)] + [((-0.6, -1.2, 6.6), 1.1)]
     confetti(90, (0, 0, 4.8), (4.0, 2.5, 2.6), seed=21, size=0.3, emission=0.5, avoid=face_line)
     cam = camera((0.7, -6.0, 4.3), (0.0, 0, 4.55), fov=46)
     cam.data.dof.use_dof = True
@@ -1530,7 +1533,7 @@ def sled_crew(body, riders, lean=0.0):
 def scene_bobsled(args, out):
     """A crew leaning hard through a banked curve, ice spraying, the run and the peaks behind."""
     data = load_dump(args, "BobsledRun")
-    parts, rigs = split_rigs(data["parts"])
+    parts, _ = split_rigs(data["parts"])
     new_scene(args.samples, args.width, args.height, top=(0.1, 0.32, 0.85), horizon=(0.7, 0.86, 1.0),
               sun=(0.35, -0.55, 0.7), sun_energy=4.2)
     build_arena(data, parts)
@@ -1569,7 +1572,7 @@ def scene_hexmeltdown(args, out):
     """The referee calls YELLOW: the yellow hexes stay up, every other one sinks into the lava with
     players still on it, and everyone leaps for safety."""
     data = load_dump(args, "HexMeltdown")
-    parts, rigs = split_rigs(data["parts"])
+    parts, _ = split_rigs(data["parts"])
     # Each column's pieces (top, rim, glow, rock) go with the nearest top.
     tops = {(round(p["cf"][0], 1), round(p["cf"][2], 1)): p for p in parts if p.get("prop") == "HexColumn" and p["n"] == "Top"}
     columns = {key: [] for key in tops}
@@ -1751,7 +1754,7 @@ def main():
     parser.add_argument("--out", default="art")
     parser.add_argument("--only", help="comma-separated scenes (default: all)")
     parser.add_argument("--samples", type=int, default=40)
-    parser.add_argument("--width", type=int, default=1920)
+    parser.add_argument("--width", type=int, default=1920, help="thumbnail size (the icon is always 512x512)")
     parser.add_argument("--height", type=int, default=1080)
     args = parser.parse_args()
     if args.fetch:

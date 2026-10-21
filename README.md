@@ -48,7 +48,8 @@ It builds the place, publishes it, and sets the name, the store description from
   session holds the place. Close Studio, or turn Collaborative Editing off, and try again.
 
 Store art (thumbnails and icon) lives in [assets/store](assets/store) and is made with
-`tools/art/make_art.py` (see [docs/ASSETS.md](docs/ASSETS.md)).
+`tools/art/make_art.py` (see [docs/ASSETS.md](docs/ASSETS.md)). The API key can't upload it:
+[assets/store/README.md](assets/store/README.md) says where it goes in the Creator Hub.
 
 Also check these in **Game Settings** in Studio:
 
