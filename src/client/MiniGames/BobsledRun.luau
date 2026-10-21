@@ -7,9 +7,12 @@
 -- the kickers; a "Curve" event slams it into the wall or sends it off with a boost. Every rider's
 -- character (players and bots, via api:CharacterOf) is set into its seat here each frame and posed
 -- sitting and leaning; your own character is moved for real, so the server sees you in your sled.
--- The next curve's cue (LEAN LEFT! / LEAN RIGHT!) shows as soon as its window opens on the server
--- (the sled's "O" time: at GO, then the moment the last curve was judged), in the same colour and
--- shape as its button; before GO it previews the first curve, with the buttons off.
+-- The next curve's cue (LEAN LEFT! / LEAN RIGHT!) shows exactly while the server would count a
+-- lean for it, in the same colour and shape as its button: from GO for the first curve, then from
+-- BobsledCourse.GRACE after the sled entered the curve before (the server's "C" time once it's
+-- shared, until then from the sled as drawn here). Each press carries its time, and the server
+-- judges it by that, so a press made while the cue showed LEAN RIGHT! counts for that curve. Before
+-- GO the cue previews the first curve, with the buttons off.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -233,9 +236,11 @@ function BobsledRun.Start(api)
 			leans[userId] = { Dir = dir, At = at }
 		end
 	end
-	api:OnEvent("Lean", function(userId, dir)
+	api:OnEvent("Lean", function(userId, dir, at)
 		if type(userId) == "number" and (dir == -1 or dir == 1) and userId ~= myId then
-			noteLean(userId, dir, api:Now())
+			-- (when it was pressed, as the server counts it, so the crew pips match the judging)
+			local now = api:Now()
+			noteLean(userId, dir, if type(at) == "number" then math.min(at, now) else now)
 		end
 	end)
 
@@ -465,18 +470,42 @@ function BobsledRun.Start(api)
 	local right = api:Button({ Text = "RIGHT >", Key = Enum.KeyCode.D, Color = RIGHT_COLOR, Slot = 1 })
 	local lastPress = -math.huge
 
-	-- My sled's next curve, the seconds to it, and when its window opened (nil before GO).
+	-- My sled's curve whose window is open, the seconds to it, and when its window opened (nil before
+	-- GO). The server judges a curve a moment after its window closes (waiting for presses still on
+	-- the way), so once the sled is GRACE into it the next curve's cue already shows, just as the
+	-- server counts any lean pressed from then on for that one.
+	local closedAt: { [number]: number } = {} -- each curve's window close as first seen here
 	local function windowState(): (BobsledCourse.Curve?, number?, number?)
 		local entry = myTeam and snapshot[myTeam]
 		local visual = myTeam and visuals[myTeam]
 		if not course or not entry or not visual or entry.F then
 			return nil, nil, nil
 		end
-		local curve = course.Curves[entry.N or 1]
+		local index = entry.N or 1
+		local curve = course.Curves[index]
 		if not curve then
 			return nil, nil, nil
 		end
 		local opened = if type(entry.O) == "number" then entry.O else nil
+		if opened then
+			local now = api:Now()
+			local closes = if type(entry.C) == "number" then entry.C else closedAt[index]
+			if not closes and visual.D >= curve.D0 then
+				-- (not shared yet: from when the sled drawn here entered the curve)
+				local entered = now - (visual.D - curve.D0) / math.max(visual.V, 8)
+				if now > entered + BobsledCourse.GRACE then
+					closes = entered + BobsledCourse.GRACE
+					closedAt[index] = closes
+				end
+			end
+			if closes and now > closes then
+				curve = course.Curves[index + 1]
+				opened = closes
+				if not curve then
+					return nil, nil, nil
+				end
+			end
+		end
 		return curve, (curve.D0 - visual.D) / math.max(visual.V, 8), opened
 	end
 
@@ -489,7 +518,7 @@ function BobsledRun.Start(api)
 			return
 		end
 		lastPress = now
-		api:Action("Lean", dir)
+		api:Action("Lean", dir, now) -- (judged by when it was pressed: see the top of this file)
 		noteLean(myId, dir, now)
 		api:Sound("Click")
 	end

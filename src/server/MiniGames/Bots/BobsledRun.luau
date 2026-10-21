@@ -1,7 +1,8 @@
 -- How bots play Bobsled Run (contract in Bots/Default.luau). A bot rides in its crew's sled and,
--- as soon as the next curve's window opens (its cue shows), leans the curve's way after its own
--- reaction time (bot:Reaction(), quicker with skill), pressed through ctx:BotAction at that exact
--- moment (ctx:Delay), so the server judges it like any rider's press. Clumsier bots now and then
+-- as soon as the next curve's window opens (its cue shows: mode:_openCurve, the same moment a
+-- player's screen switches to it), leans the curve's way after its own reaction time
+-- (bot:Reaction(), quicker with skill), pressed through ctx:BotAction at that exact moment
+-- (ctx:Delay), so the server judges it like any rider's press. Clumsier bots now and then
 -- lean the wrong way, miss a curve or react too late; a skilled crew takes most curves clean, a
 -- clumsy one bumps the wall a few times: good players can beat them.
 --
@@ -16,13 +17,11 @@ function Brain.Step(bot, ctx, mode, _dt)
 	if not sled or sled.Place or sled.Gone or not mode.startAt then
 		return
 	end
-	local curve = mode.course.Curves[sled.Next]
+	-- The curve whose window is open (from GO, then from just after the sled entered the last one).
+	local index, openedAt = mode:_openCurve(sled, ctx:Now())
+	local curve = mode.course.Curves[index]
 	local memory = bot.Memory
-	if not curve or memory.Planned == curve.Index then
-		return
-	end
-	-- Wait for the window (open from GO, then from the moment the last curve was judged).
-	if not sled.OpenAt then
+	if not curve or memory.Planned == curve.Index or not openedAt then
 		return
 	end
 	local secondsToCurve = (curve.D0 - sled.D) / math.max(sled.V, 1)
@@ -44,9 +43,9 @@ function Brain.Step(bot, ctx, mode, _dt)
 		delay = secondsToCurve + 0.4 -- too late: the sled's already in the curve
 	end
 	delay = math.min(delay, secondsToCurve + 0.6)
-	-- A press that comes after the curve was judged is dropped: it mustn't count for the next one.
+	-- A press that comes after the curve's window closed is dropped: it mustn't count for the next.
 	local function press(lean: number)
-		if sled.Next == curve.Index and not sled.Place then
+		if (mode:_openCurve(sled, ctx:Now())) == curve.Index and not sled.Place then
 			ctx:BotAction(bot, "Lean", lean)
 		end
 	end

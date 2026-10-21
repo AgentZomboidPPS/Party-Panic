@@ -5,11 +5,20 @@
 --
 -- The rope's angle follows a schedule shared with every client (MG_Rope): a list of segments that
 -- each start at a bottom pass and are announced one full turn ahead, so clients draw it perfectly
--- in sync. At every pass the server checks that each player is in the air as the rope goes under
--- them (a short moment either side of the pass, shifted by half their ping so a jump that looked
--- right on their screen counts). Being in the air at some other moment doesn't count, so holding
--- jump isn't a way through (owner: "its super easy right now not to get hit"). Bots are judged the same way
--- (Bots/FireRope.luau times their jumps from the same schedule).
+-- in sync. At every pass the server sweeps the rope along its arc, step by step, against each
+-- player's legs as their own screen showed them (their height and place across the bridge, shifted
+-- by half their ping): you're out only if the rope's bright fireballs really pass through your feet
+-- or legs, and a jump that clears it on your screen counts. Being in the air at some other moment
+-- doesn't help, so holding jump isn't a way through (owner: "its super easy right now not to get
+-- hit"). Bots are judged the same way (Bots/FireRope.luau times their jumps from the same schedule).
+--
+-- Hitbox pass (owner: "We need to fine tune some of the hitboxes. the precision games will feel super
+-- bad if we dont."): it used to ask for the root to be 1.6 studs up for 0.07 s either side of the
+-- moment the rope reached the middle of the bridge. When the rope is fast it only spends about 0.02 s
+-- under someone's feet, so that threw out jumps that landed with the rope already 4 studs behind
+-- them; and someone standing near the front or back edge met the rope up to 0.15 s earlier or later
+-- (and higher) than the middle, so they were judged at the wrong moment. Feet now come from the
+-- character's hip height instead of where the root happened to be when the round started.
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
@@ -24,8 +33,13 @@ local LENGTH = 72 -- bridge length (x)
 local DEPTH = 8 -- bridge depth (z)
 local RADIUS = 9.5 -- rope swing radius
 local ROPE_LOW = 0.9 -- rope height above the floor at the bottom of its swing
-local CLEAR = 1.6 -- how far a player's root must rise above standing height to clear the rope
-local CLEAR_WINDOW = 0.07 -- a jumper must be that high from this long before the pass to this long after
+-- What the rope hits with: the smaller fireballs (radius 0.75; the core is 0.4). The bigger balls
+-- (0.95) and the see-through glow (0.9) can graze a jumper's soles without counting.
+local ROPE_HIT = 0.75
+local LEG_HALF = 0.5 -- half a character's legs and feet, front to back
+local SCAN = 0.62 -- radians either side of the bottom: the rope's reach over the whole bridge depth
+local SCAN_STEP = 0.01 -- radians per step of the sweep (under 0.1 studs of rope travel)
+local SLACK = 0.02 -- seconds of leeway either way on a player's delay (ping jitter), in their favour
 local FIRST_PERIOD = 3.0
 local FASTEST_PERIOD = 1.05 -- a Roblox jump is ~0.5s in the air; this leaves time to land and go again
 local LAVA_DROP = 24
@@ -37,7 +51,8 @@ local CRATER_RADIUS = 172 -- the crater wall around the lake
 local rng = Random.new()
 
 type Segment = { T0: number, A0: number, W: number }
-type Sample = { T: number, H: number }
+type Sample = { T: number, F: number, Z: number } -- feet above the deck, place across it (z)
+type Pass = { T: number, Before: number, After: number, Done: { [Player]: boolean }, Sweeps: { [Player]: any } }
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -112,6 +127,7 @@ function FireRope:Prepare()
 	self.standing = {} :: { [Player]: number }
 	self.jumps = {} :: { [Player]: number }
 	self.segments = {} :: { Segment }
+	self.pending = {} :: { Pass }
 	self.passes = 0
 	local origin = ctx.Origin.Position
 	self.floorY = origin.Y
@@ -271,58 +287,147 @@ function FireRope:_floorHeight(position: Vector3): number?
 	return position.Y - self.floorY
 end
 
-function FireRope:_judge(passTime: number)
+-- How high a character's root stands above its feet: from its hip height (avatars differ), with
+-- the height it stood at when the round started as a fallback.
+local function standingHeight(humanoid: Humanoid?, root: BasePart, measured: number): number
+	if humanoid then
+		local legs = if humanoid.RigType == Enum.HumanoidRigType.R6 then 3 else humanoid.HipHeight + root.Size.Y / 2
+		if legs > 1.5 and legs < 6 then
+			return legs
+		end
+	end
+	return if measured > 1.5 and measured < 5 then measured else 3
+end
+
+-- A player's feet height and place across the bridge at server time t, between two samples.
+local function sampleAt(samples: { Sample }, t: number): (number?, number?)
+	for index = #samples, 2, -1 do
+		local a, b = samples[index - 1], samples[index]
+		if a.T <= t and t <= b.T then
+			if b.T - a.T > 0.1 then
+				return nil, nil -- a gap (they were off the deck): nothing to judge there
+			end
+			local k = if b.T > a.T then (t - a.T) / (b.T - a.T) else 0
+			return a.F + (b.F - a.F) * k, a.Z + (b.Z - a.Z) * k
+		elseif b.T < t then
+			return nil, nil
+		end
+	end
+	return nil, nil
+end
+
+-- Whether the rope (a disc of radius ROPE_HIT at z, y) overlaps legs standing at `legZ` with
+-- their soles at `feet`: a box LEG_HALF deep each way, from the soles up a character's height.
+local function touches(z: number, y: number, legZ: number, feet: number): boolean
+	local dz = math.max(0, math.abs(z - legZ) - LEG_HALF)
+	local dy = if y < feet then feet - y elseif y > feet + 5 then y - feet - 5 else 0
+	return dz * dz + dy * dy < ROPE_HIT * ROPE_HIT
+end
+
+-- Sweeps the rope through one bottom pass against one player, as far as their positions have
+-- arrived. Returns "hit", "clear", or nil while it still needs later positions.
+function FireRope:_sweep(player: Player, pass: Pass, now: number): string?
+	local samples = self.history[player]
+	local last = samples and samples[#samples]
+	if not last then
+		return if now - pass.T > 1.5 then "clear" else nil -- off the deck: the fall check deals with them
+	end
+	local sweep = pass.Sweeps[player]
+	if not sweep then
+		-- What their screen showed at a moment reaches the server about half a round trip later
+		-- (plus a frame of replication). Bots move on the server: no delay.
+		local delay, slack = 0, 0
+		if not (player :: any):IsA("Bot") then
+			local ok, ping = pcall(function()
+				return (player :: any):GetNetworkPing()
+			end)
+			delay = 0.03 + (if ok and type(ping) == "number" then math.clamp(ping, 0, 0.5) / 2 else 0.05)
+			slack = SLACK
+		end
+		-- Each delay in the leeway is swept on its own; the player is out only if the rope hits
+		-- them under all of them.
+		sweep = { Step = -math.round(SCAN / SCAN_STEP), Delays = { delay - slack, delay, delay + slack }, Hit = {} }
+		pass.Sweeps[player] = sweep
+	end
+	local latest = sweep.Delays[3]
+	local lastStep = math.round(SCAN / SCAN_STEP)
+	local axisZ = self.axis.Z
+	while sweep.Step <= lastStep do
+		local theta = sweep.Step * SCAN_STEP
+		local t = pass.T + theta / (if theta < 0 then pass.Before else pass.After)
+		if t + latest > last.T then
+			-- Not all here yet; give up waiting after a while (they left the deck).
+			return if now - pass.T > 1.5 then "clear" else nil
+		end
+		local z = RADIUS * math.sin(theta)
+		local y = ROPE_LOW + RADIUS * (1 - math.cos(theta))
+		local hits = 0
+		for index, delay in sweep.Delays do
+			if not sweep.Hit[index] then
+				local feet, legZ = sampleAt(samples, t + delay)
+				if feet and legZ and touches(z, y, legZ - axisZ, feet) then
+					sweep.Hit[index] = true
+				end
+			end
+			if sweep.Hit[index] then
+				hits += 1
+			end
+		end
+		if hits == #sweep.Delays then
+			return "hit"
+		end
+		sweep.Step += 1
+	end
+	return "clear"
+end
+
+-- Judges every pass whose rope sweep has played out for each player still in.
+function FireRope:_judge(now: number)
 	local ctx = self.context
-	for _, player in ctx:GetAlivePlayers() do
-		local samples = self.history[player]
-		if not samples then
-			continue
-		end
-		local ok, ping = pcall(function()
-			return (player :: any):GetNetworkPing()
-		end)
-		-- What their screen showed at the pass reaches the server about half a round trip later.
-		local at = passTime + 0.03 + (if ok and type(ping) == "number" then math.clamp(ping, 0, 0.5) / 2 else 0.05)
-		local lowest = math.huge
-		local nearest, nearestGap = nil, 0.15
-		for _, sample in samples do
-			local gap = math.abs(sample.T - at)
-			if gap <= CLEAR_WINDOW then
-				lowest = math.min(lowest, sample.H)
-			elseif gap < nearestGap then
-				nearest, nearestGap = sample.H, gap
+	local index = 1
+	while self.pending[index] do
+		local pass = self.pending[index]
+		local waiting = false
+		for _, player in ctx:GetAlivePlayers() do
+			if pass.Done[player] then
+				continue
+			end
+			local verdict = self:_sweep(player, pass, now)
+			if verdict == nil then
+				waiting = true
+				continue
+			end
+			pass.Done[player] = true
+			if verdict == "clear" then
+				if self.history[player] and self.history[player][1] then
+					self.jumps[player] = (self.jumps[player] or 0) + 1
+					ctx:AddScore(player, 1)
+					ctx:SetScoreText(player, if self.jumps[player] == 1 then "1 jump" else `{self.jumps[player]} jumps`)
+					ctx:SetPlayerShared(player, "Jumps", self.jumps[player])
+				end
+			else
+				local _, _, root = ctx:GetCharacter(player)
+				if root then
+					Notifier.Effect("Fireworks", root.Position, { rgb(255, 120, 40), rgb(255, 210, 60) })
+					ctx:Knockback(player, Vector3.new(0, 55, 45), 1.2) -- thrown off the bridge, bots too
+				end
+				ctx:Eliminate(player, "rope")
 			end
 		end
-		if lowest == math.huge then
-			if not nearest then
-				continue -- off the bridge (falling): the fall check deals with it
-			end
-			lowest = nearest
-		end
-		local need = (self.standing[player] or 3) + CLEAR
-		if lowest >= need then
-			self.jumps[player] = (self.jumps[player] or 0) + 1
-			ctx:AddScore(player, 1)
-			ctx:SetScoreText(player, if self.jumps[player] == 1 then "1 jump" else `{self.jumps[player]} jumps`)
-			ctx:SetPlayerShared(player, "Jumps", self.jumps[player])
+		if waiting then
+			index += 1
 		else
-			local _, _, root = ctx:GetCharacter(player)
-			if root then
-				Notifier.Effect("Fireworks", root.Position, { rgb(255, 120, 40), rgb(255, 210, 60) })
-				ctx:Knockback(player, Vector3.new(0, 55, 45), 1.2) -- thrown off the bridge, bots too
-			end
-			ctx:Eliminate(player, "rope")
+			table.remove(self.pending, index)
 		end
 	end
 end
 
 function FireRope:Start()
 	local ctx = self.context
-	-- Standing height of each player's root above the floor, for judging jumps.
+	-- How high each player's root stands above their feet, for judging jumps.
 	for _, player in ctx:GetAlivePlayers() do
-		local _, _, root = ctx:GetCharacter(player)
-		local height = root and (root.Position.Y - self.floorY)
-		self.standing[player] = if height and height > 1.5 and height < 5 then height else 3
+		local _, humanoid, root = ctx:GetCharacter(player)
+		self.standing[player] = if root then standingHeight(humanoid, root, root.Position.Y - self.floorY) else 3
 		self.history[player] = {}
 	end
 
@@ -335,7 +440,8 @@ function FireRope:Start()
 	self:_publish(0)
 	ctx:SetStatus("Jump the fire rope!")
 
-	-- Height history for every player, in server time.
+	-- Feet height and place across the bridge for every player, in server time; then judge the
+	-- passes whose sweep has arrived.
 	ctx:Heartbeat(function()
 		local now = ctx:Now()
 		for _, player in ctx:GetAlivePlayers() do
@@ -346,27 +452,26 @@ function FireRope:Start()
 			end
 			local height = self:_floorHeight(root.Position)
 			if height then
-				table.insert(samples, { T = now, H = height })
+				table.insert(samples, { T = now, F = height - (self.standing[player] or 3), Z = root.Position.Z })
 			end
 			while samples[1] and now - samples[1].T > 2 do
 				table.remove(samples, 1)
 			end
 		end
+		self:_judge(now)
 	end)
 
-	-- Each bottom pass: judge it a moment later (to let lagging positions arrive) and plan the
-	-- turn after next, so clients always know the rope's path one full turn ahead.
+	-- Each bottom pass: queue it for judging (once each player's positions around it have arrived)
+	-- and plan the turn after next, so clients always know the rope's path one full turn ahead.
 	ctx:Loop(function(): number?
 		local upcoming = self.segments[#self.segments]
 		local now = ctx:Now()
 		if now < upcoming.T0 then
 			return math.min(0.05, upcoming.T0 - now)
 		end
-		local passTime = upcoming.T0
 		self.passes += 1
-		ctx:Delay(0.4, function()
-			self:_judge(passTime)
-		end)
+		local before = self.segments[#self.segments - 1] or upcoming
+		table.insert(self.pending, { T = upcoming.T0, Before = before.W, After = upcoming.W, Done = {}, Sweeps = {} })
 		table.insert(self.segments, {
 			T0 = upcoming.T0 + 2 * math.pi / upcoming.W,
 			A0 = 0,

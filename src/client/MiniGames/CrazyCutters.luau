@@ -11,6 +11,12 @@
 -- that counts. When you finish a shape early, the camera pulls back so you can watch the others.
 -- EVERYONE ELSE's cutter replays the positions the server relays ("Cut"), a moment behind (as far
 -- behind as their positions arrive late), so it glides smoothly; bots' cuts arrive the same way.
+--
+-- What you see is what the server judges: your dots and cut line are drawn at the sizes the scoring
+-- uses (Rules.DOT_SIZE, CUT_WIDTH), a dot on your board turns pale exactly when the server's tracker
+-- counts its stretch as cut (so "Missed a spot!" always leaves a brown dot to find), and positions
+-- the server hasn't confirmed yet go again with the next batch (a lost or dropped batch would
+-- otherwise leave the server judging a straight shortcut where you traced a curve).
 
 local ContextActionService = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -44,8 +50,9 @@ local ARROW_LIFT = 0.68
 local REPLAY_DELAY = 0.3 -- others' cutters replay at least this far behind, so they glide
 local REPLAY_MAX = 0.8 -- ...and at most this far
 local SEND_EVERY = 0.12
-local RESEND_EVERY = 0.25 -- a finished cut's last positions go again until the server confirms it
-local RESEND_FOR = 1.5 -- ...for this long; then the cut carries on (the server is missing a bit)
+local RESEND_EVERY = 0.25 -- positions the server hasn't confirmed go again at least this often
+local RESEND_FOR = 1.5 -- a finished cut the server hasn't confirmed this long carries on (it's missing a bit)
+local LATE_SEND = 0.5 -- positions still go this long after the cut ends (the server takes them a moment)
 local GRAB = 1.5 -- a mouse click this close to the wheel grabs it
 local HINT_GAP = 68 -- hints sit just under the panel (clear of the start, at the outline's top)
 local SHOUT_GAP = 106 -- big messages under the hints (a phone hint is one 36-tall line)
@@ -102,6 +109,7 @@ type Board = {
 	Dots: { Part },
 	DotAt: { Vector2 },
 	DotSize: number,
+	DotPoints: { { number } }, -- your board: the outline points each dot stands for
 	StartDisc: Part?,
 	Trail: { Part },
 	TrailUsed: number,
@@ -168,7 +176,8 @@ function CrazyCutters.Start(api)
 			Mine = data.User == me.UserId,
 			Dots = {},
 			DotAt = {},
-			DotSize = 0.3,
+			DotSize = Rules.DOT_SIZE,
+			DotPoints = {},
 			StartDisc = nil,
 			Trail = {},
 			TrailUsed = 0,
@@ -302,6 +311,7 @@ function CrazyCutters.Start(api)
 			end
 			table.clear(board.Dots)
 			table.clear(board.DotAt)
+			table.clear(board.DotPoints)
 			table.clear(board.Samples)
 			clearTrail(board)
 			board.Done = false
@@ -313,7 +323,7 @@ function CrazyCutters.Start(api)
 			placeCutter(board)
 			-- Dotted outline: closer dots on your own board.
 			local spacing = if board.Mine then 0.55 else 1.1
-			local size = if board.Mine then 0.3 else 0.36
+			local size = if board.Mine then Rules.DOT_SIZE else 0.36
 			board.DotSize = size
 			local count = math.max(8, math.floor(current.Length / spacing))
 			for index = 1, count - 1 do
@@ -333,6 +343,23 @@ function CrazyCutters.Start(api)
 				})
 				table.insert(board.Dots, dot)
 				table.insert(board.DotAt, Vector2.new(u, v))
+			end
+			if board.Mine and #board.DotAt > 0 then
+				-- Each outline point the tracker scores belongs to its nearest dot.
+				for _ in board.DotAt do
+					table.insert(board.DotPoints, {})
+				end
+				for point = 1, current.N do
+					local spot = Vector2.new(current.U[point], current.V[point])
+					local best, nearest = math.huge, 1
+					for dotIndex, dotAt in board.DotAt do
+						local d = (dotAt - spot).Magnitude
+						if d < best then
+							best, nearest = d, dotIndex
+						end
+					end
+					table.insert(board.DotPoints[nearest], point)
+				end
 			end
 			-- The start: a green disc with an arrow pointing the way round.
 			local disc = part({
@@ -398,16 +425,41 @@ function CrazyCutters.Start(api)
 		local lift = CUT_LIFT + CUT_STEP * ((index % 2) + half)
 		board.TrailLen += length
 		local a, b = at(board, from.X, from.Y, lift), at(board, position.X, position.Y, lift)
-		segment.Size = Vector3.new(if board.Mine then 0.2 else 0.28, 0.07, length + 0.12)
+		segment.Size = Vector3.new(if board.Mine then Rules.CUT_WIDTH else 0.28, 0.07, length + 0.12)
 		segment.CFrame = CFrame.lookAt((a + b) / 2, b, board.Top.UpVector)
 		segment.Color = GOOD:Lerp(BAD, math.clamp((distance - Rules.FULL) / (Rules.ZERO - Rules.FULL), 0, 1))
 		segment.Parent = api.World
 		board.TrailFrom = position
+		if board.Mine then
+			return -- your own dots follow your tracker (paleDots)
+		end
 		-- Dots the cutter has passed turn pale (cut).
 		local r2 = Rules.COVER * Rules.COVER
 		for dotIndex, dotAt in board.DotAt do
 			local dot = board.Dots[dotIndex]
 			if dot.Color ~= DOT_DONE and (dotAt - position).Magnitude ^ 2 <= r2 then
+				dot.Color = DOT_DONE
+				dot.Transparency = 0.35
+				dot.Size = Vector3.new(DOT_TOP, board.DotSize, board.DotSize)
+			end
+		end
+	end
+
+	-- Your dots turn pale exactly when the tracker (the server's rule) counts all of theirs as cut.
+	local function paleDots(board: Board, track: Rules.Tracker)
+		for dotIndex, points in board.DotPoints do
+			local dot = board.Dots[dotIndex]
+			if dot.Color == DOT_DONE then
+				continue
+			end
+			local cut = true
+			for _, point in points do
+				if not track.Covered[point] then
+					cut = false
+					break
+				end
+			end
+			if cut then
 				dot.Color = DOT_DONE
 				dot.Transparency = 0.35
 				dot.Size = Vector3.new(DOT_TOP, board.DotSize, board.DotSize)
@@ -560,8 +612,9 @@ function CrazyCutters.Start(api)
 	local dragFrom: Vector2? = nil -- touch: the finger's board point when the wheel was last at wheelFrom
 	local wheelFrom = Vector2.zero
 	local fingerAt: Vector2? = nil
-	local pending = {}
-	local recent = {} -- the last positions sent, flat, for resending a finished cut
+	local recent = {} -- your last positions, flat { t, u, v, ... } (the server skips ones it has)
+	local sentUpTo = 0 -- the newest position's time sent so far
+	local confirmed = 0 -- the newest position's time the server took (it relays every one it takes)
 	local lastSend = 0
 	local lastSample = 0
 	local lastSamplePos = Vector2.zero
@@ -569,7 +622,6 @@ function CrazyCutters.Start(api)
 	local hintState: string? = nil -- "Back" (go back to the start) or "Missed" (dots still to cut)
 	local flashUntil = 0 -- the start disc pulses until then (a click that missed the wheel)
 	local doneAt = 0 -- when this client saw the cut finish (resends until the server confirms it)
-	local lastResend = 0
 
 	local function boardPoint(screen: Vector3, free: boolean?): Vector2?
 		if not mine then
@@ -704,16 +756,36 @@ function CrazyCutters.Start(api)
 		return direction
 	end
 
-	-- Sends the positions waiting to go (no sooner than the server takes a batch, so none is lost).
+	-- Sends the new positions (no sooner than the server takes a batch), together with any sent a
+	-- while ago that the server still hasn't confirmed: two batches arriving in one server frame, or
+	-- a lost one, would otherwise leave a gap the server scores as a straight shortcut.
 	local function flush(now: number, force: boolean?)
-		if
-			#pending > 0
-			and round
-			and now - lastSend >= 0.04
-			and (force or now - lastSend >= SEND_EVERY or #pending >= Rules.MAX_CHUNK * 3 - 3)
-		then
-			api:Action("Cut", round.Index, pending)
-			pending = {}
+		if not round or #recent == 0 or now - lastSend < 0.04 or now > round.T1 + LATE_SEND then
+			return
+		end
+		local ok, ping = pcall(function()
+			return (me :: any):GetNetworkPing()
+		end)
+		local overdue = now - SEND_EVERY - 0.1 - (if ok and type(ping) == "number" then math.clamp(ping, 0, 1) else 0.3)
+		local fresh = 0
+		local batch = {}
+		for at = 1, #recent - 2, 3 do
+			local t = recent[at]
+			if t > sentUpTo then
+				fresh += 1
+			elseif t <= confirmed or t > overdue then
+				continue -- the server has it, or it may still be on its way
+			end
+			table.insert(batch, t)
+			table.insert(batch, recent[at + 1])
+			table.insert(batch, recent[at + 2])
+		end
+		local due = if fresh > 0
+			then force or now - lastSend >= SEND_EVERY or fresh >= Rules.MAX_CHUNK // 2
+			else now - lastSend >= RESEND_EVERY
+		if #batch > 0 and due then
+			api:Action("Cut", round.Index, batch)
+			sentUpTo = math.max(sentUpTo, batch[#batch - 2])
 			lastSend = now
 		end
 	end
@@ -729,8 +801,9 @@ function CrazyCutters.Start(api)
 		round = data
 		if fresh then
 			setupShape(data.Shape)
-			pending = {}
 			recent = {}
+			sentUpTo = 0
+			confirmed = 0
 			doneAt = 0
 			hintState = nil
 			moved = false
@@ -764,7 +837,15 @@ function CrazyCutters.Start(api)
 
 	api:OnEvent("Cut", function(userId: number, index: number, flat: { number })
 		local board = boards[userId]
-		if not board or board.Mine or not round or index ~= round.Index or type(flat) ~= "table" then
+		if not board or not round or index ~= round.Index or type(flat) ~= "table" then
+			return
+		end
+		if board.Mine then
+			-- The server took these: they don't need sending again.
+			local last = flat[#flat - 2]
+			if type(last) == "number" then
+				confirmed = math.max(confirmed, last + 1e-4)
+			end
 			return
 		end
 		for at = 1, #flat - 2, 3 do
@@ -839,8 +920,15 @@ function CrazyCutters.Start(api)
 		end
 		board.Done = true
 		board.Popped = true
-		popCookie(board)
-		if board.Mine then
+		if not board.Mine then
+			-- Their cutter replays a moment behind: pop the cookie as it closes the lap on screen.
+			api:Track(task.delay(board.Lag, function()
+				if round and round.Index == index then
+					popCookie(board)
+				end
+			end))
+		else
+			popCookie(board)
 			local grade, symbol = Rules.Grade(score)
 			shout(`{symbol} {score}%`, Theme.Colors.Yellow)
 			api:Sound("Pickup")
@@ -950,9 +1038,6 @@ function CrazyCutters.Start(api)
 					lastSample = now
 					lastSamplePos = mine.Pos
 					local t = math.floor(now * 1000 + 0.5) / 1000
-					table.insert(pending, t)
-					table.insert(pending, mine.Pos.X)
-					table.insert(pending, mine.Pos.Y)
 					table.insert(recent, t)
 					table.insert(recent, mine.Pos.X)
 					table.insert(recent, mine.Pos.Y)
@@ -963,12 +1048,12 @@ function CrazyCutters.Start(api)
 						end
 					end
 					tracker:Add(mine.Pos.X, mine.Pos.Y)
+					paleDots(mine, tracker)
 					scoreLabel.Text = `✂ {tracker:Score()}%`
 					if tracker.Done then
 						cutTo(mine, mine.Pos, true)
 						flush(now, true)
 						doneAt = now
-						lastResend = now
 					else
 						-- Tell the player what's left: back to the start, or dots they skipped.
 						local coverage = tracker:Coverage()
@@ -998,20 +1083,17 @@ function CrazyCutters.Start(api)
 					end
 				end
 			end
-			flush(now)
-			-- The cut is finished here but the server hasn't said so yet (a batch got lost on the
-			-- way): send the last positions again (it skips the ones it has). If it still hasn't
-			-- after a while, it is missing a bit of the cut: let the player carry on cutting.
-			if mine and tracker and tracker.Done and not mine.Done and doneAt > 0 then
-				if now - doneAt > RESEND_FOR then
-					if round.Phase == "Cut" and now < round.T1 then
-						tracker.Done = false
-						doneAt = 0
-						hintState = nil
-					end
-				elseif now - lastResend >= RESEND_EVERY and #recent > 0 then
-					lastResend = now
-					api:Action("Cut", round.Index, table.clone(recent))
+			-- The moment the cut ends, the last positions go at once (the server only takes them
+			-- for a moment after the end).
+			flush(now, round.Phase ~= "Cut" or now >= round.T1)
+			-- The cut is finished here but the server hasn't said so yet: flush keeps sending what
+			-- it hasn't confirmed. If it still hasn't after a while, it is missing a bit of the cut
+			-- (a position it turned down): let the player carry on cutting.
+			if mine and tracker and tracker.Done and not mine.Done and doneAt > 0 and now - doneAt > RESEND_FOR then
+				if round.Phase == "Cut" and now < round.T1 then
+					tracker.Done = false
+					doneAt = 0
+					hintState = nil
 				end
 			end
 

@@ -281,6 +281,10 @@ BobsledCourse.CRUISE = 40 -- studs/s a sled settles at
 BobsledCourse.MAX = 62
 BobsledCourse.LAUNCH = 16 -- studs/s^2 off the start
 BobsledCourse.WARN = 3 -- seconds to a curve over which the cue's timing bar fills up
+-- Seconds after the sled enters a curve that a lean still counts for it (the bar is full at the
+-- entry; this covers a thumb a hair late and the drawn sled trailing the server's). Then the next
+-- curve's window opens and its cue shows.
+BobsledCourse.GRACE = 0.15
 BobsledCourse.BOOST = 14 -- studs/s a perfectly clean curve adds
 BobsledCourse.BUMP = 0.5 -- speed kept after slamming the wall
 BobsledCourse.SCRAPE = 0.82 -- speed kept after a scrape
@@ -293,9 +297,11 @@ function BobsledCourse.AllowedMisses(maxCrew: number, crew: number): number
 end
 
 -- Judges a curve from the crew's leans (right and wrong ones, out of `crew` riders, `allowed`
--- misses): the result kind and the new speed. A miss is a rider who didn't lean; a wrong lean costs
--- two (it cancels a right one). Clean: no more misses than allowed. Scrape: one more, if at least
--- half the crew still leaned right overall (1 of 3 isn't enough). Else it's a bump.
+-- misses): the result kind and the new speed. A miss is a rider who didn't lean; for a clean run a
+-- wrong lean costs two (it cancels a right one). Clean: no more misses than allowed. Scrape: at
+-- least half the crew leaned right and more of them right than wrong, so two riders leaning in and
+-- one out scrape the wall rather than slam it (the HUD shows 2/3 either way); a lone right lean in a
+-- crew of 3, or as many wrong as right, is a bump.
 function BobsledCourse.Judge(
 	right: number,
 	wrong: number,
@@ -308,7 +314,7 @@ function BobsledCourse.Judge(
 	if crew > 0 and net >= 1 and misses <= allowed then
 		local boost = BobsledCourse.BOOST * math.clamp(net / math.max(crew - allowed, 1), 0, 1)
 		return "Clean", math.min(BobsledCourse.MAX, speed + boost)
-	elseif crew > 0 and net >= 1 and misses <= allowed + 1 and net * 2 >= crew then
+	elseif crew > 0 and net >= 1 and right * 2 >= crew then
 		return "Scrape", speed * BobsledCourse.SCRAPE
 	end
 	return "Bump", speed * BobsledCourse.BUMP

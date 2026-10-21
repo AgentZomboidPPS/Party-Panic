@@ -58,7 +58,7 @@ return function(env)
 			if elapsed > mark and not reported[mark] then
 				reported[mark] = true
 				env.note(
-					`t={mark}: bumps {mode.bumpCount or 0}, ring-outs {mode.ringOuts or 0}, alive {ctx:AliveCount()}`
+					`t={mark}: bumps {mode.bumpCount or 0} (as a screen saw them {mode.screenBumps or 0}), ring-outs {mode.ringOuts or 0}, draws {mode.draws or 0}, alive {ctx:AliveCount()}`
 				)
 			end
 		end

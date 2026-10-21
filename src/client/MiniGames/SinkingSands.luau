@@ -4,7 +4,9 @@
 -- with the sand while they stand on it (the server does the same for bots). Shows the player's
 -- role, the sand's state (spin direction, PULL) and their haul; Sand Kings get SWIRL and PULL.
 -- Grabs are predicted: a coin this player runs through pops at once and comes back if the server
--- says someone else got it first (or nobody did, within PENDING_TIME).
+-- says someone else got it first (or nobody did, within PENDING_TIME). The prediction is the
+-- server's grab rule seen from here: within reach of the treasure as drawn or of its true spot,
+-- swept between frames (the server sweeps the same paths, allowing for ping and the easing).
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -50,6 +52,7 @@ type Treasure = {
 	Predicted: boolean?, -- the pickup sound already played
 	Missing: boolean?, -- no longer in the server's list (while pending)
 	Spin: number,
+	Rel: Vector2?, -- this player's middle relative to the treasure last frame (for the swept test)
 	Gone: string?, -- "Grab" | "Sink" | "Lost" once the server removed it
 	GoneAt: number,
 	GoneFrom: Vector3?,
@@ -64,6 +67,14 @@ local function partsOf(model: Instance): { BasePart }
 		end
 	end
 	return list
+end
+
+-- Flat distance from the origin to the segment a-b (same test as the server's grab sweep).
+local function segmentReach(a: Vector2, b: Vector2): number
+	local d = b - a
+	local length = d:Dot(d)
+	local t = if length > 1e-9 then math.clamp(-a:Dot(d) / length, 0, 1) else 0
+	return (a + d * t).Magnitude
 end
 
 local function rootOf(api, userId: number?): BasePart?
@@ -693,16 +704,27 @@ function SinkingSands.Start(api)
 			item.Shown = shown
 			item.Model:PivotTo(CFrame.new(shown :: Vector3) * turn)
 
-			-- Ran through it: grab it now (the server confirms within a moment).
+			-- Ran through it (or it whipped through me): grab it now (the server confirms in a moment).
 			if myRoot and now >= item.T and not sunk and not item.Predicted then
 				local p = myRoot.Position
 				local dy = p.Y - ground.Y
-				if Vector2.new(p.X - ground.X, p.Z - ground.Z).Magnitude < kind.Reach and dy > -2 and dy < 7.5 then
+				local rel = Vector2.new(p.X - ground.X, p.Z - ground.Z)
+				local drawnAt = shown :: Vector3
+				local drawn = Vector2.new(p.X - drawnAt.X, p.Z - drawnAt.Z).Magnitude
+				local before = item.Rel
+				if not before or (before - rel).Magnitude > 8 then
+					before = rel -- a hitch or a teleport: no sweep across it
+				end
+				local reach = math.min(segmentReach(before, rel), drawn)
+				item.Rel = rel
+				if reach < kind.Reach and dy > -2 and dy < 7.5 then
 					item.Pending = now
 					item.PendingFrom = shown
 					item.Predicted = true
 					api:Sound("Pickup")
 				end
+			else
+				item.Rel = nil
 			end
 		end
 

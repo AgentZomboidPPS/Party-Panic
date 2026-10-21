@@ -8,7 +8,9 @@
 -- tilt switches itself off for good once someone has steered with the thumbstick for a second.
 -- The server decides bumps and sends "Bump" (a velocity kick for this ball); everyone gets "Boing"
 -- (a squash, a ring and a sound where two balls met) and "Splash" (someone fell in). This player's
--- own bumps squash and boing the moment the balls touch on screen, without waiting for the server.
+-- own bumps squash and boing the moment the balls touch on screen, without waiting for the server,
+-- by the server's own rule (MG_Tuning Touch and ClosingMin): the server also judges bumps as this
+-- screen showed them, so a boing here is a bump there.
 --
 -- Also: a strip of every rider's shape and color (dimmed with a cross when they're out), an EDGE!
 -- warning near the rim, a YOU marker over this player's ball, gentle foam rings on the sea, and the
@@ -77,6 +79,8 @@ function BumperBallers.Start(api)
 	local player = api.Player or Players.LocalPlayer
 	local myId = player and player.UserId
 	local tuning = api:SharedJSON("Tuning") or { Accel = 46, MaxSpeed = 24, Relief = 0.3, ReliefDrag = 0.6 }
+	local touchDistance = tuning.Touch or 8.5
+	local closingMin = tuning.ClosingMin or 4
 	local island = api:SharedJSON("Island")
 	local drag = tuning.Accel / tuning.MaxSpeed
 	local hud = api:TopHud()
@@ -573,14 +577,18 @@ function BumperBallers.Start(api)
 			if otherId == myId or not otherBody or not otherBody.Parent then
 				continue
 			end
-			local gap = flat(otherBody.Position - body.Position)
-			local distance = gap.Magnitude
-			if distance > size + 0.4 or distance < 0.01 or now - (localBoingAt[otherId] or -10) < 0.6 then
+			local gap = otherBody.Position - body.Position
+			local apart = flat(gap)
+			if
+				gap.Magnitude > touchDistance
+				or apart.Magnitude < 0.01
+				or now - (localBoingAt[otherId] or -10) < 0.6
+			then
 				continue
 			end
-			local normal = gap.Unit
+			local normal = apart.Unit
 			local closing = flat(velocity):Dot(normal) - flat(otherBody.AssemblyLinearVelocity):Dot(normal)
-			if closing > 4 then
+			if closing >= closingMin then
 				localBoingAt[otherId] = now
 				local strength = math.clamp(closing / (tuning.MaxSpeed * 2), 0.2, 1)
 				boing(body.Position + normal * size / 2, strength, myId, otherId)
