@@ -1,0 +1,29 @@
+newmtl Stone
+Kd 0.471 0.431 0.451
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 0.314 0.251 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Glow
+Kd 1.000 0.510 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Metal
+Kd 0.353 0.361 0.392
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Coals
+Kd 1.000 0.471 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

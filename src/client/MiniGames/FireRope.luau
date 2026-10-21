@@ -1,6 +1,15 @@
--- Client half of Fire Rope: draws the burning rope and spins the two fire wheels from the shared
+-- Client half of Fire Rope: draws the burning rope and spins the two sun wheels from the shared
 -- schedule (MG_Rope), shows a shadow on the floor where the rope will sweep (for timing), and
 -- counts your jumps.
+--
+-- The look (art pass; owner: "I saw the lava rope one and that one kinda sucks"): a golden-hour sky
+-- over the Dragon Temple, fires in the braziers and tower bowls, steam where lava falls meet the
+-- lake, and a rope that reads from anywhere: white-gold fireballs threaded on a white-hot core inside
+-- a deep-red rim (a bright line with a dark edge against both the orange lava and the cream deck),
+-- licked by flames; the heat shows in the rim and flames going angry red as it speeds up. Particles
+-- stay off with reduced effects.
+
+local Lighting = game:GetService("Lighting")
 
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -9,9 +18,15 @@ local State = require(script.Parent.Parent.State)
 
 local FireRope = {}
 
-local COLD = Color3.fromRGB(255, 225, 90)
-local WARM = Color3.fromRGB(255, 140, 40)
-local HOT = Color3.fromRGB(255, 55, 40)
+local COLD = Color3.fromRGB(255, 205, 60)
+local WARM = Color3.fromRGB(255, 120, 30)
+local HOT = Color3.fromRGB(255, 40, 30)
+local WHITE_HOT = Color3.fromRGB(255, 250, 215)
+local EMBER = Color3.fromRGB(90, 10, 10) -- the rope's outline darkens towards this as it heats up
+local CLOCK_TIME = 15.6 -- warm afternoon: high enough sun for short shadows and a bright phone screen
+
+local FIRE_TEXTURE = "rbxasset://textures/particles/fire_main.dds"
+local SMOKE_TEXTURE = "rbxasset://textures/particles/smoke_main.dds"
 
 local function heatColor(heat: number): Color3
 	if heat < 0.5 then
@@ -38,15 +53,71 @@ local function angleAt(rope, now: number): number
 	return current.A0 + current.W * (now - current.T0)
 end
 
+local function visualPart(props: { [string]: any }): Part
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Material = Enum.Material.Neon
+	for key, value in props do
+		(part :: any)[key] = value
+	end
+	return part
+end
+
+-- Fires on the arena's FlameSpot markers and steam on its SteamSpot markers.
+local function decorate(spot: Instance)
+	if not spot:IsA("BasePart") then
+		return
+	end
+	local flame = spot:GetAttribute("Flame")
+	if spot.Name == "FlameSpot" and type(flame) == "number" then
+		local fire = Instance.new("Fire")
+		fire.Size = flame
+		fire.Heat = flame * 1.4
+		fire.Color = Color3.fromRGB(255, 150, 40)
+		fire.SecondaryColor = Color3.fromRGB(255, 60, 20)
+		fire.Parent = spot
+	end
+	local steam = spot:GetAttribute("Steam")
+	if spot.Name == "SteamSpot" and type(steam) == "number" then
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Texture = SMOKE_TEXTURE
+		emitter.Color = ColorSequence.new(Color3.fromRGB(255, 190, 150), Color3.fromRGB(150, 120, 120))
+		emitter.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.25, 0.7),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		emitter.Size = NumberSequence.new(4 * steam, 12 * steam)
+		emitter.Lifetime = NumberRange.new(3, 5)
+		emitter.Speed = NumberRange.new(4, 8)
+		emitter.SpreadAngle = Vector2.new(25, 25)
+		emitter.EmissionDirection = Enum.NormalId.Top
+		emitter.RotSpeed = NumberRange.new(-20, 20)
+		emitter.Rate = 2 * steam
+		emitter.Parent = spot
+	end
+end
+
 function FireRope.Start(api)
 	api:Mood({
-		Tint = Color3.fromRGB(255, 232, 214),
-		Saturation = 0.12,
-		Contrast = 0.08,
-		Haze = Color3.fromRGB(255, 170, 120),
-		HazeDecay = Color3.fromRGB(150, 70, 50),
-		Density = 0.3,
+		Tint = Color3.fromRGB(255, 228, 206),
+		Saturation = 0.18,
+		Contrast = 0.1,
+		Haze = Color3.fromRGB(255, 160, 100),
+		HazeDecay = Color3.fromRGB(170, 70, 60),
+		Density = 0.32,
 	})
+	-- Golden hour for the round, put back afterwards.
+	local clockTime = Lighting.ClockTime
+	Lighting.ClockTime = CLOCK_TIME
+	api:Track(function()
+		Lighting.ClockTime = clockTime
+	end)
+
 	local rope = api:SharedJSON("Rope")
 	while not rope do
 		task.wait(0.1)
@@ -58,38 +129,44 @@ function FireRope.Start(api)
 	local arena = api:Arena()
 	local axis = Vector3.new(rope.Axis[1], rope.Axis[2], rope.Axis[3])
 	local radius = rope.Radius
+	local effects = not State.ReducedEffects()
 
-	-- The rope: a line of fireballs in one model, turned around the axis every frame.
+	-- The rope: a white-hot core threaded through fireballs inside a soft glow, all in one model
+	-- turned around the axis every frame.
 	local model = Instance.new("Model")
 	model.Name = "FireRopeVisual"
-	local pivot = Instance.new("Part")
-	pivot.Name = "Axis"
-	pivot.Anchored = true
-	pivot.CanCollide = false
-	pivot.CanQuery = false
-	pivot.CanTouch = false
-	pivot.Transparency = 1
-	pivot.Size = Vector3.one
-	pivot.CFrame = CFrame.new(axis)
+	local pivot = visualPart({ Name = "Axis", Transparency = 1, Size = Vector3.one, CFrame = CFrame.new(axis) })
 	pivot.Parent = model
 	model.PrimaryPart = pivot
+	local low = CFrame.new(axis + Vector3.new(0, -radius, 0))
+	local core = visualPart({
+		Name = "Core",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(rope.Length, 0.8, 0.8),
+		Color = WHITE_HOT,
+		CFrame = low,
+	})
+	core.Parent = model
+	local halo = visualPart({
+		Name = "Halo",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(rope.Length - 1, 1.8, 1.8), -- top at 1.8 at the pass: a cleared jump looks cleared
+		Color = HOT, -- a red rim around the bright balls; darkens with heat (see below)
+		Transparency = 0.45,
+		CFrame = low,
+	})
+	halo.Parent = model
 	local balls = {}
 	local count = math.floor(rope.Length / 2.1)
-	local effects = not State.ReducedEffects()
 	for index = 0, count do
 		local x = -rope.Length / 2 + index * rope.Length / count
-		local ball = Instance.new("Part")
-		ball.Name = "Fireball"
-		ball.Shape = Enum.PartType.Ball
-		ball.Size = Vector3.one * 1.8
-		ball.Material = Enum.Material.Neon
-		ball.Color = COLD
-		ball.Anchored = true
-		ball.CanCollide = false
-		ball.CanQuery = false
-		ball.CanTouch = false
-		ball.CastShadow = false
-		ball.CFrame = CFrame.new(axis + Vector3.new(x, -radius, 0))
+		local ball = visualPart({
+			Name = "Fireball",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * (if index % 2 == 0 then 1.9 else 1.5), -- alternating, like a braid of flame
+			Color = WHITE_HOT:Lerp(COLD, 0.45),
+			CFrame = CFrame.new(axis + Vector3.new(x, -radius, 0)),
+		})
 		ball.Parent = model
 		table.insert(balls, ball)
 		if effects and index % 3 == 0 then
@@ -111,27 +188,54 @@ function FireRope.Start(api)
 			trail.Parent = ball
 		end
 	end
+	-- Flames licking off the whole length of the rope (one emitter over the core's volume, locked to it).
+	local flames: ParticleEmitter? = nil
+	if effects then
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Texture = FIRE_TEXTURE
+		emitter.Shape = Enum.ParticleEmitterShape.Box
+		emitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+		emitter.LightEmission = 1
+		emitter.Color = ColorSequence.new(COLD, WARM)
+		emitter.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1.1),
+			NumberSequenceKeypoint.new(0.4, 1.5),
+			NumberSequenceKeypoint.new(1, 0.2),
+		})
+		emitter.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.3),
+			NumberSequenceKeypoint.new(0.6, 0.5),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		emitter.Lifetime = NumberRange.new(0.18, 0.32)
+		emitter.Speed = NumberRange.new(0.5, 2)
+		emitter.SpreadAngle = Vector2.new(180, 180)
+		emitter.Acceleration = Vector3.new(0, 4, 0) -- turns with the rope (locked), so kept small
+		emitter.RotSpeed = NumberRange.new(-180, 180)
+		emitter.Rotation = NumberRange.new(0, 360)
+		emitter.Rate = 160
+		emitter.LockedToPart = true -- the flames ride with the rope instead of smearing behind it
+		emitter.Parent = core
+		flames = emitter
+	end
 	local light = Instance.new("PointLight")
 	light.Color = WARM
-	light.Range = 18
-	light.Brightness = 2
+	light.Range = 20
+	light.Brightness = 2.2
 	light.Parent = balls[math.floor(#balls / 2)]
 	model.Parent = api.World
 
-	-- The rope's shadow on the bridge: where it will sweep, darker as it comes down.
-	local shadow = Instance.new("Part")
-	shadow.Name = "RopeShadow"
-	shadow.Anchored = true
-	shadow.CanCollide = false
-	shadow.CanQuery = false
-	shadow.CanTouch = false
-	shadow.CastShadow = false
-	shadow.Material = Enum.Material.SmoothPlastic
-	shadow.Color = Color3.fromRGB(40, 20, 20)
-	shadow.Size = Vector3.new(rope.Length - 14, 0.05, 1.4)
+	-- The rope's glow on the bridge: where it will sweep, stronger as it comes down. A heat glow, not a
+	-- dark stripe, so it can't be mistaken for a player's shadow. Well above the bridge's borders, so
+	-- it shows the whole way across.
+	local shadow = visualPart({
+		Name = "RopeShadow",
+		Color = Color3.fromRGB(255, 90, 30),
+		Size = Vector3.new(rope.Length - 14, 0.05, 1.4),
+	})
 	shadow.Parent = api.World
 
-	-- The fire wheels at both ends.
+	-- The sun wheels at both ends, and fires and steam on the arena's markers.
 	local wheels = {}
 	if arena then
 		for _, name in { "WheelL", "WheelR" } do
@@ -139,6 +243,12 @@ function FireRope.Start(api)
 			if wheel then
 				table.insert(wheels, { Model = wheel, Base = wheel:GetPivot() })
 			end
+		end
+		if effects then
+			for _, descendant in arena:GetDescendants() do
+				decorate(descendant)
+			end
+			api:Track(arena.DescendantAdded:Connect(decorate))
 		end
 	end
 
@@ -174,15 +284,22 @@ function FireRope.Start(api)
 		local z = radius * math.sin(theta)
 		local y = -radius * math.cos(theta)
 		local below = math.clamp(-y / radius, 0, 1) -- 1 at the bottom, 0 at axis height
-		shadow.CFrame = CFrame.new(rope.Axis[1], rope.FloorY + 0.04, rope.Axis[3] + z)
-		shadow.Transparency = 1 - below * 0.65
+		shadow.CFrame = CFrame.new(rope.Axis[1], rope.FloorY + 0.22, rope.Axis[3] + z)
+		shadow.Transparency = 1 - below * 0.55
 		if rope.Heat ~= lastHeat then
 			lastHeat = rope.Heat
 			local color = heatColor(rope.Heat)
-			for _, ball in balls do
-				ball.Color = color
+			-- The balls stay bright (white-gold, a little warmer on the small ones); the rim carries the heat.
+			for index, ball in balls do
+				ball.Color = WHITE_HOT:Lerp(color, if index % 2 == 1 then 0.45 else 0.7)
 			end
+			halo.Color = HOT:Lerp(EMBER, rope.Heat * 0.6)
+			core.Color = WHITE_HOT:Lerp(color, 0.25)
 			light.Color = color
+			if flames then
+				flames.Color = ColorSequence.new(WHITE_HOT:Lerp(color, 0.4), color)
+				flames.Rate = 160 + 120 * rope.Heat -- angrier as it speeds up
+			end
 		end
 	end)
 end

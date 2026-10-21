@@ -29,6 +29,10 @@ local CLEAR_WINDOW = 0.07 -- a jumper must be that high from this long before th
 local FIRST_PERIOD = 3.0
 local FASTEST_PERIOD = 1.05 -- a Roblox jump is ~0.5s in the air; this leaves time to land and go again
 local LAVA_DROP = 24
+local TEMPLE_DISTANCE = 150 -- how far ahead of the bridge the Dragon Temple stands
+local TEMPLE_SCALE = 1.1 -- with the distance, puts the dragon's frills just under the round banner on screen
+local TEMPLE_SINK = 10 -- (unscaled) how deep the temple's bottom tier sits in the lava; its splash mound is made for this
+local CRATER_RADIUS = 172 -- the crater wall around the lake
 
 local rng = Random.new()
 
@@ -37,6 +41,66 @@ type Sample = { T: number, H: number }
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
+end
+
+-- An invisible marker the client lights a fire on (size in the "Flame" attribute), with a glow
+-- unless `light` is false (phones get few lights).
+local function flameSpot(ctx, position: Vector3, size: number, light: boolean?)
+	local spot = Build.Decor({
+		Name = "FlameSpot",
+		Size = Vector3.one,
+		Transparency = 1,
+		CFrame = CFrame.new(position),
+		Parent = ctx.Arena,
+	})
+	spot:SetAttribute("Flame", size)
+	if light ~= false then
+		Build.Light(spot, rgb(255, 150, 60), size * 3.4, 2)
+	end
+end
+
+-- An invisible marker the client puffs steam from, where lava falls into the lake.
+local function steamSpot(ctx, position: Vector3, size: number)
+	local spot = Build.Decor({
+		Name = "SteamSpot",
+		Size = Vector3.one,
+		Transparency = 1,
+		CFrame = CFrame.new(position),
+		Parent = ctx.Arena,
+	})
+	spot:SetAttribute("Steam", size)
+end
+
+-- How far apart two angles are (radians, 0..pi).
+local function angleBetween(a: number, b: number): number
+	return math.abs((a - b + math.pi) % (2 * math.pi) - math.pi)
+end
+
+-- Rock spires around the lake (like Scenery.RockRim), leaving the view to the temple (-Z) open and
+-- the lava-fall cliffs (at `keepClear` angles) unblocked.
+local function rockRim(ctx, center: Vector3, radius: number, count: number, keepClear: { number })
+	for index = 0, count - 1 do
+		local angle = (index + rng:NextNumber(-0.3, 0.3)) / count * math.pi * 2
+		if angleBetween(angle, -math.pi / 2) < math.rad(40) then
+			continue
+		end
+		local blocking = false
+		for _, clear in keepClear do
+			if angleBetween(angle, clear) < math.rad(14) then
+				blocking = true
+			end
+		end
+		if blocking then
+			continue
+		end
+		local distance = radius * rng:NextNumber(0.94, 1.08)
+		MeshLibrary.Get("Spire", {
+			Scale = rng:NextNumber(1.1, 2.1),
+			CFrame = CFrame.new(center + Vector3.new(math.cos(angle) * distance, -1, math.sin(angle) * distance))
+				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+			Parent = ctx.Arena,
+		})
+	end
 end
 
 function FireRope:Prepare()
@@ -53,107 +117,108 @@ function FireRope:Prepare()
 	self.floorY = origin.Y
 	self.axis = origin + Vector3.new(0, RADIUS + ROPE_LOW, 0)
 
-	-- A lava lake in a volcanic crater, with volcanoes ahead of the players.
+	-- The Dragon Temple's fire festival (owner: "I saw the lava rope one and that one kinda sucks"):
+	-- the bridge spans a lava lake in front of a stepped temple whose dragon head pours lava down its
+	-- stairs, framed by basalt cliffs with lava falls, fire braziers and volcanoes on the horizon.
 	local lake = origin - Vector3.new(0, LAVA_DROP, 0)
-	Scenery.LavaLake(ctx, lake, 210)
+	local base = lake - Vector3.new(0, 1, 0) -- props standing in the lava are based here
+	local function facingBridge(position: Vector3): CFrame
+		return CFrame.lookAt(position, Vector3.new(origin.X, position.Y, origin.Z))
+	end
+	Scenery.LavaLake(ctx, lake, 300)
 	Scenery.Ground(ctx, lake)
-	Scenery.RockRim(ctx, lake, 110, 18, 0.9, 1.8)
-	Scenery.Volcano(ctx, lake + Vector3.new(30, -2, -320), origin, 2.4)
-	Scenery.Volcano(ctx, lake + Vector3.new(-280, -2, -250), origin, 1.5)
-	Scenery.Volcano(ctx, lake + Vector3.new(300, -2, -190), origin, 1.15)
+	local cliffs =
+		{ Vector3.new(-102, 0, -112), Vector3.new(102, 0, -112), Vector3.new(-104, 0, 112), Vector3.new(104, 0, 112) }
+	local cliffAngles = {}
+	for _, spot in cliffs do
+		table.insert(cliffAngles, math.atan2(spot.Z, spot.X))
+	end
+	rockRim(ctx, lake, 150, 22, cliffAngles)
+	-- The crater's basalt wall all around the lake, open only behind the temple (-Z), so the lava
+	-- meets rock wherever a spectator looks.
+	local gap = math.rad(22)
+	local walls = 11
+	for index = 0, walls - 1 do
+		local angle = -math.pi / 2 + gap + (index + 0.5) / walls * (2 * math.pi - 2 * gap)
+		local distance = CRATER_RADIUS + rng:NextNumber(-5, 6)
+		-- Sunk a little, each to its own depth: their (hidden) bottoms never share a plane.
+		local sink = 1 + (index % 3) * 0.6
+		local position = base + Vector3.new(math.cos(angle) * distance, -sink, math.sin(angle) * distance)
+		MeshLibrary.Get("BasaltWall", {
+			Scale = rng:NextNumber(0.95, 1.15),
+			CFrame = facingBridge(position),
+			Parent = ctx.Arena,
+		})
+	end
+	-- Lower and further back behind the temple: closes the gap without darkening the sky behind the
+	-- dragon (from the bridge they stay under the temple's top tier).
+	for index, side in { -1, 1 } do
+		local angle = -math.pi / 2 + side * math.rad(17)
+		local position = base + Vector3.new(math.cos(angle) * 240, -1.3 - index * 0.5, math.sin(angle) * 240)
+		MeshLibrary.Get("BasaltWall", { Scale = 0.85, CFrame = facingBridge(position), Parent = ctx.Arena })
+	end
+	-- The temple rises out of the lava (its bottom tier mostly under it), which keeps the dragon head
+	-- low enough on screen to stay clear of the round banner.
+	local temple = facingBridge(base + Vector3.new(0, -TEMPLE_SINK * TEMPLE_SCALE, -TEMPLE_DISTANCE))
+	MeshLibrary.Get("DragonTemple", { Scale = TEMPLE_SCALE, CFrame = temple, Parent = ctx.Arena })
+	-- Steam where its lava cascade meets the lake.
+	steamSpot(ctx, (temple * CFrame.new(0, TEMPLE_SINK * TEMPLE_SCALE + 2, -42 * TEMPLE_SCALE)).Position, 3)
+	for _, spot in cliffs do
+		local scale = if spot.Z < 0 then 1.25 else 1.05
+		local cframe = facingBridge(base + spot)
+		MeshLibrary.Get("LavaFall", { Scale = scale, CFrame = cframe, Parent = ctx.Arena })
+		steamSpot(ctx, (cframe * CFrame.new(0, 2, -13 * scale)).Position, 2)
+	end
+	Scenery.Volcano(ctx, lake + Vector3.new(-175, -2, -345), origin, 2.4)
+	Scenery.Volcano(ctx, lake + Vector3.new(235, -2, -300), origin, 1.7)
+	Scenery.Volcano(ctx, lake + Vector3.new(40, -2, 360), origin, 1.9)
 
-	-- The bridge: a stone slab with gold edges on stone arches rising out of the lava.
+	-- The bridge: a sandstone walkway with terracotta borders on carved arches over the lava.
 	Shapes.Slab(Vector3.new(LENGTH, 3, DEPTH), 1.2, {
 		Name = "Bridge",
 		CFrame = CFrame.new(origin - Vector3.new(0, 1.5, 0)),
-		Color = rgb(190, 170, 160),
-		Material = Enum.Material.Slate,
+		Color = rgb(244, 218, 178),
+		Material = Enum.Material.Sandstone,
 		Parent = ctx.Arena,
 	})
 	for _, side in { -1, 1 } do
-		Shapes.RoundedBox(Vector3.new(LENGTH + 0.6, 0.8, 0.9), 0.35, {
-			Name = "Edge",
-			CFrame = CFrame.new(origin + Vector3.new(0, -2.4, side * (DEPTH / 2 + 0.1))),
-			Color = rgb(255, 200, 60),
-			Parent = ctx.Arena,
-		})
-	end
-	for index = 0, 7 do
-		local x = -LENGTH / 2 + 2 + index * (LENGTH - 4) / 7
 		Build.Decor({
-			Name = "Seam",
-			Size = Vector3.new(0.25, 0.05, DEPTH - 1),
-			CFrame = CFrame.new(origin + Vector3.new(x, 0.03, 0)),
-			Color = rgb(150, 130, 125),
+			Name = "Border",
+			Size = Vector3.new(LENGTH - 2.4, 0.11, 0.9), -- top at +0.09: clear of the deck, well under the rope's glow
+			CFrame = CFrame.new(origin + Vector3.new(0, 0.035, side * (DEPTH / 2 - 0.85))),
+			Color = rgb(222, 100, 66),
 			Parent = ctx.Arena,
 		})
 	end
-	local archWidth = LENGTH / 3
-	for index = -1, 1 do
-		Shapes.Arch(
-			archWidth,
-			LAVA_DROP - 1.9,
-			3,
-			DEPTH - 1,
-			CFrame.new(lake + Vector3.new(index * archWidth, -1, 0)),
-			{
-				Name = "Arch",
-				Color = rgb(128, 108, 108),
-				Material = Enum.Material.Slate,
-				Parent = ctx.Arena,
-			}
-		)
-	end
+	MeshLibrary.Get("TempleBridge", { CFrame = CFrame.new(base), Parent = ctx.Arena })
 
-	-- A fire wheel at each end turns the rope (the client spins the wheels in time with it), held
-	-- by a stone tower with a burning brazier on top.
+	-- A sun wheel at each end turns the rope (the client spins the wheels in time with it), its axle
+	-- in a stone tower with a fire bowl on top.
 	for _, side in { -1, 1 } do
 		local wheelX = side * (LENGTH / 2 + 7)
-		local wheel = MeshLibrary.Get("FireWheel", { Parent = ctx.Arena })
+		local wheel = MeshLibrary.Get("SunWheel", { Parent = ctx.Arena })
 		wheel.Name = if side < 0 then "WheelL" else "WheelR"
 		local box = wheel:GetBoundingBox()
 		local center = self.axis + Vector3.new(wheelX, 0, 0)
 		wheel:PivotTo(wheel:GetPivot() + (center - box.Position))
 
-		local towerX = wheelX + side * 4.7 -- the axle's end just meets the tower
-		local towerHeight = LAVA_DROP + RADIUS + ROPE_LOW + 5
-		Shapes.RoundedBox(Vector3.new(6, towerHeight, 6), 1.2, {
-			Name = "Tower",
-			CFrame = CFrame.new(lake + Vector3.new(towerX, towerHeight / 2 - 1, 0)),
-			Color = rgb(96, 76, 84),
-			Material = Enum.Material.Slate,
+		local tower = base + Vector3.new(wheelX + side * 4.7, 0, 0)
+		MeshLibrary.Get("RopeTower", {
+			CFrame = CFrame.lookAt(tower, tower - Vector3.new(side, 0, 0)), -- medallion towards the wheel
 			Parent = ctx.Arena,
 		})
-		for _, height in { 8, towerHeight - 3.5 } do
-			Shapes.RoundedBox(Vector3.new(6.8, 1, 6.8), 0.4, {
-				Name = "TowerBand",
-				CFrame = CFrame.new(lake + Vector3.new(towerX, height, 0)),
-				Color = rgb(255, 200, 60),
-				Parent = ctx.Arena,
-			})
-		end
-		local brazier = Shapes.RoundedBox(Vector3.new(4, 1.6, 4), 0.6, {
-			Name = "Brazier",
-			CFrame = CFrame.new(lake + Vector3.new(towerX, towerHeight - 0.2, 0)),
-			Color = rgb(70, 55, 62),
-			Material = Enum.Material.Metal,
-			Parent = ctx.Arena,
-		})
-		local coals = Build.Decor({
-			Name = "Coals",
-			Size = Vector3.new(3, 0.3, 3),
-			CFrame = brazier.CFrame + Vector3.new(0, 0.85, 0),
-			Color = rgb(255, 150, 50),
-			Material = Enum.Material.Neon,
-			Parent = ctx.Arena,
-		})
-		local fire = Instance.new("Fire")
-		fire.Size = 7
-		fire.Heat = 10
-		fire.Color = rgb(255, 140, 40)
-		fire.SecondaryColor = rgb(255, 60, 30)
-		fire.Parent = coals
-		Build.Light(coals, rgb(255, 150, 60), 30, 2)
+		flameSpot(ctx, tower + Vector3.new(0, 43, 0), 7, false) -- the fire and the glowing coals read; no light
+	end
+
+	-- Fire braziers rising out of the lava either side of the bridge, clear of the rope. The pair in
+	-- front (where the rope comes down) stands lower and out past the bridge's ends, framing the view
+	-- instead of burning behind the players and the descending rope.
+	for _, spot in
+		{ Vector3.new(-42, -6, -26), Vector3.new(42, -6, -26), Vector3.new(-22, 0, 17), Vector3.new(22, 0, 17) }
+	do
+		local position = base + spot
+		MeshLibrary.Get("FireBrazier", { CFrame = CFrame.new(position), Parent = ctx.Arena })
+		flameSpot(ctx, position + Vector3.new(0, 27.6, 0), 6)
 	end
 
 	-- Everyone lines up across the bridge, facing the side the rope comes down on.
