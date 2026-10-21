@@ -6,6 +6,7 @@ All art props and audio are **original and generated from code**, so there's not
 | --- | --- | --- |
 | `assets/meshes/*.obj, *.glb` | 15 toy-style props (shopping cart, glove, chest, trophy, trees...) | `python3 tools/meshgen/generate_meshes.py` |
 | `assets/audio/music/*.ogg` | "Party Plaza" + "Sunset Social" (lobby playlist), "Panic Mode" (rounds) | `python3 tools/music/compose.py` |
+| `assets/audio/modes/ModePack*.ogg` | each mini-game's own round song, several to a file | `python3 tools/music/modes.py` |
 | `assets/audio/sfx/*.ogg` | 15 sound effects, plus `SfxSprite.ogg` (all of them in one file) | same |
 
 Requirements for regenerating: Python 3.10+, `numpy`, `scipy`, `scikit-image` (meshes), and
@@ -62,7 +63,42 @@ How the client plays music (`AudioController`):
   4 minutes of music before anything repeats.
 - Music starts at a gentle default volume and **fades in** over 6 seconds on first launch.
 - Music **ducks** while a menu is open. Players choose Off / Low / Medium / High in Settings.
-- The round track **speeds up** during the last 10 seconds.
+- Each mini-game has **its own round song** (below). A game without one yet plays "Panic Mode",
+  which **speeds up** during the last 10 seconds.
+
+## Each mini-game's own song
+
+Owner: "put in the backlog custom music for each mini game", then "take over the music." Every song is
+one file, `tools/music/songs/<ModeId>.py`, written with `tools/music/score.py`'s lead-sheet notation
+(melodies, chords and drum patterns as short strings) and played by the instruments in
+`tools/music/instruments.py`. `tools/music/songkit.py` lists the rules every song keeps:
+
+- an **intro of at least 13 seconds** (the rules card and the 3-2-1). The game starts the song so the
+  end of the intro, the **drop, lands exactly on GO** (`src/shared/Logic/SongTiming.luau`), whenever
+  the player's device finishes loading it, and puts it right again at GO;
+- after the intro, **about the round's length of music** (up to ~70 s), with the big finish where the
+  round's own finale is. In a longer round the part after the intro **loops**, so the last bars lead
+  back into the drop;
+- **-11 LUFS**, true peaks under -1 dBTP, bass where phone speakers can play it.
+
+Adding a song for a new game:
+
+```
+python3 tools/music/modes.py list                 # which modes have no song yet
+# write tools/music/songs/<ModeId>.py (copy the shape of a finished one; end with SONG = Song(...))
+python3 tools/music/modes.py render <ModeId>      # into build/music/<ModeId>.wav
+python3 tools/music/modes.py check                # lengths against the round, loudness, peaks
+python3 tools/music/modes.py preview previews/ <ModeId>   # an MP3 to listen to
+python3 tools/music/modes.py pack                 # assets/audio/modes/ModePack<N>.ogg + src/shared/ModeMusic.luau
+python3 tools/upload_assets.py --user-id 11690979745 --what modes
+```
+
+Roblox caps audio uploads at 10 a month (100 with ID verification) and each file at about 7 minutes,
+so songs go up **packed**: several to a file of at most 400 s, each played as a region of its pack.
+`tools/music/packs.json` says which song is where. A pack that's been uploaded is never rebuilt, so new
+songs go into a new pack (one more upload); re-rendering a song in an uploaded pack needs
+`pack --replace ModePack<N>` and a new upload of that pack. Until a game's pack is uploaded (its id in
+`AudioAssets.ModeMusic`), the game plays "Panic Mode", so nothing breaks in between.
 
 ## Store art
 

@@ -1,0 +1,27 @@
+{
+ "ModePack1": {
+  "songs": [
+   {
+    "id": "FireRope",
+    "title": "Dragon Temple Drums",
+    "start": 0.0,
+    "drop": 15.238,
+    "end": 99.048
+   },
+   {
+    "id": "HexMeltdown",
+    "title": "Molten Showdown",
+    "start": 99.548,
+    "drop": 115.031,
+    "end": 207.935
+   },
+   {
+    "id": "HoneyTrap",
+    "title": "Honeycomb Hush",
+    "start": 208.435,
+    "drop": 226.896,
+    "end": 309.973
+   }
+  ]
+ }
+}
