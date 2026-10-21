@@ -21,7 +21,7 @@ local Flight = {}
 Flight.WIND_TIME = 10 -- seconds of winding, from GO
 Flight.LAUNCH_DELAY = 1.6 -- from the end of the winding to lift-off (the "LAUNCH!" beat)
 Flight.RATE = 12 -- the most winds counted per second
-Flight.BURST = 5 -- presses that can arrive bunched together and still count
+Flight.BURST = 8 -- presses that can arrive bunched together and still count
 Flight.STUDS_PER_METER = 4
 Flight.BASE = 2 -- meters a toy with no winds hops off its pad
 Flight.PER_WIND = 0.6 -- meters per wind
@@ -33,7 +33,7 @@ Flight.LAND = 0.35 -- share of its speed a toy has left when it touches down
 Flight.HEIGHT = 12 -- cruise height over the field (studs)
 Flight.PAD = 1.3 -- the launch pad's top over the field: where a toy starts from
 Flight.MARKER = 10 -- meters between distance markers
-Flight.MAX_WINDS = Flight.RATE * Flight.WIND_TIME + 1
+Flight.MAX_WINDS = Flight.RATE * Flight.WIND_TIME + 1 -- a hard cap on top of the rate
 
 export type Plan = {
 	Distance: number, -- studs from the pad to the landing spot

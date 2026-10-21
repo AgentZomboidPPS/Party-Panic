@@ -54,7 +54,7 @@ local COLORS = {
 	Color3.fromRGB(160, 110, 70),
 	Color3.fromRGB(40, 150, 140),
 	Color3.fromRGB(225, 50, 150),
-	Color3.fromRGB(240, 240, 250),
+	Color3.fromRGB(170, 215, 40),
 }
 
 local rng = Random.new()
@@ -461,8 +461,9 @@ function MechaMarathon:Prepare()
 			Parent = ctx.Arena,
 		})
 		Build.SurfaceText(tile, Enum.NormalId.Top, tostring(index), {
-			TextColor3 = color:Lerp(Color3.new(0, 0, 0), 0.25),
-			TextStrokeTransparency = 1,
+			TextColor3 = rgb(40, 50, 80), -- dark ink on the white tile, ringed in the lane's color
+			TextStrokeColor3 = color,
+			TextStrokeTransparency = 0,
 			PixelsPerStud = 16,
 			LightInfluence = 1,
 			Brightness = 1,
@@ -500,7 +501,13 @@ function MechaMarathon:Prepare()
 	})
 	ctx:SetShared("Stage", "Ready")
 
-	ctx:SpawnAll(points, true)
+	-- SpawnAll hands out points in ctx:GetPlayers() order, not the shuffled lane order.
+	local ordered = {}
+	for _, player in ctx:GetPlayers() do
+		local winder = self.winders[player]
+		table.insert(ordered, if winder then winder.Spot else points[1])
+	end
+	ctx:SpawnAll(ordered, true)
 	ctx.Hooks.Respawn = function(player)
 		local winder = self.winders[player]
 		return if winder then winder.Spot else nil
@@ -539,7 +546,7 @@ function MechaMarathon:_wind(player)
 	if now < self.windStart or now > self.windEnd + leewayFor(player) then
 		return
 	end
-	if Flight.Take(winder, now) then
+	if winder.Winds < Flight.MAX_WINDS and Flight.Take(winder, now) then
 		winder.Winds += 1
 	end
 end
@@ -619,11 +626,23 @@ function MechaMarathon:_launch()
 	self.launchAt = self.windEnd + Flight.LAUNCH_DELAY
 	local toys = {}
 	local last = 0
+	local taken = {}
 	for player, winder in self.winders do
 		if winder.Gone then
 			continue
 		end
-		winder.Meters = Flight.Meters(winder.Winds, rng:NextNumber(-Flight.WOBBLE, Flight.WOBBLE))
+		-- The wobble, nudged a centimeter at a time until no other toy lands on exactly the same
+		-- spot (so there are no ties to split); the draw leaves room for the nudge under WOBBLE.
+		local wobble = rng:NextNumber(-Flight.WOBBLE + 0.07, Flight.WOBBLE - 0.07)
+		local meters = Flight.Meters(winder.Winds, wobble)
+		local step = 0
+		while taken[meters] and step < 12 do
+			step += 1
+			meters =
+				Flight.Meters(winder.Winds, wobble + (if step % 2 == 1 then 1 else -1) * math.ceil(step / 2) * 0.01)
+		end
+		taken[meters] = true
+		winder.Meters = meters
 		local plan = Flight.Plan(winder.Meters :: number)
 		toys[tostring(player.UserId)] = { M = winder.Meters, W = winder.Winds, S = rng:NextInteger(1, 9999) }
 		last = math.max(last, plan.Total)
