@@ -4,7 +4,7 @@
 --
 --   DIVERS (most players) run on the sand and grab treasure (+1 coin, +3 gem, +5 bag, +10 idol). The
 --   sand drags them round and in; whoever slips into the sinkhole is spat back out at the rim a
---   moment later (and the Sand Kings score +3).
+--   moment later (and the Sand Kings score +5).
 --   SAND KINGS (about one in four, on thrones round the rim) steer the swirl: SWIRL flips the spin
 --   and whips it faster, PULL drains the funnel hard for two seconds. Every treasure that sinks goes
 --   to the Kings. With nobody to be a King (a solo round) the sand plays King by itself.
@@ -36,10 +36,10 @@ local KINGS, DIVERS = "SandKings", "Divers"
 -- Treasure kinds: value, how often (weight), how fast the sand carries it (heavier = slower), grab
 -- reach (studs, measured from the player's middle) and the prop the client draws.
 SinkingSands.Kinds = {
-	{ Name = "Coin", Value = 1, Weight = 58, Factor = 1, Reach = 3.4, Prop = "SandCoin" },
-	{ Name = "Gem", Value = 3, Weight = 27, Factor = 0.92, Reach = 3.4, Prop = "SandGem" },
-	{ Name = "Bag", Value = 5, Weight = 15, Factor = 0.8, Reach = 3.7, Prop = "CoinBag" },
-	{ Name = "Idol", Value = 10, Weight = 0, Factor = 0.62, Reach = 3.9, Prop = "GoldenIdol" },
+	{ Name = "Coin", Value = 1, Weight = 58, Factor = 1.5, Reach = 3.4, Prop = "SandCoin" },
+	{ Name = "Gem", Value = 3, Weight = 27, Factor = 1.4, Reach = 3.4, Prop = "SandGem" },
+	{ Name = "Bag", Value = 5, Weight = 15, Factor = 1.2, Reach = 3.7, Prop = "CoinBag" },
+	{ Name = "Idol", Value = 10, Weight = 0, Factor = 0.95, Reach = 3.9, Prop = "GoldenIdol" },
 }
 local IDOL = 4
 
@@ -49,10 +49,10 @@ local THRONE_R = SandSwirl.RIM + 9
 local DIVER_R = SandSwirl.RIM + 3.5
 local HOLD_DEPTH = 22 -- the dark pocket down the sinkhole where gulped divers wait
 local GULP_TIME = 1.8
-local GULP_BONUS = 3
+local GULP_BONUS = 5
 local FALL_TIME = 1.1 -- treasure falls from the sky this long before it lands
 local MAX_ITEMS = 24
-local SWIRL_COOLDOWN, PULL_COOLDOWN = 3, 5
+local SWIRL_COOLDOWN, PULL_COOLDOWN = 3, 5 -- with three Kings; fewer Kings recharge faster
 local FLIP_GAP = 1.4 -- the spin never reverses twice within this long
 local HIP = 3 -- a character's root above the ground
 
@@ -466,7 +466,15 @@ function SinkingSands:ItemPolar(item: Item, t: number): (number, number, number?
 	if t <= item.T then
 		return item.R, item.A, nil
 	end
-	return SandSwirl.Advance(self.segments, item.R, item.A, item.T, t, SinkingSands.Kinds[item.Kind].Factor)
+	return SandSwirl.Advance(
+		self.segments,
+		item.R,
+		item.A,
+		item.T,
+		t,
+		SinkingSands.Kinds[item.Kind].Factor,
+		SandSwirl.TREASURE_DRAIN
+	)
 end
 
 -- The treasure's spot on the sand at `t` (world space).
@@ -570,6 +578,12 @@ function SinkingSands:_pull(byUserId: number?)
 	ctx:Fire(nil, "Power", "PULL", start, byUserId or 0, false)
 end
 
+-- Cooldowns for this many Kings: a lone King has to keep the sand busy by themself.
+function SinkingSands:Cooldowns(): (number, number)
+	local share = math.clamp(#self.kings, 1, 3) / 3
+	return SWIRL_COOLDOWN * (0.55 + 0.45 * share), PULL_COOLDOWN * (0.6 + 0.4 * share)
+end
+
 function SinkingSands:IsKing(player: any): boolean
 	return table.find(self.kings, player) ~= nil
 end
@@ -668,7 +682,9 @@ function SinkingSands:Start()
 		if now < cool.Swirl - 0.1 then
 			return
 		end
-		cool.Swirl = now + SWIRL_COOLDOWN
+		local length = self:Cooldowns()
+		cool.Swirl = now + length
+		ctx:SetPlayerShared(player, "SwirlLength", length)
 		ctx:SetPlayerShared(player, "SwirlAt", cool.Swirl)
 		self:_swirl(player.UserId)
 	end, { Interval = 0.25 })
@@ -681,7 +697,9 @@ function SinkingSands:Start()
 		if now < cool.Pull - 0.1 then
 			return
 		end
-		cool.Pull = now + PULL_COOLDOWN
+		local _, length = self:Cooldowns()
+		cool.Pull = now + length
+		ctx:SetPlayerShared(player, "PullLength", length)
 		ctx:SetPlayerShared(player, "PullAt", cool.Pull)
 		self:_pull(player.UserId)
 	end, { Interval = 0.25 })
@@ -721,7 +739,7 @@ function SinkingSands:Start()
 		elseif count < MAX_ITEMS then
 			self:_spawnItem(pickKind())
 		end
-		return math.clamp(2.6 / (0.6 + 0.26 * math.max(1, divers)), 0.55, 2.2) * rng:NextNumber(0.8, 1.2)
+		return math.clamp(2 / (0.5 + 0.28 * math.max(1, divers)), 0.45, 2) * rng:NextNumber(0.8, 1.2)
 	end)
 
 	-- Grabs, sinks and the sinkhole, ten times a second; the sand shared at least once a second.

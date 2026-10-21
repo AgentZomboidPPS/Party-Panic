@@ -30,6 +30,7 @@ SandSwirl.EDGE = 1.5 -- a walker's drift fades out over this distance either sid
 SandSwirl.LIP = 6 -- width of the extra suction ring round the hole (walkers only)
 SandSwirl.LIP_PULL = 3.5 -- extra inward speed at the very edge of the hole
 SandSwirl.WALK_SPIN = 0.4 -- walkers slide round with this much of the sand's spin (treasure rides all of it)
+SandSwirl.TREASURE_DRAIN = 2.4 -- treasure slides down this much faster than the sand drags a walker
 SandSwirl.AIR_DRAG = 0.6 -- how much of the drag still reaches someone in the air (hopping isn't a free pass)
 SandSwirl.MIN_V = 0.4
 
@@ -177,15 +178,17 @@ function SandSwirl.FlowAt(segments: { Segment }, t: number): (number, number)
 end
 
 -- Carries a point lying on the sand from (r, a) at t0 to t1. `factor` scales the flow (heavy
--- treasure drifts slower but on the same spiral). Returns the new radius and angle, and the time it
--- reached the hole if it did (then r is HOLE).
+-- treasure drifts slower but on the same spiral) and `drain` scales only the inward part (treasure
+-- uses TREASURE_DRAIN). Returns the new radius and angle, and the time it reached the hole if it
+-- did (then r is HOLE).
 function SandSwirl.Advance(
 	segments: { Segment },
 	r: number,
 	a: number,
 	t0: number,
 	t1: number,
-	factor: number?
+	factor: number?,
+	drain: number?
 ): (number, number, number?)
 	local hole = SandSwirl.HOLE
 	if r <= hole then
@@ -205,7 +208,7 @@ function SandSwirl.Advance(
 		local to = if index < count then segments[index + 1].T else math.huge
 		local s0, s1 = math.max(t0, from), math.min(t1, to)
 		if s1 > s0 then
-			local v = math.max(segment.V, SandSwirl.MIN_V) * k
+			local v = math.max(segment.V, SandSwirl.MIN_V) * k * (drain or 1)
 			local s = segment.S * k
 			local r1 = r - v * (s1 - s0)
 			if r1 <= hole then

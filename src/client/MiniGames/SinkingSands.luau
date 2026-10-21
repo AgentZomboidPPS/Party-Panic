@@ -21,10 +21,10 @@ local SinkingSands = {}
 -- Must match the server's kinds (index = kind number).
 -- Mark is the landing marker's dot (the ring round it is always dark, so it reads on pale sand).
 local KINDS = {
-	{ Prop = "SandCoin", Value = 1, Factor = 1, Lift = 0.15, Reach = 3.4, Mark = Color3.fromRGB(255, 214, 60) },
-	{ Prop = "SandGem", Value = 3, Factor = 0.92, Lift = 0.5, Reach = 3.4, Mark = Color3.fromRGB(70, 200, 255) },
-	{ Prop = "CoinBag", Value = 5, Factor = 0.8, Lift = 0, Reach = 3.7, Mark = Color3.fromRGB(255, 170, 30) },
-	{ Prop = "GoldenIdol", Value = 10, Factor = 0.62, Lift = 0, Reach = 3.9, Mark = Color3.fromRGB(255, 170, 30) },
+	{ Prop = "SandCoin", Value = 1, Factor = 1.5, Lift = 0.15, Reach = 3.4, Mark = Color3.fromRGB(255, 214, 60) },
+	{ Prop = "SandGem", Value = 3, Factor = 1.4, Lift = 0.5, Reach = 3.4, Mark = Color3.fromRGB(70, 200, 255) },
+	{ Prop = "CoinBag", Value = 5, Factor = 1.2, Lift = 0, Reach = 3.7, Mark = Color3.fromRGB(255, 170, 30) },
+	{ Prop = "GoldenIdol", Value = 10, Factor = 0.95, Lift = 0, Reach = 3.9, Mark = Color3.fromRGB(255, 170, 30) },
 }
 local GEM_COLOR = Color3.fromRGB(70, 200, 255) -- every gem is worth the same, so they all look alike
 local MARK_RING = Color3.fromRGB(90, 55, 30)
@@ -183,7 +183,7 @@ function SinkingSands.Start(api)
 		if t <= item.T then
 			return item.R, item.A, nil
 		end
-		return SandSwirl.Advance(segments, item.R, item.A, item.T, t, KINDS[item.Kind].Factor)
+		return SandSwirl.Advance(segments, item.R, item.A, item.T, t, KINDS[item.Kind].Factor, SandSwirl.TREASURE_DRAIN)
 	end
 
 	local function surface(r: number, a: number): Vector3
@@ -642,9 +642,9 @@ function SinkingSands.Start(api)
 						* CFrame.Angles(math.atan(slope), 0, 0)
 						* CFrame.Angles(0, 0, math.rad(90))
 					local size = 1.6 + 1.8 * k + (if item.Kind >= 3 then 0.8 else 0)
-					item.Marker.Size = Vector3.new(0.1, size, size)
-					item.Marker.CFrame = flatOn * CFrame.new(0.1, 0, 0)
-					item.Dot.CFrame = flatOn * CFrame.new(0.16, 0, 0)
+					item.Marker.Size = Vector3.new(0.06, size, size)
+					item.Marker.CFrame = flatOn * CFrame.new(0.08, 0, 0)
+					item.Dot.CFrame = flatOn * CFrame.new(0.2, 0, 0) -- clear of the ring (no flicker)
 				end
 			else
 				if item.Marker then
@@ -717,8 +717,8 @@ function SinkingSands.Start(api)
 			local pullAt = api:Mine("PullAt") or 0
 			local swirlLeft = math.max(0, swirlAt - now)
 			local pullLeft = math.max(0, pullAt - now)
-			swirlButton:SetFill(1 - swirlLeft / SWIRL_COOLDOWN)
-			pullButton:SetFill(1 - pullLeft / PULL_COOLDOWN)
+			swirlButton:SetFill(1 - swirlLeft / (api:Mine("SwirlLength") or SWIRL_COOLDOWN))
+			pullButton:SetFill(1 - pullLeft / (api:Mine("PullLength") or PULL_COOLDOWN))
 			swirlButton:SetEnabled(swirlLeft <= 0)
 			pullButton:SetEnabled(pullLeft <= 0)
 		end

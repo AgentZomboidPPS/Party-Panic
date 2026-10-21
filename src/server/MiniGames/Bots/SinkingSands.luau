@@ -60,18 +60,19 @@ local function kingStep(bot, ctx, mode)
 		end
 	end
 
+	local swirlCool, pullCool = mode:Cooldowns()
 	if clock >= (memory.SwirlReady or 0) then
-		local want = if close > 0 then 0.3 + bot.Skill * 0.5 else 0.06
+		local want = if close > 0 then 0.4 + bot.Skill * 0.5 else 0.12 + bot.Skill * 0.1
 		if bot:Chance(want) then
-			memory.SwirlReady = clock + 3.1
+			memory.SwirlReady = clock + swirlCool + 0.1
 			ctx:BotAction(bot, "Swirl")
 			return
 		end
 	end
 	if clock >= (memory.PullReady or 0) then
-		local want = if deep > 0 or richNearHole then 0.2 + bot.Skill * 0.45 else 0.04
+		local want = if deep > 0 or richNearHole then 0.2 + bot.Skill * 0.45 else 0.08
 		if bot:Chance(want) then
-			memory.PullReady = clock + 5.1
+			memory.PullReady = clock + pullCool + 0.1
 			ctx:BotAction(bot, "Pull")
 		end
 	end
@@ -138,11 +139,19 @@ local function diverStep(bot, ctx, mode)
 
 	local item = memory.Target and mode.items[memory.Target]
 	if item then
-		local distance = flat(mode:ItemPosition(item, now), position)
-		local lead = math.min(1.5, distance / WALK) * (0.4 + bot.Skill * 0.6)
-		local aim = mode:ItemPosition(item, now + lead)
+		-- Bots look again only every so often (like a person's eye), so a fast SWIRL can whip the
+		-- treasure out from under them; a surge makes them slower to re-aim.
+		if memory.AimFor ~= memory.Target or clock >= (memory.AimUntil or 0) then
+			local spin = SandSwirl.FlowAt(mode.segments, now)
+			local surging = math.abs(spin) > SandSwirl.SPIN[2] + 2
+			memory.AimFor = memory.Target
+			memory.AimUntil = clock + bot:Reaction() * (if surging then 1 else 0.5)
+			local distance = flat(mode:ItemPosition(item, now), position)
+			local lead = math.min(1.5, distance / WALK) * (0.4 + bot.Skill * 0.6)
+			memory.Aim = mode:ItemPosition(item, now + lead)
+		end
 		-- Lean outward against the pull, more for better bots.
-		bot:MoveTo(aim + outward * (0.6 + bot.Skill * 1.4))
+		bot:MoveTo(memory.Aim + outward * (0.6 + bot.Skill * 1.4))
 	else
 		-- Nothing worth chasing: wait on the gentle outer slope.
 		memory.Home = memory.Home or (center + outward * bot.Rng:NextNumber(22, 30))
