@@ -416,11 +416,25 @@ def tiki_bar():
     straws = [taper([(x + 0.1, deck_top + 3.8, -3.4), (x + 0.35, deck_top + 4.5, -3.55)], 0.05, 0.05, 5) for x in (-3.0, 0.2, 3.1)]
     roof = merge(thatch_tier(7.4, 6.4, deck_top + 7.9, deck_top + 10.6, 0.5, 1), thatch_tier(4.2, 3.6, deck_top + 9.9, deck_top + 12.4, 0.35, 2))
     sign = bar(-3.6, deck_top + 7.3, -6.75, 3.6, deck_top + 8.6, -6.45)
+    sign.smooth = False
+    # A pink wave across the teal board, with a dot at each end (no text, nothing to translate).
+    mid = deck_top + 7.95
+    wave_points = [(-2.9 + k * 0.29, mid + 0.22 * math.sin(k * 0.29 * 2.2), -6.8) for k in range(21)]
+    wave = taper(wave_points, 0.13, 0.13, 6)
+    dots = [sphere(0.24, 6, 10).translate(x, mid, -6.78) for x in (-3.25, 3.25)]
     sign_posts = [cylinder(0.12, 1.0, 6).translate(x, deck_top + 7.5, -6.3) for x in (-2.8, 2.8)]
-    wood = merge(*planks, counter, shelf, shelf2, back, *stools, sign)
+    wood = merge(*planks, counter, shelf, shelf2, back, *stools)
     wood.smooth = False
     bamboo = merge(*stilts, *posts, *slats, *stool_legs, *sign_posts)
-    return {"Wood": wood, "Bamboo": bamboo, "Thatch": roof, "Bottles": merge(*bottles), "Cups": merge(*cups, *straws)}
+    return {
+        "Wood": wood,
+        "Bamboo": bamboo,
+        "Thatch": roof,
+        "Bottles": merge(*bottles),
+        "Cups": merge(*cups, *straws),
+        "Sign": sign,
+        "SignWave": merge(wave, *dots),
+    }
 
 
 def tiki_totem():
@@ -494,7 +508,7 @@ def far_island(seed: int, peaks):
     n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
     n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-9
     c = tri.mean(axis=1)
-    rock_part, jungle = split(rest, (n[:, 1] < 0.6) & (c[:, 1] > 26.0) | (c[:, 1] > 52.0))
+    rock_part, jungle = split(rest, (n[:, 1] < 0.45) & (c[:, 1] > 40.0) | (c[:, 1] > 82.0))
     rock_part.smooth = False
     return {"Sand": sand_part, "Jungle": jungle, "Rock": rock_part}
 
@@ -504,7 +518,7 @@ def far_island_a():
 
 
 def far_island_b():
-    return far_island(9, [(0.1, 0.05, 44.0, 0.45), (-0.45, -0.1, 18.0, 0.3)])
+    return far_island(9, [(-0.35, 0.05, 40.0, 0.3), (0.05, -0.05, 46.0, 0.3), (0.42, 0.1, 34.0, 0.28), (-0.1, -0.35, 16.0, 0.3)])
 
 
 PROPS = {
@@ -560,6 +574,8 @@ COLORS = {
     "Thatch": (220, 180, 100),
     "Bottles": (60, 190, 160),
     "Cups": (255, 190, 60),
+    "Sign": (70, 200, 210),
+    "SignWave": (255, 110, 170),
     "Paint": (230, 70, 50),
     "Eyes": (250, 245, 230),
     "Teeth": (40, 30, 30),

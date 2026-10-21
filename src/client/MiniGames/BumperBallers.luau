@@ -460,6 +460,7 @@ function BumperBallers.Start(api)
 
 	local wasAlive = nil
 	local nextStrip = 0
+	local nextBob = 0
 	api:RenderStep(function(dt: number)
 		local now = os.clock()
 		-- Squash-and-stretch pulses (uniform, so they look right however the ball has rolled).
@@ -506,13 +507,17 @@ function BumperBallers.Start(api)
 				* CFrame.Angles(0, 0, math.rad(90))
 		end
 
-		for _, bob in bobbers do
-			local t = now * 1.4 + bob.Phase
-			bob.Model:PivotTo(
-				bob.Base
-					* CFrame.new(0, math.sin(t) * 0.22, 0)
-					* CFrame.Angles(math.sin(t * 0.8) * 0.05, 0, math.cos(t * 0.9) * 0.05)
-			)
+		-- A 0.22-stud bob reads fine at 30 Hz; skip the other frames to save phones the PivotTo calls.
+		if now >= nextBob then
+			nextBob = now + 1 / 30
+			for _, bob in bobbers do
+				local t = now * 1.4 + bob.Phase
+				bob.Model:PivotTo(
+					bob.Base
+						* CFrame.new(0, math.sin(t) * 0.22, 0)
+						* CFrame.Angles(math.sin(t * 0.8) * 0.05, 0, math.cos(t * 0.9) * 0.05)
+				)
+			end
 		end
 
 		local ball = balls[myId]

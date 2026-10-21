@@ -294,7 +294,13 @@ function BumperBallers:_buildArena()
 	local partyBase = waterY - 4
 	local party =
 		CFrame.lookAt(Vector3.new(partySpot.X, partyBase, partySpot.Z), Vector3.new(center.X, partyBase, center.Z))
-	MeshLibrary.Get("BumperIslet", { Scale = PARTY_SCALE, CFrame = party, Parent = ctx.Arena })
+	MeshLibrary.Get("BumperIslet", {
+		Scale = PARTY_SCALE,
+		-- Scaled up, the islet's rocks would read as grey slabs: tint them as sandy dune stones.
+		Colors = { Rock = Color3.fromRGB(214, 196, 150) },
+		CFrame = party,
+		Parent = ctx.Arena,
+	})
 	table.insert(taken, { Spot = partySpot, Radius = 27 })
 	local function onParty(x: number, z: number): CFrame
 		-- A spot on the party islet's sand (x right, -z toward the island), a little sunk in.
@@ -355,8 +361,9 @@ function BumperBallers:_buildArena()
 				Parent = ctx.Arena,
 			})
 		elseif index == 2 or index == 6 then
+			local spot = onIslet(-4, 2).Position
 			MeshLibrary.Get("BumperTikiTotem", {
-				CFrame = CFrame.lookAt(onIslet(-4, 2).Position, Vector3.new(center.X, waterY, center.Z)),
+				CFrame = CFrame.lookAt(spot, Vector3.new(center.X, spot.Y, center.Z)),
 				Parent = ctx.Arena,
 			})
 		end
@@ -389,7 +396,7 @@ function BumperBallers:_buildArena()
 	-- Rocks in the surf at the foot of the cliff.
 	for index = 0, 9 do
 		local angle = decor:NextNumber(0, math.pi * 2)
-		local distance = decor:NextNumber(52, 64)
+		local distance = decor:NextNumber(62, 84)
 		MeshLibrary.Get("Boulder", {
 			Scale = decor:NextNumber(0.5, 1.1),
 			Colors = { Rock = Color3.fromRGB(125, 118, 112) },

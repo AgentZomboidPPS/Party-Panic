@@ -180,6 +180,8 @@ return function(h)
 				Thatch = h.rgb(232, 184, 96),
 				Bottles = h.rgb(60, 200, 168),
 				Cups = h.rgb(255, 196, 60),
+				Sign = h.rgb(70, 200, 210),
+				SignWave = h.rgb(255, 110, 170),
 			},
 			Materials = { Wood = Enum.Material.Wood, Thatch = Enum.Material.Fabric, Bottles = Enum.Material.Glass },
 			Fallback = function(m)
@@ -192,6 +194,8 @@ return function(h)
 				h.block(m, "Wood", Vector3.new(10.2, 3.35, 1.9), Vector3.new(0, 3.18, -3.35))
 				h.block(m, "Thatch", Vector3.new(14.8, 2.7, 12.8), Vector3.new(0, 10.75, 0))
 				h.block(m, "Thatch", Vector3.new(8.4, 2.5, 7.2), Vector3.new(0, 12.65, 0))
+				h.block(m, "Sign", Vector3.new(7.2, 1.3, 0.3), Vector3.new(0, 9.45, -6.6))
+				h.block(m, "SignWave", Vector3.new(6.2, 0.3, 0.2), Vector3.new(0, 9.45, -6.85))
 			end,
 		},
 		BumperTikiTotem = {
@@ -237,7 +241,7 @@ return function(h)
 			Height = 95.18,
 			AssetId = 91040437822529,
 			Shadow = false,
-			Palette = { Sand = h.rgb(244, 226, 168), Jungle = h.rgb(62, 158, 78), Rock = h.rgb(120, 128, 118) },
+			Palette = { Sand = h.rgb(244, 226, 168), Jungle = h.rgb(62, 158, 78), Rock = h.rgb(132, 150, 112) },
 			Materials = { Rock = Enum.Material.Slate },
 			Fallback = function(m)
 				h.blob(m, "Jungle", Vector3.new(180, 95.18, 120), Vector3.new(0, 47.59, 0))
@@ -245,13 +249,13 @@ return function(h)
 			end,
 		},
 		BumperFarIslandB = {
-			Height = 63.97,
+			Height = 81.96,
 			AssetId = 122168403471281,
 			Shadow = false,
-			Palette = { Sand = h.rgb(244, 226, 168), Jungle = h.rgb(74, 166, 86), Rock = h.rgb(120, 128, 118) },
+			Palette = { Sand = h.rgb(244, 226, 168), Jungle = h.rgb(74, 166, 86), Rock = h.rgb(132, 150, 112) },
 			Materials = { Rock = Enum.Material.Slate },
 			Fallback = function(m)
-				h.blob(m, "Jungle", Vector3.new(180, 63.97, 120), Vector3.new(0, 31.99, 0))
+				h.blob(m, "Jungle", Vector3.new(180, 81.96, 120), Vector3.new(0, 40.98, 0))
 				h.blob(m, "Sand", Vector3.new(200, 12, 140), Vector3.new(0, 4, 0))
 			end,
 		},
