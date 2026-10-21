@@ -187,21 +187,25 @@ function UIKit.Button(props: Props, onClick: (() -> ())?, top: Color3?, bottom: 
 end
 
 -- Keeps a container at a comfortable size on every screen, from phones to 4K monitors.
--- The scale UIKit.AutoScale gives the current screen (layouts that line up with scaled HUD parts).
-function UIKit.CurrentScale(bias: number?): number
-	local viewport = workspace.CurrentCamera.ViewportSize
+-- The scale for a screen this size (in points): the design size fitted to it, kept between
+-- Theme.MinScale and Theme.MaxScale. Every phone gets MinScale (see Theme).
+function UIKit.ScaleFor(viewport: Vector2, bias: number?): number
 	local raw = math.min(viewport.X / Theme.DesignSize.X, viewport.Y / Theme.DesignSize.Y)
 	return math.clamp(raw * (bias or 1), Theme.MinScale, Theme.MaxScale)
 end
 
+-- The scale UIKit.AutoScale gives the current screen (layouts that line up with scaled HUD parts).
+function UIKit.CurrentScale(bias: number?): number
+	return UIKit.ScaleFor(workspace.CurrentCamera.ViewportSize, bias)
+end
+
 function UIKit.AutoScale(container: GuiObject, bias: number?): UIScale
 	local uiScale = UIKit.new("UIScale", { Parent = container })
-	uiScale:SetAttribute("AutoScale", bias or 1) -- lets tools/checks/ui_render.py redo the layout per screen
+	-- Lets the UI checks redo the scale per screen (tools/checks/gui_dump.luau, ui_render.py).
+	uiScale:SetAttribute("AutoScale", bias or 1)
 	local camera = workspace.CurrentCamera
 	local function update()
-		local viewport = camera.ViewportSize
-		local raw = math.min(viewport.X / Theme.DesignSize.X, viewport.Y / Theme.DesignSize.Y)
-		uiScale.Scale = math.clamp(raw * (bias or 1), Theme.MinScale, Theme.MaxScale)
+		uiScale.Scale = UIKit.ScaleFor(camera.ViewportSize, bias)
 	end
 	camera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
 	update()
