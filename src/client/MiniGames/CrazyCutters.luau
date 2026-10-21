@@ -656,12 +656,16 @@ function CrazyCutters.Start(api)
 			end
 		end))
 		-- Shift slows the wheel; keep it from also toggling Roblox's Shift Lock.
-		ContextActionService:BindActionAtPriority("CutterSlow", function()
-			return Enum.ContextActionResult.Sink
-		end, false, 3000, Enum.KeyCode.LeftShift)
-		api:Track(function()
-			ContextActionService:UnbindAction("CutterSlow")
+		local bound = pcall(function()
+			ContextActionService:BindActionAtPriority("CutterSlow", function()
+				return Enum.ContextActionResult.Sink
+			end, false, 3000, Enum.KeyCode.LeftShift)
 		end)
+		if bound then
+			api:Track(function()
+				ContextActionService:UnbindAction("CutterSlow")
+			end)
+		end
 	end
 
 	local function keyDirection(): Vector2
