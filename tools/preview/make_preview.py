@@ -101,6 +101,9 @@ CAMERAS: dict[str, dict] = {
     # dropping through, two more on the blue ice below (no dolly, so they stay in sight under it).
     "Spleef": {"look_at": "Water", "yaw": 210, "pitch": 8, "distance": 49, "fov": 44, "shift": [2, 27.5, -1],
                "raise": 7, "bob": 1, "dolly": 0},
+    # A tank going up in a toy explosion (turret and driver flying) beside a pink rival, a toy brick in
+    # front, the playroom window and a beach ball beyond.
+    "Tanks": {"look_at": "Cork", "yaw": -60, "pitch": 30, "distance": 44, "shift": [-63, 3.5, -26], "raise": 6},
     # Divers at the rim of the swirling sinkhole, treasure on the sand around it.
     "SinkingSands": {"yaw": 30, "pitch": 30, "distance": 36, "shift": [0, 2, 6]},
     # Low over the water: a shark's fin between the rafts, swimmers and coins on the decks, the
@@ -119,6 +122,7 @@ DUMP_AT: dict[str, float] = {
     "PumpAndPop": 16,  # the balloons are big by now
     "SkateEscape": 10,
     "Spleef": 12,  # holes dug in every floor, players on all three
+    "Tanks": 5.5,  # a second after the shields drop: the first tanks blowing up, the rest still rolling
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole
     "SharkBait": 13,  # a raft tipping, coins spilled in the water, the sharks closing in
 }
