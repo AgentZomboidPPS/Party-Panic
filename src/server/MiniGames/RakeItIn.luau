@@ -187,10 +187,10 @@ function RakeItIn:Prepare()
 		Parent = ctx.Arena,
 	})
 
-	-- Hay bales stacked around the edge of the yard.
+	-- Hay bales stacked out among the bushes (well behind the cameras at the stands).
 	for index = 0, 7 do
 		local angle = (index + 0.5) / 8 * math.pi * 2 + rng:NextNumber(-0.15, 0.15)
-		local spot = origin + Vector3.new(math.cos(angle), 0, math.sin(angle)) * rng:NextNumber(29, 31)
+		local spot = origin + Vector3.new(math.cos(angle), 0, math.sin(angle)) * rng:NextNumber(39, 41)
 		local facing = CFrame.lookAt(spot, origin) * CFrame.Angles(0, math.pi / 2 + rng:NextNumber(-0.2, 0.2), 0)
 		for layer = 0, if index % 2 == 0 then 1 else 0 do
 			MeshLibrary.Get("HayBale", {
@@ -530,6 +530,14 @@ function RakeItIn:Start()
 		if self.dirty then
 			self:_publish()
 		end
+		if not self.rush and ctx:Progress() >= RUSH then
+			self.rush = true
+			ctx:Announce("🎃 GOLDEN RUSH! 🎃", "warning", 2.5)
+			ctx:Sound("HazardWarning")
+			ctx:SetShared("Rush", true)
+			local speed = RakeItIn.SegmentSpeed(self.spin, now)
+			self:_changeSpin((if speed >= 0 then 1 else -1) * 0.55)
+		end
 		return 0.1
 	end)
 
@@ -537,12 +545,6 @@ function RakeItIn:Start()
 	-- the GOLDEN RUSH.
 	ctx:Delay(rng:NextNumber(4, 6), function()
 		ctx:Loop(function(): number?
-			if not self.rush and ctx:Progress() >= RUSH then
-				self.rush = true
-				ctx:Announce("🎃 GOLDEN RUSH! 🎃", "warning", 2.5)
-				ctx:Sound("HazardWarning")
-				ctx:SetShared("Rush", true)
-			end
 			local current = RakeItIn.SegmentSpeed(self.spin, ctx:Now())
 			local direction = if current >= 0 then 1 else -1
 			if rng:NextNumber() < 0.3 then
