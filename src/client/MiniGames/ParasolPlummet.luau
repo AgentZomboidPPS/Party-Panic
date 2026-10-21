@@ -444,16 +444,16 @@ function ParasolPlummet.Start(api)
 
 	-- Cloud puffs streaming up past the sky (the fall), at a few depths.
 	local puffs: { { Model: Model?, X: number, Y: number, Z: number, Speed: number, Scale: number } } = {}
-	local puffCount = if reduced then 6 else 14
+	local puffCount = if reduced then 4 else 10
 	for index = 1, puffCount do
 		local behind = index % 5 ~= 0
 		table.insert(puffs, {
 			Model = nil,
-			X = math.random(-130, 130),
-			Y = math.random(-70, 70),
-			Z = if behind then -math.random(35, 110) else math.random(18, 32),
-			Speed = if behind then math.random(14, 26) else math.random(30, 40),
-			Scale = if behind then math.random(10, 22) / 10 else math.random(6, 10) / 10,
+			X = if behind then math.random(-150, 150) else (if index % 2 == 0 then -1 else 1) * math.random(62, 90),
+			Y = math.random(-80, 80),
+			Z = if behind then -math.random(70, 150) else math.random(18, 30),
+			Speed = if behind then math.random(16, 26) else math.random(30, 40),
+			Scale = if behind then math.random(10, 18) / 10 else math.random(6, 9) / 10,
 		})
 	end
 
@@ -857,7 +857,7 @@ function ParasolPlummet.Start(api)
 			else
 				x, y = Sim.ItemAt(item, now)
 			end
-			local height = if item.Kind == "Coin" then 2.2 elseif item.Kind == "Bag" then 3 else 3.6
+			local height = Sim.Kinds[item.Kind].Height
 			local turn
 			if item.Kind == "Hammer" then
 				turn = CFrame.Angles(0, 0, item.Spin + now * (if item.Knocked then 14 else 8) * -math.sign(item.VX))
@@ -885,9 +885,9 @@ function ParasolPlummet.Start(api)
 				end
 			end
 			puff.Y += puff.Speed * dt
-			if puff.Y > 75 then
-				puff.Y = -75
-				puff.X = math.random(-130, 130)
+			if puff.Y > 85 then
+				puff.Y = -85
+				puff.X = math.random(-150, 150)
 				if puff.Z > 0 then
 					-- (In front of the sky only off to the sides: never over a faller.)
 					puff.X = (if math.random() < 0.5 then -1 else 1) * math.random(60, 90)

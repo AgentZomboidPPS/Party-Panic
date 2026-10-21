@@ -118,10 +118,11 @@ function ParasolPlummet:_buildArena()
 		local holder = Instance.new("Model")
 		holder.Name = `Thrower{index}`
 		local base = CFrame.new(self:_world(x, y, 0))
-		MeshLibrary.Get("ParasolPlummetCloud", { CFrame = base * CFrame.new(0, -2.2, 0), Parent = holder })
+		MeshLibrary.Get("ParasolPlummetCloud", { Scale = 1.4, CFrame = base * CFrame.new(0, -3, 0), Parent = holder })
 		-- Turned mostly to the camera, a little toward the middle of the sky.
 		MeshLibrary.Get("ParasolPlummetThrower", {
-			CFrame = base * CFrame.new(0, 0.6, 0) * CFrame.Angles(0, math.pi + side * math.rad(35), 0),
+			Scale = 1.4,
+			CFrame = base * CFrame.new(0, 1.2, 0) * CFrame.Angles(0, math.pi + side * math.rad(35), 0),
 			Parent = holder,
 		})
 		holder:PivotTo(base)
@@ -155,12 +156,12 @@ function ParasolPlummet:_buildArena()
 	for column = -4, 4 do
 		for row = 0, 2 do
 			MeshLibrary.Get("ParasolPlummetCloud", {
-				Scale = rng:NextNumber(7, 10),
+				Scale = rng:NextNumber(6, 9),
 				CFrame = CFrame.new(
 					center
 						+ Vector3.new(
 							column * 120 + rng:NextNumber(-30, 30),
-							-95 - row * 12 + rng:NextNumber(-6, 6),
+							-150 - row * 14 + rng:NextNumber(-6, 6),
 							-120 - row * 170 + rng:NextNumber(-30, 30)
 						)
 				) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
@@ -538,9 +539,7 @@ function ParasolPlummet:_throw(): number?
 		vy = if peak > y0 then math.sqrt(2 * g * (peak - y0)) else rng:NextNumber(-3, 0)
 		local top = math.max(peak, y0)
 		local across = rng:NextNumber() < 0.7
-		local ty = if across
-			then rng:NextNumber(Sim.Y_MIN - 2, math.max(Sim.Y_MIN - 2, top - 1))
-			else Sim.Y_MIN - 2
+		local ty = if across then rng:NextNumber(Sim.Y_MIN - 2, math.max(Sim.Y_MIN - 2, top - 1)) else Sim.Y_MIN - 2
 		local seconds = (vy + math.sqrt(vy * vy + 2 * g * math.max(0, y0 - ty))) / g
 		local tx = if across
 			then -side * (Sim.HALF_W + 13)

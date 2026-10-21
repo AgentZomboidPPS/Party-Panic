@@ -44,9 +44,9 @@ Sim.WINDUP = 0.55 -- seconds a thrower winds up before the throw leaves its hand
 Sim.LIFE = 7 -- no thrown thing lives longer than this
 
 Sim.Kinds = {
-	Coin = { Value = 1, Radius = 1.1 },
-	Bag = { Value = 5, Radius = 1.5 },
-	Hammer = { Value = 0, Radius = 1.3 },
+	Coin = { Value = 1, Radius = 1.4, Height = 2.8 }, -- (Height: the drawn mesh's, for the client)
+	Bag = { Value = 5, Radius = 1.8, Height = 3.6 },
+	Hammer = { Value = 0, Radius = 1.5, Height = 4.2 },
 }
 
 -- Hit shapes, relative to the faller's root. The umbrella is held up over the head in both hands,
@@ -125,7 +125,7 @@ end
 
 -- Where a throw leaves a thrower's hand (relative to its cloud's position).
 function Sim.HandOffset(side: number): (number, number)
-	return -side * 1.6, 5.2
+	return -side * 2.0, 7.0
 end
 
 -- Whether something of `radius` at (x, y) touches a faller at (fx, fy) with its umbrella `open` or

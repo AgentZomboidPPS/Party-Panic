@@ -110,12 +110,11 @@ function Brain.Step(bot, ctx, mode, _dt)
 		-- only drop when it's below that and float up when it's above.
 		local steer = math.clamp((bestX + memory.Wobble - f.X) / 3, -1, 1)
 		local open = if memory.Open == nil then true else memory.Open
+		-- (Level with it, an open umbrella's slow float keeps it in reach longest.)
 		if bestY < f.Y - 1.5 then
 			open = false
-		elseif bestY > f.Y + 4 then
+		elseif bestY > f.Y + 4 or f.Y < Sim.Y_MAX - 2 then
 			open = true
-		elseif f.Y < Sim.Y_MAX - 2 then
-			open = true -- (level with it: an open umbrella's slow float keeps it in reach longest)
 		end
 		send(bot, ctx, memory, steer, open)
 		return
