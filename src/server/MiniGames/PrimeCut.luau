@@ -40,7 +40,7 @@ local PrimeCut = MiniGame.Define("PrimeCut", { Results = "Team" })
 PrimeCut.Shapes = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
 
 local SPACING = 44 -- between the grills
-local STAND_Z = 13.6 -- where a team stands, in front of its grill
+local STAND_Z = 17.5 -- where a team stands, in front of its grill (clear of the knife's handle)
 local READY = 1.2 -- a new steak lands; the knives unlock this long after
 local LOCK = 0.4 -- presses made before the window closed still arrive this long after
 local REVEAL = 4.2 -- the pieces and shares on screen
