@@ -172,13 +172,27 @@ function RakeItIn.Start(api)
 		local angle = th + angleAt(t)
 		return Vector3.new(center.X + math.cos(angle) * r, soilY, center.Z + math.sin(angle) * r)
 	end
-	local function inLane(station, item, t: number): boolean
+	local function inLane(station, item, t: number, grace: number): boolean
 		if t < item.Land or (item.Fuse > 0 and t >= item.Fuse) then
 			return false
 		end
 		local d = item.Th + angleAt(t) - station.Angle
 		local along = item.R * math.cos(d)
-		return math.abs(item.R * math.sin(d)) <= half and along >= rIn and along <= rOut
+		return math.abs(item.R * math.sin(d)) <= half + grace and along >= rIn - grace and along <= rOut + grace
+	end
+	-- What a rake pressed now would take, judged like the server does (generous for produce over the
+	-- whole drag, strict for bombs), so what's lifted or outlined is exactly what you'd get.
+	local grace, bombInset, drag = layout.Grace or 0, layout.BombInset or 0, layout.Drag or { 0 }
+	local function takes(station, item, t: number): boolean
+		if item.Kind == BOMB then
+			return inLane(station, item, t, -bombInset)
+		end
+		for _, after in drag do
+			if inLane(station, item, t + after, grace) then
+				return true
+			end
+		end
+		return false
 	end
 
 	-- Produce.
@@ -588,7 +602,7 @@ function RakeItIn.Start(api)
 			else
 				position = onField(item.R, item.Th, t)
 				yaw = item.Yaw - angle
-				local lane = mine and inLane(mine, item, t)
+				local lane = mine and takes(mine, item, t)
 				if lane then
 					laneCount += 1
 					laneValue += values[item.Kind]

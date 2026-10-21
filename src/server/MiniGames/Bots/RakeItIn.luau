@@ -26,7 +26,7 @@ local function haul(bot, mode, station, t: number): (number, number, boolean)
 	local seen = bot.Memory.Seen
 	local count, value, bomb = 0, 0, false
 	for _, item in mode.items do
-		if mode:InLane(station, item, t) then
+		if mode:Takes(station, item, t) then
 			count += 1
 			local worth = mode.Kinds[item.Kind].Value
 			if worth < 0 then

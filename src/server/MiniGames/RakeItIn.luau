@@ -13,6 +13,12 @@
 -- listed with who raked them, so clients can fly them to the right basket. A rake is judged on the
 -- server against the same schedule, at the moment the player pressed (with leeway for their ping).
 -- Bots rake through ctx:BotAction exactly like players, so nothing here is client-only.
+--
+-- What a rake takes is generous for produce and strict for bombs (owner: "hitboxes for rake game
+-- suck"): produce counts as soon as it overlaps the lane, anywhere from the press to the end of the
+-- drag, so whatever you see the rake sweep through is yours; a bomb only counts if it was clearly
+-- inside the lines when you pressed, so one you dodged at the edge never jams you. The client lifts
+-- exactly the produce a rake would take and outlines exactly the bombs it would.
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Scenery = require(script.Parent.Kit.Scenery)
@@ -30,6 +36,9 @@ local R_OUT = 20.6
 local R_SPAWN_IN = 11.0
 local R_SPAWN_OUT = 18.6
 local HALF = 2.6 -- half a lane's width (the rake head is 4.3 wide; a little generous)
+local PRODUCE_GRACE = 0.9 -- produce counts this far past the lane's lines and ends (about its radius)
+local BOMB_INSET = 0.5 -- a bomb's middle must be this far inside the lines to count
+local DRAG = { 0, 0.1, 0.2, 0.3 } -- seconds after the press while the rake still sweeps the lane
 local STAND = 23.4 -- where players stand, from the middle
 local SILO_Y = 1.85 -- the silo stands on the pedestal (its footing sunk in a little), scaled 0.95
 local VENT_Y = SILO_Y + 19.5 * 0.95 -- its vent cap, where produce pops out
@@ -105,15 +114,30 @@ function RakeItIn:ItemOffset(item: Item, t: number): Vector3
 	return Vector3.new(math.cos(angle) * item.R, 0, math.sin(angle) * item.R)
 end
 
--- Whether an item is in a station's lane at time t (landed and inside the lane's box).
-function RakeItIn:InLane(station: Station, item: Item, t: number): boolean
+-- Whether an item is in a station's lane at time t: landed, and its middle inside the lane's box
+-- grown by `grace` studs on every side (shrunk when negative).
+function RakeItIn:InLane(station: Station, item: Item, t: number, grace: number?): boolean
 	if t < item.Land or (item.Fuse and t >= item.Fuse) then
 		return false
 	end
+	local g = grace or 0
 	local d = item.Th + self:AngleAt(t) - station.Angle
 	local along = item.R * math.cos(d)
 	local across = item.R * math.sin(d)
-	return math.abs(across) <= HALF and along >= self.rIn and along <= R_OUT
+	return math.abs(across) <= HALF + g and along >= self.rIn - g and along <= R_OUT + g
+end
+
+-- Whether a rake pressed at time t takes this item (see the top of this file).
+function RakeItIn:Takes(station: Station, item: Item, t: number): boolean
+	if item.Kind == BOMB then
+		return self:InLane(station, item, t, -BOMB_INSET)
+	end
+	for _, after in DRAG do
+		if self:InLane(station, item, t + after, PRODUCE_GRACE) then
+			return true
+		end
+	end
+	return false
 end
 
 -- What raking a station's lane at time t would take: the items, their total value, and whether a
@@ -121,7 +145,7 @@ end
 function RakeItIn:LaneHaul(station: Station, t: number): ({ Item }, number, boolean)
 	local taken, value, bomb = {}, 0, false
 	for _, item in self.items do
-		if self:InLane(station, item, t) then
+		if self:Takes(station, item, t) then
 			table.insert(taken, item)
 			value += RakeItIn.Kinds[item.Kind].Value
 			bomb = bomb or item.Kind == BOMB
@@ -336,6 +360,9 @@ function RakeItIn:Prepare()
 		RIn = self.rIn,
 		ROut = R_OUT,
 		Half = HALF,
+		Grace = PRODUCE_GRACE,
+		BombInset = BOMB_INSET,
+		Drag = DRAG,
 		Flight = FLIGHT,
 		Cooldown = COOLDOWN,
 		Jam = JAM,
