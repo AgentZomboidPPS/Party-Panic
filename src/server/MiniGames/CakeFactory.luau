@@ -20,13 +20,25 @@
 -- unfinished cakes are tipped into the bin.
 --
 -- The server owns the belt: its distance is a shared schedule (V0, Acc from T0), clients slide the
--- cakes along it every frame and the server judges each press against the same schedule, a little
--- in the past for the player's ping. The state of the cakes on each belt is shared as a string
--- ("Cakes_<Team>"), and the "Add"/"Missed"/"Boxed" events animate the machines for everyone.
+-- cakes along it every frame and the server judges each press against the same schedule, at the
+-- moment the press was made on the player's own screen (see below). The state of the cakes on each
+-- belt is shared as a string ("Cakes_<Team>"), and the "Add"/"Missed"/"Boxed" events animate the
+-- machines for everyone.
 -- Every team gets the same plates, so a good team could finish them all: skill shows in the score
 -- through ⭐ cakes. A finished cake scores 1, a ⭐ cake (every layer a PERFECT press) scores 2, and
 -- the pills show both counts (🎂 cakes, ⭐ cakes). A tie on points is broken by perfect presses, then
 -- good layers (the results say so).
+--
+-- Judged by what each player saw (owner: "We need to fine tune some of the hitboxes. the precision
+-- games will feel super bad if we dont."): the ADD button sends the time on the player's clock
+-- (the synced server time) when they pressed, and the press is judged where the belt was SEEN
+-- (0.05 s) before that, the frame their finger reacted to, so phone ping and its jitter no longer
+-- push a press late. A lit gate is always a good press: the server allows SLACK (0.05 s of belt)
+-- either side of the window for the screen's own delay. A cake is only splatted when the machine's
+-- head is over its plate (RUIN: the plate is 4.2 wide, the heads about 1 wide); a press further
+-- off just jams. A second press on the cake you just did, within DOUBLE_TAP of the first (before
+-- its layer can show on your screen), is ignored instead of ruining it; the client also stops
+-- lighting the gate for that cake the moment you press, so it never asks for a second tap.
 --
 -- Bots press through ctx:BotAction with skill-based timing on the same schedule (Bots/CakeFactory);
 -- even the best bots slip now and then, so a sharp human team beats them. There are no moving
@@ -55,7 +67,13 @@ CakeFactory.V0 = 4 -- belt speed at GO (studs/s)
 CakeFactory.V_END = 8.5 -- ...and when the time is up
 CakeFactory.WINDOW = 1.5 -- a press within this of a cake's middle is good
 CakeFactory.PERFECT = 0.55 -- ...within this, perfect
-CakeFactory.RUIN = 3.1 -- a press with a cake nearer than this (but outside the window) splats it
+CakeFactory.RUIN = 2.6 -- a press with a cake nearer than this (but outside the window) splats it:
+-- the plate's radius (2.1) plus about half a machine head, so only a press that visibly comes down
+-- on the plate ruins the cake
+CakeFactory.SLACK = 0.05 -- seconds of belt allowed past either edge of the window (screen delay)
+CakeFactory.SEEN = 0.05 -- a press is judged this long before the player's clock said they pressed
+CakeFactory.MAX_LAG = 0.35 -- ...and never further back than this before it reached the server
+CakeFactory.DOUBLE_TAP = 0.25 -- a repeat press this soon on the cake you just did is ignored
 CakeFactory.JAM = 0.5 -- a machine pressed with no cake under it jams this long
 CakeFactory.BELT_TOP = 3.2 -- height of the belt's surface
 CakeFactory.KINDS = { "Sponge", "Cream", "Berry" }
@@ -87,7 +105,15 @@ type Line = {
 	Layers: number,
 	Perfect: number,
 }
-type Worker = { Team: string, Spot: CFrame, JamUntil: number, Good: number, Perfect: number, Bad: number }
+type Worker = {
+	Team: string,
+	Spot: CFrame,
+	JamUntil: number,
+	Good: number,
+	Perfect: number,
+	Bad: number,
+	Last: { K: number, Index: number, At: number }?, -- the last cake this player layered
+}
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -267,6 +293,8 @@ function CakeFactory:_shareBelt()
 		Box = CakeFactory.BOX,
 		Finish = CakeFactory.FINISH,
 		Window = CakeFactory.WINDOW,
+		Slack = CakeFactory.SLACK,
+		Seen = CakeFactory.SEEN,
 		Ruin = CakeFactory.RUIN,
 		Top = CakeFactory.BELT_TOP,
 		Jam = CakeFactory.JAM,
@@ -804,8 +832,27 @@ function CakeFactory:_leave(player: Player)
 	self:_shareBelt()
 end
 
--- A press of ADD: judged against the belt a little in the past (what the player's screen showed).
-function CakeFactory:_add(player: Player)
+-- When a press of ADD is judged: where the belt was on the player's screen when they pressed.
+-- `sentAt` is the client's synced clock at the press; bots (and old clients) send none, so their
+-- press is judged at its arrival less half the player's ping. Never more than MAX_LAG back, so a
+-- made-up time can't reach for a cake that's long gone.
+function CakeFactory:PressTime(player: Player, sentAt: any): number
+	local now = self.context:Now()
+	if type(sentAt) == "number" and sentAt == sentAt then
+		return math.clamp(sentAt - CakeFactory.SEEN, now - CakeFactory.MAX_LAG, now)
+	end
+	local lag = 0
+	if typeof(player) == "Instance" then
+		local ok, ping = pcall(function()
+			return player:GetNetworkPing()
+		end)
+		lag = CakeFactory.SEEN + (if ok and type(ping) == "number" then math.clamp(ping, 0, 0.5) / 2 else 0.05)
+	end
+	return now - math.min(lag, CakeFactory.MAX_LAG)
+end
+
+-- A press of ADD: judged against the belt at the moment the player's screen showed (PressTime).
+function CakeFactory:_add(player: Player, sentAt: any)
 	local ctx = self.context
 	local worker = self.workers[player]
 	if not worker or not self.t0 or self.stopAt then
@@ -827,15 +874,8 @@ function CakeFactory:_add(player: Player)
 	if flat.Magnitude > REACH then
 		return
 	end
-	local lag = 0
-	if typeof(player) == "Instance" then
-		local ok, ping = pcall(function()
-			return player:GetNetworkPing()
-		end)
-		lag = 0.03 + (if ok and type(ping) == "number" then math.clamp(ping, 0, 0.5) / 2 else 0.05)
-	end
-	local at = now - lag
-	local slack = self:Speed(at) * 0.05 -- a little more for the message's own jitter
+	local at = self:PressTime(player, sentAt)
+	local slack = self:Speed(at) * CakeFactory.SLACK
 	local distance = self:Distance(at)
 
 	-- Which cake this press is for: one under any of this player's machines that needs exactly that
@@ -880,8 +920,17 @@ function CakeFactory:_add(player: Player)
 		kind = if ruinedAt then "ruined" else "miss"
 	else
 		local cake = self:Cake(line, bestK)
+		local last = worker.Last
 		if math.abs(bestOffset) > CakeFactory.WINDOW + slack then
 			kind = "splat"
+		elseif
+			cake.N >= best
+			and last
+			and last.K == bestK
+			and last.Index == best
+			and at - last.At < CakeFactory.DOUBLE_TAP
+		then
+			return -- a double tap on the cake you just did, before its layer could show: nothing
 		elseif cake.N ~= best - 1 then
 			kind = if cake.N >= best then "double" else "wrong"
 		else
@@ -889,6 +938,7 @@ function CakeFactory:_add(player: Player)
 		end
 		if kind == "perfect" or kind == "good" then
 			cake.N = best
+			worker.Last = { K = bestK, Index = best, At = at }
 			worker.Good += 1
 			line.Layers += 1
 			if kind == "perfect" then
@@ -917,8 +967,8 @@ function CakeFactory:Start()
 	self.started = true
 	self.t0 = ctx:Now() + 0.2
 	self:_shareBelt()
-	ctx:OnAction("Add", function(player)
-		self:_add(player)
+	ctx:OnAction("Add", function(player, sentAt)
+		self:_add(player, sentAt)
 	end, { Interval = 0.12 })
 
 	-- Anyone who left (or never spawned) before the hook was set.
@@ -933,13 +983,13 @@ function CakeFactory:Start()
 	end
 
 	-- The packer judges every cake that reaches it, and the machines note cakes that went by
-	-- without their layer (judged where the belt was 0.3 s ago, the most a press can be lag-
-	-- compensated, so no press still on its way could have counted).
+	-- without their layer (judged where the belt was MAX_LAG ago, the most a press can be judged
+	-- in the past, so no press still on its way could have counted).
 	local lastStatus, status, faster = 0, nil, 1
 	ctx:Loop(function(): number?
 		local now = ctx:Now()
 		local distance = self:Distance(now)
-		local late = self:Distance(now - 0.3)
+		local late = self:Distance(now - CakeFactory.MAX_LAG)
 		for _, team in self.order do
 			local line = self.lines[team]
 			local changed = false
