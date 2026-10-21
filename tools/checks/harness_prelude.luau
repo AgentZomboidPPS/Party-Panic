@@ -406,7 +406,9 @@ local function __round(value)
 	return value
 end
 
-function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, uiAt, botCount)
+-- `watch` (round_harness.py --client-sits-out / --client-out-at): the stand-in client sits the round
+-- out ({ sitOut = true }), or is knocked out `outAt` seconds in.
+function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, uiAt, botCount, watch)
 	local GameDefinitions = __require("Shared/GameDefinitions")
 	local GameState = __require("Shared/GameState")
 	local Config = __require("Shared/Config")
@@ -477,7 +479,15 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 
 	GameState.Set("RoundId", 1)
 	GameState.Set("GameId", id)
-	local participants = table.clone(__fakePlayers)
+	-- A stand-in client sitting out is on the server but not in the round (Services/SitOutService).
+	local watcher = if clientMode and watch and watch.sitOut then __localPlayer else nil
+	local roundPlayers = table.clone(__fakePlayers)
+	if watcher then
+		table.remove(roundPlayers, table.find(roundPlayers, watcher))
+		watcher:SetAttribute("PP_SitOut", true)
+		summary.clientSitsOut = true
+	end
+	local participants = table.clone(roundPlayers)
 	for _, bot in bots do
 		table.insert(participants, bot)
 	end
@@ -499,10 +509,10 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	local env = {
 		ctx = ctx,
 		game = miniGame,
-		players = table.clone(__fakePlayers),
+		players = table.clone(roundPlayers),
 		rng = Random.new(7),
 		note = __note,
-		client = clientMode,
+		client = clientMode and not watcher, -- players[1] is driven by the client half
 		localPlayer = __localPlayer,
 	}
 	function env.Action(player, name, ...)
@@ -573,6 +583,12 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 			if now - begin >= limit then
 				ctx:End(if now - begin >= definition.Duration then "TimeUp" else "HarnessStop")
 				break
+			end
+			if watch and watch.outAt and clientMode and not watcher and not summary.clientOutAt then
+				if now - begin >= watch.outAt then
+					summary.clientOutAt = __round(now - begin)
+					ctx:Eliminate(__localPlayer, "harness")
+				end
 			end
 			if uiAt and clientGuis then
 				summary.ui = summary.ui or {}

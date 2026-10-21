@@ -111,8 +111,9 @@ Also: `api:Shared/SharedJSON/OnShared`, `api:Mine/OnMine` (per-player state), `a
 from a UserId the server shared.
 
 **HUD rules:** everything goes in `api:TopHud()` at `y >= api:HudY()` so it never covers the
-round banner, status line or team scores; action buttons come from `api:Button`. Keep text short
-and big, and pair every color with a shape or icon. Check the layout on phones (below).
+round banner, status line or team scores; action buttons come from `api:Button`, which only shows them
+to players still in the round (`api:CanAct()`: not to anyone sitting out, knocked out or watching).
+Keep text short and big, and pair every color with a shape or icon. Check the layout on phones (below).
 
 ## 5. Props and meshes
 
@@ -181,6 +182,7 @@ physics, so bots' walking and jumping are simulated there).
 python3 tools/preview/render.py arena.json out --views player,overview --cameras cams.json   # the arena
 python3 tools/preview/zfight.py arena.json                                                   # flicker
 python3 tools/checks/round_harness.py MyGame --client --touch --ui-at 3,10 ... > ui.luau      # phone HUD
+#   (add --client-sits-out or --client-out-at 5 to see the screen of someone watching the round)
 python3 tools/checks/ui_render.py ui.json out --sizes all                                    # draw + check
 ```
 
