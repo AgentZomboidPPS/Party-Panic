@@ -23,7 +23,7 @@ return function(h)
 	return {
 		RockinRacewayHorse = {
 			Height = 4.62,
-			AssetId = 0, -- tools/upload_assets.py --only RockinRacewayHorse fills this in
+			AssetId = 126786881978749, -- tools/upload_assets.py --only RockinRacewayHorse fills this in
 			Shadow = true,
 			Palette = {
 				Body = rgb(255, 80, 90),
@@ -57,7 +57,7 @@ return function(h)
 		},
 		RockinRacewayCarrot = {
 			Height = 0.41,
-			AssetId = 0,
+			AssetId = 84877669459711,
 			Collide = false, -- a flat panel on the track: decoration only
 			Shadow = false,
 			Palette = {
@@ -76,7 +76,7 @@ return function(h)
 		},
 		RockinRacewayHurdle = {
 			Height = 0.8,
-			AssetId = 0,
+			AssetId = 121724237313910,
 			Collide = false, -- riders hop it; the game judges the bump, nothing physical
 			Shadow = false,
 			Palette = {
@@ -95,7 +95,7 @@ return function(h)
 		},
 		RockinRacewayTurn = {
 			Height = 0.58,
-			AssetId = 0,
+			AssetId = 136616326775445,
 			Collide = false, -- the grass slab under it is the solid ground
 			Shadow = false,
 			Palette = {
@@ -121,7 +121,7 @@ return function(h)
 		},
 		RockinRacewayArch = {
 			Height = 22.6,
-			AssetId = 0,
+			AssetId = 128963519431134,
 			Collide = false, -- it stands outside the curbs; nothing to climb
 			BlocksCamera = { "CheckDark", "CheckLight" },
 			Palette = {
@@ -144,7 +144,7 @@ return function(h)
 		},
 		RockinRacewayFence = {
 			Height = 2.79,
-			AssetId = 0,
+			AssetId = 101784712044453,
 			Collide = false, -- nobody walks here: riders stay on the track
 			Shadow = false,
 			Palette = { Rails = rgb(250, 250, 250), Posts = rgb(250, 250, 250), Caps = rgb(230, 60, 70) },
@@ -159,7 +159,7 @@ return function(h)
 		},
 		RockinRacewayBunting = {
 			Height = 9.3,
-			AssetId = 0,
+			AssetId = 91393016743628,
 			Collide = false,
 			Palette = {
 				Pole = rgb(250, 250, 250),
@@ -189,7 +189,7 @@ return function(h)
 		},
 		RockinRacewayStand = {
 			Height = 14.1,
-			AssetId = 0,
+			AssetId = 75906433740655,
 			Collide = false, -- behind the fence, out of reach
 			BlocksCamera = true,
 			Palette = {
@@ -228,7 +228,7 @@ return function(h)
 		},
 		RockinRacewayCarousel = {
 			Height = 17.4,
-			AssetId = 0,
+			AssetId = 112695960659311,
 			Collide = false, -- in the infield, out of reach
 			Palette = {
 				Deck = rgb(250, 240, 220),
@@ -261,7 +261,7 @@ return function(h)
 		},
 		RockinRacewayTent = {
 			Height = 9.6,
-			AssetId = 0,
+			AssetId = 110175596841138,
 			Collide = false,
 			Palette = {
 				Walls = rgb(250, 250, 250),
@@ -280,7 +280,7 @@ return function(h)
 		},
 		RockinRacewayWheel = {
 			Height = 45.9,
-			AssetId = 0,
+			AssetId = 129216002551582,
 			Collide = false, -- far past the back straight
 			Palette = {
 				Rim = rgb(250, 250, 250),
