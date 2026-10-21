@@ -521,7 +521,7 @@ function HoneyTrap.Start(api)
 				turnText.Text = "🎲 YOUR TURN!"
 				turnText.TextColor3 = Theme.Colors.Yellow
 				api:Sound("Countdown")
-				setHint("Press HIT or jump to stop the block on 1 or 2!")
+				setHint("🎲 HIT or jump to take 1 or 2!")
 			else
 				turnText.Text = `🎲 {new.Name}'s turn`
 				turnText.TextColor3 = Theme.Colors.Text
