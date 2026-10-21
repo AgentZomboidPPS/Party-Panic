@@ -10,8 +10,8 @@
 -- dropped into the lava here (Bots/HexMeltdown.luau is how they play).
 --
 -- Art pass ("make every arena look really cool"): a toy volcano crater. Carved basalt hex columns
--- with candy-colored tiles, a crater wall with lava falls and rock spires, crust islands on the
--- lava, and a game-show referee robot on a striped stage under a light-bulb call board, between
+-- with candy-colored tiles, a crater wall with lava falls and rock spires, cracked crust rafts on
+-- the lava, and a game-show referee robot on a striped stage under a light-bulb call board, between
 -- two lava torches. The meshes are in World/Props/HexMeltdown.luau; the colliders are unchanged.
 
 local ArenaKit = require(script.Parent.Kit.ArenaKit)
@@ -33,10 +33,14 @@ local LAVA_DROP = 20 -- lava surface below the hex tops
 local DROP_DEPTH = 3 -- a bot off the called color falls once the other hexes are this far down
 
 -- Art (World/Props/HexMeltdown.luau). Mesh props pivot at their bounding box's bottom center:
-local WALL_PIVOT = Vector3.new(-0.16, 0, -103.96) -- a CraterWall arc's pivot from the crater center
-local ROBOT_PIVOT = Vector3.new(3.38, 0.04, -0.05) -- the RefereeBot's pivot from its feet
+local WALL_PIVOT = Vector3.new(-0.11, 0, -103.91) -- a CraterWall arc's pivot from the crater center
+local WALL_SCALE = 0.85 -- the crater's inner foot about 73 studs out, framing the grid
+local ROBOT_PIVOT = Vector3.new(7.13, 0.04, -0.05) -- the RefereeBot's pivot from its feet
 local STAND_HEIGHT = 19.3 -- RefereeStand: its top is the stage
-local MARQUEE_CENTER_Y = 23.5 -- the CallMarquee's opening, above the stage
+-- The stage sits this far back from the old rock's center, so its grid-side edge is where the rock's
+-- was (the invisible collider) and only the far side, out of reach, overhangs.
+local STAND_BACK = 5.4
+local MARQUEE_CENTER_Y = 27 -- the CallMarquee's opening, above the stage
 local STAND_SCALE, ROBOT_SCALE, MARQUEE_SCALE = 1.15, 1.35, 1.25
 local BASALT = Color3.fromRGB(84, 60, 80)
 local RIM = Color3.fromRGB(255, 244, 226)
@@ -122,33 +126,56 @@ end
 local function buildCrater(ctx, origin: Vector3, lake: Vector3)
 	for index = 0, 3 do
 		local turn = CFrame.new(lake.X, lake.Y - 3, lake.Z) * CFrame.Angles(0, math.rad(index * 90 + 45), 0)
-		MeshLibrary.Get("CraterWall", { CFrame = turn * CFrame.new(WALL_PIVOT), Parent = ctx.Arena })
+		MeshLibrary.Get("CraterWall", {
+			Scale = WALL_SCALE,
+			CFrame = turn * CFrame.new(WALL_PIVOT * WALL_SCALE),
+			Parent = ctx.Arena,
+		})
 	end
 	-- Rock spires along the crest break up the skyline (none behind the referee's board).
-	for index = 0, 13 do
-		local degrees = (index / 14 * 360 + rng:NextNumber(-8, 8)) % 360
+	for index = 0, 10 do
+		local degrees = (index / 11 * 360 + rng:NextNumber(-8, 8)) % 360
 		if degrees > 240 and degrees < 300 then
 			continue
 		end
 		local angle = math.rad(degrees)
-		local distance = rng:NextNumber(102, 112)
-		MeshLibrary.Get("Spire", {
-			Scale = rng:NextNumber(1.4, 2.1),
+		local distance = rng:NextNumber(87, 95)
+		local spire = MeshLibrary.Get("Spire", {
+			Scale = rng:NextNumber(1.1, 1.6),
 			Colors = { Rock = WALL_ROCK },
-			CFrame = CFrame.new(lake + Vector3.new(math.cos(angle) * distance, 8, math.sin(angle) * distance))
+			CFrame = CFrame.new(lake + Vector3.new(math.cos(angle) * distance, 6, math.sin(angle) * distance))
 				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
-			Parent = ctx.Arena,
 		})
+		-- Scenery only (out of reach): no colliders, and the same smooth toy rock as the wall.
+		for _, part in spire:GetDescendants() do
+			if part:IsA("BasePart") then
+				part.CanCollide = false
+				part.CanQuery = false
+				part.CanTouch = false
+				if part.Name == "Rock" then
+					part.Material = Enum.Material.SmoothPlastic
+				end
+			end
+		end
+		spire.Parent = ctx.Arena
 	end
 	-- Rafts sit in the open lava between the grid and the wall, never in front of the referee.
-	for _, raft in { { 20, 60 }, { 75, 62 }, { 125, 60 }, { 170, 58 }, { 215, 62 }, { 325, 60 } } do
+	-- Each raft is stretched by its own amounts along X and Z, so no two share an outline.
+	for _, raft in { { 20, 48 }, { 75, 50 }, { 125, 47 }, { 170, 49 }, { 215, 48 }, { 330, 50 } } do
 		local angle = math.rad(raft[1])
-		local spot = lake + Vector3.new(math.cos(angle) * raft[2], -0.9, math.sin(angle) * raft[2])
-		MeshLibrary.Get("LavaCrust", {
-			Scale = rng:NextNumber(0.9, 1.15),
-			CFrame = CFrame.new(spot) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
-			Parent = ctx.Arena,
-		})
+		local spot = lake + Vector3.new(math.cos(angle) * raft[2], -0.8, math.sin(angle) * raft[2])
+		local crust = MeshLibrary.Get("LavaCrust", { Scale = rng:NextNumber(0.85, 1) })
+		local pivot = crust:GetPivot()
+		local stretch = Vector3.new(rng:NextNumber(0.8, 1.2), 1, rng:NextNumber(0.75, 1.25))
+		for _, part in crust:GetDescendants() do
+			if part:IsA("BasePart") then
+				local offset = pivot:ToObjectSpace(part.CFrame)
+				part.Size *= stretch
+				part.CFrame = pivot * CFrame.new(offset.Position * stretch) * offset.Rotation
+			end
+		end
+		crust:PivotTo(CFrame.new(spot) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
+		crust.Parent = ctx.Arena
 	end
 	for _, side in { -1, 1 } do
 		local torch = MeshLibrary.Get("LavaTorch", {
@@ -160,8 +187,9 @@ local function buildCrater(ctx, origin: Vector3, lake: Vector3)
 			Build.Light(flame, rgb(255, 150, 60), 26, 1.6)
 		end
 	end
-	Scenery.Volcano(ctx, lake + Vector3.new(-20, -2, -300), origin, 2.3)
-	Scenery.Volcano(ctx, lake + Vector3.new(260, -2, -220), origin, 1.4)
+	-- The volcanoes stand off to the sides, so the call board and the flag have open sky behind them.
+	Scenery.Volcano(ctx, lake + Vector3.new(135, -2, -300), origin, 2.3)
+	Scenery.Volcano(ctx, lake + Vector3.new(-200, -2, -260), origin, 1.4)
 	Scenery.Volcano(ctx, lake + Vector3.new(-290, -2, -160), origin, 1.1)
 end
 
@@ -180,12 +208,12 @@ local function buildReferee(ctx, origin: Vector3): (BasePart, TextLabel)
 	local facing = CFrame.lookAt(stageTop, Vector3.new(origin.X, stageTop.Y, origin.Z))
 	MeshLibrary.Get("RefereeStand", {
 		Scale = STAND_SCALE,
-		CFrame = facing * CFrame.new(0, -STAND_HEIGHT * STAND_SCALE, 0),
+		CFrame = facing * CFrame.new(0, -STAND_HEIGHT * STAND_SCALE, STAND_BACK),
 		Parent = ctx.Arena,
 	})
 	local robot = MeshLibrary.Get("RefereeBot", {
 		Scale = ROBOT_SCALE,
-		CFrame = facing * CFrame.new(0, 0, -3.5) * CFrame.new(ROBOT_PIVOT * ROBOT_SCALE),
+		CFrame = facing * CFrame.new(0, 0, -3.2) * CFrame.new(ROBOT_PIVOT * ROBOT_SCALE),
 		Parent = ctx.Arena,
 	})
 	local flag = robot:FindFirstChild("Flag", true) :: BasePart

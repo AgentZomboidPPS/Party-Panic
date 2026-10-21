@@ -4,7 +4,7 @@
 --                 (piece Top: the game recolors it per hex and the client makes it glow), lava cracks.
 --   CraterWall    a 100 degree arc of the crater wall; four turned copies close the ring. Its pivot
 --                 is not the crater center (see WALL_PIVOT in MiniGames/HexMeltdown.luau).
---   LavaCrust     a raft of crusted plates with hot edges, floating on the lava.
+--   LavaCrust     a raft of cooled crust split into angular plates, hot lava glowing in the cracks.
 --   RefereeStand  the basalt plinth with the striped referee stage on top (the stage is the top).
 --   RefereeBot    the referee robot, holding up the call flag on its right (+X). The server colors
 --                 the Flag piece with every call.
@@ -47,7 +47,7 @@ return function(h)
 			end,
 		},
 		CraterWall = {
-			Height = 38.48,
+			Height = 38.3,
 			AssetId = 91122088728380,
 			Shadow = false,
 			Palette = { Rock = rgb(96, 66, 88), Ledge = rgb(158, 106, 124), Lava = LAVA },
@@ -62,15 +62,17 @@ return function(h)
 			end,
 		},
 		LavaCrust = {
-			Height = 2.19,
+			Height = 2.73,
 			AssetId = 125133549228210,
 			Shadow = false,
 			Palette = { Crust = rgb(88, 52, 58), Glow = rgb(255, 176, 64) },
 			Materials = { Glow = Enum.Material.Neon },
 			Fallback = function(m)
-				h.blob(m, "Crust", Vector3.new(13, 1.6, 11), Vector3.new(0, 1, 0))
-				h.blob(m, "Crust", Vector3.new(8, 1.4, 7), Vector3.new(11, 1, 4))
-				h.blob(m, "Glow", Vector3.new(14.4, 0.8, 12.4), Vector3.new(0, 0.6, 0))
+				h.block(m, "Glow", Vector3.new(9.5, 1.6, 10), Vector3.new(0, 0.8, 0))
+				for _, plate in { { -2.4, -2.6, 0.3 }, { 2.2, -2.4, -0.2 }, { -2.1, 2.7, -0.4 }, { 2.4, 2.5, 0.25 } } do
+					local part = h.block(m, "Crust", Vector3.new(3.8, 2, 4.2), Vector3.new(plate[1], 1.35, plate[2]))
+					part.CFrame = CFrame.new(plate[1], 1.35, plate[2]) * CFrame.Angles(0, plate[3], 0)
+				end
 			end,
 		},
 		RefereeStand = {
@@ -91,7 +93,7 @@ return function(h)
 			end,
 		},
 		RefereeBot = {
-			Height = 16.78,
+			Height = 18.41,
 			AssetId = 94134489281399,
 			Collide = true,
 			Palette = {
@@ -105,18 +107,19 @@ return function(h)
 			},
 			Materials = { Eyes = Enum.Material.Neon, Bulb = Enum.Material.Neon },
 			Fallback = function(m)
-				-- Same layout as the mesh: body at x = 0, flag out to x = 11.75.
+				-- Same layout as the mesh: body at x = 0, flag out to x = 19.3.
 				h.rounded(m, "Body", Vector3.new(6.2, 5.4, 4.4), 1.2, Vector3.new(0, 4.6, 0))
 				h.rounded(m, "Body", Vector3.new(5.4, 4.2, 4.4), 1.2, Vector3.new(0, 10.1, 0))
 				h.block(m, "Eyes", Vector3.new(3.6, 1.2, 0.4), Vector3.new(0, 10.3, -2.2))
 				h.pillar(m, "Dark", 5, 2, Vector3.new(0, 1.1, 0))
-				h.pillar(m, "Gold", 0.45, 9, Vector3.new(5, 12, -0.6))
-				h.block(m, "Flag", Vector3.new(6.6, 4.8, 0.3), Vector3.new(8.4, 13.4, -0.6))
+				h.pillar(m, "Gold", 0.5, 10.8, Vector3.new(7.3, 12.4, -0.6))
+				h.block(m, "Dark", Vector3.new(10.2, 7.2, 0.5), Vector3.new(12.7, 13.9, -0.6))
+				h.block(m, "Flag", Vector3.new(9.6, 6.6, 0.7), Vector3.new(12.7, 13.9, -0.6))
 				h.ball(m, "Bulb", 0.9, Vector3.new(0, 16.3, 0))
 			end,
 		},
 		CallMarquee = {
-			Height = 36.2,
+			Height = 39.7,
 			AssetId = 115360607581019,
 			Palette = {
 				Frame = rgb(124, 64, 214),
@@ -127,13 +130,13 @@ return function(h)
 			},
 			Materials = { Bulbs = Enum.Material.Neon, Flame = Enum.Material.Neon },
 			Fallback = function(m)
-				h.block(m, "Frame", Vector3.new(30, 2.2, 2.2), Vector3.new(0, 28.9, 0))
-				h.block(m, "Frame", Vector3.new(30, 2.2, 2.2), Vector3.new(0, 18.1, 0))
-				h.block(m, "Frame", Vector3.new(2.2, 8.6, 2.2), Vector3.new(-13.9, 23.5, 0))
-				h.block(m, "Frame", Vector3.new(2.2, 8.6, 2.2), Vector3.new(13.9, 23.5, 0))
-				h.block(m, "Frame", Vector3.new(2.2, 17, 2.2), Vector3.new(-8.5, 8.5, 0))
-				h.block(m, "Frame", Vector3.new(2.2, 17, 2.2), Vector3.new(8.5, 8.5, 0))
-				h.blob(m, "Badge", Vector3.new(7.2, 6.2, 1.6), Vector3.new(0, 33, 0))
+				h.block(m, "Frame", Vector3.new(30, 2.2, 2.2), Vector3.new(0, 32.4, 0))
+				h.block(m, "Frame", Vector3.new(30, 2.2, 2.2), Vector3.new(0, 21.6, 0))
+				h.block(m, "Frame", Vector3.new(2.2, 8.6, 2.2), Vector3.new(-13.9, 27, 0))
+				h.block(m, "Frame", Vector3.new(2.2, 8.6, 2.2), Vector3.new(13.9, 27, 0))
+				h.block(m, "Frame", Vector3.new(2.2, 20.5, 2.2), Vector3.new(-4, 10.25, 0))
+				h.block(m, "Frame", Vector3.new(2.2, 20.5, 2.2), Vector3.new(4, 10.25, 0))
+				h.blob(m, "Badge", Vector3.new(7.2, 6.2, 1.6), Vector3.new(0, 36.5, 0))
 			end,
 		},
 		LavaTorch = {

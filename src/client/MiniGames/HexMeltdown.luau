@@ -19,6 +19,7 @@ type Hex = {
 	Tops: { BasePart },
 	Offset: number,
 	Splash: ParticleEmitter?,
+	SeenAbove: number, -- the last call during which this hex was seen above the lava
 	SplashedCall: number,
 }
 
@@ -127,15 +128,43 @@ function HexMeltdown.Start(api)
 			Tops = findTops(model),
 			Offset = 0,
 			Splash = splash,
+			SeenAbove = 0,
 			SplashedCall = 0,
 		})
 	end
-	for _, child in arena:GetChildren() do
-		task.spawn(addHex, child)
-	end
-	api:Track(arena.ChildAdded:Connect(addHex))
 
-	-- The referee robot (it hops when it raises a new flag) and embers off the lava torches.
+	-- Embers off the lava torches, tagged ambient so the reduced effects setting turns them off
+	-- (AmbienceController).
+	local function addEmbers(child: Instance)
+		if child.Name ~= "LavaTorch" then
+			return
+		end
+		local flame = child:FindFirstChild("Flame", true) or child:WaitForChild("Flame", 5)
+		if not flame or not flame:IsA("BasePart") then
+			return
+		end
+		local embers = sparks(flame, Color3.fromRGB(255, 120, 30))
+		embers.Rate = 6
+		embers.Size = NumberSequence.new(0.5, 0)
+		embers.Lifetime = NumberRange.new(1.2, 2.2)
+		embers.Speed = NumberRange.new(5, 9)
+		embers.SpreadAngle = Vector2.new(25, 25)
+		embers.Acceleration = Vector3.new(1.5, 2, 0)
+		embers.EmissionDirection = Enum.NormalId.Top
+		embers.Enabled = not State.ReducedEffects()
+		CollectionService:AddTag(embers, "PP_Ambient")
+	end
+
+	local function addChild(child: Instance)
+		addHex(child)
+		addEmbers(child)
+	end
+	for _, child in arena:GetChildren() do
+		task.spawn(addChild, child)
+	end
+	api:Track(arena.ChildAdded:Connect(addChild))
+
+	-- The referee robot (it hops when it raises a new flag).
 	local robot: Model? = nil
 	local robotBase = CFrame.identity
 	task.spawn(function()
@@ -145,23 +174,6 @@ function HexMeltdown.Start(api)
 			robot = found
 		end
 	end)
-	-- Tagged ambient, so the reduced effects setting turns them off (AmbienceController).
-	for _, child in arena:GetChildren() do
-		local flame = child.Name == "LavaTorch" and child:FindFirstChild("Flame", true)
-		if flame and flame:IsA("BasePart") then
-			local embers = sparks(flame, Color3.fromRGB(255, 120, 30))
-			embers.Rate = 6
-			embers.Size = NumberSequence.new(0.5, 0)
-			embers.Lifetime = NumberRange.new(1.2, 2.2)
-			embers.Speed = NumberRange.new(5, 9)
-			embers.SpreadAngle = Vector2.new(25, 25)
-			embers.Acceleration = Vector3.new(1.5, 2, 0)
-			embers.EmissionDirection = Enum.NormalId.Top
-			embers.Enabled = not State.ReducedEffects()
-			CollectionService:AddTag(embers, "PP_Ambient")
-		end
-	end
-
 	-- The call banner: shape and color name with a bar that runs out when the hexes sink.
 	local banner = UIKit.Panel({
 		Name = "Call",
@@ -236,8 +248,19 @@ function HexMeltdown.Start(api)
 				hex.Offset = offset + shake
 				hex.Model:PivotTo(hex.Base * CFrame.new(0, hex.Offset, 0))
 			end
-			-- A spray of lava sparks as the hex top plunges past the lava.
-			if call and not matches and hex.Splash and hex.SplashedCall ~= call.Id and offset < -LAVA_BELOW_TOP then
+			-- A spray of lava sparks as the hex top plunges past the lava (only if it was seen above
+			-- the lava during this call, so a player who joins mid-sink gets no burst of splashes).
+			if call and offset >= -LAVA_BELOW_TOP then
+				hex.SeenAbove = call.Id
+			end
+			if
+				call
+				and not matches
+				and hex.Splash
+				and hex.SeenAbove == call.Id
+				and hex.SplashedCall ~= call.Id
+				and offset < -LAVA_BELOW_TOP
+			then
 				hex.SplashedCall = call.Id
 				hex.Splash:Emit(if State.ReducedEffects() then 5 else 14)
 			end

@@ -39,6 +39,39 @@ def face_normals(mesh: Mesh) -> np.ndarray:
     return n / (np.linalg.norm(n, axis=1, keepdims=True) + 1e-12)
 
 
+def signed_volume(mesh: Mesh) -> float:
+    tri = mesh.v[mesh.f]
+    return float(np.einsum("ij,ij->i", tri[:, 0], np.cross(tri[:, 1], tri[:, 2])).sum() / 6)
+
+
+def outward(mesh: Mesh) -> Mesh:
+    """Flips a closed mesh's faces if they point inward."""
+    if signed_volume(mesh) < 0:
+        mesh.f = mesh.f[:, ::-1].copy()
+    return mesh
+
+
+def slab(front: np.ndarray, back: np.ndarray, smooth: bool = True) -> Mesh:
+    """A closed slab between two (rows, cols, 3) grids of points: both faces plus the rim."""
+    rows, cols = front.shape[:2]
+    off = rows * cols
+    verts = np.vstack([front.reshape(-1, 3), back.reshape(-1, 3)])
+
+    def idx(i, j):
+        return i * cols + j
+
+    faces = []
+    for i in range(rows - 1):
+        for j in range(cols - 1):
+            a, b, c, d = idx(i, j), idx(i, j + 1), idx(i + 1, j), idx(i + 1, j + 1)
+            faces += [(a, b, c), (b, d, c), (off + a, off + c, off + b), (off + b, off + c, off + d)]
+    loop = ([idx(0, j) for j in range(cols)] + [idx(i, cols - 1) for i in range(1, rows)]
+            + [idx(rows - 1, j) for j in range(cols - 2, -1, -1)] + [idx(i, 0) for i in range(rows - 2, 0, -1)])
+    for p, q in zip(loop, loop[1:] + loop[:1]):
+        faces += [(p, off + p, q), (q, off + p, off + q)]
+    return outward(Mesh(verts, faces, smooth))
+
+
 def waves(points: np.ndarray, seed: int, count: int = 7, low: float = 0.08, high: float = 0.22) -> np.ndarray:
     """Smooth 3D value in about -1..1: a sum of random plane waves (rock lumps, crags)."""
     rng = np.random.default_rng(seed)
@@ -122,6 +155,11 @@ WALL_PROFILE = [  # (radius, y) from the outer foot over the crest to the inner 
 ]
 
 
+FALL_ANGLES = (-24.0, 21.0)
+LEDGE_ROWS = (range(18, 22), range(6, 8))  # profile rows (95.5, 22.5)-(91, 19.6) and (122, 18)-(115, 24)
+CREST_ROW = 12  # (104, 30.5)
+
+
 def crater_wall():
     rng = np.random.default_rng(31)
     thetas = np.radians(np.linspace(-WALL_ARC / 2, WALL_ARC / 2, 67))
@@ -154,8 +192,13 @@ def crater_wall():
     center_dir = verts * np.array([1, 0, 1])
     center_dir /= np.linalg.norm(center_dir, axis=1, keepdims=True)
     height = np.clip(verts[:, 1] / 34, 0, 1)
-    verts += center_dir * ((lumps * 3.6 + crags * 2.2) * np.clip(height, 0.15, 1))[:, None]
-    verts[:, 1] += (lumps * 1.8 + crags * 1.2) * height
+    verts += center_dir * ((lumps * 3.0 + crags * 1.2) * np.clip(height, 0.15, 1))[:, None]
+    verts[:, 1] += (lumps * 1.6 + crags * 0.7) * height
+    # A V-shaped notch in the crest where each lava fall pours over.
+    vertex_theta = np.arctan2(verts[:, 0], -verts[:, 2])
+    for angle in FALL_ANGLES:
+        near = np.exp(-((vertex_theta - math.radians(angle)) / math.radians(2.6)) ** 2)
+        verts[:, 1] -= 4.5 * near * np.clip((verts[:, 1] - 16) / 10, 0, 1)
     seg = len(thetas)
     faces = []
     for i in range(rows - 1):
@@ -163,53 +206,195 @@ def crater_wall():
             a = i * seg + s
             b, c, d = a + 1, a + seg, a + seg + 1
             faces += [(a, c, b), (b, c, d)]
-    wall = Mesh(verts, faces, smooth=False)
+    wall = Mesh(verts, faces, smooth=True)
     # Faces must point away from the solid: on the inner foot that is toward the crater center.
     n = face_normals(wall)
     inner = wall.v[wall.f[-1]].mean(axis=0)
     if np.dot(n[-1], inner * np.array([1, 0, 1])) > 0:
         wall.f = wall.f[:, ::-1].copy()
         n = -n
-    ledge = n[:, 1] > 0.9
+    # Light ledges are whole profile rows, so each band runs unbroken around the arc.
+    face_row = np.arange(len(wall.f)) // (2 * (seg - 1))
+    ledge = np.isin(face_row, [row for band in LEDGE_ROWS for row in band])
     rock, top = subset(wall, ~ledge), subset(wall, ledge)
 
-    # Lava falls pouring from notches in the crest down the inner face into the lake.
+    # Vertex normals (pointing out of the rock) to lay the lava falls on the inner face.
+    vn = np.zeros_like(verts)
+    for k in range(3):
+        np.add.at(vn, wall.f[:, k], n)
+    vn /= np.linalg.norm(vn, axis=1, keepdims=True) + 1e-12
+
+    def surface(row, theta):
+        """The wall point and normal on `row` at angle `theta` (linear between columns)."""
+        k = int(np.clip(np.searchsorted(thetas, theta), 1, seg - 1))
+        t = (theta - thetas[k - 1]) / (thetas[k] - thetas[k - 1])
+        a, b = row * seg + k - 1, row * seg + k
+        p = verts[a] * (1 - t) + verts[b] * t
+        q = vn[a] * (1 - t) + vn[b] * t
+        return p, q / (np.linalg.norm(q) + 1e-12)
+
+    # Lava falls: a ribbon pouring from each notch down the inner face, 4 studs wide at the crest
+    # and 8 at the foot, with a pool where it feeds the lake (the lava is 3 studs above the foot).
     falls = []
-    crest_row = 12  # (104, 30.5)
-    for angle in (-24.0, 21.0):
+    thick = 0.8
+    for angle in FALL_ANGLES:
         theta = math.radians(angle)
-        idx = int(np.argmin(np.abs(thetas - theta)))
-        path = []
-        for row in range(crest_row, rows):
-            p = verts[row * seg + idx].copy()
-            inward = -p * np.array([1, 0, 1]) / np.linalg.norm(p * np.array([1, 0, 1]))
-            path.append(tuple(p + inward * 0.9 + np.array([0, 0.5, 0])))
-        falls.append(tube(path, 1.5, 8))
-        foot = np.array(path[-1])
-        falls.append(icosphere(3.4, 1, 0.25, seed=int(abs(angle))).scale(1, 0.32, 1).translate(foot[0], 3.0, foot[2]))
-        top_p = np.array(path[0])
-        falls.append(icosphere(2.2, 1, 0.2, seed=int(abs(angle)) + 9).scale(1, 0.35, 1).translate(top_p[0], top_p[1] - 0.2, top_p[2]))
+        front, back = [], []
+        for row in range(CREST_ROW - 1, rows):
+            t = (row - CREST_ROW + 1) / (rows - CREST_ROW)
+            width = 4 + 4 * t ** 0.8
+            center, _ = surface(row, theta)
+            radius = math.hypot(center[0], center[2])
+            row_front, row_back = [], []
+            for u in np.linspace(-1, 1, 7):
+                p, normal = surface(row, theta + u * width / 2 / radius)
+                row_back.append(p + normal * 0.3)
+                row_front.append(p + normal * (0.3 + thick))
+            front.append(row_front)
+            back.append(row_back)
+        falls.append(slab(np.array(front), np.array(back)))
+        foot, _ = surface(rows - 1, theta)
+        falls.append(icosphere(5.2, 2, 0.15, seed=int(abs(angle))).scale(1, 0.2, 1.15).translate(foot[0], 3.0, foot[2]))
+        lip, _ = surface(CREST_ROW - 1, theta)
+        falls.append(icosphere(2.6, 1, 0.15, seed=int(abs(angle)) + 9).scale(1, 0.3, 1).translate(lip[0], lip[1] + 0.1, lip[2]))
     lava = merge(*falls)
     return {"Rock": rock, "Ledge": top, "Lava": lava}
 
 
 # ---------------------------------------------------------------------------- lava crust
 
+def cross2(a, b) -> float:
+    return a[0] * b[1] - a[1] * b[0]
+
+
+def hull2d(points: np.ndarray) -> np.ndarray:
+    """Convex hull of 2D points, counter-clockwise."""
+    pts = sorted(map(tuple, points))
+
+    def half(seq):
+        out = []
+        for p in seq:
+            while len(out) >= 2 and cross2(np.subtract(out[-1], out[-2]), np.subtract(p, out[-2])) <= 0:
+                out.pop()
+            out.append(p)
+        return out
+
+    lower, upper = half(pts), half(pts[::-1])
+    return np.array(lower[:-1] + upper[:-1])
+
+
+def clip_half(poly: np.ndarray, normal: np.ndarray, offset: float) -> np.ndarray:
+    """The part of a convex polygon where p . normal >= offset."""
+    out = []
+    for i in range(len(poly)):
+        p, q = poly[i], poly[(i + 1) % len(poly)]
+        dp, dq = p @ normal - offset, q @ normal - offset
+        if dp >= 0:
+            out.append(p)
+        if (dp >= 0) != (dq >= 0):
+            out.append(p + (q - p) * dp / (dp - dq))
+    out = np.array(out)
+    keep = [i for i in range(len(out)) if np.linalg.norm(out[i] - out[i - 1]) > 0.05]
+    return out[keep]
+
+
+def inset2d(poly: np.ndarray, d: float) -> np.ndarray:
+    """A convex counter-clockwise polygon shrunk by d on every side."""
+    out = poly
+    for i in range(len(poly)):
+        p, q = poly[i], poly[(i + 1) % len(poly)]
+        edge = (q - p) / np.linalg.norm(q - p)
+        inward = np.array([-edge[1], edge[0]])
+        out = clip_half(out, inward, p @ inward + d)
+        if len(out) < 3:
+            break
+    return out
+
+
+def plate(poly: np.ndarray, y0: float, y1: float, bevel: float, tilt: np.ndarray) -> Mesh:
+    """A flat-shaded slab of crust: polygon (x, z) from y0 up to y1 with a bevelled top edge."""
+    center = poly.mean(axis=0)
+    top = center + (poly - center) * np.clip(1 - bevel / (np.linalg.norm(poly - center, axis=1) + 1e-9), 0.5, 1)[:, None]
+    rings = [(poly, y0), (poly, y1 - bevel), (top, y1)]
+    n = len(poly)
+    verts = [(x, y, z) for ring, y in rings for x, z in ring] + [(center[0], y1, center[1]), (center[0], y0, center[1])]
+    faces = []
+    for r in range(2):
+        for i in range(n):
+            j = (i + 1) % n
+            a, b, c, d = r * n + i, r * n + j, (r + 1) * n + i, (r + 1) * n + j
+            faces += [(a, c, b), (b, c, d)]
+    top_c, bottom_c = 3 * n, 3 * n + 1
+    for i in range(n):
+        j = (i + 1) % n
+        faces += [(2 * n + i, top_c, 2 * n + j), (i, j, bottom_c)]
+    mesh = outward(Mesh(verts, faces, smooth=False))
+    # Tip the plate a little about its own center (rafts are never quite level).
+    lift = (mesh.v[:, 0] - center[0]) * tilt[0] + (mesh.v[:, 2] - center[1]) * tilt[1]
+    mesh.v[:, 1] += np.where(mesh.v[:, 1] > y0 + 0.01, lift, 0)
+    return mesh
+
+
+def grow2d(poly: np.ndarray, d: float) -> np.ndarray:
+    """A convex counter-clockwise polygon pushed out by d on every side."""
+    out = []
+    for i in range(len(poly)):
+        normals = []
+        for p, q in ((poly[i - 1], poly[i]), (poly[i], poly[(i + 1) % len(poly)])):
+            edge = (q - p) / np.linalg.norm(q - p)
+            normals.append(np.array([edge[1], -edge[0]]))
+        n1, n2 = normals
+        out.append(poly[i] + d * (n1 + n2) / max(1 + n1 @ n2, 0.3))
+    return np.array(out)
+
+
 def lava_crust():
-    """An island of crust: lumpy flattened rocks run together, a hot glowing edge under them and a
-    few lava bubbles around."""
-    rocks, glows, bubbles = [], [], []
-    for i, (x, z, radius) in enumerate(((0, 0, 6.0), (6.5, 2.5, 4.6), (-5.5, 3.2, 4.4), (2.5, -5.2, 4.0), (-3.5, -4.0, 3.2), (10.5, -2.0, 2.8))):
-        rock = icosphere(radius, 2, 0.45, seed=60 + i).scale(1, 0.24, 1)
-        rock.v[:, 1] = np.maximum(rock.v[:, 1], -0.2)  # flat underside, just under the lava
-        rocks.append(rock.translate(x, 0.2, z))
-        halo = icosphere(radius * 1.14, 1, 0.35, seed=80 + i).scale(1, 0.1, 1)
-        glows.append(halo.translate(x, 0.15, z))
-    for x, z, radius in ((-10, -1, 1.2), (5, 8.5, 0.9), (-2, 8.0, 1.0), (13.5, 3, 0.8)):
-        bubbles.append(sphere(radius, 6, 10).scale(1, 0.7, 1).translate(x, 0.3, z))
-    crust = merge(*rocks)
-    crust.smooth = False
-    return {"Crust": crust, "Glow": merge(*glows, *bubbles)}
+    """A raft of cooled crust: an irregular slab split by straight cracks into angular plates. The
+    plates are shrunk apart and drift a little, so the hot Glow slabs under them show in the cracks
+    and as a thin rim; one outer plate has broken off, so the outline is never a neat polygon."""
+    rng = np.random.default_rng(64)
+    sides = 8
+    step = 2 * math.pi / sides
+    angles = np.linspace(0, 2 * math.pi, sides, endpoint=False) + rng.uniform(-0.3, 0.3, sides) * step
+    radii = 5.2 * rng.uniform(0.75, 1.25, sides)
+    outline = hull2d(np.stack([np.cos(angles) * radii, np.sin(angles) * radii], axis=1))
+    def area(poly):
+        return 0.5 * abs(sum(cross2(poly[i - 1], poly[i]) for i in range(len(poly))))
+
+    # Split into plates with straight cracks: each cut goes across the biggest plate's long side,
+    # a little off-center, and never leaves a sliver.
+    cells = [outline]
+    for _ in range(5):
+        cells.sort(key=area)
+        poly = cells.pop()
+        spread = poly - poly.mean(axis=0)
+        long_axis = np.linalg.eigh(spread.T @ spread)[1][:, -1]
+        for _ in range(20):
+            direction = math.atan2(long_axis[1], long_axis[0]) + rng.uniform(-0.5, 0.5)
+            normal = np.array([math.cos(direction), math.sin(direction)])
+            offset = poly.mean(axis=0) @ normal + rng.uniform(-0.6, 0.6)
+            halves = [clip_half(poly, normal, offset), clip_half(poly, -normal, -offset)]
+            if all(len(half) >= 3 and area(half) > 0.3 * area(poly) for half in halves):
+                break
+        cells += halves
+    # Break off the smallest plate on the rim.
+    cells.sort(key=area)
+    cells = cells[1:]
+    middle = outline.mean(axis=0)
+    plates, glows = [], []
+    for k, cell in enumerate(cells):
+        away = cell.mean(axis=0) - middle
+        drift = away / (np.linalg.norm(away) + 1e-9) * rng.uniform(0.05, 0.35)
+        turn = rng.uniform(-0.05, 0.05)
+        c, s_ = math.cos(turn), math.sin(turn)
+        center = cell.mean(axis=0)
+        moved = (cell - center) @ np.array([[c, s_], [-s_, c]]) + center + drift
+        shrunk = inset2d(moved, 0.32)
+        if len(shrunk) >= 3:
+            plates.append(plate(shrunk, 0.3, rng.uniform(2.3, 2.9), 0.35, rng.uniform(-0.05, 0.05, 2)))
+        # Each plate's own glow, a touch bigger than its cell, at its own height (no shared faces).
+        glows.append(plate(grow2d(moved, 0.06), 0.0, 1.45 + 0.07 * k, 0.2, np.zeros(2)))
+    return {"Crust": merge(*plates), "Glow": merge(*glows)}
 
 
 # ---------------------------------------------------------------------------- referee stand
@@ -290,7 +475,13 @@ def stripe_band(x0: float, x1: float, hy: float, hz: float, r: float, cy: float,
     return mesh
 
 
-ROBOT_POLE_X = 5.0
+POLE_BOTTOM, POLE_TOP = (4.2, 7.0), (9.5, 17.8)  # (x, y): the pole leans out to the robot's right
+FLAG = {"top": 17.2, "high": 6.6, "width": 9.6, "z": -0.6}
+
+
+def pole_x(y: float) -> float:
+    (x0, y0), (x1, y1) = POLE_BOTTOM, POLE_TOP
+    return x0 + (x1 - x0) * (y - y0) / (y1 - y0)
 
 
 def referee_bot():
@@ -316,22 +507,27 @@ def referee_bot():
 
     # Arms: right (+X) raised holding the flag pole, left (-X) on the hip.
     shoulders = merge(*(sphere(0.95, 8, 12).translate(side * 3.15, 6.3, 0) for side in (-1, 1)))
-    right_arm = tube([(3.2, 6.3, 0), (4.3, 7.6, -0.4), (ROBOT_POLE_X, 9.4, -0.6)], 0.6, 10)
+    hand_x = pole_x(9.4)
+    right_arm = tube([(3.2, 6.3, 0), (4.4, 7.7, -0.4), (hand_x, 9.4, -0.6)], 0.6, 10)
     left_arm = tube([(-3.2, 6.3, 0), (-4.4, 4.9, -0.3), (-3.7, 3.4, -1.3)], 0.6, 10)
-    hands = merge(sphere(0.85, 8, 12).translate(ROBOT_POLE_X, 9.5, -0.6), sphere(0.85, 8, 12).translate(-3.6, 3.3, -1.4))
-    pole = merge(tube([(ROBOT_POLE_X, 7.6, -0.6), (ROBOT_POLE_X, 16.2, -0.6)], 0.22, 8), sphere(0.42, 6, 10).translate(ROBOT_POLE_X, 16.4, -0.6))
+    hands = merge(sphere(0.85, 8, 12).translate(hand_x, 9.5, -0.6), sphere(0.85, 8, 12).translate(-3.6, 3.3, -1.4))
+    pole = merge(tube([(*POLE_BOTTOM, -0.6), (*POLE_TOP, -0.6)], 0.24, 8), sphere(0.45, 6, 10).translate(*POLE_TOP, -0.6).translate(0, 0.2, 0))
 
-    # The flag: a waving cloth slab off the top of the pole (closed, so it shows from both sides).
-    nx, ny, width, high, thick = 14, 6, 6.6, 4.8, 0.14
+    # The flag: a waving cloth slab off the leaning pole (closed, so it shows from both sides), its
+    # inner edge along the pole, out clear of the marquee legs behind it.
+    nx, ny, width, high, thick = 16, 7, FLAG["width"], FLAG["high"], 0.14
+
+    def cloth(u, v, side):
+        y = FLAG["top"] - high + v * high - 0.3 * u * u
+        x = pole_x(y) + 0.3 + u * width
+        z = FLAG["z"] + 0.55 * math.sin(u * 5.0) * u + 0.1 * math.sin(v * 3 + u * 4)
+        return (x, y, z + side * thick)
+
     grid = []
     for side in (-1, 1):
         for j in range(ny + 1):
             for i in range(nx + 1):
-                u, v = i / nx, j / ny
-                x = ROBOT_POLE_X + 0.15 + u * width
-                y = 15.9 - high + v * high - 0.25 * u * u
-                z = -0.6 + 0.55 * math.sin(u * 5.0) * u + 0.1 * math.sin(v * 3 + u * 4)
-                grid.append((x, y, z + side * thick))
+                grid.append(cloth(i / nx, j / ny, side))
     faces = []
     count = (nx + 1) * (ny + 1)
     for j in range(ny):
@@ -350,9 +546,13 @@ def referee_bot():
     edge([i for i in range(nx + 1)])
     edge([ny * (nx + 1) + i for i in range(nx + 1)][::-1])
     flag = Mesh(grid, faces, smooth=False)
+    # A dark hem all round, so any call color stands out against the wall, sky or marquee.
+    hem_loop = ([cloth(i / nx, 0, 0) for i in range(nx + 1)] + [cloth(1, j / ny, 0) for j in range(1, ny + 1)]
+                + [cloth(i / nx, 1, 0) for i in range(nx - 1, -1, -1)] + [cloth(0, j / ny, 0) for j in range(ny - 1, -1, -1)])
+    hem = merge(tube(hem_loop, 0.3, 6), *(sphere(0.3, 5, 8).translate(*cloth(u, v, 0)) for u, v in ((0, 0), (1, 0), (1, 1), (0, 1))))
 
     white = merge(torso, head, right_arm, left_arm)
-    dark = merge(base, stripes, neck, shoulders, hands, ears, screen)
+    dark = merge(base, stripes, neck, shoulders, hands, ears, screen, hem)
     dark.smooth = False
     return {
         "Body": white,
@@ -367,7 +567,7 @@ def referee_bot():
 
 # ---------------------------------------------------------------------------- call marquee
 
-MARQUEE = {"width": 30.0, "height": 13.0, "bar": 2.2, "depth": 2.2, "center_y": 23.5, "legs_x": 8.5}
+MARQUEE = {"width": 30.0, "height": 13.0, "bar": 2.2, "depth": 2.2, "center_y": 27.0, "legs_x": 4.0}
 
 
 def call_marquee():
@@ -435,7 +635,12 @@ def lava_torch():
     column.smooth = False
     bowl = lathe([(1.0, 20.6), (3.0, 21.0), (4.4, 22.4), (4.9, 23.6), (4.6, 23.9), (3.9, 23.0), (0.0, 22.6)], 24)
     band = torus(4.85, 0.28, 32, 6).translate(0, 23.6, 0)
-    flame = flame_shape(3.6, 8.5, 1).translate(0, 22.4, 0)
+    # A flame of several tongues, each leaning out and twisting, so the outline flickers.
+    tongues = [flame_shape(2.7, 8.5, 1).translate(0, 22.4, 0)]
+    for k, (radius, high, lean, direction) in enumerate(((2.0, 6.5, 14, 20), (1.8, 5.0, 18, 140), (1.6, 4.0, 16, 250), (1.7, 5.6, 12, 320))):
+        tongue = flame_shape(radius, high, 11 + k * 7).rotate("z", -lean).translate(1.4, 0, 0).rotate("y", direction)
+        tongues.append(tongue.translate(0, 22.3, 0))
+    flame = merge(*tongues)
     core = flame_shape(2.0, 5.0, 3).translate(0, 22.5, -0.6)
     return {"Rock": column, "Gold": merge(bowl, band), "Flame": flame, "Core": core}
 
