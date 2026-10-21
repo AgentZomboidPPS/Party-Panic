@@ -113,30 +113,6 @@ function SinkingSands:Prepare()
 
 	self:_buildArena(kingCount)
 
-	-- Thrones for the Kings, Divers spread round the rim between them.
-	local spawns = {}
-	local divers = #players - kingCount
-	for index, player in players do
-		if index <= kingCount then
-			spawns[index] = self.thrones[player].CFrame * CFrame.new(0, 2.6, 0.5)
-		else
-			local k = index - kingCount
-			spawns[index] = self:_rimSpot(self.kingOffset + (k - 0.5) / math.max(1, divers) * math.pi * 2)
-		end
-	end
-	-- SpawnAll cycles through points in GetPlayers() order, so spawn one by one instead.
-	local done = 0
-	for index, player in players do
-		task.spawn(function()
-			ctx:SpawnPlayer(player, spawns[index], true)
-			done += 1
-		end)
-	end
-	local deadline = os.clock() + 8
-	while done < #players and os.clock() < deadline do
-		task.wait(0.1)
-	end
-
 	ctx.Hooks.Respawn = function(player)
 		if self.thrones[player] then
 			return self.thrones[player].CFrame * CFrame.new(0, 2.6, 0.5)
@@ -159,6 +135,30 @@ function SinkingSands:Prepare()
 				ctx:Announce("The Sand Kings left: the sand plays on by itself!", "info", 3)
 			end
 		end
+	end
+
+	-- Thrones for the Kings, Divers spread round the rim between them.
+	local spawns = {}
+	local divers = #players - kingCount
+	for index, player in players do
+		if index <= kingCount then
+			spawns[index] = self.thrones[player].CFrame * CFrame.new(0, 2.6, 0.5)
+		else
+			local k = index - kingCount
+			spawns[index] = self:_rimSpot(self.kingOffset + (k - 0.5) / math.max(1, divers) * math.pi * 2)
+		end
+	end
+	-- SpawnAll cycles through points in GetPlayers() order, so spawn one by one instead.
+	local done = 0
+	for index, player in players do
+		task.spawn(function()
+			ctx:SpawnPlayer(player, spawns[index], true)
+			done += 1
+		end)
+	end
+	local deadline = os.clock() + 8
+	while done < #players and os.clock() < deadline do
+		task.wait(0.1)
 	end
 
 	ctx:SetStatus("Divers: grab the treasure! Sand Kings: sink it!")
@@ -192,11 +192,11 @@ function SinkingSands:_buildArena(kingCount: number)
 	for index = 1, 14 do
 		local angle = index / 14 * math.pi * 2 + rng:NextNumber(-0.15, 0.15)
 		local distance = rng:NextNumber(260, 420)
-		local width = rng:NextNumber(120, 220)
+		local width = rng:NextNumber(150, 300)
 		local dune = Build.Decor({
 			Name = "Dune",
 			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(width, width * rng:NextNumber(0.22, 0.34), width * rng:NextNumber(0.5, 0.8)),
+			Size = Vector3.new(width, width * rng:NextNumber(0.1, 0.16), width * rng:NextNumber(0.45, 0.7)),
 			CFrame = CFrame.new(
 				center.X + math.cos(angle) * distance,
 				floorY - 4,
@@ -256,8 +256,9 @@ function SinkingSands:_buildArena(kingCount: number)
 		-- The mesa top, from the rim to the cliffs.
 		local width = 2 * PLAZA * math.sin(math.pi / sectors) + 0.6
 		local mid = center + outward * (SandSwirl.RIM + PLAZA) / 2
+		-- (alternate sectors sit a hair lower, so where neighbours overlap they never z-fight)
 		slab(
-			CFrame.new(mid - Vector3.new(0, 0.5, 0)) * look.Rotation,
+			CFrame.new(mid - Vector3.new(0, 0.5 + (sector % 2) * 0.06, 0)) * look.Rotation,
 			Vector3.new(width, 1, PLAZA - SandSwirl.RIM + 0.4)
 		)
 		-- An invisible wall at the cliff edge so nobody walks off the mesa.

@@ -28,8 +28,8 @@ return function(h)
 				-- The mesa's cliffs as a ring of blocks; the mode shows its sand collision instead.
 				for index = 0, 15 do
 					local angle = index / 16 * math.pi * 2
-					local part = h.block(m, "Cliff", Vector3.new(36, 40, 44), Vector3.zero)
-					part.CFrame = CFrame.new(math.cos(angle) * 60, 20, math.sin(angle) * 60)
+					local part = h.block(m, "Cliff", Vector3.new(36, 39.6, 44), Vector3.zero)
+					part.CFrame = CFrame.new(math.cos(angle) * 60, 19.8 - index % 2 * 0.1, math.sin(angle) * 60)
 						* CFrame.Angles(0, -angle, 0)
 					part.Material = Enum.Material.Sandstone
 				end
@@ -43,11 +43,11 @@ return function(h)
 			Collide = false,
 			Shadow = false,
 			Palette = {
-				Swirl1 = h.rgb(214, 158, 98),
-				Swirl2 = h.rgb(252, 228, 172),
-				Swirl3 = h.rgb(252, 228, 172),
-				Swirl4 = h.rgb(252, 230, 176),
-				Swirl5 = h.rgb(252, 232, 182),
+				Swirl1 = h.rgb(206, 150, 92),
+				Swirl2 = h.rgb(250, 222, 164),
+				Swirl3 = h.rgb(220, 172, 110),
+				Swirl4 = h.rgb(250, 224, 168),
+				Swirl5 = h.rgb(224, 178, 116),
 				Whirl = h.rgb(170, 118, 76),
 			},
 			Materials = { Whirl = Enum.Material.Sand },

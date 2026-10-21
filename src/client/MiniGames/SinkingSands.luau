@@ -291,7 +291,7 @@ function SinkingSands.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 54,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, api:HudY() + 70),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + 140),
 		Size = UDim2.fromOffset(520, 64),
 		Visible = false,
 		Parent = hud,
@@ -320,7 +320,7 @@ function SinkingSands.Start(api)
 		else
 			api:Hint("🪙 DIVER: grab the treasure! Stay out of the hole!", api:HudY() + 70)
 		end
-		hintUntil = os.clock() + 7
+		hintUntil = os.clock() + 12
 		if isKing and not swirlButton then
 			local swirl = api:Button({ Text = "SWIRL", Key = Enum.KeyCode.E, Color = Theme.Colors.Orange })
 			local pull = api:Button({ Text = "PULL", Key = Enum.KeyCode.Q, Color = Theme.Colors.Pink, Slot = 2 })
@@ -417,9 +417,9 @@ function SinkingSands.Start(api)
 	end)
 	api:OnEvent("Power", function(kind: string, _start: number, userId: number, flipped: boolean)
 		if kind == "SWIRL" then
-			showFlash(if flipped then "🌀 SWIRL! ⟲" else "🌀 SWIRL!", Theme.Colors.Orange, 1.1)
+			showFlash(if flipped then "🌀 SWIRL! 🔄" else "🌀 SWIRL!", Theme.Colors.Orange, 1.1)
 		else
-			showFlash("⬇ PULL! ⬇", Theme.Colors.Red, 1.4)
+			showFlash("⏬ PULL! ⏬", Theme.Colors.Red, 1.4)
 		end
 		api:Sound("HazardWarning")
 		local root = rootOf(api, userId)
@@ -541,9 +541,10 @@ function SinkingSands.Start(api)
 
 		-- The sand's state: spin direction (an arrow as well as words) and PULL.
 		local pulling = v > baseDrain
-		local arrow = if s >= 0 then "⟲" else "⟳"
+		-- Seen from above, a positive spin turns clockwise.
+		local arrow = if s >= 0 then "🔃" else "🔄"
 		if pulling then
-			stateLabel.Text = "⬇ PULL!"
+			stateLabel.Text = "⏬ PULL!"
 			stateLabel.TextColor3 = Theme.Colors.Red
 		elseif math.abs(s) > SandSwirl.SPIN[2] + 2 then
 			stateLabel.Text = `{arrow} SWIRL!`
