@@ -413,9 +413,6 @@ function StampOut.Start(api)
 	end
 	refreshHud()
 
-		end)
-	end
-
 	-- STAMP: charge and hop -------------------------------------------------------------------------
 	local button = api:Button({ Text = "STAMP", Key = Enum.KeyCode.E, Color = Theme.Colors.Pink })
 	local chargeStart: number? = nil
