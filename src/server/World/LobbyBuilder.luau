@@ -279,15 +279,12 @@ local function buildGround(root: Model)
 	MeshLibrary.Get("LobbyCourt", { CFrame = CFrame.new(0, 0.1, 0), Parent = ground })
 	MeshLibrary.Get("LobbyPavers", { CFrame = CFrame.new(0, 0.1, 0), Parent = ground })
 
-	-- Paved walkways across the lawn to every zone: a white border with the zone's color inside.
+	-- The stage, shop, podium and emote stage open straight onto the promenade. The two corner zones
+	-- sit out on the lawn, so paved walkways (a white border, the zone's color inside) lead to them;
+	-- they stop just short of the corner floors, whose tops share the walkway's height.
 	local walkways = {
-		{ target = Vector3.new(0, 0, STAGE_Z + 14), width = 16, color = rgb(255, 204, 64) }, -- vote stage
-		{ target = PODIUM + Vector3.new(-10, 0, 0), width = 10, color = rgb(255, 96, 110) }, -- podium (red carpet)
-		{ target = SHOP + Vector3.new(10, 0, 0), width = 10, color = rgb(255, 120, 190) }, -- shop
-		{ target = EMOTE + Vector3.new(0, 0, -12), width = 10, color = rgb(80, 200, 255) }, -- emote stage
-		-- (these two stop just short of their corner floors, whose tops share the walkway's height)
-		{ target = QUESTS * 0.81, width = 9, color = rgb(160, 120, 255) }, -- quests
-		{ target = ARCADE * 0.81, width = 9, color = rgb(100, 220, 140) }, -- arcade
+		{ target = QUESTS * 0.79, width = 9, color = rgb(160, 120, 255) }, -- quests
+		{ target = ARCADE * 0.79, width = 9, color = rgb(100, 220, 140) }, -- arcade
 	}
 	for _, walk in walkways do
 		local direction = Vector3.new(walk.target.X, 0, walk.target.Z).Unit
@@ -519,7 +516,9 @@ local function buildVoteStage(root: Model): { BasePart }
 			Name = "Crown",
 			Shape = Enum.PartType.Cylinder,
 			Size = Vector3.new(2, 9, 9),
-			CFrame = CFrame.new(index * 8.4, STAGE_TOP + 47, backZ - 1.6) * CFrame.Angles(0, math.rad(90), 0),
+			-- Pink and gold scallops at alternating heights, like a carnival tent's valance.
+			CFrame = CFrame.new(index * 8.4, STAGE_TOP + 47 + (index % 2) * 0.6, backZ - 1.6)
+				* CFrame.Angles(0, math.rad(90), 0),
 			Color = if index % 2 == 0 then rgb(255, 92, 150) else rgb(255, 204, 64),
 			Parent = stage,
 		})

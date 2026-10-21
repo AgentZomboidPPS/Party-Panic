@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORLD = ROOT / "src" / "server" / "World"
-MODULES = ["Build", "Shapes", "MeshAssets", "MeshLibrary", "Environment", "LobbyBuilder"]
+MODULES = ["Build", "Shapes", "MeshAssets", "MeshLibrary", "Environment", "LobbyBuilder", "BeachBalls"]
 # World/Props modules the lobby uses (the mini-games' own props are skipped).
 PROPS = ["Lobby"]
 
