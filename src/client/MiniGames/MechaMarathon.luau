@@ -262,7 +262,7 @@ function MechaMarathon.Start(api)
 		Name = "WindPanel",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, y),
-		Size = UDim2.fromOffset(if touch then 330 else 300, if touch then 92 else 80),
+		Size = UDim2.fromOffset(if touch then 340 else 300, if touch then 100 else 80),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		BackgroundTransparency = 0.2,
 		Parent = hud,
@@ -283,7 +283,7 @@ function MechaMarathon.Start(api)
 		Name = "Tension",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.new(1, -28, 0, if touch then 20 else 18),
+		Size = UDim2.new(1, -28, 0, if touch then 28 else 18),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.82,
 		Parent = panel,
@@ -300,14 +300,14 @@ function MechaMarathon.Start(api)
 		Name = "Detail",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = if touch then 18 else 16,
+		TextSize = if touch then 24 else 16,
 		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 2,
 		Parent = track,
 		Children = { UIKit.TextStroke(0.15) },
 	})
-	local panelBottom = y + (if touch then 92 else 80)
+	local panelBottom = y + (if touch then 100 else 80)
 	local shout = UIKit.Label({
 		Name = "Shout",
 		Text = "",
@@ -420,6 +420,27 @@ function MechaMarathon.Start(api)
 	local flights = nil
 	local placeOf = {} :: { [number]: number }
 	local winner: Toy? = nil
+	local gone = {} :: { [number]: boolean }
+	-- Places among toys whose players are still here (the server leaves out anyone who left; the
+	-- server spreads equal distances apart, so there are no ties), and the server's own winner.
+	local function rank()
+		local order = {}
+		for _, toy in toys do
+			if toy.Meters and not gone[toy.User] then
+				table.insert(order, toy)
+			end
+		end
+		table.sort(order, function(a, b)
+			return (a.Meters :: number) > (b.Meters :: number)
+		end)
+		table.clear(placeOf)
+		for index, toy in order do
+			placeOf[toy.User] = index
+		end
+		local named = api:Shared("Winner")
+		winner = (if type(named) == "number" then byUser[named] else nil) or order[1]
+	end
+	api:OnShared("Winner", rank)
 	local function readWinds()
 		local winds = api:SharedJSON("Winds")
 		if type(winds) ~= "table" then
@@ -435,6 +456,10 @@ function MechaMarathon.Start(api)
 				toy.Winds = count
 			end
 		end
+		-- Presses bunched by a lag spike that the server dropped: show its count, not ours.
+		if mine and myWinds > mine.Winds + Flight.BURST + 4 then
+			myWinds = mine.Winds
+		end
 	end
 	api:OnShared("Winds", readWinds)
 	readWinds()
@@ -444,7 +469,6 @@ function MechaMarathon.Start(api)
 			return
 		end
 		flights = data
-		local order = {}
 		for user, entry in data.Toys do
 			local toy = byUser[tonumber(user) or 0]
 			if toy and type(entry) == "table" and type(entry.M) == "number" then
@@ -454,30 +478,27 @@ function MechaMarathon.Start(api)
 				local rng = Random.new(toy.Seed)
 				toy.Phases = { rng:NextNumber(0, 6.28), rng:NextNumber(0, 6.28), rng:NextNumber(0, 6.28) }
 				toy.Winds = tonumber(entry.W) or toy.Winds
-				table.insert(order, toy)
 			end
 		end
-		table.sort(order, function(a, b)
-			return (a.Meters :: number) > (b.Meters :: number)
-		end)
-		for index, toy in order do
-			placeOf[toy.User] = index
-		end
-		winner = order[1]
+		rank()
 	end
 	api:OnShared("Flights", readFlights)
 	readFlights()
 	local function readGone()
-		local gone = api:SharedJSON("Gone")
-		if type(gone) ~= "table" then
+		local list = api:SharedJSON("Gone")
+		if type(list) ~= "table" then
 			return
 		end
-		for _, user in gone do
+		for _, user in list do
 			local toy = byUser[tonumber(user) or 0]
-			if toy and toy.Tag then
-				toy.Tag.Enabled = false
+			if toy then
+				gone[toy.User] = true
+				if toy.Tag then
+					toy.Tag.Enabled = false
+				end
 			end
 		end
+		rank()
 	end
 	api:OnShared("Gone", readGone)
 	readGone()
@@ -655,6 +676,7 @@ function MechaMarathon.Start(api)
 		table.clear(parts)
 		table.clear(frames)
 		local front, frontX, frontCount = 0, 0, 0
+		local minX, maxX = math.huge, -math.huge
 		local flying = 0
 		local t = if launchAt then now - launchAt else -1
 		for _, toy in toys do
@@ -766,8 +788,10 @@ function MechaMarathon.Start(api)
 		-- The leaders: every toy still flying within a few studs of the front one.
 		for _, toy in toys do
 			if toy.Plan and not toy.Landed and stage == "flight" and toy.Along >= front - 8 then
-				frontX += toy.Base.Position.X
+				local x = toy.Base.Position.X
+				frontX += x
 				frontCount += 1
+				minX, maxX = math.min(minX, x), math.max(maxX, x)
 			end
 		end
 
@@ -820,10 +844,21 @@ function MechaMarathon.Start(api)
 				eye = pad + Vector3.new(3, 8, 16)
 				look = pad + Vector3.new(0, 4, -22)
 			elseif flying > 0 then
-				local x = if frontCount > 0 then frontX / frontCount else pad.X
-				x = x * 0.75 + origin.X * 0.25
+				-- Frame every leader and your own toy if it's still flying: back off until they fit.
+				if mine.Plan and not mine.Landed then
+					minX, maxX = math.min(minX, pad.X), math.max(maxX, pad.X)
+				end
+				if minX > maxX then
+					minX, maxX = pad.X, pad.X
+				end
+				local x = (minX + maxX) / 2
+				local viewport = camera.ViewportSize
+				local aspect = if viewport.Y > 0 then viewport.X / viewport.Y else 16 / 9
+				local halfWide = math.atan(math.tan(math.rad(camera.FieldOfView) / 2) * aspect)
+				local need = ((maxX - minX) / 2 + 6) / math.tan(halfWide) -- distance to fit the spread
+				local back = math.clamp(need / 22, 1, 3) -- 22: the default eye's distance to the pack
 				local ahead = origin.Z - front
-				eye = Vector3.new(x + 7, origin.Y + Flight.HEIGHT + 7, ahead + 21)
+				eye = Vector3.new(x + 7, origin.Y + Flight.HEIGHT - 3 + 10 * back, ahead + 21 * back)
 				look = Vector3.new(x, origin.Y + Flight.HEIGHT - 3, ahead - 16)
 			else
 				local target = winner or mine
