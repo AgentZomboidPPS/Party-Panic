@@ -1,5 +1,5 @@
--- Scaffolds a new mini-game: the server module, its client half, a test bot, a props file with a
--- starter mesh, and its definition.
+-- Scaffolds a new mini-game: the server module, its client half, a bot brain, a test bot, a props
+-- file with a starter mesh, and its definition.
 --
 --   lune run tools/new-minigame <Id> "<Display Name>" <Category> [--team]
 --   lune run tools/new-minigame HotPotato "Hot Potato" Survival
@@ -51,6 +51,7 @@ end
 local files = {
 	{ "tools/templates/MiniGame.luau.template", `src/server/MiniGames/{id}.luau` },
 	{ "tools/templates/MiniGameClient.luau.template", `src/client/MiniGames/{id}.luau` },
+	{ "tools/templates/MiniGameBrain.luau.template", `src/server/MiniGames/Bots/{id}.luau` },
 	{ "tools/templates/MiniGameBot.luau.template", `tools/checks/bots/{id}.luau` },
 	{ "tools/templates/Props.luau.template", `src/server/World/Props/{id}.luau` },
 	{ "tools/templates/meshgen_props.py.template", `tools/meshgen/props/{id}.py` },

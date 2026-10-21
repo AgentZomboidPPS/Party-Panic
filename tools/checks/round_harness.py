@@ -79,18 +79,19 @@ def rewrite(module: str, text: str, is_init: bool) -> str:
     return re.sub(r"^export type", "type", text, flags=re.M)
 
 
-PRELUDE = (Path(__file__).resolve().parent / "harness_prelude.luau").read_text()
+PRELUDE = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (Path(__file__).resolve().parent / "harness_prelude.luau").read_text()
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("game")
+    parser.add_argument("game", help="mode id, or LOBBY for the lobby with bots (uses --bots, --seconds)")
     parser.add_argument("--players", type=int, default=12)
     parser.add_argument("--seconds", type=float, default=0, help="stop after this many seconds (0 = game length)")
     parser.add_argument("--client", action="store_true", help="also run the client half as Bot1")
     parser.add_argument("--dump-at", type=float, default=None, help="snapshot the arena this many seconds into the round")
     parser.add_argument("--map", help="write a line map (bundle line -> module) here for readable errors")
     parser.add_argument("--touch", action="store_true", help="the stand-in client is a phone (touch, no keyboard)")
+    parser.add_argument("--bots", type=int, default=0, help="also add this many real bots, played by the mode's brain (MiniGames/Bots/<Id>)")
     parser.add_argument("--ui-at", help="with --client: snapshot the player's screen UI at these round times, e.g. 2,10 (see ui_render.py)")
     args = parser.parse_args()
 
@@ -120,7 +121,10 @@ def main():
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)
     ui = "nil" if not args.ui_at else "{" + ", ".join(str(float(t)) for t in args.ui_at.split(",")) + "}"
-    out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui})')
+    if args.game == "LOBBY":
+        out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8}, 10)")
+    else:
+        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots})')
     sys.stdout.write("\n".join(out))
 
 

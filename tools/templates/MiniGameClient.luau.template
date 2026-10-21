@@ -8,6 +8,7 @@
 --   api:Button({ Text, Key })  a big action button (beside the jump button on phones)
 --   api:Template(name)         a copy of a model the server shared with ctx:ShareTemplate
 --   api:Sound(name) / Effect   local feedback; api:Mood({...}) tints the arena for this player
+--   api:CharacterOf(userId)    anyone's character, bots included; api:Participants() lists the round
 
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)

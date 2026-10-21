@@ -1,5 +1,6 @@
 -- Renders the in-world screens from replicated state: the three giant vote cards, the
--- announcement board, the personal quest board, the champion board and podium name tags.
+-- announcement board, the personal quest board, the champion board and podium name tags (a bot
+-- champion gets a robot portrait: bots have no Roblox avatar to show).
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -12,6 +13,7 @@ local GameState = require(Shared.GameState)
 local Placement = require(Shared.Logic.Placement)
 local QuestDefinitions = require(Shared.QuestDefinitions)
 
+local Participants = require(script.Parent.Parent.Participants)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -263,6 +265,9 @@ end
 
 local thumbnails: { [number]: string } = {}
 local function headshot(userId: number): string
+	if Participants.IsBotId(userId) then
+		return "" -- no Roblox avatar (GetUserThumbnailAsync fails for a bot's negative id)
+	end
 	if not thumbnails[userId] then
 		local ok, url = pcall(
 			Players.GetUserThumbnailAsync,
@@ -276,8 +281,38 @@ local function headshot(userId: number): string
 	return thumbnails[userId]
 end
 
+type PodiumTag = {
+	image: ImageLabel,
+	robot: TextLabel,
+	glow: UIGradient,
+	label: TextLabel,
+	gui: BillboardGui,
+	userId: number?,
+}
+
+-- Puts a champion's face on a podium tag: their headshot, or a robot on the bot's own color.
+local function showPortrait(tag: PodiumTag, userId: number)
+	tag.userId = userId
+	local isBot = Participants.IsBotId(userId)
+	tag.robot.Visible = isBot
+	tag.glow.Enabled = isBot
+	if isBot then
+		local bot = Participants.FromUserId(userId)
+		tag.image.Image = ""
+		tag.image.BackgroundColor3 = bot and bot.Color or Theme.Colors.Cyan
+		return
+	end
+	tag.image.BackgroundColor3 = Theme.Colors.Panel
+	task.spawn(function()
+		local url = headshot(userId)
+		if tag.userId == userId then -- still this champion's spot (a new round may have finished)
+			tag.image.Image = url
+		end
+	end)
+end
+
 local function buildChampions()
-	local tags: { [number]: { image: ImageLabel, label: TextLabel, gui: BillboardGui } } = {}
+	local tags: { [number]: PodiumTag } = {}
 	local boardText: TextLabel? = nil
 
 	local function refresh()
@@ -293,9 +328,7 @@ local function buildChampions()
 			tag.gui.Enabled = champion ~= nil
 			if champion then
 				tag.label.Text = champion.Name
-				task.spawn(function()
-					tag.image.Image = headshot(champion.UserId)
-				end)
+				showPortrait(tag, champion.UserId)
 			end
 		end
 		for _, entry in champions do
@@ -320,12 +353,24 @@ local function buildChampions()
 			ResetOnSpawn = false,
 			Parent = playerGui,
 		})
+		local glow = UIKit.Gradient(Color3.new(1, 1, 1), Color3.fromRGB(150, 150, 170))
+		glow.Enabled = false
 		local image = UIKit.new("ImageLabel", {
 			Size = UDim2.fromOffset(110, 110),
 			Position = UDim2.fromOffset(20, 0),
 			BackgroundColor3 = Theme.Colors.Panel,
 			Parent = gui,
-			Children = { UIKit.Round(), UIKit.Stroke(Theme.Colors.Yellow, 3, 0) },
+			Children = { UIKit.Round(), UIKit.Stroke(Theme.Colors.Yellow, 3, 0), glow },
+		})
+		local robot = UIKit.Label({
+			Name = "Robot",
+			Text = "🤖",
+			TextScaled = true,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.52),
+			Size = UDim2.fromScale(0.68, 0.68),
+			Visible = false,
+			Parent = image,
 		})
 		local label = UIKit.Label({
 			Text = "",
@@ -336,7 +381,7 @@ local function buildChampions()
 			Parent = gui,
 			Children = { UIKit.TextStroke(0.2) },
 		})
-		tags[place] = { image = image, label = label, gui = gui }
+		tags[place] = { image = image, robot = robot, glow = glow, label = label, gui = gui, userId = nil }
 		refresh()
 	end)
 	onTag("ChampionBoard", function(instance)
@@ -353,6 +398,7 @@ local function buildChampions()
 	end)
 
 	GameState.Changed("Champions", refresh)
+	Participants.Changed:Connect(refresh) -- a bot champion's color, once the bots have loaded in
 	refresh()
 end
 

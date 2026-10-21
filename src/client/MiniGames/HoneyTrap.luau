@@ -2,8 +2,6 @@
 -- taken), the 1-or-2 block over whoever's turn it is, fruit flying into baskets and the bees.
 -- Shows whose turn it is; on yours the HIT button appears (jumping hits the block too).
 
-local Players = game:GetService("Players")
-
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -50,21 +48,9 @@ local function ease(alpha: number): number
 	return 1 - (1 - alpha) ^ 3
 end
 
-local function findPlayer(userId: number?): Player?
-	if not userId then
-		return nil
-	end
-	for _, player in Players:GetPlayers() do
-		if player.UserId == userId then
-			return player
-		end
-	end
-	return nil
-end
-
-local function rootOf(userId: number?): BasePart?
-	local player = findPlayer(userId)
-	local character = player and player.Character
+-- The root part of whoever has this UserId, player or bot.
+local function rootOf(api, userId: number?): BasePart?
+	local character = api:CharacterOf(userId)
 	return if character then character:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
 end
 
@@ -573,7 +559,7 @@ function HoneyTrap.Start(api)
 		for index = #swarms, 1, -1 do
 			local swarm = swarms[index]
 			local age = now - swarm.Start
-			local root = rootOf(swarm.User)
+			local root = rootOf(api, swarm.User)
 			local target = if root then root.Position else swarm.Fallback
 			local leaving = math.max(0, age - 3.2)
 			for _, bee in swarm.Bees do

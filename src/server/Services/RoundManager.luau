@@ -14,6 +14,8 @@ local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local Placement = require(Shared.Logic.Placement)
 
+local BotRegistry = require(script.Parent.BotRegistry)
+local BotService = require(script.Parent.BotService)
 local DataService = require(script.Parent.DataService)
 local LobbyService = require(script.Parent.LobbyService)
 local Notifier = require(script.Parent.Notifier)
@@ -54,6 +56,21 @@ local function readyPlayers(): { Player }
 	return list
 end
 
+-- Everyone who'd play the next round: ready players plus the bots filling in (bots never play
+-- without at least one person).
+local function participantsNow(): { Player }
+	local list = readyPlayers()
+	if #list == 0 then
+		return list
+	end
+	for _, bot in BotRegistry.List() do
+		if bot.Character then
+			table.insert(list, bot)
+		end
+	end
+	return list
+end
+
 local function setPhase(phase: string, duration: number?, message: string?)
 	GameState.Set("Phase", phase)
 	GameState.Set("PhaseEndsAt", if duration then workspace:GetServerTimeNow() + duration else 0)
@@ -74,7 +91,7 @@ local function waitFor(duration: number, abort: (() -> boolean)?): boolean
 end
 
 local function tooFewPlayers(): boolean
-	return #readyPlayers() < minPlayers()
+	return #readyPlayers() == 0 or #participantsNow() < minPlayers()
 end
 
 -- Runs a mini-game step in its own thread with a timeout so it can never stall the loop.
@@ -167,6 +184,8 @@ local function runRound(definition, participants: { Player })
 	local started = guarded("Start:" .. definition.Id, 5, miniGame.Start, miniGame)
 	if not started then
 		context:End("Error")
+	else
+		context:RunBots(MiniGames.Brain(definition.Id), miniGame)
 	end
 
 	local roundStart = os.clock()
@@ -230,6 +249,7 @@ local function runRound(definition, participants: { Player })
 	cleanupContext()
 	Notifier.Sound(nil, "ReturnToLobby")
 	GameState.Set("GameId", "")
+	task.delay(1, BotService.Rebalance) -- bots that stayed for this round can make room now
 
 	table.insert(recentGames, 1, definition.Id)
 	while #recentGames > 5 do
@@ -240,7 +260,7 @@ end
 local function runCycle()
 	-- Waiting for enough players
 	while tooFewPlayers() do
-		local needed = minPlayers() - #readyPlayers()
+		local needed = math.max(1, minPlayers() - #participantsNow())
 		setPhase(
 			"Waiting",
 			nil,
@@ -257,7 +277,7 @@ local function runCycle()
 	end
 
 	-- Voting
-	local voters = readyPlayers()
+	local voters = participantsNow()
 	local options = VotingService.BuildOptions(#voters, recentGames, ignoreModeLimits())
 	local forced = Config.Debug.ForceGame
 	if isStudio() and forced ~= "" then
@@ -280,7 +300,7 @@ local function runCycle()
 		return
 	end
 
-	local participants = readyPlayers()
+	local participants = participantsNow()
 	if #participants < minPlayers() then
 		Notifier.All("Not enough players to start - back to the lobby.", "warning")
 		return

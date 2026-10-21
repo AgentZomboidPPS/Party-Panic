@@ -37,7 +37,7 @@ def fix(text: str) -> str:
     return re.sub(r"TaskScript:(\d+)", lambda m: where(int(m.group(1))), text)
 
 
-for key in ["prepare", "prepareSeconds", "arenaParts", "start", "endReason", "roundSeconds", "stop", "cleanup",
+for key in ["bots", "brain", "prepare", "prepareSeconds", "arenaParts", "start", "endReason", "roundSeconds", "stop", "cleanup",
             "destroy", "arenaLeftovers", "sharedLeftovers", "winningTeam", "clientGuiDuringResults",
             "clientModeGuisAfterCleanup"]:
     if key in d:

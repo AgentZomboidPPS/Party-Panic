@@ -12,7 +12,8 @@ Outline*.
 | --- | --- |
 | **Core loop** | A server-authoritative state machine (Waiting → Intermission → Voting → Preparing → In Round → Results → Cleanup) with a watchdog. Every mini-game call runs with a timeout, so a broken mode can't stall the server. |
 | **Voting** | Three options with live counts, change your vote until time runs out, random tie-breaks, an occasional *Mystery* card, recently played modes down-weighted, category mixing. Vote by tapping a card or stepping onto a portal pad. |
-| **6 launch modes** | 🔨 Don't Get Flattened · 🌋 Floor Is Lava · 🥊 Yeet Arena · 🛒 Shopping Cart Grand Prix · 💰 Greedy Goblins · 🔘 The Wrong Button |
+| **Mini-games** | Party classics rebuilt for 12 players: 🔥 Fire Rope · ⚡ Hex Meltdown · 🍯 Honey Trap · 🎈 Pump & Pop · 🛹 Skate Escape · 🏹 Arrow Ambush · 🏜️ Sinking Sands · 🔵 Bumper Ballers |
+| **Bots** | Friendly AI players fill empty spots so every round feels full (8 by default): they fade out when someone joins, fade back in when someone leaves, play every mode with their own brain at varied skill, and are clearly labelled 🤖 with a BOT nameplate. No rewards, no saved data. |
 | **Progression** | Coins, XP and levels, itemized round rewards, personal bests, daily and weekly quests, a daily gift with streaks, a hidden daily token, level and stat unlocks |
 | **Cosmetics** | Trails, titles, emotes (dances and effect emotes), victory and knockout effects, a coin shop with confirmation, an optional VIP pass (cosmetic only, never pay-to-win) |
 | **Lobby** | One compact round plaza built around the vote stage: three glowing portal bays with screens, a fountain with a turning gold trophy, winner podium, shop with a mannequin gallery, quest board and a giant gumball gift machine, arcade target range, emote stage with a dance floor, a spiral parkour tower to a view deck, colored walkways, planters, lamp posts with party lights, and a ring of trees and hills |

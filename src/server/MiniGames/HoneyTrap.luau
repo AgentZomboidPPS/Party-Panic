@@ -9,10 +9,6 @@
 -- turn's clock, so every client shows the same face at the same moment. The server judges a hit
 -- against that clock with leeway for lag, so the face you saw is the face you get.
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Remotes = require(ReplicatedStorage.Shared.Remotes)
-
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Scenery = require(script.Parent.Kit.Scenery)
 local Build = require(script.Parent.Parent.World.Build)
@@ -37,7 +33,6 @@ HoneyTrap.Fruits = {
 	{ Name = "Plum", Color = Color3.fromRGB(150, 80, 200) },
 }
 
-local knockbackRemote = Remotes.Get("Knockback")
 local rng = Random.new()
 
 type Turn = {
@@ -314,10 +309,10 @@ function HoneyTrap:_resolve(turn: Turn, face: number)
 		-- The comb lands in their basket, then the swarm chases them off.
 		ctx:Delay(1.1, function()
 			local _, _, root = ctx:GetCharacter(player)
-			if root and typeof(player) == "Instance" then
+			if root then
 				local away = Vector3.new(root.Position.X - ctx.Origin.X, 0, root.Position.Z - ctx.Origin.Z)
 				away = if away.Magnitude > 0.1 then away.Unit else Vector3.new(0, 0, 1)
-				knockbackRemote:FireClient(player, away * 45 + Vector3.new(0, 50, 0), 1.2)
+				ctx:Knockback(player, away * 45 + Vector3.new(0, 50, 0), 1.2) -- bots are thrown too
 			end
 			ctx:Delay(1.0, function()
 				ctx:Eliminate(player, "bees")

@@ -13,6 +13,8 @@
 --   api:Tilt()                   phone tilt as a move direction (nil without an accelerometer)
 --   api:Template(name)           a copy of a model the server shared with ctx:ShareTemplate
 --   api:Sound(name) / Effect     sound and particle effects for this player only
+--   api:Participants()           everyone in this round, players and bots alike
+--   api:CharacterOf(userId)      anyone's character by UserId, bots included
 
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
@@ -30,6 +32,7 @@ local Signal = require(Shared.Signal)
 
 local AudioController = require(script.Parent.Parent.Parent.Controllers.AudioController)
 local EffectsController = require(script.Parent.Parent.Parent.Controllers.EffectsController)
+local Participants = require(script.Parent.Parent.Parent.Participants)
 local State = require(script.Parent.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.Parent.UI.UIKit)
@@ -142,6 +145,18 @@ function Api.Character(self: Api): (Model?, Humanoid?, BasePart?)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	return character, humanoid, root
+end
+
+-- Everyone playing this round, bots included (Participants.luau): DisplayName, UserId, IsBot,
+-- IsLocal, :GetAttribute(name) (PP_Alive, PP_Score, MG_<key>...) and :Character().
+function Api.Participants(_self: Api): { Participants.Participant }
+	return Participants.InRound()
+end
+
+-- A participant's character by UserId, e.g. one the server shared ("Taker = player.UserId"). Bots
+-- aren't in Players, so look people up here rather than with Players:GetPlayers().
+function Api.CharacterOf(_self: Api, userId: number?): Model?
+	return Participants.CharacterOf(userId)
 end
 
 function Api.IsTouch(_self: Api): boolean

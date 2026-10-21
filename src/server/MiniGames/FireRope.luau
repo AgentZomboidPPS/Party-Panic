@@ -6,11 +6,8 @@
 -- The rope's angle follows a schedule shared with every client (MG_Rope): a list of segments that
 -- each start at a bottom pass and are announced one full turn ahead, so clients draw it perfectly
 -- in sync. At every pass the server checks each player's recent height, with a little leeway for
--- network lag, so a jump that looked right on your screen counts.
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Remotes = require(ReplicatedStorage.Shared.Remotes)
+-- network lag, so a jump that looked right on your screen counts. Bots are judged the same way
+-- (Bots/FireRope.luau times their jumps from the same schedule).
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
@@ -30,7 +27,6 @@ local FIRST_PERIOD = 3.0
 local FASTEST_PERIOD = 1.05 -- a Roblox jump is ~0.5s in the air; this leaves time to land and go again
 local LAVA_DROP = 24
 
-local knockbackRemote = Remotes.Get("Knockback")
 local rng = Random.new()
 
 type Segment = { T0: number, A0: number, W: number }
@@ -239,9 +235,7 @@ function FireRope:_judge(passTime: number)
 			local _, _, root = ctx:GetCharacter(player)
 			if root then
 				Notifier.Effect("Fireworks", root.Position, { rgb(255, 120, 40), rgb(255, 210, 60) })
-				if typeof(player) == "Instance" then
-					knockbackRemote:FireClient(player, Vector3.new(0, 55, 45), 1.2)
-				end
+				ctx:Knockback(player, Vector3.new(0, 55, 45), 1.2) -- thrown off the bridge, bots too
 			end
 			ctx:Eliminate(player, "rope")
 		end
