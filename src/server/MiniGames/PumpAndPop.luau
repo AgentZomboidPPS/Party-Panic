@@ -728,7 +728,9 @@ function PumpAndPop:Stop(reason: string?)
 	end
 end
 
--- Team results (best balloon first, by exact fill); each player's line shows their own pumps.
+-- Team results (best balloon first, by exact fill); each player's line shows their own perfect pumps,
+-- the figure the standings showed all round ("Yellow 100% • 22 perfect": short enough to read whole on
+-- the results card beside a name).
 function PumpAndPop:GetResults()
 	local results = self.context:TeamResults()
 	for _, entry in results.Entries do
@@ -738,8 +740,7 @@ function PumpAndPop:GetResults()
 		end
 		local pumper = self.pumpers[entry.Player]
 		if pumper then
-			entry.ScoreText =
-				`{entry.Team} {station and self:_percent(station) or 0}% • {pumper.Pumps} pumps, {pumper.Perfect} perfect`
+			entry.ScoreText = `{entry.Team} {station and self:_percent(station) or 0}% • {pumper.Perfect} perfect`
 		end
 	end
 	results.WinningTeam = self:_leader()

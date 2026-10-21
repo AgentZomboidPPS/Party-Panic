@@ -310,6 +310,45 @@ local function statusLine(phase: string): string
 	return "🎮 You're in the next round!"
 end
 
+-- The round's team scores as one line (the team pill under the status line): every team in the round
+-- with its mark and score, whatever the mode calls its teams. Colour teams wear their shape in the
+-- team's colour (★ Red, ● Blue, ▲ Green, ◆ Yellow: Teams.Shapes), so colour is never the only cue;
+-- versus roles their icon (🏹 Archers / 🏃 Runners, 💎 Divers / 👑 SandKings, 🦈 Sharks / 🏊 Swimmers).
+-- Two teams read "★ 12   —   9 ●", three or four "★ 12   ● 9   ▲ 7   ◆ 3". Returns the line
+-- (RichText) and the same line as plain text, to measure.
+local function teamScoreLine(scores: { [string]: any }): (string, string)
+	local names = {}
+	for _, team in Teams.Order do
+		if scores[team] ~= nil then
+			table.insert(names, team)
+		end
+	end
+	local others = {}
+	for name in scores do
+		if not table.find(Teams.Order, name) then
+			table.insert(others, name)
+		end
+	end
+	table.sort(others)
+	for _, name in others do
+		table.insert(names, name)
+	end
+	local rich, plain = {}, {}
+	for index, name in names do
+		local value = scores[name]
+		local score = if type(value) == "number" then tostring(value) else "0"
+		local shape = Teams.Shapes[name]
+		local color = Teams.Colors[name]
+		local mark = shape or Teams.Icons[name] or string.upper(name)
+		local shown = if shape and color then `<font color="#{color:ToHex()}">{shape}</font>` else mark
+		local right = #names == 2 and index == 2 -- the second of two reads "9 ●"
+		table.insert(rich, if right then `{score} {shown}` else `{shown} {score}`)
+		table.insert(plain, if right then `{score} {mark}` else `{mark} {score}`)
+	end
+	local gap = if #names == 2 then "   —   " else "   "
+	return table.concat(rich, gap), table.concat(plain, gap)
+end
+
 local function followTimer(timerPill: Frame, timer: TextLabel)
 	local lastWhole = -1
 	RunService.Heartbeat:Connect(function()
@@ -397,6 +436,7 @@ local function buildPhaseBanner(parent: Instance)
 		Font = Theme.Fonts.Display,
 		TextSize = 24,
 		TextWrapped = false,
+		RichText = true,
 		Size = UDim2.fromScale(1, 1),
 		Parent = teams,
 	})
@@ -415,31 +455,7 @@ local function buildPhaseBanner(parent: Instance)
 			return
 		end
 		teams.Visible = true
-		-- Colour teams: two read "A — B"; with three or four, every team present gets its icon and
-		-- score. Versus roles (Archers / Runners, ...): each side's icon and score, in name order.
-		local present = {}
-		for _, team in Teams.Order do
-			if scores[team] ~= nil then
-				table.insert(present, `{Teams.Icons[team]} {scores[team]}`)
-			end
-		end
-		if #present > 2 then
-			teamsLabel.Text = table.concat(present, "   ")
-		elseif #present > 0 then
-			teamsLabel.Text = `🔴 {scores.Red or 0}   —   {scores.Blue or 0} 🔵`
-		else
-			local names = {}
-			for name in scores do
-				table.insert(names, name)
-			end
-			table.sort(names)
-			local parts = {}
-			for index, name in names do
-				local icon = Teams.Icons[name] or ""
-				table.insert(parts, if index == 1 then `{icon} {scores[name]}` else `{scores[name]} {icon}`)
-			end
-			teamsLabel.Text = table.concat(parts, "   —   ")
-		end
+		teamsLabel.Text = teamScoreLine(scores)
 	end
 	GameState.Changed("TeamScores", refreshTeams)
 	refreshTeams()
@@ -555,7 +571,9 @@ local function buildTopBarSwitch(hud: Instance)
 end
 
 -- Phones: the round's status line ("Survivors: 7") and team scores, just under the top bar in the
--- middle. Mode HUDs go under them (Api.TopHud / HudY).
+-- middle. Mode HUDs go under them (Api.TopHud / HudY). The team pill shows the round's own teams
+-- (teamScoreLine): it used to read "🔴 Red — Blue 🔵" whatever the teams were, so Sharks, Divers and
+-- Archers rounds read 0 — 0 all round on phones and Green and Yellow never showed.
 local function buildTouchStatus(parent: Instance)
 	local holder = UIKit.new("Frame", {
 		Name = "RoundStatus",
@@ -589,11 +607,23 @@ local function buildTouchStatus(parent: Instance)
 		Font = Theme.Fonts.Display,
 		TextSize = 24,
 		TextWrapped = false,
+		RichText = true,
 		Size = UDim2.fromScale(1, 1),
 		Parent = teams,
 	})
+	-- The pill is as wide as its line (four teams with 3-digit scores fit the smallest phone),
+	-- re-measured now and then in case the font was still loading.
+	local teamsLine, fittedAt = "", 0
+	local function fitTeams()
+		fittedAt = os.clock()
+		local width = math.ceil(UIKit.TextWidth(teamsLine, 24, Theme.Fonts.Display)) + 44
+		teams.Size = UDim2.fromOffset(math.clamp(width, 160, 600), 42)
+	end
 	RunService.Heartbeat:Connect(function()
 		status.Text = statusLine(GameState.Get("Phase") or "Waiting")
+		if teams.Visible and os.clock() - fittedAt > 1 then
+			fitTeams()
+		end
 	end)
 	local function refreshTeams()
 		local scores = GameState.GetJSON("TeamScores")
@@ -602,7 +632,12 @@ local function buildTouchStatus(parent: Instance)
 			return
 		end
 		teams.Visible = true
-		teamsLabel.Text = `🔴 {scores.Red or 0}  —  {scores.Blue or 0} 🔵`
+		local rich, plain = teamScoreLine(scores)
+		teamsLabel.Text = rich
+		if plain ~= teamsLine then
+			teamsLine = plain
+			fitTeams()
+		end
 	end
 	GameState.Changed("TeamScores", refreshTeams)
 	refreshTeams()
