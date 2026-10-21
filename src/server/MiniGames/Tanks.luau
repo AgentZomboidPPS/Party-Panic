@@ -25,14 +25,19 @@
 --     was that long ago: what they saw dodge is a dodge, what they saw touch them is a hit. Bots (no
 --     screen) are judged as the server sees them. A tank's own shell can hit it only after its
 --     ricochet (and never in its first half second, so a shot point-blank into a wall is safe).
---   * Shells that meet pop each other; a shell that touches a mine sets it off. A mine arms after
---     1.5 s (its layer must have driven off it first), goes off when a hull drives onto it or after
---     7 s, and its blast takes every tank, shell and mine within 10 studs (mines chain a moment
---     later). Everyone one blast catches is knocked out in the same server step.
+--   * Shells that meet pop each other; a shell that touches a mine sets it off (both only once the
+--     shell is out of its barrel, where clients first draw it: a shot never sets off the mine under
+--     its own tank). A mine arms after 1.5 s (its layer must have driven off it first), goes off
+--     when a hull touches it or after 7 s, and its blast takes every tank, shell and mine within 10
+--     studs (mines chain a moment later). Everyone one blast catches is knocked out in the same
+--     server step; a player is spared if their own screen (a one-way trip ahead) had them outside.
+--   * Live mines and shells are shared state as well as events, so a screen that starts late still
+--     draws every one that's out.
 --   * For the first 3 s after GO every tank is shielded (a shell that touches it just pops, a blast
 --     passes it by), so nobody is out before they've had a chance to move.
 --   * Each tank can have 2 shells in flight and 2 mines down. A hit scores for the shooter or the
---     mine's layer (never for yourself).
+--     mine's layer (never for yourself); a mine that takes its own layer scores for whoever set it
+--     off (their shell, their tank driving onto it, or the blast that chained it).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -847,6 +852,8 @@ function Tanks:_stepMines(now: number)
 					end
 				elseif near and now >= mine.ArmAt then
 					blow = true
+					-- Whoever drove onto it set it off: if it takes its layer too, that's their hit.
+					mine.Detonator = mine.Detonator or tank
 					break
 				end
 			end
