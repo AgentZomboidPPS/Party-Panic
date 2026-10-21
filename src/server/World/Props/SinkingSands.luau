@@ -170,7 +170,7 @@ return function(h)
 		-- inlays and paths to the gateways. Flat paving that never collides (the mode's floor does).
 		SandMosaic = {
 			Height = 0.45,
-			AssetId = 81110255983094,
+			AssetId = 124625971567784,
 			Shadow = false,
 			Palette = {
 				Curb = h.rgb(236, 206, 156),
@@ -188,7 +188,7 @@ return function(h)
 		-- A tall painted column with a royal banner down its front (-Z).
 		SandColumn = {
 			Height = 27.89,
-			AssetId = 72287327916001,
+			AssetId = 116838347727083,
 			Collide = true,
 			Palette = { Stone = stone, Paint = paint, Gold = gold, Cloth = cloth },
 			Materials = { Stone = Sandstone, Gold = Metal, Cloth = Enum.Material.Fabric },
@@ -202,7 +202,7 @@ return function(h)
 		},
 		SandColumnBroken = {
 			Height = 14.15,
-			AssetId = 107884216100304,
+			AssetId = 84462374502012,
 			Collide = true,
 			Palette = { Stone = stone, Gold = gold },
 			Materials = { Stone = Sandstone, Gold = Metal },
@@ -214,7 +214,7 @@ return function(h)
 		-- A gateway: two columns under a lintel with a turquoise cornice and a gold winged sun.
 		SandArch = {
 			Height = 32.97,
-			AssetId = 89349128152206,
+			AssetId = 84569703748343,
 			Collide = true,
 			Palette = { Stone = stone, Paint = paint, Gold = gold, Glow = glow },
 			Materials = { Stone = Sandstone, Gold = Metal, Glow = Neon },
@@ -263,7 +263,7 @@ return function(h)
 		-- A giant cat sphinx in a striped royal headdress, lying with its paws forward (-Z).
 		SandSphinx = {
 			Height = 37.65,
-			AssetId = 76302524600552,
+			AssetId = 97448802400676,
 			Shadow = false,
 			Palette = {
 				Body = h.rgb(242, 198, 122),
@@ -300,7 +300,7 @@ return function(h)
 		-- A big crescent dune (recolored per dune for depth).
 		SandDune = {
 			Height = 26,
-			AssetId = 128616273519002,
+			AssetId = 107954322554378,
 			Shadow = false,
 			Palette = { Dune = h.rgb(236, 184, 110) },
 			Materials = { Dune = Enum.Material.Sand },

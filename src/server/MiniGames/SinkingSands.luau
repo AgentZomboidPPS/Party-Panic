@@ -363,7 +363,8 @@ function SinkingSands:_buildArena(kingCount: number)
 end
 
 -- The temple courtyard on the mesa top: a ring of painted columns with royal banners and four
--- gateways framing the funnel, palms flanking each gateway and heaps of treasure that sparkle.
+-- gateways framing the funnel, palms flanking each gateway and heaps of treasure that sparkle. The
+-- gateways stand north, south, east and west, each framing a landmark beyond the cliffs.
 local COLONNADE_R = 66
 local BANNER_RED, BANNER_BLUE = Color3.fromRGB(214, 38, 62), Color3.fromRGB(40, 86, 210)
 
@@ -376,7 +377,7 @@ function SinkingSands:_buildCourtyard()
 	end
 	for slot = 0, 15 do
 		local angle = slot / 16 * math.pi * 2
-		if slot % 4 == 2 then
+		if slot % 4 == 0 then
 			MeshLibrary.Get("SandArch", { CFrame = facing(angle, COLONNADE_R), Parent = arena })
 			for side = -1, 1, 2 do
 				MeshLibrary.Get("SandPalm", {
@@ -385,7 +386,7 @@ function SinkingSands:_buildCourtyard()
 					Parent = arena,
 				})
 			end
-		elseif slot % 4 == 1 and slot ~= 5 or slot == 15 then
+		elseif slot == 3 or slot == 6 or slot == 9 or slot == 13 then
 			MeshLibrary.Get("SandColumnBroken", {
 				CFrame = facing(angle, COLONNADE_R) * CFrame.Angles(0, slot * 1.7, 0),
 				Parent = arena,
@@ -393,11 +394,11 @@ function SinkingSands:_buildCourtyard()
 		else
 			MeshLibrary.Get("SandColumn", {
 				CFrame = facing(angle, COLONNADE_R),
-				Colors = { Cloth = if slot % 4 == 0 then BANNER_RED else BANNER_BLUE },
+				Colors = { Cloth = if slot % 2 == 0 then BANNER_RED else BANNER_BLUE },
 				Parent = arena,
 			})
 		end
-		if slot % 4 == 0 then
+		if slot % 4 == 2 then
 			local hoard = MeshLibrary.Get("SandHoard", {
 				CFrame = facing(angle, 58) * CFrame.Angles(0, math.pi + slot * 0.3, 0),
 				Parent = arena,
@@ -437,7 +438,7 @@ end
 -- rolling dunes in layers that pale with distance, and ruins and cacti on the desert floor.
 local TEMPLE_ANGLE = -math.pi / 2 -- the temple stands on the -Z side
 local SPHINX_ANGLE = 0
-local OASIS_ANGLE = math.rad(140)
+local OASIS_ANGLE = math.pi
 
 function SinkingSands:_buildBackdrop(floorY: number)
 	local center = self.center
@@ -450,20 +451,20 @@ function SinkingSands:_buildBackdrop(floorY: number)
 	end
 
 	-- The temple's pivot (its footprint's middle) sits 12.8 studs (unscaled) in front of its core.
-	local templeScale = 1.5
+	local templeScale = 1.8
 	MeshLibrary.Get("SandTemple", {
-		CFrame = facingCenter(at(TEMPLE_ANGLE, 240 - 12.8 * templeScale)),
+		CFrame = facingCenter(at(TEMPLE_ANGLE, 262 - 12.8 * templeScale)),
 		Scale = templeScale,
 		Parent = arena,
 	})
 	MeshLibrary.Get("SandSphinx", {
-		CFrame = facingCenter(at(SPHINX_ANGLE, 270)),
-		Scale = 2.1,
+		CFrame = facingCenter(at(SPHINX_ANGLE, 248)),
+		Scale = 2.3,
 		Parent = arena,
 	})
 	for _, pyramid in
 		{
-			{ math.rad(75), 470, 2.0 },
+			{ math.pi / 2, 470, 2.0 },
 			{ math.rad(205), 430, 1.6 },
 			{ math.rad(228), 520, 1.3 },
 			{ math.rad(320), 480, 1.5 },
@@ -495,8 +496,15 @@ function SinkingSands:_buildBackdrop(floorY: number)
 		local ring = index % 3
 		local angle = index / 18 * math.pi * 2 + ring * 0.21
 		local distance = 200 + ring * 110 + rng:NextNumber(0, 40)
-		if distance < 400 and (math.cos(angle - TEMPLE_ANGLE) > 0.88 or math.cos(angle - SPHINX_ANGLE) > 0.88) then
-			continue -- keep the temple and the sphinx in view
+		if
+			distance < 400
+			and (
+				math.cos(angle - TEMPLE_ANGLE) > 0.88
+				or math.cos(angle - SPHINX_ANGLE) > 0.88
+				or math.cos(angle - math.pi / 2) > 0.94
+			)
+		then
+			continue -- keep the temple, the sphinx and the big pyramid in view
 		end
 		local dune = MeshLibrary.Get("SandDune", {
 			CFrame = CFrame.new(at(angle, distance))

@@ -674,7 +674,7 @@ def arc_slab(r0, r1, a0, a1, y0, y1, segs=3):
 
 def cloth(width, height, thick=0.25, notch=0.0, wave=0.0, seed=0):
     """A hanging banner (top edge at y = 0, hanging down, facing -Z) with a swallowtail and a ripple."""
-    mesh = rounded_box(width, height, thick, thick * 0.45, 10)
+    mesh = rounded_box(width, height, thick, thick * 0.45, 7)
     v = mesh.v
     v[:, 1] -= height / 2
     if notch > 0:
@@ -703,7 +703,7 @@ def column(height=28.0, radius=2.0, broken=0.0, seed=0):
     plinth = merge(box(radius * 3.1, 0.9, radius * 3.1, y=0.45, bevel=0.15), box(radius * 2.7, 0.7, radius * 2.7, y=1.25, bevel=0.15))
     shaft_top = height - 4.6 if not broken else broken
     base_ring = solid(lathe([(0.0, 1.6), (radius * 1.22, 1.6), (radius * 1.25, 2.0), (radius * 1.12, 2.4), (0.0, 2.4)], 40))
-    rows = 18
+    rows = 10
     profile = [(0.0, 2.3)] + [(radius * (1.02 - 0.12 * (i / rows) ** 1.4), 2.3 + (shaft_top - 2.3) * i / rows) for i in range(rows + 1)] + [(0.0, shaft_top)]
     shaft = lathe(profile, 64)
     a = np.arctan2(shaft.v[:, 2], shaft.v[:, 0])
@@ -956,7 +956,7 @@ def sand_pyramid():
 def sand_dune():
     """A big crescent dune (200 x 110, 26 tall): a gentle windward back (+Z), a steep lee face and a
     sharp curved crest. Its edges sink just below the desert floor."""
-    nx, nz = 64, 52
+    nx, nz = 54, 42
     xs = np.linspace(-1, 1, nx)
     zs = np.linspace(-1, 1, nz)
     verts = []
@@ -1169,9 +1169,9 @@ def sand_mosaic():
         accent.append(box(1.6, h - 0.04, 1.6, x=x, y=(h - 0.04) / 2, z=z, bevel=0.1).rotate("y", 0))
     inlay.append(arc_slab(51.4, 51.9, 0.0, math.pi, 0.0, h - 0.05, 48))
     inlay.append(arc_slab(51.4, 51.9, math.pi, 2 * math.pi, 0.0, h - 0.05, 48))
-    # Paths to the four gateways (on the diagonals).
+    # Paths to the four gateways (north, south, east and west).
     for q in range(4):
-        a = math.pi / 4 + q * math.pi / 2
+        a = q * math.pi / 2
         for k in range(7):
             r0 = 52.4 + k * 2.3
             for side in (-1, 0, 1):
