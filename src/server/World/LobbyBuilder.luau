@@ -3,7 +3,7 @@
 -- One compact, round plaza (about 150 studs across) so everything is in view from the spawn:
 --
 --                              N (-Z)
---        [parkour tower]   [ VOTE STAGE: 4 portal bays ]   [speakers]
+--     [ obby + goo pool ]  [ VOTE STAGE: 4 portal bays ]   [speakers]
 --
 --   W  [ SHOP / gallery ]       ( fountain + trophy )       [ WINNER PODIUM ]  E (+X)
 --
@@ -23,6 +23,7 @@ local Lighting = game:GetService("Lighting")
 
 local Build = require(script.Parent.Build)
 local Environment = require(script.Parent.Environment)
+local LobbyObby = require(script.Parent.LobbyObby)
 local MeshLibrary = require(script.Parent.MeshLibrary)
 local Shapes = require(script.Parent.Shapes)
 
@@ -37,6 +38,7 @@ export type LobbyRefs = {
 	Targets: { BasePart },
 	TargetBoard: TextLabel,
 	BallSpots: { Vector3 },
+	ParkourFrame: CFrame, -- the obby's course space (Shared/Logic/ParkourCourse)
 }
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -82,18 +84,36 @@ local SHOP = Vector3.new(-54, 0, -4)
 local QUESTS = Vector3.new(-42, 0, 42)
 local ARCADE = Vector3.new(42, 0, 42)
 local EMOTE = Vector3.new(0, 0, 54)
-local PARKOUR = Vector3.new(-58, 0, -50)
+-- The obby: a round goo pool with a lookout tower in the middle, out on the lawn between the shop and
+-- the vote stage (World/LobbyObby). Its course space looks away from the plaza.
+local PARKOUR = Vector3.new(-81, 0, -44.7)
+local PARKOUR_FRAME = CFrame.lookAt(PARKOUR, PARKOUR * 2)
 
 LobbyBuilder.PlazaRadius = PLAZA_RADIUS
 LobbyBuilder.StageFrontZ = STAGE_Z + 13 -- the vote stage's front edge (its steps are in front)
--- Places a beach ball may not sit in for long (the fountain pool, the emote stage).
+-- Places a beach ball may not sit in for long (the fountain pool, the emote stage, the obby's goo).
 LobbyBuilder.BallTraps = {
 	{ Center = Vector3.zero, Radius = 13 },
 	{ Center = EMOTE, Radius = 15 },
+	{ Center = PARKOUR, Radius = LobbyObby.Radius },
 }
 
 local function tag(instance: Instance, name: string)
 	CollectionService:AddTag(instance, name)
+end
+
+-- How far the lobby's invisible boundary is from the middle along `angle` (radians, from +X toward +Z):
+-- a circle, pushed out round the obby's pool (with lawn to walk round it) where that reaches further.
+local BOUNDARY_RADIUS = PLAZA_RADIUS + 30
+local function boundaryRadius(angle: number): number
+	local direction = Vector3.new(math.cos(angle), 0, math.sin(angle))
+	local bulge = LobbyObby.Radius + 7
+	local along = direction:Dot(PARKOUR)
+	local inside = along * along - (PARKOUR.Magnitude ^ 2 - bulge * bulge)
+	if inside <= 0 then
+		return BOUNDARY_RADIUS
+	end
+	return math.max(BOUNDARY_RADIUS, along + math.sqrt(inside))
 end
 
 local function prompt(parent: BasePart, actionText: string, objectText: string, action: string?): ProximityPrompt
@@ -317,9 +337,31 @@ local function buildGround(root: Model)
 		end
 	end
 
-	-- Invisible boundary a little further out, among the trees.
-	for index, point in Build.Ring(Vector3.new(0, 25, 0), PLAZA_RADIUS + 30, 28) do
-		Build.Barrier({ Name = "Boundary" .. index, Size = Vector3.new(24, 70, 2), CFrame = point, Parent = ground })
+	-- Invisible boundary a little further out, among the trees. It bulges out round the obby's pool, so
+	-- there's lawn to walk round it: a ring of wall segments, in smaller steps along the bulge.
+	local steps = {}
+	for index = 0, 27 do
+		local from, to = index / 28 * math.pi * 2, (index + 1) / 28 * math.pi * 2
+		local split = 1
+		for sample = 0, 8 do
+			if boundaryRadius(from + (to - from) * sample / 8) > BOUNDARY_RADIUS + 0.01 then
+				split = 6
+			end
+		end
+		for part = 0, split - 1 do
+			table.insert(steps, from + (to - from) * part / split)
+		end
+	end
+	for index, angle in steps do
+		local nextAngle = steps[index % #steps + 1]
+		local a = Vector3.new(math.cos(angle), 0, math.sin(angle)) * boundaryRadius(angle)
+		local b = Vector3.new(math.cos(nextAngle), 0, math.sin(nextAngle)) * boundaryRadius(nextAngle)
+		Build.Barrier({
+			Name = "Boundary" .. index,
+			Size = Vector3.new((b - a).Magnitude + 1, 70, 2),
+			CFrame = CFrame.fromMatrix((a + b) / 2 + Vector3.new(0, 25, 0), (b - a).Unit, Vector3.yAxis),
+			Parent = ground,
+		})
 	end
 end
 
@@ -1244,105 +1286,6 @@ local function buildEmoteStage(root: Model): (ProximityPrompt, Vector3)
 	return prompt(cannonBase, "Fire Confetti!", "Confetti Cannon"), center + Vector3.new(0, 10, 0)
 end
 
--- Secret space: spiral parkour tower to a view deck (north-west) ---------------------------------
-
-local function buildParkour(root: Model): Vector3
-	local course = Build.Model("ParkourRoute", root)
-	local center = PARKOUR
-	local radius = 11
-	local startAngle = math.atan2(-center.Z, -center.X) -- the side facing the plaza
-
-	local function around(angle: number, height: number): Vector3
-		return center + Vector3.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
-	end
-
-	local startPad = Shapes.Slab(Vector3.new(7, 0.6, 7), 2.5, {
-		Name = "ParkourStart",
-		CFrame = CFrame.new(around(startAngle, 0.3)),
-		Color = rgb(120, 230, 120),
-		Material = Enum.Material.Neon,
-		CanTouch = true,
-		Parent = course,
-	})
-	tag(startPad, "ParkourStart")
-	Build.Billboard(
-		startPad,
-		"🧗 Parkour - climb to the view deck!",
-		{ StudsOffset = Vector3.new(0, 5, 0), Size = UDim2.fromOffset(280, 44), MaxDistance = 70 }
-	)
-
-	local steps = 13
-	for index = 1, steps do
-		local angle = startAngle + math.rad(32 * index)
-		local position = around(angle, 2.3 * index)
-		Shapes.RoundedBox(Vector3.new(5.5, 1.2, 5.5), 0.5, {
-			Name = "Step" .. index,
-			CFrame = CFrame.lookAt(position, Vector3.new(center.X, position.Y, center.Z)),
-			Color = Color3.fromHSV(index / (steps + 2), 0.55, 1),
-			Parent = course,
-		})
-	end
-
-	local deckHeight = 2.3 * steps + 2.6
-	disc(
-		"Pillar",
-		9,
-		deckHeight - 0.5,
-		center + Vector3.new(0, (deckHeight - 0.5) / 2, 0),
-		{ Color = rgb(155, 125, 235), Parent = course }
-	)
-	for level = 1, 3 do
-		disc(
-			"PillarBand",
-			9.6,
-			0.8,
-			center + Vector3.new(0, level * deckHeight / 4, 0),
-			{ Color = PALETTE.Trim, Parent = course }
-		)
-	end
-	local deckCenter = center + Vector3.new(0, deckHeight, 0)
-	disc("ViewDeck", 18, 1.2, deckCenter, { Color = rgb(255, 222, 95), Parent = course })
-	local finish = disc("ParkourFinish", 6, 0.3, deckCenter + Vector3.new(0, 0.7, 0), {
-		Color = rgb(255, 120, 60),
-		Material = Enum.Material.Neon,
-		CanCollide = false,
-		CanTouch = true,
-		Parent = course,
-	})
-	tag(finish, "ParkourFinish")
-	-- Railing posts all round except where the last step arrives.
-	local arrival = startAngle + math.rad(32 * steps)
-	for index = 0, 15 do
-		local angle = index / 16 * math.pi * 2
-		local delta = math.abs(((angle - arrival + math.pi) % (math.pi * 2)) - math.pi)
-		if delta < 0.5 then
-			continue
-		end
-		local position = deckCenter + Vector3.new(math.cos(angle) * 8.5, 2, math.sin(angle) * 8.5)
-		Shapes.Capsule(3.4, 0.7, {
-			Name = "Rail",
-			CFrame = CFrame.new(position) * CFrame.Angles(0, 0, math.rad(90)),
-			Color = rgb(255, 255, 255),
-			Parent = course,
-		})
-	end
-	Shapes.Capsule(12, 0.5, {
-		Name = "FlagPole",
-		CFrame = CFrame.new(deckCenter + Vector3.new(0, 6.5, 0)) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = rgb(240, 240, 240),
-		CanCollide = false,
-		Parent = course,
-	})
-	Build.Decor({
-		Name = "Flag",
-		Size = Vector3.new(0.2, 3.4, 5.6),
-		CFrame = CFrame.new(deckCenter + Vector3.new(0, 10.6, 2.8)),
-		Color = rgb(255, 84, 150),
-		Parent = course,
-	})
-	return deckCenter + Vector3.new(3, 2.5, 3)
-end
-
 local function buildBouncePads(root: Model)
 	for index, degrees in { 45, 135 } do
 		local angle = math.rad(degrees)
@@ -1381,6 +1324,14 @@ local function clearOfLandmarks(position: Vector3): boolean
 		end
 	end
 	return true
+end
+
+-- Whether scenery at `position` that spreads `reach` studs (a tree's canopy) keeps clear of the obby,
+-- with room to spare, so nothing grows into the course or gives a leg up into it. Callers draw their
+-- random numbers first, so the scenery elsewhere comes out the same.
+local TREE_SPREAD = 6 -- how far a Tree prop's canopy reaches from its trunk, at scale 1
+local function clearOfObby(position: Vector3, reach: number): boolean
+	return LobbyObby.Clear(PARKOUR_FRAME, position, reach + 3)
 end
 
 local function buildFerrisWheel(parent: Instance)
@@ -1469,28 +1420,36 @@ local function buildGardens(root: Model)
 		local radial = Vector3.new(math.cos(angle), 0, math.sin(angle))
 		local position = radial * spot[2]
 		-- The bed's long axis runs along the circle, so it lines the lawn instead of blocking it.
-		MeshLibrary.Get("LobbyFlowerBed", {
-			Colors = flowerSets[index % #flowerSets + 1],
-			Scale = 1.3,
-			CFrame = CFrame.lookAt(position, position + radial),
-			Parent = gardens,
-		})
+		if clearOfObby(position, 6.5) then
+			MeshLibrary.Get("LobbyFlowerBed", {
+				Colors = flowerSets[index % #flowerSets + 1],
+				Scale = 1.3,
+				CFrame = CFrame.lookAt(position, position + radial),
+				Parent = gardens,
+			})
+		end
 		-- A clump of trees and bushes behind it, for height and shade.
 		local side = Vector3.new(-radial.Z, 0, radial.X)
 		local behind = radial * (spot[2] + 9)
 		for _, offset in { side * -4.5, side * 4.5 + radial * 2.5 } do
-			MeshLibrary.Get("Tree", {
-				Scale = rng:NextNumber(1.05, 1.35),
-				CFrame = CFrame.new(behind + offset) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
-				Parent = gardens,
-			})
+			local scale, yaw = rng:NextNumber(1.05, 1.35), rng:NextNumber(0, math.pi * 2)
+			if clearOfObby(behind + offset, TREE_SPREAD * scale) then
+				MeshLibrary.Get("Tree", {
+					Scale = scale,
+					CFrame = CFrame.new(behind + offset) * CFrame.Angles(0, yaw, 0),
+					Parent = gardens,
+				})
+			end
 		end
 		for _, offset in { side * -9, side * 0.5 - radial * 1.5, side * 9 } do
-			MeshLibrary.Get("Bush", {
-				Scale = rng:NextNumber(0.9, 1.2),
-				CFrame = CFrame.new(behind + offset) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
-				Parent = gardens,
-			})
+			local scale, yaw = rng:NextNumber(0.9, 1.2), rng:NextNumber(0, math.pi * 2)
+			if clearOfObby(behind + offset, 3 * scale) then
+				MeshLibrary.Get("Bush", {
+					Scale = scale,
+					CFrame = CFrame.new(behind + offset) * CFrame.Angles(0, yaw, 0),
+					Parent = gardens,
+				})
+			end
 		end
 	end
 end
@@ -1507,8 +1466,8 @@ local function buildScenery(root: Model)
 	for index = 0, lampCount - 1 do
 		local angle = (index + 0.5) / lampCount * math.pi * 2
 		local position = Vector3.new(math.cos(angle) * (PLAZA_RADIUS - 3), 0, math.sin(angle) * (PLAZA_RADIUS - 3))
-		-- Leave the stage back and the zone buildings free of lamps.
-		if position.Z < STAGE_Z + 6 and math.abs(position.X) < 50 then
+		-- Leave the stage back, the zone buildings and the obby free of lamps.
+		if position.Z < STAGE_Z + 6 and math.abs(position.X) < 50 or not clearOfObby(position, 2) then
 			continue
 		end
 		MeshLibrary.Get("LampPost", { CFrame = facing(position, Vector3.zero), Parent = scenery })
@@ -1544,9 +1503,13 @@ local function buildScenery(root: Model)
 		if not clearOfLandmarks(position) then
 			continue
 		end
+		local scale, yaw = rng:NextNumber(1.1, 1.5), rng:NextNumber(0, math.pi * 2)
+		if not clearOfObby(position, 3 * scale) then
+			continue
+		end
 		MeshLibrary.Get("Bush", {
-			Scale = rng:NextNumber(1.1, 1.5),
-			CFrame = CFrame.new(position) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+			Scale = scale,
+			CFrame = CFrame.new(position) * CFrame.Angles(0, yaw, 0),
 			Parent = scenery,
 		})
 	end
@@ -1560,7 +1523,7 @@ local function buildScenery(root: Model)
 			local position = Vector3.new(math.cos(angle) * distance, -0.4, math.sin(angle) * distance)
 			local scale = rng:NextNumber(1.2, 1.8) + (ring - 1) * 0.3
 			local yaw = rng:NextNumber(0, math.pi * 2)
-			if not clearOfLandmarks(position) then
+			if not clearOfLandmarks(position) or not clearOfObby(position, TREE_SPREAD * scale) then
 				continue
 			end
 			MeshLibrary.Get("Tree", {
@@ -1569,6 +1532,21 @@ local function buildScenery(root: Model)
 				Parent = scenery,
 			})
 		end
+	end
+	-- The rings leave a gap round the obby: a crescent of trees behind its pool closes the view
+	-- again, past the boundary where nobody can reach them.
+	local crescent = Random.new(23)
+	for index = 0, 6 do
+		local angle = math.rad(112 + index * 22 + crescent:NextNumber(-5, 5))
+		local distance = LobbyObby.Radius + 15 + crescent:NextNumber(-1.5, 2.5)
+		local scale = crescent:NextNumber(1.3, 1.75)
+		local position =
+			PARKOUR_FRAME:PointToWorldSpace(Vector3.new(math.sin(angle) * distance, -0.4, math.cos(angle) * distance))
+		MeshLibrary.Get("Tree", {
+			Scale = scale,
+			CFrame = CFrame.new(position) * CFrame.Angles(0, crescent:NextNumber(0, math.pi * 2), 0),
+			Parent = scenery,
+		})
 	end
 
 	-- Floating sparkles over the plaza.
@@ -1624,6 +1602,29 @@ local function buildScenery(root: Model)
 	tag(confetti, "PP_Ambient")
 end
 
+-- Foliage never collides (owner: "trees and stuff collides"): canopies, bushes and flowers are walked
+-- through, so nobody bumps into them on the way somewhere or climbs them to skip part of the obby.
+-- Trunks, flower-bed curbs and planters stay solid.
+local SOFT_FOLIAGE = { Leaves = true, Flowers = true, FlowerA = true, FlowerB = true, FlowerC = true, Hearts = true }
+
+local function softenFoliage(root: Instance)
+	for _, item in root:GetDescendants() do
+		if not item:IsA("BasePart") or not SOFT_FOLIAGE[item.Name] then
+			continue
+		end
+		local prop = item:FindFirstAncestorWhichIsA("Model")
+		while prop and not prop:GetAttribute("PP_Prop") do
+			prop = prop:FindFirstAncestorWhichIsA("Model")
+		end
+		if prop then
+			local part = item :: BasePart
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+		end
+	end
+end
+
 function LobbyBuilder.Build(): LobbyRefs
 	setupLighting()
 	local root = Build.Model("Lobby", workspace)
@@ -1638,11 +1639,13 @@ function LobbyBuilder.Build(): LobbyRefs
 	local dailyPrompt = buildQuestCorner(root)
 	local targets, targetBoard = buildArcade(root)
 	local confettiPrompt, confettiPosition = buildEmoteStage(root)
-	local deckSpot = buildParkour(root)
+	-- Secret space: the obby, a goo pool with a lookout tower (north-west).
+	local obby = LobbyObby.Build(root, PARKOUR_FRAME)
 	buildBouncePads(root)
 	buildGardens(root)
 	buildSkyline(root)
 	buildScenery(root)
+	softenFoliage(root)
 
 	return {
 		Root = root,
@@ -1651,7 +1654,7 @@ function LobbyBuilder.Build(): LobbyRefs
 		ConfettiPosition = confettiPosition,
 		-- Hidden daily token spots: one is picked per day (§5 "Secret collectible").
 		TokenSpots = {
-			deckSpot, -- on the parkour view deck
+			obby.DeckSpot, -- on the obby's view deck
 			Vector3.new(0, 2.5, STAGE_Z - 18), -- behind the vote stage
 			SHOP + Vector3.new(-5, 20.5, 8), -- on the shop awning
 			PODIUM + Vector3.new(9.6, 21, 14), -- on top of the champion board
@@ -1668,6 +1671,7 @@ function LobbyBuilder.Build(): LobbyRefs
 			Vector3.new(math.cos(math.rad(215)) * 37, 0.2, math.sin(math.rad(215)) * 37),
 			Vector3.new(math.cos(math.rad(325)) * 37, 0.2, math.sin(math.rad(325)) * 37),
 		},
+		ParkourFrame = PARKOUR_FRAME,
 	}
 end
 
