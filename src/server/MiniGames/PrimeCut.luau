@@ -133,7 +133,7 @@ function PrimeCut:_buildArena()
 	Build.Part({
 		Name = "DeckTrim",
 		Size = Vector3.new(deckWidth + 1.2, 0.9, 45.2),
-		CFrame = CFrame.new(origin + Vector3.new(0, -0.85, 2)),
+		CFrame = CFrame.new(origin + Vector3.new(0, -0.9, 2)),
 		Color = rgb(124, 82, 52),
 		Material = Enum.Material.Wood,
 		Parent = arena,
