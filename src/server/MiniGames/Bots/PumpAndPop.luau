@@ -6,8 +6,10 @@
 -- Skill sets how close each hold lands to the middle of the green band and how quickly a bot gets
 -- back on the handle: a skilled bot pumps nearly every press perfectly, a clumsy one lets go early
 -- or holds too long now and then and pauses between pumps. The release is scheduled with ctx:Delay,
--- not on the next ~0.15 s step, so a bot's timing is as fine as a player's. Bots hop for joy when
--- their team pops its balloon.
+-- not on the next ~0.15 s step, so a bot's timing is as fine as a player's. Like the client, a bot
+-- waits out the server's minimum CYCLE between presses, so its hold is timed from when the server
+-- starts counting (a fumbled tap no longer cuts its next press short). Bots hop for joy when their
+-- team pops its balloon.
 
 local PumpAndPopBrain = {}
 
@@ -40,12 +42,13 @@ function PumpAndPopBrain.Step(bot, ctx, mode, _dt)
 		hold = bot.Rng:NextNumber(0.1, 0.3) -- a fumbled, hurried press
 	end
 	memory.Holding = true
+	memory.DownAt = now
 	ctx:BotAction(bot, "Down")
 	ctx:Delay(math.max(hold, 0.05), function()
 		ctx:BotAction(bot, "Up")
 		memory.Holding = false
 		local pause = bot.Rng:NextNumber(0.04, 0.2) + (1 - bot.Skill) * bot.Rng:NextNumber(0.05, 0.45)
-		memory.Next = os.clock() + mode.SPRING + pause
+		memory.Next = math.max(os.clock() + mode.SPRING, memory.DownAt + mode.CYCLE) + pause
 	end)
 end
 
