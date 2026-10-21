@@ -364,7 +364,8 @@ function Spleef.Start(api)
 				local index = part:GetAttribute("Cell")
 				local block = if type(index) == "number" then blocks[index] else nil
 				if block then
-					breakVisual(block, block.DropAt ~= nil, false)
+					local mine = block.Asked ~= nil and os.clock() - block.Asked < 1.5
+					breakVisual(block, block.DropAt ~= nil, mine)
 				end
 			end))
 		end

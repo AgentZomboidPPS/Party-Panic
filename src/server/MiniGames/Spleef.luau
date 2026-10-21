@@ -40,6 +40,8 @@ local GRACE = 0.25 -- standing over a hole this long drops a character (people a
 local PING_MAX = 0.3 -- the most of anyone's ping that is made up for
 local WATER_BELOW = 47 -- the pool's surface under the top floor
 local CRUMBLE_AT = 0.4 -- share of the round before the floors start cracking
+local CRUMBLE_DONE = 0.92 -- share of the round by when the crumble has done its work
+local LAST_CORE = 5 -- blocks of the last floor left standing at the very end (a crowded finale)
 local FALL_MAX = 120 -- the fastest a dropped character falls (studs/s)
 local CREDIT_TIME = 5 -- a fall this soon after a rival broke your block is their spleef
 -- No bot moves faster than walking, jumping or falling could make it (a player landing on a bot's
@@ -505,7 +507,7 @@ function Spleef:Start()
 		ctx:Announce("The ice is cracking!", "warning", 2.5)
 		ctx:Sound("HazardWarning")
 		ctx:Loop(function()
-			local progress = math.clamp((ctx:Elapsed() - startAt) / math.max(1, duration - startAt), 0, 1)
+			local progress = math.clamp((ctx:Elapsed() - startAt) / math.max(1, duration * CRUMBLE_DONE - startAt), 0, 1)
 			self:_crumble(progress)
 			return ArenaKit.Lerp(0.9, 0.45, progress)
 		end)
@@ -527,11 +529,13 @@ function Spleef:_break(cell: Cell, by: any?)
 end
 
 -- One wave of the crumble: on each floor, enough blocks start cracking (rim first) to keep the
--- floor shrinking on schedule; they drop when their warning runs out.
+-- floor shrinking on schedule; they drop when their warning runs out. The upper floors go
+-- completely; the last floor shrinks to a small core in the middle, so whoever is still standing
+-- at the end has to fight for it (and a round always ends: last one standing, or time up).
 function Spleef:_crumble(progress: number)
 	local ctx = self.context
 	local warn = ArenaKit.Lerp(1.9, 1.2, progress)
-	local keep = 1 - 0.97 * progress ^ 1.1 -- share of each floor still standing by now
+	local keep = 1 - progress ^ 1.1 -- share of each floor still standing by now
 	local batch = {}
 	for floor = 1, FLOORS do
 		local solid = {}
@@ -540,19 +544,22 @@ function Spleef:_crumble(progress: number)
 				table.insert(solid, cell)
 			end
 		end
-		local want = math.ceil(self.floorCount[floor] * keep)
+		local core = if floor == FLOORS then LAST_CORE else 0
+		local want = math.max(core, math.ceil(self.floorCount[floor] * keep))
 		local extra = math.clamp(#solid - want, 0, 6)
-		if extra == 0 and #solid > 0 and rng:NextNumber() < 0.3 then
+		if extra == 0 and #solid > core and rng:NextNumber() < 0.3 then
 			extra = 1
 		end
+		-- Rim first (on the last floor almost only the rim, so its core is the middle).
+		local base = if floor == FLOORS then 0.01 else 0.15
 		for _ = 1, extra do
 			local total = 0
 			for _, cell in solid do
-				total += 0.15 + cell.Rim ^ 4 * 3
+				total += base + cell.Rim ^ 4 * 3
 			end
 			local pick = rng:NextNumber() * total
 			for index, cell in solid do
-				pick -= 0.15 + cell.Rim ^ 4 * 3
+				pick -= base + cell.Rim ^ 4 * 3
 				if pick <= 0 or index == #solid then
 					table.insert(batch, cell)
 					table.remove(solid, index)
