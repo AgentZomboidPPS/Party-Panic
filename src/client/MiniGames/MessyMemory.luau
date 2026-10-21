@@ -85,6 +85,7 @@ type Toy = {
 	Hop: number,
 	Spin: number,
 	Now: CFrame,
+	Drawn: CFrame?, -- where the model was last put
 	Shown: boolean,
 }
 
@@ -534,12 +535,16 @@ function MessyMemory.Start(api)
 
 	-- Camera ----------------------------------------------------------------------------------------
 	local savedType, savedFov = camera.CameraType, camera.FieldOfView
+	-- (Phones: a little wider and lower, so the counter's toys sit clear of the buttons in the
+	-- bottom corner and the top shelf clear of the HUD.)
+	local touch = api:IsTouch()
+	local look = if touch then Rules.LOOK - Vector3.new(0, 0.8, 0) else Rules.LOOK
 	local function viewOf(booth: Booth): CFrame
-		return CFrame.lookAt(booth.Frame * Rules.EYE, booth.Frame * Rules.LOOK)
+		return CFrame.lookAt(booth.Frame * Rules.EYE, booth.Frame * look)
 	end
 	if mine then
 		camera.CameraType = Enum.CameraType.Scriptable
-		camera.FieldOfView = 52
+		camera.FieldOfView = if touch then 58 else 52
 		camera.CFrame = viewOf(mine)
 		api:Track(function()
 			camera.CameraType = savedType
@@ -828,7 +833,8 @@ function MessyMemory.Start(api)
 				if booth == mine and selected == toy then
 					frame = frame * CFrame.new(0, 0.45 + math.sin(clock * 6) * 0.12, 0)
 				end
-				if item.Now ~= frame then
+				if item.Drawn ~= frame then
+					item.Drawn = frame
 					item.Now = frame
 					model:PivotTo(frame)
 				end

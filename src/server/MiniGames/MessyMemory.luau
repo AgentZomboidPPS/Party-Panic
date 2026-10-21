@@ -156,7 +156,7 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 		Name = "Rug",
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(0.06, 30, 30),
-		CFrame = upright(center + Vector3.new(0, 0.08, 0)),
+		CFrame = upright(center + Vector3.new(0, 0.29, 0)),
 		Color = rgb(120, 200, 235),
 		Material = Enum.Material.Fabric,
 		Parent = arena,
@@ -164,19 +164,19 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 	Build.Decor({
 		Name = "RugRim",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.04, 33, 33),
-		CFrame = upright(center + Vector3.new(0, 0.04, 0)),
+		Size = Vector3.new(0.06, 33, 33),
+		CFrame = upright(center + Vector3.new(0, 0.13, 0)),
 		Color = rgb(255, 255, 255),
 		Material = Enum.Material.Fabric,
 		Parent = arena,
 	})
 	for index = 0, 15 do
 		local angle = index / 16 * math.pi * 2
-		local at = center + Vector3.new(math.cos(angle) * 12.5, 0.135, math.sin(angle) * 12.5)
+		local at = center + Vector3.new(math.cos(angle) * 12.5, 0.44, math.sin(angle) * 12.5)
 		Build.Decor({
 			Name = "RugStar",
 			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.03, 1.6, 1.6),
+			Size = Vector3.new(0.04, 1.6, 1.6),
 			CFrame = upright(at),
 			Color = if index % 2 == 0 then rgb(255, 220, 90) else rgb(255, 140, 190),
 			Material = Enum.Material.Fabric,
@@ -224,13 +224,13 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 		local outward = Vector3.new(math.sin(angle), 0, math.cos(angle))
 		-- Neighbouring panels overlap a little, so every other one sits a hair further out (no
 		-- two faces in one plane: no flicker).
-		local nudge = (index % 2) * 0.06
+		local nudge = (index % 2) * 0.15
 		local base = center + outward * (WALL_RADIUS + nudge)
 		local frame = CFrame.lookAt(base, base - outward)
 		Build.Decor({
 			Name = "Wallpaper",
-			Size = Vector3.new(width, 30, 1),
-			CFrame = frame * CFrame.new(0, 15, 0),
+			Size = Vector3.new(width, 29.6, 1),
+			CFrame = frame * CFrame.new(0, 15.2 + nudge, 0),
 			Color = if index % 2 == 0 then rgb(255, 214, 228) else rgb(255, 240, 246),
 			Material = Enum.Material.SmoothPlastic,
 			Parent = arena,
@@ -245,8 +245,8 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 		})
 		Build.Decor({
 			Name = "Skirting",
-			Size = Vector3.new(width + 0.3, 1.6 + nudge, 1.4),
-			CFrame = frame * CFrame.new(0, 0.82 + nudge / 2, -0.05),
+			Size = Vector3.new(width + 0.3, 1.6, 1.4),
+			CFrame = frame * CFrame.new(0, 0.9 + nudge, -0.05),
 			Color = rgb(150, 110, 200),
 			Material = Enum.Material.SmoothPlastic,
 			Parent = arena,
@@ -267,7 +267,7 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 	}
 	for _, giant in giants do
 		local angle = math.rad(giant[3] + 36)
-		local at = center + Vector3.new(math.cos(angle) * 9, 0.11, math.sin(angle) * 9)
+		local at = center + Vector3.new(math.cos(angle) * 9, 0.42, math.sin(angle) * 9)
 		MeshLibrary.Get(giant[1], {
 			Scale = giant[2],
 			CFrame = CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z)) * SPIN,
@@ -277,7 +277,7 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 	local boxColors = { rgb(255, 120, 170), rgb(120, 200, 255), rgb(255, 210, 80), rgb(160, 120, 230) }
 	for index = 0, 4 do
 		local angle = math.rad(index * 72)
-		local at = center + Vector3.new(math.cos(angle) * 15.5, 0.02, math.sin(angle) * 15.5)
+		local at = center + Vector3.new(math.cos(angle) * 15.5, 0.27, math.sin(angle) * 15.5)
 		MeshLibrary.Get("GiftBox", {
 			Scale = rng:NextNumber(0.35, 0.5),
 			Colors = { Box = boxColors[index % #boxColors + 1] },
