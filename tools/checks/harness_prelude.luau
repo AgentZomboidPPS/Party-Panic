@@ -797,7 +797,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		summary.clientCelebration = if shown then table.concat(texts, " | ") else "none"
 		local chip = clientGuis:FindFirstChild("ProfileChip", true)
 		local tab = chip and chip:FindFirstChild("NextReward")
-		local tabLabel = tab and tab:FindFirstChildOfClass("TextLabel")
+		local tabLabel = tab and tab:FindFirstChildWhichIsA("TextLabel", true)
 		summary.clientNextReward = if tabLabel then tabLabel.Text else "none"
 	end
 	local okCleanup, cleanupErr = pcall(miniGame.Cleanup, miniGame)

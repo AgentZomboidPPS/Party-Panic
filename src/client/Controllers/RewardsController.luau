@@ -1,7 +1,8 @@
 -- The Rewards screen and the next goal on the HUD (owner: "Also we need cool payoffs for players
 -- that keep playing the game."):
 --   * Beside the coins, a pink tab shows the next exclusive reward ("🌌 Lv 10: Starry Night"; phones:
---     "🌌 Lv 10"), so there's always a next goal on screen; tapping the profile chip opens the screen.
+--     "🌌 Lv 10"), so there's always a next goal on screen; tapping the profile chip or the tab opens
+--     the screen.
 --     The level badge takes the prestige tier's colors (every 10 levels; the top tier shimmers).
 --   * The Rewards screen has two tabs. LEVEL ROAD: a strip of cards to swipe through, one per
 --     level (every level pays coins; milestone levels unlock cosmetics nobody can buy), each ribbon
@@ -125,6 +126,26 @@ local function buildNextTab(context)
 		Parent = holder,
 	}, Theme.Colors.Pink, PINK_DARK)
 	local stroke = tab:FindFirstChildOfClass("UIStroke") :: UIStroke
+	-- The whole pill opens the Rewards screen. PC: it's a see-through button over the pill (the pill
+	-- reaches past the profile chip's own button), with the words on it. Phones: the chip's button
+	-- grows to cover the pill instead (a button of the pill's height would be too small for a thumb).
+	local baseWidth = holder.Size.X.Offset
+	local face: GuiObject = tab
+	if not touch then
+		local open = UIKit.new("TextButton", {
+			Name = "Open",
+			Text = "",
+			AutoButtonColor = false,
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 2,
+			Parent = tab,
+		})
+		open.Activated:Connect(function()
+			State.OpenScreen:Fire("Rewards")
+		end)
+		face = open
+	end
 	-- Phones: the coins tab's top is tucked under the pill, so the text sits in its visible part.
 	local textSize = if touch then 18 else 20
 	local label = UIKit.Label({
@@ -136,7 +157,8 @@ local function buildNextTab(context)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(if touch then 10 else 16, if touch then 10 else 0),
 		Size = UDim2.new(1, if touch then -14 else -22, 0, if touch then 32 else height),
-		Parent = tab,
+		ZIndex = 2,
+		Parent = face,
 		Children = { UIKit.TextStroke(0.2) },
 	})
 	local function refresh()
@@ -175,6 +197,10 @@ local function buildNextTab(context)
 		stroke.Transparency = if close then 0 else 0.75
 		local phase = GameState.Get("Phase") or "Waiting"
 		tab.Visible = phase ~= "InRound" and not (touch and left + width > TOUCH_TAB_REACH)
+		if touch then
+			local reach = if tab.Visible then left + width else 0
+			holder.Size = UDim2.fromOffset(math.max(baseWidth, reach), holder.Size.Y.Offset)
+		end
 	end
 	State.ProfileChanged:Connect(function(profile, previous)
 		refresh()

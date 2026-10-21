@@ -6,7 +6,8 @@
 --     ("MILESTONE!"), and a returning player gets the rewards their level and career had already
 --     earned when the update came out ("NEW REWARDS!"). EQUIP puts on what it unlocked; a new
 --     emote gets TRY IT.
---   * Over the head of anyone who levels up, a "Lv 10!" pops up for everyone in the lobby to see.
+--   * Over the head of anyone who levels up, a "Lv 10!" pops up for everyone in the lobby to see
+--     (a level-up from a round's rewards pops once everyone is back in the lobby).
 -- The server has already granted everything (Services/ProgressionService); this only shows it.
 -- A celebration waits for a calm moment: never during the vote, the rules card, the round or the
 -- results (it shows when everyone's back in the lobby), and several at once make one. It closes
@@ -18,6 +19,12 @@
 -- which steps aside meanwhile; PP_Celebrating), clear of the profile chip, the menu column, the
 -- jump button and the toasts on the smallest phone; its buttons are on its right half, outside
 -- the thumbstick's corner, and 44 pt tall. PC: the middle of the screen.
+--
+-- Third pass (review): a card waits for the player's profile (its "Next up" goal comes from it),
+-- the rewards are in fixed slots so the row doesn't jump as each one pops in, and the best reward
+-- comes first, which is also what EQUIP ALL puts on (a veteran's NEW REWARDS! card would
+-- otherwise equip the level-3 trail over the level-35 one). The "Lv 10!" over a head shows once
+-- everyone is back in the lobby (ProgressionService holds the ones from the end of a round).
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -65,6 +72,26 @@ local GOLD = ColorSequence.new(Color3.fromRGB(255, 236, 120), Color3.fromRGB(240
 local CYAN_DARK = Color3.fromRGB(50, 120, 230)
 local GREEN_DARK = Color3.fromRGB(60, 160, 90)
 local PINK_DARK = Color3.fromRGB(200, 50, 140)
+
+-- Where each cosmetic is in the catalog (the tie-break for "best first").
+local catalogIndex: { [string]: number } = {}
+for index, item in Cosmetics.List do
+	catalogIndex[item.Id] = index
+end
+
+-- Best first: the highest road level, then the biggest career milestone, then catalog order.
+local function better(a: Cosmetics.Cosmetic, b: Cosmetics.Cosmetic): boolean
+	local levelA, levelB = a.UnlockLevel or 0, b.UnlockLevel or 0
+	if levelA ~= levelB then
+		return levelA > levelB
+	end
+	local statA = if a.UnlockStat then a.UnlockStat.Value else 0
+	local statB = if b.UnlockStat then b.UnlockStat.Value else 0
+	if statA ~= statB then
+		return statA > statB
+	end
+	return (catalogIndex[a.Id] or 0) < (catalogIndex[b.Id] or 0)
+end
 
 local touch = false
 local gui: ScreenGui
@@ -297,6 +324,7 @@ local function show(celebration: Celebration)
 			table.insert(items, item)
 		end
 	end
+	table.sort(items, better) -- the chips show the best first, and EQUIP ALL puts those on
 	local level = celebration.Level or 1
 	local look = Progression.Look(level)
 	local newColor = isLevel and celebration.From ~= nil and look.Index > Progression.Look(celebration.From).Index
@@ -442,7 +470,20 @@ local function show(celebration: Celebration)
 		end
 		table.insert(chips, itemChip(row, item, 1 + index))
 	end
+	-- Each chip sits in a slot of its own size that is in the row from the start, so the row is
+	-- laid out once and the chips pop in one by one without moving the others.
 	for index, chip in chips do
+		local slot = UIKit.new("Frame", {
+			Name = chip.Name .. "Slot",
+			Size = chip.Size,
+			LayoutOrder = chip.LayoutOrder,
+			BackgroundTransparency = 1,
+			ZIndex = chip.ZIndex,
+			Parent = row,
+		})
+		chip.AnchorPoint = Vector2.new(0.5, 0.5)
+		chip.Position = UDim2.fromScale(0.5, 0.5)
+		chip.Parent = slot
 		chip.Visible = false
 		task.delay(0.4 + index * 0.18, function()
 			if chip.Parent then
@@ -482,7 +523,7 @@ local function show(celebration: Celebration)
 			),
 		},
 	})
-	-- EQUIP puts on what it unlocked (the first new item in each slot: a trail AND a title, say);
+	-- EQUIP puts on what it unlocked (the best new item in each slot: a trail AND a title, say);
 	-- an emote gets TRY IT instead. The server checks the player owns each one.
 	local toEquip: { Cosmetics.Cosmetic } = {}
 	local slotsTaken: { [string]: boolean } = {}
@@ -585,6 +626,9 @@ end
 function CelebrationController.Pump()
 	if closeCurrent or windowOpen or #queue == 0 or not CALM[GameState.Get("Phase") or "Waiting"] then
 		return
+	end
+	if not State.Profile then
+		return -- its "Next up" comes from the profile: shown once the first one arrives
 	end
 	local celebration = merge(queue)
 	table.clear(queue)
@@ -695,6 +739,11 @@ function CelebrationController.Start(context)
 			CelebrationController.Pump()
 		else
 			CelebrationController.Dismiss() -- the vote or the round: out of the way
+		end
+	end)
+	State.ProfileChanged:Connect(function()
+		if #queue > 0 then
+			CelebrationController.Pump()
 		end
 	end)
 	-- A window opening (shop, quests, the Rewards screen...) takes over; once it closes, anything
