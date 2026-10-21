@@ -310,7 +310,7 @@ function SinkingSands.Start(api)
 	})
 	local function refreshHaul()
 		local score = api.Player:GetAttribute("PP_Score") or 0
-		haulLabel.Text = `{if isKing then "👑" else "🪙"} {score}`
+		haulLabel.Text = `{if isKing then "👑" else "💎"} {score}`
 	end
 	api:Track(api.Player:GetAttributeChangedSignal("PP_Score"):Connect(refreshHaul))
 	refreshHaul()
@@ -365,7 +365,7 @@ function SinkingSands.Start(api)
 		if isKing then
 			hint.Text = "👑 SAND KING: SWIRL and PULL to sink the treasure!"
 		else
-			hint.Text = "🪙 DIVER: grab the treasure! Stay out of the hole!"
+			hint.Text = "💎 DIVER: grab the treasure! Stay out of the hole!"
 		end
 		hint.Visible = true
 		hintUntil = math.huge -- counted from GO (below)

@@ -25,7 +25,7 @@ Teams.Icons = {
 	Archers = "🏹",
 	Runners = "🏃",
 	SandKings = "👑",
-	Divers = "🪙",
+	Divers = "💎", -- not 🪙: phones show nothing for it (newer than Roblox's emoji font)
 } :: { [string]: string }
 
 function Teams.Color(name: string?): Color3?
