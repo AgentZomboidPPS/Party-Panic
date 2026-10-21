@@ -54,7 +54,7 @@ function Brain.Step(bot, ctx, mode, _dt)
 		end
 		local kind = Sim.Kinds[item.Kind]
 		if item.Kind == "Hammer" then
-			for _, ahead in { 0.15, 0.35, 0.6, 0.9 } do
+			for _, ahead in { 0.15, 0.35, 0.6, 0.9, 1.25 } do
 				local t = now + ahead
 				local hx, hy = Sim.ItemAt(item, t)
 				local px = f.X + f.VX * ahead
@@ -100,15 +100,23 @@ function Brain.Step(bot, ctx, mode, _dt)
 		if math.abs(f.X) > Sim.HALF_W - 3 then
 			away = -math.sign(f.X) -- pinned to the edge: go the other way
 		end
-		send(bot, ctx, memory, away, dangerY < f.Y + 1)
+		-- Sideways first; drop under one coming in high, float over one coming in low.
+		send(bot, ctx, memory, away, dangerY < f.Y + 1 or f.Y < Sim.Y_MIN + 3)
 		return
 	end
 	memory.Dodging = false
 	if best then
-		-- Meet it with the umbrella or the body: aim a little below it.
-		local aimY = bestY - 2.5
+		-- Meet it with the umbrella or the body: anything from the feet to the canopy catches, so
+		-- only drop when it's below that and float up when it's above.
 		local steer = math.clamp((bestX + memory.Wobble - f.X) / 3, -1, 1)
-		local open = f.Y <= aimY + 1.2
+		local open = if memory.Open == nil then true else memory.Open
+		if bestY < f.Y - 1.5 then
+			open = false
+		elseif bestY > f.Y + 4 then
+			open = true
+		elseif f.Y < Sim.Y_MAX - 2 then
+			open = true -- (level with it: an open umbrella's slow float keeps it in reach longest)
+		end
 		send(bot, ctx, memory, steer, open)
 		return
 	end
@@ -116,12 +124,13 @@ function Brain.Step(bot, ctx, mode, _dt)
 	if not home or bot:Chance(0.05) then
 		home = bot.Rng:NextNumber(-Sim.HALF_W * 0.7, Sim.HALF_W * 0.7)
 		memory.Home = home
+		memory.HomeY = bot.Rng:NextNumber(Sim.Y_MIN + 6, Sim.Y_MAX - 3)
 	end
 	-- Hover around the middle of the sky (high enough to see what comes, low enough to drop on it).
 	local open = if memory.Open == nil then true else memory.Open
-	if f.Y > 6 then
+	if f.Y > memory.HomeY + 3 then
 		open = false
-	elseif f.Y < -5 then
+	elseif f.Y < memory.HomeY - 3 then
 		open = true
 	end
 	send(bot, ctx, memory, math.clamp((home - f.X) / 6, -1, 1), open)

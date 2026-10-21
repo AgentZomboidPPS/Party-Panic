@@ -35,7 +35,7 @@ return function(env)
 					elseif d < bestD then
 						bestD = d
 						steer = math.clamp((x - f.X) / 3, -1, 1)
-						open = f.Y < y - 2.5
+						open = y > f.Y - 1.5
 					end
 				end
 				steer = math.floor(steer * 4 + 0.5) / 4

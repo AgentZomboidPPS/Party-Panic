@@ -521,21 +521,33 @@ function ParasolPlummet:_throw(): number?
 	local cx, cy, side = Sim.ThrowerAt(thrower, at)
 	local hx, hy = Sim.HandOffset(side)
 	local x0, y0 = cx + hx, cy + hy
-	local tx, ty, seconds
+	local g = -Sim.GRAVITY
+	local vx, vy
 	if kind == "Hammer" then
 		-- At a faller (where they are now: they have the wind-up and the flight to dodge it).
 		local f = targets[rng:NextInteger(1, #targets)]
-		tx = math.clamp(f.X + rng:NextNumber(-2.5, 2.5), -Sim.HALF_W, Sim.HALF_W)
-		ty = math.clamp(f.Y + rng:NextNumber(-1, 3), Sim.Y_MIN, Sim.Y_MAX + 4)
-		seconds = math.clamp(math.abs(tx - x0) / 26, 1.0, 1.8)
+		local tx = math.clamp(f.X + rng:NextNumber(-2.5, 2.5), -Sim.HALF_W, Sim.HALF_W)
+		local ty = math.clamp(f.Y + rng:NextNumber(-1, 3), Sim.Y_MIN, Sim.Y_MAX + 4)
+		vx, vy = Sim.Aim(x0, y0, tx, ty, math.clamp(math.abs(tx - x0) / 26, 1.0, 1.8))
+		vy = math.clamp(vy, -6, math.sqrt(2 * g * math.max(0, Sim.Y_MAX + 5 - y0)))
 	else
-		-- Somewhere in open sky, mostly on the thrower's far half so arcs cross the middle.
-		tx = side * -1 * rng:NextNumber(-Sim.HALF_W * 0.6, Sim.HALF_W - 3)
-		ty = rng:NextNumber(Sim.Y_MIN + 1, Sim.Y_MAX + 3)
-		seconds = math.abs(tx - x0) / rng:NextNumber(16, 26) + (if kind == "Bag" then 0.3 else 0)
+		-- Arcs that peak anywhere from low to high in the sky (a coin lingers near its peak, so the
+		-- peaks are spread out: no height is the one place to wait). Most fly right across and out
+		-- the far side, at any height; some drop out of the bottom part way.
+		local peak = rng:NextNumber(Sim.Y_MIN + 3, Sim.Y_MAX + 4)
+		vy = if peak > y0 then math.sqrt(2 * g * (peak - y0)) else rng:NextNumber(-3, 0)
+		local top = math.max(peak, y0)
+		local across = rng:NextNumber() < 0.7
+		local ty = if across
+			then rng:NextNumber(Sim.Y_MIN - 2, math.max(Sim.Y_MIN - 2, top - 1))
+			else Sim.Y_MIN - 2
+		local seconds = (vy + math.sqrt(vy * vy + 2 * g * math.max(0, y0 - ty))) / g
+		local tx = if across
+			then -side * (Sim.HALF_W + 13)
+			else -side * rng:NextNumber(-Sim.HALF_W * 0.6, Sim.HALF_W - 3)
+		local speed = math.clamp(math.abs(tx - x0) / math.max(seconds, 0.1), 9, 30)
+		vx = -side * speed * (if kind == "Bag" then 0.85 else 1)
 	end
-	local vx, vy = Sim.Aim(x0, y0, tx, ty, seconds)
-	vy = math.clamp(vy, -6, 24)
 	self.nextId += 1
 	local item: Item = {
 		Id = self.nextId,

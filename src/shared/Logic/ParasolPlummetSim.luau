@@ -23,7 +23,7 @@ Sim.Y_MIN = -15
 Sim.Y_MAX = 13
 
 -- Faller motion (studs/s and 1/s).
-Sim.RISE = 2.6 -- umbrella open: a slow float upward
+Sim.RISE = 5 -- umbrella open: a slow float upward
 Sim.DROP = -17 -- umbrella shut: a fast drop
 Sim.STEER_OPEN = 15
 Sim.STEER_SHUT = 10
@@ -38,7 +38,7 @@ Sim.SAFE = 1.0 -- seconds after a stun when no hammer can hit again
 -- Thrown things.
 Sim.GRAVITY = -7
 Sim.THROWER_X = 43 -- the throwers' clouds, either side of the sky
-Sim.THROWER_BASE = { 7, -6 } -- their resting heights (upper and lower cloud on each side)
+Sim.THROWER_BASE = { 3, -9 } -- their resting heights (upper and lower cloud on each side)
 Sim.THROWER_BOB = 4 -- how far their clouds bob up and down
 Sim.WINDUP = 0.55 -- seconds a thrower winds up before the throw leaves its hand
 Sim.LIFE = 7 -- no thrown thing lives longer than this
