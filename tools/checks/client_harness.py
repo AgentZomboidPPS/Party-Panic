@@ -30,7 +30,8 @@ everyone on a break", "Preparing sitting out", "InRound sitting out", "InRound b
 sitting out") next to the playing ones to compare (Intermission, Voting, Preparing, InRound,
 Results, Settings), and leaves the rest out. Open Cloud caps the size of a task's result, and every
 screen in one run is over it (about 3 MB of snapshots): Roblox then reports "Task timed out due to
-an internal error" and returns nothing.
+an internal error" and returns nothing. --shots NAME,... keeps just those snapshots (the run still
+plays everything and reports every error).
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
@@ -395,6 +396,9 @@ local SIT_OUT_COMPARE =
 local function snap(key, root)
 	local sitOut = SIT_OUT_SHOTS[key]
 	local wanted = if __sitOutMode then sitOut == true or SIT_OUT_COMPARE[key] == true else sitOut == nil
+	if __onlyShots then
+		wanted = __onlyShots[key] == true -- --shots: just these
+	end
 	if wanted then
 		__ui[key] = __dumpGui(root or __playerGui, key)
 	end
@@ -698,7 +702,7 @@ do
 		step = "celebration " .. case.name
 		__fire("Celebrate", case.payload)
 		task.wait(1.6) -- the rewards are revealed one by one
-		__ui[case.name] = __dumpGui(__playerGui, case.name)
+		snap(case.name)
 		Celebrations.Dismiss()
 		task.wait(0.5)
 	end
@@ -1137,6 +1141,8 @@ def main():
     parser.add_argument("--bots", type=int, default=0, help="stand-in bots that play the round with the player")
     parser.add_argument("--sit-out", action="store_true", help="draw the screens of a player sitting out (and the "
                         "playing ones to compare) instead of every screen")
+    parser.add_argument("--shots", help="only these snapshots, comma-separated (e.g. Intermission,LevelUp,Rewards): "
+                        "a run with every screen at several sizes is over Open Cloud's result cap")
     parser.add_argument("--sizes", help="screens to lay the UI out on with the engine (ui_render.py's names or "
                         "groups; default: touch with --touch, else pc; none to skip)")
     args = parser.parse_args()
@@ -1147,6 +1153,11 @@ def main():
         f"__richMode = {'true' if args.rich else 'false'}\n"
         f"__botCount = {args.bots}\n"
         f"__sitOutMode = {'true' if args.sit_out else 'false'}\n"
+        + (
+            "__onlyShots = { " + ", ".join(f'["{name}"] = true' for name in args.shots.split(",")) + " }\n"
+            if args.shots
+            else "__onlyShots = nil\n"
+        )
         + (devices_luau(size_names(sizes)) if sizes != "none" else "")
     )
     out = [flags + gui_dump + PRELUDE + screen_guis()]

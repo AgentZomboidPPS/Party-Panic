@@ -2,6 +2,8 @@
 -- the celebrations and the name tags show them (owner: "Also we need cool payoffs for players that
 -- keep playing the game."). The rules live in Logic/ProgressionLogic; the exclusive cosmetics are
 -- the Cosmetics with an UnlockLevel (the road) or an UnlockStat (the career milestones).
+-- Second pass: the milestones in the order to go for them (SortedMilestones), for the Career tab
+-- and the celebration's next goal.
 
 local Config = require(script.Parent.Config)
 local Cosmetics = require(script.Parent.Cosmetics)
@@ -86,6 +88,31 @@ function Progression.MilestoneProgress(item: Cosmetics.Cosmetic, stats: { [strin
 	end
 	local have = tonumber(stats and stats[unlock.Stat]) or 0
 	return math.min(have, unlock.Value), unlock.Value
+end
+
+-- Every milestone, the ones to go first: the closest to done (by share, then by how few are left),
+-- then the unlocked ones, each group in catalog order. For a new player that puts the quick ones
+-- (5 race podiums) before the long ones (30 days).
+function Progression.SortedMilestones(owned: { [string]: boolean }?, stats: { [string]: any }?): { Cosmetics.Cosmetic }
+	local list = table.clone(milestones)
+	local keys = {}
+	for index, item in list do
+		local have, target = Progression.MilestoneProgress(item, stats)
+		local done = owned ~= nil and owned[item.Id] == true
+		keys[item.Id] = { Done = done, Share = have / math.max(1, target), Left = target - have, Index = index }
+	end
+	table.sort(list, function(a, b)
+		local ka, kb = keys[a.Id], keys[b.Id]
+		if ka.Done ~= kb.Done then
+			return kb.Done
+		elseif not ka.Done and ka.Share ~= kb.Share then
+			return ka.Share > kb.Share
+		elseif not ka.Done and ka.Left ~= kb.Left then
+			return ka.Left < kb.Left
+		end
+		return ka.Index < kb.Index
+	end)
+	return list
 end
 
 -- Prestige ---------------------------------------------------------------------------------------

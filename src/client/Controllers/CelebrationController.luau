@@ -4,7 +4,8 @@
 --     Road's coins and any exclusive cosmetic), then the next goal, with EQUIP for a new trail,
 --     title or effect and a button to the Rewards screen. Career milestones get the same moment
 --     ("MILESTONE!"), and a returning player gets the rewards their level and career had already
---     earned when the update came out ("NEW REWARDS!").
+--     earned when the update came out ("NEW REWARDS!"). EQUIP puts on what it unlocked; a new
+--     emote gets TRY IT.
 --   * Over the head of anyone who levels up, a "Lv 10!" pops up for everyone in the lobby to see.
 -- The server has already granted everything (Services/ProgressionService); this only shows it.
 -- A celebration waits for a calm moment: never during the vote, the rules card, the round or the
@@ -229,16 +230,8 @@ local function nextGoal(celebration: Celebration): string
 		end
 		return "You've unlocked every level reward!"
 	end
-	local best, bestRatio = nil, -1
-	for _, item in Progression.Milestones do
-		if profile and not profile.Owned[item.Id] then
-			local have, target = Progression.MilestoneProgress(item, profile.Stats)
-			if have / math.max(1, target) > bestRatio then
-				best, bestRatio = item, have / math.max(1, target)
-			end
-		end
-	end
-	if best and profile then
+	local best = profile and Progression.SortedMilestones(profile.Owned, profile.Stats)[1]
+	if best and profile and not profile.Owned[best.Id] then
 		local have, target = Progression.MilestoneProgress(best, profile.Stats)
 		return `Next: {best.Icon} {best.Name} ({have}/{target})`
 	end
@@ -394,9 +387,7 @@ local function show(celebration: Celebration)
 	})
 	local subline
 	if isLevel then
-		subline = if newColor
-			then `Level {level}, and a new name tag color: {look.Icon} {look.Name}!`
-			else `You're level {level}!`
+		subline = if newColor then `New name tag color: {look.Icon} {look.Name}!` else `You're level {level}!`
 	elseif welcome then
 		subline = "Your level and career earned these. They're yours!"
 	else
@@ -491,20 +482,41 @@ local function show(celebration: Celebration)
 			),
 		},
 	})
-	local equipItem = nil
+	-- EQUIP puts on what it unlocked (the first new item in each slot: a trail AND a title, say);
+	-- an emote gets TRY IT instead. The server checks the player owns each one.
+	local toEquip: { Cosmetics.Cosmetic } = {}
+	local slotsTaken: { [string]: boolean } = {}
+	local emote: Cosmetics.Cosmetic? = nil
 	for _, item in items do
-		if Cosmetics.IsEquipSlot(item.Slot) then
-			equipItem = item
-			break
+		if Cosmetics.IsEquipSlot(item.Slot) and not slotsTaken[item.Slot] then
+			slotsTaken[item.Slot] = true
+			table.insert(toEquip, item)
+		elseif item.Slot == "Emote" and not emote then
+			emote = item
 		end
 	end
-	if equipItem then
-		local item = equipItem
-		local equipped = State.Profile and State.Profile.Equipped[item.Slot] == item.Id
+	local function allEquipped(): boolean
+		local profile = State.Profile
+		for _, item in toEquip do
+			if not profile or profile.Equipped[item.Slot] ~= item.Id then
+				return false
+			end
+		end
+		return true
+	end
+	local function paintDone(button: TextButton, text: string)
+		button.Text = text
+		local gradient = button:FindFirstChildOfClass("UIGradient")
+		if gradient then
+			gradient.Color = ColorSequence.new(Theme.Colors.Green, GREEN_DARK)
+		end
+	end
+	if #toEquip > 0 then
+		local done = allEquipped()
 		local button
 		button = UIKit.Button({
 			Name = "Equip",
-			Text = if equipped then "EQUIPPED" else "EQUIP",
+			Text = if done then "EQUIPPED" elseif #toEquip > 1 then "EQUIP ALL" else "EQUIP",
 			TextSize = 20,
 			Size = UDim2.fromOffset(130, buttonHeight),
 			CornerRadius = 18,
@@ -512,13 +524,27 @@ local function show(celebration: Celebration)
 			ZIndex = 4,
 			Parent = buttons,
 		}, function()
-			Remotes.Get("ShopEquip"):FireServer(item.Slot, item.Id)
-			button.Text = "EQUIPPED"
-			local gradient = button:FindFirstChildOfClass("UIGradient")
-			if gradient then
-				gradient.Color = ColorSequence.new(Theme.Colors.Green, GREEN_DARK)
+			for _, item in toEquip do
+				Remotes.Get("ShopEquip"):FireServer(item.Slot, item.Id)
 			end
-		end, if equipped then Theme.Colors.Green else Theme.Colors.Cyan, if equipped then GREEN_DARK else CYAN_DARK)
+			paintDone(button, "EQUIPPED")
+		end, if done then Theme.Colors.Green else Theme.Colors.Cyan, if done then GREEN_DARK else CYAN_DARK)
+	elseif emote then
+		local item = emote
+		local button
+		button = UIKit.Button({
+			Name = "TryEmote",
+			Text = "TRY IT!",
+			TextSize = 20,
+			Size = UDim2.fromOffset(130, buttonHeight),
+			CornerRadius = 18,
+			LayoutOrder = 1,
+			ZIndex = 4,
+			Parent = buttons,
+		}, function()
+			Remotes.Get("UseEmote"):FireServer(item.Id) -- road emotes are effects: the server plays it
+			paintDone(button, `{item.Icon} AGAIN`)
+		end, Theme.Colors.Cyan, CYAN_DARK)
 	end
 	UIKit.Button({
 		Name = "SeeMore",

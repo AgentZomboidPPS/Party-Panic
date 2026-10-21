@@ -11,6 +11,8 @@
 --   profile it sends (Shared/Progression has the road, the milestones and the colors).
 -- Phones: 44 pt buttons and 11 pt or bigger text; the road's cards fit the shortest phone window.
 -- State.OpenScreen:Fire("Rewards", "Career") opens it on a tab.
+-- Second pass: CAREER lists the quickest milestones first (5 race podiums before 30 days), the
+-- same order the celebration's "Next:" goal uses (Progression.SortedMilestones).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -600,29 +602,8 @@ local function renderCareer(keep: Vector2?)
 		Parent = body,
 		Children = { UIKit.List(Enum.FillDirection.Vertical, 10), UIKit.Padding(4) },
 	})
-	-- Closest to unlocking first; unlocked ones at the end.
-	local items = table.clone(Progression.Milestones)
-	local function ratio(item: Cosmetics.Cosmetic): number
-		if profile and profile.Owned[item.Id] then
-			return 2
-		end
-		local have, target = Progression.MilestoneProgress(item, profile and profile.Stats)
-		return have / math.max(1, target)
-	end
-	local ratios = {}
-	for index, item in items do
-		ratios[item.Id] = { ratio(item), index }
-	end
-	table.sort(items, function(a, b)
-		local ra, rb = ratios[a.Id], ratios[b.Id]
-		local doneA, doneB = ra[1] > 1, rb[1] > 1
-		if doneA ~= doneB then
-			return doneB
-		elseif not doneA and ra[1] ~= rb[1] then
-			return ra[1] > rb[1]
-		end
-		return ra[2] < rb[2]
-	end)
+	-- Closest to unlocking first (the quick ones before the long ones); unlocked ones at the end.
+	local items = Progression.SortedMilestones(profile and profile.Owned, profile and profile.Stats)
 	local unlocked = 0
 	for _, item in items do
 		if profile and profile.Owned[item.Id] then
