@@ -9,6 +9,7 @@
 -- and the player picks Off / Low / Medium / High in Settings.
 
 local Debris = game:GetService("Debris")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
@@ -251,7 +252,9 @@ function AudioController.Start(_context)
 		refreshVolume(0.4)
 	end)
 
-	-- Countdown beeps during the last 3 seconds of Preparing, and the hurry-up speed-up.
+	-- Countdown beeps during the last 3 seconds of Preparing (for the players in the round, not someone
+	-- sitting it out in the lobby), and the hurry-up speed-up.
+	local localPlayer = Players.LocalPlayer
 	local lastBeep = -1
 	local roundTrack = playlists.Round.tracks[1]
 	RunService.Heartbeat:Connect(function()
@@ -261,7 +264,9 @@ function AudioController.Start(_context)
 			local second = math.ceil(left)
 			if second <= 3 and second >= 1 and second ~= lastBeep then
 				lastBeep = second
-				AudioController.Play("Countdown")
+				if localPlayer and localPlayer:GetAttribute("PP_InRound") == true then
+					AudioController.Play("Countdown")
+				end
 			end
 		else
 			lastBeep = -1
