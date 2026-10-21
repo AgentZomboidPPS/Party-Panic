@@ -129,7 +129,7 @@ function Spleef:_buildScenery()
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(4, 1600, 1600),
 		CFrame = upright(pool - Vector3.new(0, 2.6, 0)),
-		Color = Color3.fromRGB(232, 241, 252),
+		Color = Color3.fromRGB(208, 224, 242), -- a shade bluer than the top floor, so the floors stand out
 		Material = Enum.Material.Snow,
 		Parent = ctx.Arena,
 	})
