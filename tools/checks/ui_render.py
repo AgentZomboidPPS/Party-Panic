@@ -135,6 +135,7 @@ SANS = [("/usr/share/fonts/opentype/inter/Inter-ExtraBold.otf", "/usr/share/font
         (DEJAVU, "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")]
 _font_cache: dict = {}
 _cmap_cache: dict = {}
+_drawn_cache: dict = {}
 
 
 def font_path(name: str) -> str:
@@ -153,9 +154,23 @@ def covers(path: str, ch: str) -> bool:
 
             _cmap_cache[path] = set(TTFont(path, lazy=True).getBestCmap())
         except Exception:
-            _cmap_cache[path] = None  # without fontTools, trust the font
+            _cmap_cache[path] = None  # without fontTools: drawn() below
     cmap = _cmap_cache[path]
-    return cmap is None or ord(ch) in cmap
+    return drawn(path, ch) if cmap is None else ord(ch) in cmap
+
+
+def drawn(path: str, ch: str) -> bool:
+    """Without fontTools: whether the font draws `ch` as anything but its missing-glyph box (so the
+    team shapes ★ ● ▲ ◆, which Fredoka lacks, are drawn with a font that has them)."""
+    key = (path, ch)
+    if key not in _drawn_cache:
+        face = font_at(path, 40)
+        if path not in _drawn_cache:
+            box = face.getmask("\U0010fffd")  # a private-use character no font has
+            _drawn_cache[path] = (box.size, bytes(box))
+        mask = face.getmask(ch)
+        _drawn_cache[key] = (mask.size, bytes(mask)) != _drawn_cache[path]
+    return _drawn_cache[key]
 
 
 def font_at(path: str, size: float) -> ImageFont.FreeTypeFont:
@@ -513,6 +528,10 @@ def render(nodes: list, size_name: str, out: Path):
             poy = jy + jump / 2 - py - jump * 0.15
         if n.get("underProfile"):
             psx, psy, pox, poy = 0, 0, 14, 12 + 130 * auto_scale + 8  # RoundController: under the profile chip
+        if n.get("aboveActions") and touch:
+            # NotificationController: the toasts sit above the mode's action buttons (their row, as above).
+            jx, jy, jump = jump_button(dev)
+            psy, poy = 0, jy + jump / 2 - py - jump * 0.15 - 118 * auto_scale / 2 - 8
         x = px + psx * pw + pox - ax * w
         y = py + psy * ph + poy - ay * h
         if "_listpos" in n:
