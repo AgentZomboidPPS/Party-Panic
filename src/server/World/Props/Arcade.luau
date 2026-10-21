@@ -52,7 +52,7 @@ return function(h)
 	return {
 		ArcadeSkeeMachine = {
 			Height = 12.09,
-			AssetId = 0,
+			AssetId = 115646710351906,
 			Collide = true,
 			Palette = {
 				Cabinet = rgb(255, 84, 150), -- World/Arcade gives each machine its own color
@@ -138,7 +138,7 @@ return function(h)
 		},
 		ArcadeSkeeBall = {
 			Height = 0.778,
-			AssetId = 0,
+			AssetId = 88984141595492,
 			Palette = { Ball = rgb(255, 84, 150), Band = rgb(255, 255, 255) },
 			Fallback = function(m)
 				h.ball(m, "Ball", 0.72, Vector3.new(0, 0.389, 0))
@@ -147,7 +147,7 @@ return function(h)
 		},
 		ArcadeTicketFloor = {
 			Height = 1.05,
-			AssetId = 0,
+			AssetId = 111736912425418,
 			Collide = true,
 			Shadow = false,
 			Palette = {
@@ -168,7 +168,7 @@ return function(h)
 		},
 		ArcadeBestBoard = {
 			Height = 22.3,
-			AssetId = 0,
+			AssetId = 109924586028819,
 			Collide = true,
 			Palette = {
 				Posts = rgb(255, 255, 255),

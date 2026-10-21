@@ -444,8 +444,9 @@ def arcade_skee_machine():
 def arcade_skee_ball():
     """A Skee-Ball ball with a band round it (so you can see it roll)."""
     radius = R
-    ball = icosphere(radius, 3).translate(0, radius, 0)
-    band = torus(radius * 0.96, radius * 0.12, 32, 8).rotate("z", 90).translate(0, radius, 0)
+    # Light (there are forty of them about): smooth shading does the rest.
+    ball = icosphere(radius, 2).translate(0, radius, 0)
+    band = torus(radius * 0.96, radius * 0.12, 24, 6).rotate("z", 90).translate(0, radius, 0)
     return {"Ball": ball, "Band": band}
 
 

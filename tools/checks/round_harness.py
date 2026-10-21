@@ -102,7 +102,8 @@ PRELUDE = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (Pat
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("game", help="mode id, or LOBBY for the lobby with bots (uses --bots, --seconds)")
+    parser.add_argument("game", help="mode id, LOBBY for the lobby with bots (uses --bots, --seconds), or SKEEBALL "
+                        "for a Skee-Ball game in the lobby's arcade (tools/checks/skeeball_game.luau)")
     parser.add_argument("--players", type=int, default=12)
     parser.add_argument("--seconds", type=float, default=0, help="stop after this many seconds (0 = game length)")
     parser.add_argument("--client", action="store_true", help="also run the client half as Bot1")
@@ -127,9 +128,10 @@ def main():
     for module, path in paths.items():
         if module == "Shared/Remotes":
             continue  # replaced by the harness's recording stand-in
-        if args.game != "LOBBY" and other_mode(module, args.game):
+        lobby = args.game in ("LOBBY", "SKEEBALL")
+        if not lobby and other_mode(module, args.game):
             continue  # keeps the bundle under Luau execution's 1 MB script limit
-        if args.game == "LOBBY" and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES):
+        if lobby and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES):
             continue  # the lobby keeps LOBBY_MODES only
         is_init = path.name == "init.luau"
         body = rewrite(module, path.read_text(), is_init)
@@ -150,7 +152,10 @@ def main():
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)
     ui = "nil" if not args.ui_at else "{" + ", ".join(str(float(t)) for t in args.ui_at.split(",")) + "}"
-    if args.game == "LOBBY":
+    if args.game == "SKEEBALL":
+        out.append((Path(__file__).resolve().parent / "skeeball_game.luau").read_text())
+        out.append("return __runSkeeBall()")
+    elif args.game == "LOBBY":
         out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8}, 10)")
     else:
         out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots})')

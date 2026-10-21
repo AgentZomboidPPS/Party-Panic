@@ -480,6 +480,111 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
 	task.wait(0.3)
 end
 
+-- 3b. Skee-Ball in the lobby's arcade (SkeeBallController): the player takes machine 1, rolls a
+-- ball (its score pops), finishes a game (PLAY AGAIN / DONE) and leaves. A stand-in machine, board
+-- and ball when the place's lobby is older than this client.
+local skeeChecks = {}
+do
+	local CollectionService = game:GetService("CollectionService")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local machineModel = nil
+	for _, tagged in CollectionService:GetTagged("SkeeMachine") do
+		if tagged:GetAttribute("SkeeIndex") == 1 then
+			machineModel = tagged
+		end
+	end
+	if not machineModel then
+		local frame = CFrame.new(60, 0.4, -40) * CFrame.Angles(0, math.rad(-57), 0)
+		machineModel = Instance.new("Model")
+		machineModel.Name = "ArcadeSkeeMachine"
+		local function piece(name, size, offset)
+			local part = Instance.new("Part")
+			part.Name = name
+			part.Anchored = true
+			part.Size = size
+			part.CFrame = frame * CFrame.new(offset)
+			part.Parent = machineModel
+			return part
+		end
+		piece("Cabinet", Vector3.new(5, 3, 14), Vector3.new(0, 1.5, 0))
+		piece("Screen", Vector3.new(4.3, 1.5, 0.05), Vector3.new(0, 8.3, 6.375)):AddTag("SkeeScreen")
+		piece("Band50", Vector3.new(0.1, 0.8, 0.8), Vector3.new(0, 4.4, 4.2))
+		piece("BulbsA", Vector3.new(0.3, 0.3, 0.3), Vector3.new(-1, 11, 6.4))
+		piece("BulbsB", Vector3.new(0.3, 0.3, 0.3), Vector3.new(1, 11, 6.4))
+		piece("Glow", Vector3.new(0.1, 0.1, 8), Vector3.new(1.6, 3.6, -2.6))
+		piece("Stand", Vector3.new(3, 5, 2), Vector3.new(0, 2.5, -9)):AddTag("SkeeStand")
+		machineModel:SetAttribute("SkeeIndex", 1)
+		machineModel:SetAttribute("SkeeColor", Color3.fromRGB(64, 196, 255))
+		machineModel:SetAttribute("SkeeFrame", frame)
+		machineModel.Parent = workspace
+		machineModel:AddTag("SkeeMachine")
+		skeeChecks.standIn = true
+	end
+	for key, value in { SkeeUser = 0, SkeeName = "", SkeeScore = 0, SkeeBalls = 0, SkeeState = "Idle", SkeeBest = 0 } do
+		machineModel:SetAttribute(key, value)
+	end
+	if not CollectionService:GetTagged("SkeeBestBoard")[1] then
+		local part = Instance.new("Part")
+		part.Name = "BestBoard"
+		part.Anchored = true
+		part.Size = Vector3.new(23, 5.6, 0.1)
+		part.CFrame = CFrame.new(70, 16, -48)
+		part.Parent = workspace
+		part:AddTag("SkeeBestBoard")
+	end
+	CollectionService:GetTagged("SkeeBestBoard")[1]:SetAttribute(
+		"Board",
+		'[{"N":"SuperLongDisplayNm20","S":420,"U":7},{"N":"Harness","S":310,"U":1},{"N":"Pancake","S":250,"U":9}]'
+	)
+	if not ReplicatedStorage:FindFirstChild("ArcadeAssets") then
+		local assets = Instance.new("Folder")
+		assets.Name = "ArcadeAssets"
+		local ball = Instance.new("Model")
+		ball.Name = "SkeeBall"
+		local part = Instance.new("Part")
+		part.Name = "Ball"
+		part.Shape = Enum.PartType.Ball
+		part.Size = Vector3.one * 0.72
+		part.Anchored = true
+		part.CanCollide = false
+		part.CFrame = CFrame.new(0, 0.36, 0)
+		part.Parent = ball
+		ball.PrimaryPart = part
+		ball.Parent = assets
+		assets.Parent = ReplicatedStorage
+	end
+	step = "SkeeBall"
+	task.wait(1.5) -- the controller picks the machine up
+	local SkeeBallController = __require("Client/Controllers/SkeeBallController")
+	machineModel:SetAttribute("SkeeUser", 1)
+	machineModel:SetAttribute("SkeeName", __player.DisplayName)
+	machineModel:SetAttribute("SkeeBest", 240)
+	machineModel:SetAttribute("SkeeState", "Playing")
+	__fire("SkeeBall", "Start", 1, 240)
+	task.wait(1.2)
+	__ui["SkeeBall"] = __dumpGui(__playerGui, "SkeeBall")
+	task.wait(0.4)
+	skeeChecks.rolled = SkeeBallController.Roll(0.05, 0.5)
+	__fire("SkeeBall", "Rolled", 1, 1, 1050, 500, "40", 40)
+	task.wait(1.65)
+	__ui["SkeeBall pop"] = __dumpGui(__playerGui, "SkeeBall pop")
+	machineModel:SetAttribute("SkeeScore", 40)
+	machineModel:SetAttribute("SkeeBalls", 1)
+	task.wait(0.6)
+	machineModel:SetAttribute("SkeeState", "Over")
+	__fire("SkeeBall", "Over", 1, 1, 310, 240, true, 2)
+	task.wait(1)
+	__ui["SkeeBall over"] = __dumpGui(__playerGui, "SkeeBall over")
+	skeeChecks.sentToServer = table.concat(__sent, ",")
+	__fire("SkeeBall", "End", 1, "Left")
+	task.wait(0.5)
+	local controls = __playerGui:FindFirstChild("PartyPanicHUD") and __playerGui.PartyPanicHUD:FindFirstChild("SkeeBallControls")
+	skeeChecks.closed = controls ~= nil and not controls.Visible
+	for key, value in { SkeeUser = 0, SkeeName = "", SkeeScore = 0, SkeeBalls = 0, SkeeState = "Idle", SkeeBest = 0 } do
+		machineModel:SetAttribute(key, value)
+	end
+end
+
 -- 4. A whole round, phase by phase, with three toasts on screen in the lobby. The vote shows the
 -- fullest cards: the two longest names and the longest objective (that game is the one played).
 -- The stand-in players play it (round attributes, as RoundContext sets them), with the stand-in
@@ -878,6 +983,7 @@ return game:GetService("HttpService"):JSONEncode({
 	guiInstances = guiCount,
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
+	skeeChecks = skeeChecks,
 	textReport = __textReport,
 	portals = __portals,
 })

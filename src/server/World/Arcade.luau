@@ -225,7 +225,6 @@ local function buildMachine(parent: Instance, index: number): Model
 		CFrame = frame,
 		Parent = parent,
 	})
-	machine.Name = "SkeeMachine" .. index
 	machine:SetAttribute("SkeeIndex", index)
 	machine:SetAttribute("SkeeColor", color)
 	machine:SetAttribute("SkeeFrame", frame) -- the frame Shared/Logic/SkeeBall's numbers are in

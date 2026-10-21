@@ -1012,7 +1012,7 @@ local function exitPlay()
 		connection:Disconnect()
 	end
 	table.clear(play.Connections)
-	ContextActionService:UnbindAction("SkeeBallRoll")
+	pcall(ContextActionService.UnbindAction, ContextActionService, "SkeeBallRoll")
 	RunService:UnbindFromRenderStep("SkeeBallCamera")
 	showAim(0, 0, false)
 	setFade(0)
@@ -1080,12 +1080,23 @@ local function enterPlay(index: number, best: number)
 			setFade(SELF_FADE)
 		end
 	end)
-	ContextActionService:BindActionAtPriority("SkeeBallRoll", function(_, inputState)
-		if inputState == Enum.UserInputState.Begin then
-			pressRoll()
-		end
-		return Enum.ContextActionResult.Sink
-	end, false, Enum.ContextActionPriority.High.Value, Enum.KeyCode.Space, Enum.KeyCode.Return, Enum.KeyCode.ButtonA)
+	-- Space, Enter or a controller's A press ROLL (and don't jump while you play).
+	pcall(function()
+		ContextActionService:BindActionAtPriority(
+			"SkeeBallRoll",
+			function(_, inputState)
+				if inputState == Enum.UserInputState.Begin then
+					pressRoll()
+				end
+				return Enum.ContextActionResult.Sink
+			end,
+			false,
+			Enum.ContextActionPriority.High.Value,
+			Enum.KeyCode.Space,
+			Enum.KeyCode.Return,
+			Enum.KeyCode.ButtonA
+		)
+	end)
 	table.insert(play.Connections, UserInputService.InputBegan:Connect(onInputBegan))
 	table.insert(play.Connections, UserInputService.InputChanged:Connect(onInputChanged))
 	table.insert(play.Connections, UserInputService.InputEnded:Connect(onInputEnded))
@@ -1425,6 +1436,16 @@ local function onEvent(kind: any, index: any, ...: any)
 			popOver(machine, "NEW BEST!", Theme.Colors.Yellow, true)
 		end
 	end
+end
+
+-- Rolls your next ball as if you'd let go of a drag (aim -1..1, power 0..1); false if you can't
+-- roll right now. The UI checks use it; any other input could too.
+function SkeeBallController.Roll(aim: number, power: number): boolean
+	if not canRoll() then
+		return false
+	end
+	roll(aim, power)
+	return true
 end
 
 function SkeeBallController.Start(context)
