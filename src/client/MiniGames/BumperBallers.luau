@@ -136,7 +136,7 @@ function BumperBallers.Start(api)
 			Children = { UIKit.TextStroke(0.3) },
 		})
 		local cross = UIKit.Label({
-			Text = "✕",
+			Text = "X",
 			Font = Enum.Font.GothamBlack,
 			TextScaled = true,
 			Size = UDim2.fromScale(1.1, 1.1),
