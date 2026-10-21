@@ -125,6 +125,19 @@ local list: { GameDefinition } = {
 		MinPlayers = 2,
 		IsTeam = true,
 	},
+	{
+		Id = "RakeItIn",
+		Name = "Rake It In",
+		Category = "Reaction",
+		Icon = "🥕",
+		Color = Color3.fromRGB(255, 150, 60),
+		Objective = "Rake veggies off the spinning field into your basket. 🎃 = 3, 💣 = -3!",
+		Controls = "Press RAKE when veggies are in your lane. Skip the bombs!",
+		Duration = 45,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 

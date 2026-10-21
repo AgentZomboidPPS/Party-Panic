@@ -1,0 +1,23 @@
+newmtl RakeHandle
+Kd 0.769 0.549 0.337
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl RakeGrip
+Kd 1.000 0.804 0.196
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl RakeHead
+Kd 0.902 0.216 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl RakeTines
+Kd 0.784 0.804 0.843
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

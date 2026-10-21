@@ -1,0 +1,11 @@
+newmtl CarrotRoot
+Kd 1.000 0.518 0.118
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl CarrotLeaves
+Kd 0.275 0.706 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
