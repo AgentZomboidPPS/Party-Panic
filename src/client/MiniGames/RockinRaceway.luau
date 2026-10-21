@@ -466,12 +466,12 @@ function RockinRaceway.Start(api)
 	-- corner and under the race bar), in two short lines.
 	local startHint = UIKit.Label({
 		Name = "StartHint",
-		Text = "Hold the left side to GALLOP\nTap HOP over blue hurdles",
+		Text = "◀ Hold left side: GALLOP\nTap HOP over hurdles",
 		Font = Theme.Fonts.Display,
-		TextSize = 22,
+		TextSize = 26,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, shiftX, 0, meterY + meterHeight + 44),
-		Size = UDim2.fromOffset(360, 60),
+		Size = UDim2.fromOffset(380, 66),
 		Visible = false,
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.15) },
