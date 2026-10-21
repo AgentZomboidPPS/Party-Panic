@@ -1,6 +1,9 @@
 -- Client half of Honey Trap: draws the vine of fruit and honeycombs (sliding down as they're
 -- taken), the 1-or-2 block over whoever's turn it is, fruit flying into baskets and the bees.
 -- Shows whose turn it is; on yours the HIT button appears (jumping hits the block too).
+--
+-- Art pass: warm storybook grading, a leafy vine, and (unless effects are reduced) pollen motes,
+-- blossom petals drifting off the oak, butterflies over the flower beds and bees round the hives.
 
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -111,9 +114,11 @@ end
 
 function HoneyTrap.Start(api)
 	api:Mood({
-		Tint = Color3.fromRGB(255, 251, 240),
-		Saturation = 0.16,
-		Contrast = 0.05,
+		Tint = Color3.fromRGB(255, 246, 228),
+		Saturation = 0.2,
+		Contrast = 0.06,
+		Brightness = 0.02,
+		Haze = Color3.fromRGB(255, 236, 206),
 	})
 	local layout = api:SharedJSON("Layout")
 	while not layout do
@@ -134,13 +139,17 @@ function HoneyTrap.Start(api)
 
 	-- Templates the server shared (fruit is recolored per kind).
 	local templates = {}
-	for _, name in { "Fruit", "Honeycomb", "Bee", "DiceBlock" } do
+	for _, name in { "Fruit", "Honeycomb", "Bee", "DiceBlock", "Vine" } do
 		task.spawn(function()
 			templates[name] = api:Template(name)
 		end)
 	end
 	local waited = 0
-	while waited < 5 and not (templates.Fruit and templates.Honeycomb and templates.Bee and templates.DiceBlock) do
+	local function allArrived(): boolean
+		return (templates.Fruit and templates.Honeycomb and templates.Bee and templates.DiceBlock and templates.Vine)
+			~= nil
+	end
+	while waited < 5 and not allArrived() do
 		waited += task.wait(0.1)
 	end
 	local fruitColors = {}
@@ -181,17 +190,26 @@ function HoneyTrap.Start(api)
 		return bee
 	end
 
-	-- The vine itself: a green rope from the branch tip down past the lowest item.
-	local rope = Instance.new("Part")
-	rope.Name = "Vine"
-	rope.Shape = Enum.PartType.Cylinder
+	-- The vine itself: a leafy vine from inside the branch tip down past the lowest item (its leaves
+	-- grow to the sides and the back, away from the hanging fruit); a plain rope if it never came.
 	local ropeLength = anchor.Y - bottomY + 1.2
-	rope.Size = Vector3.new(ropeLength, 0.4, 0.4)
-	rope.CFrame = CFrame.new(anchor.X, anchor.Y - ropeLength / 2, anchor.Z) * CFrame.Angles(0, 0, math.rad(90))
-	rope.Color = Color3.fromRGB(80, 130, 50)
-	rope.Material = Enum.Material.SmoothPlastic
-	settle(rope)
-	rope.Parent = api.World
+	if templates.Vine then
+		local vineModel = templates.Vine:Clone()
+		settle(vineModel)
+		local _, size = vineModel:GetBoundingBox()
+		vineModel:PivotTo(CFrame.new(anchor.X, anchor.Y + 1.2 - size.Y, anchor.Z))
+		vineModel.Parent = api.World
+	else
+		local rope = Instance.new("Part")
+		rope.Name = "Vine"
+		rope.Shape = Enum.PartType.Cylinder
+		rope.Size = Vector3.new(ropeLength, 0.4, 0.4)
+		rope.CFrame = CFrame.new(anchor.X, anchor.Y - ropeLength / 2, anchor.Z) * CFrame.Angles(0, 0, math.rad(90))
+		rope.Color = Color3.fromRGB(80, 130, 50)
+		rope.Material = Enum.Material.SmoothPlastic
+		settle(rope)
+		rope.Parent = api.World
+	end
 
 	-- Items hang on the front of the vine (towards the players), zigzagging a little.
 	local shown: { [number]: Item } = {}
@@ -312,9 +330,13 @@ function HoneyTrap.Start(api)
 	-- The 1-or-2 block, with its number on every side.
 	local dice = templates.DiceBlock or fallbackModel("Dice")
 	settle(dice)
-	local block: BasePart? = nil
+	local block: BasePart? = dice:FindFirstChild("Block", true) :: BasePart?
 	for _, part in partsOf(dice) do
-		if not block or part.Size.Magnitude > (block :: BasePart).Size.Magnitude then
+		part.CastShadow = false
+		if part.Name == "Wings" then
+			part.Transparency = 0.3
+		end
+		if not dice:FindFirstChild("Block", true) and (not block or part.Size.Magnitude > block.Size.Magnitude) then
 			block = part
 		end
 	end
@@ -399,7 +421,24 @@ function HoneyTrap.Start(api)
 		fruitText.Text = `🍎 {value or 0}`
 		UIKit.PopIn(fruitPill, 0.25)
 	end)
-	api:Hint("Take 1 or 2 each turn - don't take the 🍯 honeycomb!", y + 74)
+	-- The hint line under the turn panel, kept as narrow as the panel (wrapping if need be) so on a
+	-- small phone it stays clear of the standings on the left.
+	local hintFitted = false
+	local function hint(text: string)
+		api:Hint(text, y + 74)
+		local label = hud:FindFirstChild("Hint") :: TextLabel?
+		if label and not hintFitted then
+			hintFitted = true
+			label.Size = UDim2.fromOffset(420, 64)
+			label.TextWrapped = true
+			label.TextScaled = true
+			local limit = Instance.new("UITextSizeConstraint")
+			limit.MaxTextSize = 26
+			limit.MinTextSize = 14
+			limit.Parent = label
+		end
+	end
+	hint("Take 1 or 2 each turn - don't take the 🍯 honeycomb!")
 
 	local hit = api:Button({ Text = "HIT!", Key = Enum.KeyCode.E, Color = Theme.Colors.Yellow })
 	hit:SetVisible(false)
@@ -469,11 +508,11 @@ function HoneyTrap.Start(api)
 				turnText.Text = "🎲 YOUR TURN!"
 				turnText.TextColor3 = Theme.Colors.Yellow
 				api:Sound("Countdown")
-				api:Hint("Jump or press HIT to stop the block!", y + 74)
+				hint("Jump or press HIT to stop the block!")
 			else
 				turnText.Text = `🎲 {new.Name}'s turn`
 				turnText.TextColor3 = Theme.Colors.Text
-				api:Hint(if new.Next == me and api:Alive() then "You're up next - count the fruit!" else "", y + 74)
+				hint(if new.Next == me and api:Alive() then "You're up next - count the fruit!" else "")
 			end
 			UIKit.PopIn(panel, 0.3)
 		end
@@ -481,7 +520,7 @@ function HoneyTrap.Start(api)
 			announcedResult = new.Id
 			resultAt = os.clock()
 			if new.User == me then
-				api:Hint("", y + 74)
+				hint("")
 			end
 			local pad = pads[new.User]
 			if pad then
@@ -499,15 +538,119 @@ function HoneyTrap.Start(api)
 	local arena = api:Arena(5)
 	local hiveBees = {}
 	if arena and effects then
-		local tree = arena:FindFirstChild("HoneyTree")
+		local tree = arena:FindFirstChild("HoneyOak")
 		local hive = tree and tree:FindFirstChild("Hive", true) :: BasePart?
 		if hive then
 			for index = 1, 4 do
 				local bee = makeBee()
 				if bee then
-					table.insert(hiveBees, { Model = bee, Center = hive.Position, Phase = index * 1.6 })
+					table.insert(hiveBees, { Model = bee, Center = hive.Position, Phase = index * 1.6, Radius = 4.5 })
 				end
 			end
+		end
+		-- One bee buzzing round each straw beehive.
+		for index, child in arena:GetChildren() do
+			if child.Name == "HoneySkep" and child:IsA("Model") then
+				local bee = makeBee()
+				if bee then
+					local center = child:GetPivot().Position + Vector3.new(0, 4.2, 0)
+					table.insert(hiveBees, { Model = bee, Center = center, Phase = index * 2.3, Radius = 2.6 })
+				end
+			end
+		end
+	end
+
+	-- Ambient life (off with reduced effects): pollen motes over the glade, blossom glints drifting
+	-- down from the oak, and butterflies flitting round the tree below the vine.
+	local ground = bottomY
+	for _, pad in pads do
+		ground = math.min(ground, pad.Pos.Y - 0.6)
+	end
+	-- The oak's trunk (the server works it out from the tree; the fallback matches the meshgen).
+	local trunkXZ = layout.Trunk or { anchor.X, anchor.Z - 14.5 }
+	local trunk = Vector3.new(trunkXZ[1], ground, trunkXZ[2])
+	local butterflies = {}
+	if effects then
+		local function carrier(name: string, size: Vector3, position: Vector3): Part
+			local part = Instance.new("Part")
+			part.Name = name
+			part.Size = size
+			part.CFrame = CFrame.new(position)
+			part.Transparency = 1
+			settle(part)
+			part.CastShadow = false
+			part.Parent = api.World
+			return part
+		end
+		local pollen = Instance.new("ParticleEmitter")
+		pollen.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		pollen.Color = ColorSequence.new(Color3.fromRGB(255, 236, 150))
+		pollen.LightEmission = 0.8
+		pollen.Transparency = NumberSequence.new(0.15)
+		pollen.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.3, 0.22),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+		pollen.Lifetime = NumberRange.new(6, 10)
+		pollen.Speed = NumberRange.new(0.3, 0.9)
+		pollen.SpreadAngle = Vector2.new(180, 180)
+		pollen.Acceleration = Vector3.new(0, 0.2, 0)
+		pollen.Rate = 10
+		pollen.Parent = carrier("Pollen", Vector3.new(56, 4, 56), Vector3.new(anchor.X, ground + 4, anchor.Z - 4))
+
+		local petals = Instance.new("ParticleEmitter")
+		petals.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		petals.Color = ColorSequence.new(Color3.fromRGB(255, 190, 220), Color3.fromRGB(255, 240, 248))
+		petals.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.1, 0.1),
+			NumberSequenceKeypoint.new(0.85, 0.2),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		petals.Size = NumberSequence.new(0.45)
+		petals.Lifetime = NumberRange.new(8, 11)
+		petals.Speed = NumberRange.new(0.2, 0.6)
+		petals.SpreadAngle = Vector2.new(60, 60)
+		petals.EmissionDirection = Enum.NormalId.Bottom
+		petals.Acceleration = Vector3.new(0.6, -1.6, 0.8)
+		petals.Drag = 0.45
+		petals.Rotation = NumberRange.new(0, 360)
+		petals.RotSpeed = NumberRange.new(-90, 90)
+		petals.Rate = 4
+		petals.Parent = carrier("Petals", Vector3.new(34, 1, 30), trunk + Vector3.new(0, 35, 0))
+
+		local wingColors = {
+			Color3.fromRGB(255, 150, 200),
+			Color3.fromRGB(180, 150, 255),
+			Color3.fromRGB(255, 220, 90),
+			Color3.fromRGB(130, 200, 255),
+			Color3.fromRGB(255, 170, 110),
+		}
+		for index, color in wingColors do
+			local wings = {}
+			for _ = 1, 2 do
+				local wing = Instance.new("Part")
+				wing.Name = "Butterfly"
+				wing.Size = Vector3.new(0.9, 0.05, 0.75)
+				wing.Color = color
+				wing.Material = Enum.Material.SmoothPlastic
+				local shape = Instance.new("SpecialMesh")
+				shape.MeshType = Enum.MeshType.Sphere
+				shape.Parent = wing
+				settle(wing)
+				wing.CastShadow = false
+				wing.Parent = api.World
+				table.insert(wings, wing)
+			end
+			table.insert(butterflies, {
+				Wings = wings,
+				Angle = index / #wingColors * math.pi * 2,
+				Radius = rng:NextNumber(15, 21),
+				Height = rng:NextNumber(1.8, 4.2),
+				Speed = rng:NextNumber(0.14, 0.22) * (if index % 2 == 0 then 1 else -1),
+				Phase = rng:NextNumber(0, 6),
+			})
 		end
 	end
 
@@ -587,8 +730,29 @@ function HoneyTrap.Start(api)
 		for _, bee in hiveBees do
 			local angle = t * 1.7 + bee.Phase
 			local spot = bee.Center
-				+ Vector3.new(math.cos(angle) * 4.5, math.sin(t * 2.3 + bee.Phase) * 1.5, math.sin(angle) * 4.5)
+				+ Vector3.new(
+					math.cos(angle) * bee.Radius,
+					math.sin(t * 2.3 + bee.Phase) * 1.5,
+					math.sin(angle) * bee.Radius
+				)
 			bee.Model:PivotTo(CFrame.lookAt(spot, spot + Vector3.new(-math.sin(angle), 0, math.cos(angle))))
+		end
+
+		-- Butterflies: lazy loops round the oak, bobbing, wings flapping.
+		for _, fly in butterflies do
+			local angle = fly.Angle + t * fly.Speed + math.sin(t * 0.7 + fly.Phase) * 0.3
+			local radius = fly.Radius + math.sin(t * 0.5 + fly.Phase) * 2
+			local spot = trunk
+				+ Vector3.new(
+					math.sin(angle) * radius,
+					fly.Height + math.sin(t * 1.9 + fly.Phase) * 0.6,
+					math.cos(angle) * radius
+				)
+			local ahead = Vector3.new(math.cos(angle), 0, -math.sin(angle)) * math.sign(fly.Speed)
+			local body = CFrame.lookAt(spot, spot + ahead)
+			local flap = math.sin(t * 16 + fly.Phase) * 0.9
+			fly.Wings[1].CFrame = body * CFrame.Angles(0, 0, flap) * CFrame.new(-0.5, 0, 0)
+			fly.Wings[2].CFrame = body * CFrame.Angles(0, 0, -flap) * CFrame.new(0.5, 0, 0)
 		end
 
 		-- The block and the turn HUD.

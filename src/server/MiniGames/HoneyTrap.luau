@@ -8,6 +8,11 @@
 -- The vine (MG_Vine) and the turn (MG_Turn) are shared state, and the block's flips follow the
 -- turn's clock, so every client shows the same face at the same moment. The server judges a hit
 -- against that clock with leeway for lag, so the face you saw is the face you get.
+--
+-- Art pass ("make every arena look really cool"): a storybook meadow. A giant honey oak with a
+-- front door, a beehive, a swing and lanterns; a lawn with flower beds and toadstools; everyone
+-- stands on a big flower on a sand crescent with a picnic basket; sunflowers and straw beehives
+-- around. The props live in World/Props/HoneyTrap.luau.
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Scenery = require(script.Parent.Kit.Scenery)
@@ -23,6 +28,10 @@ local TURN_TIME = 6 -- seconds to hit before the block stops by itself
 local FLIP = 0.42 -- seconds each face shows
 local PAUSE_FRUIT = 1.4 -- after a turn that took only fruit
 local PAUSE_HONEY = 3.2 -- after a honeycomb (the bees need a moment)
+local TRUNK_BEHIND = 14.5 -- the oak's trunk is this far behind its vine branch tip (TRUNK_Z in the meshgen)
+local FOREST_TINT = Color3.fromRGB(58, 140, 104) -- cools the forest so the lime-and-pink oak stands out
+-- The oak's pieces people can bump into; the canopy, honey, lanterns and swing are only looks.
+local OAK_SOLID = { Trunk = true, Bark = true, Door = true, Stone = true }
 
 -- Fruit kinds on the vine (the vine string uses their index; "H" is a honeycomb).
 HoneyTrap.Fruits = {
@@ -46,6 +55,54 @@ type Turn = {
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
+end
+
+-- Petal colors of the players' flowers, in pad order.
+local PETALS = {
+	rgb(255, 150, 192),
+	rgb(150, 204, 255),
+	rgb(255, 238, 120),
+	rgb(196, 166, 255),
+	rgb(255, 178, 120),
+	rgb(146, 226, 172),
+	rgb(255, 255, 255),
+	rgb(255, 124, 140),
+	rgb(130, 226, 236),
+	rgb(255, 206, 236),
+	rgb(222, 240, 120),
+	rgb(255, 200, 150),
+}
+
+-- Sunflowers and straw beehives around the meadow: { angle (0 = the players' side), distance, size }.
+local SUNFLOWERS = {
+	{ -122, 30, 1.0 },
+	{ -131, 33.5, 0.8 },
+	{ 124, 31, 1.1 },
+	{ 116, 34.5, 0.85 },
+	{ -160, 34, 1.2 },
+	{ 166, 33, 0.95 },
+	{ -56, 32, 0.9 },
+	{ 52, 31.5, 1.0 },
+	{ 60, 34, 0.75 },
+}
+local SKEPS = { { -98, 29, 1.0 }, { -106, 33, 0.85 }, { 100, 29.5, 1.0 }, { 180, 30, 1.1 } }
+
+-- Places a prop so its "Mark" piece (its true middle; its pivot is its bounding box's bottom
+-- center) lands on `at`, and hides the mark.
+local function placeByMark(model: Model, at: CFrame)
+	model:PivotTo(at)
+	local mark = model:FindFirstChild("Mark", true) :: BasePart?
+	if mark then
+		model:PivotTo(model:GetPivot() + (at.Position - mark.Position))
+		mark.Transparency = 1
+	end
+end
+
+-- A spot around the meadow, turned to face its middle.
+local function aroundMeadow(origin: Vector3, angle: number, distance: number): CFrame
+	local a = math.rad(angle)
+	local position = origin + Vector3.new(math.sin(a), 0, math.cos(a)) * distance
+	return CFrame.lookAt(position, Vector3.new(origin.X, position.Y, origin.Z))
 end
 
 -- A stretch of vine: runs of fruit, each ended by a honeycomb (now and then two in a row).
@@ -85,21 +142,35 @@ function HoneyTrap:Prepare()
 	self.turnId = 0
 	self.current = nil :: Turn?
 
-	-- A sunny meadow with a forest around it.
+	-- A sunny meadow with a forest around it, and a storybook glade in the middle: a lawn with
+	-- flower beds and toadstools, and a sand crescent under the players' flowers.
 	Scenery.Meadow(ctx, origin, 300)
-	Build.Part({
-		Name = "Clearing",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.4, 64, 64),
-		CFrame = CFrame.new(origin + Vector3.new(0, 0.1, 2)) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = rgb(196, 170, 120),
-		Material = Enum.Material.Ground,
-		CanCollide = false,
-		Parent = ctx.Arena,
-	})
+	-- A cooler, deeper green for the forest ring and the hills behind it, so the oak isn't lost in them.
+	for _, part in ctx.Arena:GetDescendants() do
+		if part:IsA("BasePart") then
+			if part.Name == "Leaves" then
+				part.Color = part.Color:Lerp(FOREST_TINT, 0.35)
+			elseif part.Name == "Hill" then
+				part.Color = part.Color:Lerp(FOREST_TINT, 0.2)
+			end
+		end
+	end
+	placeByMark(MeshLibrary.Get("HoneyGlade", { Parent = ctx.Arena }), CFrame.new(origin))
+	for _, spot in SUNFLOWERS do
+		local facing = aroundMeadow(origin, spot[1], spot[2])
+		MeshLibrary.Get("HoneySunflower", {
+			Scale = spot[3],
+			CFrame = facing * CFrame.Angles(0, math.rad(rng:NextNumber(-12, 12)), 0),
+			Parent = ctx.Arena,
+		})
+	end
+	for _, spot in SKEPS do
+		local facing = aroundMeadow(origin, spot[1], spot[2])
+		MeshLibrary.Get("HoneySkep", { Scale = spot[3], CFrame = facing, Parent = ctx.Arena })
+	end
 
 	-- The tree, turned to face the players, with its branch tip right above the vine spot.
-	local tree = MeshLibrary.Get("HoneyTree", {
+	local tree = MeshLibrary.Get("HoneyOak", {
 		CFrame = CFrame.new(origin) * CFrame.Angles(0, math.pi, 0),
 		Parent = ctx.Arena,
 	})
@@ -109,8 +180,17 @@ function HoneyTrap:Prepare()
 		anchor.Transparency = 1
 	end
 	local anchorPosition = if anchor then anchor.Position else origin + Vector3.new(0, 29.6, 0)
+	local trunkPosition = anchorPosition + tree:GetPivot():VectorToWorldSpace(Vector3.new(0, 0, TRUNK_BEHIND))
+	for _, part in tree:GetDescendants() do
+		if part:IsA("BasePart") and not OAK_SOLID[part.Name] then
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+		end
+	end
 
-	-- Pads in an arc facing the vine, each with a basket for its fruit.
+	-- Pads in an arc facing the vine: a big flower to stand on (the pad itself is an invisible
+	-- disc, so the standing height never changes) and a picnic basket for the fruit.
 	local players = ctx:GetPlayers()
 	for index = #players, 2, -1 do
 		local other = rng:NextInteger(1, index)
@@ -118,6 +198,8 @@ function HoneyTrap:Prepare()
 	end
 	local count = #players
 	local span = math.rad(math.clamp((count - 1) * 15, 30, 160))
+	-- With a full meadow the arc is tight: slightly smaller flowers and baskets keep them apart.
+	local crowded = count > 10
 	local spawns = {}
 	local layoutPads = {}
 	for index, player in players do
@@ -131,19 +213,21 @@ function HoneyTrap:Prepare()
 			Size = Vector3.new(0.6, 4.6, 4.6),
 			CFrame = CFrame.new(position + Vector3.new(0, 0.3, 0)) * CFrame.Angles(0, 0, math.rad(90)),
 			Color = rgb(255, 245, 225),
+			Transparency = 1,
 			Parent = ctx.Arena,
 		})
-		Build.Decor({
-			Name = "PadRim",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.4, 5.4, 5.4),
-			CFrame = CFrame.new(position + Vector3.new(0, 0.2, 0)) * CFrame.Angles(0, 0, math.rad(90)),
-			Color = rgb(255, 200, 60),
-			Parent = ctx.Arena,
-		})
+		placeByMark(
+			MeshLibrary.Get("HoneyDaisyPad", {
+				Scale = if crowded then 0.94 else 1,
+				Colors = { Petals = PETALS[(index - 1) % #PETALS + 1] },
+				Parent = ctx.Arena,
+			}),
+			facing + Vector3.new(0, 0.32, 0) -- on the sand crescent
+		)
 		local basketSpot = position - flat * 3.3
-		MeshLibrary.Get("Basket", {
-			CFrame = CFrame.new(basketSpot + Vector3.new(0, 0.2, 0)),
+		MeshLibrary.Get("HoneyBasket", {
+			Scale = if crowded then 0.88 else 1,
+			CFrame = CFrame.lookAt(basketSpot, basketSpot + flat) + Vector3.new(0, 0.27, 0),
 			Parent = ctx.Arena,
 		})
 		self.pads[player] = index
@@ -170,7 +254,8 @@ function HoneyTrap:Prepare()
 	ctx:ShareTemplate("Fruit", MeshLibrary.Get("Fruit"))
 	ctx:ShareTemplate("Honeycomb", MeshLibrary.Get("Honeycomb"))
 	ctx:ShareTemplate("Bee", MeshLibrary.Get("Bee"))
-	ctx:ShareTemplate("DiceBlock", MeshLibrary.Get("DiceBlock"))
+	ctx:ShareTemplate("DiceBlock", MeshLibrary.Get("HoneyDice"))
+	ctx:ShareTemplate("Vine", MeshLibrary.Get("HoneyVine"))
 
 	local fruitColors = {}
 	for _, kind in HoneyTrap.Fruits do
@@ -178,6 +263,7 @@ function HoneyTrap:Prepare()
 	end
 	ctx:SetSharedJSON("Layout", {
 		Anchor = { anchorPosition.X, anchorPosition.Y, anchorPosition.Z },
+		Trunk = { trunkPosition.X, trunkPosition.Z },
 		Bottom = origin.Y + BOTTOM,
 		Spacing = SPACING,
 		Pads = layoutPads,

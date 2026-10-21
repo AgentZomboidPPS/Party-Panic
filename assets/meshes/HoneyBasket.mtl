@@ -1,0 +1,23 @@
+newmtl Basket
+Kd 0.804 0.843 0.882
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Weave
+Kd 0.831 0.627 0.376
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rim
+Kd 0.353 0.314 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cloth
+Kd 0.922 0.329 0.329
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
