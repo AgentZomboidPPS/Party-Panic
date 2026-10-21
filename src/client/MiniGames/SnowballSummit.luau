@@ -162,7 +162,7 @@ function SnowballSummit.Start(api)
 		dot.Transparency = 0.25 + index * 0.1
 		local size = 1.1 - index * 0.13
 		dot.Size = Vector3.new(0.06, size, size)
-		dot.CFrame = CFrame.new(0, -1000, 0)
+		dot.CFrame = CFrame.new(index * 4, -1000, 0) -- parked apart, out of sight, until you roll a ball
 		dot.Parent = api.World
 		dots[index] = dot
 	end
@@ -383,8 +383,8 @@ function SnowballSummit.Start(api)
 		else
 			meter.Visible = false
 			roll:SetFill(0)
-			for _, dot in dots do
-				dot.CFrame = CFrame.new(0, -1000, 0)
+			for index, dot in dots do
+				dot.CFrame = CFrame.new(index * 4, -1000, 0)
 			end
 		end
 

@@ -91,7 +91,7 @@ return function(h)
 			Materials = { Rock = Enum.Material.Slate, Snow = Enum.Material.Snow },
 			Fallback = function(m)
 				h.blob(m, "Rock", Vector3.new(140, 200, 140), Vector3.new(0, 52, 0))
-				h.blob(m, "Snow", Vector3.new(50, 60, 50), Vector3.new(0, 122, 0))
+				h.blob(m, "Snow", Vector3.new(50, 60, 50), Vector3.new(0, 120, 0))
 			end,
 		},
 	}
