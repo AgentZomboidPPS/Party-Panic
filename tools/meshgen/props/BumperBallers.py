@@ -86,19 +86,19 @@ def island():
     # tucks under the grass. Listed outside-in so the top faces up.
     sand = organic_lathe([
         (46.6, WATER - 0.8), (46.1, WATER + 1.5), (45.6, GRASS_TOP - 1.4), (45.1, GRASS_TOP - 0.45),
-        (44.6, GRASS_TOP + 0.05), (44.1, GRASS_TOP + 0.15), (43.8, GRASS_TOP + 0.15), (42.2, GRASS_TOP + 0.15),
+        (44.6, GRASS_TOP + 0.05), (44.1, GRASS_TOP + 0.15), (43.9, GRASS_TOP + 0.15), (40.9, GRASS_TOP + 0.15),
         (38.4, GRASS_TOP + 0.15), (37.9, GRASS_TOP + 0.08), (37.6, GRASS_TOP - 0.4),
     ], segments, 0.012, waves=9, seed=3)
     # The warning lip: a ring of red and white stripes in the sand's own top (no overlapping faces).
     c = face_centers(sand)
     radius = np.hypot(c[:, 0], c[:, 2])
     angle = np.arctan2(c[:, 2], c[:, 0])
-    lip = (radius > 42.0) & (radius < 44.2) & (c[:, 1] > GRASS_TOP + 0.1)
-    red = lip & (np.floor((angle + math.pi) / (2 * math.pi / 40)).astype(int) % 2 == 0)
+    lip = (radius > 40.8) & (radius < 44.2) & (c[:, 1] > GRASS_TOP + 0.1)
+    red = lip & (np.floor((angle + math.pi) / (2 * math.pi / 48)).astype(int) % 2 == 0)
     stripe_red, rest = split(sand, red)
     c = face_centers(rest)
     radius = np.hypot(c[:, 0], c[:, 2])
-    white = (radius > 42.0) & (radius < 44.2) & (c[:, 1] > GRASS_TOP + 0.1)
+    white = (radius > 40.8) & (radius < 44.2) & (c[:, 1] > GRASS_TOP + 0.1)
     stripe_white, sand = split(rest, white)
 
     # Cliff: weathered rock from the sea bed up to the sand.
@@ -169,12 +169,12 @@ def palm():
             trunk.v[ring] = p + (trunk.v[ring] - p) * 1.13
     crown = np.array(points[-1])
     fronds = []
-    for k in range(9):
-        yaw = k * 40 + (7 if k % 2 else -5)
-        length = 7.2 if k % 2 else 8.0
-        fronds.append(frond(length, 1.5, 1.05, yaw, math.radians(28 if k % 2 else 18)))
-    for k in range(4):  # young fronds pointing up
-        fronds.append(frond(4.5, 0.3, 0.7, k * 90 + 45, math.radians(62)))
+    for k in range(11):
+        yaw = k * (360 / 11) + (8 if k % 2 else -6)
+        length = 9.0 if k % 2 else 10.5
+        fronds.append(frond(length, 2.3, 1.45, yaw, math.radians(30 if k % 2 else 16)))
+    for k in range(5):  # young fronds pointing up
+        fronds.append(frond(5.5, 0.5, 0.9, k * 72 + 36, math.radians(58)))
     leaves = merge(*fronds).translate(*crown)
     nuts = merge(*[sphere(0.55, 8, 12).translate(crown[0] + math.cos(a) * 0.65, crown[1] - 0.55, crown[2] + math.sin(a) * 0.65)
                    for a in (0.3, 2.4, 4.4)])
@@ -183,7 +183,9 @@ def palm():
 
 
 def islet():
-    sand = organic_lathe([(10.5, 0.0), (9.5, 0.9), (7.6, 2.1), (5.0, 2.9), (2.4, 3.2), (0.0, 3.25)], 40, 0.08, waves=5, seed=9)
+    profile = [(10.5, 0.0), (9.5, 0.9), (7.6, 2.1), (5.0, 2.9), (2.4, 3.2), (0.0, 3.25)]
+    sand = organic_lathe(profile, 40, 0.08, waves=5, seed=9)
+    radii, heights = [p[0] for p in profile][::-1], [p[1] for p in profile][::-1]
     rng = np.random.default_rng(12)
     rocks = []
     for k in range(4):
@@ -196,7 +198,7 @@ def islet():
     for k in range(5):
         a = rng.uniform(0, 2 * math.pi)
         r = rng.uniform(1.5, 4.5)
-        tufts.append(icosphere(rng.uniform(0.5, 0.8), 1, noise=0.3, seed=60 + k).scale(1.3, 0.7, 1.3).translate(math.cos(a) * r, 3.05, math.sin(a) * r))
+        tufts.append(icosphere(rng.uniform(0.5, 0.8), 1, noise=0.3, seed=60 + k).scale(1.3, 0.7, 1.3).translate(math.cos(a) * r, float(np.interp(r, radii, heights)) - 0.15, math.sin(a) * r))
     return {"Sand": sand, "Rock": rock, "Grass": merge(*tufts)}
 
 

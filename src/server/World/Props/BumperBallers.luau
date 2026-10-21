@@ -2,42 +2,50 @@
 -- The meshes come from tools/meshgen/props/BumperBallers.py; until they're uploaded the Fallback is
 -- used. Balls: Shell takes the rider's color (MeshLibrary.Get Colors), Pattern stays white.
 return function(h)
-	local white = h.rgb(248, 248, 248)
-	local function ballSpec(pattern: (m: Model) -> ())
-		return {
+	local ballPalette = { Shell = h.rgb(240, 70, 70), Pattern = h.rgb(248, 248, 248) }
+	local ballMaterials = { Shell = Enum.Material.SmoothPlastic, Pattern = Enum.Material.SmoothPlastic }
+	return {
+		BumperBallGores = {
 			Height = 8,
-			AssetId = 0,
-			Palette = { Shell = h.rgb(240, 70, 70), Pattern = white },
-			Materials = { Shell = Enum.Material.SmoothPlastic, Pattern = Enum.Material.SmoothPlastic },
+			AssetId = 101756819052049,
+			Palette = ballPalette,
+			Materials = ballMaterials,
 			Fallback = function(m)
 				h.ball(m, "Shell", 8, Vector3.new(0, 4, 0))
-				pattern(m)
+				h.roller(m, "Pattern", 8.12, 1.2, Vector3.new(0, 4, 0))
 			end,
-		}
-	end
-	return {
-		BumperBallGores = ballSpec(function(m)
-			h.roller(m, "Pattern", 8.12, 1.2, Vector3.new(0, 4, 0))
-		end),
-		BumperBallBands = ballSpec(function(m)
-			h.pillar(m, "Pattern", 8.12, 1.4, Vector3.new(0, 4, 0))
-		end),
-		BumperBallDots = ballSpec(function(m)
-			for _, offset in
-				{ Vector3.new(0, 4, 0), Vector3.new(0, -4, 0), Vector3.new(4, 0, 0), Vector3.new(-4, 0, 0) }
-			do
-				h.ball(m, "Pattern", 2.4, Vector3.new(0, 4, 0) + offset * 0.86)
-			end
-		end),
+		},
+		BumperBallBands = {
+			Height = 8,
+			AssetId = 124794818084464,
+			Palette = ballPalette,
+			Materials = ballMaterials,
+			Fallback = function(m)
+				h.ball(m, "Shell", 8, Vector3.new(0, 4, 0))
+				h.pillar(m, "Pattern", 8.12, 1.4, Vector3.new(0, 4, 0))
+			end,
+		},
+		BumperBallDots = {
+			Height = 8,
+			AssetId = 124123644253149,
+			Palette = ballPalette,
+			Materials = ballMaterials,
+			Fallback = function(m)
+				h.ball(m, "Shell", 8, Vector3.new(0, 4, 0))
+				for _, offset in { Vector3.yAxis, -Vector3.yAxis, Vector3.xAxis, -Vector3.xAxis } do
+					h.ball(m, "Pattern", 2.4, Vector3.new(0, 4, 0) + offset * 3.45)
+				end
+			end,
+		},
 		-- The beach ring, striped warning lip, cliffs, surf rocks and foam. The grass top is a part
 		-- the mode builds (it's also what the balls roll on); this mesh's top sits 0.15 above it.
 		BumperIsland = {
 			Height = 14,
-			AssetId = 0,
+			AssetId = 114085300507066,
 			Palette = {
 				Sand = h.rgb(240, 222, 165),
 				StripeRed = h.rgb(232, 62, 62),
-				StripeWhite = h.rgb(250, 250, 250),
+				StripeWhite = h.rgb(255, 255, 255),
 				Rock = h.rgb(128, 120, 112),
 				Foam = h.rgb(245, 252, 255),
 			},
@@ -56,8 +64,8 @@ return function(h)
 			end,
 		},
 		BumperPalm = {
-			Height = 18.36,
-			AssetId = 0,
+			Height = 18.35,
+			AssetId = 84557085753971,
 			Palette = {
 				Trunk = h.rgb(150, 110, 72),
 				Leaves = h.rgb(66, 168, 72),
@@ -71,8 +79,8 @@ return function(h)
 			end,
 		},
 		BumperIslet = {
-			Height = 3.62,
-			AssetId = 0,
+			Height = 3.57,
+			AssetId = 118505733776037,
 			Palette = { Sand = h.rgb(240, 222, 165), Rock = h.rgb(128, 120, 112), Grass = h.rgb(90, 180, 80) },
 			Materials = { Rock = Enum.Material.Slate },
 			Fallback = function(m)
