@@ -440,7 +440,18 @@ function HoneyTrap.Start(api)
 			end
 		end
 	end
-	hint("Take 1 or 2 each turn - don't take the 🍯 honeycomb!")
+	-- Everyone plays from their own flower (the server holds them there), so the hints say so: people
+	-- used to walk at the tree (owner: "Players think they have to go to the tree").
+	local WAIT_HINT = "🌼 Stay on your flower - the fruit comes to you!"
+	local nudgeUntil = 0 -- while a "no walking" nudge is up, the turn hints wait their turn
+	local baseHint = ""
+	local function setHint(text: string)
+		baseHint = text
+		if os.clock() >= nudgeUntil then
+			hint(text)
+		end
+	end
+	setHint(if pads[me] then WAIT_HINT else "")
 
 	local hit = api:Button({ Text = "HIT!", Key = Enum.KeyCode.E, Color = Theme.Colors.Yellow })
 	hit:SetVisible(false)
@@ -510,11 +521,17 @@ function HoneyTrap.Start(api)
 				turnText.Text = "🎲 YOUR TURN!"
 				turnText.TextColor3 = Theme.Colors.Yellow
 				api:Sound("Countdown")
-				hint("Jump or press HIT to stop the block!")
+				setHint("Press HIT or jump to stop the block on 1 or 2!")
 			else
 				turnText.Text = `🎲 {new.Name}'s turn`
 				turnText.TextColor3 = Theme.Colors.Text
-				hint(if new.Next == me and api:Alive() then "You're up next - count the fruit!" else "")
+				local playing = pads[me] ~= nil and api:Alive()
+				setHint(
+					if playing and new.Next == me
+						then "You're up next - count the fruit!"
+						elseif playing then WAIT_HINT
+						else ""
+				)
 			end
 			UIKit.PopIn(panel, 0.3)
 		end
@@ -522,7 +539,7 @@ function HoneyTrap.Start(api)
 			announcedResult = new.Id
 			resultAt = os.clock()
 			if new.User == me then
-				hint("")
+				setHint("")
 			end
 			local pad = pads[new.User]
 			if pad then
@@ -535,6 +552,34 @@ function HoneyTrap.Start(api)
 		turn = nil
 		onTurn()
 	end
+
+	-- Pushing the stick does nothing here, so instead of leaving someone pushing towards the tree,
+	-- tell them they play from where they stand (once in a while, for a few seconds).
+	local pushingSince: number? = nil
+	local nudgedAt = -math.huge
+	api:RenderStep(function()
+		local now = os.clock()
+		if nudgeUntil > 0 and now >= nudgeUntil then
+			nudgeUntil = 0
+			hint(baseHint)
+		end
+		local _, humanoid = api:Character()
+		if not humanoid or humanoid.MoveDirection.Magnitude < 0.5 or not pads[me] or not api:Alive() then
+			pushingSince = nil
+			return
+		end
+		pushingSince = pushingSince or now
+		if now - (pushingSince :: number) > 0.4 and now - nudgedAt > 8 then
+			nudgedAt = now
+			nudgeUntil = now + 3.5
+			local mine = turn ~= nil and turn.User == me and turn.Result == nil
+			hint(
+				if mine
+					then "🌼 No need to walk - press HIT or jump!"
+					else "🌼 No walking needed - you play from your flower!"
+			)
+		end
+	end)
 
 	-- Bees that live around the hive on the tree.
 	local arena = api:Arena(5)

@@ -26,6 +26,16 @@
 --   down instead of hanging in the air while the hex sinks out from under it.
 --   A stomp counts if you land on a rival where your screen showed them: up to your ping plus
 --   0.15s back (they are drawn that late, and at walking speed that is more than the 2.2 reach).
+--
+-- Floating bots (owner: "Theres invisible stuff." "Bot is floating."): bots were being launched
+-- into the sky. The server moves bots and each player's own device moves them, so when the two
+-- touched (a player landing on a bot, or walking into one) Roblox shoved the bot out of the way,
+-- sometimes hard enough to send it flying over the lava; a stomp on two rivals at once also added
+-- two bounces. Now bots and players pass through each other here (stomps never needed touching:
+-- they go by where everyone is), a stomp bounces you once however many heads it lands on, and no
+-- bot can move faster than it could by walking, jumping or bouncing.
+
+local PhysicsService = game:GetService("PhysicsService")
 
 local ArenaKit = require(script.Parent.Kit.ArenaKit)
 local MiniGame = require(script.Parent.Kit.MiniGame)
@@ -51,6 +61,12 @@ local SEEN_LAG = 0.15
 local STOMP_REACH = 2.2 -- flat: feet on the head or shoulders (both characters about 2 wide)
 local STOMP_LOW, STOMP_HIGH = 2.5, 6 -- the stomper's root this far above the victim's (on the head: 5.3)
 local STOMP_PING_MAX = 0.2 -- the most of a stomper's ping that is made up for
+local BOUNCE = 45 -- added to a stomper's upward speed, once per landing
+-- Bots and players don't touch in this mode (they still stomp each other: that goes by position).
+-- People use the lobby's PP_Players group (World/BeachBalls.luau puts every player's character in it).
+local BOT_GROUP, PEOPLE_GROUP = "PP_HexBots", "PP_Players"
+-- No bot ever moves faster than this (walking is 16, a jump or a bounce about 50 up).
+local BOT_MAX_UP, BOT_MAX_FLAT = 60, 30
 
 -- Art (World/Props/HexMeltdown.luau). Mesh props pivot at their bounding box's bottom center:
 local WALL_PIVOT = Vector3.new(-0.11, 0, -103.91) -- a CraterWall arc's pivot from the crater center
@@ -285,6 +301,41 @@ local function buildReferee(ctx, origin: Vector3): (BasePart, TextLabel)
 	return flag, label
 end
 
+-- Puts every character in the round in the bots' or the people's collision group (parts that load
+-- later too), so bots and players pass through each other. Returns false if the groups can't be set
+-- up, and then everyone collides as before.
+local function separateBotsFromPeople(ctx): boolean
+	local ok = pcall(function()
+		for _, group in { BOT_GROUP, PEOPLE_GROUP } do
+			if not PhysicsService:IsCollisionGroupRegistered(group) then
+				PhysicsService:RegisterCollisionGroup(group)
+			end
+		end
+		PhysicsService:CollisionGroupSetCollidable(BOT_GROUP, PEOPLE_GROUP, false)
+	end)
+	if not ok then
+		return false
+	end
+	for _, player in ctx:GetPlayers() do
+		local character = ctx:GetCharacter(player)
+		if not character then
+			continue
+		end
+		local group = if BotRegistry.IsBot(player) then BOT_GROUP else PEOPLE_GROUP
+		for _, item in character:GetDescendants() do
+			if item:IsA("BasePart") then
+				item.CollisionGroup = group
+			end
+		end
+		ctx:Track(character.DescendantAdded:Connect(function(item)
+			if item:IsA("BasePart") then
+				item.CollisionGroup = group
+			end
+		end))
+	end
+	return true
+end
+
 function HexMeltdown:Prepare()
 	local ctx = self.context
 	ctx.RespawnMode = "Eliminate"
@@ -377,6 +428,7 @@ function HexMeltdown:Prepare()
 		spawns[index], spawns[other] = spawns[other], spawns[index]
 	end
 	ctx:SpawnAll(spawns, true)
+	separateBotsFromPeople(ctx)
 	ctx:SetStatus(`Players left: {ctx:AliveCount()}`)
 end
 
@@ -460,6 +512,7 @@ function HexMeltdown:Start()
 				continue
 			end
 			local since = clock - stompRewind(attacker)
+			local bounced = false
 			for victim, trail in trails do
 				if victim == attacker or ctx:IsStunned(victim) then
 					continue
@@ -478,8 +531,11 @@ function HexMeltdown:Start()
 				if hit and clock - (self.lastStomp[key] or 0) > 1.5 then
 					self.lastStomp[key] = clock
 					ctx:Stun(victim, 1.2)
-					ctx:Knockback(attacker, Vector3.new(0, 45, 0), 0) -- the stomper bounces off
-					ctx:Sound("Boing")
+					if not bounced then -- the stomper bounces off, once however many heads it lands on
+						bounced = true
+						ctx:Knockback(attacker, Vector3.new(0, BOUNCE, 0), 0)
+						ctx:Sound("Boing")
+					end
 				end
 			end
 		end
@@ -492,7 +548,31 @@ function HexMeltdown:Start()
 
 	ctx:Heartbeat(function(dt)
 		self:_dropBots(dt)
+		self:_limitBots()
 	end)
+end
+
+-- A safety net under the bots: whatever shoves one (a pile-up, a bounce on a bounce), it can't fly
+-- off over the lava or hang in the sky; it goes no faster than walking, jumping or bouncing would.
+function HexMeltdown:_limitBots()
+	local ctx = self.context
+	for _, player in ctx:GetAlivePlayers() do
+		if not BotRegistry.IsBot(player) or self.falling[player] then
+			continue
+		end
+		local _, _, root = ctx:GetCharacter(player)
+		if not root or root.Anchored then
+			continue
+		end
+		local velocity = root.AssemblyLinearVelocity
+		local flat = Vector3.new(velocity.X, 0, velocity.Z)
+		if velocity.Y > BOT_MAX_UP or flat.Magnitude > BOT_MAX_FLAT then
+			if flat.Magnitude > BOT_MAX_FLAT then
+				flat = flat.Unit * BOT_MAX_FLAT
+			end
+			root.AssemblyLinearVelocity = Vector3.new(flat.X, math.min(velocity.Y, BOT_MAX_UP), flat.Z)
+		end
+	end
 end
 
 -- Players fall when the hexes sink on their screens. The server moves bots, and on the server the

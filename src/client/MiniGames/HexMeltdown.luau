@@ -174,29 +174,31 @@ function HexMeltdown.Start(api)
 			robot = found
 		end
 	end)
-	-- The call banner: shape and color name with a bar that runs out when the hexes sink.
+	-- The call banner: shape and color name with a bar that runs out when the hexes sink. Kept small
+	-- (owner, of the old big one over the referee's board: "This"): the flag and the board in the
+	-- arena are the call, this is the reminder and the timer.
 	local banner = UIKit.Panel({
 		Name = "Call",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, api:HudY()),
-		Size = UDim2.fromOffset(380, 92),
-		CornerRadius = 22,
+		Size = UDim2.fromOffset(270, 60),
+		CornerRadius = 18,
 		Visible = false,
 		Parent = api:TopHud(),
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 	local callText = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 46,
-		Size = UDim2.new(1, 0, 0, 62),
-		Position = UDim2.fromOffset(0, 6),
+		TextSize = 32,
+		Size = UDim2.new(1, 0, 0, 40),
+		Position = UDim2.fromOffset(0, 4),
 		Parent = banner,
 		Children = { UIKit.TextStroke(0.1) },
 	})
 	local barBack = UIKit.new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.new(1, -40, 0, 10),
+		Position = UDim2.new(0.5, 0, 1, -8),
+		Size = UDim2.new(1, -32, 0, 8),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		Parent = banner,
 		Children = { UIKit.Round() },
