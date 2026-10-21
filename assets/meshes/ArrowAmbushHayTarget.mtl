@@ -1,0 +1,41 @@
+newmtl Straw
+Kd 1.000 0.353 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Face
+Kd 0.275 0.157 0.118
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rings
+Kd 0.902 0.235 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bull
+Kd 1.000 0.804 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Shafts
+Kd 0.824 0.651 0.439
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Fletching
+Kd 1.000 0.431 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Wood
+Kd 0.706 0.471 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

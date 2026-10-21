@@ -22,8 +22,26 @@ Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
+newmtl Paint
+Kd 0.961 0.941 0.882
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl ShieldRim
+Kd 1.000 0.804 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Crest
+Kd 1.000 0.804 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
 newmtl Face
-Kd 0.980 0.965 0.925
+Kd 0.275 0.157 0.118
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
@@ -36,12 +54,6 @@ d 1
 
 newmtl Bull
 Kd 1.000 0.804 0.235
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Rim
-Kd 0.353 0.314 0.471
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1

@@ -1,0 +1,17 @@
+newmtl Cobble
+Kd 0.918 0.871 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl CobbleWarm
+Kd 0.902 0.745 0.533
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl CobbleCool
+Kd 0.659 0.722 0.800
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
