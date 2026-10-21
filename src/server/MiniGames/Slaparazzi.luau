@@ -53,10 +53,11 @@ local HISTORY_STEP = 1 / 20
 local HISTORY_KEEP = 1.5 -- seconds
 
 -- The arena (studs from the origin; +Z is toward the photographer).
-local PLAZA_Y = 0.15 -- the plaza's top
+local PLAZA_Y = 0.25 -- the plaza's top
 local FLOOR_Y = 1.45 -- the stage's top
 local STAGE_Z = -2 -- the stage's middle
-local STAGE = Vector3.new(60, 0.7, 40) -- the upper tier (the lower one is 4 studs bigger)
+local STAGE = Vector3.new(60, 0.9, 40) -- the upper tier (the lower one is 4 studs bigger)
+local FRAME_LIFT = 0.11 -- the frame sits this far above the stage floor (just over the carpet)
 local FRAME_X = 17 -- how far from the stage's middle the frame's middle can go
 local FRAME_Z0, FRAME_Z1 = -12, 7
 local FRAME_MOVE = 11 -- each new spot is at least this far from the last one
@@ -198,7 +199,7 @@ function Slaparazzi:Prepare()
 		Y = floor,
 	} :: Rules.Frame
 	self.frameModel = MeshLibrary.Get("SlaparazziFrame", {
-		CFrame = CFrame.new(center.X, floor + 0.03, center.Z),
+		CFrame = CFrame.new(center.X, floor + FRAME_LIFT, center.Z),
 		Parent = ctx.Arena,
 	})
 	self:_publishFrame()
@@ -237,6 +238,7 @@ function Slaparazzi:Prepare()
 
 	ctx:ShareTemplate("SlaparazziGlove", MeshLibrary.Get("SlaparazziGlove"))
 	ctx:SetSharedJSON("Layout", {
+		Lift = FRAME_LIFT,
 		Camera = { origin.X, origin.Y + PLAZA_Y, origin.Z + CAMERA_Z },
 		Reach = Rules.CLIENT_REACH,
 		Cooldown = Rules.COOLDOWN,
@@ -281,8 +283,8 @@ function Slaparazzi:_buildArena()
 	Build.Part({
 		Name = "Plaza",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.3, 80, 80),
-		CFrame = CFrame.new(at(0, PLAZA_Y - 0.15, 0)) * upright,
+		Size = Vector3.new(0.5, 80, 80),
+		CFrame = CFrame.new(at(0, PLAZA_Y - 0.25, 0)) * upright,
 		Color = Color3.fromRGB(214, 206, 196),
 		Material = Enum.Material.Slate,
 		Parent = arena,
@@ -290,22 +292,22 @@ function Slaparazzi:_buildArena()
 	Build.Part({
 		Name = "PlazaRim",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.24, 82, 82),
-		CFrame = CFrame.new(at(0, PLAZA_Y - 0.19, 0)) * upright,
+		Size = Vector3.new(0.22, 82, 82),
+		CFrame = CFrame.new(at(0, PLAZA_Y - 0.24, 0)) * upright,
 		Color = Color3.fromRGB(196, 160, 70),
 		Material = Enum.Material.SmoothPlastic,
 		Parent = arena,
 	})
-	Shapes.Slab(STAGE + Vector3.new(4, 0, 4), 6, {
+	Shapes.Slab(Vector3.new(STAGE.X + 4, 0.7, STAGE.Z + 4), 6, {
 		Name = "StageStep",
-		CFrame = CFrame.new(at(0, FLOOR_Y - 0.65 - 0.35, STAGE_Z)),
+		CFrame = CFrame.new(at(0, FLOOR_Y - 1, STAGE_Z)),
 		Color = Color3.fromRGB(58, 40, 70),
 		Material = Enum.Material.SmoothPlastic,
 		Parent = arena,
 	})
 	Shapes.Slab(STAGE, 5, {
 		Name = "Stage",
-		CFrame = CFrame.new(at(0, FLOOR_Y - 0.35, STAGE_Z)),
+		CFrame = CFrame.new(at(0, FLOOR_Y - STAGE.Y / 2, STAGE_Z)),
 		Color = Color3.fromRGB(86, 58, 44),
 		Material = Enum.Material.WoodPlanks,
 		Parent = arena,
@@ -313,8 +315,8 @@ function Slaparazzi:_buildArena()
 	-- The red carpet: a runner across the stage and down the plaza to the photographer.
 	Build.Decor({
 		Name = "CarpetStage",
-		Size = Vector3.new(9, 0.06, STAGE.Z - 1),
-		CFrame = CFrame.new(at(0, FLOOR_Y + 0.02, STAGE_Z)),
+		Size = Vector3.new(9, 0.2, STAGE.Z - 1),
+		CFrame = CFrame.new(at(0, FLOOR_Y, STAGE_Z)),
 		Color = Color3.fromRGB(196, 24, 40),
 		Material = Enum.Material.Fabric,
 		Parent = arena,
@@ -322,16 +324,16 @@ function Slaparazzi:_buildArena()
 	local carpetFrom = STAGE_Z + STAGE.Z / 2 + 2
 	Build.Decor({
 		Name = "CarpetPlaza",
-		Size = Vector3.new(9, 0.06, CAMERA_Z + 4 - carpetFrom),
-		CFrame = CFrame.new(at(0, PLAZA_Y + 0.02, (carpetFrom + CAMERA_Z + 4) / 2)),
+		Size = Vector3.new(9, 0.2, CAMERA_Z + 4 - carpetFrom),
+		CFrame = CFrame.new(at(0, PLAZA_Y, (carpetFrom + CAMERA_Z + 4) / 2)),
 		Color = Color3.fromRGB(196, 24, 40),
 		Material = Enum.Material.Fabric,
 		Parent = arena,
 	})
 	for _, side in { -1, 1 } do
-		for _, z in { carpetFrom + 1, carpetFrom + 7.5 } do
+		for _, z in { carpetFrom + 3.5, carpetFrom + 11 } do
 			MeshLibrary.Get("SlaparazziRope", {
-				CFrame = CFrame.new(at(side * 6, PLAZA_Y, z + 3)) * CFrame.Angles(0, math.pi / 2, 0),
+				CFrame = CFrame.new(at(side * 6, PLAZA_Y, z)) * CFrame.Angles(0, math.pi / 2, 0),
 				Parent = arena,
 			})
 		end
@@ -651,7 +653,7 @@ function Slaparazzi:Start()
 		self:_publishFrame()
 		ctx:Delay(GLIDE_AFTER + GLIDE_TIME + 0.1, function()
 			if self.frameModel.Parent then
-				self.frameModel:PivotTo(CFrame.new(x, frame.Y + 0.03, z))
+				self.frameModel:PivotTo(CFrame.new(x, frame.Y + FRAME_LIFT, z))
 			end
 		end)
 		return 0.03

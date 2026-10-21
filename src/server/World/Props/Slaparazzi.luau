@@ -8,7 +8,7 @@ return function(h)
 		-- The photo frame on the stage. Its rings' outer edges are the scoring radii
 		-- (Logic/Slaparazzi.luau RINGS: 3.6, 7.2, 11); the whole frame is 24.35 studs across.
 		SlaparazziFrame = {
-			Height = 0.12,
+			Height = 0.12
 			AssetId = 0,
 			Shadow = false,
 			Palette = {
@@ -19,13 +19,14 @@ return function(h)
 			},
 			Materials = { Bracket = Enum.Material.Neon, Gold = Enum.Material.Neon },
 			Fallback = function(m)
-				h.pillar(m, "Bronze", 22, 0.04, Vector3.new(0, 0.02, 0))
-				h.pillar(m, "Silver", 14.4, 0.04, Vector3.new(0, 0.06, 0))
-				h.pillar(m, "Gold", 7.2, 0.04, Vector3.new(0, 0.1, 0))
+				-- Discs stacked a little apart (parts that share a plane flicker).
+				h.pillar(m, "Bronze", 22, 0.03, Vector3.new(0, 0.015, 0))
+				h.pillar(m, "Silver", 14.4, 0.03, Vector3.new(0, 0.105, 0))
+				h.pillar(m, "Gold", 7.2, 0.03, Vector3.new(0, 0.195, 0))
 				for _, sx in { -1, 1 } do
 					for _, sz in { -1, 1 } do
-						h.block(m, "Bracket", Vector3.new(3.2, 0.12, 0.55), Vector3.new(sx * 10.5, 0.06, sz * 11.9))
-						h.block(m, "Bracket", Vector3.new(0.55, 0.12, 3.2), Vector3.new(sx * 11.9, 0.06, sz * 10.5))
+						h.block(m, "Bracket", Vector3.new(3.2, 0.03, 0.55), Vector3.new(sx * 10.5, 0.015, sz * 11.9))
+						h.block(m, "Bracket", Vector3.new(0.55, 0.03, 3.2), Vector3.new(sx * 11.9, 0.015, sz * 10.5))
 					end
 				end
 			end,

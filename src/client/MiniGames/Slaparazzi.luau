@@ -281,6 +281,8 @@ function Slaparazzi.Start(api)
 		Parent = marker,
 	})
 
+	local layout = api:SharedJSON("Layout")
+	local lift = if layout and type(layout.Lift) == "number" then layout.Lift else 0.11
 	local frame: Rules.Frame? = api:SharedJSON("Frame")
 	api:OnShared("Frame", function()
 		frame = api:SharedJSON("Frame")
@@ -558,7 +560,7 @@ function Slaparazzi.Start(api)
 		local x, z = Rules.FrameAt(current, now)
 		local center = Vector3.new(x, current.Y, z)
 		if frameModel then
-			frameModel:PivotTo(CFrame.new(x, current.Y + 0.03, z))
+			frameModel:PivotTo(CFrame.new(x, current.Y + lift, z))
 		end
 		for _, beam in beams do
 			beam.CFrame = CFrame.lookAt(beam.Position, center)

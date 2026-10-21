@@ -72,10 +72,10 @@ def frame():
             tick.rotate("y", -math.degrees(a) + 90).translate(math.cos(a) * mid, FLAT * 0.4, math.sin(a) * mid)
             ticks.append(tick)
     return {
-        "Gold": merge(gold, middle_star),
-        "Silver": silver,
         "Bronze": bronze,
         "Bracket": merge(*corners, *ticks),
+        "Silver": silver,
+        "Gold": merge(gold, middle_star),
     }
 
 
