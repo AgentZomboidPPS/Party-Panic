@@ -45,7 +45,7 @@ local STAND_SCALE, ROBOT_SCALE, MARQUEE_SCALE = 1.15, 1.35, 1.25
 local BASALT = Color3.fromRGB(84, 60, 80)
 local RIM = Color3.fromRGB(255, 244, 226)
 local GOLD = Color3.fromRGB(255, 196, 60)
-local WALL_ROCK = Color3.fromRGB(96, 66, 88)
+local WALL_ROCK = Color3.fromRGB(66, 50, 62)
 
 -- Every color comes with a shape so color is never the only cue (design doc §12).
 HexMeltdown.Palette = {

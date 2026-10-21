@@ -21,7 +21,8 @@ import math
 
 import numpy as np
 
-from generate_meshes import COLORS as BASE_COLORS, Mesh, capsule, cylinder, icosphere, lathe, merge, rounded_box, sphere, torus, tube, weld
+from generate_meshes import COLORS as BASE_COLORS, Mesh, capsule, cylinder, icosphere, lathe, merge, rounded_box, sphere, torus, weld
+from generate_meshes import tube as _tube
 
 COS30 = math.cos(math.radians(30))
 
@@ -49,6 +50,26 @@ def outward(mesh: Mesh) -> Mesh:
     if signed_volume(mesh) < 0:
         mesh.f = mesh.f[:, ::-1].copy()
     return mesh
+
+
+def tube(points, radius: float, sides: int = 8) -> Mesh:
+    """The shared tube with its faces turned outward and both ends capped (the shared one is
+    inside-out and open, which Roblox would draw hollow)."""
+    mesh = _tube(points, radius, sides)
+    mesh.f = mesh.f[:, ::-1].copy()
+    verts, faces = list(mesh.v), [tuple(f) for f in mesh.f]
+    pts = [np.array(p, dtype=float) for p in points]
+    for ring, outside in ((0, pts[0] - pts[1]), (len(pts) - 1, pts[-1] - pts[-2])):
+        center = len(verts)
+        verts.append(pts[ring])
+        rim = list(range(len(verts), len(verts) + sides))
+        verts.extend(mesh.v[ring * sides:(ring + 1) * sides])
+        cap = [(center, rim[j], rim[(j + 1) % sides]) for j in range(sides)]
+        a, b, c = (np.asarray(verts[i]) for i in cap[0])
+        if np.dot(np.cross(b - a, c - a), outside) < 0:
+            cap = [(x, z, y) for x, y, z in cap]
+        faces += cap
+    return Mesh(np.array(verts), faces, mesh.smooth)
 
 
 def slab(front: np.ndarray, back: np.ndarray, smooth: bool = True) -> Mesh:

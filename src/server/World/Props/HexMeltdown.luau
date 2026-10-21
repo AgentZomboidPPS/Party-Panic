@@ -36,7 +36,7 @@ return function(h)
 	local props = {
 		HexColumn = {
 			Height = 30.95,
-			AssetId = 77352161999929,
+			AssetId = 101443752523189,
 			Palette = { Rock = BASALT, Top = rgb(250, 250, 255), Rim = rgb(255, 244, 226), Glow = LAVA },
 			Materials = { Glow = Enum.Material.Neon },
 			Fallback = function(m)
@@ -50,7 +50,7 @@ return function(h)
 			Height = 38.3,
 			AssetId = 72361166933085,
 			Shadow = false,
-			Palette = { Rock = rgb(96, 66, 88), Ledge = rgb(158, 106, 124), Lava = LAVA },
+			Palette = { Rock = rgb(66, 50, 62), Ledge = rgb(104, 74, 88), Lava = LAVA },
 			Materials = { Lava = Enum.Material.Neon },
 			Fallback = function(m)
 				-- Three lumpy ridges along the arc (mesh coordinates: the arc bulges toward -Z).
@@ -94,8 +94,7 @@ return function(h)
 		},
 		RefereeBot = {
 			Height = 18.41,
-			AssetId = 124935401518839,
-			Collide = true,
+			AssetId = 80595116655074,
 			Palette = {
 				Body = rgb(248, 248, 255),
 				Dark = rgb(46, 42, 60),
@@ -120,7 +119,7 @@ return function(h)
 		},
 		CallMarquee = {
 			Height = 39.7,
-			AssetId = 121121312136938,
+			AssetId = 137569703457097,
 			Palette = {
 				Frame = rgb(124, 64, 214),
 				Trim = GOLD,
