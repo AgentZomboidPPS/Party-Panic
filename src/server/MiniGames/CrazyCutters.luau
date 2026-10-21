@@ -26,8 +26,8 @@ local CrazyCutters = MiniGame.Define("CrazyCutters", { Results = "Score" })
 
 local RING = 37 -- boards' middles from the arena's middle
 local SLOT = math.rad(30) -- between neighbouring boards (12 fill the ring)
-local FLOOR = 3.75 -- the cookie floor's top above the arena origin
-local BOARD_UP = 0.1 -- boards sit this far above the floor (clear of the cookie's lumps)
+local FLOOR = 4 -- the cookie floor's top above the arena origin
+local BOARD_UP = 0.15 -- boards sit this far above the floor (clear of the cookie's lumps)
 local DOUGH = 0.8 -- the dough sheet's bottom above the board's
 local DOUGH_TOP = 1.22 -- the dough's top surface above the board's bottom
 local STAND = 11.2 -- players stand this far behind their board's middle
@@ -153,7 +153,7 @@ function CrazyCutters:_buildArena(origin: Vector3)
 			Build.Decor({
 				Name = "Gingham",
 				Size = Vector3.new(blanket / stripes / 2, 0.04, blanket),
-				CFrame = CFrame.new(origin + Vector3.new(0, 0.22 + axis * 0.04, 0))
+				CFrame = CFrame.new(origin + Vector3.new(0, 0.31 + axis * 0.12, 0))
 					* CFrame.Angles(0, math.rad(12) + axis * math.pi / 2, 0)
 					* CFrame.new(offset, 0, 0),
 				Color = rgb(230, 60, 70),

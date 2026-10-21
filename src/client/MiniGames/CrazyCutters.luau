@@ -31,6 +31,13 @@ local START_COLOR = rgb(70, 200, 110)
 local GOOD = rgb(70, 190, 100)
 local BAD = rgb(235, 70, 60)
 local PANEL = rgb(60, 36, 24)
+-- Heights over the dough, each layer clear of the next (no flicker): dots, the start disc, the cut
+-- line (four alternating levels), the start arrow on top.
+local DOT_TOP = 0.1
+local START_TOP = 0.19
+local CUT_LIFT = 0.275
+local CUT_STEP = 0.09
+local ARROW_LIFT = 0.68
 local REPLAY_DELAY = 0.3 -- others' cutters replay this far behind, so they glide
 local SEND_EVERY = 0.12
 local KEY_SPEED = 5.5 -- studs/s with keys or a stick
@@ -88,6 +95,7 @@ type Board = {
 	Trail: { Part },
 	TrailUsed: number,
 	TrailFrom: Vector2,
+	TrailLen: number,
 	Samples: { { number } }, -- relayed { t, u, v } waiting to be replayed (others' boards)
 	Pos: Vector2, -- the cutter's position now
 	Heading: number,
@@ -148,6 +156,7 @@ function CrazyCutters.Start(api)
 			Trail = {},
 			TrailUsed = 0,
 			TrailFrom = Vector2.zero,
+			TrailLen = 0,
 			Samples = {},
 			Pos = Vector2.zero,
 			Heading = 0,
@@ -259,6 +268,7 @@ function CrazyCutters.Start(api)
 			board.Done = false
 			board.Pos = Vector2.new(su, sv)
 			board.TrailFrom = board.Pos
+			board.TrailLen = 0
 			board.Heading = math.atan2(-du, -dv) -- the wheel rolls along the outline
 			placeCutter(board)
 			-- Dotted outline: closer dots on your own board.
@@ -270,9 +280,11 @@ function CrazyCutters.Start(api)
 				local dot = part({
 					Name = "Dot",
 					Shape = Enum.PartType.Cylinder,
-					Size = Vector3.new(0.06, size, size),
+					Size = Vector3.new(DOT_TOP, size, size),
 					Color = DOT_COLOR,
-					CFrame = CFrame.new(at(board, u, v, 0.04)) * board.Top.Rotation * CFrame.Angles(0, 0, math.rad(90)),
+					CFrame = CFrame.new(at(board, u, v, DOT_TOP / 2))
+						* board.Top.Rotation
+						* CFrame.Angles(0, 0, math.rad(90)),
 					Parent = api.World,
 				})
 				table.insert(board.Dots, dot)
@@ -282,9 +294,11 @@ function CrazyCutters.Start(api)
 			local disc = part({
 				Name = "Start",
 				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(0.07, 0.9, 0.9),
+				Size = Vector3.new(START_TOP, 0.9, 0.9),
 				Color = START_COLOR,
-				CFrame = CFrame.new(at(board, su, sv, 0.045)) * board.Top.Rotation * CFrame.Angles(0, 0, math.rad(90)),
+				CFrame = CFrame.new(at(board, su, sv, START_TOP / 2))
+					* board.Top.Rotation
+					* CFrame.Angles(0, 0, math.rad(90)),
 				Parent = api.World,
 			})
 			table.insert(startMarkers, disc)
@@ -293,7 +307,8 @@ function CrazyCutters.Start(api)
 			local up = board.Top.UpVector
 			local forward = (at(board, su + du, sv + dv, 0) - at(board, su, sv, 0)).Unit
 			local zAxis = -forward
-			local head = CFrame.fromMatrix(at(board, su + du * 1.15, sv + dv * 1.15, 0.065), up, zAxis:Cross(up), zAxis)
+			local head =
+				CFrame.fromMatrix(at(board, su + du * 1.15, sv + dv * 1.15, ARROW_LIFT), up, zAxis:Cross(up), zAxis)
 			for _, turn in { 0, math.pi } do
 				local wedge = Instance.new("WedgePart")
 				wedge.Name = "StartArrow"
@@ -304,7 +319,7 @@ function CrazyCutters.Start(api)
 				wedge.CastShadow = false
 				wedge.Color = START_COLOR
 				wedge.Material = Enum.Material.SmoothPlastic
-				wedge.Size = Vector3.new(0.07, 0.38, 0.75)
+				wedge.Size = Vector3.new(0.1, 0.38, 0.75)
 				wedge.CFrame = head * CFrame.Angles(0, 0, turn) * CFrame.new(0, 0.19, 0)
 				wedge.Parent = api.World
 				table.insert(startMarkers, wedge)
@@ -331,8 +346,13 @@ function CrazyCutters.Start(api)
 			board.Trail[index] = segment
 		end
 		board.TrailUsed = index
-		local a, b = at(board, from.X, from.Y, 0.06), at(board, position.X, position.Y, 0.06)
-		segment.Size = Vector3.new(if board.Mine then 0.2 else 0.28, 0.05, length + 0.12)
+		-- Neighbouring stretches overlap a little at the joints, so they alternate between two
+		-- heights (and the second half of a lap, which meets the first at the start, uses two more).
+		local half = if shape and board.TrailLen > shape.Length * 0.55 then 2 else 0
+		local lift = CUT_LIFT + CUT_STEP * ((index % 2) + half)
+		board.TrailLen += length
+		local a, b = at(board, from.X, from.Y, lift), at(board, position.X, position.Y, lift)
+		segment.Size = Vector3.new(if board.Mine then 0.2 else 0.28, 0.07, length + 0.12)
 		segment.CFrame = CFrame.lookAt((a + b) / 2, b, board.Top.UpVector)
 		segment.Color = GOOD:Lerp(BAD, math.clamp((distance - Rules.FULL) / (Rules.ZERO - Rules.FULL), 0, 1))
 		segment.Parent = api.World
