@@ -47,6 +47,8 @@ local JOINTS = {
 	RightFoot = "RightAnkle",
 }
 
+local R6_JOINTS = { "Left Shoulder", "Right Shoulder", "Left Hip", "Right Hip" }
+
 local function angles(x: number, y: number, z: number): CFrame
 	return CFrame.Angles(rad(x), rad(y), rad(z))
 end
@@ -78,6 +80,11 @@ local function ridePose(phase: number, stride: number, air: number, dizzy: boole
 		RightKnee = angles(-knee * (0.5 + 0.5 * math.max(0, -math.cos(phase))) - tuck, 0, 0),
 		LeftAnkle = angles(10, 0, 0),
 		RightAnkle = angles(10, 0, 0),
+		-- R6: each limb swings about its joint's Z axis (forward is + on the right, - on the left).
+		["Right Hip"] = angles(0, 0, swing + tuck),
+		["Left Hip"] = angles(0, 0, swing - tuck),
+		["Right Shoulder"] = angles(0, 0, if cheer then 160 elseif dizzy then 90 + math.sin(t * 14) * 30 else 60),
+		["Left Shoulder"] = angles(0, 0, if cheer then -160 elseif dizzy then -90 + math.sin(t * 14) * 30 else -60),
 	}
 end
 
@@ -112,6 +119,7 @@ function RockinRaceway.Start(api)
 
 	local originCF: CFrame? = nil
 	local riders: { [string]: { L: number, C: Color3, N: string } } = {}
+	local panels: { Track.Panel } = {}
 	local snapshot: { T: number, R: { [string]: any } } = { T = 0, R = {} }
 	local shown: { [string]: Shown } = {}
 	local stage = api:Shared("Stage") or "Ready"
@@ -125,6 +133,7 @@ function RockinRaceway.Start(api)
 			return
 		end
 		originCF = CFrame.new(value.O[1], value.O[2], value.O[3])
+		panels = if type(value.Panels) == "table" then value.Panels else {}
 		for _, entry in value.Riders or {} do
 			local c = entry.C or { 255, 255, 255 }
 			riders[tostring(entry.U)] = { L = entry.L or 1, C = Color3.fromRGB(c[1], c[2], c[3]), N = entry.N or "" }
@@ -151,6 +160,8 @@ function RockinRaceway.Start(api)
 				V = entry.V or 0,
 				C = entry.C or Track.CARROTS,
 				Gallop = entry.G == 1,
+				Build = entry.B or 0,
+				Rest = entry.Rs or 10,
 				SpinUntil = entry.S or 0,
 				DashUntil = entry.Da or 0,
 				SlowUntil = entry.Sl or 0,
@@ -158,9 +169,10 @@ function RockinRaceway.Start(api)
 			-- Ride it on from the snapshot's moment to now with what I'm holding.
 			local behind = math.clamp(now - snapshot.T, 0, 0.5)
 			rider.Gallop = holding and not entry.F
-			local steps = math.ceil(behind / (1 / 30))
-			for _ = 1, steps do
-				Track.Ride(rider, behind / steps, now - behind)
+			local steps = if stage == "Race" then math.ceil(behind / (1 / 30)) else 0
+			for k = 1, steps do
+				local step = behind / steps
+				Track.Ride(rider, step, now - behind + (k - 1) * step)
 			end
 			mine = rider
 			if entry.H and entry.H > myHopAt + 0.05 then
@@ -220,6 +232,13 @@ function RockinRaceway.Start(api)
 		for partName, motorName in JOINTS do
 			local part = character:FindFirstChild(partName)
 			local motor = part and part:FindFirstChild(motorName)
+			if motor and motor:IsA("Motor6D") then
+				rig[motorName] = { Motor = motor, Current = CFrame.identity }
+			end
+		end
+		local torso = character:FindFirstChild("Torso") -- (R6: its four limbs hang off the torso)
+		for _, motorName in R6_JOINTS do
+			local motor = torso and torso:FindFirstChild(motorName)
 			if motor and motor:IsA("Motor6D") then
 				rig[motorName] = { Motor = motor, Current = CFrame.identity }
 			end
@@ -452,24 +471,88 @@ function RockinRaceway.Start(api)
 	end
 
 	-- Controls ---------------------------------------------------------------------------------------
+	-- PC: hold W (or Up) to GALLOP, Space to HOP. Phones: each thumb owns one control. The left thumb
+	-- holds GALLOP anywhere on the left half of the screen (the MOVE stick does nothing here), and
+	-- the drawn GALLOP pad just right of the stick's corner lights up while it's held. The right thumb
+	-- taps HOP beside the jump button (the jump button hops too). Each hold is tracked by its own
+	-- touch, so tapping HOP never lets go of GALLOP.
 
-	local gallop = api:Button({ Text = "GALLOP", Key = Enum.KeyCode.W, Color = Theme.Colors.Orange, Slot = 1 })
-	-- (GALLOP is the longest label: it shrinks to fit instead of wrapping onto two lines)
-	local gallopHolder = api.Gui:FindFirstChild("Action_GALLOP")
-	local gallopLabel = gallopHolder and gallopHolder:FindFirstChildWhichIsA("TextLabel", true)
-	if gallopLabel then
-		gallopLabel.TextWrapped = false
-		gallopLabel.Size = UDim2.fromScale(0.96, 0.5) -- (a little wider than the usual 0.86)
+	local gallop = nil :: any
+	local padTouch: InputObject? = nil
+	local pad: Frame? = nil
+	local padFace: Frame? = nil
+	if touch then
+		local holder = UIKit.new("Frame", {
+			Name = "GallopPad",
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(0.5, -8, 1, -20),
+			Size = UDim2.fromOffset(104, 104),
+			BackgroundTransparency = 1,
+			Parent = api.Gui,
+		})
+		UIKit.AutoScale(holder)
+		padFace = UIKit.new("Frame", {
+			Name = "Face",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Theme.Colors.Orange,
+			Parent = holder,
+			Children = { UIKit.Round(), UIKit.Stroke(Color3.new(1, 1, 1), 4, 0.1) },
+		})
+		UIKit.Label({
+			Name = "Label",
+			Text = "GALLOP",
+			Font = Theme.Fonts.Display,
+			TextSize = 22,
+			Size = UDim2.new(0.92, 0, 0, 26),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.42),
+			Parent = padFace,
+			Children = { UIKit.TextStroke(0.15) },
+		})
+		UIKit.Label({
+			Name = "Sub",
+			Text = "◀ hold",
+			Font = Theme.Fonts.Bold,
+			TextSize = 16,
+			Size = UDim2.new(0.9, 0, 0, 20),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.7),
+			Parent = padFace,
+			Children = { UIKit.TextStroke(0.3) },
+		})
+		pad = holder
+		holder.Visible = api:CanAct()
+		api:OnCanAct(function(value)
+			holder.Visible = value
+		end)
+	else
+		gallop = api:Button({ Text = "GALLOP", Key = Enum.KeyCode.W, Color = Theme.Colors.Orange, Slot = 1 })
+		-- (GALLOP is the longest label: it shrinks to fit instead of wrapping onto two lines)
+		local gallopHolder = api.Gui:FindFirstChild("Action_GALLOP")
+		local gallopLabel = gallopHolder and gallopHolder:FindFirstChildWhichIsA("TextLabel", true)
+		if gallopLabel then
+			gallopLabel.TextWrapped = false
+			gallopLabel.Size = UDim2.fromScale(0.96, 0.5) -- (a little wider than the usual 0.86)
+		end
 	end
-	local hop = api:Button({ Text = "HOP", Key = Enum.KeyCode.Space, Color = Theme.Colors.Cyan, Slot = 2 })
+	local hop = api:Button({
+		Text = "HOP",
+		Key = Enum.KeyCode.Space,
+		Color = Theme.Colors.Cyan,
+		Slot = if touch then 1 else 2,
+	})
+	local upHeld = false
 	local function racing(): boolean
 		local entry = snapshot.R[myKey]
 		return stage == "Race" and entry ~= nil and entry.F == nil and api:CanAct()
 	end
-	local function setHolding(value: boolean)
-		if value and not racing() then
-			value = false
-		end
+	-- What the player is holding right now (W, Up, the GALLOP button or a left-half touch), whether
+	-- or not the race has started: a GALLOP held through the countdown gallops at GO.
+	local function wantsGallop(): boolean
+		return upHeld or padTouch ~= nil or (gallop ~= nil and gallop:IsDown())
+	end
+	local function refreshHolding()
+		local value = wantsGallop() and racing()
 		if value ~= holding then
 			holding = value
 			if mine then
@@ -478,22 +561,28 @@ function RockinRaceway.Start(api)
 			api:Action("Gallop", value)
 		end
 	end
-	gallop.Pressed:Connect(function()
-		setHolding(true)
-	end)
-	gallop.Released:Connect(function()
-		setHolding(false)
-	end)
-	-- (the arrow up key and a held mouse button gallop too on PC)
+	if gallop then
+		gallop.Pressed:Connect(refreshHolding)
+		gallop.Released:Connect(refreshHolding)
+	end
 	api:Track(UserInputService.InputBegan:Connect(function(input, processed)
-		if not processed and input.KeyCode == Enum.KeyCode.Up then
-			setHolding(true)
+		if input.KeyCode == Enum.KeyCode.Up and not processed then
+			upHeld = true
+		elseif input.UserInputType == Enum.UserInputType.Touch and touch and padTouch == nil then
+			-- (a touch on the left half; touches on HOP or the jump button are on the right half)
+			if input.Position.X < camera.ViewportSize.X * 0.5 then
+				padTouch = input
+			end
 		end
+		refreshHolding()
 	end))
 	api:Track(UserInputService.InputEnded:Connect(function(input)
-		if input.KeyCode == Enum.KeyCode.Up and not gallop:IsDown() then
-			setHolding(false)
+		if input.KeyCode == Enum.KeyCode.Up then
+			upHeld = false
+		elseif input == padTouch then
+			padTouch = nil
 		end
+		refreshHolding()
 	end))
 	local function doHop()
 		local now = api:Now()
@@ -514,9 +603,8 @@ function RockinRaceway.Start(api)
 	hop.Pressed:Connect(doHop)
 	api:Track(UserInputService.JumpRequest:Connect(doHop)) -- (Roblox's own jump button hops too)
 	api:Track(function()
-		if holding then
-			holding = false
-		end
+		holding = false
+		padTouch = nil
 	end)
 
 	local shake = 0
@@ -717,7 +805,9 @@ function RockinRaceway.Start(api)
 					posed[character] = key
 				end
 				local humanoid = character:FindFirstChildOfClass("Humanoid")
-				local rootY = if humanoid then humanoid.HipHeight + root.Size.Y / 2 else ROOT_Y
+				local rootY = if humanoid and humanoid.RigType == Enum.HumanoidRigType.R15
+					then humanoid.HipHeight + root.Size.Y / 2
+					else ROOT_Y -- (an R6 root stands 3 studs up; its HipHeight is 0)
 				if key == myKey then
 					if humanoid and not humanoid.PlatformStand then
 						humanoid.PlatformStand = true
@@ -813,10 +903,39 @@ function RockinRaceway.Start(api)
 				meterText.Text = text
 			end
 			meterText.TextColor3 = if color == Theme.Colors.Orange then Theme.Colors.Text else color
-			gallop:SetFill(if holding then 1 - fraction else 0, Theme.Colors.Text)
+			if gallop then
+				gallop:SetFill(if holding then 1 - fraction else 0, Theme.Colors.Text)
+			end
 		end
-		gallop:SetEnabled(racing())
-		hop:SetEnabled(racing())
+		refreshHolding() -- (the race starting, finishing or ending changes what a held GALLOP does)
+		local canRide = racing()
+		if gallop then
+			gallop:SetEnabled(canRide)
+		end
+		if pad and padFace then
+			padFace.BackgroundTransparency = if canRide then 0 else 0.55
+			padFace.BackgroundColor3 = if holding then Theme.Colors.Yellow else Theme.Colors.Orange
+		end
+		hop:SetEnabled(canRide)
+		-- HOP lights up while a hop pressed now would carry the whole horse over the next hurdle
+		-- (Track.Clears: the server's own rule).
+		local hopNow = false
+		if mine and canRide and mine.V > 1 and now >= myHopAt + Track.HOP_TIME + Track.HOP_REST then
+			for _, panel in panels do
+				if panel.D > mine.D then
+					if panel.K == "H" then
+						hopNow = Track.Clears(now, now + (panel.D - mine.D) / mine.V, mine.V)
+					end
+					if panel.D - mine.D > 30 then
+						break
+					end
+					if panel.K == "H" then
+						break
+					end
+				end
+			end
+		end
+		hop:SetFill(if hopNow then 1 else 0, Theme.Colors.Text)
 
 		if callout.Visible and os.clock() > calloutUntil then
 			callout.Visible = false
@@ -826,8 +945,9 @@ function RockinRaceway.Start(api)
 			hintUntil = os.clock() + 5
 			api:Hint(
 				if touch
-					then "Hold GALLOP · let go in the red! HOP the blue hurdles"
-					else "Hold W to GALLOP · let go in the red! SPACE hops the blue hurdles"
+					then "Hold the left side to GALLOP · HOP the blue hurdles"
+					else "Hold W to GALLOP · let go in the red! SPACE hops the blue hurdles",
+				meterY + meterHeight + 92 -- (under the race bar, the meter and the callout)
 			)
 		end
 		if hintUntil > 0 and os.clock() > hintUntil then

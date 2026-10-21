@@ -8,12 +8,17 @@
 -- facing at D, `offset` studs outward from the centre line (a lane). One lap from the start line, in
 -- the middle of the home straight, back to the same line under the finish arch.
 --
--- Riding (Ride): holding GALLOP pushes the horse toward GALLOP speed and eats carrots; letting go
--- eases it back toward TROT speed while the carrots grow back. The carrot meter's bottom quarter is
--- the red line: run the meter dry while still galloping and the horse spins out (SPIN_TIME nearly
--- stopped). The horse speeds up gradually, so long gallops that ride the meter down near the red
--- line beat short taps. An orange carrot panel ridden over gives a DASH; a blue hurdle panel slows
--- the horse unless it hops over it (HOP_TIME in the air).
+-- Riding (Ride): holding GALLOP eats carrots and builds the horse's stride up over BUILD seconds of
+-- unbroken galloping; letting go drops it back to a trot and, after a breath, the carrots grow back.
+-- The carrot meter's bottom quarter is the red line: run the meter dry while still galloping and the
+-- horse spins out (SPIN_TIME nearly stopped). So the fastest riders gallop from a full meter all the
+-- way down near the red line; quick taps never build a stride. An orange carrot panel ridden over
+-- gives a DASH; a blue hurdle panel slows the horse unless the whole horse hops over it (Clears).
+--
+-- Review pass (the reviewer simulated Ride: every gallop strategy averaged the same speed, so riding
+-- near the red line didn't pay): the stride build-up and the breath before refilling make it pay.
+-- 40 s offline sim: let go at 5 and press at 99 averages 21.8 studs/s (a 34.9 s lap), let go at the
+-- red line 20.7, at 40 19.7, the safe 70/95 18.3, never letting go 10.5, taps 11-17, trotting 14.8.
 --
 -- Leaf module: no Roblox services, so Lune tests can load it.
 
@@ -29,15 +34,19 @@ Track.LENGTH = 2 * Track.STRAIGHT + 2 * Track.TURN -- one lap (~764 studs)
 
 -- Riding (studs per second, carrots 0..CARROTS).
 Track.TROT = 15
-Track.GALLOP = 27
-Track.DASH = 38 -- speed right after a carrot panel
+Track.GALLOP = 31 -- top gallop speed, once the stride has built all the way up
+Track.START = 0.2 -- how much of the gallop a fresh press gives at once (the rest builds up)
+Track.BUILD = 3.6 -- seconds of unbroken galloping for the stride to build all the way up
+Track.DROP = 0.4 -- seconds for a built-up stride to fall away after letting go
+Track.DASH = 40 -- speed right after a carrot panel
 Track.SLOW = 7 -- speed after hitting a hurdle
 Track.SPIN_SPEED = 2
-Track.RISE = 1.5 -- how quickly the horse picks up speed (per second)
-Track.FALL = 1.1 -- how quickly it eases off
+Track.RISE = 2.2 -- how quickly the horse picks up speed (per second)
+Track.FALL = 1.4 -- how quickly it eases off
 Track.CARROTS = 100
-Track.EAT = 24 -- carrots a second while galloping (about 4 s from full)
-Track.REFILL = 30 -- carrots a second while trotting
+Track.EAT = 22 -- carrots a second while galloping (about 4.5 s from full)
+Track.REFILL = 34 -- carrots a second while trotting...
+Track.REFILL_WAIT = 0.2 -- ...once the horse has caught its breath after a gallop
 Track.RED = 25 -- the red line: below it the meter is red
 Track.SPIN_TIME = 1.8
 Track.SPIN_CARROTS = 30 -- carrots after a spin-out
@@ -54,6 +63,8 @@ export type Rider = {
 	V: number,
 	C: number, -- carrots
 	Gallop: boolean,
+	Build: number, -- 0..1: how far the stride has built up in this gallop
+	Rest: number, -- seconds since the last gallop ended
 	SpinUntil: number,
 	DashUntil: number,
 	SlowUntil: number,
@@ -129,20 +140,32 @@ function Track.Panels(random: any): { Panel }
 	return list
 end
 
--- One step of riding: speed toward the gallop or trot pace, carrots eaten or grown back, a spin-out
--- when the meter runs dry under a gallop. Returns true when this step spun the horse out.
+-- One step of riding. Holding GALLOP builds the stride up over BUILD seconds of unbroken galloping
+-- (a fresh press gives START of it at once), so long gallops that ride the meter down near the red
+-- line are fastest and quick taps never get going. Letting go drops the stride and, after
+-- REFILL_WAIT, the carrots grow back. Running the meter dry under a gallop spins the horse out.
+-- Returns true when this step spun the horse out.
 function Track.Ride(rider: Rider, dt: number, now: number): boolean
 	local spun = false
 	local spinning = now < rider.SpinUntil
 	local galloping = rider.Gallop and not spinning
-	local target = if spinning then Track.SPIN_SPEED elseif galloping then Track.GALLOP else Track.TROT
+	if galloping then
+		rider.Build = math.min(1, rider.Build + dt / Track.BUILD)
+		rider.Rest = 0
+	else
+		rider.Build = math.max(0, rider.Build - dt / Track.DROP)
+		rider.Rest += dt
+	end
+	local stride = Track.START + (1 - Track.START) * rider.Build
+	local target = if spinning
+		then Track.SPIN_SPEED
+		elseif galloping then Track.TROT + (Track.GALLOP - Track.TROT) * stride
+		else Track.TROT
 	local rate = if spinning then 4 elseif target > rider.V then Track.RISE else Track.FALL
 	rider.V += (target - rider.V) * (1 - math.exp(-rate * dt))
 	if now < rider.DashUntil and not spinning then
-		rider.V = math.max(
-			rider.V,
-			Track.DASH - (Track.DASH - Track.GALLOP) * (1 - (rider.DashUntil - now) / Track.DASH_TIME)
-		)
+		local fade = 1 - (rider.DashUntil - now) / Track.DASH_TIME
+		rider.V = math.max(rider.V, Track.DASH - (Track.DASH - Track.TROT) * fade * 0.5)
 	end
 	if now < rider.SlowUntil then
 		rider.V = math.min(rider.V, Track.SLOW)
@@ -153,12 +176,13 @@ function Track.Ride(rider: Rider, dt: number, now: number): boolean
 			rider.C = 0
 			rider.SpinUntil = now + Track.SPIN_TIME
 			rider.DashUntil = 0
+			rider.Build = 0
 			spun = true
 		end
-	elseif not spinning then
-		rider.C = math.min(Track.CARROTS, rider.C + Track.REFILL * dt)
-	else
+	elseif spinning then
 		rider.C = math.min(Track.SPIN_CARROTS, rider.C + Track.SPIN_CARROTS / Track.SPIN_TIME * dt)
+	elseif rider.Rest >= Track.REFILL_WAIT then
+		rider.C = math.min(Track.CARROTS, rider.C + Track.REFILL * dt)
 	end
 	rider.D += rider.V * dt
 	return spun
@@ -171,6 +195,21 @@ function Track.HopHeight(since: number): number
 	end
 	local t = since / Track.HOP_TIME
 	return 4 * t * (1 - t) * Track.HOP_HEIGHT
+end
+
+-- A hurdle's bar is CLEAR studs up. The horse reaches NOSE studs ahead of its rider and TAIL behind,
+-- so it passes over the bar from NOSE / speed before the rider's own crossing (`at`) until TAIL /
+-- speed after. The hurdle is cleared only if the hop is at least CLEAR high that whole time (a hop
+-- is highest in its middle, so checking both ends is enough). The server judges by this and the
+-- client lights HOP by it.
+Track.CLEAR = 0.8
+Track.NOSE = 2
+Track.TAIL = 1.75
+
+function Track.Clears(hopAt: number, at: number, speed: number): boolean
+	local v = math.max(speed, 1)
+	return Track.HopHeight(at - Track.NOSE / v - hopAt) >= Track.CLEAR
+		and Track.HopHeight(at + Track.TAIL / v - hopAt) >= Track.CLEAR
 end
 
 function Track.Ordinal(place: number): string

@@ -30,7 +30,7 @@ end
 
 function Brain.Step(bot, ctx, mode, _dt)
 	local rider = mode.riders and mode.riders[bot]
-	if not rider or rider.Gone or rider.Finish or not mode.racing then
+	if not rider or rider.Gone or rider.Finish or not mode.racing or mode.ending then
 		return
 	end
 	local memory = bot.Memory
@@ -79,7 +79,7 @@ function Brain.Step(bot, ctx, mode, _dt)
 			memory.HopFor = index
 			local good = bot.Rng:NextNumber() < lerp(0.55, 0.95, bot.Skill)
 			if good then
-				memory.HopIn = bot.Rng:NextNumber(0.22, 0.5)
+				memory.HopIn = bot.Rng:NextNumber(0.32, 0.55) -- (the whole horse over the bar: Track.Clears)
 			elseif bot.Rng:NextNumber() < 0.5 then
 				memory.HopIn = bot.Rng:NextNumber(0.8, 1.1) -- too early: down before the bar
 			else

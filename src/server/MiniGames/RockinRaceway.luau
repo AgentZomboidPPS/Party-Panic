@@ -18,8 +18,12 @@
 -- same in every lane. When a rider's distance passes a panel, the server notes the moment and waits
 -- out that rider's ping before judging it, so a HOP pressed while the horse was still short of the
 -- hurdle on the player's screen counts even if it arrives a little later. A hurdle is cleared when
--- the hop is high enough at that moment to clear its bar (HopHeight >= CLEAR); a carrot is taken
--- unless the horse is that high over it.
+-- the hop holds the whole horse (nose to wheel) above its bar while it passes (Track.Clears, the
+-- same rule the client lights HOP by); a carrot is taken unless the horse is that high over it.
+--
+-- Review pass: the race freezes the moment it closes (no riding, no input, bots stop too); riders
+-- home in the same step take places in the order they crossed; the results renumber the finishers
+-- still here.
 --
 -- Bots press GALLOP and HOP through ctx:BotAction (Bots/RockinRaceway.luau) and are judged by the
 -- same rules, so hurdles slow bots and dry meters spin them out exactly like players. Nothing is
@@ -37,7 +41,6 @@ local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 local RockinRaceway = MiniGame.Define("RockinRaceway", { Results = "Score" })
 
 local FINISH_CLOCK = 10 -- seconds the finish stays open after the first rider is home
-local CLEAR = 0.8 -- hop height that clears a hurdle's bar (and misses a carrot)
 local MAX_LEEWAY = 0.4
 local ROOT_Y = 3 -- a standing character's root above the ground
 
@@ -65,7 +68,7 @@ type Rider = Track.Rider & {
 	Offset: number,
 	HopAt: number,
 	Next: number, -- the next panel row to pass
-	Pending: { { Panel: Track.Panel, At: number, JudgeAt: number } },
+	Pending: { { Panel: Track.Panel, At: number, V: number, JudgeAt: number } },
 	Finish: number?, -- the moment it crossed the line
 	Place: number?,
 	Shown: number, -- score already in the standings
@@ -420,6 +423,8 @@ function RockinRaceway:Prepare()
 			V = 0,
 			C = Track.CARROTS,
 			Gallop = false,
+			Build = 0,
+			Rest = 10,
 			SpinUntil = 0,
 			DashUntil = 0,
 			SlowUntil = 0,
@@ -528,6 +533,9 @@ function RockinRaceway:Start()
 
 	ctx:OnAction("Gallop", function(player, on)
 		local rider = self.riders[player]
+		if self.ending then
+			return -- the race is over
+		end
 		if rider and not rider.Gone and not rider.Finish and type(on) == "boolean" then
 			rider.Gallop = on
 		end
@@ -540,16 +548,31 @@ function RockinRaceway:Start()
 	local lastScore = 0
 	local lastBots = 0
 	ctx:Heartbeat(function(dt)
+		if self.ending then
+			return -- the race is over: everyone stays where they were when it closed
+		end
 		local now = ctx:Now()
 		dt = math.min(dt, 0.1)
+		local home = {}
 		for player, rider in self.riders do
 			if rider.Gone then
 				continue
 			end
-			if not rider.Finish then
-				self:_ride(player, rider, dt, now)
+			if not rider.Finish and self:_ride(player, rider, dt, now) then
+				table.insert(home, player)
 			end
 			self:_judge(rider, now)
+		end
+		-- Riders home in the same step take their places in the order they crossed the line.
+		table.sort(home, function(a, b)
+			return (self.riders[a].Finish :: number) < (self.riders[b].Finish :: number)
+		end)
+		for _, player in home do
+			self:_home(player, self.riders[player], now)
+		end
+		if #home > 0 then
+			self:_score()
+			self:_checkDone()
 		end
 		if now - lastBots >= 1 / 20 then
 			lastBots = now
@@ -577,7 +600,7 @@ end
 -- the player's ping allows).
 function RockinRaceway:_hop(player: any, pressedAt: any)
 	local rider = self.riders[player]
-	if not rider or rider.Gone or rider.Finish or not self.racing then
+	if not rider or rider.Gone or rider.Finish or not self.racing or self.ending then
 		return
 	end
 	local now = self.context:Now()
@@ -595,7 +618,8 @@ function RockinRaceway:_hop(player: any, pressedAt: any)
 	rider.HopAt = at
 end
 
-function RockinRaceway:_ride(player: any, rider: Rider, dt: number, now: number)
+-- One step of a rider's race; true when it crossed the line in this step.
+function RockinRaceway:_ride(player: any, rider: Rider, dt: number, now: number): boolean
 	local ctx = self.context
 	local before = rider.D
 	if Track.Ride(rider, dt, now) then
@@ -607,7 +631,12 @@ function RockinRaceway:_ride(player: any, rider: Rider, dt: number, now: number)
 	while panel and panel.D <= rider.D do
 		local fraction = if rider.D > before then (panel.D - before) / (rider.D - before) else 1
 		local at = now - dt * (1 - math.clamp(fraction, 0, 1))
-		table.insert(rider.Pending, { Panel = panel, At = at, JudgeAt = at + leewayFor(player) })
+		table.insert(rider.Pending, {
+			Panel = panel,
+			At = at,
+			V = rider.V,
+			JudgeAt = at + leewayFor(player) + Track.TAIL / math.max(rider.V, 1),
+		})
 		rider.Next += 1
 		panel = self.panels[rider.Next]
 	end
@@ -616,19 +645,24 @@ function RockinRaceway:_ride(player: any, rider: Rider, dt: number, now: number)
 		rider.D = Track.LENGTH
 		rider.Finish = now - math.min(over, dt)
 		rider.Gallop = false
-		self.finished += 1
-		rider.Place = self.finished
-		local time = (rider.Finish :: number) - self.startAt
-		ctx:SetScoreText(player, `{Track.Ordinal(self.finished)} · {string.format("%.1f", time)}s`)
-		ctx:Fire(nil, "Finish", player.UserId, self.finished, time)
-		if self.finished == 1 then
-			ctx:Announce(`🏁 {player.DisplayName} wins the race!`, "success", 3)
-			ctx:Sound("Victory")
-			self.closeAt = now + FINISH_CLOCK
-			ctx:SetShared("CloseAt", self.closeAt)
-		end
-		self:_score()
-		self:_checkDone()
+		return true
+	end
+	return false
+end
+
+-- A rider over the line: its place, the cheer, the finish clock for everyone else.
+function RockinRaceway:_home(player: any, rider: Rider, now: number)
+	local ctx = self.context
+	self.finished += 1
+	rider.Place = self.finished
+	local time = (rider.Finish :: number) - self.startAt
+	ctx:SetScoreText(player, `{Track.Ordinal(self.finished)} · {string.format("%.1f", time)}s`)
+	ctx:Fire(nil, "Finish", player.UserId, self.finished, time)
+	if self.finished == 1 then
+		ctx:Announce(`🏁 {player.DisplayName} wins the race!`, "success", 3)
+		ctx:Sound("Victory")
+		self.closeAt = now + FINISH_CLOCK
+		ctx:SetShared("CloseAt", self.closeAt)
 	end
 end
 
@@ -636,11 +670,10 @@ function RockinRaceway:_judge(rider: Rider, now: number)
 	local pending = rider.Pending
 	while pending[1] and pending[1].JudgeAt <= now do
 		local item = table.remove(pending, 1) :: any
-		local height = Track.HopHeight(item.At - rider.HopAt)
-		local high = height >= CLEAR
+		local high = Track.HopHeight(item.At - rider.HopAt) >= Track.CLEAR
 		local result
 		if item.Panel.K == "H" then
-			if high then
+			if Track.Clears(rider.HopAt, item.At, item.V) then
 				result = "clear"
 			else
 				result = "bump"
@@ -677,6 +710,8 @@ function RockinRaceway:_share()
 			V = round(rider.V, 0.01),
 			C = round(rider.C, 0.1),
 			G = if rider.Gallop then 1 else nil,
+			B = round(rider.Build, 0.001),
+			Rs = round(math.min(rider.Rest, 5), 0.001),
 			H = if now - rider.HopAt < 2 then round(rider.HopAt, 0.001) else nil,
 			S = if rider.SpinUntil > now then round(rider.SpinUntil, 0.001) else nil,
 			Da = if rider.DashUntil > now then round(rider.DashUntil, 0.001) else nil,
@@ -738,7 +773,11 @@ function RockinRaceway:_end(reason: string)
 	local ctx = self.context
 	for _, rider in self.riders do
 		rider.Gallop = false
+		if not rider.Finish then
+			rider.V = 0
+		end
 	end
+	self:_share()
 	ctx:SetShared("Stage", "Done")
 	ctx:Delay(if reason == "Finished" then 2.5 else 0.5, function()
 		ctx:End(reason)
@@ -749,6 +788,20 @@ end
 function RockinRaceway:GetResults()
 	local ctx = self.context
 	local entries = {}
+	local home = {}
+	for player in ctx.Participants do
+		local rider = self.riders[player]
+		if player.Parent and rider and rider.Finish then
+			table.insert(home, rider)
+		end
+	end
+	table.sort(home, function(a, b)
+		return (a.Finish :: number) < (b.Finish :: number)
+	end)
+	local places = {}
+	for index, rider in home do
+		places[rider] = index -- (a finisher who left gives up their place)
+	end
 	for player in ctx.Participants do
 		if not player.Parent then
 			continue
@@ -758,11 +811,12 @@ function RockinRaceway:GetResults()
 			continue
 		end
 		local percent = math.floor(math.clamp(rider.D / Track.LENGTH, 0, 1) * 100)
-		if rider.Place then
+		local place = places[rider]
+		if place then
 			table.insert(entries, {
 				Player = player,
-				Rank = 1e6 - rider.Place,
-				ScoreText = `{Track.Ordinal(rider.Place)} · {string.format(
+				Rank = 1e6 - place,
+				ScoreText = `{Track.Ordinal(place)} · {string.format(
 					"%.1f",
 					(rider.Finish or 0) - (self.startAt or 0)
 				)}s`,
