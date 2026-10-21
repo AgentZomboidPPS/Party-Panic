@@ -1,9 +1,10 @@
 """Meshes for Skate Escape (see tools/meshgen/props/README.md). Units are studs, +Y up, base on y = 0,
 -Z is the front (the way the skater rides). Generate with:
     python3 tools/meshgen/generate_meshes.py --only SkateBoard,SkateCrate,SkateBarrier,SkateBoost,SkateDeck,SkateRail,SkateTorch,\
-        SkateCanyonWall,SkatePylon,SkateCable,SkateStartGate,SkateFinishArch
+        SkateCanyonWall,SkateButte,SkatePylon,SkateCable,SkateStartGate,SkateFinishArch
 
-The arena props (canyon wall, pylon) have their foot 2 studs under the lava, 66 studs below the deck."""
+The canyon wall's foot stands 2 studs under the lava (48 below the deck); the pylon's foot is 66 below
+the deck, buried deeper in the lava."""
 
 import math
 
@@ -451,20 +452,26 @@ def torch():
 
 WALL_LENGTH = 200.0
 WALL_BACK = 64.0  # how deep the wall's top runs back from its foot
-WALL_RIM = 79.0  # the height its top comes down to at the back (the plateau around the canyon)
-# Rock bands from the lava up: piece, bottom, top, how far the face is set back, bumpiness.
+WALL_RIM = 38.0  # the height its top comes down to at the back (the plateau around the canyon)
+WALL_TOP = 42.0  # the skyline's average height: a few studs under the deck, so the bridge is the highest thing
+# Rock bands from the lava up: piece, bottom, top, how far the face is set back, bumpiness. The foot
+# stands 2 studs under the lava; everything above it is seen.
 WALL_BANDS = (
-    ("Basalt", 0.0, 22.0, 0.0, 3.2),
-    ("RockLow", 22.0, 47.0, 5.0, 3.0),
-    ("RockMid", 47.0, 58.0, 10.0, 2.8),
-    ("Stripe", 58.0, 60.5, 11.0, 1.4),  # thin cream line
-    ("RockMid", 60.5, 73.0, 11.5, 2.8),
-    ("Stripe", 73.0, 78.0, 14.0, 1.6),  # the wide cream stripe the lava falls start from
-    ("RockTop", 78.0, 87.0, 15.5, 2.6),
-    ("RockLow", 87.0, 89.5, 16.5, 1.4),  # thin red line
-    ("RockTop", 89.5, 100.0, 17.0, 2.6),
+    ("Basalt", 0.0, 7.0, 0.0, 2.6),  # dark crust at the lava line
+    ("RockLow", 7.0, 16.0, 4.0, 2.6),
+    ("RockMid", 16.0, 22.0, 8.0, 2.4),
+    ("Stripe", 22.0, 23.2, 8.8, 1.2),  # thin cream line
+    ("RockMid", 23.2, 29.0, 9.3, 2.4),
+    ("Stripe", 29.0, 32.5, 11.5, 1.4),  # the wide cream stripe the lava falls start from
+    ("RockTop", 32.5, 37.0, 13.0, 2.2),
+    ("RockLow", 37.0, 38.2, 13.8, 1.0),  # thin red line
+    ("RockTop", 38.2, WALL_TOP, 14.3, 2.2),
 )
 CAVE_BAND = 5
+
+
+def strata_wave(x):
+    return 1.6 * noise1(x, 303, (1.0, 0.4), (0.025, 0.07))
 
 
 def band_y(band, top, x):
@@ -474,8 +481,9 @@ def band_y(band, top, x):
     if k == 0:
         return 0.0
     if k == len(WALL_BANDS):
-        return 92.0 + 8.0 * max(-1.0, min(1.0, noise1(x, 400, (1.0, 0.5), (0.03, 0.09)) / 1.2))
-    return WALL_BANDS[k][1] + 2.6 * noise1(x, 303, (1.0, 0.4), (0.025, 0.07)) + 0.4 * noise1(x, 300 + k, (1.0,), (0.05,))
+        skyline = WALL_TOP + 3.5 * max(-1.0, min(1.0, noise1(x, 400, (1.0, 0.5), (0.03, 0.09)) / 1.2))
+        return max(skyline, band_y(k - 1, False, x) + 2.5)
+    return WALL_BANDS[k][1] + strata_wave(x) + 0.3 * noise1(x, 300 + k, (1.0,), (0.05,))
 
 
 def wall_front(x, band, row):
@@ -491,7 +499,7 @@ def canyon_wall():
     """A 200-stud stretch of the canyon's side: layered toy rock bands (dark basalt at the lava, red,
     orange, a cream stripe, terracotta on top) stepping back as they rise, boulders on the ledges and
     two lava falls pouring down the face. Faces -Z; its foot (z = 0) stands in the lava."""
-    xs = list(np.linspace(-WALL_LENGTH / 2, WALL_LENGTH / 2, 40))
+    xs = list(np.linspace(-WALL_LENGTH / 2, WALL_LENGTH / 2, 30))
     pieces = {}
     for band, (name, _, _, _, _) in enumerate(WALL_BANDS):
         sections = []
@@ -563,7 +571,7 @@ def canyon_wall():
                 ribbon.append(np.array(sway[i]) + np.array([across, 0, 0]) + normal * (face + 0.1))
             crust.append(capped_tube([tuple(p) for p in ribbon], 0.28, 6))
         # A dark cave mouth around the source.
-        cave = icosphere(1.0, 2).scale(width * 0.75, 3.2, 1.6).translate(x0, mouth + 0.6, stripe + 0.6)
+        cave = icosphere(1.0, 2).scale(width * 0.75, 2.4, 1.6).translate(x0, mouth + 0.6, stripe + 0.6)
         caves.append(cave)
     pieces["Basalt"] += caves
     pieces["Boulders"] = boulders
@@ -572,6 +580,51 @@ def canyon_wall():
         mesh.smooth = False
     out["Lava"] = merge(*falls)
     out["Crust"] = merge(*crust)
+    return out
+
+
+def frustum(outline, y0, y1, s0, s1):
+    """A closed band around a star-shaped outline (points in XZ round the middle), scaled s0 at its
+    bottom and s1 at its top, with fan caps."""
+    n = len(outline)
+    verts = [(x * s0, y0, z * s0) for x, z in outline] + [(x * s1, y1, z * s1) for x, z in outline]
+    verts += [(0.0, y0, 0.0), (0.0, y1, 0.0)]
+    faces = []
+    for i in range(n):
+        j = (i + 1) % n
+        faces += [(i, j, n + i), (j, n + j, n + i), (2 * n, j, i), (2 * n + 1, n + i, n + j)]
+    return outward(Mesh(verts, faces, smooth=False))
+
+
+def butte():
+    """A far-off layered mesa for the plateau's skyline (cheap: about 600 triangles): stacked rock
+    bands stepping in as they rise, a cream stripe, a flat top and a few boulders at its foot."""
+    rng = np.random.default_rng(31)
+    sides = 22
+    outline = []
+    for i in range(sides):
+        a = 2 * math.pi * i / sides
+        r = 1.0 + 0.12 * noise1(a * 30, 77, (1.0, 0.5), (0.07, 0.19)) + rng.uniform(-0.04, 0.04)
+        outline.append((math.cos(a) * 40.0 * r, -math.sin(a) * 26.0 * r))
+    bands = (
+        ("RockLow", 0.0, 14.0, 1.0, 0.94),
+        ("RockMid", 14.0, 24.0, 0.9, 0.84),
+        ("Stripe", 24.0, 27.0, 0.83, 0.8),
+        ("RockMid", 27.0, 33.0, 0.76, 0.72),
+        ("RockTop", 33.0, 40.0, 0.68, 0.62),
+    )
+    pieces = {}
+    for name, y0, y1, s0, s1 in bands:
+        pieces.setdefault(name, []).append(frustum(outline, y0, y1, s0, s1))
+    boulders = []
+    for k in range(4):
+        a = rng.uniform(0, 2 * math.pi)
+        r = float(rng.uniform(3.5, 6.0))
+        boulders.append(icosphere(r, 1, 0.3, seed=90 + k).scale(1.3, 0.8, 1.1).translate(math.cos(a) * 42, r * 0.4, -math.sin(a) * 28))
+    out = {name: merge(*meshes) for name, meshes in pieces.items()}
+    out["Boulders"] = merge(*boulders)
+    for mesh in out.values():
+        mesh.smooth = False
     return out
 
 
@@ -840,6 +893,7 @@ PROPS = {
     "SkateRail": rail,
     "SkateTorch": torch,
     "SkateCanyonWall": canyon_wall,
+    "SkateButte": butte,
     "SkatePylon": pylon,
     "SkateCable": cable,
     "SkateStartGate": start_gate,
@@ -850,8 +904,8 @@ COLORS = {
     "Deck": (255, 120, 60),
     "Trucks": (190, 195, 205),
     "Wheels": (255, 230, 90),
-    "Slats": (196, 140, 82),
-    "Frame": (140, 92, 52),
+    "Slats": (244, 192, 92),
+    "Frame": (222, 62, 50),
     "Metal": (90, 92, 100),
     "Legs": (70, 70, 80),
     "Red": (235, 60, 60),
@@ -860,8 +914,8 @@ COLORS = {
     "Pad": (40, 36, 60),
     "Rim": (90, 80, 120),
     "Arrows": (255, 220, 60),
-    "Planks": (214, 156, 98),
-    "PlanksB": (188, 128, 78),
+    "Planks": (158, 104, 68),
+    "PlanksB": (124, 82, 56),
     "Beams": (96, 64, 44),
     "Bolts": (70, 70, 76),
     "CurbRed": (232, 64, 52),
@@ -873,11 +927,11 @@ COLORS = {
     "Iron": (60, 58, 62),
     "Coals": (255, 120, 40),
     "Basalt": (66, 46, 54),
-    "RockLow": (156, 62, 50),
-    "RockMid": (214, 112, 64),
-    "Stripe": (244, 204, 150),
-    "RockTop": (198, 94, 60),
-    "Boulders": (120, 70, 60),
+    "RockLow": (118, 50, 52),
+    "RockMid": (176, 84, 72),
+    "Stripe": (222, 150, 118),
+    "RockTop": (150, 70, 64),
+    "Boulders": (100, 56, 52),
     "Lava": (255, 140, 40),
     "Crust": (90, 40, 34),
     "Stone": (176, 160, 150),

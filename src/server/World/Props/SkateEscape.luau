@@ -28,7 +28,8 @@ return function(h)
 		SkateCrate = {
 			Height = 2.6,
 			AssetId = 89347066014266,
-			Palette = { Slats = h.rgb(196, 140, 82), Frame = h.rgb(140, 92, 52), Metal = h.rgb(90, 92, 100) },
+			-- Painted toy colors the deck never uses, so every crate row stands out on the brown planks.
+			Palette = { Slats = h.rgb(244, 192, 92), Frame = h.rgb(222, 62, 50), Metal = h.rgb(90, 92, 100) },
 			Materials = { Slats = wood, Frame = wood, Metal = Enum.Material.Metal },
 			Fallback = function(m)
 				h.block(m, "Slats", Vector3.new(4.2, 2.6, 3.4), Vector3.new(0, 1.3, 0))
@@ -71,8 +72,8 @@ return function(h)
 			AssetId = 130808942087961,
 			Collide = true,
 			Palette = {
-				Planks = h.rgb(214, 148, 90),
-				PlanksB = h.rgb(180, 116, 70),
+				Planks = h.rgb(158, 104, 68),
+				PlanksB = h.rgb(124, 82, 56),
 				Beams = h.rgb(96, 64, 44),
 				CurbRed = h.rgb(236, 66, 54),
 				CurbWhite = h.rgb(250, 246, 236),
@@ -108,19 +109,20 @@ return function(h)
 				h.ball(m, "Coals", 1, Vector3.new(0, 3.6, 0))
 			end,
 		},
-		-- A 200-stud stretch of the lava canyon's side (faces -Z, foot 2 studs under the lava): layered
-		-- rock bands stepping back as they rise, with two lava falls.
+		-- A 200-stud stretch of the lava canyon's side (faces -Z, foot 2 studs under the lava, top a few
+		-- studs under the deck): layered rock bands stepping back as they rise, with two lava falls. Dark
+		-- reds, so the lava is the only hot color.
 		SkateCanyonWall = {
-			Height = 99.34,
-			AssetId = 88097771332453,
+			Height = 45.21,
+			AssetId = 82906443897049,
 			Shadow = false,
 			Palette = {
-				Basalt = h.rgb(72, 50, 58),
-				RockLow = h.rgb(170, 70, 54),
-				RockMid = h.rgb(222, 120, 70),
-				Stripe = h.rgb(246, 208, 156),
-				RockTop = h.rgb(204, 98, 62),
-				Boulders = h.rgb(134, 76, 62),
+				Basalt = h.rgb(60, 42, 50),
+				RockLow = h.rgb(118, 50, 52),
+				RockMid = h.rgb(176, 84, 72),
+				Stripe = h.rgb(222, 150, 118),
+				RockTop = h.rgb(150, 70, 64),
+				Boulders = h.rgb(100, 56, 52),
 				Lava = h.rgb(255, 136, 40),
 				Crust = h.rgb(84, 38, 32),
 			},
@@ -135,12 +137,39 @@ return function(h)
 				Crust = Enum.Material.Basalt,
 			},
 			Fallback = function(m)
-				h.block(m, "Basalt", Vector3.new(200, 22, 64), Vector3.new(0, 11, 32))
-				h.block(m, "RockLow", Vector3.new(200, 25, 59), Vector3.new(0, 34.5, 34.5))
-				h.block(m, "RockMid", Vector3.new(200, 26, 54), Vector3.new(0, 60, 37))
-				h.block(m, "Stripe", Vector3.new(200, 5, 50.5), Vector3.new(0, 75.5, 38.75))
-				h.block(m, "RockTop", Vector3.new(200, 21.3, 48.5), Vector3.new(0, 88.65, 39.75))
-				h.block(m, "Lava", Vector3.new(8, 72, 2), Vector3.new(-52, 36, -5.1))
+				h.block(m, "Basalt", Vector3.new(200, 7, 64), Vector3.new(0, 3.5, 32))
+				h.block(m, "RockLow", Vector3.new(200, 9, 60), Vector3.new(0, 11.5, 34))
+				h.block(m, "RockMid", Vector3.new(200, 13, 56), Vector3.new(0, 22.5, 36))
+				h.block(m, "Stripe", Vector3.new(200, 3.5, 52.5), Vector3.new(0, 30.75, 37.75))
+				h.block(m, "RockTop", Vector3.new(200, 12.7, 51), Vector3.new(0, 38.85, 38.5))
+				h.block(m, "Lava", Vector3.new(8, 30, 2), Vector3.new(-52, 15, -5.1))
+			end,
+		},
+		-- A far-off layered mesa on the plateau, for a rugged skyline (low-poly: it's only ever far away).
+		SkateButte = {
+			AssetId = 112906917689410,
+			Height = 42.58,
+			Shadow = false,
+			Palette = {
+				RockLow = h.rgb(118, 50, 52),
+				RockMid = h.rgb(176, 84, 72),
+				Stripe = h.rgb(222, 150, 118),
+				RockTop = h.rgb(150, 70, 64),
+				Boulders = h.rgb(100, 56, 52),
+			},
+			Materials = {
+				RockLow = Enum.Material.Slate,
+				RockMid = Enum.Material.Sandstone,
+				Stripe = Enum.Material.Sandstone,
+				RockTop = Enum.Material.Sandstone,
+				Boulders = Enum.Material.Slate,
+			},
+			Fallback = function(m)
+				h.block(m, "RockLow", Vector3.new(76, 16.6, 50), Vector3.new(0, 8.3, 0))
+				h.block(m, "RockMid", Vector3.new(66, 10, 44), Vector3.new(0, 21.6, 0))
+				h.block(m, "Stripe", Vector3.new(62, 3, 41), Vector3.new(0, 28.1, 0))
+				h.block(m, "RockMid", Vector3.new(57, 6, 38), Vector3.new(0, 32.6, 0))
+				h.block(m, "RockTop", Vector3.new(51, 7, 33), Vector3.new(0, 39.1, 0))
 			end,
 		},
 		-- A stone viaduct pier under the bridge (foot 2 studs under the lava, deck 66 above it) with a
@@ -231,6 +260,10 @@ return function(h)
 				h.block(m, "Beam", Vector3.new(108, 2.2, 2.6), Vector3.new(0, 26.8, 0))
 				h.block(m, "Banner", Vector3.new(100, 8, 0.8), Vector3.new(0, 21.7, 0))
 				h.block(m, "Housing", Vector3.new(16, 6.4, 3), Vector3.new(0, 31.4, 0))
+				-- The start lamps (the client lights them red, then green), red on the racers' left.
+				for name, x in { LampRed = 5, LampAmber = 0, LampGreen = -5 } do
+					h.block(m, name, Vector3.new(3.8, 3.8, 1), Vector3.new(x, 31.4, -1.6))
+				end
 			end,
 		},
 		-- The finish: a giant round stone arch with a checkered band, a golden trophy on the keystone
