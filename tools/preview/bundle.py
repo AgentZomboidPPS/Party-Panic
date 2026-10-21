@@ -23,8 +23,8 @@ def module_source(name: str) -> str:
     text = (WORLD / f"{name}.luau").read_text()
     text = re.sub(r"require\(script\.Parent\.(\w+)\)", r'__require("\1")', text)
     for path in SHARED:
-        name = path.split("/")[-1]
-        text = text.replace(f"require(ReplicatedStorage.Shared.{path.replace('/', '.')})", f'__require("{name}")')
+        shared = path.split("/")[-1]
+        text = text.replace(f"require(ReplicatedStorage.Shared.{path.replace('/', '.')})", f'__require("{shared}")')
     # World/Props: only the modules in PROPS, served from the bundle.
     text = text.replace('script.Parent:FindFirstChild("Props")', "__propsFolder")
     text = text.replace("require(module :: any)(helpers)", "__props[module.Name](helpers)")

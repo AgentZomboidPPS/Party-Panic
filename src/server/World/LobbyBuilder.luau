@@ -91,10 +91,11 @@ local PARKOUR_FRAME = CFrame.lookAt(PARKOUR, PARKOUR * 2)
 
 LobbyBuilder.PlazaRadius = PLAZA_RADIUS
 LobbyBuilder.StageFrontZ = STAGE_Z + 13 -- the vote stage's front edge (its steps are in front)
--- Places a beach ball may not sit in for long (the fountain pool, the emote stage).
+-- Places a beach ball may not sit in for long (the fountain pool, the emote stage, the obby's goo).
 LobbyBuilder.BallTraps = {
 	{ Center = Vector3.zero, Radius = 13 },
 	{ Center = EMOTE, Radius = 15 },
+	{ Center = PARKOUR, Radius = LobbyObby.Radius },
 }
 
 local function tag(instance: Instance, name: string)

@@ -342,7 +342,7 @@ function LobbyObby.Build(parent: Instance, frame: CFrame): Refs
 			Parent = tower,
 		})
 	end
-	local finish = column("ParkourFinish", 4.6, deckTop - 0.05, deckTop + 0.25, ground(0, 0), {
+	local finish = column("ParkourFinish", 7, deckTop - 0.05, deckTop + 0.25, ground(0, 0), {
 		Color = rgb(255, 120, 60),
 		Material = Enum.Material.Neon,
 		CanCollide = false,
