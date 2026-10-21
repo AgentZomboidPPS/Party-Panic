@@ -966,8 +966,6 @@ if #bots > 0 then
 	botChecks.headshotsAskedFor = __thumbnailIds
 end
 
--- The round levelled the player up (a new player's first win does): the card waits for the lobby.
-__fire("Celebrate", { Kind = "LevelUp", Level = 2, From = 1, Coins = 3, Items = { "Emote_Balloons" } })
 phase("Cleanup", 3, function()
 	for _, who in everyone() do
 		who:SetAttribute("PP_InRound", false)
@@ -996,6 +994,10 @@ do
 			tutorialDone = table.find(__sent, "TutorialDone") ~= nil,
 		}
 	end
+	-- The round levelled the player up (a new player's first win does). (Fired once the Cleanup
+	-- snapshot is taken: a snapshot in the middle of the chips popping in reads as tiny text.)
+	__fire("Celebrate", { Kind = "LevelUp", Level = 2, From = 1, Coins = 3, Items = { "Emote_Balloons" } })
+	task.wait(0.6)
 	look("cardUp")
 	task.wait(10) -- the card closes itself after 9 s
 	look("afterCard")
