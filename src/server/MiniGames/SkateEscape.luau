@@ -311,8 +311,8 @@ function SkateEscape:_buildArena()
 	})
 	Build.Decor({
 		Name = "FinishLine",
-		Size = Vector3.new(DECK_WIDTH - 4, 0.06, 4),
-		CFrame = CFrame.new(origin + Vector3.new(0, 0.04, -length - 2)),
+		Size = Vector3.new(DECK_WIDTH - 4, 0.16, 4),
+		CFrame = CFrame.new(origin + Vector3.new(0, 0.12, -length - 2)),
 		Color = rgb(250, 250, 250),
 		Parent = arena,
 	})
@@ -323,12 +323,12 @@ function SkateEscape:_buildArena()
 		if (column + row) % 2 == 0 then
 			Build.Decor({
 				Name = "Checker",
-				Size = Vector3.new((DECK_WIDTH - 4) / squares, 0.07, 2),
+				Size = Vector3.new((DECK_WIDTH - 4) / squares, 0.12, 2),
 				CFrame = CFrame.new(
 					origin
 						+ Vector3.new(
 							-(DECK_WIDTH - 4) / 2 + (column + 0.5) * (DECK_WIDTH - 4) / squares,
-							0.05,
+							0.2,
 							-length - 1 - row * 2
 						)
 				),
