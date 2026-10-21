@@ -125,7 +125,7 @@ function SnowballSummit:Prepare()
 	self.nextId = 0
 	self.cooldown = {} :: { [any]: number }
 	self.flights = {} :: { [any]: Flight }
-	self.knocks = {} :: { [any]: { T: number, P0: Vector3, V: Vector3 } } -- people's knocks (the test bot replays them)
+	self.knocks = {} :: { [any]: { Start: number, P0: Vector3, V: Vector3 } } -- people's knocks (the test bot replays them)
 	self.lastHit = {} :: { [any]: { By: any, T: number } }
 	self.outSince = {} :: { [any]: number }
 	self.kos = {} :: { [any]: number }
@@ -464,7 +464,7 @@ function SnowballSummit:_knock(victim: any, ball: Ball, at: Vector3)
 			}
 		end
 	else
-		self.knocks[victim] = { T = ctx:Now(), P0 = root.Position, V = velocity }
+		self.knocks[victim] = { Start = ctx:Now(), P0 = root.Position, V = velocity }
 		ctx:Knockback(victim, velocity, stun)
 	end
 end

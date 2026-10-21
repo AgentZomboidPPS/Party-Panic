@@ -56,6 +56,7 @@ return function(env)
 			local holding = game.held and game.held[player] ~= nil
 			if not holding and elapsed > 3 and env.rng:NextNumber() < 0.05 then
 				env.Action(player, "Build")
+				env.builds = (env.builds or 0) + 1
 				me.ThrowAt = elapsed + env.rng:NextNumber(1.2, 3.5)
 			elseif holding and elapsed > me.ThrowAt then
 				-- Turn to the nearest rival and let go.
@@ -83,13 +84,16 @@ return function(env)
 			local step = Vector3.new(me.Goal.X - root.X, 0, me.Goal.Z - root.Z)
 			if step.Magnitude > 0.1 then
 				local move = step.Unit * math.min(step.Magnitude, 14 * dt)
+				if move.Magnitude < 0.01 then
+					continue
+				end
 				local spot = Vector3.new(root.X + move.X, center.Y + 3, root.Z + move.Z)
 				env.Move(player, spot, spot + move)
 			end
 		end
-		if elapsed > 20 and not env.reported then
+		if elapsed > 15 and not env.reported then
 			env.reported = true
-			env.note(`stand-ins threw {throws} snowballs, {hits} hits so far`)
+			env.note(`stand-ins threw {throws} snowballs ({env.builds or 0} builds), {hits} hits so far`)
 		end
 	end
 end
