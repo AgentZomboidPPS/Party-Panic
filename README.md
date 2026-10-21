@@ -12,12 +12,12 @@ Outline*.
 | --- | --- |
 | **Core loop** | A server-authoritative state machine (Waiting → Intermission → Voting → Preparing → In Round → Results → Cleanup) with a watchdog. Every mini-game call runs with a timeout, so a broken mode can't stall the server. |
 | **Voting** | Four cards: three games and Random (a hidden pick, revealed if it wins), with live counts; change your vote until time runs out; random tie-breaks; recently played modes down-weighted; category mixing. Tap a card to vote. The stage's four portals play a little looping preview of each option (Random's spins through the games like a slot machine and lands on its game if it wins), and take turns showing every game between votes. |
-| **Mini-games** | Party classics rebuilt for 12 players: 🔥 Fire Rope · ⚡ Hex Meltdown · 🍯 Honey Trap · 🎈 Pump & Pop · 🛹 Skate Escape · 🏹 Arrow Ambush · 🏜️ Sinking Sands · 🔵 Bumper Ballers |
+| **Mini-games** | Twelve party classics rebuilt for 12 players: 🔥 Fire Rope · ⚡ Hex Meltdown · 🍯 Honey Trap · 🎈 Pump & Pop · 🛹 Skate Escape · 🏹 Arrow Ambush · 🏜️ Sinking Sands · 🔵 Bumper Ballers · 🥕 Rake It In · 🍪 Crazy Cutters · 🎂 Cake Factory · 🛷 Bobsled Run |
 | **Bots** | Friendly AI players fill empty spots so every round feels full (8 by default): they fade out when someone joins, fade back in when someone leaves, play every mode with their own brain at varied skill, and are clearly labelled 🤖 with a BOT nameplate. No rewards, no saved data. |
 | **Progression** | Coins, XP and levels, itemized round rewards, personal bests, daily and weekly quests, a daily gift with streaks, a hidden daily token, level and stat unlocks |
 | **Cosmetics** | Trails, titles, emotes (dances and effect emotes), victory and knockout effects, a coin shop with confirmation, an optional VIP pass (cosmetic only, never pay-to-win) |
 | **Lobby** | A sunny theme-park plaza built around the vote stage: four portal bays that play previews of the games under a scalloped carnival crown with neon tubes, flanked by candy-striped turrets; a scalloped stone fountain with rubber ducks, arcing water jets and a turning gold trophy (players can wade in); a sunburst court and patterned promenade on a grass lawn with flower beds and tree clusters; a turning Ferris wheel and drifting hot-air balloons on the skyline; beach balls to kick around (players pass through them and the server punts them, so there's no lag-bump on phones); a winner podium of gold, silver and bronze tiers under a bulb-lit candy arch; a shop with a mannequin gallery; a wooden quest kiosk and a giant gumball gift machine; a carnival shooting gallery (striped awning, bulbs, tin ducks) for the arcade target range; an emote stage with a dance floor under a fan-crowned arch with speakers and a circus confetti cannon; a spiral parkour tower to a view deck, lamp posts strung with bunting, floating confetti, and a ring of trees and hills |
-| **Look** | Rounded CSG geometry instead of blocks, 15 detailed original mesh props, ShadowMap lighting (sharp sun shadows, light on phones), bloom, sun rays, clouds, ambient particles and bobbing decorations |
+| **Look** | Rounded CSG geometry instead of blocks, over a hundred detailed original mesh props (every arena has its own set), ShadowMap lighting (sharp sun shadows, light on phones), bloom, sun rays, clouds, ambient particles and bobbing decorations |
 | **Audio** | An original soundtrack (two lobby tracks plus a round track that speeds up near the end) and 15 original sound effects |
 | **UI** | Mobile-first scaling, rounded glossy panels, toasts, rules card with a 3-2-1 countdown, standings, results breakdown, spectate, settings (music volume, reduced effects), onboarding tips |
 | **Safety** | Session-locked DataStore saves, rate-limited and validated remotes, server-side hit, pickup and checkpoint validation, and no client-reported scores or rewards |
@@ -146,9 +146,9 @@ luau-lsp analyze --definitions=@roblox=globalTypes.d.luau --sourcemap=sourcemap.
 ## Status and honest caveats
 
 - The whole codebase type-checks against the current Roblox API (0 errors) and passes lint, format
-  and unit tests, and the place builds with Rojo. **It has not been play-tested inside Roblox
-  Studio yet.** That wasn't possible in the environment it was built in, so expect a round of
-  tuning and small fixes after the first playtests (hazard timings, arena sizes, UI positions).
+  and unit tests, and the place builds with Rojo. Every mini-game is checked on a real Roblox
+  server (12 players, real bots, phone screens; see Checks), but those servers have no physics, so
+  movement feel, knockbacks and timings are only proven by playing: expect tuning after playtests.
 - Balancing values (rewards, prices, timings) are the design outline's starting points. Tune them
   in `src/shared/Config.luau` and `src/shared/Cosmetics.luau`.
 - Knockback is applied by the victim's client, because each client simulates its own character.
