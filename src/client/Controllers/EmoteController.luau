@@ -4,7 +4,8 @@
 -- The picker pops up in the middle of the screen, clear of the thumbstick, the jump button and the
 -- vote cards; two rows show at a time (the rest scroll), and it closes when the game moves on to
 -- the next phase or a window opens, so it's never left covering the vote.
--- Phones: 68 pt cells with 11 pt names and a 44 pt close button.
+-- Phones: 68 pt cells with 11 pt names and a 44 pt close button, under the tip and vote cards at the
+-- top middle.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -27,6 +28,7 @@ local cellSize = 84 -- a little bigger on phones, so names like Confetti Pop sta
 local GAP = 10
 local PADDING = 12
 local MAX_ROWS = 2
+local header = 44 -- the title row (taller on phones)
 
 local player = Players.LocalPlayer
 local panel: Frame
@@ -116,7 +118,9 @@ local function render()
 		State.OpenScreen:Fire("Shop", "Emote")
 	end, Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
 	local rows = math.min(math.ceil(count / COLUMNS), MAX_ROWS)
-	grid.Size = UDim2.new(1, 0, 0, rows * cellSize + (rows - 1) * GAP + 2 * PADDING)
+	local height = rows * cellSize + (rows - 1) * GAP + 2 * PADDING
+	grid.Size = UDim2.new(1, 0, 0, height)
+	panel.Size = UDim2.fromOffset(panel.Size.X.Offset, header + height)
 end
 
 setOpen = function(open: boolean)
@@ -134,20 +138,37 @@ end
 function EmoteController.Start(context)
 	touch = UIKit.IsTouch()
 	cellSize = if touch then 110 else 84
+	-- Phones: a taller title row, so the close button is big enough for a thumb.
+	header = if touch then 84 else 44
+	local width = COLUMNS * cellSize + (COLUMNS - 1) * GAP + 2 * PADDING
+	local parent: Instance = context.Hud
+	if touch then
+		-- In a frame at the top middle scaled like the tip and the vote cards, so the picker
+		-- starts under them on every screen.
+		local holder = UIKit.new("Frame", {
+			Name = "EmotesHolder",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 4),
+			Size = UDim2.fromOffset(width, 450),
+			BackgroundTransparency = 1,
+			Parent = context.Hud,
+		})
+		UIKit.AutoScale(holder)
+		parent = holder
+	end
 	panel = UIKit.Panel({
 		Name = "Emotes",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.45),
-		Size = UDim2.fromOffset(COLUMNS * cellSize + (COLUMNS - 1) * GAP + 2 * PADDING, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		AnchorPoint = if touch then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5),
+		Position = if touch then UDim2.new(0.5, 0, 0, 104) else UDim2.fromScale(0.5, 0.45),
+		Size = UDim2.fromOffset(width, header + cellSize + 2 * PADDING),
 		CornerRadius = 24,
 		Visible = false,
-		Parent = context.Hud,
+		Parent = parent,
 	})
-	UIKit.AutoScale(panel)
+	if not touch then
+		UIKit.AutoScale(panel)
+	end
 	panel:SetAttribute("PP_Popup", true) -- opened on request, over the middle of the screen
-	-- Phones: a taller title row, so the close button is big enough for a thumb.
-	local header = if touch then 84 else 44
 	local closeSize = if touch then Theme.Touch.Target else 34
 	UIKit.Label({
 		Text = if touch then "🕺 Emotes" else "🕺 Emotes  (G)",

@@ -280,50 +280,38 @@ local function refreshBoard()
 			elseif teamColor then teamColor
 			elseif entry.alive then Theme.Colors.Text
 			else Theme.Colors.TextDim
-		if touch then
-			-- Phones: the name (shortened if it must be) and the score on the right, always shown.
-			local row = UIKit.new("Frame", {
-				Size = UDim2.new(1, 0, 0, TOUCH_ROW),
-				BackgroundTransparency = 1,
-				LayoutOrder = index,
-				Parent = board,
-			})
-			local nameLabel = UIKit.Label({
-				Text = `{index}. {status}{name}`,
-				RichText = true,
-				TextSize = 19,
-				TextWrapped = false,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				TextColor3 = color,
-				Size = UDim2.new(1, -64, 1, 0),
-				Parent = row,
-			})
-			nameLabel:SetAttribute("PP_TruncateOk", true)
-			UIKit.Label({
-				Text = detail,
-				RichText = true,
-				TextSize = 19,
-				TextWrapped = false,
-				TextXAlignment = Enum.TextXAlignment.Right,
-				TextColor3 = color,
-				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.fromScale(1, 0),
-				Size = UDim2.new(0, 60, 1, 0),
-				Parent = row,
-			})
-			continue
-		end
-		UIKit.Label({
-			Text = `{index}. {status}{name}  ·  {detail}`,
+		-- The name (shortened if it must be) and the score on the right, always shown.
+		local textSize = if touch then 19 else 18
+		local scoreWidth = if touch then 60 else 76
+		local row = UIKit.new("Frame", {
+			Size = UDim2.new(1, 0, 0, if touch then TOUCH_ROW else 24),
+			BackgroundTransparency = 1,
+			LayoutOrder = index,
+			Parent = board,
+		})
+		local nameLabel = UIKit.Label({
+			Text = `{index}. {status}{name}`,
 			RichText = true,
-			TextSize = 18,
+			TextSize = textSize,
+			TextWrapped = false,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			TextColor3 = color,
-			Size = UDim2.new(1, 0, 0, 24),
-			LayoutOrder = index,
-			Parent = board,
+			Size = UDim2.new(1, -(scoreWidth + 4), 1, 0),
+			Parent = row,
+		})
+		nameLabel:SetAttribute("PP_TruncateOk", true)
+		UIKit.Label({
+			Text = detail,
+			RichText = true,
+			TextSize = textSize,
+			TextWrapped = false,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			TextColor3 = color,
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.fromScale(1, 0),
+			Size = UDim2.new(0, scoreWidth, 1, 0),
+			Parent = row,
 		})
 	end
 end

@@ -230,11 +230,14 @@ local function __engineLayout(playerGui, entries)
 				local problem = nil
 				if text:match("%S") and copy.TextTransparency < 0.9 then
 					if not copy.TextFits then
-						problem = if copy.TextTruncate ~= Enum.TextTruncate.None
-							then "truncated"
-							else `cut off (needs {math.ceil(need.X)}x{math.ceil(need.Y)}, has {math.floor(size.X)}x{math.floor(
-								size.Y
-							)})`
+						if copy.TextTruncate == Enum.TextTruncate.None then
+							problem =
+								`cut off (needs {math.ceil(need.X)}x{math.ceil(need.Y)}, has {math.floor(size.X)}x{math.floor(
+									size.Y
+								)})`
+						elseif not copy:GetAttribute("PP_TruncateOk") then -- a long name may end in "..."
+							problem = "truncated"
+						end
 					elseif copy.TextScaled and device.touch and px < 11 then
 						problem = `scaled down to {round(px)} pt`
 					end

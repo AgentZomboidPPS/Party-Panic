@@ -511,13 +511,13 @@ local function everyone()
 	end
 	return list
 end
--- The standings rows as they read on screen.
+-- The standings rows as they read on screen (a row is a title label, or a name and a score).
 local function boardRows()
 	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
 	local board = hud and hud:FindFirstChild("Leaderboard")
 	local rows = {}
 	for _, child in if board then board:GetChildren() else {} do
-		if child:IsA("TextLabel") then
+		if child:IsA("TextLabel") or child:IsA("Frame") then
 			table.insert(rows, child)
 		end
 	end
@@ -526,7 +526,17 @@ local function boardRows()
 	end)
 	local texts = {}
 	for _, row in rows do
-		table.insert(texts, row.Text)
+		if row:IsA("TextLabel") then
+			table.insert(texts, row.Text)
+		else
+			local parts = {}
+			for _, label in row:GetChildren() do
+				if label:IsA("TextLabel") then
+					table.insert(parts, label.Text)
+				end
+			end
+			table.insert(texts, table.concat(parts, "  ·  "))
+		end
 	end
 	return texts
 end

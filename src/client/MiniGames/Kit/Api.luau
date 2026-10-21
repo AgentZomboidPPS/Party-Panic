@@ -489,6 +489,11 @@ function Api.Hint(self: Api, text: string, y: number?)
 	hint.Position = UDim2.new(0.5, 0, 0, y or self:HudY())
 	hint.Text = text
 	hint.Visible = text ~= ""
+	if self:IsTouch() then
+		-- Phones: only as wide as the words, so the line stays clear of the thumbstick's corner.
+		local width = UIKit.TextWidth(text, 26, Theme.Fonts.Display) + 24
+		hint.Size = UDim2.fromOffset(math.min(620, math.ceil(width)), 64)
+	end
 end
 
 -- Phone tilt as a camera-relative move input. The screen's axes are worked out from the way the
