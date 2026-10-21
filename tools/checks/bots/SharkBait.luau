@@ -41,7 +41,7 @@ return function(env)
 		local deck = layout.Deck + 3
 		local wet = layout.Floor + 3
 		for index, player in env.players do
-			if not env.Alive(player) or mode:IsEaten(player) then
+			if not env.Alive(player) or mode:IsGulped(player) then
 				continue
 			end
 			local position = env.Root(player)
@@ -60,7 +60,7 @@ return function(env)
 						spot
 						and env.Alive(other)
 						and not mode:IsShark(other)
-						and not mode:IsEaten(other)
+						and not mode:IsGulped(other)
 						and mode:InWater(spot)
 					then
 						local distance = flatDistance(position, spot)

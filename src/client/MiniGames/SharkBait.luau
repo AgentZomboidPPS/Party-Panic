@@ -402,6 +402,8 @@ function SharkBait.Start(api)
 	api:OnShared("Haul", refreshHaul)
 	api:OnShared("Goal", refreshHaul)
 	refreshHaul()
+	local rushStroke = UIKit.Stroke(Theme.Colors.Yellow, 4, 1)
+	rushStroke.Parent = panel
 
 	-- The role hint, and big flashes in the same spot ("TIPPING!", "CHOMPED!").
 	local hint = UIKit.Label({
@@ -430,6 +432,41 @@ function SharkBait.Start(api)
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.05), UIKit.new("UITextSizeConstraint", { MaxTextSize = 50 }) },
 	})
+	-- Swallowed: a red belly tint over the screen and a countdown while this player's camera rides
+	-- along behind the shark that ate them.
+	local belly = UIKit.new("Frame", {
+		Name = "Belly",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(120, 10, 30),
+		BackgroundTransparency = 0.35,
+		Visible = false,
+		Parent = api.Gui,
+		Children = {
+			UIKit.new("UIGradient", {
+				Rotation = 90,
+				Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 0),
+					NumberSequenceKeypoint.new(0.3, 0.75),
+					NumberSequenceKeypoint.new(0.7, 0.75),
+					NumberSequenceKeypoint.new(1, 0),
+				}),
+			}),
+		},
+	})
+	local bellyLabel = UIKit.Label({
+		Name = "Gulp",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = 44,
+		TextScaled = true,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.62),
+		Size = UDim2.fromOffset(460, 110),
+		Parent = belly,
+		Children = { UIKit.TextStroke(0.1), UIKit.new("UITextSizeConstraint", { MaxTextSize = 44 }) },
+	})
+	UIKit.AutoScale(bellyLabel)
+
 	local flashUntil = 0
 	local function showFlash(text: string, color: Color3, seconds: number)
 		flash.Text = text
@@ -706,7 +743,7 @@ function SharkBait.Start(api)
 		local look = flat(root.CFrame.LookVector)
 		if look.Magnitude > 0.01 then
 			local target = math.atan2(-look.X, -look.Z)
-			view.Yaw = lerpAngle(view.Yaw, target, 1 - math.exp(-dt * 9))
+			view.Yaw = lerpAngle(view.Yaw, target, 1 - math.exp(-dt * 14))
 		end
 		local swim = math.clamp(view.Speed / 22, 0, 1)
 		local t = now - view.LungeAt
@@ -740,7 +777,7 @@ function SharkBait.Start(api)
 
 	-- Swim rings for swimmers in the water --------------------------------------------------------------
 
-	local eaten: { [number]: boolean } = {}
+	local gulped: { [number]: boolean } = {} -- swimmers in a shark's belly right now
 	local floaties: { [number]: { Model: Model?, Prey: BasePart } } = {}
 	local function drawFloaties(now: number)
 		local seen = {}
@@ -749,7 +786,7 @@ function SharkBait.Start(api)
 			local wet = participant:GetAttribute("MG_InWater") == true
 				and participant:GetAttribute("PP_Alive") == true
 				and participant:GetAttribute("MG_Role") == "Swimmer"
-				and not eaten[userId]
+				and not gulped[userId]
 			local character = if wet then participant:Character() else nil
 			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if not root then
@@ -1010,13 +1047,38 @@ function SharkBait.Start(api)
 			shake = math.max(shake, 0.25)
 		end
 	end)
-	api:OnEvent("Eaten", function(userId: number, sharkId: number, x: number, z: number)
-		eaten[userId] = true
+	local gulpedBy: number? = nil -- the shark whose belly this player is in
+	local gulpUntil = 0
+	local gulpCamera: Vector3? = nil
+	local function releaseGulp()
+		gulpedBy = nil
+		gulpCamera = nil
+		belly.Visible = false
+		if camera and camera.CameraType == Enum.CameraType.Scriptable then
+			camera.CameraType = Enum.CameraType.Custom
+			local _, humanoid = api:Character()
+			if humanoid then
+				camera.CameraSubject = humanoid
+			end
+		end
+	end
+	api:Track(releaseGulp)
+	api:OnEvent("Eaten", function(userId: number, sharkId: number, x: number, z: number, lost: number?)
+		gulped[userId] = true
 		local at = Vector3.new(x, waterY, z)
-		splash(at, 1.4)
+		splash(at, 1.5)
 		floatText(at + Vector3.new(0, 3, 0), "CHOMP!", Theme.Colors.Red, 44)
+		if lost and lost > 0 then
+			task.delay(0.35, function()
+				floatText(at + Vector3.new(0, 1, 0), `-{lost} 💰`, Theme.Colors.Orange, 32)
+			end)
+		end
 		api:Effect("Bubbles", at)
 		if userId == api.Player.UserId then
+			gulpedBy = sharkId
+			gulpUntil = os.clock() + 4.5
+			belly.Visible = true
+			bellyLabel.Text = "GULP! 🦈"
 			showFlash("CHOMPED! 🦈", Theme.Colors.Red, 2.2)
 			shake = if reduced then 0 else 0.6
 		elseif sharkId == api.Player.UserId then
@@ -1024,6 +1086,17 @@ function SharkBait.Start(api)
 			api:Sound("Pickup")
 		end
 		api:Sound("Splash")
+	end)
+	api:OnEvent("SpatOut", function(userId: number, x: number, z: number)
+		gulped[userId] = nil
+		local at = Vector3.new(x, deckY, z)
+		splash(at, 1)
+		floatText(at + Vector3.new(0, 4, 0), "SPAT OUT!", Theme.Colors.Cyan, 34)
+		if userId == api.Player.UserId then
+			releaseGulp()
+			showFlash("PTOOEY! Back on a raft!", Theme.Colors.Cyan, 1.6)
+			api:Sound("Boing")
+		end
 	end)
 	api:OnEvent("Tossed", function(userId: number)
 		local character = api:CharacterOf(userId)
@@ -1084,6 +1157,15 @@ function SharkBait.Start(api)
 		splash(Vector3.new(x, waterY, z), 1.2)
 		api:Sound("VoteOpen")
 	end)
+	local rushing = false
+	local function refreshRush()
+		if api:Shared("Rush") == true and not rushing then
+			rushing = true
+			showFlash("🌊 COIN RUSH! 🌊", Theme.Colors.Yellow, 2)
+		end
+	end
+	api:OnShared("Rush", refreshRush)
+	refreshRush()
 	api:OnEvent("Win", function(team: string)
 		api:Effect("Fireworks", origin + Vector3.new(0, 12, 0))
 		if team == "Swimmers" then
@@ -1168,11 +1250,17 @@ function SharkBait.Start(api)
 		end
 	end
 
-	-- The shark's camera sits a little higher, so it sees over the rafts.
+	-- The shark's camera sits a little higher (so it sees over the rafts) and never closer than
+	-- its whole body.
 	local cameraHumanoid: Humanoid? = nil
+	local savedZoom = tonumber((api.Player :: any).CameraMinZoomDistance) or 0.5
+	local zoomSet = false
 	api:Track(function()
 		if cameraHumanoid and cameraHumanoid.Parent then
 			cameraHumanoid.CameraOffset = Vector3.zero
+		end
+		if zoomSet then
+			api.Player.CameraMinZoomDistance = savedZoom
 		end
 	end)
 
@@ -1222,7 +1310,7 @@ function SharkBait.Start(api)
 		-- Coins.
 		local inRound = GameState.Get("Phase") == "InRound"
 		local _, myHumanoid, myRoot = api:Character()
-		local canGrab = inRound and not isShark and api:Alive() and myRoot ~= nil and not eaten[api.Player.UserId]
+		local canGrab = inRound and not isShark and api:Alive() and myRoot ~= nil and not gulped[api.Player.UserId]
 		for id, coin in coins do
 			local kind = KINDS[coin.Kind]
 			if coin.Pending and not coin.Gone then
@@ -1344,6 +1432,23 @@ function SharkBait.Start(api)
 			end
 		end
 
+		-- In a shark's belly: ride along behind it until spat out.
+		if gulpedBy then
+			local view = sharks[gulpedBy]
+			if clock > gulpUntil + 1 then
+				releaseGulp() -- (the spit-out cue never came)
+			elseif camera and view and view.Last then
+				local forward = CFrame.Angles(0, view.Yaw, 0).LookVector
+				local p = Vector3.new(view.Last.X, waterY, view.Last.Z)
+				local want = p - forward * 17 + Vector3.new(0, 10, 0)
+				gulpCamera = if gulpCamera then gulpCamera:Lerp(want, 1 - math.exp(-dt * 5)) else want
+				camera.CameraType = Enum.CameraType.Scriptable
+				camera.CFrame = CFrame.lookAt(gulpCamera :: Vector3, p + Vector3.new(0, 1.5, 0))
+			end
+			local left = math.max(0, math.ceil(gulpUntil - 0.5 - clock))
+			bellyLabel.Text = if left > 0 then `GULP! 🦈  Spat out in {left}…` else "GULP! 🦈"
+		end
+
 		-- In the water: a warning when a shark closes in.
 		local wet = api:Mine("InWater") == true and not isShark and api:Alive()
 		if wet and not lastWet then
@@ -1364,6 +1469,10 @@ function SharkBait.Start(api)
 		-- The shark's camera, and a little shake when the jaws snap close by.
 		if isShark and myHumanoid and myHumanoid ~= cameraHumanoid then
 			cameraHumanoid = myHumanoid
+		end
+		if isShark and not zoomSet then
+			zoomSet = true
+			api.Player.CameraMinZoomDistance = math.max(savedZoom, 16)
 		end
 		shake = math.max(0, shake - dt)
 		if camera and (punch > 0 or camera.FieldOfView ~= baseFov) then
@@ -1405,6 +1514,10 @@ function SharkBait.Start(api)
 		end
 		if flash.Visible and clock > flashUntil then
 			flash.Visible = false
+		end
+
+		if rushing then
+			rushStroke.Transparency = 0.15 + 0.35 * (0.5 + 0.5 * math.sin(clock * 9))
 		end
 
 		if chompButton then

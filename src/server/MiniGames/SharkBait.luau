@@ -7,12 +7,14 @@
 --   SWIMMERS hop raft to raft grabbing coins (+1): on the decks, hanging over the gaps (grab them
 --   mid-hop) and floating in the water, where pearls (+3) and the odd TREASURE CHEST (+6) bob too.
 --   The swimmers win together the moment their haul reaches the goal on the HUD. Anyone in the
---   water is slow, and fair game for the shark.
+--   water is slow, and fair game for the shark. In the last quarter comes the COIN RUSH: coins twice
+--   as fast, more of them in the water.
 --   SHARKS can't climb onto a raft. CHOMP (E, or the button) snaps the jaws: a swimmer in the water
---   in reach is eaten (out), and a raft in reach WOBBLES for 1.2 s, then FLIPS: everyone still on it
---   is thrown into the water and its coins spill round it. It bobs back up 3 s later and can't be
---   chomped again for a moment. Sharks win if the goal isn't reached by the buzzer, or if every
---   swimmer is eaten. At least two rafts always stay up, so there's always somewhere to jump.
+--   in reach is swallowed (the swimmers' haul loses 2 coins) and spat back out onto a raft 4 s
+--   later, and a raft in reach WOBBLES for 1.2 s, then FLIPS: everyone still on it is thrown into the
+--   water and its coins spill round it. It bobs back up 3 s later and can't be chomped again for a
+--   moment. Sharks win if the goal isn't reached by the buzzer. At least two rafts always stay up,
+--   so there's always somewhere to jump. Nobody is ever out: everyone plays the whole minute.
 --
 -- How it works. The server owns everything; clients draw. Every raft is one invisible upright
 -- cylinder from the hidden sea floor (3.5 studs under the water, where anyone in the water stands,
@@ -82,11 +84,15 @@ SharkBait.RAM_REACH = 0.6 -- a raft's edge this far past the jaws' line still co
 local JUDGE_SPREAD = 0.1
 local BITE_SLACK = 0.6 -- the second look allows the swimmer's own follow-through
 local OVERHANG = 0.6 -- a middle this far past a raft's edge still stands on it (feet on the rim)
-local TOSS_OUT, TOSS_UP = 30, 34
-local EAT_DELAY = 0.9 -- the eaten swimmer goes out (and home) this long after the chomp
+local TOSS_OUT, TOSS_UP = 20, 34 -- thrown about 2 to 9 studs out past the edge
+local GULP_TIME = 4 -- a swallowed swimmer is spat back out onto a raft after this long
+SharkBait.CHOMP_COST = 2 -- coins a chomp takes off the swimmers' haul
+local POCKET = -32.5 -- the shark's belly: a hidden ledge under the sea bed, where swallowed swimmers wait
+local CLIMB_TIME = 0.8 -- no-physics test servers: how long a swimmer takes to climb out at a raft
 local WATER_LIFE = 9 -- coins in the water sink after this long
 local CHEST_LIFE = 12
 local POP_IN = 0.35 -- a new coin rises into view this long before it can be grabbed
+local RUSH_AT = 0.75 -- the COIN RUSH (coins twice as fast, more of them in the water) for the last quarter
 local SPILL_TIME = 0.55 -- spilled coins fly this long before they land in the water
 -- A grab: the coin's middle within the kind's reach of the swimmer's middle (flat), and the coin
 -- between GRAB_BELOW under and GRAB_ABOVE over it.
@@ -218,14 +224,16 @@ function SharkBait:Prepare()
 	self.deckY = origin.Y + SharkBait.DECK
 	self.waterY = origin.Y + SharkBait.WATER
 	self.floorY = origin.Y + SharkBait.SEA_FLOOR
-	ctx.KillY = self.floorY - 18
+	ctx.KillY = origin.Y - 50 -- under the shark's belly (POCKET)
 	ctx.Arena:SetAttribute("Center", origin)
 	self.role = {} :: { [any]: string }
 	self.sharks = {} :: { any }
-	self.eaten = {} :: { [any]: boolean }
+	self.gulped = {} :: { [any]: number } -- swallowed swimmers: when they're spat out
+	self.chomped = {} :: { [any]: number } -- how often each swimmer was swallowed
 	self.wet = {} :: { [any]: boolean }
 	self.spots = {} :: { [any]: Vector3 } -- each swimmer's middle at the last grab check
 	self.splashAt = {} :: { [any]: number }
+	self.wetSince = {} :: { [any]: number }
 	self.coins = {} :: { [number]: Coin }
 	self.coinId = 0
 	self.coinsDirty = true
@@ -237,8 +245,8 @@ function SharkBait:Prepare()
 	self.haul = 0
 	self.goal = 1
 	self.swimmerCount = 0
-	self.shownLeft = 0
 	self.chests = 0
+	self.rush = false
 	self.ended = false
 	self.won = nil :: string?
 
@@ -537,6 +545,17 @@ function SharkBait:_buildArena()
 		Material = Enum.Material.Sand,
 		Parent = arena,
 	})
+	-- The shark's belly: a hidden ledge under the sea bed, where swallowed swimmers wait (out of sight
+	-- under the deep sea floor) until they're spat out.
+	Build.Part({
+		Name = "Belly",
+		Size = Vector3.new(12, 1, 12),
+		CFrame = CFrame.new(origin + Vector3.new(0, POCKET - 0.5, 0)),
+		Transparency = 1,
+		CastShadow = false,
+		CanTouch = false,
+		Parent = arena,
+	})
 	-- The hidden floor anyone in the water stands on, and the float line everyone stays inside.
 	Build.Part({
 		Name = "SeaFloor",
@@ -723,8 +742,8 @@ function SharkBait:IsShark(player: any): boolean
 	return self.role[player] == "Shark"
 end
 
-function SharkBait:IsEaten(player: any): boolean
-	return self.eaten[player] == true
+function SharkBait:IsGulped(player: any): boolean
+	return self.gulped[player] ~= nil
 end
 
 function SharkBait:InWater(position: Vector3): boolean
@@ -780,7 +799,7 @@ function SharkBait:_chomp(shark: any)
 	-- A swimmer in the water in reach: a bite (each judged by what their own screen showed).
 	local victims = {}
 	for _, swimmer in ctx:GetAlivePlayers() do
-		if self.role[swimmer] ~= "Swimmer" or self.eaten[swimmer] then
+		if self.role[swimmer] ~= "Swimmer" or self.gulped[swimmer] then
 			continue
 		end
 		local _, _, swimmerRoot = ctx:GetCharacter(swimmer)
@@ -824,7 +843,7 @@ function SharkBait:_chomp(shark: any)
 			ctx:Delay(JUDGE_SPREAD, function()
 				local second = self:_jawReach(swimmer, from, look)
 				if first <= SharkBait.BITE_RADIUS and second <= SharkBait.BITE_RADIUS + BITE_SLACK then
-					self:_eat(swimmer, shark)
+					self:_gulp(swimmer, shark)
 				end
 			end)
 		end)
@@ -834,45 +853,79 @@ end
 -- How far a swimmer's middle is from a chomp's jaws (math.huge unless they're in the water).
 function SharkBait:_jawReach(swimmer: any, from: Vector3, look: Vector3): number
 	local _, _, root = self.context:GetCharacter(swimmer)
-	if not root or self.eaten[swimmer] or not self:InWater(root.Position) then
+	if not root or self.gulped[swimmer] or not self:InWater(root.Position) then
 		return math.huge
 	end
 	return SharkBait.JawDistance(root.Position, from, look)
 end
 
-function SharkBait:_eat(swimmer: any, shark: any)
+-- Swallowed: the swimmer waits in the shark's belly (a hidden ledge under the sea bed; their own
+-- screen follows the shark), the swimmers' haul loses CHOMP_COST coins, and a moment later the
+-- shark spits them back out onto a raft.
+function SharkBait:_gulp(swimmer: any, shark: any)
 	local ctx = self.context
-	if self.eaten[swimmer] or self.ended or not ctx:IsAlive(swimmer) then
+	if self.gulped[swimmer] or self.ended or not ctx:IsAlive(swimmer) then
 		return
 	end
-	self.eaten[swimmer] = true
 	local character, _, root = ctx:GetCharacter(swimmer)
-	local at = if root then root.Position else self.origin
-	ctx:Fire(nil, "Eaten", swimmer.UserId, if shark then shark.UserId else 0, round(at.X, 2), round(at.Z, 2))
-	ctx:Freeze(swimmer, true)
-	if character then
-		-- Gone in one gulp (the clients draw the splash); they go home a moment later.
-		for _, descendant in character:GetDescendants() do
-			if descendant:IsA("BasePart") or descendant:IsA("Decal") then
-				(descendant :: any).Transparency = 1
-			elseif descendant:IsA("BillboardGui") then
-				descendant.Enabled = false
-			end
-		end
+	if not character or not root then
+		return
 	end
-	local state = ctx:State(swimmer)
-	local coins = if state then state.Score else 0
-	ctx:SetScoreText(swimmer, `Chomped at {math.floor(ctx:Elapsed())}s • {coins} coins`)
+	local at = root.Position
+	self.gulped[swimmer] = ctx:Now() + GULP_TIME
+	self.wet[swimmer] = false
+	self.spots[swimmer] = nil
+	ctx:SetPlayerShared(swimmer, "InWater", false)
+	local lost = math.min(SharkBait.CHOMP_COST, self.haul)
+	if lost > 0 then
+		self.haul -= lost
+		ctx:SetShared("Haul", self.haul)
+		ctx:AddTeamScore(SharkBait.SWIMMERS, -lost)
+	end
+	self.chomped[swimmer] = (self.chomped[swimmer] or 0) + 1
+	self:_swimmerText(swimmer)
 	ctx:AddTeamScore(SharkBait.SHARKS, 1)
 	if shark and self.chomps[shark] then
 		self.chomps[shark] += 1
 		ctx:AddScore(shark, 5)
 		self:_sharkText(shark)
 	end
-	ctx:Delay(EAT_DELAY, function()
-		ctx:Eliminate(swimmer, "eaten")
+	ctx:Fire(nil, "Eaten", swimmer.UserId, if shark then shark.UserId else 0, round(at.X, 2), round(at.Z, 2), lost)
+	character:PivotTo(CFrame.new(self.origin + Vector3.new(0, POCKET + SharkBait.HIP, 0)))
+	ctx:Freeze(swimmer, true)
+	ctx:Delay(GULP_TIME, function()
+		self:_spitOut(swimmer)
 	end)
-	self:_refresh()
+	self:_status()
+end
+
+-- Back out of the belly, onto a raft that's up.
+function SharkBait:_spitOut(swimmer: any)
+	local ctx = self.context
+	if not self.gulped[swimmer] then
+		return
+	end
+	self.gulped[swimmer] = nil
+	self.spots[swimmer] = nil
+	local character = ctx:GetCharacter(swimmer)
+	if not character or not ctx:IsAlive(swimmer) then
+		return
+	end
+	local spot = self:_raftSpot()
+	character:PivotTo(spot + Vector3.new(0, SharkBait.HIP, 0))
+	ctx:Freeze(swimmer, false)
+	ctx:Fire(nil, "SpatOut", swimmer.UserId, round(spot.X, 2), round(spot.Z, 2))
+end
+
+function SharkBait:_swimmerText(swimmer: any)
+	local state = self.context:State(swimmer)
+	local coins = if state then state.Score else 0
+	local text = if coins == 1 then "1 coin" else `{coins} coins`
+	local times = self.chomped[swimmer] or 0
+	if times > 0 then
+		text ..= if times == 1 then " • chomped once" else ` • chomped {times}x`
+	end
+	self.context:SetScoreText(swimmer, text)
 end
 
 function SharkBait:_sharkText(shark: any)
@@ -932,7 +985,7 @@ function SharkBait:_flip(raft: Raft, shark: any)
 
 	-- Everyone on it goes in: each judged by what their own screen showed (see the top).
 	for _, swimmer in ctx:GetAlivePlayers() do
-		if self.role[swimmer] ~= "Swimmer" or self.eaten[swimmer] then
+		if self.role[swimmer] ~= "Swimmer" or self.gulped[swimmer] then
 			continue
 		end
 		local lag = pingOf(swimmer) / 2
@@ -943,7 +996,7 @@ function SharkBait:_flip(raft: Raft, shark: any)
 			end
 			ctx:Delay(JUDGE_SPREAD, function()
 				local _, _, later = ctx:GetCharacter(swimmer)
-				if later and self:_onRaft(raft, later.Position) and not self.eaten[swimmer] then
+				if later and self:_onRaft(raft, later.Position) and not self.gulped[swimmer] then
 					self:_toss(swimmer, raft, shark)
 				end
 			end)
@@ -964,7 +1017,7 @@ function SharkBait:_waterSpotNear(raft: Raft, dir: Vector3): Vector3
 	for attempt = 0, 7 do
 		local turn = (if attempt % 2 == 0 then 1 else -1) * math.ceil(attempt / 2) * 0.45
 		local d = CFrame.Angles(0, turn, 0):VectorToWorldSpace(dir)
-		local spot = raft.Center + d * (raft.Radius + rng:NextNumber(2.2, 4.5))
+		local spot = raft.Center + d * (raft.Radius + rng:NextNumber(2.4, 6))
 		spot = Vector3.new(spot.X, self.waterY + SharkBait.WATER_COIN, spot.Z)
 		local clear = flatDistance(spot, self.origin) < SharkBait.LAGOON - 3
 		for _, other in self.rafts do
@@ -1019,7 +1072,7 @@ function SharkBait:_surface(raft: Raft)
 	-- pushed out past its edge (a shark never gets onto a raft).
 	for _, player in ctx:GetAlivePlayers() do
 		local character, _, root = ctx:GetCharacter(player)
-		if not character or not root or self.eaten[player] then
+		if not character or not root or self.gulped[player] then
 			continue
 		end
 		local position = root.Position
@@ -1075,11 +1128,40 @@ local function clearOfCoins(coins: { [number]: Coin }, spot: Vector3, spacing: n
 	return true
 end
 
--- One new coin somewhere sensible: half on decks, a quarter over the gaps, a quarter in the water.
+-- A spot in the water close to the rafts (a quick dip from a deck): in a gap between two
+-- neighbours, or in the ring of water round the middle raft.
+function SharkBait:_nearSpot(): Vector3?
+	if rng:NextNumber() < 0.3 then
+		local middle = self.rafts[1]
+		local angle = rng:NextNumber(0, math.pi * 2)
+		local radius = (SharkBait.CENTER_RADIUS + SharkBait.RING - SharkBait.RING_RADIUS) / 2
+		return Vector3.new(
+			middle.Center.X + math.cos(angle) * radius,
+			self.waterY + SharkBait.WATER_COIN,
+			middle.Center.Z + math.sin(angle) * radius
+		)
+	end
+	local raft = self.rafts[rng:NextInteger(1, #self.rafts)]
+	local index = raft.Neighbours[rng:NextInteger(1, math.max(1, #raft.Neighbours))]
+	local other = if index then self.rafts[index] else nil
+	if not other then
+		return nil
+	end
+	local dir = flat(other.Center - raft.Center).Unit
+	local gap = flatDistance(raft.Center, other.Center) - raft.Radius - other.Radius
+	local spot = raft.Center + dir * (raft.Radius + gap / 2)
+	return Vector3.new(spot.X, self.waterY + SharkBait.WATER_COIN, spot.Z)
+end
+
+-- One new coin. A third or so on the decks (safe and small), a quarter hanging over the gaps (grab
+-- them mid-hop) and the rest in the water, where the shark is: half close to the rafts, half out
+-- in the open, where pearls are likelier. The COIN RUSH puts more of them in the water.
 function SharkBait:_spawnCoin()
-	local roll = rng:NextNumber()
+	local deckShare = if self.rush then 0.22 else 0.35
+	local waterShare = if self.rush then 0.55 else 0.4
 	for _ = 1, 8 do
-		if roll < 0.5 then
+		local roll = rng:NextNumber()
+		if roll < deckShare then
 			local raft = self.rafts[rng:NextInteger(1, #self.rafts)]
 			if raft.State ~= SharkBait.READY then
 				continue
@@ -1092,10 +1174,11 @@ function SharkBait:_spawnCoin()
 				self:_addCoin(COIN, spot, raft.Index, 0)
 				return
 			end
-		elseif roll < 0.75 then
+		elseif roll < 1 - waterShare then
 			local raft = self.rafts[rng:NextInteger(1, #self.rafts)]
-			local other = self.rafts[raft.Neighbours[rng:NextInteger(1, math.max(1, #raft.Neighbours))] or 1]
-			if other == raft then
+			local index = raft.Neighbours[rng:NextInteger(1, math.max(1, #raft.Neighbours))]
+			local other = if index then self.rafts[index] else nil
+			if not other then
 				continue
 			end
 			local dir = flat(other.Center - raft.Center).Unit
@@ -1106,19 +1189,27 @@ function SharkBait:_spawnCoin()
 				return
 			end
 		else
-			local angle = rng:NextNumber(0, math.pi * 2)
-			local distance = rng:NextNumber(SharkBait.RING + SharkBait.RING_RADIUS + 3, SharkBait.LAGOON - 5)
-			local spot = Vector3.new(
-				self.origin.X + math.cos(angle) * distance,
-				self.waterY + SharkBait.WATER_COIN,
-				self.origin.Z + math.sin(angle) * distance
-			)
-			if clearOfCoins(self.coins, spot, 3) then
-				self:_addCoin(if rng:NextNumber() < 0.45 then PEARL else COIN, spot, 0, WATER_LIFE)
+			local near = rng:NextNumber() < 0.5
+			local spot = if near then self:_nearSpot() else nil
+			if not near then
+				local angle = rng:NextNumber(0, math.pi * 2)
+				local distance = rng:NextNumber(SharkBait.RING + SharkBait.RING_RADIUS + 3, SharkBait.LAGOON - 5)
+				spot = Vector3.new(
+					self.origin.X + math.cos(angle) * distance,
+					self.waterY + SharkBait.WATER_COIN,
+					self.origin.Z + math.sin(angle) * distance
+				)
+			end
+			if spot and clearOfCoins(self.coins, spot, 3) then
+				self:_addCoin(
+					if rng:NextNumber() < (if near then 0.2 else 0.5) then PEARL else COIN,
+					spot,
+					0,
+					WATER_LIFE
+				)
 				return
 			end
 		end
-		roll = rng:NextNumber()
 	end
 end
 
@@ -1144,9 +1235,7 @@ function SharkBait:_grab(swimmer: any, id: number, coin: Coin)
 	ctx:AddTeamScore(SharkBait.SWIMMERS, kind.Value)
 	self.haul += kind.Value
 	ctx:SetShared("Haul", self.haul)
-	local state = ctx:State(swimmer)
-	local score = if state then state.Score else 0
-	ctx:SetScoreText(swimmer, if score == 1 then "1 coin" else `{score} coins`)
+	self:_swimmerText(swimmer)
 	ctx:Fire(nil, "Grab", id, swimmer.UserId, kind.Value)
 	if self.haul >= self.goal and not self.ended then
 		self.ended = true
@@ -1201,7 +1290,7 @@ end
 function SharkBait:SwimmersLeft(): number
 	local count = 0
 	for _, player in self.context:GetAlivePlayers() do
-		if self.role[player] == "Swimmer" and not self.eaten[player] then
+		if self.role[player] == "Swimmer" then
 			count += 1
 		end
 	end
@@ -1222,8 +1311,8 @@ function SharkBait:_status()
 	if self.ended then
 		return
 	end
-	local left = self:SwimmersLeft()
-	self.context:SetStatus(if left == 1 then "🏊 1 swimmer left!" else `🏊 {left} swimmers left`)
+	local need = math.max(0, self.goal - self.haul)
+	self.context:SetStatus(if need == 1 then "🏊 1 coin to go!" else `🏊 {need} coins to go!`)
 end
 
 -- The end of the round once one side is gone.
@@ -1232,24 +1321,10 @@ function SharkBait:_refresh()
 	if self.ended or not ctx:IsRunning() then
 		return
 	end
-	local left = self:SwimmersLeft()
-	if self.swimmerCount > 0 and left == 0 then
+	if self.swimmerCount > 0 and self:SwimmersLeft() == 0 then
 		self.ended = true
-		local eaten = 0
-		for _ in self.eaten do
-			eaten += 1
-		end
-		if eaten == 0 then
-			ctx:SetStatus("🏊 The swimmers left!")
-			ctx:End("NoSwimmers")
-			return
-		end
-		self.won = SharkBait.SHARKS
-		ctx:SetStatus("🦈 Every swimmer got chomped! SHARK WINS!")
-		ctx:Fire(nil, "Win", SharkBait.SHARKS)
-		ctx:Delay(1.4, function()
-			ctx:End("AllEaten")
-		end)
+		ctx:SetStatus("🏊 The swimmers left!")
+		ctx:End("NoSwimmers")
 		return
 	end
 	if self.swimmerCount > 0 and self:SharksLeft() == 0 then
@@ -1272,7 +1347,7 @@ function SharkBait:Start()
 		end
 	end
 	-- The goal: enough that the swimmers have to take risks, more for more swimmers and sharks.
-	self.goal = math.max(10, 8 + 6 * self.swimmerCount - (if #self.sharks > 1 then 4 else 0))
+	self.goal = math.max(12, math.floor(8 + 6.5 * self.swimmerCount) - (if #self.sharks > 1 then 4 else 0))
 	ctx:SetShared("Goal", self.goal)
 	ctx:SetShared("Haul", 0)
 	ctx:AddTeamScore(SharkBait.SHARKS, 0)
@@ -1300,14 +1375,22 @@ function SharkBait:Start()
 	end
 	ctx:Loop(function(): number?
 		local progress = ctx:Progress()
+		if progress >= RUSH_AT and not self.rush then
+			self.rush = true
+			ctx:SetShared("Rush", true)
+			ctx:Announce("🌊 COIN RUSH! Coins everywhere!", "reward", 3)
+			ctx:Sound("VoteOpen")
+		end
 		local chestsDue = if progress >= 0.72 and self.swimmerCount >= 5 then 2 elseif progress >= 0.38 then 1 else 0
+		local most = 8 + 2 * self.swimmerCount + (if self.rush then 6 else 0)
 		if self.chests < chestsDue then
 			self.chests += 1
 			self:_spawnChest()
-		elseif self:CoinCount() < 8 + 2 * self.swimmerCount then
+		elseif self:CoinCount() < most then
 			self:_spawnCoin()
 		end
-		return math.clamp(2.2 / (0.6 + 0.3 * math.max(1, self.swimmerCount)), 0.35, 1.6) * rng:NextNumber(0.8, 1.2)
+		local every = math.clamp(2.6 / (0.6 + 0.28 * math.max(1, self.swimmerCount)), 0.4, 1.8)
+		return every * (if self.rush then 0.5 else 1) * rng:NextNumber(0.8, 1.2)
 	end)
 
 	-- Ten times a second: who's in the water, grabs, sinking coins, everyone where they belong.
@@ -1326,7 +1409,7 @@ function SharkBait:_tick(now: number)
 	local origin: Vector3 = self.origin
 	for _, player in ctx:GetAlivePlayers() do
 		local character, humanoid, root = ctx:GetCharacter(player)
-		if not character or not humanoid or not root or self.eaten[player] then
+		if not character or not humanoid or not root or self.gulped[player] then
 			continue
 		end
 		local position = root.Position
@@ -1363,6 +1446,7 @@ function SharkBait:_tick(now: number)
 		local wet = self:InWater(position)
 		if wet ~= (self.wet[player] == true) then
 			self.wet[player] = wet
+			self.wetSince[player] = if wet then now else nil
 			ctx:SetPlayerShared(player, "InWater", wet)
 			if not ctx:IsStunned(player) then
 				humanoid.WalkSpeed = if wet then SharkBait.SWIM_SPEED else ctx.WalkSpeed
@@ -1373,7 +1457,7 @@ function SharkBait:_tick(now: number)
 				ctx:Fire(nil, "Splash", player.UserId, round(position.X, 2), round(position.Z, 2))
 			end
 		end
-		if wet and not physics then
+		if wet and not physics and now - (self.wetSince[player] or now) >= CLIMB_TIME then
 			-- No physics on the test servers: a swimmer that reaches a raft's side climbs up it (on a
 			-- real server their jump does that).
 			local raft = self:RaftUnder(position, -0.6)
@@ -1413,17 +1497,14 @@ function SharkBait:_tick(now: number)
 	if self.coinsDirty and now - self.lastPublish >= 0.1 then
 		self:_publishCoins()
 	end
-	-- The banner's team score for the swimmers is their haul; the status says who's left.
-	local left = self:SwimmersLeft()
-	if left ~= self.shownLeft then
-		self.shownLeft = left
-		self:_status()
-	end
 end
 
--- At the buzzer: nothing moves any more.
+-- At the buzzer: nothing moves any more, and anyone still in a shark's belly is spat out for the cheer.
 function SharkBait:Stop()
 	self.ended = true
+	for swimmer in self.gulped do
+		self:_spitOut(swimmer)
+	end
 end
 
 -- Everyone on the winning side shares first place; the losing side is ordered by points: sharks by
@@ -1443,9 +1524,9 @@ function SharkBait:GetResults()
 			continue
 		end
 		local team = if role == "Shark" then SharkBait.SHARKS else SharkBait.SWIMMERS
-		-- Sharks and chomped swimmers show their score line; swimmers who made it say so.
-		local text = if role == "Shark" or self.eaten[player]
+		local text = if role == "Shark"
 			then `🦈 {state.ScoreText}`
+			elseif (self.chomped[player] or 0) > 0 then `🏊 {state.ScoreText}`
 			else `🏊 {state.Score} {if state.Score == 1 then "coin" else "coins"} • never chomped!`
 		table.insert(entries, {
 			Player = player,

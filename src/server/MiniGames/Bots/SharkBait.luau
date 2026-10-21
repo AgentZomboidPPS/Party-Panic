@@ -225,7 +225,7 @@ local function sharkStep(bot, ctx, mode, now: number)
 	-- 1. Prey: the nearest swimmer in the water this bot has noticed.
 	local prey, preyRoot, preyDistance = nil, nil, math.huge
 	for _, swimmer in ctx:GetAlivePlayers() do
-		if mode.role[swimmer] ~= "Swimmer" or mode:IsEaten(swimmer) then
+		if mode.role[swimmer] ~= "Swimmer" or mode:IsGulped(swimmer) then
 			continue
 		end
 		local swimmerRoot = rootOf(ctx, swimmer)
@@ -417,7 +417,7 @@ end
 
 local function swimmerStep(bot, ctx, mode, now: number)
 	local root = bot:Root()
-	if not root or mode:IsEaten(bot) then
+	if not root or mode:IsGulped(bot) then
 		return
 	end
 	local memory = bot.Memory
