@@ -349,16 +349,17 @@ function CakeFactory.Start(api)
 	end
 	refreshTags()
 
-	-- HUD: a pill per team (shape, name, cakes), yours outlined. Phones draw the HUD at 75%, so
-	-- there the text is bigger and the pills two to a row.
+	-- HUD: a pill per team (shape, name, cakes), yours outlined, all in one row (with 3-4 teams
+	-- just the shape; the name floats over each line). Phones draw the HUD smaller, so there the
+	-- text is bigger and everything sits as high as it can, clear of the move stick.
 	local hud = api:TopHud()
 	local y = api:HudY()
 	local touch = api:IsTouch()
 	local count = #order
 	local compact = count >= 3
-	local columns = if touch then 2 else count
+	local columns = count
 	local pillWidth = if touch
-		then (if compact then 150 else 200)
+		then math.min(200, math.floor(600 / count) - 10)
 		elseif compact then math.min(150, math.floor(470 / count) - 10)
 		else 170
 	local textSize = if touch then 26 else 20
@@ -401,15 +402,16 @@ function CakeFactory.Start(api)
 	local pillsBottom = y + (math.ceil(count / columns) - 1) * rowStep + 46
 
 	-- Your lanes: one per machine you run.
-	type Lane = { Machine: Machine, Frame: Frame, Track: Frame, Gate: Frame, GateText: TextLabel, Dots: { Frame } }
+	-- (Phones: on the right half, so the move stick's corner stays clear.)
+	type Lane = { Machine: Machine, Frame: Frame, Track: Frame, Gate: Frame, Kind: TextLabel, Dots: { Frame } }
 	local lanes = {} :: { Lane }
-	local laneWidth = if touch then 400 else 360
-	local laneHeight = if touch then 64 else 54
+	local laneWidth = if touch then 440 else 380
+	local laneHeight = if touch then 80 else 54
 	local laneTop = pillsBottom + 10
 	local laneHolder = UIKit.new("Frame", {
 		Name = "Lanes",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, laneTop),
+		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(0.5, 0),
+		Position = if touch then UDim2.new(1, 0, 0, laneTop) else UDim2.new(0.5, 0, 0, laneTop),
 		Size = UDim2.fromOffset(laneWidth, 0),
 		BackgroundTransparency = 1,
 		Parent = hud,
@@ -432,16 +434,16 @@ function CakeFactory.Start(api)
 				Parent = laneHolder,
 				Children = { UIKit.Corner(14), UIKit.Stroke(myColor, 2, 0) },
 			})
-			local tagWidth = if touch then 116 else 104
-			label(
+			local tagWidth = if touch then 164 else 116
+			local kind = label(
 				frame,
 				`{ICONS[machine.Kind] or ""} {string.upper(machine.Kind)}`,
-				if touch then 22 else 19,
+				if touch then 28 else 19,
 				Color3.new(1, 1, 1),
 				{
 					Name = "Kind",
-					Position = UDim2.fromOffset(6, 0),
-					Size = UDim2.new(0, tagWidth - 6, 1, 0),
+					Position = UDim2.fromOffset(8, 0),
+					Size = UDim2.new(0, tagWidth - 8, 1, 0),
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}
 			)
@@ -468,38 +470,32 @@ function CakeFactory.Start(api)
 				Parent = track,
 				Children = { UIKit.Corner(8), UIKit.Stroke(Color3.new(1, 1, 1), 3, 0) },
 			})
-			local gateText = label(gate, "", if touch then 18 else 16, Color3.new(1, 1, 1), {
-				Name = "Tap",
-				ZIndex = 5,
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.new(2, 0, 1, 0),
-			})
 			local dots = {}
 			for _ = 1, 4 do
 				local dot = UIKit.new("Frame", {
 					Name = "Cake",
 					AnchorPoint = Vector2.new(0.5, 0.5),
-					Size = UDim2.fromOffset(laneHeight - 20, laneHeight - 20),
+					Size = UDim2.fromOffset(laneHeight - 18, laneHeight - 18),
 					BackgroundColor3 = Color3.new(1, 1, 1),
 					Visible = false,
 					ZIndex = 3,
 					Parent = track,
 					Children = { UIKit.Round(), UIKit.Stroke(Color3.new(0, 0, 0), 2, 0.3) },
 				})
-				label(dot, "", if touch then 22 else 20, Color3.new(1, 1, 1), { Name = "Mark", ZIndex = 4 })
+				label(dot, "", if touch then 34 else 20, Color3.new(1, 1, 1), { Name = "Mark", ZIndex = 4 })
 				table.insert(dots, dot)
 			end
 			table.insert(
 				lanes,
-				{ Machine = machine, Frame = frame, Track = track, Gate = gate, GateText = gateText, Dots = dots }
+				{ Machine = machine, Frame = frame, Track = track, Gate = gate, Kind = kind, Dots = dots }
 			)
 		end
 		laneHolder.Size = UDim2.fromOffset(laneWidth, #mine * (laneHeight + 8))
 	end
 	buildLanes()
 
-	-- ADD: wakes up at GO; the hint shows for 8 seconds under the lanes.
+	-- ADD: wakes up at GO; the hint shows for 8 seconds under the lanes (not on phones: the lanes'
+	-- TAP! says it, and the move stick's corner stays clear).
 	local add = if myLine then api:Button({ Text = "ADD", Key = Enum.KeyCode.E, Color = myColor }) else nil
 	if add then
 		add:SetEnabled(false)
@@ -522,8 +518,10 @@ function CakeFactory.Start(api)
 		live = true
 		if add then
 			add:SetEnabled(true)
-			api:Hint("Tap ADD when a ✓ cake is in the gate", hintY())
-			hintUntil = now + 8
+			if not touch then
+				api:Hint("Tap ADD when a ✓ cake is in the gate", hintY())
+				hintUntil = now + 8
+			end
 		end
 	end
 	if add then
@@ -1009,7 +1007,11 @@ function CakeFactory.Start(api)
 			lane.Gate.BackgroundColor3 = if ready then GREEN else Color3.new(1, 1, 1)
 			local scale = if ready then 1.12 else 1
 			lane.Gate.Size = UDim2.new(window * 2 / span * scale, 0, 1, if ready then 0 else -4)
-			lane.GateText.Text = if ready then "TAP!" else ""
+			local kindText = if ready then "👉 TAP!" else `{ICONS[machine.Kind] or ""} {string.upper(machine.Kind)}`
+			if lane.Kind.Text ~= kindText then
+				lane.Kind.Text = kindText
+				lane.Kind.TextColor3 = if ready then GREEN else Color3.new(1, 1, 1)
+			end
 			for _, gate in machine.Gates do
 				gate.Material = if ready then Enum.Material.Neon else Enum.Material.SmoothPlastic
 				gate.Color = if ready then GREEN else Color3.new(1, 1, 1)

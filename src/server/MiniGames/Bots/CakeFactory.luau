@@ -52,7 +52,7 @@ function CakeFactoryBrain.Step(bot, ctx, mode, _dt)
 		local ready = not (cake and cake.Bad) and layers == index - 1
 		local press
 		if ready then
-			press = not bot:Chance((1 - skill) * 0.12) -- now and then a bot just misses one
+			press = not bot:Chance((1 - skill) * 0.18) -- now and then a bot just misses one
 		else
 			press = bot:Chance((1 - skill) * 0.22) -- a careless press on a cake that isn't ready
 		end
