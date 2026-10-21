@@ -654,7 +654,20 @@ function SkateEscape.Start(api)
 		local alpha = 1 - math.exp(-(if type(dt) == "number" then dt else 1 / 60) * 18)
 		for key in race.Lane or {} do
 			local character = api:CharacterOf(tonumber(key))
-			if not character then
+			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if not character or not root then
+				continue
+			end
+			-- Only skaters on the course: someone sent back to the lobby gets their own animations back.
+			local offset = root.Position - origin
+			if math.abs(offset.X) > 120 or offset.Z > 120 or offset.Z < -length - 200 or offset.Y < -200 then
+				local rig = rigs[character]
+				if rig then
+					for _, joint in rig do
+						joint.Motor.Transform = CFrame.identity
+					end
+					rigs[character] = nil
+				end
 				continue
 			end
 			local mode, kick = poseFor(key, now)
@@ -667,8 +680,7 @@ function SkateEscape.Start(api)
 			local board = character:FindFirstChild("Skateboard")
 			local weld = board and board:FindFirstChild("BoardWeld", true)
 			local humanoid = character:FindFirstChildOfClass("Humanoid")
-			local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if weld and weld:IsA("Weld") and humanoid and root then
+			if weld and weld:IsA("Weld") and humanoid then
 				local height = SkateCourse.RootHeight(humanoid, root)
 				weld.C0 = CFrame.new(0, -height, 0)
 					* CFrame.Angles(0, 0, rad(-boardPitch(key, now)))
