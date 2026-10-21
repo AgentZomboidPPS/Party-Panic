@@ -26,7 +26,7 @@ TankField.HALF_LENGTH = 3.8
 TankField.SPEED = 13 -- studs/s
 TankField.TURN = math.rad(220) -- hull turn rate, rad/s
 TankField.ACCEL = 9 -- 1/s: how fast the speed reaches the stick's
-TankField.SHELL_SPEED = 28 -- about twice a tank's speed: a shell you see coming can be dodged
+TankField.SHELL_SPEED = 23 -- about twice a tank's speed: a shell you see coming can be dodged
 TankField.SHELL_RADIUS = 0.45 -- assets/meshes/TanksShell.glb is 0.9 thick
 TankField.SHELL_Y = 3.1 -- a shell's center above the floor (the barrel's height)
 TankField.MUZZLE = 5.4 -- from the tank's center to the barrel's tip
@@ -43,7 +43,7 @@ TankField.MINE_TRIGGER = 1.3 -- an armed mine goes off when a hull touches the m
 TankField.MINE_RADIUS = 1.3 -- the mine you see (a shell that touches it sets it off)
 TankField.MINE_BLAST = 10 -- everything this close to the blast is caught in it
 TankField.CHAIN_DELAY = 0.15 -- a mine caught in a blast goes off this much later
-TankField.SHIELD = 3 -- seconds after GO when every tank is shielded (a shell or blast just pops)
+TankField.SHIELD = 4.5 -- seconds after GO when every tank is shielded (a shell or blast just pops)
 TankField.OWN_SAFE = 0.5 -- a tank's own shell can't hit it in its first half second (point-blank walls)
 TankField.WALL_HEIGHT = 8
 TankField.COVER_HEIGHT = 4
@@ -139,6 +139,16 @@ export type Tank = {
 	V: number,
 	Rev: boolean,
 }
+
+-- While the room is crowded (more than 6 tanks rolling) each tank has 1 shell in flight and a
+-- slower reload, so a 12-tank round doesn't end in an opening volley; then 2 and the quick reload.
+TankField.CROWD = 6
+function TankField.Limits(alive: number): (number, number)
+	if alive > TankField.CROWD then
+		return 1, 1
+	end
+	return TankField.MAX_SHELLS, TankField.RELOAD
+end
 
 function TankField.Wrap(angle: number): number
 	return (angle + PI) % TAU - PI

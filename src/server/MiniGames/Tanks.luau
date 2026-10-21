@@ -500,7 +500,8 @@ function Tanks:_fire(player: any, aim: any, pressedAt: any, token: any)
 		return
 	end
 	local now = ctx:Now()
-	if tank.Shells >= TankField.MAX_SHELLS or now - tank.LastShot < TankField.RELOAD - 0.05 then
+	local cap, reload = TankField.Limits(self.alive or #self.list)
+	if tank.Shells >= cap or now - tank.LastShot < reload - 0.05 then
 		ctx:Fire(player, "Dud", if type(token) == "number" then token else 0)
 		return
 	end
@@ -965,7 +966,8 @@ function Tanks:_flushOuts()
 		)
 	end
 	for _, entry in batch do
-		ctx:Eliminate(entry[1].Player, entry[3])
+		-- (Telemetry tells own goals apart: "shelled-own", "mined-own".)
+		ctx:Eliminate(entry[1].Player, if entry[2] == entry[1] or not entry[2] then `{entry[3]}-own` else entry[3])
 	end
 	self:_status()
 	self:_share()
@@ -980,6 +982,10 @@ function Tanks:_status()
 		end
 	end
 	ctx:SetStatus(if alive == 1 then "1 tank left!" else `{alive} tanks left`)
+	if alive ~= self.alive then
+		self.alive = alive
+		ctx:SetShared("Alive", alive) -- (clients and bots read the shell limits from it)
+	end
 end
 
 function Tanks:_share()
@@ -1007,6 +1013,11 @@ function Tanks:_share()
 end
 
 -- Results -------------------------------------------------------------------------------------------
+
+-- How many shells a tank may have in flight now (see TankField.Limits).
+function Tanks:ShellCap(): number
+	return (TankField.Limits(self.alive or #self.list))
+end
 
 -- Survivors first (the last tank standing, or everyone still rolling at the bell, by hits), then
 -- the rest by hits and how long they lasted.
