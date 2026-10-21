@@ -72,7 +72,7 @@ local previews: { [string]: Preview } = {
 		Fps = 8,
 	},
 	PumpAndPop = {
-		Image = "rbxassetid://82171771927787",
+		Image = "rbxassetid://109007412426401",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),
