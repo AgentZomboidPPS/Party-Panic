@@ -113,7 +113,8 @@ local function node(className: string, fields: { [string]: any }?): any
 end
 
 -- The DataStore: records by key, and per key a list of plans for the next calls ({ delay = game
--- seconds before it runs, fail = "before" (nothing written) or "after" (written, then an error) }).
+-- seconds before it runs, reply = game seconds between its write and its answer, fail = "before"
+-- (nothing written) or "after" (written, then an error) }).
 local function newStore()
 	local store = { records = {} :: { [string]: any }, plans = {} :: { [string]: { any } }, log = {} :: { string } }
 	function store.UpdateAsync(_, key: string, transform: (any) -> any): any
@@ -132,6 +133,9 @@ local function newStore()
 		end
 		store.records[key] = copy(result)
 		table.insert(store.log, "write")
+		if plan.reply then
+			wait(plan.reply)
+		end
 		if plan.fail == "after" then
 			error("DataStore request timed out after writing (test)")
 		end
@@ -257,11 +261,17 @@ local function server(store, options: { [string]: any }?)
 		},
 		task = scaledTask,
 		warn = function() end,
-		-- Luau's own library, as the game has it.
+		-- Luau's own library, as the game has it (os.clock counts game seconds, like task.wait).
 		math = math,
 		table = table,
 		string = string,
-		os = os,
+		os = {
+			time = os.time,
+			date = os.date,
+			clock = function()
+				return os.clock() / SCALE
+			end,
+		},
 		coroutine = coroutine,
 		pcall = pcall,
 		error = error,
@@ -407,7 +417,7 @@ test("left while loading: only the lock is released, the save itself is untouche
 	local store = newStore()
 	store.records.Player_103 = veteranRecord(1234)
 	local before = copy(store.records.Player_103.Data)
-	store.plans.Player_103 = { { delay = 3 } } -- a slow load
+	store.plans.Player_103 = { { reply = 3 } } -- a slow load (the lock is taken, the answer is late)
 	local world = server(store)
 	local player = world.join(103)
 	wait(1)
@@ -419,6 +429,19 @@ test("left while loading: only the lock is released, the save itself is untouche
 	expectEqual(store.records.Player_103.Lock, nil)
 	expectEqual(store.records.Player_103.Data, before, "the coins wait for a real visit to be converted")
 	expectEqual(world.DataService.Get(player), nil)
+
+	-- Gone before the load's request was even read: it takes no lock at all.
+	store.plans.Player_103 = { { delay = 3 } }
+	local again = world.join(103)
+	wait(1)
+	world.leave(again)
+	expectTrue(waitFor(function()
+		return #store.log >= 3
+	end))
+	wait(2)
+	expectEqual(store.log, { "write", "write", "cancel" }, "nothing written")
+	expectEqual(store.records.Player_103.Lock, nil)
+	expectEqual(store.records.Player_103.Data, before)
 	world.stop()
 end)
 
@@ -499,6 +522,93 @@ test("back on the same server while their last save is still being tried: the lo
 	expectEqual(profile.Data.Coins, 6, "loaded what the last visit saved")
 	world.leave(again)
 	expectTrue(released(world, "Player_109"))
+	world.stop()
+end)
+
+-- Two visits of one player to the same server: each lock names its session, so the first visit
+-- can't clear the second one's lock (the second would play unlocked until its first autosave).
+test("back on the same server while the load they left is still running: it waits, and keeps its lock", function()
+	local store = newStore()
+	store.records.Player_112 = veteranRecord(1000)
+	store.plans.Player_112 = { { reply = 5 } } -- the first visit's load: lock taken, a slow answer
+	local world = server(store)
+	local first = world.join(112)
+	wait(1)
+	world.leave(first)
+	wait(0.5)
+	local again = world.join(112) -- that load is still running
+	local profile = loaded(world, again)
+	wait(6) -- (the first visit's load is over by now, whenever this one loaded)
+	local lock = store.records.Player_112.Lock
+	expectTrue(lock ~= nil and lock.JobId == "server-A", "this visit holds the lock")
+	expectEqual(lock.Session, profile.Session)
+	expectEqual(store.log, { "write", "write", "write" }, "the first load, its lock release, then this load")
+	profile.Data.Coins += 5
+	world.leave(again)
+	expectTrue(released(world, "Player_112"))
+	expectEqual(store.records.Player_112.Data.Coins, 105)
+	expectEqual(world.errors, {})
+	world.stop()
+end)
+
+test("a leave save slower than the wait on rejoining never clears the next visit's lock", function()
+	local store = newStore()
+	local world = server(store)
+	local first = world.join(113)
+	loaded(world, first).Data.Coins += 7
+	store.plans.Player_113 = {
+		{ delay = 9, fail = "before" }, -- the leave save fails slowly...
+		{ delay = 9, fail = "before" },
+		{ delay = 9, fail = "before" },
+		{}, -- (the next visit's load, once its 30 s wait is over)
+		{ delay = 2 }, -- ...and its last try comes after that load
+	}
+	world.leave(first)
+	wait(1)
+	local again = world.join(113)
+	local profile = loaded(world, again)
+	expectTrue(waitFor(function()
+		return #store.log >= 6
+	end))
+	expectEqual(store.log[6], "cancel", "the late leave save is refused")
+	local lock = store.records.Player_113.Lock
+	expectTrue(lock ~= nil and lock.Session == profile.Session, "the next visit keeps its lock")
+	expectEqual(world.errors[#world.errors], "DataSave: Player_113: session lock lost, save skipped")
+	profile.Data.Coins += 3
+	world.leave(again)
+	expectTrue(released(world, "Player_113"))
+	expectEqual(store.records.Player_113.Data.Coins, 3, "saved what the next visit had (it loaded before 7 were)")
+	world.stop()
+end)
+
+test("locks from before sessions were numbered: another server's keeps us out, our own lets us save", function()
+	local store = newStore()
+	store.records.Player_114 = veteranRecord(1000)
+	store.records.Player_114.Lock = { JobId = "server-OLD", Time = os.time() } -- an older server, still playing
+	local world = server(store, { autosave = 5 })
+	local player = world.join(114)
+	wait(2)
+	expectEqual(world.DataService.Get(player), nil, "kept out while the older server holds it")
+	store.records.Player_114.Lock = nil -- (its leave save lets go)
+	local profile = loaded(world, player)
+	expectEqual(store.records.Player_114.Lock.Session, profile.Session)
+	task.spawn(world.DataService.Start)
+	-- A lock with this server's JobId and no Session (the old form) still counts as this session's.
+	store.records.Player_114.Lock = { JobId = "server-A", Time = os.time() }
+	profile.Data.Coins += 4
+	expectTrue(
+		waitFor(function()
+			return store.records.Player_114.Data.Coins == 104
+		end, 10),
+		"the autosave went through"
+	)
+	expectEqual(store.records.Player_114.Lock.Session, profile.Session, "and locked it as this session's")
+	store.records.Player_114.Lock = { JobId = "server-A", Time = os.time() }
+	profile.Data.Coins += 1
+	world.leave(player)
+	expectTrue(released(world, "Player_114"), "the leave save went through")
+	expectEqual(store.records.Player_114.Data.Coins, 105)
+	expectEqual(world.errors, {})
 	world.stop()
 end)
 
