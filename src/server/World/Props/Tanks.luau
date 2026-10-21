@@ -65,6 +65,15 @@ return function(h)
 			Fallback = function(m)
 				h.rounded(m, "Wood", Vector3.new(8, 8, 8), 0.5, Vector3.new(0, 4, 0))
 			end,
+			PostProcess = function(model: Model)
+				-- Only the block itself is solid (its box is what's drawn); the painted grain isn't.
+				for _, part in model:GetDescendants() do
+					if part:IsA("BasePart") and part.Name == "Grain" then
+						part.CanCollide = false
+						part.CanQuery = false
+					end
+				end
+			end,
 		},
 		TanksBrick = {
 			Height = 4.3,

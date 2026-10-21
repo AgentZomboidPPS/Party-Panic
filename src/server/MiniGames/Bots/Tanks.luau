@@ -388,9 +388,7 @@ function Brain.Step(bot, ctx, mode, dt)
 		-- Shoot it down: aim where it will be when a shell from here meets it.
 		local d = math.sqrt((sx - tank.X) ^ 2 + (sz - tank.Z) ^ 2)
 		local meet = d / (2 * SPEED)
-		local ax, az = sx - sdx * SPEED * meet, sz - sdz * SPEED * meet
-		local s = (now - shell.T0) * SPEED + meet * SPEED
-		ax, az = TankField.At(shell.Path, s)
+		local ax, az = TankField.At(shell.Path, (now - shell.T0) * SPEED + meet * SPEED)
 		wantAim = heading(ax - tank.X, az - tank.Z)
 		clear = bot:Chance(0.5 + 0.4 * skill)
 		if clear then
@@ -439,8 +437,8 @@ function Brain.Step(bot, ctx, mode, dt)
 	end
 
 	-- A mine when an enemy is close (then drive off it).
-	if tank.Mines < TankField.MAX_MINES and now >= (m.NextMine or now + rng:NextNumber(3, 6)) then
-		m.NextMine = m.NextMine or now
+	m.NextMine = m.NextMine or now + rng:NextNumber(3, 6)
+	if tank.Mines < TankField.MAX_MINES and now >= m.NextMine then
 		local close = math.huge
 		for _, other in enemies do
 			close = math.min(close, math.sqrt((other.X - tank.X) ^ 2 + (other.Z - tank.Z) ^ 2))
