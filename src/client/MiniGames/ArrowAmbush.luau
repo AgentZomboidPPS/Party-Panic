@@ -95,12 +95,14 @@ function ArrowAmbush.Start(api)
 	local origin = v3(layout.Origin)
 	local tower = v3(layout.Tower)
 	local bounds = layout.Bounds
-	local hitRadius: number = layout.Hit
+	-- The ring is drawn half a stud wider than the hit radius: a runner is only tagged with their
+	-- middle that far inside it (the server's ArrowAmbush.RING_RADIUS).
+	local ringRadius: number = layout.Ring or (layout.Hit + 0.5)
 	local cooldown: number = layout.Cooldown
 	local boardHalf: number = layout.BoardHalf
 	local boardsT0: number = layout.BoardsT0
 	local railTop: number = layout.RailTop or 0
-	local boardHeight: number = layout.BoardHeight or 8
+	local boardHeight: number = layout.BoardHeight or 8.3
 	local samples: number = layout.Samples or 48
 	local me = Players.LocalPlayer
 
@@ -312,13 +314,13 @@ function ArrowAmbush.Start(api)
 		return frame
 	end
 
-	local RING_SIZE = hitRadius * 2 + 1.4
+	local RING_SIZE = ringRadius * 2 + 1.4
 	local function addRing(position: Vector3, id: number)
 		local holder, canvas = marking(RING_SIZE, api.World)
 		holder.Name = "LandingRing"
 		-- Each ring a hair higher than the last few, so overlapping rings never flicker.
 		holder.CFrame = CFrame.new(position + Vector3.new(0, 0.3 + (id % 6) * 0.012, 0))
-		local inside = hitRadius * 2 / RING_SIZE
+		local inside = ringRadius * 2 / RING_SIZE
 		circle(canvas, inside, RING_COLOR, 0.7, 7)
 		local fill = circle(canvas, 0.1, RING_COLOR, 0.25)
 		-- A cross through the ring, so the warning is a shape and not only a color.
@@ -691,7 +693,7 @@ function ArrowAmbush.Start(api)
 		local reticlePart, reticleCanvas = marking(RING_SIZE + 1, api.World)
 		reticlePart.Name = "Reticle"
 		reticle = reticlePart
-		reticleRing = circle(reticleCanvas, hitRadius * 2 / (RING_SIZE + 1), READY_COLOR, 0.8, 6)
+		reticleRing = circle(reticleCanvas, ringRadius * 2 / (RING_SIZE + 1), READY_COLOR, 0.8, 6)
 		reticleSpin = UIKit.new("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
