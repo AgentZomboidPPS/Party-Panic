@@ -20,6 +20,12 @@
 -- show (Shared/Logic/RaceBar), easing into place so they don't jump. Yours is bigger, ringed in white
 -- with a glow, and always drawn on top. The bar is a little taller for the two rows, and what sits under
 -- it moves down with it.
+--
+-- Audit pass (owner: "it just has to work"): someone who dropped out of the race and rejoined, or whose
+-- spawn failed, is still in the race's lane list (it's made at the start), so this screen treated them
+-- as racing from the lobby: the bridge warning flashed and the hazard alarm sounded for the rest of the
+-- round and the results, and every jump in the lobby went boing. Racing now also needs the server's live
+-- list of racers to have me.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -370,7 +376,9 @@ function SkateEscape.Start(api)
 	-- Controls --------------------------------------------------------------------------------------
 
 	local function racing(): boolean
-		return myLane ~= nil and collapse ~= nil and not me.Done and outAt == nil
+		-- (The lanes are the race's start list: they still name someone who left and came back, or
+		-- whose spawn failed. Only the server's live list says I'm still in the race.)
+		return myLane ~= nil and racers[myKey] ~= nil and collapse ~= nil and not me.Done and outAt == nil
 	end
 
 	local function doPush()

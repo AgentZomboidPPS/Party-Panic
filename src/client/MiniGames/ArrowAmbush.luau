@@ -10,6 +10,14 @@
 -- Their move controls are put away (they can't walk), so the whole screen is free to tap.
 -- RUNNERS play normally, watch for the rings and hear arrows coming down near them. Anyone not in
 -- the round just watches.
+--
+-- Bug pass (owner: "it just has to work"): an archer who goes out mid-round (a reset knocks them
+-- out) gets their own camera, move controls and turning back at once, instead of a frozen tower view
+-- and no way to walk the lobby or spectate until the round was over; their bow goes away with them
+-- (it used to follow their new character round the lobby) and the TAP TO SHOOT bar and aim marks go
+-- whenever they can't shoot. A respawn while still in the round (a reset during the rules card) no
+-- longer leaves the camera fighting the default one. A tap before GO no longer clicks and starts a
+-- reload for an arrow the server never fires.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -28,6 +36,7 @@ local RUNNER_COLOR = Color3.fromRGB(80, 200, 255)
 local RING_COLOR = Color3.fromRGB(255, 70, 60)
 local READY_COLOR = Color3.fromRGB(255, 240, 120)
 local BADGE_COLORS = { Color3.fromRGB(120, 220, 120), Color3.fromRGB(80, 190, 255), Color3.fromRGB(255, 200, 60) }
+local ARCHER_FOV = 56 -- the archer's view over the tower
 -- Each board's paint (the shield on the front and the back), in its badge's color: +1 green, +2 blue, +3 orange-gold.
 local BOARD_PAINT = { Color3.fromRGB(76, 186, 96), Color3.fromRGB(62, 132, 236), Color3.fromRGB(246, 158, 40) }
 local BEADS = 16
@@ -647,30 +656,29 @@ function ArrowAmbush.Start(api)
 	local queuedUntil = 0 -- a tap a moment early is fired as soon as the bow is ready
 	local flashAt = -10 -- when the reload bar last flashed "not ready"
 	local cameraBase: CFrame? = nil
+	local holding = false -- the archer's view and move controls are the mode's (see letGo)
+	local letGo = function() end
 	local spotData = layout.Spots and layout.Spots[tostring(me.UserId)]
 	local bowBase = if type(spotData) == "table" then v3(spotData) else nil
 	local function readyAt(): number
 		return math.max(api:Mine("NextShot") or 0, predictedNext)
 	end
+	-- Shots only count while the round runs (the server turns any other away), so a tap during the
+	-- 3-2-1 doesn't click and start a reload for an arrow that never flies.
+	local function live(): boolean
+		return GameState.Get("Phase") == "InRound" and api:Alive()
+	end
 	if isArcher then
 		local camera = workspace.CurrentCamera
 		local savedType, savedFov = camera.CameraType, camera.FieldOfView
 		camera.CameraType = Enum.CameraType.Scriptable
-		camera.FieldOfView = 56
+		camera.FieldOfView = ARCHER_FOV
 		-- High over the front of the tower (above the parapet), looking well out over the courtyard,
 		-- so the far end sits under the round banner and the near wall at the bottom of the screen.
 		local eye = tower + Vector3.new(0, 28, 4)
 		local focus = Vector3.new(origin.X, floorY, origin.Z + 11)
 		cameraBase = CFrame.lookAt(eye, focus)
 		camera.CFrame = cameraBase :: CFrame
-		api:Track(function()
-			camera.CameraType = savedType
-			camera.FieldOfView = savedFov
-			local _, humanoid = api:Character()
-			if humanoid then
-				humanoid.AutoRotate = true
-			end
-		end)
 
 		-- Put the move controls away: archers stand still, and the whole screen is for aiming.
 		local controls = nil
@@ -682,12 +690,29 @@ function ArrowAmbush.Start(api)
 				controls:Disable()
 			end
 		end)
-		api:Track(function()
+		-- The view, the move controls and turning come back when the round is over, or the moment this
+		-- archer is out of it (a reset knocks them out: their new character is in the lobby, where they
+		-- walk and can spectate), whichever comes first.
+		holding = true
+		letGo = function()
+			if not holding then
+				return
+			end
+			holding = false
+			camera.CameraType = savedType
+			camera.FieldOfView = savedFov
+			local _, humanoid = api:Character()
+			if humanoid then
+				humanoid.AutoRotate = true
+			end
 			if controls then
 				pcall(function()
 					controls:Enable()
 				end)
 			end
+		end
+		api:Track(function()
+			letGo()
 		end)
 
 		local reticlePart, reticleCanvas = marking(RING_SIZE + 1, api.World)
@@ -752,7 +777,7 @@ function ArrowAmbush.Start(api)
 			api:Sound("Click")
 		end
 		local function shoot(at: Vector3?)
-			if not at or not api:Alive() then
+			if not at or not live() then
 				return
 			end
 			local wait = readyAt() - api:Now()
@@ -764,7 +789,7 @@ function ArrowAmbush.Start(api)
 				queuedUntil = api:Now() + wait
 				task.delay(wait, function()
 					queuedUntil = 0
-					if api:Alive() and readyAt() - api:Now() <= 0.06 then
+					if live() and readyAt() - api:Now() <= 0.06 then
 						release(queuedAt)
 					end
 				end)
@@ -851,7 +876,8 @@ function ArrowAmbush.Start(api)
 		end
 
 		-- Bows: held in front of each archer, kicking back when they shoot. (Every 2 s the list is
-		-- checked again, so an archer who leaves takes their bow with them.)
+		-- checked again, so an archer who leaves takes their bow with them. One who's out puts it
+		-- away: after a reset their new character is in the lobby.)
 		if clock - bowsCheckedAt > 2 then
 			bowsCheckedAt = clock
 			refreshBows()
@@ -861,7 +887,7 @@ function ArrowAmbush.Start(api)
 			halfPing = if ok and type(ping) == "number" then math.clamp(ping / 2, 0, 0.3) else 0
 		end
 		for userId, entry in bows do
-			local character = entry.Who:Character()
+			local character = if entry.Who:GetAttribute("PP_Alive") == true then entry.Who:Character() else nil
 			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if not root or not entry.Model then
 				if not entry.Hidden then
@@ -890,8 +916,16 @@ function ArrowAmbush.Start(api)
 			end
 		end
 
-		-- The local archer: face the aim, draw the reticle, the path and the reload bar.
+		-- The local archer: face the aim, draw the reticle, the path and the reload bar while they can
+		-- shoot. Once they're out of the round, the view and the move controls are theirs again.
 		if isArcher and reticle and reticleRing and beads then
+			if holding and not api:Alive() then
+				letGo()
+			end
+			local canAct = api:CanAct()
+			if bottom then
+				bottom.Visible = canAct
+			end
 			local nextShot = readyAt()
 			local ready = now >= nextShot - 0.05
 			local fraction = if ready then 1 else math.clamp(1 - (nextShot - now) / cooldown, 0, 1)
@@ -910,14 +944,20 @@ function ArrowAmbush.Start(api)
 			end
 			-- A little recoil on the camera when we shoot.
 			local since = clock - (lastShot[me.UserId] or -10)
-			if cameraBase then
+			if holding and cameraBase then
+				local camera = workspace.CurrentCamera
+				if camera.CameraType ~= Enum.CameraType.Scriptable then
+					-- A respawn (a reset during the rules card) hands the camera back to the character.
+					camera.CameraType = Enum.CameraType.Scriptable
+					camera.FieldOfView = ARCHER_FOV
+				end
 				local kick = if since < 0.18 then math.sin(since / 0.18 * math.pi) * 0.006 else 0
-				workspace.CurrentCamera.CFrame = (cameraBase :: CFrame) * CFrame.Angles(kick, 0, 0)
+				camera.CFrame = (cameraBase :: CFrame) * CFrame.Angles(kick, 0, 0)
 			end
 			local _, humanoid, root = api:Character()
-			local showAim = aim ~= nil and (not api:IsTouch() or aimingTouch ~= nil)
+			local showAim = canAct and aim ~= nil and (not api:IsTouch() or aimingTouch ~= nil)
 			reticle.Parent = if showAim then api.World else nil
-			if aim and root then
+			if canAct and aim and root then
 				local flat = Vector3.new(aim.X, root.Position.Y, aim.Z)
 				if (flat - root.Position).Magnitude > 1 then
 					if humanoid then

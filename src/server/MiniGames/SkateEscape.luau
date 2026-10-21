@@ -29,6 +29,12 @@
 -- let go from that same spot: a player's character goes back to their own device, a bot's stays the
 -- server's (anchoring drops the owner a part was given, and Roblox would hand the bot to the nearest
 -- player's device, which then fights the server over where it is).
+--
+-- Audit pass (owner: "it just has to work"): the live standings scored riders in whole percents, so
+-- riders up to 14 studs apart tied, and the standings list a tie by account, not by who's ahead (a
+-- phone showed "2. you 44%" beside the race HUD's "1st of 6"). They score in studs now, ranked like
+-- the results. The collapse reaching the finish line allows for each rider's lead on their own
+-- screen, like it does the rest of the race (Shared/Logic/SkateCourse.Caught).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
@@ -1115,12 +1121,13 @@ function SkateEscape:_share()
 				ctx:SetScoreText(racer.Player, `{math.floor(math.clamp(racer.D / SkateCourse.Length, 0, 1) * 100)}%`)
 			end
 		end
-		-- The live standings sort by score: progress in percent, finishers above everyone by place.
+		-- The live standings sort by score: how far along in whole studs (they show the percent),
+		-- finishers above everyone by place, the same order as the results.
 		local state = self.startAt and ctx:State(racer.Player)
 		if state then
 			local score = if racer.Place
-				then 200 - racer.Place
-				else math.floor(math.clamp(racer.D / SkateCourse.Length, 0, 1) * 100)
+				then 1e4 - racer.Place
+				else math.floor(math.clamp(racer.D, 0, SkateCourse.Length))
 			if score ~= state.Score then
 				ctx:AddScore(racer.Player, score - state.Score)
 			end

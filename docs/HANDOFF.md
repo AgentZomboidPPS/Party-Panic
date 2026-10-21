@@ -1,8 +1,45 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-21 17:40 UTC (1:40 PM Eastern)** by Session A, which is wrapping up (owner: "can you wrap this up
-and give me a handoff document?"). **You now own everything.** Nothing else is running: Session A's helper agents
-were stopped, and their unfinished work is saved in `docs/wip/` (section 3).
+Last updated: **2026-10-21 19:40 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+`claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
+Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
+
+## Session B in flight (19:40 UTC)
+
+- **Live version 31** (published 19:03 UTC from `claude/upbeat-galileo-gvwq66` at 22735e3): everything in version 30,
+  plus **Shark Bait** (built in the owner's other window on `claude/shark-bait`, merged at a595136 on the owner's word:
+  "Merge the shark bait game into this now"), plus mode buttons that only show to players who can use them
+  (`Api.CanAct` in `Kit/Api.luau`) and a readable Skate Escape race bar (`Logic/RaceBar.luau`). Owner must restart servers.
+- **Merged on this branch since version 31 (ships in version 32):** Fire Rope "chair" (the camera slid inside the back
+  braziers and rope towers; fixed with a client-only camera collision group, `BlocksCamera` in MeshLibrary specs);
+  audits of Rake It In (two rakes after one veggie both get it), Bobsled Run (hint after GO, standings, results lines,
+  lean presses, slow phones), Skate Escape (last-instant finishes, standings order, no FALLING! after rejoining), Pump &
+  Pop (press spam can't beat rhythm), Arrow Ambush (out archers get camera/controls back, bots go round the boards),
+  Cake Factory (time-up packing, double taps, quick presses, hint, rules text); MiniGameController cancels a waiting
+  start-up with its round; Honey Trap's your-turn hint fits phones; backlog game 26 (Struggle).
+- **Finished, fixing review findings, then merged for version 32** (local worktree branches `worktree-agent-*`, not
+  pushed): Skee-Ball arcade (§2.2), payoffs + low coins incl. a one-time saved-coin conversion (§2.2; the data-safety
+  review found nothing; ships with the DataService save fixes below), Bumper Ballers phone controls (§2.2), Sinking Sands
+  bots (§2.2).
+- **CRITICAL, in progress:** the owner reports "invisible stuff you can jump on and hang on in several games" (Honey
+  Trap screenshot: a player standing ~4 studs above their flower). A sweep is dumping every collidable part per arena and
+  the lobby on test servers and fixing whatever is solid where nothing is drawn.
+- **Bug fixing in progress:** a read-only audit of 7 areas found 18 leads (saved in Session B's scratchpad); helpers are
+  fixing Hex Meltdown (incl. the last call running into Results: survivors fall in the lava, bots float), round-end
+  fairness (last players out in the same step, Honey Trap stings at time-up, Fire Rope same-pass verdicts),
+  DataService saves lost at shutdown (BindToClose skips in-flight leave saves; leave save not retried), the phone team
+  pill (only Red/Blue: role-team modes show 0 - 0), and fresh audits of Skate Escape, Arrow Ambush, Pump & Pop, Rake It
+  In, Crazy Cutters, Cake Factory and Bobsled Run.
+- **New games, building now** (owner's order; builder per game in a worktree, then an independent review, a fix pass,
+  merge_check, mode_check, portal preview, publish): Tanks!, Spleef, Mecha-Marathon, Prime Cut, Stamp Out, Messy Memory;
+  then Parasol Plummet, Trace Race, Eatsa Pizza, Snowball Summit, Rockin' Raceway, Slaparazzi, Log Jam, Struggle. Custom
+  music per game is being composed (one round track per mode, AudioController plays the mode's own).
+- **Toolchain in a fresh container (GitHub downloads are blocked here):** `cargo install --locked stylua@2.6.0 --features
+  luau`, `selene@0.31.0`, `rojo@7.7.1`, `lune@0.11.0` (crates.io works); luau-lsp from source: `git clone --depth 1
+  --branch 1.70.1 https://github.com/JohnnyMorganz/luau-lsp`, `git submodule update --init --depth 1`, cmake Release with
+  `-DCMAKE_CXX_FLAGS=-Wno-error=maybe-uninitialized`, target `Luau.LanguageServer.CLI`; `globalTypes.d.luau` is in that
+  repo's `scripts/`. Blender: `python3.11 -m venv` + `pip install bpy` (5.0.1). Mesh/music tools: `pip install scipy
+  scikit-image`.
 
 ## 0. Start here (the first 10 minutes)
 
@@ -170,9 +207,10 @@ owner the version number, and remind them to restart servers.
 longer, console capture in reports. 24 fair hitboxes in all 11 precision games. 25 control track in sound reports.
 26 Skate Escape start (skaters held on the line until GO). 27 sit-out switch, countdown beeps only for players in the
 round. 28 rules card (10 s, nothing drawn over it). 29 lobby obby (a goo-pool course, scenery you can't climb). 30 Hex Meltdown bots stop flying off and a small call
-banner; Honey Trap's tutorial says you play from your flower.
-Games (12, all hold 12 players): Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking Sands, Arrow
-Ambush, Pump & Pop, Rake It In, Crazy Cutters, Cake Factory, Bobsled Run.
+banner; Honey Trap's tutorial says you play from your flower. 31 Shark Bait (from the owner's other window), mode
+buttons only for players who can use them, Skate Escape race bar readable side by side.
+Games (13, all hold 12 players): Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking Sands, Arrow
+Ambush, Pump & Pop, Rake It In, Crazy Cutters, Cake Factory, Bobsled Run, Shark Bait.
 
 ## 9. The owner's requests today (newest last)
 

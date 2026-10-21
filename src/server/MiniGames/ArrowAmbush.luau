@@ -30,6 +30,9 @@
 --  * Boards block arrows that visibly touch them: the frame is 3.78 studs either side and 8.14
 --    high (TargetBoard mesh, on 0.46 rails), plus the arrowhead's 0.15. It was 3.6 and 8, so an
 --    arrow could clip a board's edge on screen and still tag the runner hiding behind it.
+--
+-- Bug pass (owner: "it just has to work"): a runner who goes out without an arrow (a reset) reads
+-- "Out at 12s" in the standings and results instead of "Running".
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
@@ -869,7 +872,11 @@ function ArrowAmbush:Start()
 	ctx.Hooks.PlayerLeft = function()
 		self:_refresh()
 	end
-	ctx.Hooks.Eliminated = function()
+	ctx.Hooks.Eliminated = function(player)
+		if self.role[player] == "Runner" and not self.tagged[player] then
+			-- Out without an arrow (a reset): the standings and results say so, not "Running".
+			ctx:SetScoreText(player, string.format("Out at %ds", math.floor(ctx:Elapsed())))
+		end
 		self:_refresh()
 	end
 

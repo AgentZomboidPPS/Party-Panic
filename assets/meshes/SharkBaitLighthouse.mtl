@@ -1,0 +1,47 @@
+newmtl Rock
+Kd 0.745 0.549 0.392
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Grass
+Kd 0.431 0.745 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Tower
+Kd 0.961 0.961 0.941
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stripes
+Kd 1.000 0.329 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rail
+Kd 0.510 0.345 0.220
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Lantern
+Kd 1.000 0.902 0.549
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Roof
+Kd 0.839 0.251 0.196
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Door
+Kd 0.275 0.157 0.353
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

@@ -5,6 +5,10 @@
 -- (E or a click on PC; beside the jump button on phones).
 --
 -- Rakes are judged on the server at the moment you pressed; your own rake swings right away.
+--
+-- A veggie two neighbours raked at the same moment counts for both (owner: "the precision games
+-- will feel super bad if we dont"; see the server half): it flies to the first basket and a copy
+-- of it to the second.
 
 local UserInputService = game:GetService("UserInputService")
 
@@ -303,6 +307,7 @@ function RakeItIn.Start(api)
 				item.Model:Destroy()
 			elseif station and by ~= 0 then
 				table.insert(flying, {
+					Id = id,
 					Model = item.Model,
 					From = from,
 					To = station.Basket + Vector3.new(0, 2.6, 0),
@@ -483,7 +488,8 @@ function RakeItIn.Start(api)
 	local button = api:Button({ Text = "RAKE!", Key = Enum.KeyCode.E, Color = Theme.Colors.Orange })
 	button:SetVisible(mine ~= nil)
 	local function rake()
-		if not mine or not api:Alive() then
+		-- (Like the button: a click after time's up would only swing the rake; the server ignores it.)
+		if not mine or not api:CanAct() then
 			return
 		end
 		local t = api:Now()
@@ -526,6 +532,23 @@ function RakeItIn.Start(api)
 		for _, id in (if type(ids) == "table" then ids else {}) do
 			local item = items[id]
 			if not item then
+				-- Already flying to a neighbour's basket: it counted for this rake too (both pressed
+				-- while it was in their lane on their screens), so a copy flies here as well.
+				for _, fly in flying do
+					local copy = if fly.Id == id then fly.Model:Clone() else nil
+					if copy then
+						copy.Parent = api.World
+						table.insert(flying, {
+							Id = id,
+							Model = copy,
+							From = fly.From,
+							To = station.Basket + Vector3.new(0, 2.6, 0),
+							Start = os.clock() + 0.15,
+							Spin = fly.Spin,
+						})
+						break
+					end
+				end
 				continue
 			end
 			items[id] = nil
@@ -537,6 +560,7 @@ function RakeItIn.Start(api)
 				end)
 			else
 				table.insert(flying, {
+					Id = id,
 					Model = model,
 					From = model:GetPivot().Position,
 					To = station.Basket + Vector3.new(0, 2.6, 0),

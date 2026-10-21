@@ -1,4 +1,4 @@
-# Mini-game backlog (games 13-25)
+# Mini-game backlog (games 13-26)
 
 The owner asked for these, in this order, after the first twelve and "after everything else is finished" (owner: "dont
 start on game 13+ untill everything else is finished"). Each brief below is what the builder works from. They are built
@@ -12,7 +12,7 @@ Planned categories once all 25 exist (the brief leaves some open; these are the 
 | --- | --- | --- |
 | Team | Pump & Pop, Bobsled Run, Cake Factory | + Prime Cut, Eatsa Pizza, Log Jam (6) |
 | Reaction | Hex Meltdown, Rake It In, Crazy Cutters | + Mecha-Marathon, Messy Memory, Trace Race (6) |
-| Versus | Sinking Sands, Arrow Ambush | + Tanks!, Stamp Out (4) |
+| Versus | Sinking Sands, Arrow Ambush, Shark Bait | + Tanks!, Stamp Out, Struggle (6) |
 | Knockback | Bumper Ballers | + Snowball Summit, Slaparazzi (3) |
 | Survival | Fire Rope | + Spleef (2) |
 | Luck | Honey Trap | + Parasol Plummet (2) |
@@ -74,3 +74,21 @@ After "Slaparazzi" (Super Mario Party): a photographer snaps a photo every few s
 ## 25. Log Jam (`LogJam`, Team)
 
 After "Log Jam" (Mario Party 3, 2-vs-2): each team works a sawmill: one teammate PLACES a log by pressing the button shown on their screen, the partner CHOPS it by pressing that same button; a wrong press jams that side for a moment; the team that chops the most logs in 30 s wins. Up to 12: 2 to 4 teams (Teams.luau) with roles rotating each log so everyone both places and chops; the prompt is one of four big shape+colour buttons (▲ ■ ● ◆) shown to the placer (and to the chopper a beat later); the server owns prompts, presses and counts. Bots press with skill-based reaction and error. Category Team, Duration 30-40, MinPlayers 2, IsTeam true. Props as real meshes: sawmill stations, logs, axes, wood chips, a forest lumber-yard arena.
+
+## 26. Struggle (`Struggle`, Versus)
+
+Added by the owner on 2026-10-21 ("Also lets add this into the backburner for games.
+https://kingdomhearts.fandom.com/wiki/Struggle"). After "Struggle" (Kingdom Hearts II, the Sandlot matches): everyone
+fights with a foam bat; each player starts with a pile of orbs in their own colour, and every hit knocks some of the
+victim's orbs loose, scattering them on the ground; anyone can pick up loose orbs (grabbing rivals' orbs raises your
+score, grabbing your own back restores it); the most orbs when time runs out wins, and the match ends early if one player
+holds every orb. Adapt for up to 12 in a free-for-all: start with about 20 orbs each (not 100: 12 players), SWING button
+(and click/tap on PC) with a short cooldown and a wind-up you can see, a hit knocks out a few orbs (more for a
+charged swing, with a small knockback via ctx:Knockback for players and bots alike) and gives the victim a brief
+invulnerability so nobody gets juggled; nobody is eliminated at 0 orbs (they keep fighting to win orbs back), ties
+broken by hits landed. The server owns orbs (positions, pickups by distance, ownership), hits (range, arc, facing,
+cooldown, fair-hit leeway against what the attacker saw) and scores; clients draw orbs, swings and hit sparks smoothly.
+Bots chase orb-rich rivals and loose orbs, swing with skill-based timing and dodge wind-ups. Category Versus, Duration
+60-75, MinPlayers 2, IsTeam false. Props as real meshes (original designs, no Kingdom Hearts branding or likenesses):
+padded foam bats, glowing orbs in player colours (with a shape per player so colour isn't the only cue), a sunset
+sandlot with a tram-yard backdrop, banners, a scoreboard and benches.
