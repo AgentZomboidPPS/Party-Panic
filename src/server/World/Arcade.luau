@@ -288,6 +288,24 @@ function Arcade.Build(root: Model): Model
 	clearSite(root, frame)
 	local arcade = Build.Model("Arcade", root)
 	MeshLibrary.Get("ArcadeTicketFloor", { CFrame = frame * FLOOR_PIVOT, Parent = arcade })
+	-- What feet land on: flat invisible floors at the grout's height (0.3) under the patio's
+	-- tickets and the path's (the floor mesh doesn't collide).
+	local colliders = Build.Model("Colliders", arcade)
+	for _, floor in
+		{
+			{ Name = "PatioFloor", Size = Vector3.new(24.8, 1, 19.3), At = Vector3.new(0, -0.2, 5.75) },
+			{ Name = "PathFloor", Size = Vector3.new(7.2, 1, 23.1), At = Vector3.new(0, -0.2, -15.45) },
+		}
+	do
+		Build.Part({
+			Name = floor.Name,
+			Size = floor.Size,
+			CFrame = frame * CFrame.new(floor.At),
+			Transparency = 1,
+			CastShadow = false,
+			Parent = colliders,
+		})
+	end
 	for index = 1, Arcade.Count do
 		buildMachine(arcade, index)
 	end

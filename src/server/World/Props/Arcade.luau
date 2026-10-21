@@ -145,10 +145,11 @@ return function(h)
 				h.roller(m, "Band", 0.76, 0.1, Vector3.new(0, 0.389, 0))
 			end,
 		},
+		-- Walked on through invisible floors World/Arcade lays under its tickets (the mesh's own
+		-- collision would be a guess at its slabs, tickets and stars).
 		ArcadeTicketFloor = {
 			Height = 1.05,
 			AssetId = 111736912425418,
-			Collide = true,
 			Shadow = false,
 			Palette = {
 				Rim = rgb(255, 255, 255),
