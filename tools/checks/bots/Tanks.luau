@@ -59,14 +59,14 @@ return function(env)
 				local toward = math.atan2(dx, dz) + wander[player].Angle
 				local push = if bestD > 30 then 1 elseif bestD < 16 then -0.8 else 0.4
 				mx, mz = math.sin(toward) * push, math.cos(toward) * push
-				aim = math.atan2(-dx, -dz) + env.rng:NextNumber(-0.12, 0.12)
+				aim = math.atan2(-dx, -dz) + env.rng:NextNumber(-0.45, 0.45)
 			end
 			seqs[player] = (seqs[player] or 1e6) + 1
 			env.Action(player, "In", seqs[player], mx, mz, aim)
 			-- Only with a clear line (a shot into a brick would bounce straight back at it).
 			local clear = best and mode.Field.Clear(mode.field, tank.X, tank.Z, best.X, best.Z, 0.6)
 			if clear and now >= (nextFire[player] or 0) and tank.Shells < 2 then
-				nextFire[player] = now + env.rng:NextNumber(0.5, 1.4)
+				nextFire[player] = now + env.rng:NextNumber(1, 2.4)
 				env.Action(player, "Fire", aim, now)
 				shots += 1
 			end

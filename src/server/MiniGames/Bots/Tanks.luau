@@ -22,7 +22,7 @@ local TankField = require(ReplicatedStorage.Shared.Logic.TankField)
 local Brain = {}
 
 local SPEED = TankField.SHELL_SPEED
-local HORIZON = 1.2 -- seconds of shell flight a bot looks ahead
+local HORIZON = 1.5 -- seconds of shell flight a bot looks ahead
 local wrap = TankField.Wrap
 
 local function heading(dx: number, dz: number): number
@@ -149,6 +149,14 @@ local function dodge(field, tank, t: number, x: number, z: number, dx: number, d
 	return bestX, bestZ
 end
 
+-- Whether a shot this way would come back off its wall at this tank (should it miss).
+local function backAtMe(field, tank, aim: number): boolean
+	local second = TankField.Path(field, tank.X, tank.Z, aim).Segments[2]
+	local reach = math.min(second.Length, 60)
+	local ex, ez = second.X + second.DX * reach, second.Z + second.DZ * reach
+	return (segmentDistance(tank.X, tank.Z, second.X, second.Z, ex, ez)) < TankField.HALF_LENGTH + 2
+end
+
 -- A one-wall bank shot at the target, or nil (never one that comes back past this tank first).
 local function bankShot(field, tank, target): number?
 	local best, bestS = nil, math.huge
@@ -191,7 +199,9 @@ function Brain.Step(bot, ctx, mode, dt)
 	m.Seq = (m.Seq or 0) + 1
 	m.Aim = m.Aim or tank.Aim
 	m.Seen = m.Seen or {}
-	m.NextShot = m.NextShot or now + bot:Reaction() * 1.5 -- nobody fires the instant it's GO
+	-- First real shot a while after the spawn shield drops (sooner for skilled bots), so they don't
+	-- all open fire at once; nothing is wasted on shields before that.
+	m.NextShot = m.NextShot or (mode.startAt + TankField.SHIELD + 0.5 + rng:NextNumber(0.5, 3) * (1.3 - skill))
 
 	local enemies = {}
 	for _, other in mode.list do
@@ -388,9 +398,7 @@ function Brain.Step(bot, ctx, mode, dt)
 		-- Shoot it down: aim where it will be when a shell from here meets it.
 		local d = math.sqrt((sx - tank.X) ^ 2 + (sz - tank.Z) ^ 2)
 		local meet = d / (2 * SPEED)
-		local ax, az = sx - sdx * SPEED * meet, sz - sdz * SPEED * meet
-		local s = (now - shell.T0) * SPEED + meet * SPEED
-		ax, az = TankField.At(shell.Path, s)
+		local ax, az = TankField.At(shell.Path, (now - shell.T0) * SPEED + meet * SPEED)
 		wantAim = heading(ax - tank.X, az - tank.Z)
 		clear = bot:Chance(0.5 + 0.4 * skill)
 		if clear then
@@ -405,11 +413,11 @@ function Brain.Step(bot, ctx, mode, dt)
 			px, pz = target.X + vx * fly * lead, target.Z + vz * fly * lead
 		end
 		if now >= (m.NoiseUntil or 0) then
-			m.Noise = (rng:NextNumber() - 0.5 + rng:NextNumber() - 0.5) * (1 - skill) * 0.22
+			m.Noise = (rng:NextNumber() - 0.5 + rng:NextNumber() - 0.5) * (1.15 - skill) * 0.4
 			m.NoiseUntil = now + rng:NextNumber(0.5, 1.1)
 		end
 		wantAim = heading(px - tank.X, pz - tank.Z) + (m.Noise or 0)
-		clear = TankField.Clear(field, tank.X, tank.Z, px, pz, 0.5)
+		clear = TankField.Clear(field, tank.X, tank.Z, px, pz, 0.5) and not backAtMe(field, tank, m.Aim)
 	else
 		if skill > 0.4 and now >= (m.BankAt or 0) then
 			m.BankAt = now + rng:NextNumber(0.7, 1.2)
@@ -434,13 +442,13 @@ function Brain.Step(bot, ctx, mode, dt)
 		and now >= (m.NextShot or 0)
 	then
 		ctx:BotAction(bot, "Fire", m.Aim, now)
-		m.NextShot = now + rng:NextNumber(0.35, 1.1) * (1.4 - skill)
+		m.NextShot = now + rng:NextNumber(0.6, 1.5) * (1.5 - skill)
 		m.Bank = nil
 	end
 
 	-- A mine when an enemy is close (then drive off it).
-	if tank.Mines < TankField.MAX_MINES and now >= (m.NextMine or now + rng:NextNumber(3, 6)) then
-		m.NextMine = m.NextMine or now
+	m.NextMine = m.NextMine or now + rng:NextNumber(3, 6)
+	if tank.Mines < TankField.MAX_MINES and now >= m.NextMine then
 		local close = math.huge
 		for _, other in enemies do
 			close = math.min(close, math.sqrt((other.X - tank.X) ^ 2 + (other.Z - tank.Z) ^ 2))

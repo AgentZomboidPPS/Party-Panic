@@ -25,12 +25,19 @@
 --     was that long ago: what they saw dodge is a dodge, what they saw touch them is a hit. Bots (no
 --     screen) are judged as the server sees them. A tank's own shell can hit it only after its
 --     ricochet (and never in its first half second, so a shot point-blank into a wall is safe).
---   * Shells that meet pop each other; a shell that touches a mine sets it off. A mine arms after
---     1.5 s (its layer must have driven off it first), goes off when a hull drives onto it or after
---     7 s, and its blast takes every tank, shell and mine within 10 studs (mines chain a moment
---     later). Everyone one blast catches is knocked out in the same server step.
+--   * Shells that meet pop each other; a shell that touches a mine sets it off (both only once the
+--     shell is out of its barrel, where clients first draw it: a shot never sets off the mine under
+--     its own tank). A mine arms after 1.5 s (its layer must have driven off it first), goes off
+--     when a hull touches it or after 7 s, and its blast takes every tank, shell and mine within 10
+--     studs (mines chain a moment later). Everyone one blast catches is knocked out in the same
+--     server step; a player is spared if their own screen (a one-way trip ahead) had them outside.
+--   * Live mines and shells are shared state as well as events, so a screen that starts late still
+--     draws every one that's out.
+--   * For the first 3 s after GO every tank is shielded (a shell that touches it just pops, a blast
+--     passes it by), so nobody is out before they've had a chance to move.
 --   * Each tank can have 2 shells in flight and 2 mines down. A hit scores for the shooter or the
---     mine's layer (never for yourself).
+--     mine's layer (never for yourself); a mine that takes its own layer scores for whoever set it
+--     off (their shell, their tank driving onto it, or the blast that chained it).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -86,6 +93,7 @@ type Shell = {
 	Path: TankField.Path,
 	End: number, -- when it reaches its second wall
 	Prev: number, -- checked up to this server time
+	Aim: number,
 	Dead: boolean,
 	Counted: boolean, -- its owner got the slot back
 }
@@ -99,6 +107,7 @@ type Mine = {
 	BlowAt: number,
 	Clear: boolean, -- its layer has driven off it
 	Dead: boolean,
+	Detonator: Tank?, -- whose shell (or blast) set it off, when not its layer's
 }
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -152,9 +161,10 @@ function Tanks:_buildArena()
 	local wallpaper = rgb(176, 208, 236)
 	for _, spec in
 		{
-			{ Vector3.new(width + 2 * 70 + 8, 72, 4), Vector3.new(0, 36, northZ - 2) },
-			{ Vector3.new(4, 72, depth + 220), Vector3.new(-sideX - 2, 36, 46) },
-			{ Vector3.new(4, 72, depth + 220), Vector3.new(sideX + 2, 36, 46) },
+			{ Vector3.new(width + 2 * 70 + 7.8, 72, 4), Vector3.new(0, 36, northZ - 2) },
+			-- (the side walls sit 0.1 lower than the north one: no flush faces where they meet)
+			{ Vector3.new(4, 72, depth + 220), Vector3.new(-sideX - 2, 35.9, 46) },
+			{ Vector3.new(4, 72, depth + 220), Vector3.new(sideX + 2, 35.9, 46) },
 		}
 	do
 		Build.Part({
@@ -170,21 +180,23 @@ function Tanks:_buildArena()
 	Build.Decor({
 		Name = "Baseboard",
 		Size = Vector3.new(width + 2 * 70, 5, 1.2),
-		CFrame = self:_at(0, floorY + 2.5, northZ + 0.6),
+		CFrame = self:_at(0, floorY + 2.5, northZ + 0.7),
 		Color = rgb(250, 248, 240),
 		Parent = room,
 	})
+	-- The side ones run from just behind the north one's front to just short of the walls' ends.
+	local boardZ0, boardZ1 = northZ + 0.2, 46 + (depth + 220) / 2 - 1
 	for _, side in { -1, 1 } do
 		Build.Decor({
 			Name = "Baseboard",
-			Size = Vector3.new(1.2, 5, depth + 220 - 4),
-			CFrame = self:_at(side * (sideX - 0.6), floorY + 2.5, 46 + 2),
+			Size = Vector3.new(1.2, 5.2, boardZ1 - boardZ0), -- (not flush with the north one's faces)
+			CFrame = self:_at(side * (sideX - 0.7), floorY + 2.5, (boardZ0 + boardZ1) / 2),
 			Color = rgb(250, 248, 240),
 			Parent = room,
 		})
 	end
 	MeshLibrary.Get("TanksWindow", {
-		CFrame = self:_at(0, floorY + 14, northZ) * CFrame.Angles(0, math.pi, 0),
+		CFrame = self:_at(0, floorY + 14, northZ + 2) * CFrame.Angles(0, math.pi, 0), -- the frame proud of the wall (pivot is the box center)
 		Parent = room,
 	})
 	-- Giant toys around the arena (north and the sides: the camera looks north).
@@ -231,7 +243,7 @@ function Tanks:_buildArena()
 	for col = 1, field.Cols - 1 do
 		Build.Decor({
 			Name = "Groove",
-			Size = Vector3.new(0.16, 0.08, depth),
+			Size = Vector3.new(0.16, 0.2, depth),
 			CFrame = self:_at(-width / 2 + col * TILE, 0, 0),
 			Color = groove,
 			Material = Enum.Material.Sand,
@@ -241,7 +253,7 @@ function Tanks:_buildArena()
 	for row = 1, field.Rows - 1 do
 		Build.Decor({
 			Name = "Groove",
-			Size = Vector3.new(width, 0.06, 0.16),
+			Size = Vector3.new(width, 0.4, 0.16), -- (faces 0.1 apart where they cross: no flicker)
 			CFrame = self:_at(0, 0, -depth / 2 + row * TILE),
 			Color = groove,
 			Material = Enum.Material.Sand,
@@ -514,10 +526,12 @@ function Tanks:_fire(player: any, aim: any, pressedAt: any, token: any)
 		Path = path,
 		End = t0 + path.Length / SPEED,
 		Prev = t0,
+		Aim = aim,
 		Dead = false,
 		Counted = false,
 	}
 	self.shells[shell.Id] = shell
+	self.shellsDirty = true
 	ctx:Fire(nil, "Shot", shell.Id, tank.Id, t0, tank.X, tank.Z, aim, if type(token) == "number" then token else 0)
 end
 
@@ -551,6 +565,7 @@ function Tanks:_layMine(player: any)
 		Dead = false,
 	}
 	self.mines[mine.Id] = mine
+	self.minesDirty = true
 	ctx:Fire(nil, "Mine", mine.Id, tank.Id, round(mine.X, 0.01), round(mine.Z, 0.01), mine.ArmAt, mine.BlowAt)
 end
 
@@ -610,6 +625,47 @@ function Tanks:_step(dt: number)
 	self:_stepShells(prev, now)
 	self:_stepMines(now)
 	self:_flushOuts()
+	self:_shareShots()
+end
+
+-- Live mines and shells as shared state too (the events are only cues): a screen that starts late
+-- (a slow phone, someone rejoining or watching) still draws every mine and shell that's out.
+function Tanks:_shareShots()
+	local ctx = self.context
+	if self.minesDirty then
+		self.minesDirty = false
+		local list = {}
+		for id, mine in self.mines do
+			if not mine.Dead then
+				list[tostring(id)] = {
+					mine.Owner.Id,
+					round(mine.X, 0.01),
+					round(mine.Z, 0.01),
+					round(mine.ArmAt, 0.001),
+					round(mine.BlowAt, 0.001),
+				}
+			end
+		end
+		ctx:SetSharedJSON("Mines", list)
+	end
+	if self.shellsDirty then
+		self.shellsDirty = false
+		local now = ctx:Now()
+		local list = {}
+		for id, shell in self.shells do
+			if not shell.Dead and now < shell.End then
+				local first = shell.Path.Segments[1]
+				list[tostring(id)] = {
+					shell.Owner.Id,
+					shell.T0,
+					first.X,
+					first.Z,
+					shell.Aim,
+				}
+			end
+		end
+		ctx:SetSharedJSON("Shells", list)
+	end
 end
 
 -- The first point (path distance) at which a shell's flight between s0 and s1 touches a hull.
@@ -641,12 +697,13 @@ local function hullHit(path: TankField.Path, s0: number, s1: number, tank: Tank)
 end
 
 -- Distance from a point to the segment a-b.
-local function segmentDistance(px: number, pz: number, ax: number, az: number, bx: number, bz: number): number
+-- Distance from a point to the segment a-b, and where along it (0..1) it's closest.
+local function segmentDistance(px: number, pz: number, ax: number, az: number, bx: number, bz: number): (number, number)
 	local dx, dz = bx - ax, bz - az
 	local length2 = dx * dx + dz * dz
 	local t = if length2 > 1e-9 then math.clamp(((px - ax) * dx + (pz - az) * dz) / length2, 0, 1) else 0
 	local cx, cz = ax + dx * t - px, az + dz * t - pz
-	return math.sqrt(cx * cx + cz * cz)
+	return math.sqrt(cx * cx + cz * cz), t
 end
 
 function Tanks:_popShell(shell: Shell, s: number, kind: string)
@@ -654,6 +711,7 @@ function Tanks:_popShell(shell: Shell, s: number, kind: string)
 		return
 	end
 	shell.Dead = true
+	self.shellsDirty = true
 	if not shell.Counted then
 		shell.Counted = true
 		shell.Owner.Shells = math.max(0, shell.Owner.Shells - 1)
@@ -688,26 +746,36 @@ function Tanks:_stepShells(prev: number, now: number)
 			end
 		end
 		if bestTank then
-			self:_popShell(shell, bestS, "tank")
-			self:_knockOut(bestTank, shell.Owner, "shelled")
+			if now < self.startAt + TankField.SHIELD then
+				self:_popShell(shell, bestS, "shield")
+			else
+				self:_popShell(shell, bestS, "tank")
+				self:_knockOut(bestTank, shell.Owner, "shelled")
+			end
 			continue
 		end
-		local s0 = math.max((shell.Prev - shell.T0) * SPEED, 0)
+		-- Mines it flies into (only once it's out of the barrel, as clients draw it), popping where
+		-- it meets the first one.
+		local s0 = math.max((shell.Prev - shell.T0) * SPEED, TankField.SHELL_SHOWN)
 		local s1 = math.min((now - shell.T0) * SPEED, path.Length)
-		-- Mines it flies into.
-		if s1 > s0 then
-			local ax, az = TankField.At(path, s0)
-			local bx, bz = TankField.At(path, s1)
+		local hitS, hitMine = math.huge, nil
+		TankField.Pieces(path, s0, s1, function(ax, az, bx, bz, sa, sb)
 			for _, mine in self.mines do
-				if
-					not mine.Dead
-					and segmentDistance(mine.X, mine.Z, ax, az, bx, bz) <= TankField.MINE_RADIUS + radius
-				then
-					self:_popShell(shell, s1, "mine")
-					self:_blast(mine, now)
-					break
+				if mine.Dead then
+					continue
+				end
+				local d, t = segmentDistance(mine.X, mine.Z, ax, az, bx, bz)
+				if d <= TankField.MINE_RADIUS + radius then
+					local s = sa + (sb - sa) * t
+					if s < hitS then
+						hitS, hitMine = s, mine
+					end
 				end
 			end
+		end)
+		if hitMine then
+			self:_popShell(shell, hitS, "mine")
+			self:_blast(hitMine, now, shell.Owner)
 		end
 		if shell.Dead then
 			continue
@@ -717,6 +785,7 @@ function Tanks:_stepShells(prev: number, now: number)
 			-- players judged a little in the past).
 			shell.Counted = true
 			shell.Owner.Shells = math.max(0, shell.Owner.Shells - 1)
+			self.shellsDirty = true
 		end
 		shell.Prev = now
 		if now - MAX_LAG > shell.End then
@@ -730,26 +799,31 @@ function Tanks:_stepShells(prev: number, now: number)
 			table.insert(live, shell)
 		end
 	end
+	local shown = TankField.SHELL_SHOWN / SPEED -- seconds from T0 until a shell leaves its barrel
 	for i = 1, #live do
 		local a = live[i]
-		if a.Dead then
+		if a.Dead or now < a.T0 + shown then
 			continue
 		end
-		local a0x, a0z = TankField.At(a.Path, math.max(prev - a.T0, 0) * SPEED)
-		local a1x, a1z = TankField.At(a.Path, (now - a.T0) * SPEED)
 		for j = i + 1, #live do
 			local b = live[j]
-			if b.Dead then
+			if b.Dead or now < b.T0 + shown then
 				continue
 			end
-			local b0x, b0z = TankField.At(b.Path, math.max(prev - b.T0, 0) * SPEED)
+			-- Over the part of this frame when both are out of their barrels: the closest approach of
+			-- their relative motion.
+			local from = math.max(prev, a.T0 + shown, b.T0 + shown)
+			local a0x, a0z = TankField.At(a.Path, (from - a.T0) * SPEED)
+			local a1x, a1z = TankField.At(a.Path, (now - a.T0) * SPEED)
+			local b0x, b0z = TankField.At(b.Path, (from - b.T0) * SPEED)
 			local b1x, b1z = TankField.At(b.Path, (now - b.T0) * SPEED)
-			-- Relative motion from (b0 - a0) to (b1 - a1): closest approach to zero.
 			local rx0, rz0 = b0x - a0x, b0z - a0z
 			local rx1, rz1 = b1x - a1x, b1z - a1z
-			if segmentDistance(0, 0, rx0, rz0, rx1, rz1) <= 2 * radius + 0.3 then
-				self:_popShell(a, (now - a.T0) * SPEED, "shell")
-				self:_popShell(b, (now - b.T0) * SPEED, "shell")
+			local d, t = segmentDistance(0, 0, rx0, rz0, rx1, rz1)
+			if d <= 2 * radius + 0.3 then
+				local at = from + (now - from) * t
+				self:_popShell(a, (at - a.T0) * SPEED, "shell")
+				self:_popShell(b, (at - b.T0) * SPEED, "shell")
 				break
 			end
 		end
@@ -778,18 +852,42 @@ function Tanks:_stepMines(now: number)
 					end
 				elseif near and now >= mine.ArmAt then
 					blow = true
+					-- Whoever drove onto it set it off: if it takes its layer too, that's their hit.
+					mine.Detonator = mine.Detonator or tank
 					break
 				end
 			end
 		end
 		if blow then
-			self:_blast(mine, now)
+			self:_blast(mine, now, mine.Detonator)
 		end
 	end
 end
 
 -- A mine goes off: every tank, shell and mine in the blast.
-function Tanks:_blast(mine: Mine, now: number)
+-- Whether a blast at (x, z) catches a tank. A player's own screen runs their tank a one-way trip
+-- ahead of the server, so a player is spared when either where the server has them or where their
+-- screen showed them is outside the ring (the benefit of the doubt, like shells).
+function Tanks:_caught(tank: Tank, x: number, z: number, radius: number): boolean
+	if not TankField.Near(tank, x, z, radius) then
+		return false
+	end
+	if tank.Bot or tank.Lag <= 0 then
+		return true
+	end
+	local ahead = {
+		X = tank.X - math.sin(tank.H) * tank.V * tank.Lag,
+		Z = tank.Z - math.cos(tank.H) * tank.V * tank.Lag,
+		H = tank.H,
+		V = tank.V,
+		Rev = tank.Rev,
+	}
+	return TankField.Near(ahead, x, z, radius)
+end
+
+-- A mine goes off: every tank, shell and mine in the blast. `detonator` is whose shell (or blast)
+-- set it off: when the blast takes the mine's own layer, that's who gets the hit.
+function Tanks:_blast(mine: Mine, now: number, detonator: Tank?)
 	if mine.Dead then
 		return
 	end
@@ -797,10 +895,17 @@ function Tanks:_blast(mine: Mine, now: number)
 	mine.Dead = true
 	mine.Owner.Mines = math.max(0, mine.Owner.Mines - 1)
 	ctx:Fire(nil, "Boom", mine.Id, round(mine.X, 0.01), round(mine.Z, 0.01))
+	self.minesDirty = true
 	local blast = TankField.MINE_BLAST
-	for _, tank in self.list do
-		if not tank.Out and TankField.Near(tank, mine.X, mine.Z, blast) then
-			self:_knockOut(tank, mine.Owner, "mined")
+	if now >= self.startAt + TankField.SHIELD then
+		for _, tank in self.list do
+			if not tank.Out and self:_caught(tank, mine.X, mine.Z, blast) then
+				local by = mine.Owner
+				if tank == mine.Owner and detonator and detonator ~= tank then
+					by = detonator
+				end
+				self:_knockOut(tank, by, "mined")
+			end
 		end
 	end
 	for _, shell in self.shells do
@@ -815,6 +920,8 @@ function Tanks:_blast(mine: Mine, now: number)
 	for _, other in self.mines do
 		if not other.Dead and (other.X - mine.X) ^ 2 + (other.Z - mine.Z) ^ 2 <= blast * blast then
 			other.BlowAt = math.min(other.BlowAt, now + TankField.CHAIN_DELAY)
+			-- A chain goes back to whoever started it.
+			other.Detonator = other.Detonator or detonator or mine.Owner
 		end
 	end
 end

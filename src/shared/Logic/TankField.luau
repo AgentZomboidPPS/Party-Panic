@@ -26,20 +26,24 @@ TankField.HALF_LENGTH = 3.8
 TankField.SPEED = 13 -- studs/s
 TankField.TURN = math.rad(220) -- hull turn rate, rad/s
 TankField.ACCEL = 9 -- 1/s: how fast the speed reaches the stick's
-TankField.SHELL_SPEED = 40
+TankField.SHELL_SPEED = 28 -- about twice a tank's speed: a shell you see coming can be dodged
 TankField.SHELL_RADIUS = 0.45 -- assets/meshes/TanksShell.glb is 0.9 thick
 TankField.SHELL_Y = 3.1 -- a shell's center above the floor (the barrel's height)
 TankField.MUZZLE = 5.4 -- from the tank's center to the barrel's tip
+-- Where a shell first shows (clients hide it inside the barrel): it meets mines and other shells
+-- only from here on, so a shot never sets off a mine under its own tank.
+TankField.SHELL_SHOWN = 5.4 * 0.85
 TankField.MAX_SHELLS = 2 -- in flight per tank
 TankField.RELOAD = 0.3 -- seconds between shots
 TankField.MAX_MINES = 2
 TankField.MINE_GAP = 1 -- seconds between mines
 TankField.MINE_ARM = 1.5 -- a fresh mine can't go off by itself being driven over until then
 TankField.MINE_FUSE = 7 -- it blows by itself this long after it's laid
-TankField.MINE_TRIGGER = 1.0 -- an armed mine goes off when a hull comes this close to its center
+TankField.MINE_TRIGGER = 1.3 -- an armed mine goes off when a hull touches the mine you see
 TankField.MINE_RADIUS = 1.3 -- the mine you see (a shell that touches it sets it off)
 TankField.MINE_BLAST = 10 -- everything this close to the blast is caught in it
 TankField.CHAIN_DELAY = 0.15 -- a mine caught in a blast goes off this much later
+TankField.SHIELD = 3 -- seconds after GO when every tank is shielded (a shell or blast just pops)
 TankField.OWN_SAFE = 0.5 -- a tank's own shell can't hit it in its first half second (point-blank walls)
 TankField.WALL_HEIGHT = 8
 TankField.COVER_HEIGHT = 4

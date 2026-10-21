@@ -98,6 +98,7 @@ type Visual = {
 	PopFrom: CFrame?,
 	Debris: { { any } }?,
 	Plate: BillboardGui?,
+	Bubble: BasePart?,
 }
 
 type ShellVisual = {
@@ -270,6 +271,17 @@ function Tanks.Start(api)
 				table.insert(visual.HullOff, base:ToObjectSpace(part.CFrame))
 			end
 		end
+		-- The spawn shield: a bubble round the tank until it wears off (TankField.SHIELD after GO).
+		visual.Bubble = decor({
+			Name = "Bubble",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * 10.5,
+			Color = Color3.fromRGB(150, 220, 255),
+			Material = Enum.Material.ForceField,
+			Transparency = 0.2,
+			CFrame = HIDDEN,
+			Parent = model,
+		})
 		model.Parent = api.World
 		-- Whose tank: the driver's name over it in the tank's colour ("YOU" for your own).
 		local anchor = turretPart or model.PrimaryPart
@@ -302,6 +314,10 @@ function Tanks.Start(api)
 			part.CFrame = hull * visual.HullOff[index]
 		end
 		local axis = CFrame.new((hull * visual.Axis).Position) * CFrame.Angles(0, visual.Aim, 0)
+		local bubble = visual.Bubble
+		if bubble then
+			bubble.CFrame = if api:Now() < goAt + TankField.SHIELD then hull + Vector3.new(0, 2.6, 0) else HIDDEN
+		end
 		local kick = if visual.Recoil > 0 then CFrame.new(0, 0, visual.Recoil * 0.5) else CFrame.identity
 		for index, part in visual.Turret do
 			local offset = visual.TurretOff[index]
@@ -661,11 +677,16 @@ function Tanks.Start(api)
 		table.insert(shells, entry)
 	end
 
+	local ended: { [number]: boolean } = {} -- shells that are gone (a late snapshot never brings one back)
+
 	local function endShell(entry: ShellVisual, position: Vector3?, kind: string)
 		if entry.Done then
 			return
 		end
 		entry.Done = true
+		if entry.Id then
+			ended[entry.Id] = true
+		end
 		local part = entry.Part
 		local at = position or (part and part.Position)
 		if part then
@@ -676,7 +697,9 @@ function Tanks.Start(api)
 		end
 		if at and kind ~= "quiet" then
 			sparks(at, colorOf(entry.Owner))
-			if kind == "shell" and near(at, 90) then
+			if kind == "shield" and near(at, 90) then
+				api:Sound("Boing")
+			elseif kind == "shell" and near(at, 90) then
 				api:Sound("Click")
 			end
 		end
@@ -697,9 +720,18 @@ function Tanks.Start(api)
 			return
 		end
 		local path = TankField.Path(field, x, z, shotAim)
+		local known = ended[id] ~= nil
+		for _, entry in shells do
+			if entry.Id == id then
+				known = true -- already drawn from the shared state
+			end
+		end
 		if owner == myId and type(shotToken) == "number" and shotToken > 0 then
 			for _, entry in shells do
-				if entry.Token == shotToken and not entry.Id then
+				if entry.Token == shotToken and not entry.Id and known then
+					endShell(entry, nil, "quiet") -- the shared copy already flies the server's flight
+					return
+				elseif entry.Token == shotToken and not entry.Id then
 					-- My own shot: take the server's flight, easing out the small difference.
 					local now = api:Now()
 					local ox, oz = TankField.At(entry.Path, math.max(now - entry.T0, 0) * SPEED)
@@ -712,17 +744,19 @@ function Tanks.Start(api)
 				end
 			end
 		end
-		addShell({
-			Id = id,
-			Owner = owner,
-			T0 = t0,
-			Path = path,
-			Bounced = false,
-			OffX = 0,
-			OffZ = 0,
-			Born = os.clock(),
-			Done = false,
-		})
+		if not known then
+			addShell({
+				Id = id,
+				Owner = owner,
+				T0 = t0,
+				Path = path,
+				Bounced = false,
+				OffX = 0,
+				OffZ = 0,
+				Born = os.clock(),
+				Done = false,
+			})
+		end
 		local visual = visuals[owner]
 		if visual then
 			visual.Aim = shotAim
@@ -733,6 +767,49 @@ function Tanks.Start(api)
 			end
 		end
 	end)
+
+	-- The shells in flight as shared state: draws any this screen missed (it started late).
+	local function readShells()
+		local value = api:SharedJSON("Shells")
+		if type(value) ~= "table" or not field then
+			return
+		end
+		local now = api:Now()
+		for key, item in value do
+			local id = tonumber(key)
+			if not id or ended[id] or type(item) ~= "table" or type(item[2]) ~= "number" then
+				continue
+			end
+			local drawn = false
+			local pending = false -- one of my own shots still waiting for the server's word
+			for _, entry in shells do
+				if entry.Id == id then
+					drawn = true
+				elseif item[1] == myId and entry.Owner == myId and not entry.Id and not entry.Done then
+					pending = true
+				end
+			end
+			if drawn or pending then
+				continue
+			end
+			local path = TankField.Path(field, item[3], item[4], item[5])
+			if (now - item[2]) * SPEED < path.Length then
+				addShell({
+					Id = id,
+					Owner = item[1],
+					T0 = item[2],
+					Path = path,
+					Bounced = (now - item[2]) * SPEED >= path.Bounce,
+					OffX = 0,
+					OffZ = 0,
+					Born = os.clock(),
+					Done = false,
+				})
+			end
+		end
+	end
+	api:OnShared("Shells", readShells)
+	readShells()
 
 	api:OnEvent("Dud", function(dudToken)
 		for _, entry in shells do
@@ -811,35 +888,96 @@ function Tanks.Start(api)
 
 	-- Mines ------------------------------------------------------------------------------------------
 
-	api:OnEvent("Mine", function(id, owner, x, z, armAt, blowAt)
-		if type(id) ~= "number" or type(x) ~= "number" then
-			return
-		end
-		local entry: MineVisual = { Owner = owner, X = x, Z = z, ArmAt = armAt, BlowAt = blowAt }
+	local blown: { [number]: boolean } = {} -- mines that went off (a late snapshot never brings one back)
+
+	-- A mine's model (again later if its template hadn't arrived yet).
+	local function mineModel(entry: MineVisual)
 		local template = templates.TanksMine
-		if template then
-			local model = template:Clone() :: Model
-			for _, part in model:GetDescendants() do
-				if part:IsA("BasePart") then
-					part.Anchored = true
-					part.CanCollide = false
-					part.CanQuery = false
-					part.CanTouch = false
-					if part.Name == "Band" then
-						part.Color = colorOf(owner)
-					elseif part.Name == "Light" then
-						entry.Light = part
-					end
+		if entry.Model or not template or not field then
+			return -- (placed later, once the field and template are here)
+		end
+		local model = template:Clone() :: Model
+		for _, part in model:GetDescendants() do
+			if part:IsA("BasePart") then
+				part.Anchored = true
+				part.CanCollide = false
+				part.CanQuery = false
+				part.CanTouch = false
+				if part.Name == "Band" then
+					part.Color = colorOf(entry.Owner)
+				elseif part.Name == "Light" then
+					entry.Light = part
 				end
 			end
-			model:PivotTo(CFrame.new(world(x, -0.02, z)))
-			model.Parent = api.World
-			entry.Model = model
 		end
+		model:PivotTo(CFrame.new(world(entry.X, -0.02, entry.Z)))
+		model.Parent = api.World
+		entry.Model = model
+	end
+
+	local function addMine(id: number, owner: number, x: number, z: number, armAt: number, blowAt: number): boolean
+		if mines[id] or blown[id] then
+			return false
+		end
+		local entry: MineVisual = { Owner = owner, X = x, Z = z, ArmAt = armAt, BlowAt = blowAt }
 		mines[id] = entry
-		if owner == myId then
+		mineModel(entry)
+		return true
+	end
+
+	local function removeMine(id: number)
+		local entry = mines[id]
+		blown[id] = true
+		if entry then
+			mines[id] = nil
+			if entry.Model then
+				entry.Model:Destroy()
+			end
+			if entry.Ring then
+				entry.Ring:Destroy()
+			end
+		end
+	end
+
+	api:OnEvent("Mine", function(id, owner, x, z, armAt, blowAt)
+		if type(id) ~= "number" or type(x) ~= "number" or type(z) ~= "number" then
+			return
+		end
+		if addMine(id, owner, x, z, armAt, blowAt) and owner == myId then
 			api:Sound("Click")
 		end
+	end)
+
+	-- The live mines as shared state: draws any this screen missed (it started late) and drops any
+	-- whose blast it missed.
+	local function readMines()
+		local value = api:SharedJSON("Mines")
+		if type(value) ~= "table" then
+			return
+		end
+		for key, entry in value do
+			local id = tonumber(key)
+			if id and type(entry) == "table" and type(entry[2]) == "number" then
+				addMine(id, entry[1], entry[2], entry[3], entry[4], entry[5])
+			end
+		end
+		for id in mines do
+			if value[tostring(id)] == nil then
+				-- Give the blast's own event a moment (it brings the bang); then just remove it.
+				task.delay(0.6, function()
+					local now = api:SharedJSON("Mines")
+					if mines[id] and type(now) == "table" and now[tostring(id)] == nil then
+						removeMine(id)
+					end
+				end)
+			end
+		end
+	end
+	api:OnShared("Mines", readMines)
+	readMines()
+	api:OnShared("Field", function()
+		readMines()
+		readShells()
 	end)
 
 	local shake = 0
@@ -877,15 +1015,8 @@ function Tanks.Start(api)
 	end
 
 	api:OnEvent("Boom", function(id, x, z)
-		local entry = mines[id]
-		if entry then
-			mines[id] = nil
-			if entry.Model then
-				entry.Model:Destroy()
-			end
-			if entry.Ring then
-				entry.Ring:Destroy()
-			end
+		if type(id) == "number" then
+			removeMine(id)
 		end
 		if type(x) == "number" then
 			boom(world(x, 1, z), Color3.fromRGB(255, 120, 60), 1.25)
@@ -894,7 +1025,7 @@ function Tanks.Start(api)
 				Name = "Scorch",
 				Shape = Enum.PartType.Cylinder,
 				Size = Vector3.new(0.05, 7, 7),
-				CFrame = CFrame.new(world(x, 0.05, z)) * CFrame.Angles(0, 0, math.rad(90)),
+				CFrame = CFrame.new(world(x, 0.31, z)) * CFrame.Angles(0, 0, math.rad(90)), -- over the grooves
 				Color = Color3.fromRGB(70, 52, 40),
 				Transparency = 0.35,
 				Parent = marks,
@@ -904,9 +1035,20 @@ function Tanks.Start(api)
 
 	-- Knock-outs -------------------------------------------------------------------------------------
 
-	local feed: { TextLabel } = {}
 	local hud = api:TopHud()
 	local hudY = api:HudY()
+	local feed: { TextLabel } = {}
+	local hintUp = true -- the controls hint, until 8 s after GO (the rules card hides it before then)
+	-- The kill feed sits under the hits line (under the hint while it's up); fewer lines on phones,
+	-- where the thumbstick's corner starts not far below.
+	local function layoutFeed()
+		local top = hudY + 38 + (if hintUp then 36 else 0)
+		local most = (if touch then 2 else 3) - (if hintUp and touch then 1 else 0)
+		for index, item in feed do
+			item.Position = UDim2.new(0.5, 0, 0, top + (index - 1) * 32)
+			item.Visible = index <= most
+		end
+	end
 	local hitsLabel = UIKit.Label({
 		Name = "Hits",
 		Text = "",
@@ -932,10 +1074,10 @@ function Tanks.Start(api)
 			Name = "Feed",
 			Text = text,
 			Font = Theme.Fonts.Display,
-			TextSize = 22,
+			TextSize = 28,
 			TextColor3 = color,
 			AnchorPoint = Vector2.new(0.5, 0),
-			Size = UDim2.fromOffset(420, 26),
+			Size = UDim2.fromOffset(440, 32),
 			Parent = hud,
 			Children = { UIKit.TextStroke(0.1) },
 		})
@@ -946,17 +1088,13 @@ function Tanks.Start(api)
 				oldest:Destroy()
 			end
 		end
-		for index, item in feed do
-			item.Position = UDim2.new(0.5, 0, 0, hudY + 38 + (index - 1) * 26)
-		end
+		layoutFeed()
 		task.delay(4.5, function()
 			local index = table.find(feed, label)
 			if index then
 				table.remove(feed, index)
 				label:Destroy()
-				for position, item in feed do
-					item.Position = UDim2.new(0.5, 0, 0, hudY + 38 + (position - 1) * 26)
-				end
+				layoutFeed()
 			end
 		end)
 	end
@@ -994,7 +1132,7 @@ function Tanks.Start(api)
 			decor({
 				Name = "Cross",
 				Size = Vector3.new(0.9, 0.06, 7),
-				CFrame = CFrame.new(world(visual.X, 0.07 + index * 0.005, visual.Z))
+				CFrame = CFrame.new(world(visual.X, 0.48 + index * 0.06, visual.Z))
 					* CFrame.Angles(0, math.rad(45 * index), 0),
 				Color = colorOf(userId),
 				Material = Enum.Material.SmoothPlastic,
@@ -1052,13 +1190,10 @@ function Tanks.Start(api)
 	end))
 	api:Hint(
 		if touch
-			then "Stick: drive • Drag right side: aim • FIRE!"
+			then "Stick: drive • Drag right: aim • FIRE!"
 			else "WASD drive • Mouse aim • Click to FIRE • E: mine",
-		hudY + 120
+		hudY + 38
 	)
-	task.delay(9, function()
-		api:Hint("")
-	end)
 
 	if not touch then
 		reticle = decor({
@@ -1130,6 +1265,11 @@ function Tanks.Start(api)
 		local dt = math.min(rawDt, 0.1)
 		local now = api:Now()
 		local clock = os.clock()
+		if hintUp and now > goAt + 8 then
+			hintUp = false
+			api:Hint("")
+			layoutFeed()
+		end
 
 		for index = #effects, 1, -1 do
 			local item = effects[index]
@@ -1362,6 +1502,9 @@ function Tanks.Start(api)
 
 		-- Mines blink faster as they get ready to blow; the blast's reach shows in their last moments.
 		for _, entry in mines do
+			if not entry.Model then
+				mineModel(entry) -- its template arrived after it did
+			end
 			local left = entry.BlowAt - now
 			local light = entry.Light
 			if light then
@@ -1375,7 +1518,7 @@ function Tanks.Start(api)
 					Name = "Blast",
 					Shape = Enum.PartType.Cylinder,
 					Size = Vector3.new(0.06, TankField.MINE_BLAST * 2, TankField.MINE_BLAST * 2),
-					CFrame = CFrame.new(world(entry.X, 0.1, entry.Z)) * CFrame.Angles(0, 0, math.rad(90)),
+					CFrame = CFrame.new(world(entry.X, 0.7, entry.Z)) * CFrame.Angles(0, 0, math.rad(90)),
 					Color = Color3.fromRGB(255, 70, 60),
 					Material = Enum.Material.Neon,
 					Transparency = 0.75,
