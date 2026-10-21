@@ -437,6 +437,8 @@ function CrazyCutters.Start(api)
 	local function shout(text: string, color: Color3?)
 		big.Text = text
 		big.TextColor3 = color or Color3.new(1, 1, 1)
+		-- Only as wide as the words, so it stays clear of the corners (phones' thumb zones).
+		big.Size = UDim2.fromOffset(math.min(560, UIKit.TextWidth(text, 64, Theme.Fonts.Display) + 24), 76)
 		if text ~= "" then
 			UIKit.PopIn(big, 0.25)
 		end
@@ -474,9 +476,9 @@ function CrazyCutters.Start(api)
 	local function cameraTarget(board: Board): CFrame
 		-- Looking down at the dough from just behind the near edge; the board sits a little low on
 		-- the screen, under the HUD. Pulled back and lower when watching the others.
-		local distance = if watching then 40 else 24.5
+		local distance = if watching then 40 else 26.5
 		local pitch = math.rad(if watching then 52 else 70)
-		local look = board.Top * Vector3.new(0, 0, if watching then -6 else -1.2)
+		local look = board.Top * Vector3.new(0, 0, if watching then -6 else -2.7)
 		local eye = board.Top * Vector3.new(0, math.sin(pitch) * distance, math.cos(pitch) * distance)
 		return CFrame.lookAt(eye, look)
 	end
@@ -607,12 +609,13 @@ function CrazyCutters.Start(api)
 			end
 			local icon = SHAPE_ICONS[data.Shape] or "🍪"
 			shapeLabel.Text = `{icon} {string.upper(data.Shape)} {data.Index}/{data.Count}`
-			scoreLabel.Text = ""
+			scoreLabel.Text = if mine then "✂ 0%" else ""
 			shout("")
+			api:Hint("")
 			if mine and not hinted then
 				hinted = true
 				api:Hint(
-					if touch then "Drag your finger along the dots!" else "Hold the mouse and trace the dots! (or WASD)",
+					if touch then "Drag your finger along the dots!" else "Hold the mouse and trace the dots!",
 					hudY + 158
 				)
 			end
@@ -649,7 +652,7 @@ function CrazyCutters.Start(api)
 		end
 		quiet(cookie)
 		cookie.Parent = api.World
-		local plateTop = board.Frame * CFrame.new(9.6, 0, 9.5) * CFrame.new(0, 2.46 * 0.8 - 0.1 + board.Plate * 0.5, 0)
+		local plateTop = board.Frame * CFrame.new(11, 0, 10.5) * CFrame.new(0, 2.46 * 0.8 - 0.1 + board.Plate * 0.5, 0)
 		board.Plate += 1
 		table.insert(pops, {
 			Model = cookie,
@@ -672,16 +675,11 @@ function CrazyCutters.Start(api)
 		end
 		board.Done = true
 		if board.Mine then
-			local grade = Rules.Grade(score)
-			shout(`{grade} {score}%`, Theme.Colors.Yellow)
+			local grade, symbol = Rules.Grade(score)
+			shout(`{symbol} {score}%`, Theme.Colors.Yellow)
 			api:Sound("Pickup")
 			watching = true
-			api:Hint("")
-			task.delay(1.6, function()
-				if round and round.Index == index and round.Phase == "Cut" then
-					shout("Watch the others!")
-				end
-			end)
+			api:Hint(`{grade} Now watch the others!`, hudY + 158)
 		end
 	end)
 
@@ -697,7 +695,8 @@ function CrazyCutters.Start(api)
 				popCookie(board)
 				if board.Mine then
 					local grade, symbol = Rules.Grade(score)
-					shout(`{symbol} {grade} {score}%`, if score >= 80 then Theme.Colors.Yellow else Color3.new(1, 1, 1))
+					shout(`{symbol} {score}%`, if score >= 80 then Theme.Colors.Yellow else Color3.new(1, 1, 1))
+					api:Hint(grade, hudY + 158)
 					api:Sound(if score >= 80 then "Victory" else "Click")
 				end
 			end
@@ -721,8 +720,6 @@ function CrazyCutters.Start(api)
 					if count <= 3 then
 						shout(tostring(count))
 						api:Sound("Countdown")
-					else
-						shout(`{SHAPE_ICONS[round.Shape] or ""} {string.upper(round.Shape)}!`)
 					end
 				end
 				timeLabel.Text = `⏱ {math.floor(round.T1 - round.T0 + 0.5)}`
@@ -730,10 +727,10 @@ function CrazyCutters.Start(api)
 			elseif cutting then
 				if lastCount ~= 0 then
 					lastCount = 0
-					shout("CUT!", Theme.Colors.Green)
+					shout("✂ CUT!", Theme.Colors.Green)
 					api:Sound("RoundStart")
 					task.delay(0.8, function()
-						if big.Text == "CUT!" then
+						if big.Text == "✂ CUT!" then
 							shout("")
 						end
 					end)

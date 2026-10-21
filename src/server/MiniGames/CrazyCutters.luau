@@ -96,7 +96,7 @@ function CrazyCutters:Prepare()
 		MeshLibrary.Get("DoughSheet", { CFrame = frame + Vector3.new(0, DOUGH, 0), Parent = ctx.Arena })
 		MeshLibrary.Get("CookiePlate", {
 			Scale = 0.8,
-			CFrame = (frame * CFrame.new(9.6, 0, 9.5)) - Vector3.new(0, BOARD_UP, 0),
+			CFrame = (frame * CFrame.new(11, 0, 10.5)) - Vector3.new(0, BOARD_UP, 0),
 			Parent = ctx.Arena,
 		})
 		local stand = frame * CFrame.new(0, 0, STAND)
@@ -454,7 +454,7 @@ function CrazyCutters:BotSamples(player: Player, skill: number, random: Random, 
 			Index = round.Index,
 			Start = start,
 			Speed = speed,
-			Amp = 0.12 + 1.0 * (1 - skill) ^ 1.5,
+			Amp = 0.22 + 1.2 * (1 - skill) ^ 1.5,
 			W1 = random:NextNumber(1.6, 2.6),
 			W2 = random:NextNumber(4.5, 6.5),
 			P1 = random:NextNumber(0, 6.28),
