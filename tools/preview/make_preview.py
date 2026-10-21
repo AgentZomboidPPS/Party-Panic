@@ -83,6 +83,8 @@ CAMERAS: dict[str, dict] = {
     "ArrowAmbush": {"yaw": 15, "pitch": 22, "distance": 40, "shift": [0, -3, 2], "raise": 12},
     # A skater mid-ollie, the crates and the leaders ahead, lava and spires around.
     "SkateEscape": {"subject": "highest", "yaw": 50, "pitch": 10, "distance": 20, "sway": 8},
+    # Divers at the rim of the swirling sinkhole, treasure on the sand around it.
+    "SinkingSands": {"yaw": 30, "pitch": 30, "distance": 36, "shift": [0, 2, 6]},
 }
 
 # Seconds into the round to take the snapshot, where the default (8) isn't the liveliest moment.
@@ -91,6 +93,7 @@ DUMP_AT: dict[str, float] = {
     "HoneyTrap": 12,
     "PumpAndPop": 16,  # the balloons are big by now
     "SkateEscape": 10,
+    "SinkingSands": 12,  # treasure out on the sand, someone already in the hole
 }
 
 R15 = {
