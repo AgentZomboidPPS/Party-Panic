@@ -57,7 +57,7 @@ def _boundary(stage: int):
         for c in centers:
             d = np.sqrt(np.maximum(0.0, bite * bite - (s - c) ** 2))
             teeth = np.where(d > 0, 0.07 * np.sin((s - c) * 11.0), 0.0)
-            r = np.minimum(r, base + bite * 0.25 - d * 0.8 + teeth)
+            r = np.minimum(r, base + bite * 0.3 - d * 1.0 + teeth)
         return r
 
     return f
@@ -211,16 +211,16 @@ def slice_stage(stage: int):
         return r + size < float(cheese_f(np.array(th))) - 0.3
 
     olives, basil, peppers, toasty = [], [], [], []
-    for x, z, _ in spots(5, 3.0, R0 - 3.0, 0.55, 11):
+    for x, z, _ in spots(8, 3.0, R0 - 3.0, 0.55, 11):
         if keep(x, z, 0.5):
             o = torus(0.3, 0.12, 16, 8).translate(x, top_at(x, z) + 0.05, z)
             olives.append(o)
-    for index, (x, z, _) in enumerate(spots(4, 3.5, R0 - 3.0, 0.7, 23)):
+    for index, (x, z, _) in enumerate(spots(6, 3.5, R0 - 3.0, 0.7, 23)):
         if keep(x, z, 0.7):
             leaf = icosphere(1.0, 2).scale(0.62, 0.05, 0.36).rotate("y", float(rng.uniform(0, 180)))
             leaf.translate(x, top_at(x, z) + 0.04, z)
             basil.append(leaf)
-    for x, z, _ in spots(4, 3.0, R0 - 3.2, 0.7, 37):
+    for x, z, _ in spots(5, 3.0, R0 - 3.2, 0.7, 37):
         if keep(x, z, 0.75):
             a0 = rng.uniform(0, 2 * math.pi)
             pts = [

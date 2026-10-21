@@ -229,6 +229,19 @@ local list: { GameDefinition } = {
 		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "EatsaPizza",
+		Name = "Eatsa Pizza",
+		Category = "Team",
+		Icon = "🍕",
+		Color = Color3.fromRGB(240, 120, 50),
+		Objective = "Eat your team's part of the giant pizza first! Pepperoni slices take more bites.",
+		Controls = "Stand on your team's slice and mash EAT (E). Slice gone? Walk to the next one!",
+		Duration = 30,
+		MinPlayers = 2,
+		IsTeam = true,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
