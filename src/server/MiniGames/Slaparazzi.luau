@@ -433,10 +433,9 @@ function Slaparazzi:_buildArena()
 	end
 
 	-- The crowd: sections of cheering fans on risers around the plaza, out on the grass.
-	for _, spot in { { -49, -16 }, { -50, 8 }, { 49, -16 }, { 50, 8 }, { -27, 46 }, { 27, 46 }, { 0, -40 } } do
+	for _, spot in { { -49, -16 }, { -50, 8 }, { 49, -16 }, { 50, 8 }, { -27, 46 }, { 27, 46 } } do
 		local base = at(spot[1], 0, spot[2])
 		MeshLibrary.Get("SlaparazziCrowd", {
-			Scale = if spot[1] == 0 then 1.3 else 1,
 			CFrame = CFrame.lookAt(base, Vector3.new(stageMid.X, base.Y, stageMid.Z)),
 			Parent = arena,
 		})

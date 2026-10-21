@@ -96,7 +96,7 @@ function Slaparazzi.Start(api)
 		Name = "Snapshot",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, y + 104),
-		Size = UDim2.fromOffset(400, 150),
+		Size = UDim2.fromOffset(440, 170),
 		CornerRadius = 12,
 		Visible = false,
 		Parent = hud,
@@ -104,13 +104,13 @@ function Slaparazzi.Start(api)
 	local picture = UIKit.new("Frame", {
 		Name = "Picture",
 		Position = UDim2.fromOffset(10, 10),
-		Size = UDim2.fromOffset(130, 130),
+		Size = UDim2.fromOffset(150, 150),
 		BackgroundColor3 = Color3.fromRGB(70, 44, 52),
 		ClipsDescendants = true,
 		Parent = card,
 		Children = { UIKit.Corner(6) },
 	})
-	local scale = 130 / (Rules.RINGS[3] * 2 + 3)
+	local scale = 150 / (Rules.RINGS[3] * 2 + 3)
 	for index = #Rules.RINGS, 1, -1 do
 		local d = Rules.RINGS[index] * 2 * scale
 		UIKit.new("Frame", {
@@ -133,11 +133,11 @@ function Slaparazzi.Start(api)
 	local cardTitle = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 24,
+		TextSize = 28,
 		TextColor3 = Color3.fromRGB(60, 40, 90),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(152, 8),
-		Size = UDim2.fromOffset(240, 30),
+		Position = UDim2.fromOffset(172, 8),
+		Size = UDim2.fromOffset(260, 34),
 		Parent = card,
 	})
 	local lines = {}
@@ -145,23 +145,23 @@ function Slaparazzi.Start(api)
 		lines[index] = UIKit.Label({
 			Text = "",
 			Font = Theme.Fonts.Bold,
-			TextSize = 20,
+			TextSize = 25,
 			TextColor3 = Color3.fromRGB(50, 40, 70),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			TextWrapped = false,
-			Position = UDim2.fromOffset(152, 12 + index * 26),
-			Size = UDim2.fromOffset(240, 26),
+			Position = UDim2.fromOffset(172, 14 + index * 30),
+			Size = UDim2.fromOffset(260, 30),
 			Parent = card,
 		})
 	end
 	local mineLine = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 24,
+		TextSize = 28,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(152, 114),
-		Size = UDim2.fromOffset(240, 30),
+		Position = UDim2.fromOffset(172, 132),
+		Size = UDim2.fromOffset(260, 32),
 		Parent = card,
 		Children = { UIKit.TextStroke(0.3) },
 	})
@@ -508,7 +508,7 @@ function Slaparazzi.Start(api)
 			local size = if isMe then 16 else 11
 			UIKit.new("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.new(0.5, shot.X * scale, 0.5, shot.Z * scale),
+				Position = UDim2.new(0.5, -shot.X * scale, 0.5, shot.Z * scale), -- as the camera (looking -Z) sees it
 				Size = UDim2.fromOffset(size, size),
 				BackgroundColor3 = if isMe then Theme.Colors.Pink else ringColor(shot.P),
 				ZIndex = if isMe then 5 else 4,
