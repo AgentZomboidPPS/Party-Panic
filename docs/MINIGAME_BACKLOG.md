@@ -12,7 +12,7 @@ Planned categories once all 25 exist (the brief leaves some open; these are the 
 | --- | --- | --- |
 | Team | Pump & Pop, Bobsled Run, Cake Factory | + Prime Cut, Eatsa Pizza, Log Jam (6) |
 | Reaction | Hex Meltdown, Rake It In, Crazy Cutters | + Mecha-Marathon, Messy Memory, Trace Race (6) |
-| Versus | Sinking Sands, Arrow Ambush | + Tanks!, Stamp Out (4) |
+| Versus | Sinking Sands, Arrow Ambush, Shark Bait | + Tanks!, Stamp Out (5) |
 | Knockback | Bumper Ballers | + Snowball Summit, Slaparazzi (3) |
 | Survival | Fire Rope | + Spleef (2) |
 | Luck | Honey Trap | + Parasol Plummet (2) |

@@ -8,6 +8,11 @@ working tree. Prints errors, the end reason, results and every event the clients
 Luau execution runs scripts but not physics, so the stand-in players don't fall or walk: their
 bot (tools/checks/bots/<Id>.luau) moves them with PivotTo and sends the actions a client would.
 That's why mini-games check positions and distances on the server instead of relying on Touched.
+
+With --client, Bot1 runs the client half like a real player in the round. --client-sits-out makes it a
+spectator instead (sitting the round out: on the server with PP_SitOut, not in the round), and
+--client-out-at T knocks it out T seconds into the round (ctx:Eliminate): with --ui-at, what someone
+watching sees (no mode buttons for them, for one).
 """
 
 import argparse
@@ -114,6 +119,8 @@ def main():
     parser.add_argument("--ui-at", help="with --client: snapshot the player's screen UI at these round times, e.g. 2,10 (see ui_render.py)")
     parser.add_argument("--sizes", help="with --ui-at: screens to lay the UI out on with the engine (ui_render.py's "
                         "names or groups; default: touch with --touch, else pc)")
+    parser.add_argument("--client-sits-out", action="store_true", help="with --client: Bot1 sits this round out and watches")
+    parser.add_argument("--client-out-at", type=float, default=None, help="with --client: knock Bot1 out this many seconds in")
     args = parser.parse_args()
 
     header = "__touchMode = true\n" if args.touch else "__touchMode = false\n"
@@ -158,7 +165,11 @@ def main():
     elif args.game == "LOBBY":
         out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8}, 10)")
     else:
-        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots})')
+        watch = "{ sitOut = %s, outAt = %s }" % (
+            "true" if args.client_sits_out else "false",
+            "nil" if args.client_out_at is None else str(args.client_out_at),
+        )
+        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots}, {watch})')
     sys.stdout.write("\n".join(out))
 
 

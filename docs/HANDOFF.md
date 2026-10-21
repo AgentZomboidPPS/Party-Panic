@@ -1,8 +1,34 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-21 17:40 UTC (1:40 PM Eastern)** by Session A, which is wrapping up (owner: "can you wrap this up
-and give me a handoff document?"). **You now own everything.** Nothing else is running: Session A's helper agents
-were stopped, and their unfinished work is saved in `docs/wip/` (section 3).
+Last updated: **2026-10-21 19:05 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+`claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
+Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
+
+## Session B in flight (19:05 UTC)
+
+- **Live version 31** (published 19:03 UTC from `claude/upbeat-galileo-gvwq66` at 22735e3): everything in version 30,
+  plus **Shark Bait** (built in the owner's other window on `claude/shark-bait`, merged at a595136 on the owner's word:
+  "Merge the shark bait game into this now"), plus mode buttons that only show to players who can use them
+  (`Api.CanAct` in `Kit/Api.luau`) and a readable Skate Escape race bar (`Logic/RaceBar.luau`). Owner must restart servers.
+- **Finished, being reviewed, then merged for version 32** (local worktree branches `worktree-agent-*`, not pushed):
+  Skee-Ball arcade (§2.2), payoffs + low coins incl. a one-time saved-coin conversion (§2.2; ships only after its
+  data-safety review and the DataService save fixes below), Bumper Ballers phone controls (§2.2), Sinking Sands bots
+  (§2.2), Fire Rope "chair" (the camera slid inside the back braziers and rope towers; fixed with a client-only camera
+  collision group, `BlocksCamera` in MeshLibrary specs).
+- **Bug fixing in progress:** a read-only audit of 7 areas found 18 leads (saved in Session B's scratchpad); helpers are
+  fixing Hex Meltdown (incl. the last call running into Results: survivors fall in the lava, bots float), round-end
+  fairness (last players out in the same step, Honey Trap stings at time-up, Fire Rope same-pass verdicts),
+  DataService saves lost at shutdown (BindToClose skips in-flight leave saves; leave save not retried), the phone team
+  pill (only Red/Blue: role-team modes show 0 - 0), and fresh audits of Skate Escape, Arrow Ambush, Pump & Pop, Rake It
+  In, Crazy Cutters, Cake Factory and Bobsled Run.
+- **Then:** games 13-25 (build instructions per game are generated from `tools/workflows/build-minigame.js` and the
+  backlog briefs) and custom music per game.
+- **Toolchain in a fresh container (GitHub downloads are blocked here):** `cargo install --locked stylua@2.6.0 --features
+  luau`, `selene@0.31.0`, `rojo@7.7.1`, `lune@0.11.0` (crates.io works); luau-lsp from source: `git clone --depth 1
+  --branch 1.70.1 https://github.com/JohnnyMorganz/luau-lsp`, `git submodule update --init --depth 1`, cmake Release with
+  `-DCMAKE_CXX_FLAGS=-Wno-error=maybe-uninitialized`, target `Luau.LanguageServer.CLI`; `globalTypes.d.luau` is in that
+  repo's `scripts/`. Blender: `python3.11 -m venv` + `pip install bpy` (5.0.1). Mesh/music tools: `pip install scipy
+  scikit-image`.
 
 ## 0. Start here (the first 10 minutes)
 
@@ -170,9 +196,10 @@ owner the version number, and remind them to restart servers.
 longer, console capture in reports. 24 fair hitboxes in all 11 precision games. 25 control track in sound reports.
 26 Skate Escape start (skaters held on the line until GO). 27 sit-out switch, countdown beeps only for players in the
 round. 28 rules card (10 s, nothing drawn over it). 29 lobby obby (a goo-pool course, scenery you can't climb). 30 Hex Meltdown bots stop flying off and a small call
-banner; Honey Trap's tutorial says you play from your flower.
-Games (12, all hold 12 players): Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking Sands, Arrow
-Ambush, Pump & Pop, Rake It In, Crazy Cutters, Cake Factory, Bobsled Run.
+banner; Honey Trap's tutorial says you play from your flower. 31 Shark Bait (from the owner's other window), mode
+buttons only for players who can use them, Skate Escape race bar readable side by side.
+Games (13, all hold 12 players): Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking Sands, Arrow
+Ambush, Pump & Pop, Rake It In, Crazy Cutters, Cake Factory, Bobsled Run, Shark Bait.
 
 ## 9. The owner's requests today (newest last)
 
