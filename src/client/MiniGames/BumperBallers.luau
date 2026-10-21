@@ -4,9 +4,11 @@
 -- client then pushes it every frame with the same drive model the server uses for bots (MG_Tuning):
 -- force = mass * (input * Accel - flat velocity * drag). Input is Roblox's own move vector (WASD,
 -- arrows, thumbstick, gamepad: PlayerModule's controls), or phone TILT when the stick is idle.
--- On phones with an accelerometer there are CALIBRATE and FLIP buttons and a TILT ON/OFF switch.
+-- On phones with an accelerometer there are CALIBRATE, FLIP and TILT/STICK buttons beside jump;
+-- tilt switches itself off for good once someone has steered with the thumbstick for a second.
 -- The server decides bumps and sends "Bump" (a velocity kick for this ball); everyone gets "Boing"
--- (a squash, a ring and a sound where two balls met) and "Splash" (someone fell in).
+-- (a squash, a ring and a sound where two balls met) and "Splash" (someone fell in). This player's
+-- own bumps squash and boing the moment the balls touch on screen, without waiting for the server.
 --
 -- Also: a strip of every rider's shape and color (dimmed with a cross when they're out), an EDGE!
 -- warning near the rim, a YOU marker over this player's ball and gentle foam rings on the sea.
@@ -260,10 +262,10 @@ function BumperBallers.Start(api)
 			part:Destroy()
 		end)
 	end
-	api:OnEvent("Boing", function(position: Vector3, strength: number, a: number, b: number)
-		if typeof(position) ~= "Vector3" or type(strength) ~= "number" then
-			return
-		end
+	-- Instant feedback for this player's own bumps (see RenderStep); the server's Boing for the
+	-- same bump arrives a round trip later and is skipped.
+	local localBoingAt: { [number]: number } = {}
+	local function boing(position: Vector3, strength: number, a: number, b: number)
 		pulse(a, strength)
 		pulse(b, strength)
 		ring(position, Color3.fromRGB(255, 245, 200), 8 + strength * 10)
@@ -273,6 +275,16 @@ function BumperBallers.Start(api)
 		if a == myId or b == myId or near then
 			api:Sound("Boing")
 		end
+	end
+	api:OnEvent("Boing", function(position: Vector3, strength: number, a: number, b: number)
+		if typeof(position) ~= "Vector3" or type(strength) ~= "number" then
+			return
+		end
+		local other = if a == myId then b elseif b == myId then a else nil
+		if other and os.clock() - (localBoingAt[other] or -10) < 0.6 then
+			return
+		end
+		boing(position, strength, a, b)
 	end)
 	api:OnEvent("Splash", function(position: Vector3, userId: number)
 		if typeof(position) ~= "Vector3" then
@@ -291,6 +303,8 @@ function BumperBallers.Start(api)
 	local controls = moveControls()
 	local tilt = if touch then api:Tilt() else nil
 	local tiltOn = tilt ~= nil
+	local stickTime = 0 -- seconds steered with the thumbstick: after 1 s, tilt turns itself off
+	local wasDriving = false
 	local reliefUntil = 0
 	local yaw: number? = nil
 	local driving = false
@@ -305,18 +319,22 @@ function BumperBallers.Start(api)
 		local _, _, root = api:Character()
 		local mass = body.AssemblyMass + (if root then root.AssemblyMass else 0)
 		body:ApplyImpulse(dv * mass)
+		if dv.Magnitude > 9 then
+			pulse(myId, math.clamp(dv.Magnitude / 40, 0.2, 1))
+		end
 	end)
 
-	-- Tilt controls (phones with an accelerometer): CALIBRATE, FLIP and a TILT/STICK switch.
+	-- Tilt controls (phones with an accelerometer): CALIBRATE, FLIP and a TILT/STICK switch, all
+	-- beside the jump button where the right thumb already is.
 	local hintY = api:HudY() + 46
-	local tiltUi: { Calibrate: any, Flip: any, Switch: TextButton }? = nil
+	local tiltUi: { Calibrate: any, Flip: any, Switch: any }? = nil
 	local function refreshTiltUi()
 		if not tiltUi then
 			return
 		end
 		local alive = api:Alive()
-		tiltUi.Switch.Visible = alive
-		tiltUi.Switch.Text = if tiltOn then "📱 TILT: ON" else "🕹 STICK"
+		tiltUi.Switch:SetVisible(alive)
+		tiltUi.Switch:SetText(if tiltOn then "TILT" else "STICK")
 		tiltUi.Calibrate:SetVisible(alive and tiltOn)
 		tiltUi.Flip:SetVisible(alive and tiltOn)
 	end
@@ -335,17 +353,10 @@ function BumperBallers.Start(api)
 			tilt:Flip()
 			api:Sound("Click")
 		end)
-		local switch = UIKit.Button({
-			Name = "TiltSwitch",
-			Text = "📱 TILT: ON",
-			Font = Theme.Fonts.Display,
-			TextSize = 22,
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, api:HudY() + 136),
-			Size = UDim2.fromOffset(190, 42),
-			Parent = hud,
-		}, function()
+		local switch = api:Button({ Text = "TILT", Key = Enum.KeyCode.T, Color = Theme.Colors.Pink, Slot = 3 })
+		switch.Pressed:Connect(function()
 			tiltOn = not tiltOn
+			stickTime = if tiltOn then -math.huge else stickTime -- chose tilt themselves: keep it
 			refreshTiltUi()
 			api:Sound("Click")
 		end)
@@ -382,13 +393,20 @@ function BumperBallers.Start(api)
 		marker = gui
 	end
 
-	local function input(): Vector3
+	local function input(dt: number): Vector3
 		local forward, right = cameraAxes()
 		local move = Vector3.zero
 		if controls then
 			local ok, value = pcall(controls.GetMoveVector, controls)
 			if ok and typeof(value) == "Vector3" then
 				move = right * value.X - forward * value.Z
+			end
+		end
+		if tilt and tiltOn and move.Magnitude >= 0.15 then
+			stickTime += dt
+			if stickTime > 1 then
+				tiltOn = false -- they steer with the stick: tilt would drift whenever they let go
+				refreshTiltUi()
 			end
 		end
 		if move.Magnitude < 0.15 and tilt and tiltOn then
@@ -484,18 +502,24 @@ function BumperBallers.Start(api)
 			edgeLabel.Visible = near and (now * 4) % 1 < 0.7
 		end
 		driving = ball.Model:GetAttribute("ClientDriven") == true and api:Alive()
+		local force = body:FindFirstChild("Drive") :: VectorForce?
 		if not driving then
+			if wasDriving and force then
+				force.Force = Vector3.zero -- out (or reset): stop pushing the ball
+			end
+			wasDriving = false
 			return
 		end
+		wasDriving = true
 		local character, humanoid, root = api:Character()
 		if humanoid and not humanoid.PlatformStand then
 			humanoid.PlatformStand = true
 		end
-		local force = body:FindFirstChild("Drive") :: VectorForce?
-		local move = input()
+		local move = input(dt)
 		local velocity = body.AssemblyLinearVelocity
 		local k = if now < reliefUntil then drag * tuning.ReliefDrag else drag
-		local mass = body.AssemblyMass + (if root then root.AssemblyMass else 0)
+		-- A rolling ball spins up as it speeds up: 7/5 of its mass, plus the rider (as the server does).
+		local mass = body.AssemblyMass * 1.4 + (if root then root.AssemblyMass else 0)
 		if force then
 			force.Force = (move * tuning.Accel - flat(velocity) * k) * mass
 		end
@@ -509,6 +533,26 @@ function BumperBallers.Start(api)
 				local delta = (target - current + math.pi) % (math.pi * 2) - math.pi
 				yaw = current + delta * math.min(1, dt * 8)
 				align.CFrame = CFrame.Angles(0, yaw :: number, 0)
+			end
+		end
+		-- Our ball touching another on screen: squash and boing now (the server's push follows).
+		local size = body.Size.X
+		for otherId, other in balls do
+			local otherBody = other.Body
+			if otherId == myId or not otherBody or not otherBody.Parent then
+				continue
+			end
+			local gap = flat(otherBody.Position - body.Position)
+			local distance = gap.Magnitude
+			if distance > size + 0.4 or distance < 0.01 or now - (localBoingAt[otherId] or -10) < 0.6 then
+				continue
+			end
+			local normal = gap.Unit
+			local closing = flat(velocity):Dot(normal) - flat(otherBody.AssemblyLinearVelocity):Dot(normal)
+			if closing > 4 then
+				localBoingAt[otherId] = now
+				local strength = math.clamp(closing / (tuning.MaxSpeed * 2), 0.2, 1)
+				boing(body.Position + normal * size / 2, strength, myId, otherId)
 			end
 		end
 	end)

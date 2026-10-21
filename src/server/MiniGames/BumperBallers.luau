@@ -13,8 +13,11 @@
 --     and acceleration limits (MG_Tuning is shared so both sides use the same numbers).
 --   * Bumps are decided here, by distance and closing speed: when two balls meet, each is pushed
 --     apart by an amount that grows with the OTHER ball's speed into it, so the faster ball wins.
---     A player's push is sent to their client (MiniGameEvent "Bump"), a bot's is applied directly;
---     players and bots bump each other both ways under the same rules.
+--     Balls don't collide with each other physically (collision group BumperBall), because each
+--     device sees the other balls a round trip late: the server is the only judge of a bump.
+--     A player's push is sent to their client (MiniGameEvent "Bump") and checked a moment later
+--     (if it didn't happen, the server takes the ball back and pushes it itself); a bot's is applied
+--     directly. Players and bots bump each other both ways under the same rules.
 --   * Ring-outs are position checks: a ball whose center drops below the water line is out.
 --   * Luau test servers have no physics, so there the server moves every ball itself with the same
 --     drive model (see :_simulate), which is also how the round harness tests bots and bumps.
@@ -44,7 +47,7 @@ local TUNING = {
 	ReliefDrag = 0.3, -- drag multiplier during that time
 }
 local DRAG = TUNING.Accel / TUNING.MaxSpeed
-local BUMP_BASE = 10 -- studs/s every bump gives
+local BUMP_BASE = 10 -- studs/s a full-speed bump gives on top (less for a gentle touch)
 local BUMP_GAIN = 1.25 -- extra per stud/s of the other ball's speed into you
 local BUMP_SELF = 0.25 -- extra per stud/s of your own speed into them (you bounce back a bit)
 local BUMP_MAX = 62
@@ -54,22 +57,27 @@ local CLOSING_MIN = 4 -- closing speed (studs/s) that counts as a bump
 local PAIR_COOLDOWN = 0.4
 local HISTORY = 8 -- velocity samples kept (about 0.25 s): the bounce often happens before we see it
 local GRAVITY = 110 -- simulated fall (no-physics servers only)
-local MAX_LEGIT_SPEED = 125 -- studs/s: nothing in the game rolls a ball this fast
+local MAX_LEGIT_SPEED = 110 -- studs/s: nothing in the game rolls a ball this fast
+local SEPARATE_SPEED = 6 -- studs/s that pushes two slowly overlapping balls apart (no bump)
+local BALL_GROUP = "BumperBall"
+local ROLL_MASS = 1.4 -- a rolling solid ball needs 7/5 of the force to speed up (it spins up too)
 
 -- Every rider gets a color, a pattern on the ball and a shape tag, so color is never the only cue.
+-- All 12 shapes differ, and riders with similar colors (Red/Orange/Pink, Blue/Navy/Cyan,
+-- Green/Lime) never share a pattern.
 BumperBallers.Riders = {
-	{ Name = "Red", Color = Color3.fromRGB(240, 70, 70), Shape = "●" },
-	{ Name = "Blue", Color = Color3.fromRGB(60, 135, 255), Shape = "■" },
-	{ Name = "Green", Color = Color3.fromRGB(70, 200, 95), Shape = "▲" },
-	{ Name = "Yellow", Color = Color3.fromRGB(255, 205, 45), Shape = "★" },
-	{ Name = "Purple", Color = Color3.fromRGB(160, 90, 255), Shape = "♦" },
-	{ Name = "Orange", Color = Color3.fromRGB(255, 140, 40), Shape = "♥" },
-	{ Name = "Pink", Color = Color3.fromRGB(255, 100, 190), Shape = "✚" },
-	{ Name = "Cyan", Color = Color3.fromRGB(40, 210, 230), Shape = "◆" },
-	{ Name = "Lime", Color = Color3.fromRGB(165, 230, 60), Shape = "▼" },
-	{ Name = "Navy", Color = Color3.fromRGB(50, 60, 170), Shape = "☀" },
-	{ Name = "Brown", Color = Color3.fromRGB(150, 95, 60), Shape = "☾" },
-	{ Name = "Black", Color = Color3.fromRGB(45, 45, 55), Shape = "✿" },
+	{ Name = "Red", Color = Color3.fromRGB(240, 70, 70), Shape = "●", Pattern = "BumperBallGores" },
+	{ Name = "Blue", Color = Color3.fromRGB(60, 135, 255), Shape = "■", Pattern = "BumperBallGores" },
+	{ Name = "Green", Color = Color3.fromRGB(70, 200, 95), Shape = "▲", Pattern = "BumperBallGores" },
+	{ Name = "Yellow", Color = Color3.fromRGB(255, 205, 45), Shape = "★", Pattern = "BumperBallDots" },
+	{ Name = "Purple", Color = Color3.fromRGB(160, 90, 255), Shape = "◆", Pattern = "BumperBallDots" },
+	{ Name = "Orange", Color = Color3.fromRGB(255, 140, 40), Shape = "♥", Pattern = "BumperBallBands" },
+	{ Name = "Pink", Color = Color3.fromRGB(255, 100, 190), Shape = "✚", Pattern = "BumperBallDots" },
+	{ Name = "Cyan", Color = Color3.fromRGB(40, 210, 230), Shape = "♣", Pattern = "BumperBallDots" },
+	{ Name = "Lime", Color = Color3.fromRGB(165, 230, 60), Shape = "♠", Pattern = "BumperBallBands" },
+	{ Name = "Navy", Color = Color3.fromRGB(50, 60, 170), Shape = "☾", Pattern = "BumperBallBands" },
+	{ Name = "Brown", Color = Color3.fromRGB(150, 95, 60), Shape = "▼", Pattern = "BumperBallDots" },
+	{ Name = "Black", Color = Color3.fromRGB(45, 45, 55), Shape = "◐", Pattern = "BumperBallGores" },
 }
 BumperBallers.Patterns = { "BumperBallGores", "BumperBallBands", "BumperBallDots" }
 
@@ -98,9 +106,12 @@ export type Entry = {
 	Out: boolean,
 	LastBumper: any,
 	LastBumpAt: number,
-	KOs: number,
 	BeyondSince: number?,
 	PolicedUntil: number?,
+	FastSince: number?,
+	HighSince: number?,
+	HangSince: number?,
+	PendingBump: { Dv: Vector3, Before: Vector3, At: number, Peak: number }?,
 }
 
 local function flat(v: Vector3): Vector3
@@ -112,9 +123,16 @@ local function registerRiderGroup()
 		if not PhysicsService:IsCollisionGroupRegistered(RIDER_GROUP) then
 			PhysicsService:RegisterCollisionGroup(RIDER_GROUP)
 		end
+		if not PhysicsService:IsCollisionGroupRegistered(BALL_GROUP) then
+			PhysicsService:RegisterCollisionGroup(BALL_GROUP)
+		end
 		-- Riders touch nothing: the ball does the bumping, and legs never snag on the island.
 		PhysicsService:CollisionGroupSetCollidable(RIDER_GROUP, "Default", false)
 		PhysicsService:CollisionGroupSetCollidable(RIDER_GROUP, RIDER_GROUP, false)
+		-- Balls roll on the island but pass through each other: the server decides every bump.
+		PhysicsService:CollisionGroupSetCollidable(BALL_GROUP, "Default", true)
+		PhysicsService:CollisionGroupSetCollidable(BALL_GROUP, BALL_GROUP, false)
+		PhysicsService:CollisionGroupSetCollidable(BALL_GROUP, RIDER_GROUP, false)
 	end)
 	return ok
 end
@@ -249,7 +267,7 @@ end
 
 function BumperBallers:_makeBall(player, index: number, spot: Vector3): Entry
 	local rider = BumperBallers.Riders[(index - 1) % #BumperBallers.Riders + 1]
-	local patternName = BumperBallers.Patterns[(index - 1) % #BumperBallers.Patterns + 1]
+	local patternName = rider.Pattern
 	local model = Build.Model(`Ball_{player.UserId}`)
 
 	local body = Instance.new("Part")
@@ -265,6 +283,9 @@ function BumperBallers:_makeBall(player, index: number, spot: Vector3): Entry
 	body.BottomSurface = Enum.SurfaceType.Smooth
 	-- Dense (sinks, and riders barely tip it), grippy enough to roll, bouncy enough to boing.
 	body.CustomPhysicalProperties = PhysicalProperties.new(1.2, 0.5, 0.55, 1, 1)
+	if self.groupReady then
+		body.CollisionGroup = BALL_GROUP
+	end
 	body.Parent = model
 	model.PrimaryPart = body
 
@@ -348,7 +369,6 @@ function BumperBallers:_makeBall(player, index: number, spot: Vector3): Entry
 		Out = false,
 		LastBumper = nil,
 		LastBumpAt = 0,
-		KOs = 0,
 	}
 	return entry
 end
@@ -362,7 +382,9 @@ function BumperBallers:_attachRider(entry: Entry)
 	if entry.Seat and entry.Seat.Parent == root then
 		return
 	end
-	local offset = RADIUS + humanoid.HipHeight + root.Size.Y / 2
+	-- R6 rigs have no HipHeight: their 2-stud legs hang under a 2-stud root.
+	local legs = if humanoid.RigType == Enum.HumanoidRigType.R6 then 3 else humanoid.HipHeight + root.Size.Y / 2
+	local offset = RADIUS + legs
 	entry.RiderOffset = offset
 	character:PivotTo(CFrame.new(entry.Position + Vector3.new(0, offset, 0)) * CFrame.Angles(0, entry.Yaw, 0))
 	root.AssemblyLinearVelocity = Vector3.zero
@@ -437,6 +459,7 @@ function BumperBallers:Prepare()
 	self.islandAbove = 0.15 -- how far its sand rises over the grass top
 	self.entries = {} :: { [any]: Entry }
 	self.pairCooldown = {} :: { [string]: number }
+	self.koCount = {} :: { [any]: number } -- kept after a ball is gone, for the results
 	self.bumpScale = 1
 	self.groupReady = registerRiderGroup()
 
@@ -471,6 +494,12 @@ function BumperBallers:Prepare()
 		end
 		entry.Out = true
 		entry.Input = Vector3.zero
+		entry.Force.Force = Vector3.zero
+		if physics and entry.Body.Parent and not entry.Body.Anchored then
+			-- Died or reset on top of the ball: anchoring takes it back from their device (whose
+			-- last push would otherwise keep rolling it into others), and it sinks from here.
+			entry.Body.Anchored = true
+		end
 		-- The ball sinks for a moment, then it's gone.
 		ctx:Delay(1.4, function()
 			if self.entries[player] == entry then
@@ -486,8 +515,12 @@ function BumperBallers:Prepare()
 	end
 
 	ctx:SpawnAll(spots, true)
-	for _, entry in self.entries do
-		self:_attachRider(entry) -- anyone whose character was already placed before the hook ran
+	for player, entry in self.entries do
+		if ctx:State(player) == nil then
+			self:_removeBall(entry) -- spawning failed: they're not in the round, so no empty ball
+		else
+			self:_attachRider(entry) -- anyone whose character was already placed before the hook ran
+		end
 	end
 
 	ctx:SetSharedJSON("Tuning", {
@@ -510,8 +543,14 @@ function BumperBallers:Start()
 	local ctx = self.context
 
 	-- Release the balls: players' to their own devices, bots' to the server.
+	local riderless = {}
 	for player, entry in self.entries do
+		-- Re-seat anyone who reset during the countdown (their new character is in the lobby).
+		self:_attachRider(entry)
 		local _, humanoid = ctx:GetCharacter(player)
+		if not humanoid then
+			table.insert(riderless, entry)
+		end
 		if humanoid then
 			humanoid.JumpPower = 0
 			humanoid.JumpHeight = 0
@@ -527,6 +566,21 @@ function BumperBallers:Start()
 				pcall(entry.Body.SetNetworkOwner, entry.Body, nil)
 			end
 		end
+	end
+
+	-- A character still loading gets a moment to arrive, then a ball nobody rides is out.
+	if #riderless > 0 then
+		ctx:Delay(2.5, function()
+			for _, entry in riderless do
+				if self.entries[entry.Player] ~= entry or entry.Out then
+					continue
+				end
+				self:_attachRider(entry)
+				if not ctx:GetCharacter(entry.Player) then
+					ctx:Eliminate(entry.Player, "no character")
+				end
+			end
+		end)
 	end
 
 	-- Bots and stand-ins steer with the same stick a player has (x, z: a world direction, length <= 1).
@@ -562,6 +616,7 @@ function BumperBallers:Start()
 			sampleClock = 0
 		end
 		local live = {}
+		local fallen = {}
 		for _, entry in self.entries do
 			if not entry.Model.Parent then
 				continue
@@ -574,7 +629,8 @@ function BumperBallers:Start()
 			end
 			self:_step(entry, dt)
 			if entry.ClientDriven then
-				self:_police(entry)
+				self:_checkBump(entry)
+				self:_police(entry, dt)
 			end
 			if record then
 				table.insert(entry.History, 1, entry.Velocity)
@@ -593,10 +649,13 @@ function BumperBallers:Start()
 				entry.Position.Y < self.waterY - OUT_DEPTH
 				or (entry.BeyondSince and os.clock() - entry.BeyondSince > 0.8)
 			then
-				self:_ringOut(entry)
+				table.insert(fallen, entry)
 			else
 				table.insert(live, entry)
 			end
+		end
+		if #fallen > 0 then
+			self:_ringOuts(fallen)
 		end
 		self:_bumps(live)
 		local status = `Players left: {ctx:AliveCount()}`
@@ -622,12 +681,7 @@ function BumperBallers:_step(entry: Entry, dt: number)
 	local drag = if now < entry.ReliefUntil then DRAG * TUNING.ReliefDrag else DRAG
 	if physics then
 		local velocity = body.AssemblyLinearVelocity
-		local mass = body.AssemblyMass
-		local _, _, root = self.context:GetCharacter(entry.Player)
-		if root and entry.Seat then
-			mass += root.AssemblyMass
-		end
-		entry.Force.Force = (entry.Input * TUNING.Accel - flat(velocity) * drag) * mass
+		entry.Force.Force = (entry.Input * TUNING.Accel - flat(velocity) * drag) * self:_mass(entry, true)
 		entry.Position = body.Position
 		entry.Velocity = velocity
 		self:_face(entry, flat(velocity), dt)
@@ -690,37 +744,112 @@ function BumperBallers:_simulate(entry: Entry, dt: number, drag: number)
 	end
 end
 
--- Pushes a ball by `dv` studs/s: through the owner's device for players, directly for bots.
-function BumperBallers:_push(entry: Entry, dv: Vector3, bumper: Entry)
-	entry.ReliefUntil = os.clock() + TUNING.Relief
-	entry.LastBumper = bumper.Player
-	entry.LastBumpAt = os.clock()
-	if entry.ClientDriven then
-		self.context:Fire(entry.Player, "Bump", dv, TUNING.Relief)
-	elseif physics then
-		local body = entry.Body
-		local mass = body.AssemblyMass
-		local _, _, root = self.context:GetCharacter(entry.Player)
-		if root and entry.Seat then
-			mass += root.AssemblyMass
+-- How much a push or drive force has to move: the ball plus its rider (joined by a socket).
+-- A rolling ball also has to spin up, so driving it takes 7/5 of the force (`rolling`).
+function BumperBallers:_mass(entry: Entry, rolling: boolean?): number
+	local mass = entry.Body.AssemblyMass * (if rolling then ROLL_MASS else 1)
+	local _, _, root = self.context:GetCharacter(entry.Player)
+	if root and entry.Seat then
+		mass += root.AssemblyMass
+	end
+	return mass
+end
+
+function BumperBallers:_ping(entry: Entry): number
+	if typeof(entry.Player) ~= "Instance" then
+		return 0
+	end
+	local player = entry.Player :: Player
+	local ok, ping = pcall(player.GetNetworkPing, player)
+	return if ok and type(ping) == "number" then math.clamp(ping, 0, 0.6) else 0.15
+end
+
+-- Pushes a ball by `dv` studs/s: through the owner's device for players (checked afterwards, see
+-- :_checkBump), directly for bots. No `bumper` means a gentle nudge apart, not a bump.
+function BumperBallers:_push(entry: Entry, dv: Vector3, bumper: Entry?)
+	local now = os.clock()
+	if bumper then
+		entry.ReliefUntil = now + TUNING.Relief
+		entry.LastBumper = bumper.Player
+		entry.LastBumpAt = now
+	end
+	if entry.ClientDriven and now >= (entry.PolicedUntil or 0) then
+		self.context:Fire(entry.Player, "Bump", dv, if bumper then TUNING.Relief else 0)
+		if bumper then
+			local pending = entry.PendingBump
+			if pending then
+				pending.Dv += dv
+			else
+				entry.PendingBump = { Dv = dv, Before = entry.Velocity, At = now, Peak = 0 }
+			end
 		end
-		body:ApplyImpulse(dv * mass)
+	elseif physics then
+		entry.Body:ApplyImpulse(dv * self:_mass(entry))
 	else
 		entry.Velocity += dv
 	end
 end
 
+-- A player's device rolls their ball, so make sure a bump really happened there: if their ball
+-- never picked up the push (a cheat, an app in the background, lost packets), the server takes
+-- the ball back for a second and pushes it itself.
+function BumperBallers:_checkBump(entry: Entry)
+	local pending = entry.PendingBump
+	if not pending then
+		return
+	end
+	local push = flat(pending.Dv)
+	if push.Magnitude < 1 then
+		entry.PendingBump = nil
+		return
+	end
+	local gained = flat(entry.Velocity - pending.Before):Dot(push.Unit)
+	pending.Peak = math.max(pending.Peak, gained)
+	if pending.Peak >= 0.4 * push.Magnitude then
+		entry.PendingBump = nil
+		return
+	end
+	if os.clock() - pending.At < 0.35 + self:_ping(entry) then
+		return
+	end
+	entry.PendingBump = nil
+	if self:_takeBack(entry, 1) then
+		entry.Body:ApplyImpulse(pending.Dv * self:_mass(entry))
+		self.forcedBumps = (self.forcedBumps or 0) + 1
+	end
+end
+
+-- The server moves a player's ball itself for `seconds`, then hands it back to their device.
+function BumperBallers:_takeBack(entry: Entry, seconds: number): boolean
+	local body = entry.Body
+	if entry.Out or not body.Parent or body.Anchored then
+		return false
+	end
+	entry.PolicedUntil = math.max(entry.PolicedUntil or 0, os.clock() + seconds)
+	entry.PendingBump = nil
+	pcall(body.SetNetworkOwner, body, nil)
+	self.context:Delay(seconds, function()
+		if os.clock() < (entry.PolicedUntil or 0) - 0.05 then
+			return -- taken back again since: that call hands it back
+		end
+		if not entry.Out and body.Parent and not body.Anchored then
+			self.context:GiveOwnership(body, entry.Player)
+		end
+	end)
+	return true
+end
+
 -- Finds balls that just met and bumps them apart: the faster ball into the other wins.
 function BumperBallers:_bumps(live: { Entry })
 	local now = os.clock()
-	local contact = BALL_SIZE + 1.2 -- a little leeway: the server sees players a moment late
+	self.separateCooldown = self.separateCooldown or {}
 	for i = 1, #live do
 		local a = live[i]
 		for j = i + 1, #live do
 			local b = live[j]
 			local gap = b.Position - a.Position
 			local distance = flat(gap).Magnitude
-			if distance > contact or math.abs(gap.Y) > BALL_SIZE or distance < 0.01 then
+			if distance > BALL_SIZE + 3 or math.abs(gap.Y) > BALL_SIZE or distance < 0.01 then
 				continue
 			end
 			local key = if a.Index < b.Index then `{a.Index}:{b.Index}` else `{b.Index}:{a.Index}`
@@ -728,7 +857,7 @@ function BumperBallers:_bumps(live: { Entry })
 				continue
 			end
 			local normal = flat(gap).Unit -- from a to b
-			-- The strongest closing moment in the last few samples (the bounce may already be over).
+			-- The strongest closing moment in the last few samples (the server sees it a bit late).
 			local speedA, speedB, closing = 0, 0, 0
 			local samples = math.min(#a.History, #b.History)
 			for k = 1, math.max(samples, 1) do
@@ -741,13 +870,26 @@ function BumperBallers:_bumps(live: { Entry })
 					speedB = math.max(0, -flat(vb):Dot(normal))
 				end
 			end
+			-- Players' balls are seen a moment late, more so the faster they close: more leeway.
+			local lagging = a.ClientDriven or b.ClientDriven
+			local contact = BALL_SIZE + (if lagging then math.clamp(closing * 0.12, 0.5, 3) else 0.5)
+			if distance > contact then
+				continue
+			end
 			if closing < CLOSING_MIN then
+				-- Balls pass through each other physically, so two slow ones overlapping get eased apart.
+				if distance < BALL_SIZE - 0.3 and now >= (self.separateCooldown[key] or 0) then
+					self.separateCooldown[key] = now + 0.2
+					self:_push(b, normal * SEPARATE_SPEED)
+					self:_push(a, -normal * SEPARATE_SPEED)
+				end
 				continue
 			end
 			self.pairCooldown[key] = now + PAIR_COOLDOWN
 			local scale = self.bumpScale
-			local toB = math.min(BUMP_MAX, (BUMP_BASE + BUMP_GAIN * speedA + BUMP_SELF * speedB) * scale)
-			local toA = math.min(BUMP_MAX, (BUMP_BASE * 0.7 + BUMP_GAIN * speedB + BUMP_SELF * speedA) * scale)
+			local base = BUMP_BASE * math.clamp(closing / 12, 0.3, 1) -- a gentle touch is a gentle bump
+			local toB = math.min(BUMP_MAX, (base + BUMP_GAIN * speedA + BUMP_SELF * speedB) * scale)
+			local toA = math.min(BUMP_MAX, (base * 0.7 + BUMP_GAIN * speedB + BUMP_SELF * speedA) * scale)
 			local lift = Vector3.new(0, BUMP_LIFT, 0)
 			self:_push(b, normal * toB + lift, a)
 			self:_push(a, -normal * toA + lift, b)
@@ -759,27 +901,47 @@ function BumperBallers:_bumps(live: { Entry })
 	end
 end
 
--- A player's device moves their ball, so keep it honest: a ball going far faster than any bump
--- could make it is taken back by the server for a moment and slowed down.
-function BumperBallers:_police(entry: Entry)
-	local speed = entry.Velocity.Magnitude
-	if speed < MAX_LEGIT_SPEED or os.clock() < (entry.PolicedUntil or 0) then
+-- A player's device moves their ball, so keep it honest. Taken back by the server for a moment:
+-- a ball far faster than rolling can make it (a bump's extra speed is allowed while it lasts),
+-- one held up in the air, or one hanging past the rim where nothing could hold it.
+function BumperBallers:_police(entry: Entry, _dt: number)
+	local now = os.clock()
+	if now < (entry.PolicedUntil or 0) then
+		entry.FastSince, entry.HighSince, entry.HangSince = nil, nil, nil
 		return
 	end
-	entry.PolicedUntil = os.clock() + 1
-	local body = entry.Body
-	pcall(body.SetNetworkOwner, body, nil)
-	body.AssemblyLinearVelocity = entry.Velocity.Unit * TUNING.MaxSpeed
-	self.context:Delay(1, function()
-		if not entry.Out and body.Parent and not body.Anchored then
-			self.context:GiveOwnership(body, entry.Player)
+	local velocity = entry.Velocity
+	local horizontal = flat(velocity)
+	local speed = horizontal.Magnitude
+	local bumped = now < entry.ReliefUntil + 1 + self:_ping(entry)
+	local fast = speed > TUNING.MaxSpeed * 1.6 and not bumped
+	entry.FastSince = if fast then entry.FastSince or now else nil
+	local high = entry.Position.Y > self.restY + 6
+	entry.HighSince = if high then entry.HighSince or now else nil
+	local hanging = flat(entry.Position - self.center).Magnitude > ISLAND_RADIUS + 1.5
+		and entry.Position.Y > self.restY - 1
+	entry.HangSince = if hanging then entry.HangSince or now else nil
+
+	if speed > MAX_LEGIT_SPEED or (entry.FastSince and now - entry.FastSince > 0.25) then
+		if self:_takeBack(entry, 1) then
+			local slowed = if speed > 0.01 then horizontal.Unit * TUNING.MaxSpeed else Vector3.zero
+			entry.Body.AssemblyLinearVelocity = slowed + Vector3.new(0, math.min(velocity.Y, 0), 0)
+			self.policed = (self.policed or 0) + 1
 		end
-	end)
+	elseif (entry.HighSince and now - entry.HighSince > 1) or (entry.HangSince and now - entry.HangSince > 0.6) then
+		if self:_takeBack(entry, 1) then
+			-- Gravity takes it from here.
+			entry.Body.AssemblyLinearVelocity = horizontal * 0.5 + Vector3.new(0, math.min(velocity.Y, 0), 0)
+			self.policed = (self.policed or 0) + 1
+		end
+	end
 end
 
-function BumperBallers:_ringOut(entry: Entry)
-	local ctx = self.context
+-- Stops a ball that fell in: it splashes and sinks (see Start).
+function BumperBallers:_splash(entry: Entry)
 	entry.Out = true
+	entry.Input = Vector3.zero
+	entry.PendingBump = nil
 	entry.Force.Force = Vector3.zero
 	if physics and entry.Body.Parent then
 		entry.Body.Anchored = true -- the server takes it from here (it sinks; see Start)
@@ -787,18 +949,69 @@ function BumperBallers:_ringOut(entry: Entry)
 			CFrame.new(entry.Position.X, math.max(entry.Position.Y, self.waterY - OUT_DEPTH), entry.Position.Z)
 		)
 	end
-	ctx:Fire(nil, "Splash", Vector3.new(entry.Position.X, self.waterY, entry.Position.Z), entry.Player.UserId)
+	self.context:Fire(nil, "Splash", Vector3.new(entry.Position.X, self.waterY, entry.Position.Z), entry.Player.UserId)
+end
+
+-- Everyone who fell in this frame. If that's all the riders left (often: both go over after a
+-- bump), nobody beat anybody, so they share the win; otherwise the first one in goes out first.
+function BumperBallers:_ringOuts(fallen: { Entry })
+	local ctx = self.context
+	local riding = 0
+	for _, entry in fallen do
+		if ctx:IsAlive(entry.Player) then
+			riding += 1
+		end
+	end
+	if riding >= 2 and riding >= ctx:AliveCount() then
+		for _, entry in fallen do
+			self:_splash(entry)
+		end
+		self.draws = (self.draws or 0) + 1
+		ctx:End("Draw")
+		return
+	end
+	table.sort(fallen, function(a, b)
+		return a.Position.Y < b.Position.Y
+	end)
+	for _, entry in fallen do
+		self:_ringOut(entry)
+	end
+end
+
+function BumperBallers:_ringOut(entry: Entry)
+	local ctx = self.context
+	self:_splash(entry)
+	if ctx:State(entry.Player) == nil then
+		self:_removeBall(entry) -- not in the round any more: nothing to eliminate, no KO
+		return
+	end
 	-- Whoever bumped them in the last few seconds gets the knock-out.
 	local bumper = entry.LastBumper
-	if bumper and os.clock() - entry.LastBumpAt < 4 then
-		local bumperEntry = self.entries[bumper]
-		if bumperEntry then
-			bumperEntry.KOs += 1
-			ctx:SetScoreText(bumper, if bumperEntry.KOs == 1 then "1 KO" else `{bumperEntry.KOs} KOs`)
+	if bumper and bumper ~= entry.Player and os.clock() - entry.LastBumpAt < 4 then
+		local kos = (self.koCount[bumper] or 0) + 1
+		self.koCount[bumper] = kos
+		if ctx:State(bumper) then
+			ctx:SetScoreText(bumper, if kos == 1 then "1 KO" else `{kos} KOs`)
 		end
 	end
 	self.ringOuts = (self.ringOuts or 0) + 1
 	ctx:Eliminate(entry.Player, "fell")
+end
+
+-- Survival results (last one rolling wins), with each rider's knock-outs shown, and breaking
+-- ties between riders who fell at the same moment.
+function BumperBallers:GetResults()
+	local results = self.context:SurvivalResults()
+	for _, result in results.Entries do
+		local kos = if self.koCount then self.koCount[result.Player] or 0 else 0
+		if kos > 0 then
+			result.ScoreText ..= if kos == 1 then " • 1 KO" else ` • {kos} KOs`
+			if result.Rank < 1e6 then
+				result.Rank += math.min(kos, 9) * 0.01
+			end
+		end
+	end
+	return results
 end
 
 function BumperBallers:Stop()
