@@ -812,6 +812,7 @@ do
 	local rolledBefore = SkeeBallController.Status().Rolled
 	__fire("SkeeBall", "Sync", 1, 0)
 	task.wait(0.3)
+	__ui["SkeeBall roll again"] = __dumpGui(__playerGui, "SkeeBall roll again")
 	local skeePop = skeeHud and skeeHud:FindFirstChild("SkeeBallPop")
 	skeeChecks.syncPutBack = string.format(
 		"rolled %d -> %d, pop %q",
@@ -820,6 +821,26 @@ do
 		if skeePop and skeePop.Visible then skeePop.Text else "(none)"
 	)
 	skeeChecks.syncOk = rolledBefore == 1 and SkeeBallController.Status().Rolled == 0
+	-- Someone hops into your lane: they fade on your screen while you play, and come back when
+	-- they step off (or when you stop playing).
+	local intruder = Instance.new("Model")
+	intruder.Name = "LaneIntruder"
+	local intruderRoot = Instance.new("Part")
+	intruderRoot.Name = "HumanoidRootPart"
+	intruderRoot.Anchored = true
+	intruderRoot.CanCollide = false
+	intruderRoot.Size = Vector3.new(2, 2, 1)
+	intruderRoot.CFrame = machineModel:GetAttribute("SkeeFrame") * CFrame.new(0, 5, -2)
+	intruderRoot.Parent = intruder
+	Instance.new("Humanoid").Parent = intruder
+	intruder.Parent = workspace
+	task.wait(0.5)
+	local fadedInLane = intruderRoot.LocalTransparencyModifier
+	intruderRoot.CFrame = machineModel:GetAttribute("SkeeFrame") * CFrame.new(14, 5, -2)
+	task.wait(0.5)
+	skeeChecks.laneIntruder = string.format("in the lane %.2f, stepped off %.2f", fadedInLane, intruderRoot.LocalTransparencyModifier)
+	skeeChecks.laneIntruderOk = fadedInLane > 0.5 and intruderRoot.LocalTransparencyModifier == 0
+	intruder:Destroy()
 	-- A round runs while you roll (sitting it out): the round's standings show on the left, the
 	-- controls keep clear of them.
 	__player:SetAttribute("PP_SitOut", true)

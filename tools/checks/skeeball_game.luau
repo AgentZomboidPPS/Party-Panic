@@ -9,9 +9,10 @@
 -- number, out-of-range inputs). Then PLAY AGAIN, and that walking away, a round pulling the player
 -- in and leaving free the machine, while someone sitting out keeps playing through the next
 -- round's start; a quick last ball that drops in before the slow one rolled before it (the game
--- ends with both balls' points); TODAY'S BEST clearing when the day changes. Also: each machine is
--- one solid box (nobody hops into a lane), beach balls don't stay in the arcade, and every play
--- camera pose is clear of the lobby's scenery. Prints the scores.
+-- ends with both balls' points); TODAY'S BEST clearing when the day changes. Also: each machine and
+-- the board are solid only where they're drawn (the colliders, in machine 1's space, are in the
+-- result's "colliders" for a comparison with the mesh), beach balls don't stay in the arcade, and
+-- every play camera pose is clear of the lobby's scenery. Prints the scores.
 
 function __runSkeeBall()
 	local GameState = __require("Shared/GameState")
@@ -54,27 +55,108 @@ function __runSkeeBall()
 	check("four machines", #machines == 4, #machines)
 	local board = CollectionService:GetTagged("SkeeBestBoard")[1]
 	check("a TODAY'S BEST board", board ~= nil)
-	-- What bodies bump into: one solid box per machine round the whole cabinet (the mesh doesn't
-	-- collide), with its player's spot in front of it free.
+	-- What bodies bump into (owner: "invisible stuff you can jump on and hang on in several games"):
+	-- invisible pieces fitted to each cabinet's own shape (the mesh doesn't collide), so a ray over
+	-- the front at head height goes all the way to the ring board (nothing solid over the lane),
+	-- the tops you land on are the drawn ones, and its player's spot in front of it is free. The
+	-- colliders, in machine 1's own space, go in the summary for tools that compare them with the
+	-- mesh. The TODAY'S BEST board is solid the same way (its posts and panel), its mesh isn't.
+	local function rayParams(include: { Instance }): RaycastParams
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Include
+		params.FilterDescendantsInstances = include
+		return params
+	end
+	summary.colliders = {}
 	for index, model in machines do
-		local blocker = model:FindFirstChild("Blocker")
-		local solidPieces = 0
+		local holder = model:FindFirstChild("Colliders")
+		local pieces, invisible, meshSolid = 0, 0, 0
 		for _, part in model:GetDescendants() do
-			if part:IsA("BasePart") and part.CanCollide and part ~= blocker then
-				solidPieces += 1
+			if part:IsA("BasePart") and part.CanCollide then
+				if holder and part:IsDescendantOf(holder) then
+					pieces += 1
+					invisible += if part.Transparency == 1 then 1 else 0
+					if index == 1 then
+						local frame = model:GetAttribute("SkeeFrame")
+						table.insert(summary.colliders, {
+							name = part.Name,
+							shape = if part:IsA("WedgePart") then "wedge" else "box",
+							cf = { frame:ToObjectSpace(part.CFrame):GetComponents() },
+							size = { part.Size.X, part.Size.Y, part.Size.Z },
+						})
+					end
+				elseif part.Name ~= "Stand" then
+					meshSolid += 1
+				end
 			end
 		end
-		local box, size = model:GetBoundingBox()
-		local stand = model:FindFirstChild("Stand")
-		local standFree = blocker ~= nil
-			and stand ~= nil
-			and math.abs(blocker.CFrame:PointToObjectSpace(stand.Position).Z) > blocker.Size.Z / 2 + 0.5
+		local frame = model:GetAttribute("SkeeFrame")
+		local params = rayParams({ holder or model })
+		local function first(from: Vector3, along: Vector3): (string, Vector3?)
+			local hit = workspace:Raycast(frame:PointToWorldSpace(from), frame:VectorToWorldSpace(along), params)
+			return if hit then hit.Instance.Name else "nothing",
+				if hit then frame:PointToObjectSpace(hit.Position) else nil
+		end
+		local overName, overAt = first(Vector3.new(0, 5, -9), Vector3.new(0, 0, 20))
+		local laneName, laneAt = first(Vector3.new(0, 20, -3), Vector3.new(0, -25, 0))
+		local railName, railAt = first(Vector3.new(2.2, 20, -3), Vector3.new(0, -25, 0))
+		local cageName, cageAt = first(Vector3.new(0, 20, 4.5), Vector3.new(0, -25, 0))
+		local wantLane = SkeeBall.FloorY(-3 - SkeeBall.RELEASE_Z)
+		local overlap = OverlapParams.new()
+		overlap.FilterType = Enum.RaycastFilterType.Include
+		overlap.FilterDescendantsInstances = { workspace:FindFirstChild("Lobby") :: Instance }
+		local inStand = 0
+		for _, part in
+			workspace:GetPartBoundsInBox(
+				frame * CFrame.new(0, 2.8, SkeeBall.STAND_Z),
+				Vector3.new(2.6, 4.6, 2.4),
+				overlap
+			)
+		do
+			if part.CanCollide then
+				inStand += 1
+			end
+		end
 		check(
-			`machine {index} is one solid box`,
-			blocker ~= nil and blocker.CanCollide and solidPieces == 0 and standFree,
-			blocker and `{blocker.Size} vs the model's {size} at {box.Position}, other solid pieces {solidPieces}`
+			`machine {index} is solid only where it's drawn`,
+			pieces >= 20
+				and invisible == pieces
+				and meshSolid == 0
+				and overName == "BoardSlope"
+				and laneName == "LaneSlope"
+				and laneAt ~= nil
+				and math.abs(laneAt.Y - wantLane) < 0.05
+				and string.find(railName, "Rail", 1, true) ~= nil
+				and cageName == "CageRoof"
+				and cageAt ~= nil
+				and math.abs(cageAt.Y - (SkeeBall.TOP_Y + 0.12)) < 0.05
+				and inStand == 0,
+			`{pieces} colliders ({meshSolid} other solid parts); over the front: {overName} at z {overAt and math.floor(
+				overAt.Z * 100
+			) / 100}; lane {laneName} at {laneAt and math.floor(laneAt.Y * 100) / 100} (drawn {math.floor(
+				wantLane * 100
+			) / 100}); rail {railName} at {railAt and math.floor(railAt.Y * 100) / 100}; cage {cageName} at {cageAt and math.floor(
+				cageAt.Y * 100
+			) / 100}; solid parts at its stand {inStand}`
 		)
 	end
+	local boardModel = board and board.Parent and board.Parent:FindFirstChild("ArcadeBestBoard")
+	local boardHolder = boardModel and boardModel:FindFirstChild("Colliders")
+	local boardMeshSolid, boardPieces = 0, 0
+	for _, part in if boardModel then boardModel:GetDescendants() else {} do
+		if part:IsA("BasePart") and part.CanCollide then
+			if boardHolder and part:IsDescendantOf(boardHolder) then
+				boardPieces += 1
+			else
+				boardMeshSolid += 1
+			end
+		end
+	end
+	check(
+		"the TODAY'S BEST board is solid at its posts and panel only",
+		boardPieces == 5 and boardMeshSolid == 0,
+		`{boardPieces} colliders, {boardMeshSolid} solid mesh pieces`
+	)
 	local traps = __require("Server/World/LobbyBuilder").BallTraps
 	local arcadeTrap = traps[#traps]
 	check(

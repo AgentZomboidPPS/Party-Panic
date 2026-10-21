@@ -32,11 +32,18 @@
 -- Second review pass (same request): a ball you roll counts once the server says so (its echo or
 -- the machine's ball count); if the server refused it, its "Sync" puts the ball back ("ROLL
 -- AGAIN") so this device never runs ahead of the real game, and a ball's points only pop once the
--- server has taken it. A drag from the waiting ball reaches full power at the bottom edge of the
--- screen, in every layout (SkeeBallView: the vote's camera poses keep room below the ball and
--- keep the camera clear of the lobby's scenery). Only the drag's own finger ends it. On PC the
--- controls column rises above the vote cards only while they're up, and sits low the rest of the
--- time, under the round's standings.
+-- server has taken it. Your ball waits in its hole for that word however quickly it drops in (a
+-- slow word, or none, is a safety net: the machine's ball count decides), a drop's points pop even
+-- if a hitch skipped its frames, the server's roll wins over this device's own if they differ,
+-- and a machine that goes idle takes its balls off the lane (a game that ended scores nothing). A
+-- drag from the waiting ball reaches full power at the bottom edge of the screen, in every layout
+-- (SkeeBallView: the vote's camera poses keep room below the ball and keep the camera clear of the
+-- lobby's scenery). Only the drag's own finger ends it. On PC the controls column rises above the
+-- vote cards only while they're up, and sits low the rest of the time, under the round's
+-- standings. The machines are solid only where they're drawn now (owner: "invisible stuff you can
+-- jump on and hang on in several games"; World/Arcade), so people can climb onto them and hop into
+-- a lane: anyone on your machine or between it and your camera fades on your screen while you
+-- play, so nobody stands in front of your lane and rings.
 
 local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
@@ -497,28 +504,43 @@ local function settleRolls(machine: Machine, counted: number)
 	end
 end
 
+-- Takes every ball off a machine's lane (a game that ended: they don't count).
+local function clearRolls(machine: Machine)
+	for _, roll in machine.Rolls do
+		roll.Model:Destroy()
+	end
+	table.clear(machine.Rolls)
+end
+
 local function stepRolls(machine: Machine, now: number)
-	local index = 1
-	while index <= #machine.Rolls do
+	-- Your own balls the server hasn't answered in a long while (it answers every roll, so this is
+	-- a safety net): the machine's ball count decides, for all of them at once.
+	for _, roll in machine.Rolls do
+		if roll.Mine and not roll.Confirmed and now - roll.Start > CONFIRM_TIMEOUT then
+			local counted = machine.Model:GetAttribute("SkeeBalls")
+			settleRolls(machine, if type(counted) == "number" then counted else 0)
+			break
+		end
+	end
+	for index = #machine.Rolls, 1, -1 do
 		local roll = machine.Rolls[index]
 		local path = roll.Path
 		local t = now - roll.Start
-		if roll.Mine and not roll.Confirmed and t > CONFIRM_TIMEOUT then
-			-- No word from the server (it answers every roll, so this is a safety net): the
-			-- machine's ball count decides.
-			local counted = machine.Model:GetAttribute("SkeeBalls")
-			settleRolls(machine, if type(counted) == "number" then counted else 0)
-			if roll.Model.Parent == nil then
-				continue -- it went back
+		-- The drop (and its points) even when a hitch skipped its frames.
+		if t >= path.Phases[#path.Phases].T0 and not roll.Dropped then
+			roll.Dropped = true
+			if roll.Confirmed then
+				dropped(machine, roll)
+			else
+				roll.DropWaiting = true -- no points pop for a ball the server hasn't taken yet
 			end
 		end
 		if t >= path.Done + 0.05 then
-			if roll.Mine and not roll.Confirmed then
-				index += 1 -- sunk in its hole, waiting for the server's word
-				continue
+			-- Sunk in its hole: gone, unless it's yours and still waiting for the server's word.
+			if not roll.Mine or roll.Confirmed then
+				roll.Model:Destroy()
+				table.remove(machine.Rolls, index)
 			end
-			roll.Model:Destroy()
-			table.remove(machine.Rolls, index)
 			continue
 		end
 		local u, y, s = SkeeBall.Sample(path, t)
@@ -535,15 +557,6 @@ local function stepRolls(machine: Machine, now: number)
 		end
 		roll.Last = position
 		placeBall(machine, roll.Model, position, roll.Spin)
-		local phase = path.Phases[#path.Phases]
-		if t >= phase.T0 and not roll.Dropped then
-			roll.Dropped = true
-			if roll.Confirmed then
-				dropped(machine, roll)
-			else
-				roll.DropWaiting = true -- no points pop for a ball the server hasn't taken yet
-			end
-		end
 		if not roll.Hopped and t >= path.Phases[2].T0 then
 			roll.Hopped = true
 			if roll.Mine then
@@ -556,7 +569,6 @@ local function stepRolls(machine: Machine, now: number)
 				sfx("Click", 0.9, 0.5)
 			end
 		end
-		index += 1
 	end
 end
 
@@ -881,6 +893,9 @@ local function addMachine(model: Instance)
 	end
 	for _, attribute in { "SkeeState", "SkeeScore", "SkeeBalls", "SkeeName", "SkeeBest" } do
 		model:GetAttributeChangedSignal(attribute):Connect(function()
+			if attribute == "SkeeState" and model:GetAttribute("SkeeState") == "Idle" then
+				clearRolls(machine) -- a game that ended: balls still rolling don't count
+			end
 			if attribute == "SkeeBalls" then
 				-- The server took this device's balls up to its count (a ball that had to wait
 				-- its turn there is echoed a moment later).
@@ -943,15 +958,56 @@ local function character(): (Model?, Humanoid?, BasePart?)
 	return model, humanoid, root
 end
 
-local function setFade(amount: number)
-	local model = player.Character
-	if not model then
-		return
-	end
+local function fadeModel(model: Model, amount: number)
 	for _, item in model:GetDescendants() do
 		if item:IsA("BasePart") or item:IsA("Decal") then
 			item.LocalTransparencyModifier = amount
 		end
+	end
+end
+
+local function setFade(amount: number)
+	local model = player.Character
+	if model then
+		fadeModel(model, amount)
+	end
+end
+
+-- Anyone else on your machine while you play (in its lane, up on its rails or its cage, or between
+-- it and your camera) fades on your screen, so nobody can stand in front of your lane and rings.
+local OTHERS_FADE = 0.85
+local fadedOthers: { [Model]: boolean } = {}
+local function fadeOthers(machine: Machine?)
+	local inView: { [Model]: boolean } = {}
+	if machine then
+		local params = OverlapParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		local skip: { Instance } = { folder }
+		if player.Character then
+			table.insert(skip, player.Character)
+		end
+		params.FilterDescendantsInstances = skip
+		local near, far = POSES.Play.Eye.Z - 1, -SkeeBall.FRONT_Z + 0.5
+		local region = machine.Frame * CFrame.new(0, 8, (near + far) / 2)
+		local size = Vector3.new(SkeeBall.HALF_WIDTH * 2 + 2, 16, far - near)
+		for _, part in workspace:GetPartBoundsInBox(region, size, params) do
+			local model = part:FindFirstAncestorOfClass("Model")
+			if model and not inView[model] and model:FindFirstChildOfClass("Humanoid") then
+				inView[model] = true
+			end
+		end
+	end
+	for model in fadedOthers do
+		if not inView[model] then
+			fadedOthers[model] = nil
+			if model.Parent then
+				fadeModel(model, 0)
+			end
+		end
+	end
+	for model in inView do
+		fadedOthers[model] = true
+		fadeModel(model, OTHERS_FADE)
 	end
 end
 
@@ -1128,7 +1184,26 @@ local function inThumbstickZone(position: Vector2): boolean
 	return position.X < size.X * 0.4 and position.Y > size.Y / 3
 end
 
+-- Drops a drag without rolling (the window lost focus, or the system took the touch).
+local function cancelDrag()
+	if play.Dragging then
+		play.Dragging = nil
+		showAim(0, 0, false)
+		refreshControls()
+	end
+end
+
 local function onInputBegan(input: InputObject, processed: boolean)
+	local dragging = play.Dragging
+	if
+		dragging
+		and (
+			dragging.UserInputState == Enum.UserInputState.End
+			or dragging.UserInputState == Enum.UserInputState.Cancel
+		)
+	then
+		play.Dragging = nil -- its end never came here: a new touch starts afresh
+	end
 	if processed or not play.Active or play.Over or play.Dragging then
 		return
 	end
@@ -1179,13 +1254,11 @@ local function onInputEnded(input: InputObject)
 	if input ~= dragging and not mouse then
 		return
 	end
-	play.Dragging = nil
 	if input.UserInputState == Enum.UserInputState.Cancel then
-		-- The system took the touch (a notification, a swipe from the edge): no roll.
-		showAim(0, 0, false)
-		refreshControls()
+		cancelDrag() -- the system took the touch (a notification, a swipe from the edge): no roll
 		return
 	end
+	play.Dragging = nil
 	dragTo(input)
 	local aim, power = dragValues()
 	showAim(0, 0, false)
@@ -1269,6 +1342,7 @@ local function exitPlay()
 	showPrompts(true)
 	showAim(0, 0, false)
 	setFade(0)
+	fadeOthers(nil)
 	local camera = workspace.CurrentCamera
 	local _, humanoid = character()
 	camera.CameraType = Enum.CameraType.Custom
@@ -1376,6 +1450,7 @@ local function enterPlay(index: number, best: number)
 	table.insert(play.Connections, UserInputService.InputBegan:Connect(onInputBegan))
 	table.insert(play.Connections, UserInputService.InputChanged:Connect(onInputChanged))
 	table.insert(play.Connections, UserInputService.InputEnded:Connect(onInputEnded))
+	table.insert(play.Connections, UserInputService.WindowFocusReleased:Connect(cancelDrag))
 	putControlsAway(true)
 	play.MovingSince = 0
 	sfx("VoteOpen", 1.15, 0.45)
@@ -1726,12 +1801,20 @@ local function onEvent(kind: any, index: any, ...: any)
 				existing = rolling
 			end
 		end
-		if existing then
-			confirm(machine, existing)
-			return
-		end
 		local path = SkeeBall.Path(aimQ, powerQ, ball)
-		if mine then
+		if existing then
+			if existing.Path.AimQ == aimQ and existing.Path.PowerQ == powerQ then
+				confirm(machine, existing)
+				return
+			end
+			-- This device rolled that ball another way than the server took it (it rolled again
+			-- after a refusal while the first one was taken after all): the server's is the real one.
+			existing.Model:Destroy()
+			table.remove(machine.Rolls, table.find(machine.Rolls, existing) :: number)
+			if mine and play.Rolled == ball then
+				play.NextRollAt = os.clock() + path.Landed
+			end
+		elseif mine then
 			if play.Rolled >= ball then
 				return -- this device's roll that already finished
 			end
@@ -1846,7 +1929,7 @@ function SkeeBallController.Start(context)
 	end)
 	player:GetAttributeChangedSignal("PP_SitOut"):Connect(refreshHint)
 
-	local lastLights, lastScreens = 0, 0
+	local lastLights, lastScreens, lastOthers = 0, 0, 0
 	RunService.RenderStepped:Connect(function()
 		local now = os.clock()
 		for _, machine in machines do
@@ -1855,6 +1938,10 @@ function SkeeBallController.Start(context)
 		if play.Active then
 			if play.Meter ~= "Idle" then
 				meterValues(now)
+			end
+			if now - lastOthers > 0.2 then
+				lastOthers = now
+				fadeOthers(myMachine())
 			end
 			-- Walking away (WASD, a controller's stick) or being pushed off ends the game.
 			local _, humanoid, root = character()

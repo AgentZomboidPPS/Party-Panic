@@ -53,8 +53,9 @@ return function(h)
 		ArcadeSkeeMachine = {
 			Height = 12.09,
 			AssetId = 115646710351906,
-			-- Doesn't collide: World/Arcade puts one invisible box round it (no hopping into the
-			-- lane or climbing the cage).
+			-- Doesn't collide: World/Arcade fits invisible colliders to its shape. It stops the
+			-- camera, which would otherwise slide inside the cabinet.
+			BlocksCamera = true,
 			Palette = {
 				Cabinet = rgb(255, 84, 150), -- World/Arcade gives each machine its own color
 				Base = rgb(52, 36, 104),
@@ -171,7 +172,9 @@ return function(h)
 		ArcadeBestBoard = {
 			Height = 22.3,
 			AssetId = 109924586028819,
-			Collide = true,
+			-- Doesn't collide (its mesh's own collision would be a guess): World/Arcade puts
+			-- colliders on its posts and panel. It stops the camera.
+			BlocksCamera = true,
 			Palette = {
 				Posts = rgb(255, 255, 255),
 				PostStripes = rgb(255, 84, 150),
