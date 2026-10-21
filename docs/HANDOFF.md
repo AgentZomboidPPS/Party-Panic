@@ -15,9 +15,8 @@ were stopped, and their unfinished work is saved in `docs/wip/` (section 3).
    `python3 tools/checks/client_reports.py` shows which place version each player's device is on.
 4. Ask the owner which of the open items (section 2) to do first.
 
-**Live version:** 29 (published about 17:10 UTC). **Not live yet:** commit `bed7669` (Hex Meltdown floating bots +
-Honey Trap tutorial, section 2.1). If Session A managed to publish it before closing, a line "Version 30 is live" is at
-the bottom of this file; otherwise publish it (section 7) once its last test runs are clean.
+**Live version: 30** (published 17:45 UTC): everything in section 2.1 (Hex Meltdown floating bots and small banner,
+Honey Trap tutorial). The owner still has to restart servers to get it.
 
 ## 1. The owner and the house rules
 
@@ -170,7 +169,8 @@ owner the version number, and remind them to restart servers.
 21 Bobsled return fix, sound reports, store art. 22 Pump & Pop carnival art. 23 Rake It In hitboxes, rounds 5-10 s
 longer, console capture in reports. 24 fair hitboxes in all 11 precision games. 25 control track in sound reports.
 26 Skate Escape start (skaters held on the line until GO). 27 sit-out switch, countdown beeps only for players in the
-round. 28 rules card (10 s, nothing drawn over it). 29 lobby obby (a goo-pool course, scenery you can't climb).
+round. 28 rules card (10 s, nothing drawn over it). 29 lobby obby (a goo-pool course, scenery you can't climb). 30 Hex Meltdown bots stop flying off and a small call
+banner; Honey Trap's tutorial says you play from your flower.
 Games (12, all hold 12 players): Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking Sands, Arrow
 Ambush, Pump & Pop, Rake It In, Crazy Cutters, Cake Factory, Bobsled Run.
 
