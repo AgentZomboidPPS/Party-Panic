@@ -13,6 +13,7 @@ local Config = require(Shared.Config)
 local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
+local Teams = require(Shared.Teams)
 
 local State = require(script.Parent.Parent.State)
 local Modal = require(script.Parent.Parent.UI.Modal)
@@ -242,7 +243,18 @@ local function buildPhaseBanner(parent: Instance)
 			return
 		end
 		teams.Visible = true
-		teamsLabel.Text = `🔴 {scores.Red or 0}   —   {scores.Blue or 0} 🔵`
+		-- Two teams read "A — B"; with three or four, every team present gets its icon and score.
+		local present = {}
+		for _, team in Teams.Order do
+			if scores[team] ~= nil then
+				table.insert(present, `{Teams.Icons[team]} {scores[team]}`)
+			end
+		end
+		if #present > 2 then
+			teamsLabel.Text = table.concat(present, "   ")
+		else
+			teamsLabel.Text = `🔴 {scores.Red or 0}   —   {scores.Blue or 0} 🔵`
+		end
 	end
 	GameState.Changed("TeamScores", refreshTeams)
 	refreshTeams()
