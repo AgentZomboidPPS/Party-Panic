@@ -474,6 +474,9 @@ function CrazyCutters:BotSamples(player: Player, skill: number, random: Random, 
 	while t + 0.07 <= now and #out < Rules.MAX_CHUNK * 3 do
 		t += 0.07
 		local s = (t - plan.Start) * plan.Speed
+		if s > shape.Length then
+			s = shape.Length + (s - shape.Length) * 1.6 -- a second lap goes quicker
+		end
 		local u, v, du, dv = Rules.PointAt(shape, s)
 		local w = wobble(plan, t)
 		if s < shape.Length then
