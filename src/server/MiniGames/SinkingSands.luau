@@ -5,9 +5,9 @@
 --   DIVERS (most players) run on the sand and grab treasure (+1 coin, +3 gem, +5 bag, +10 idol). The
 --   sand drags them round and in; whoever slips into the sinkhole is spat back out at the rim a
 --   moment later (and the Sand Kings score +5).
---   SAND KINGS (about one in four, on thrones round the rim) steer the swirl: SWIRL flips the spin
---   and whips it faster, PULL drains the funnel hard for two seconds. Every treasure that sinks goes
---   to the Kings. With nobody to be a King (a solo round) the sand plays King by itself.
+--   SAND KINGS (about one in three, on thrones round the rim) steer the swirl: SWIRL flips the spin
+--   and whips it faster, PULL drains the funnel hard for three seconds. Every treasure that sinks
+--   goes to the Kings. With nobody to be a King (a solo round) the sand plays King by itself.
 -- The team with the bigger haul wins.
 --
 -- How it works: the sand is a shared schedule of constant-flow segments (Logic/SandSwirl), and a
@@ -28,6 +28,10 @@
 -- "Bots are terrible at this game. can we make them a little better."): the sand drags bots and
 -- then they steer like a player's stick, every frame (_dragBots), so a real server's physics can't
 -- stop their walk; how they play is in Bots/SinkingSands.
+--
+-- Stronger Kings (owner, told the Divers now won almost every round: "lets make it stronger and add
+-- another king"): one more King per round (SandSwirl.KingCount: 3 of 8 players, 4 of 12, never all
+-- Kings) and a stronger, longer PULL (SandSwirl.PULL, PULL_HOLD).
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -131,13 +135,13 @@ function SinkingSands:Prepare()
 	self.spots = {} :: { [any]: { Position: Vector3, Time: number } } -- each Diver at the last check
 	self.idols = 0
 
-	-- Teams: about one Sand King per four players (none when playing alone).
+	-- Teams (SandSwirl.KingCount): 3 Sand Kings of 8 players, 4 of 12, none when playing alone.
 	local players = ctx:GetPlayers()
 	for index = #players, 2, -1 do
 		local other = rng:NextInteger(1, index)
 		players[index], players[other] = players[other], players[index]
 	end
-	local kingCount = if #players >= 2 then math.clamp(math.floor(#players / 4 + 0.5), 1, 3) else 0
+	local kingCount = SandSwirl.KingCount(#players)
 	for index, player in players do
 		if index <= kingCount then
 			table.insert(self.kings, player)
