@@ -44,11 +44,10 @@ local function rgb(r: number, g: number, b: number): Color3
 end
 
 local PALETTE = {
-	Plaza = rgb(255, 238, 222),
-	Outer = rgb(226, 214, 255),
-	Court = rgb(214, 226, 255),
+	Lawn = rgb(104, 196, 88),
+	Grout = rgb(238, 226, 212),
+	Curb = rgb(250, 242, 228),
 	Trim = rgb(255, 204, 64),
-	Curb = rgb(255, 255, 255),
 	Stage = rgb(92, 64, 168),
 	StageDark = rgb(52, 36, 104),
 	Bay = rgb(30, 20, 66),
@@ -67,6 +66,7 @@ local PARTY_COLORS = {
 }
 
 local PLAZA_RADIUS = 75
+local PAVED_RADIUS = 45.9 -- the court and promenade (LobbyCourt + LobbyPavers); lawn beyond
 local SIGN_FONT = Enum.Font.LuckiestGuy
 
 -- Zone anchors (ground level).
@@ -251,49 +251,57 @@ end
 
 local function buildGround(root: Model)
 	local ground = Build.Model("Ground", root)
-	-- One thick disc is the whole walkable plaza; terrain is carved away under it (Environment).
-	disc("Plaza", PLAZA_RADIUS * 2, 6, Vector3.new(0, -3, 0), { Color = PALETTE.Outer, Parent = ground })
-	-- A gold curb just below the plaza edge.
-	disc("Curb", PLAZA_RADIUS * 2 + 3, 6, Vector3.new(0, -3.15, 0), { Color = PALETTE.Trim, Parent = ground })
-	-- Pattern layers stacked on top. Every layer's top is a full 0.1 stud above the one under it:
-	-- surfaces closer than that flicker (z-fighting) as the camera moves.
-	local layers = {
-		{ "MidStripe", 122, rgb(255, 255, 255), 0.1 },
-		{ "Mid", 118, PALETTE.Plaza, 0.2 },
-		-- (walkways: 0.3)
-		{ "CourtRing", 54, PALETTE.Trim, 0.4 },
-		{ "Court", 50, PALETTE.Court, 0.5 },
-		{ "CourtInner", 36, rgb(232, 238, 255), 0.6 },
-	}
-	for _, layer in layers do
-		disc(layer[1], layer[2], 0.1, Vector3.new(0, layer[4] - 0.05, 0), flat({ Color = layer[3], Parent = ground }))
-	end
+	-- One thick grass disc is the whole walkable plaza; terrain is carved away under it (Environment).
+	disc("Plaza", PLAZA_RADIUS * 2, 6, Vector3.new(0, -3, 0), {
+		Color = PALETTE.Lawn,
+		Material = Enum.Material.Grass,
+		Parent = ground,
+	})
+	-- A cream stone curb just below the plaza edge.
+	disc("Curb", PLAZA_RADIUS * 2 + 3, 6, Vector3.new(0, -3.15, 0), { Color = PALETTE.Curb, Parent = ground })
+	-- The paved middle: a grout disc with the sunburst court and the promenade's curved tiles on
+	-- top (meshes). Every layer's top is a full 0.1 stud above the one under it: surfaces closer
+	-- than that flicker (z-fighting) as the camera moves.
+	disc(
+		"Grout",
+		PAVED_RADIUS * 2 + 0.2,
+		0.1,
+		Vector3.new(0, 0.05, 0),
+		flat({ Color = PALETTE.Grout, Material = Enum.Material.Concrete, Parent = ground })
+	)
+	MeshLibrary.Get("LobbyCourt", { CFrame = CFrame.new(0, 0.1, 0), Parent = ground })
+	MeshLibrary.Get("LobbyPavers", { CFrame = CFrame.new(0, 0.1, 0), Parent = ground })
 
-	-- Walkways from the court to every zone, each in its zone's color.
+	-- Paved walkways across the lawn to every zone: a white border with the zone's color inside.
 	local walkways = {
-		{ target = Vector3.new(0, 0, STAGE_Z + 14), width = 16, color = rgb(255, 214, 92) }, -- vote stage
-		{ target = PODIUM + Vector3.new(-10, 0, 0), width = 9, color = rgb(255, 120, 120) }, -- podium (red carpet)
-		{ target = SHOP + Vector3.new(10, 0, 0), width = 9, color = rgb(255, 150, 205) }, -- shop
-		{ target = EMOTE + Vector3.new(0, 0, -12), width = 9, color = rgb(120, 220, 255) }, -- emote stage
-		{ target = QUESTS * 0.75, width = 8, color = rgb(170, 140, 255) }, -- quests
-		{ target = ARCADE * 0.75, width = 8, color = rgb(130, 225, 150) }, -- arcade
+		{ target = Vector3.new(0, 0, STAGE_Z + 14), width = 16, color = rgb(255, 204, 64) }, -- vote stage
+		{ target = PODIUM + Vector3.new(-10, 0, 0), width = 10, color = rgb(255, 96, 110) }, -- podium (red carpet)
+		{ target = SHOP + Vector3.new(10, 0, 0), width = 10, color = rgb(255, 120, 190) }, -- shop
+		{ target = EMOTE + Vector3.new(0, 0, -12), width = 10, color = rgb(80, 200, 255) }, -- emote stage
+		{ target = QUESTS * 0.86, width = 9, color = rgb(160, 120, 255) }, -- quests
+		{ target = ARCADE * 0.86, width = 9, color = rgb(100, 220, 140) }, -- arcade
 	}
 	for _, walk in walkways do
 		local direction = Vector3.new(walk.target.X, 0, walk.target.Z).Unit
-		local startRadius = 26
+		local startRadius = PAVED_RADIUS - 3
 		local endRadius = Vector3.new(walk.target.X, 0, walk.target.Z).Magnitude
 		local length = endRadius - startRadius
 		local middle = direction * (startRadius + length / 2)
-		Shapes.Slab(
-			Vector3.new(walk.width, 0.1, length),
-			walk.width * 0.45,
-			flat({
-				Name = "Walkway",
-				CFrame = CFrame.lookAt(middle + Vector3.new(0, 0.25, 0), middle + Vector3.new(0, 0.25, 0) + direction),
-				Color = walk.color,
-				Parent = ground,
-			})
-		)
+		for layer = 1, 2 do
+			local y = 0.15 + layer * 0.1
+			local width = if layer == 1 then walk.width + 1.6 else walk.width
+			Shapes.Slab(
+				Vector3.new(width, 0.1, length + (if layer == 1 then 1.6 else 0)),
+				width * 0.45,
+				flat({
+					Name = if layer == 1 then "WalkwayEdge" else "Walkway",
+					CFrame = CFrame.lookAt(middle + Vector3.new(0, y, 0), middle + Vector3.new(0, y, 0) + direction),
+					Color = if layer == 1 then rgb(255, 255, 255) else walk.color,
+					Material = if layer == 1 then Enum.Material.SmoothPlastic else Enum.Material.Pavement,
+					Parent = ground,
+				})
+			)
+		end
 	end
 
 	-- Invisible boundary a little further out, among the trees.

@@ -1,0 +1,23 @@
+newmtl RayA
+Kd 0.941 0.965 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl RayB
+Kd 0.627 0.804 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Accent
+Kd 1.000 0.471 0.686
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Ring
+Kd 1.000 0.800 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

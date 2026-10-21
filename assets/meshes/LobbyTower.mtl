@@ -1,0 +1,47 @@
+newmtl Body
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stripes
+Kd 1.000 0.329 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 1.000 0.800 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Roof
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl RoofStripes
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Windows
+Kd 0.235 0.157 0.431
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Lights
+Kd 1.000 0.925 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Flag
+Kd 1.000 0.800 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
