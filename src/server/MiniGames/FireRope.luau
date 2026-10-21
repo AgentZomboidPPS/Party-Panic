@@ -150,6 +150,13 @@ function FireRope:Prepare()
 			Parent = ctx.Arena,
 		})
 	end
+	-- Lower and further back behind the temple: closes the gap without darkening the sky behind the
+	-- dragon (from the bridge they stay under the temple's top tier).
+	for index, side in { -1, 1 } do
+		local angle = -math.pi / 2 + side * math.rad(17)
+		local position = base + Vector3.new(math.cos(angle) * 240, -1.3 - index * 0.5, math.sin(angle) * 240)
+		MeshLibrary.Get("CraterWall", { Scale = 0.85, CFrame = facingBridge(position), Parent = ctx.Arena })
+	end
 	-- The temple rises out of the lava (its bottom tier mostly under it), which keeps the dragon head
 	-- low enough on screen to stay clear of the round banner.
 	local temple = facingBridge(base + Vector3.new(0, -TEMPLE_SINK * TEMPLE_SCALE, -TEMPLE_DISTANCE))
@@ -204,10 +211,10 @@ function FireRope:Prepare()
 	end
 
 	-- Fire braziers rising out of the lava either side of the bridge, clear of the rope. The pair in
-	-- front (where the rope comes down) stands wider, further out and lower, so their fires sit below
-	-- the deck on screen and never behind the descending rope.
+	-- front (where the rope comes down) stands lower and out past the bridge's ends, framing the view
+	-- instead of burning behind the players and the descending rope.
 	for _, spot in
-		{ Vector3.new(-30, -6, -28), Vector3.new(30, -6, -28), Vector3.new(-22, 0, 17), Vector3.new(22, 0, 17) }
+		{ Vector3.new(-42, -6, -26), Vector3.new(42, -6, -26), Vector3.new(-22, 0, 17), Vector3.new(22, 0, 17) }
 	do
 		local position = base + spot
 		MeshLibrary.Get("FireBrazier", { CFrame = CFrame.new(position), Parent = ctx.Arena })
