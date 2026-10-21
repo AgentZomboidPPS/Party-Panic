@@ -101,6 +101,19 @@ def main():
         print("Dry run: nothing published.")
         return
 
+    # Asset privacy: new uploads are Restricted, and only the owner sees them until the game is
+    # granted permission. Re-grant every model and sound on each publish so nothing is invisible.
+    sys.path.insert(0, str(ROOT / "tools"))
+    sys.path.insert(0, str(ROOT / "tools" / "checks"))
+    from asset_permissions import grant
+    from asset_status import collect
+
+    asset_ids = list(collect().values())
+    granted, grant_errors = grant(asset_ids, args.universe_id)
+    print(f"The game may use {len(granted)} of {len(set(asset_ids))} models and sounds")
+    if grant_errors:
+        sys.exit(f"Refusing to publish: couldn't grant asset permissions: {json.dumps(grant_errors)[:1000]}")
+
     # 409 "Server is busy" means a Collaborative Editing session still holds the place. It can stay
     # alive for up to ~20 minutes after everyone leaves Studio, so retry with backoff.
     deadline = time.time() + args.wait_minutes * 60

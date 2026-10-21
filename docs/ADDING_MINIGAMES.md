@@ -126,8 +126,10 @@ python3 tools/upload_assets.py --user-id <owner> --what meshes --only Pump,Ballo
 python3 tools/checks/asset_status.py --meshes                         # approved for every player?
 ```
 
-The upload writes each `AssetId` into `World/Props/<Mode>.luau`. Until a mesh is uploaded and
-approved by moderation the game uses its `Fallback`. Build meshes facing **-Z** (their front);
+The upload writes each `AssetId` into `World/Props/<Mode>.luau` and gives the game permission to
+use it (Roblox makes new uploads private: without that grant only the owner sees them; publishing
+re-grants everything too). Until a mesh is uploaded and approved by moderation the game uses its
+`Fallback`. Build meshes facing **-Z** (their front);
 MeshLibrary corrects for Roblox's importer, which turns glTF models half a turn.
 `Kit/Scenery` has ready-made settings: `Meadow`, `LavaLake`, `Ground`, `Volcano`, `RockRim`.
 
