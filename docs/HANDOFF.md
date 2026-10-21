@@ -1,7 +1,7 @@
 # Handoff: Party Panic (for the Claude joining the project)
 
-Written for a second Claude that joins while the first one keeps working. Last updated: **2026-10-21 13:20 UTC
-(9:20 AM Eastern)**; the final update lands by **12:55 PM Eastern (16:55 UTC)**.
+Written for a second Claude that joins while the first one keeps working. Last updated: **2026-10-21 16:20 UTC
+(12:20 PM Eastern)**.
 
 - **Session A** is the Claude that wrote this. It keeps its current lanes until they are finished (owner: "you can finish
   all work in here. I just want to make the other claude work on other things").
@@ -38,8 +38,9 @@ Written for a second Claude that joins while the first one keeps working. Last u
 
 | Lane | Status | Files |
 | --- | --- | --- |
-| Hitbox pass for 10 games (agents in worktrees, branches `hit/<Id>`) | running; merging as they land | `src/server/MiniGames/<Id>.luau`, `src/client/MiniGames/<Id>.luau`, `src/server/MiniGames/Bots/<Id>.luau`, `tools/checks/bots/<Id>.luau` for FireRope, ArrowAmbush, SkateEscape, BumperBallers, HexMeltdown, SinkingSands, CrazyCutters, PumpAndPop, CakeFactory, BobsledRun (RakeItIn is done) |
-| Sinking Sands diver bots (owner: "Bots are terrible at this game") and the Skate Escape start float (owner: the character floats onto the bridge during the countdown and at GO) | after their hitbox merges | same mode files |
+| Hitbox pass for all 11 precision games | **done, live in version 24** (each game's commit message says what changed) | the mini-game files are free again, except the two rows below |
+| Sinking Sands diver bots (owner: "Bots are terrible at this game") (agent, branch `bots/SinkingSands`) | running | `src/server/MiniGames/Bots/SinkingSands.luau` and the other Sinking Sands files |
+| Skate Escape start float (owner: the character floats onto the bridge during the countdown and at GO) (agent, branch `fix/skate-start`) | running | the Skate Escape files, maybe `RoundContext.luau` |
 | Lobby obby rebuild + scenery not climbable (agent, branch `lobby/obby`) | running | `src/server/World/LobbyBuilder.luau` (buildParkour, scenery placement), `src/client/Controllers/MovementController.luau` |
 | Skee-Ball arcade in the lobby (agent, branch `lobby/skeeball`) | running | a new arcade module + props, a one-line hook in LobbyBuilder, a new SkeeBallController |
 | "Sit out next round" toggle (agent, branch `feature/sitout`) | running | `src/server/Services/RoundManager.luau`, `VotingService.luau`, `src/client/Controllers/HudController.luau`, `VoteController.luau`, settings UI |
@@ -131,17 +132,21 @@ grants asset permissions; prints the version; the settings PATCH warning at the 
   are Approved and Active, owned by the game's owner; the game's Use grant succeeds (re-granted today); audio can't be made
   Open Use (the API answers InvalidRequest). Version 23 reports Roblox's exact console reason from the failing device;
   next step is to read `client_reports.py` after the friend joins, then fix accordingly.
-- **Store description:** the new text is ready in `docs/STORE_DESCRIPTION.txt`. The place-settings PATCH has no scope;
-  the universe PATCH works for other fields but returns "WAF Blocked Request" for this text (tried with `1 or 2` spelled
-  out; still blocked). If it can't be found, the owner pastes it (Creator Hub > Configure > Basic Settings), and removes
-  the trailing space in the name "Party Panic ".
+- **Store description:** the new text is ready in `docs/STORE_DESCRIPTION.txt`, but our key can't set it. Roblox only
+  saves a description through the place (`PATCH cloud/v2/universes/{u}/places/{p}`), which answers 403 "Scope not
+  authorized" for this key. The universe PATCH answers 200 for a description but stores nothing (the live text is still
+  the old one), and its firewall rejects long multi-line texts anyway. So: the owner pastes it (Creator Hub > Configure >
+  Basic Settings) and removes the trailing space in the name "Party Panic ", or adds **universe.place (write)** for this
+  experience to the API key, after which every `publish_place.py` sets the name and description.
 - **Icon and thumbnails:** done (`assets/store/`, sent to the owner); the owner uploads them by hand.
 
 ## 7. Recent history (what's live)
 
-Version **23** (published 13:05 UTC today) has the 12 games below, the carnival Pump & Pop arena, Rake It In's fair rakes,
-rounds 5-10 s longer, players always sent back to the lobby after Bobsled Run, every prop facing outward (the black Hex
-Meltdown flag fixed), sound reports. Games: Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking
+Version **24** (published 16:15 UTC today) has the 12 games below, fair hitboxes in all 11 precision games (Honey Trap is
+turn-based), the carnival Pump & Pop arena, rounds 5-10 s longer, players always sent back to the lobby after Bobsled Run,
+every prop facing outward (the black Hex Meltdown flag fixed), and sound reports. Known phone-HUD nits from the last test
+rounds: Skate Escape's progress-bar racer numbers overlap when riders are side by side, Bumper Ballers' "X" sits over the
+rider icon of a knocked-out rider, and the Sinking Sands Sand King hint wraps to two lines (being fixed with the bots). Games: Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking
 Sands, Arrow Ambush, Pump & Pop, Rake It In, Crazy Cutters, Cake Factory, Bobsled Run. All hold 12 players (each has a
 clean 12-player test round).
 
