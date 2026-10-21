@@ -143,13 +143,10 @@ function StampOut.Start(api)
 				local x, z = StampGrid.Center(cell)
 				tile = decor({
 					Name = "Ink",
-					Size = Vector3.new(CELL - 0.02, 0.04, CELL - 0.02), -- a hair under a cell
-					-- (a checkerboard of two heights 0.13 apart: neighbours' sides never share a plane)
-					CFrame = CFrame.new(
-						paperX + x,
-						paperY + (if (cell + (cell - 1) // N) % 2 == 0 then 0.22 else 0.35),
-						paperZ + z
-					),
+					-- 0.1 under a cell: neighbours' sides never share a plane (no flicker); the hairline of paper
+					-- between them reads as print.
+					Size = Vector3.new(CELL - 0.1, 0.04, CELL - 0.1),
+					CFrame = CFrame.new(paperX + x, paperY + 0.22, paperZ + z),
 					Parent = folder,
 				})
 				tiles[cell] = tile

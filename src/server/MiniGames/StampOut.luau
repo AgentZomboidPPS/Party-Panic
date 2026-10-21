@@ -166,7 +166,7 @@ function StampOut:BuildArena()
 	for _, wall in
 		{
 			{ CFrame.new(origin + Vector3.new(59.5, 46, -300)), Vector3.new(781, 340, 4) },
-			{ CFrame.new(origin + Vector3.new(-330, 46.5, 74)), Vector3.new(4, 340, 752) },
+			{ CFrame.new(origin + Vector3.new(-330, 46.5, 74.5)), Vector3.new(4, 340, 751) },
 		}
 	do
 		Build.Decor({
