@@ -90,6 +90,7 @@ return function(h)
 			AssetId = 132771041638249,
 			Shadow = false,
 			Palette = { Cloud = cloud, Shade = h.rgb(214, 228, 248) },
+			Materials = { Cloud = Enum.Material.SmoothPlastic, Shade = Enum.Material.SmoothPlastic },
 			Fallback = function(m)
 				h.blob(m, "Shade", Vector3.new(14, 2.4, 7), Vector3.new(0, 1.2, 0))
 				h.blob(m, "Cloud", Vector3.new(8, 5, 6), Vector3.new(0, 2.6, 0))
@@ -108,6 +109,7 @@ return function(h)
 				Pupils = h.rgb(30, 30, 40),
 				Boots = h.rgb(130, 80, 50),
 			},
+			Materials = { Body = Enum.Material.SmoothPlastic, Belly = Enum.Material.SmoothPlastic },
 			Fallback = function(m)
 				h.blob(m, "Body", Vector3.new(3.4, 3.6, 3), Vector3.new(0, 2.2, 0))
 				h.blob(m, "Belly", Vector3.new(2.4, 2.6, 1), Vector3.new(0, 2, -1.2))

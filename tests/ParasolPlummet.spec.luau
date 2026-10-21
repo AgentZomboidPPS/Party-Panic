@@ -19,7 +19,7 @@ end
 test("ParasolPlummetSim: open floats up, shut drops, the box holds", function()
 	local f = { X = 0, Y = 0, VX = 0, VY = 0 }
 	run(f, 0, true, false, 1)
-	expectTrue(f.Y > 0 and f.Y < 3, `open floats up slowly ({f.Y})`)
+	expectTrue(f.Y > 0 and f.Y < Sim.RISE, `open floats up slowly ({f.Y})`)
 	local high = f.Y
 	run(f, 0, false, false, 1)
 	expectTrue(f.Y < high - 8, `shut drops fast ({f.Y})`)

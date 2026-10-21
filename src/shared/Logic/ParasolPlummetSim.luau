@@ -123,9 +123,11 @@ function Sim.ThrowerAt(index: number, t: number): (number, number, number)
 	return side * Sim.THROWER_X, y, side
 end
 
--- Where a throw leaves a thrower's hand (relative to its cloud's position).
+-- Where a throw leaves a thrower's hand (relative to its cloud's position): its raised right hand.
+-- The throwers are the same mesh turned to face the camera (not mirrored), so that hand is on the
+-- left of both: outside on the left cloud, inside on the right one.
 function Sim.HandOffset(side: number): (number, number)
-	return -side * 2.0, 7.0
+	return if side < 0 then -2.1 else -2.5, 8.1
 end
 
 -- Whether something of `radius` at (x, y) touches a faller at (fx, fy) with its umbrella `open` or

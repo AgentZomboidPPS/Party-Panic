@@ -964,7 +964,7 @@ function ParasolPlummet.Start(api)
 		-- The controls hint for the first seconds after GO.
 		if started and not hintShown and amFaller then
 			hintShown = true
-			hintUntil = now + 5
+			hintUntil = now + 7
 			api:Hint(
 				if touch then "Steer with the stick • hold DIVE to drop" else "A/D to steer • hold SPACE to drop",
 				hudY + 60

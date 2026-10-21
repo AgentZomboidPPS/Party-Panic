@@ -122,7 +122,7 @@ function ParasolPlummet:_buildArena()
 		-- Turned mostly to the camera, a little toward the middle of the sky.
 		MeshLibrary.Get("ParasolPlummetThrower", {
 			Scale = 1.4,
-			CFrame = base * CFrame.new(0, 1.2, 0) * CFrame.Angles(0, math.pi + side * math.rad(35), 0),
+			CFrame = base * CFrame.new(0, 2.2, 0) * CFrame.Angles(0, math.pi + side * math.rad(35), 0),
 			Parent = holder,
 		})
 		holder:PivotTo(base)
