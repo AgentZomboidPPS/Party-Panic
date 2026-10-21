@@ -11,7 +11,7 @@ return function(h)
 	return {
 		StruggleBat = {
 			Height = 4.3,
-			AssetId = 0,
+			AssetId = 138874005117270,
 			Palette = { Grip = h.rgb(40, 40, 48), Foam = h.rgb(255, 120, 60), Band = h.rgb(250, 250, 250) },
 			Materials = { Grip = Enum.Material.Fabric, Foam = Enum.Material.SmoothPlastic },
 			Shadow = false,
@@ -23,7 +23,7 @@ return function(h)
 		},
 		StruggleOrbBall = {
 			Height = 1.6,
-			AssetId = 0,
+			AssetId = 73098953975178,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -33,7 +33,7 @@ return function(h)
 		},
 		StruggleOrbCube = {
 			Height = 1.3,
-			AssetId = 0,
+			AssetId = 85396579013177,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -43,7 +43,7 @@ return function(h)
 		},
 		StruggleOrbPyramid = {
 			Height = 1.5,
-			AssetId = 0,
+			AssetId = 138314803791608,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -54,7 +54,7 @@ return function(h)
 		},
 		StruggleOrbDiamond = {
 			Height = 1.6,
-			AssetId = 0,
+			AssetId = 99947043847275,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -65,7 +65,7 @@ return function(h)
 		},
 		StruggleOrbStar = {
 			Height = 1.5,
-			AssetId = 0,
+			AssetId = 87746981604248,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -75,7 +75,7 @@ return function(h)
 		},
 		StruggleOrbRing = {
 			Height = 1.6,
-			AssetId = 0,
+			AssetId = 84876043006293,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -85,7 +85,7 @@ return function(h)
 		},
 		StruggleOrbPlus = {
 			Height = 1.6,
-			AssetId = 0,
+			AssetId = 128938696631806,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -96,7 +96,7 @@ return function(h)
 		},
 		StruggleOrbCross = {
 			Height = 1.5,
-			AssetId = 0,
+			AssetId = 85278136207862,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -109,7 +109,7 @@ return function(h)
 		},
 		StruggleOrbCone = {
 			Height = 1.5,
-			AssetId = 0,
+			AssetId = 140231652345016,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -120,7 +120,7 @@ return function(h)
 		},
 		StruggleOrbFrame = {
 			Height = 1.35,
-			AssetId = 0,
+			AssetId = 85143365552121,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -133,7 +133,7 @@ return function(h)
 		},
 		StruggleOrbPill = {
 			Height = 0.84,
-			AssetId = 0,
+			AssetId = 108419938530446,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -143,7 +143,7 @@ return function(h)
 		},
 		StruggleOrbKite = {
 			Height = 1.55,
-			AssetId = 0,
+			AssetId = 111546909516275,
 			Palette = orbPalette,
 			Materials = orbMaterials,
 			Shadow = false,
@@ -154,7 +154,7 @@ return function(h)
 		},
 		StruggleFence = {
 			Height = 8.1,
-			AssetId = 0,
+			AssetId = 72210194858891,
 			Collide = true,
 			Palette = { Boards = h.rgb(196, 146, 96), Rails = h.rgb(150, 104, 66), Post = h.rgb(120, 84, 56) },
 			Materials = {
@@ -170,7 +170,7 @@ return function(h)
 		},
 		StruggleScoreboard = {
 			Height = 16.9,
-			AssetId = 0,
+			AssetId = 93074651791987,
 			BlocksCamera = true,
 			Palette = {
 				Legs = h.rgb(110, 78, 52),
@@ -190,7 +190,7 @@ return function(h)
 		},
 		StruggleTram = {
 			Height = 11.1,
-			AssetId = 0,
+			AssetId = 110283636674850,
 			BlocksCamera = true,
 			Palette = {
 				Body = h.rgb(210, 80, 60),
@@ -217,7 +217,7 @@ return function(h)
 		},
 		StruggleTrack = {
 			Height = 1.15,
-			AssetId = 0,
+			AssetId = 113593058801207,
 			Palette = { Ballast = h.rgb(120, 110, 100), Sleepers = h.rgb(100, 72, 50), Rails = h.rgb(150, 150, 155) },
 			Materials = { Ballast = Enum.Material.Pebble, Sleepers = Enum.Material.Wood, Rails = Enum.Material.Metal },
 			Shadow = false,
@@ -228,7 +228,7 @@ return function(h)
 		},
 		StruggleBench = {
 			Height = 3.7,
-			AssetId = 0,
+			AssetId = 108941504027786,
 			Palette = { Seat = h.rgb(190, 130, 80), Back = h.rgb(176, 120, 74), Legs = h.rgb(60, 60, 66) },
 			Materials = { Seat = Enum.Material.WoodPlanks, Back = Enum.Material.WoodPlanks, Legs = Enum.Material.Metal },
 			Fallback = function(m)
@@ -239,7 +239,7 @@ return function(h)
 		},
 		StruggleBanner = {
 			Height = 12.6,
-			AssetId = 0,
+			AssetId = 114963198286555,
 			Palette = {
 				Pole = h.rgb(230, 230, 230),
 				Finial = h.rgb(240, 200, 80),
