@@ -9,11 +9,25 @@
 -- turn's clock, so every client shows the same face at the same moment. The server judges a hit
 -- against that clock with leeway for lag, so the face you saw is the face you get.
 --
+-- Timing pass (owner: "the precision games will feel super bad if we dont"): the block's rule is
+-- Logic/HoneyBlock, shared with the client. A hit pressed just before the block's last flip that
+-- reached the server after the deadline used to find the block already stopped by the server, on
+-- the next face; the server now waits a moment past the deadline (LATE_HIT) and judges it on the
+-- faces up to the deadline, and the round's end waits the same moment at the buzzer for a hit pressed
+-- just before it (RoundContext.HoldEnd; the HIT carries when it was pressed, which counts within the
+-- player's ping: Logic/Buzzer). And someone who takes a honeycomb is out from that moment: their
+-- elimination used to wait for the bees (2.1 s), so a time-up, or the last other player leaving,
+-- in that window counted them as a survivor, and they could win. The bees still play out first.
+--
 -- Art pass ("make every arena look really cool"): a storybook meadow. A giant honey oak with a
 -- front door, a beehive, a swing and lanterns; a lawn with flower beds and toadstools; everyone
 -- stands on a big flower on a sand crescent with a picnic basket; sunflowers and straw beehives
 -- around. The props live in World/Props/HoneyTrap.luau.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Buzzer = require(ReplicatedStorage.Shared.Logic.Buzzer)
+local HoneyBlock = require(ReplicatedStorage.Shared.Logic.HoneyBlock)
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Scenery = require(script.Parent.Kit.Scenery)
 local Build = require(script.Parent.Parent.World.Build)
@@ -25,9 +39,11 @@ local ARC_RADIUS = 19 -- how far the players stand from the vine
 local BOTTOM = 6.5 -- height of the lowest item on the vine
 local SPACING = 2.6 -- between items on the vine
 local TURN_TIME = 6 -- seconds to hit before the block stops by itself
-local FLIP = 0.42 -- seconds each face shows
+local FLIP = HoneyBlock.FLIP -- seconds each face shows
 local PAUSE_FRUIT = 1.4 -- after a turn that took only fruit
 local PAUSE_HONEY = 3.2 -- after a honeycomb (the bees need a moment)
+local BEES_KNOCK = 1.1 -- after a honeycomb: the swarm throws the taker off their flower
+local BEES_OUT = 2.1 -- ... and the round shows them out ("You're out!", back to the lobby)
 local TRUNK_BEHIND = 14.5 -- the oak's trunk is this far behind its vine branch tip (TRUNK_Z in the meshgen)
 local FOREST_TINT = Color3.fromRGB(58, 140, 104) -- cools the forest so the lime-and-pink oak stands out
 -- The oak's pieces people can bump into; the canopy, honey, lanterns and swing are only looks.
@@ -50,6 +66,7 @@ type Turn = {
 	T0: number,
 	Deadline: number,
 	First: number,
+	Flip: number,
 	Done: boolean,
 }
 
@@ -119,14 +136,9 @@ local function growVine(count: number, players: number): string
 	return table.concat(items)
 end
 
--- The block's face at server time `t` (it flips every FLIP seconds from T0).
-function HoneyTrap.FaceAt(turn: { T0: number, First: number }, t: number): number
-	if t <= turn.T0 then
-		return turn.First
-	end
-	local flips = math.floor((t - turn.T0) / FLIP)
-	return ((turn.First - 1 + flips) % 2) + 1
-end
+-- The block's face at server time `t` (it flips every FLIP seconds from T0 and stops at the
+-- deadline; Logic/HoneyBlock, the rule the client draws it with).
+HoneyTrap.FaceAt = HoneyBlock.FaceAt
 
 function HoneyTrap:Prepare()
 	local ctx = self.context
@@ -304,7 +316,7 @@ end
 function HoneyTrap:_startTurn(after: Player?)
 	local ctx = self.context
 	local player = self:_nextPlayer(after)
-	if not player or not ctx:IsRunning() then
+	if not player or not ctx:IsRunning() or ctx:TimeIsUp() then
 		return
 	end
 	self.turnId += 1
@@ -315,6 +327,7 @@ function HoneyTrap:_startTurn(after: Player?)
 		T0 = now + 0.6,
 		Deadline = now + 0.6 + TURN_TIME,
 		First = rng:NextInteger(1, 2),
+		Flip = FLIP,
 		Done = false,
 	}
 	self.current = turn
@@ -332,22 +345,19 @@ function HoneyTrap:_startTurn(after: Player?)
 	ctx:SetStatus(`{player.DisplayName}'s turn  •  Players left: {ctx:AliveCount()}`)
 end
 
--- Which face a hit gets: the one the player says they saw if it really showed during the last
--- moment (allowing for their ping), otherwise the face showing when the hit was sent.
-function HoneyTrap:_judgeFace(player: Player, turn: Turn, claimed: any, now: number): number
+-- A player's round trip in seconds (a bot's is 0), for judging what their screen showed.
+local function lagOf(player: Player): number
 	local ok, ping = pcall(function()
 		return (player :: any):GetNetworkPing()
 	end)
-	local lag = if ok and type(ping) == "number" then math.clamp(ping, 0, 0.4) else 0.15
-	if claimed == 1 or claimed == 2 then
-		local from = now - lag - 0.25
-		for step = 0, 4 do
-			if HoneyTrap.FaceAt(turn, from + (now - from) * step / 4) == claimed then
-				return claimed
-			end
-		end
-	end
-	return HoneyTrap.FaceAt(turn, now - lag / 2)
+	return if ok and type(ping) == "number" then math.clamp(ping, 0, 0.4) else 0.15
+end
+
+-- Which face a hit gets: the one the player says they saw if it really showed during the last
+-- moment (allowing for their ping), otherwise the face showing when the hit was sent. Never a face
+-- from after the deadline (Logic/HoneyBlock.Judge).
+function HoneyTrap:_judgeFace(player: Player, turn: Turn, claimed: any, now: number): number
+	return HoneyBlock.Judge(turn, claimed, now, lagOf(player))
 end
 
 function HoneyTrap:_resolve(turn: Turn, face: number)
@@ -392,17 +402,17 @@ function HoneyTrap:_resolve(turn: Turn, face: number)
 
 	if honey then
 		ctx:SetStatus(`🐝 The bees are after {player.DisplayName}!`)
-		-- The comb lands in their basket, then the swarm chases them off.
-		ctx:Delay(1.1, function()
+		-- Out from this moment: the results, the turns and the end of the round count it even if time
+		-- runs out, or the last other player leaves, while the bees are still busy. The comb lands in
+		-- their basket and the swarm chases them off first; the round shows them out after that.
+		ctx:Eliminate(player, "bees", BEES_OUT)
+		ctx:Delay(BEES_KNOCK, function()
 			local _, _, root = ctx:GetCharacter(player)
 			if root then
 				local away = Vector3.new(root.Position.X - ctx.Origin.X, 0, root.Position.Z - ctx.Origin.Z)
 				away = if away.Magnitude > 0.1 then away.Unit else Vector3.new(0, 0, 1)
 				ctx:Knockback(player, away * 45 + Vector3.new(0, 50, 0), 1.2) -- bots are thrown too
 			end
-			ctx:Delay(1.0, function()
-				ctx:Eliminate(player, "bees")
-			end)
 		end)
 	end
 	ctx:Delay(if honey then PAUSE_HONEY else PAUSE_FRUIT, function()
@@ -420,7 +430,9 @@ function HoneyTrap:Start()
 		ctx:SetWalkSpeed(player, 0)
 	end
 
-	ctx:OnAction("Hit", function(player, claimed)
+	-- `claimed` is the face the player's screen showed when they pressed, `sentAt` when that was (their
+	-- clock, synced to the server's); bots send the face only.
+	ctx:OnAction("Hit", function(player, claimed, sentAt)
 		local turn = self.current
 		if not turn or turn.Done or turn.Player ~= player then
 			return
@@ -429,25 +441,41 @@ function HoneyTrap:Start()
 		if now < turn.T0 - 0.1 then
 			return -- the block isn't up yet
 		end
-		self:_resolve(turn, self:_judgeFace(player, turn, claimed, now))
+		-- Past the buzzer (the round's end waits a moment for this), only a hit pressed before it, on
+		-- a face shown before it.
+		local timeUp = ctx.TimeUpAt
+		if not ctx:InTime(Buzzer.PressTime(sentAt, now, lagOf(player))) then
+			return
+		end
+		local judged = turn
+		if timeUp and timeUp < turn.Deadline then
+			judged = table.clone(turn)
+			judged.Deadline = timeUp -- for this hit the block stopped at the buzzer
+		end
+		self:_resolve(turn, self:_judgeFace(player, judged, claimed, now))
 	end, { Interval = 0.25 })
 
 	ctx:Delay(1, function()
 		self:_startTurn(nil)
 	end)
 
-	-- The block stops by itself when time runs out, and a turn passes on if its player is gone.
+	-- The block stops by itself when time runs out (after a moment for a hit still on its way, which
+	-- is judged on the faces up to the deadline), and a turn passes on if its player is gone. While a
+	-- turn is on, the round's end waits that same moment at the buzzer (RoundContext.HoldEnd).
 	ctx:Loop(function(): number?
 		local turn = self.current
 		if turn and not turn.Done then
 			if not turn.Player.Parent or not ctx:IsAlive(turn.Player) then
 				turn.Done = true
 				self:_startTurn(turn.Player)
-			elseif ctx:Now() >= turn.Deadline then
+			elseif ctx:Now() >= turn.Deadline + HoneyBlock.LATE_HIT and ctx:InTime(turn.Deadline) then
 				self:_resolve(turn, HoneyTrap.FaceAt(turn, turn.Deadline))
 			end
+			if not ctx:TimeIsUp() then
+				ctx:HoldEnd(HoneyBlock.LATE_HIT + 0.05)
+			end
 		end
-		return 0.1
+		return 0.05
 	end)
 end
 

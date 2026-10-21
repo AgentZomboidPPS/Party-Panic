@@ -230,6 +230,19 @@ local list: { GameDefinition } = {
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
+		Id = "Tanks",
+		Name = "Tanks!",
+		Category = "Versus",
+		Icon = "💣",
+		Color = Color3.fromRGB(110, 170, 90),
+		Objective = "Drive your toy tank and blast the others! One hit and you're out. Last tank rolling wins!",
+		Controls = "Drive with WASD or the stick, aim with the mouse (phones: drag right side), FIRE to shoot (bounces once), E: mine.",
+		Duration = 75,
+		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
 		Id = "PrimeCut",
 		Name = "Prime Cut",
 		Category = "Team",

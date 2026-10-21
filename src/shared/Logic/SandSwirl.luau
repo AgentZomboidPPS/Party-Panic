@@ -42,8 +42,12 @@ SandSwirl.DRAIN = { 1.3, 2.2 }
 SandSwirl.FLIP_TIME = 0.5 -- the spin passes through zero over this long when it reverses
 SandSwirl.SURGE = 7 -- extra spin of a SWIRL at its peak
 SandSwirl.SURGE_CAP = 1.5 -- overlapping SWIRLs never spin faster than this many surges
-SandSwirl.PULL = 5 -- extra drain of a PULL at its peak
-SandSwirl.PULL_CAP = 8 -- overlapping PULLs never drain faster than this extra
+-- (owner: "lets make it stronger and add another king": a PULL drains 8, was 5, for 2.5 s at its
+-- peak, was 1.7. Even on the lip in two PULLs at once, 2.2 + 10 + LIP_PULL = 15.7, a Diver can
+-- still just walk out, faster with a hop.)
+SandSwirl.PULL = 8 -- extra drain of a PULL at its peak
+SandSwirl.PULL_HOLD = 2.5 -- how long a PULL drains at its peak (it takes hold over 0.25 s, lets go over 0.5 s)
+SandSwirl.PULL_CAP = 10 -- overlapping PULLs never drain faster than this extra
 
 export type Segment = { T: number, S: number, V: number }
 
@@ -89,18 +93,25 @@ function SandSwirl.SurgeEnvelope(tau: number): number
 	return 0
 end
 
--- Envelope of a PULL: a strong suck that holds, then lets go.
+-- Envelope of a PULL: a strong suck that holds, then lets go (over PullTime seconds in all).
+local PULL_RISE, PULL_FALL = 0.25, 0.5
 function SandSwirl.PullEnvelope(tau: number): number
+	local hold = PULL_RISE + SandSwirl.PULL_HOLD
 	if tau <= 0 then
 		return 0
-	elseif tau < 0.25 then
-		return tau / 0.25
-	elseif tau < 1.95 then
+	elseif tau < PULL_RISE then
+		return tau / PULL_RISE
+	elseif tau < hold then
 		return 1
-	elseif tau < 2.45 then
-		return 1 - (tau - 1.95) / 0.5
+	elseif tau < hold + PULL_FALL then
+		return 1 - (tau - hold) / PULL_FALL
 	end
 	return 0
+end
+
+-- How long a PULL drains, from its start to the moment it has let go.
+function SandSwirl.PullTime(): number
+	return PULL_RISE + SandSwirl.PULL_HOLD + PULL_FALL
 end
 
 -- Spin direction at `t` (+1 or -1, passing smoothly through 0 while it reverses).
@@ -283,6 +294,18 @@ function SandSwirl.Detour(px: number, pz: number, ax: number, az: number, keepOu
 	local ux, uz = math.cos(angle), math.sin(angle)
 	local step = SandSwirl.DETOUR_STEP * side
 	return ux * ring - uz * step, uz * ring + ux * step
+end
+
+-- How many of `count` players are Sand Kings. It was one per four players; the owner asked for
+-- more ("lets make it stronger and add another king"), so it's one more than that: 3 of 8 players,
+-- 4 of 12. Never all Kings: one of two, and from three players up always fewer Kings than Divers
+-- (1 of 4, 2 of 5, 3 of 7). Alone, nobody is: the sand plays King.
+function SandSwirl.KingCount(count: number): number
+	if count < 2 then
+		return 0
+	end
+	local before = math.floor(count / 4 + 0.5)
+	return math.clamp(math.min(before + 1, math.floor((count - 1) / 2)), 1, 4)
 end
 
 -- Polar <-> flat offsets from the funnel's center (x, z).

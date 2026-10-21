@@ -13,6 +13,12 @@ With --client, Bot1 runs the client half like a real player in the round. --clie
 spectator instead (sitting the round out: on the server with PP_SitOut, not in the round), and
 --client-out-at T knocks it out T seconds into the round (ctx:Eliminate): with --ui-at, what someone
 watching sees (no mode buttons for them, for one).
+
+During the rules card: --leave-at T makes every stand-in leave T seconds in, and --spawn-fails gives
+them no character, so with --bots only bots are left: the round is called off (summary: calledOff).
+--reset-at T kills the last stand-in's character T seconds in (a reset); the summary's "reset" says
+where it is at GO and after. --bot FILE swaps the stand-ins' script (tools/checks/bots/<Id>.luau) for
+a scenario of your own, e.g. tools/checks/scenarios/*.luau.
 """
 
 import argparse
@@ -90,7 +96,7 @@ def rewrite(module: str, text: str, is_init: bool) -> str:
 def other_mode(module: str, game: str) -> bool:
     """Another mini-game's rules, brain or client half (a round only needs its own)."""
     modes = {path.stem for path in (SRC / "server" / "MiniGames").glob("*.luau")} - {"init"}
-    for prefix in ("Server/MiniGames/", "Server/MiniGames/Bots/", "Client/MiniGames/"):
+    for prefix in ("Server/MiniGames/", "Server/MiniGames/Bots/", "Client/MiniGames/", "Server/World/Props/"):
         name = module[len(prefix):] if module.startswith(prefix) else None
         if name in modes and name != game:
             return True
@@ -121,6 +127,10 @@ def main():
                         "names or groups; default: touch with --touch, else pc)")
     parser.add_argument("--client-sits-out", action="store_true", help="with --client: Bot1 sits this round out and watches")
     parser.add_argument("--client-out-at", type=float, default=None, help="with --client: knock Bot1 out this many seconds in")
+    parser.add_argument("--leave-at", type=float, default=None, help="every stand-in leaves this many seconds into the rules card")
+    parser.add_argument("--spawn-fails", action="store_true", help="the stand-ins have no character, so they can't be placed")
+    parser.add_argument("--reset-at", type=float, default=None, help="the last stand-in's character dies this many seconds into the rules card")
+    parser.add_argument("--bot", help="stand-in script to use instead of tools/checks/bots/<Id>.luau")
     args = parser.parse_args()
 
     header = "__touchMode = true\n" if args.touch else "__touchMode = false\n"
@@ -153,7 +163,7 @@ def main():
         line += 1
     if args.map:
         Path(args.map).write_text(json.dumps(line_map))
-    bot_file = BOTS / f"{args.game}.luau"
+    bot_file = Path(args.bot) if args.bot else BOTS / f"{args.game}.luau"
     bot = bot_file.read_text() if bot_file.exists() else "return function() end"
     out.append("local __bot = (function()\n" + bot + "\nend)()")
     client = "true" if args.client else "false"
@@ -165,9 +175,15 @@ def main():
     elif args.game == "LOBBY":
         out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8}, 10)")
     else:
-        watch = "{ sitOut = %s, outAt = %s }" % (
+        def number(value):
+            return "nil" if value is None else str(value)
+
+        watch = "{ sitOut = %s, outAt = %s, leaveAt = %s, spawnFails = %s, resetAt = %s }" % (
             "true" if args.client_sits_out else "false",
-            "nil" if args.client_out_at is None else str(args.client_out_at),
+            number(args.client_out_at),
+            number(args.leave_at),
+            "true" if args.spawn_fails else "false",
+            number(args.reset_at),
         )
         out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots}, {watch})')
     sys.stdout.write("\n".join(out))
