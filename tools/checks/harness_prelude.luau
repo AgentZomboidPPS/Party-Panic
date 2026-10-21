@@ -254,7 +254,7 @@ local function __newPlayer(index)
 		return className == "Player" or className == "Instance"
 	end
 	function player.GetNetworkPing()
-		return 0.06
+		return player.__ping or 0.06 -- a stand-in bot script can give one a slower connection
 	end
 	function player.Kick() end
 	function player.LoadCharacterAsync(self)
@@ -509,6 +509,77 @@ local function __grantRewards(definition, results, before)
 	return report
 end
 
+-- What happens to the stand-ins during the rules card (round_harness.py --leave-at / --reset-at):
+-- every one of them leaves `leaveAt` seconds in (only real bots stay), or the last one's character
+-- dies `resetAt` seconds in, like a reset from the Roblox menu; the report says where it is at GO
+-- and after (it should be back on its spot and still in).
+function __prepEvents(ctx, roundPlayers, watch, summary, leave, prepStart, prepDeadline)
+	if watch.leaveAt then
+		task.delay(math.max(0, prepStart + watch.leaveAt - os.clock()), function()
+			for _, player in roundPlayers do
+				leave(player)
+			end
+			summary.peopleLeftAt = watch.leaveAt
+		end)
+	end
+	local player = roundPlayers[#roundPlayers]
+	if not watch.resetAt or not player then
+		return
+	end
+	task.delay(math.max(0, prepStart + watch.resetAt - os.clock()), function()
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not humanoid or not root then
+			summary.reset = "no character to reset"
+			return
+		end
+		local spot = root.Position
+		local report = { who = player.Name, at = watch.resetAt, died = false, checks = {} }
+		summary.reset = report
+		humanoid.Died:Connect(function()
+			report.died = report.died or "fired"
+		end)
+		humanoid.Health = 0
+		-- Without physics a humanoid may never notice: then ask it to die the other way.
+		task.wait(0.2)
+		if not report.died then
+			pcall(humanoid.ChangeState, humanoid, Enum.HumanoidStateType.Dead)
+			task.wait(0.2)
+			report.died = if report.died then "fired after ChangeState(Dead)" else "never fired"
+		end
+		-- Roblox gives a dead player a new character Players.RespawnTime seconds later, unless they
+		-- got one before that; stand-ins aren't real players, so the harness does it.
+		report.respawnTime = RealPlayers.RespawnTime
+		task.delay(math.max(0, RealPlayers.RespawnTime - 0.4), function()
+			if player.Parent and player.Character == character then
+				report.autoRespawn = __round(os.clock() - prepStart)
+				player:LoadCharacterAsync()
+			end
+		end)
+		local function check(label)
+			local _, humanoidNow, rootNow = ctx:GetCharacter(player)
+			table.insert(report.checks, {
+				label = label,
+				alive = ctx:IsAlive(player),
+				newCharacter = player.Character ~= character,
+				fromSpot = if rootNow then __round((rootNow.Position - spot).Magnitude) else "no character",
+				walkSpeed = if humanoidNow then humanoidNow.WalkSpeed else nil,
+			})
+		end
+		task.wait(math.max(0, prepDeadline - 0.3 - os.clock()))
+		check("just before GO")
+		while not ctx.Started and ctx.Active do
+			task.wait(0.05)
+		end
+		local go = os.clock()
+		for _, after in { 0.5, 3 } do
+			task.wait(math.max(0, go + after - os.clock()))
+			check(`{after}s after GO`)
+		end
+	end)
+end
+
 -- `watch` (round_harness.py --client-sits-out / --client-out-at): the stand-in client sits the round
 -- out ({ sitOut = true }), or is knocked out `outAt` seconds in.
 function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, uiAt, botCount, watch)
@@ -610,19 +681,56 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	for _, bot in bots do
 		table.insert(participants, bot)
 	end
+	if watch and watch.spawnFails then
+		-- No character, and none to be had: SpawnPlayer gives up on every stand-in.
+		for _, player in roundPlayers do
+			if player.Character then
+				player.Character:Destroy()
+			end
+			player.Character = nil
+			player.LoadCharacterAsync = function() end
+		end
+		summary.spawnFails = #roundPlayers
+	end
 	local ctx = RoundContext.new(1, definition, participants)
 	local miniGame = module.new(ctx)
 	local prepTime = Config.Session.RulesTime + Config.Session.CountdownTime
 	local prepDeadline = os.clock() + prepTime
 	setPhase("Preparing", prepTime)
 
+	local function leave(player)
+		local index = table.find(__fakePlayers, player)
+		if index then
+			table.remove(__fakePlayers, index)
+		end
+		player.Parent = nil
+		__playerRemoving:Fire(player)
+		-- The signal above already tells the round (RoundContext._onLeave ignores a second call);
+		-- calling it directly too keeps leaves working if the stand-in signal ever changes.
+		if type(player) == "table" then
+			ctx:_onLeave(player)
+		end
+	end
+
 	local t0 = os.clock()
 	local okPrepare, prepareErr = pcall(miniGame.Prepare, miniGame)
 	summary.prepare = if okPrepare then "ok" else tostring(prepareErr)
 	summary.prepareSeconds = __round(os.clock() - t0)
 	summary.arenaParts = #ctx.Arena:GetDescendants()
-	while os.clock() < prepDeadline do
-		task.wait(0.1)
+	if okPrepare and watch then
+		__prepEvents(ctx, roundPlayers, watch, summary, leave, t0, prepDeadline)
+	end
+	-- The rules card, as RoundManager waits it out: called off once no person is left in the round.
+	local starting = okPrepare
+	if okPrepare and ctx.WaitForStart then
+		starting = ctx:WaitForStart(prepDeadline)
+	elseif okPrepare then -- an older RoundContext (a run of a branch from before it)
+		while os.clock() < prepDeadline do
+			task.wait(0.1)
+		end
+	end
+	if okPrepare and not starting then
+		summary.calledOff = __round(os.clock() - t0)
 	end
 
 	local env = {
@@ -664,22 +772,10 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	function env.Alive(player)
 		return ctx:IsAlive(player)
 	end
-	function env.Leave(player)
-		local index = table.find(__fakePlayers, player)
-		if index then
-			table.remove(__fakePlayers, index)
-		end
-		player.Parent = nil
-		__playerRemoving:Fire(player)
-		-- The signal above already tells the round (RoundContext._onLeave ignores a second call);
-		-- calling it directly too keeps leaves working if the stand-in signal ever changes.
-		if type(player) == "table" then
-			ctx:_onLeave(player)
-		end
-	end
+	env.Leave = leave
 
-	local tick = if okPrepare then botFactory(env) else nil
-	if okPrepare then
+	local tick = if starting then botFactory(env) else nil
+	if starting then
 		ctx:Begin()
 		setPhase("InRound", definition.Duration)
 		local okStart, startErr = pcall(miniGame.Start, miniGame)
@@ -700,8 +796,15 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		while not ctx.EndReason do
 			local now = os.clock()
 			if now - begin >= limit then
-				ctx:End(if now - begin >= definition.Duration then "TimeUp" else "HarnessStop")
-				break
+				local reason = if now - begin >= definition.Duration then "TimeUp" else "HarnessStop"
+				if ctx.TimeRanOut then
+					ctx:TimeRanOut(reason) -- as RoundManager: a moment for anything in flight (HoldEnd)
+				else
+					ctx:End(reason)
+				end
+				if ctx.EndReason then
+					break
+				end
 			end
 			if watch and watch.outAt and clientMode and not watcher and not summary.clientOutAt then
 				if now - begin >= watch.outAt then
@@ -748,6 +851,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 			task.wait(0.05)
 		end
 		summary.endReason = ctx.EndReason
+		if ctx.TimeUpAt then
+			summary.endHeld = __round(ctx:Now() - ctx.TimeUpAt) -- seconds the end waited at time-up
+		end
 		summary.roundSeconds = __round(os.clock() - begin)
 		local okStop, stopErr = pcall(miniGame.Stop, miniGame, ctx.EndReason)
 		summary.stop = if okStop then "ok" else tostring(stopErr)
