@@ -1,8 +1,67 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-21 17:40 UTC (1:40 PM Eastern)** by Session A, which is wrapping up (owner: "can you wrap this up
-and give me a handoff document?"). **You now own everything.** Nothing else is running: Session A's helper agents
-were stopped, and their unfinished work is saved in `docs/wip/` (section 3).
+Last updated: **2026-10-21 21:58 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+`claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
+Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
+
+## Session B in flight (21:58 UTC)
+
+- **Live version 32** (published 21:55 UTC from `claude/upbeat-galileo-gvwq66` at `6e0029b`, on the owner's "Push right
+  now"; the owner must restart servers).
+  - **What it adds over version 31:**
+    - the Fire Rope "chair" camera fix;
+    - audits of Hex Meltdown, Rake It In, Bobsled Run, Skate Escape, Pump & Pop, Arrow Ambush, Cake Factory and Crazy
+      Cutters;
+    - Bumper Ballers phone controls and Sinking Sands bots;
+    - payoffs and low coins: Rewards Road, career milestones, celebration cards, the one-time saved-coin conversion;
+    - DataService saves that survive shutdowns and never lock for a player who left mid-load;
+    - mode client start-ups cancelled with their round, and Honey Trap's hint on one line.
+  - **Full regression on that exact commit:**
+    - code checks;
+    - every mode's 12-player, bots and phone rounds: 0 errors, 0 phone-UI problems;
+    - a lobby round with 8 bots;
+    - the whole client on phone and PC: 0 errors, empty text report, ui_render 0 problems.
+  - **The whole-client harness can't run in one task any more.** Its result (3.4 MB raw) comes back from Open Cloud at
+    about 4 MiB, where it fails as "INTERNAL_ERROR Task timed out due to an internal error" after 600 s (v33's 6 MB
+    fails as `OUTPUT_SIZE_LIMIT_EXCEEDED`). For v32 it was run as two tasks, each returning half of the snapshots (by
+    sorted name), then merged for ui_render. The client-UI helper is slimming the harness output for v33.
+- **v33 candidate: local branch `integrate-v33` in `/home/user/pp-v33`, pushed to `claude/upbeat-galileo-gvwq66`.**
+  It's v32 plus:
+  - the Skee-Ball arcade;
+  - the client UI batch: the team pill shows the real teams, toasts rise above action buttons, AutoScale listeners are
+    released, results rows read whole, and the results headline names the game in capitals;
+  - new games Mecha-Marathon (games-3), Spleef (games-2), Prime Cut (games-4) and Tanks! (games-1), with portal
+    previews for the first three (Tanks! in progress);
+  - round-end fairness: same-step ties, nothing counts after the buzzer, no bots-only rounds, resets before GO put you
+    back. An independent review is running.
+  - Shark Bait safety nets (owner: "I chomped someone and now cant move"), independently reviewed and fixed: stuck
+    reports, put-backs, rescues, a fresh character if stuck again, logged to `ClientReports` (`m<UserId>`);
+  - the Sinking Sands rebalance (owner: "make it stronger and add another king"): one more King and a stronger, longer
+    PULL; bot Kings win about half of 8-player rounds;
+  - DataService per-session lock ids, reviewed safe to publish (owners must restart servers promptly after);
+  - `tools/preview/luau_task.py` retrying right after Roblox's rate window resets. Starting a task is capped at
+    5 a minute for everyone (`X-Ratelimit-Limit: 5;w=60`).
+  - the round harness leaves other modes' props out of a bundle (the 1 MiB script cap).
+- **Still to merge for v33:** the CRITICAL invisible-collision sweep (owner: "Theres invisible stuff you can jump on
+  and hang on in several games"; branch `worktree-agent-a584535e5323da1d7`: precise mesh collision, `Shapes.Custom`
+  fallback from pieces, reachable invisible walls removed), the fairness review's fixes, the client-harness size fix,
+  and the Tanks! preview. Then a full regression of every mode, the lobby and the client, and publish.
+- **New games still building in 4 cloud sessions** (each pushes `claude/games-N`, reports to Session B with
+  send_message, see [HANDOFF_GAMES.md](HANDOFF_GAMES.md)):
+  - games-1: Stamp Out, Slaparazzi, Struggle
+  - games-2: Messy Memory, Snowball Summit
+  - games-3: Parasol Plummet, Rockin' Raceway
+  - games-4: Trace Race, Eatsa Pizza, Log Jam
+- **Later (owner):**
+  - more shop items ("Yes lets add more items after everything else is finished");
+  - custom music per game (WIP in `docs/wip/music.bundle`);
+  - the owner's call on rebalancing thin categories.
+- **Toolchain in a fresh container (GitHub downloads are blocked here):** `cargo install --locked stylua@2.6.0 --features
+  luau`, `selene@0.31.0`, `rojo@7.7.1`, `lune@0.11.0` (crates.io works); luau-lsp from source: `git clone --depth 1
+  --branch 1.70.1 https://github.com/JohnnyMorganz/luau-lsp`, `git submodule update --init --depth 1`, cmake Release with
+  `-DCMAKE_CXX_FLAGS=-Wno-error=maybe-uninitialized`, target `Luau.LanguageServer.CLI`; `globalTypes.d.luau` is in that
+  repo's `scripts/`. Blender: `python3.11 -m venv` + `pip install bpy` (5.0.1). Mesh/music tools: `pip install scipy
+  scikit-image`.
 
 ## 0. Start here (the first 10 minutes)
 
@@ -194,9 +253,10 @@ owner the version number, and remind them to restart servers.
 longer, console capture in reports. 24 fair hitboxes in all 11 precision games. 25 control track in sound reports.
 26 Skate Escape start (skaters held on the line until GO). 27 sit-out switch, countdown beeps only for players in the
 round. 28 rules card (10 s, nothing drawn over it). 29 lobby obby (a goo-pool course, scenery you can't climb). 30 Hex Meltdown bots stop flying off and a small call
-banner; Honey Trap's tutorial says you play from your flower.
-Games (12, all hold 12 players): Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking Sands, Arrow
-Ambush, Pump & Pop, Rake It In, Crazy Cutters, Cake Factory, Bobsled Run.
+banner; Honey Trap's tutorial says you play from your flower. 31 Shark Bait (from the owner's other window), mode
+buttons only for players who can use them, Skate Escape race bar readable side by side.
+Games (13, all hold 12 players): Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking Sands, Arrow
+Ambush, Pump & Pop, Rake It In, Crazy Cutters, Cake Factory, Bobsled Run, Shark Bait.
 
 ## 9. The owner's requests today (newest last)
 

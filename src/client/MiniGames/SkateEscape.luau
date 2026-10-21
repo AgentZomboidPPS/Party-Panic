@@ -13,12 +13,26 @@
 -- riding height) and holds them there until GO, so taking over my skater never moves it; at GO the
 -- server hands it back to this device before the race's schedule arrives, and the bridge stays still
 -- until the collapse actually begins.
+--
+-- The race bar on phones (owner: "Wtf is this mobile Ui lol"): riders side by side used to pile their
+-- dots on top of each other, so nobody could tell who was where. Dots now sit on the bar's line, and
+-- where riders are close they step above and below it and spread just enough for every lane number to
+-- show (Shared/Logic/RaceBar), easing into place so they don't jump. Yours is bigger, ringed in white
+-- with a glow, and always drawn on top. The bar is a little taller for the two rows, and what sits under
+-- it moves down with it.
+--
+-- Audit pass (owner: "it just has to work"): someone who dropped out of the race and rejoined, or whose
+-- spawn failed, is still in the race's lane list (it's made at the start), so this screen treated them
+-- as racing from the lobby: the bridge warning flashed and the hazard alarm sounded for the rest of the
+-- round and the results, and every jump in the lobby went boing. Racing now also needs the server's live
+-- list of racers to have me.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
+local RaceBar = require(ReplicatedStorage.Shared.Logic.RaceBar)
 local SkateCourse = require(ReplicatedStorage.Shared.Logic.SkateCourse)
 
 local State = require(script.Parent.Parent.State)
@@ -201,11 +215,17 @@ function SkateEscape.Start(api)
 	-- Phones draw the HUD at 75%: bigger dots, numbers and icons there keep them readable (11 pt+).
 	local touch = api:IsTouch()
 	local barWidth = 560
+	local trackLength = barWidth - 64
+	local DOT = if touch then 30 else 18 -- a rider's dot (yours is MY_DOT)
+	local MY_DOT = if touch then 36 else 26
+	local LIFT = if touch then 15 else 9 -- how far crowded dots step above or below the line
+	local barHeight = if touch then 60 else 36 -- room for a row above the line and one below
+	local grow = barHeight - (if touch then 40 else 30) -- (the bar was one row: what's under it moves down)
 	local bar = UIKit.Panel({
 		Name = "RaceBar",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, hudY + 4),
-		Size = UDim2.fromOffset(barWidth, if touch then 40 else 30),
+		Size = UDim2.fromOffset(barWidth, barHeight),
 		CornerRadius = 15,
 		Parent = hud,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
@@ -244,26 +264,41 @@ function SkateEscape.Start(api)
 		Parent = track,
 	})
 	local markers: { [string]: Frame } = {}
+	local myGlow: Frame? = nil -- the soft white glow behind my dot
 	local function marker(key: string, lane: number): Frame
 		local existing = markers[key]
 		if existing then
 			return existing
 		end
 		local mine = key == myKey
-		local size = if touch then (if mine then 36 else 30) else (if mine then 26 else 18)
+		local size = if mine then MY_DOT else DOT
 		local dot = UIKit.new("Frame", {
 			Name = "Racer" .. key,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0, 0.5),
 			Size = UDim2.fromOffset(size, size),
 			BackgroundColor3 = SkateCourse.LaneColors[lane] or Theme.Colors.Text,
-			ZIndex = if mine then 4 else 3,
+			ZIndex = if mine then 5 else 3,
 			Parent = track,
 			Children = {
 				UIKit.Round(),
-				UIKit.Stroke(if mine then Theme.Colors.Text else Theme.Colors.PanelDark, if mine then 3 else 2),
+				if mine
+					then UIKit.Stroke(Theme.Colors.Text, if touch then 4 else 3, 0)
+					else UIKit.Stroke(Theme.Colors.PanelDark, 2, 0.3),
 			},
 		})
+		if mine then
+			myGlow = UIKit.new("Frame", {
+				Name = "MyGlow",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Size = UDim2.fromOffset(size + 10, size + 10),
+				BackgroundColor3 = Theme.Colors.Text,
+				BackgroundTransparency = 0.55,
+				ZIndex = 2, -- under the other dots: it never dims their numbers
+				Parent = track,
+				Children = { UIKit.Round() },
+			})
+		end
 		UIKit.Label({
 			Text = tostring(lane),
 			TextSize = if touch then (if mine then 26 else 24) else (if mine then 16 else 12),
@@ -283,7 +318,7 @@ function SkateEscape.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 34,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, hudY + if touch then 44 else 38), -- (under the taller phone bar)
+		Position = UDim2.new(0.5, 0, 0, hudY + grow + if touch then 44 else 38), -- (under the taller phone bar)
 		Size = UDim2.fromOffset(300, 40),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.15) },
@@ -294,7 +329,7 @@ function SkateEscape.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 40,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, hudY + 84),
+		Position = UDim2.new(0.5, 0, 0, hudY + grow + 84),
 		Size = UDim2.fromOffset(660, 48), -- the bridge warning is one long line
 		TextWrapped = false,
 		Visible = false,
@@ -341,7 +376,9 @@ function SkateEscape.Start(api)
 	-- Controls --------------------------------------------------------------------------------------
 
 	local function racing(): boolean
-		return myLane ~= nil and collapse ~= nil and not me.Done and outAt == nil
+		-- (The lanes are the race's start list: they still name someone who left and came back, or
+		-- whose spawn failed. Only the server's live list says I'm still in the race.)
+		return myLane ~= nil and racers[myKey] ~= nil and collapse ~= nil and not me.Done and outAt == nil
 	end
 
 	local function doPush()
@@ -967,6 +1004,9 @@ function SkateEscape.Start(api)
 	local pushEnabled = nil :: boolean?
 	local hintUntil = 0
 	local lastPlace = ""
+	local dotTiers: { [string]: number } = {} -- each dot's side of the bar's line last frame
+	local dotRanks: { [string]: number } = {} -- and its place in the bar's order
+	local dotShifts: { [string]: { X: number, Y: number } } = {} -- how far each dot is drawn from its rider
 
 	api:RenderStep(function(dt)
 		if not race then
@@ -997,7 +1037,7 @@ function SkateEscape.Start(api)
 							if touch
 								then "Mash PUSH • JUMP gaps • ride ⚡" -- (short: clear of the move stick)
 								else "Mash PUSH • JUMP crates & gaps • ride ⚡ pads",
-							hudY + 140
+							hudY + grow + 140
 						)
 					end
 					local event = SkateCourse.Step(me, obstacles, now, dt)
@@ -1122,21 +1162,55 @@ function SkateEscape.Start(api)
 		end
 
 		local order = {}
+		local dots: { RaceBar.Dot } = {}
 		for key, entry in racers do
 			local d = if key == myKey and myLane
 				then me.D
 				else (entry.D or 0) + (entry.V or 0) * math.clamp(now - (entry.T or now), 0, 0.5)
 			local dot = marker(key, entry.L or 1)
-			dot.Position = UDim2.fromScale(math.clamp(d / length, 0, 1), 0.5)
+			dot.Visible = true
 			dot.BackgroundTransparency = if entry.O then 0.7 else 0
+			table.insert(dots, {
+				Key = key,
+				X = math.clamp(d / length, 0, 1) * trackLength,
+				Size = if key == myKey then MY_DOT else DOT,
+				Tier = dotTiers[key],
+				Rank = dotRanks[key],
+			})
 			table.insert(order, {
 				Key = key,
 				Score = if entry.F then 1e6 - entry.F elseif entry.O then -1e6 + d else d,
 			})
 		end
+		-- Riders side by side step above and below the line (Logic/RaceBar); dots ease to their spots.
+		local spots = RaceBar.Layout(dots, { Width = trackLength, Lift = LIFT })
+		local ease = 1 - math.exp(-dt * 30) -- (about a tenth of a second: a quick swap when riders pass)
+		for _, item in dots do
+			local spot = spots[item.Key]
+			dotTiers[item.Key] = spot.Tier
+			dotRanks[item.Key] = spot.Rank
+			local shift = dotShifts[item.Key]
+			if shift then
+				shift.X += (spot.X - item.X - shift.X) * ease
+				shift.Y += (spot.Y - shift.Y) * ease
+			else
+				shift = { X = spot.X - item.X, Y = spot.Y }
+				dotShifts[item.Key] = shift
+			end
+			local position = UDim2.new(0, item.X + shift.X, 0.5, shift.Y)
+			markers[item.Key].Position = position
+			if item.Key == myKey and myGlow then
+				myGlow.Position = position
+				myGlow.Visible = true
+				myGlow.BackgroundTransparency = if racers[myKey].O then 0.85 else 0.55
+			end
+		end
 		for key, dot in markers do
 			if not racers[key] then
 				dot.Visible = false
+				if key == myKey and myGlow then
+					myGlow.Visible = false
+				end
 			end
 		end
 		table.sort(order, function(a, b)

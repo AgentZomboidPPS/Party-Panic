@@ -53,6 +53,8 @@ local function setupDailyMachine()
 end
 
 -- One hidden token per day at a rotating spot. Found tokens hide per player on the client.
+-- At midnight UTC it moves to the new day's spot (a server can run for days), and its Day
+-- attribute tells clients which day it is for.
 local function setupSecretToken()
 	local spots = refs.TokenSpots
 	local today = DailyLogic.DayNumber(os.time())
@@ -74,11 +76,23 @@ local function setupSecretToken()
 	sparkles.SparkleColor = Color3.fromRGB(255, 240, 150)
 	sparkles.Parent = token
 
+	-- A new UTC day: the new spot. True when it just moved.
+	local function rollOver(): boolean
+		local now = DailyLogic.DayNumber(os.time())
+		if now == today then
+			return false
+		end
+		today = now
+		spot = spots[(today % #spots) + 1]
+		token:SetAttribute("Day", today)
+		return true
+	end
+
 	local debounce: { [Player]: number } = {}
 	token.Touched:Connect(function(hit)
 		local player = Players:GetPlayerFromCharacter(hit.Parent)
-		if not player then
-			return
+		if not player or rollOver() then
+			return -- (a touch at the old spot as the day turns doesn't count for the new day)
 		end
 		local now = os.clock()
 		if now - (debounce[player] or 0) < 2 then
@@ -93,10 +107,17 @@ local function setupSecretToken()
 		debounce[player] = nil
 	end)
 
-	-- Gentle spin (server-side CFrame on one anchored part is cheap).
+	-- Gentle spin (server-side CFrame on one anchored part is cheap), and a look at the date now
+	-- and then.
 	local angle = 0
+	local sinceCheck = 0
 	RunService.Heartbeat:Connect(function(dt)
 		angle += dt * 1.5
+		sinceCheck += dt
+		if sinceCheck >= 5 then
+			sinceCheck = 0
+			rollOver()
+		end
 		token.CFrame = CFrame.new(spot + Vector3.new(0, math.sin(angle * 2) * 0.3, 0)) * CFrame.Angles(0, angle, 0)
 	end)
 end

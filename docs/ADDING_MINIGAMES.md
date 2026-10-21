@@ -64,9 +64,10 @@ Optional overrides: `:Stop(reason)`, `:GetResults()`, `:Cleanup()`.
 | --- | --- |
 | Place players | `ctx:SpawnAll(points, true)` (frozen until GO), `ArenaKit.SpawnRing/SpawnGrid` |
 | Who's playing | `ctx:GetPlayers()`, `ctx:GetAlivePlayers()`, `ctx:GetCharacter(player)` |
-| Knock someone out | `ctx:Eliminate(player, "reason")` (also automatic below `ctx.KillY`) |
+| Knock someone out | `ctx:Eliminate(player, "reason")` (also automatic below `ctx.KillY`); everyone put out in the same server step ties. `ctx:Eliminate(player, "bees", 2.1)`: out now, the "You're out!" after the mode's own show |
 | Falling behavior | `ctx.RespawnMode = "Eliminate"` or `"Respawn"` + `ctx.Hooks.Respawn = function(player) return cframe end` |
 | End early | `ctx.EndWhenOneLeft = true`, or `ctx:End("reason")` |
+| At the buzzer | `ctx:HoldEnd(seconds)` for something already on its way to be judged (the end waits, 0.5 s at most); then `ctx:TimeIsUp()` is true: start nothing new, and count only what happened by the buzzer, `ctx:InTime(serverTime)` (a press by when it was made: the client sends `api:Now()` with it, the server takes `Logic/Buzzer.PressTime`) |
 | Score | `ctx:AddScore(player, n)`, `ctx:SetScoreText(player, "3 laps")` |
 | Teams | `ctx:AssignTeams({ "Red", "Blue" })`, `ctx:SetTeam(player, "Red")`, `ctx:AddTeamScore("Red", n)`, `Teams.CountFor(n, perTeam)` |
 | Controls from clients | `ctx:OnAction("Pump", function(player, ...) end, { Interval = 0.1 })` - validate everything |
@@ -111,8 +112,9 @@ Also: `api:Shared/SharedJSON/OnShared`, `api:Mine/OnMine` (per-player state), `a
 from a UserId the server shared.
 
 **HUD rules:** everything goes in `api:TopHud()` at `y >= api:HudY()` so it never covers the
-round banner, status line or team scores; action buttons come from `api:Button`. Keep text short
-and big, and pair every color with a shape or icon. Check the layout on phones (below).
+round banner, status line or team scores; action buttons come from `api:Button`, which only shows them
+to players still in the round (`api:CanAct()`: not to anyone sitting out, knocked out or watching).
+Keep text short and big, and pair every color with a shape or icon. Check the layout on phones (below).
 
 ## 5. Props and meshes
 
@@ -181,6 +183,7 @@ physics, so bots' walking and jumping are simulated there).
 python3 tools/preview/render.py arena.json out --views player,overview --cameras cams.json   # the arena
 python3 tools/preview/zfight.py arena.json                                                   # flicker
 python3 tools/checks/round_harness.py MyGame --client --touch --ui-at 3,10 ... > ui.luau      # phone HUD
+#   (add --client-sits-out or --client-out-at 5 to see the screen of someone watching the round)
 python3 tools/checks/ui_render.py ui.json out --sizes all                                    # draw + check
 ```
 

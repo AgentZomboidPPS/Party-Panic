@@ -32,6 +32,12 @@
 --
 -- Bots press LEAN through ctx:BotAction with skill-based reaction times (Bots/BobsledRun.luau): the
 -- same judging as everyone, so the wall catches a bot crew exactly like a player crew.
+--
+-- Audit pass (owner: "it just has to work"): every rider's good leans show on the standings during
+-- the run ("3/4 leans", not a column of zeros), the results lines are short enough to read whole
+-- (they were cut off), and the server takes presses as fast as the client lets a rider make them,
+-- so a quick change of mind that your screen shows is the lean that counts (a 0.08 s limit by
+-- arrival dropped it when the network bunched two presses together).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
@@ -51,6 +57,11 @@ BobsledRun.Shapes = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
 local SEAT_Y = 1.9 -- a seated rider's root above the sled's pivot (runner bottoms)
 local PRE_UNITS = 3 -- straights behind the start line (the start house)
 local FINISH_CLOCK = 8 -- seconds the finish stays open after the first sled is home
+-- Presses a rider can make in a row: the client spaces them at least 0.09 s apart (its own clock),
+-- but this limit counts arrivals, which network jitter bunches closer. Under half of the client's
+-- spacing, a press the rider's screen showed still counts, and spam stays capped.
+local LEAN_INTERVAL = 0.04
+local LEAN_HISTORY = 10 -- (covers every press that can land between a window's close and its judging)
 -- A lean pressed up to this long after the sled entered the curve still counts: the timing bar is
 -- full at the entry, and the drawn sled can trail the server's by a few hundredths. (Clients use
 -- the same number: BobsledCourse.GRACE.)
@@ -442,6 +453,7 @@ function BobsledRun:Prepare()
 				Good = 0,
 				Seen = 0,
 			}
+			ctx:SetScoreText(player, "0/0 leans")
 			table.insert(ids, player.UserId)
 		end
 		table.insert(shared, { T = team, X = sled.X, R = ids })
@@ -546,11 +558,11 @@ function BobsledRun:Start()
 		rider.Lean = dir
 		rider.LeanAt = at
 		table.insert(rider.Leans, { Dir = dir, At = at })
-		if #rider.Leans > 6 then
+		if #rider.Leans > LEAN_HISTORY then
 			table.remove(rider.Leans, 1)
 		end
 		ctx:Fire(nil, "Lean", player.UserId, dir, round(at, 0.001))
-	end, { Interval = 0.08 })
+	end, { Interval = LEAN_INTERVAL })
 
 	-- Small steps, so a server hitch doesn't skip a curve's judging.
 	ctx:Heartbeat(function(dt)
@@ -610,9 +622,11 @@ function BobsledRun:_crewScore(sled: Sled, curve: BobsledCourse.Curve): (number,
 		if dir == curve.Dir then
 			right += 1
 			rider.Good += 1
+			self.context:AddScore(player, 1)
 		elseif dir ~= 0 then
 			wrong += 1
 		end
+		self.context:SetScoreText(player, `{rider.Good}/{rider.Seen} leans`)
 	end
 	return right, wrong, count
 end
@@ -807,9 +821,11 @@ function BobsledRun:GetResults()
 		entry.Rank = self:_rank(entry.Team)
 		local rider = self.riders[entry.Player]
 		local leans = if rider then ` • {rider.Good}/{rider.Seen} leans` else ""
+		-- (Short enough to read whole after "🥇  name  ·  " on the results card: the sled's place or
+		-- how far it got, and your own leans.)
 		entry.ScoreText = if sled.Place
-			then `{entry.Team} {BobsledCourse.Ordinal(sled.Place)} • {string.format("%.1f", sled.Time or 0)}s{leans}`
-			else `{entry.Team} {self:_percent(sled)}% of the run{leans}`
+			then `{entry.Team} {BobsledCourse.Ordinal(sled.Place)}{leans}`
+			else `{entry.Team} {self:_percent(sled)}%{leans}`
 		entry.BestScore = if rider then rider.Good else 0
 	end
 	results.WinningTeam = if tie then nil else best

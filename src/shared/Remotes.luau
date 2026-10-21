@@ -17,6 +17,7 @@ local NAMES = {
 	"MiniGameAction", -- (action: string, ...) a mini-game control (pump, push, shoot...); see RoundContext:OnAction
 	"ClientReport", -- (report: table) which uploaded meshes this device couldn't load; see Services/ClientReports
 	"SetSitOut", -- (sitOut: boolean) sit out the next rounds, or play again; see Services/SitOutService
+	"SkeeBall", -- both ways: the lobby arcade's Skee-Ball games; see Services/SkeeBallService
 	-- server -> client
 	"ProfileData", -- (snapshot)
 	"Notify", -- (text, kind?, duration?)
@@ -25,6 +26,8 @@ local NAMES = {
 	"Knockback", -- (velocity: Vector3, stunTime: number)
 	"PlaySound", -- (soundName)
 	"MiniGameEvent", -- (event: string, ...) mini-game specific cue for the client half of a mode
+	"Celebrate", -- (payload) a level up or career milestone to celebrate; see Services/ProgressionService
+	"LevelPop", -- (character: Model, level: number) the "Lv 10!" that pops over a player's head
 }
 
 local Remotes = {}

@@ -8,11 +8,13 @@ local TableUtil = require("../src/shared/Logic/TableUtil")
 
 local test, expectEqual, expectTrue = TestKit.test, TestKit.expectEqual, TestKit.expectTrue
 
+-- The low coin scale (Config.Rewards): 2 coins for playing, up to 6 for a win with a personal best.
 local REWARDS = {
-	Participation = { Coins = 20, XP = 25 },
-	TopHalf = { Coins = 10, XP = 10 },
-	Winner = { Coins = 15, XP = 20 },
-	PersonalBest = { Coins = 5, XP = 5 },
+	Participation = { Coins = 2, XP = 25 },
+	TopHalf = { Coins = 1, XP = 10 },
+	Winner = { Coins = 2, XP = 20 },
+	PersonalBest = { Coins = 1, XP = 5 },
+	FirstWin = { Coins = 5, XP = 50 },
 }
 
 test("Placement.Assign ranks by value with shared places for ties", function()
@@ -43,18 +45,37 @@ end)
 
 test("RewardLogic gives everyone participation and stacks bonuses", function()
 	local last = RewardLogic.ForRound({ Place = 8, PlayerCount = 8 }, REWARDS)
-	expectEqual(last.Coins, 20)
+	expectEqual(last.Coins, 2)
 	expectEqual(#last.Lines, 1)
 	expectEqual(last.IsWinner, false)
 
 	local winner = RewardLogic.ForRound({ Place = 1, PlayerCount = 8, PersonalBest = true }, REWARDS)
-	expectEqual(winner.Coins, 20 + 10 + 15 + 5)
+	expectEqual(winner.Coins, 2 + 1 + 2 + 1)
 	expectEqual(winner.XP, 25 + 10 + 20 + 5)
 	expectEqual(#winner.Lines, 4)
 	expectTrue(winner.IsWinner and winner.IsTopHalf)
 
 	local middle = RewardLogic.ForRound({ Place = 4, PlayerCount = 8 }, REWARDS)
-	expectEqual(middle.Coins, 30)
+	expectEqual(middle.Coins, 3)
+end)
+
+test("RewardLogic pays the first win of the day as its own line, only for a win", function()
+	local first = RewardLogic.ForRound({ Place = 1, PlayerCount = 8, FirstWin = true }, REWARDS)
+	expectEqual(first.Coins, 2 + 1 + 2 + 5)
+	expectEqual(first.XP, 25 + 10 + 20 + 50)
+	expectEqual(first.Lines[#first.Lines].Label, "First win today!")
+
+	local second = RewardLogic.ForRound({ Place = 2, PlayerCount = 8, FirstWin = true }, REWARDS)
+	expectEqual(second.Coins, 3, "no bonus without a win")
+	expectEqual(#second.Lines, 2)
+
+	local without = RewardLogic.ForRound({ Place = 1, PlayerCount = 8, FirstWin = true }, {
+		Participation = REWARDS.Participation,
+		TopHalf = REWARDS.TopHalf,
+		Winner = REWARDS.Winner,
+		PersonalBest = REWARDS.PersonalBest,
+	})
+	expectEqual(without.Coins, 5, "a reward table without FirstWin pays no bonus")
 end)
 
 test("LevelCurve converts total XP into level progress", function()
@@ -69,13 +90,22 @@ end)
 
 test("DailyLogic streaks grow on consecutive days and reset after a gap", function()
 	local state = { LastClaimDay = 0, Streak = 0 }
-	local table_ = { 50, 60, 70 }
-	expectEqual({ DailyLogic.Claim(state, 100, table_) }, { true, 1, 50 })
+	local table_ = { 5, 6, 7 }
+	expectEqual({ DailyLogic.Claim(state, 100, table_) }, { true, 1, 5 })
 	expectEqual({ DailyLogic.Claim(state, 100, table_) }, { false, 1, 0 })
-	expectEqual({ DailyLogic.Claim(state, 101, table_) }, { true, 2, 60 })
-	expectEqual({ DailyLogic.Claim(state, 102, table_) }, { true, 3, 70 })
-	expectEqual({ DailyLogic.Claim(state, 103, table_) }, { true, 4, 70 })
-	expectEqual({ DailyLogic.Claim(state, 110, table_) }, { true, 1, 50 })
+	expectEqual({ DailyLogic.Claim(state, 101, table_) }, { true, 2, 6 })
+	expectEqual({ DailyLogic.Claim(state, 102, table_) }, { true, 3, 7 })
+	expectEqual({ DailyLogic.Claim(state, 103, table_) }, { true, 4, 7 })
+	expectEqual({ DailyLogic.Claim(state, 110, table_) }, { true, 1, 5 })
+end)
+
+test("DailyLogic.ClaimFirstWin pays once a day", function()
+	local state = { LastClaimDay = 0, Streak = 0 }
+	expectEqual(DailyLogic.ClaimFirstWin(state, 200), true)
+	expectEqual(DailyLogic.ClaimFirstWin(state, 200), false, "a second win the same day")
+	expectEqual(DailyLogic.ClaimFirstWin(state, 201), true, "the next day")
+	expectEqual(state.FirstWinDay, 201)
+	expectEqual(DailyLogic.ClaimFirstWin(state, 199), false, "never for a day already past")
 end)
 
 test("DailyLogic week numbers start on Monday", function()
@@ -86,7 +116,7 @@ test("DailyLogic week numbers start on Monday", function()
 end)
 
 local QUESTS = {
-	{ Id = "Play", Period = "Daily", Text = "", Event = "RoundPlayed", Target = 3, RewardCoins = 50, RewardXP = 40 },
+	{ Id = "Play", Period = "Daily", Text = "", Event = "RoundPlayed", Target = 3, RewardCoins = 5, RewardXP = 40 },
 	{
 		Id = "Emotes",
 		Period = "Daily",
@@ -94,7 +124,7 @@ local QUESTS = {
 		Event = "EmoteUsed",
 		Target = 3,
 		Unique = true,
-		RewardCoins = 30,
+		RewardCoins = 3,
 		RewardXP = 20,
 	},
 	{
@@ -103,10 +133,11 @@ local QUESTS = {
 		Text = "",
 		Event = "ItemCollected",
 		Target = 25,
-		RewardCoins = 60,
+		RewardCoins = 6,
 		RewardXP = 40,
 	},
-	{ Id = "WeeklyWins", Period = "Weekly", Text = "", Event = "Win", Target = 5, RewardCoins = 200, RewardXP = 150 },
+	{ Id = "Vote", Period = "Daily", Text = "", Event = "Voted", Target = 5, RewardCoins = 3, RewardXP = 25 },
+	{ Id = "WeeklyWins", Period = "Weekly", Text = "", Event = "Win", Target = 5, RewardCoins = 30, RewardXP = 250 },
 }
 local BY_ID = {}
 for _, def in QUESTS do
@@ -126,6 +157,29 @@ test("QuestLogic.Refresh rolls distinct quests per period and keeps them until t
 	end
 	expectEqual(QuestLogic.Refresh(state, QUESTS, "Daily", 10, 3, rng.index), false)
 	expectTrue(QuestLogic.Refresh(state, QUESTS, "Daily", 11, 3, rng.index))
+end)
+
+test("QuestLogic.Refresh replaces a retired quest the same day, keeping the rest", function()
+	local state = {
+		Number = 10,
+		Active = {
+			{ Id = "Play", Progress = 2, Done = false },
+			{ Id = "D_Collect25", Progress = 0, Done = false }, -- retired: no definition any more
+			{ Id = "Emotes", Progress = 1, Done = false, Seen = { Wave = true } },
+		},
+	}
+	expectTrue(QuestLogic.Refresh(state, QUESTS, "Daily", 10, 3, TestKit.seeded(5).index))
+	expectEqual(#state.Active, 3)
+	local ids = {}
+	for _, quest in state.Active do
+		expectTrue(BY_ID[quest.Id] ~= nil, "only known quests")
+		expectTrue(not ids[quest.Id], "no quest twice")
+		ids[quest.Id] = quest
+	end
+	expectEqual(ids.Play.Progress, 2, "the others keep their progress")
+	expectEqual(ids.Emotes.Progress, 1)
+	expectEqual(state.Number, 10)
+	expectEqual(QuestLogic.Refresh(state, QUESTS, "Daily", 10, 3, TestKit.seeded(5).index), false)
 end)
 
 test("QuestLogic.ApplyEvent progresses, completes once, and handles unique keys", function()

@@ -20,7 +20,8 @@ end
 -- the detail goes into a custom field instead.
 function Telemetry.PlayerEvent(player: Player, name: string, value: number?, detail: string?)
 	bump(name)
-	if RunService:IsStudio() then
+	-- Studio, and anything that only looks like a player (bots, the check tools' stand-ins).
+	if RunService:IsStudio() or typeof(player) ~= "Instance" then
 		return
 	end
 	local fields = if detail then { [Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = detail } else nil

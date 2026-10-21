@@ -3,8 +3,15 @@
 -- Art pass ("make every arena look really cool"): sinking hexes splash lava sparks as they plunge
 -- in, the referee robot hops when it raises a new flag, and the lava torches throw embers (ambient,
 -- off with reduced effects).
+-- Round's end (owner: "Bot is floating." "Theres invisible stuff."): the hexes move by the server's
+-- own rule (Shared/Logic/HexMeltdown), which calls the call off when the round ends: nothing more
+-- sinks, whatever was down comes back up and the call pill goes away. The last call used to play on
+-- through the results, sinking survivors into the lava under bots left standing in the air.
 
 local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Rules = require(ReplicatedStorage.Shared.Logic.HexMeltdown)
 
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -25,27 +32,6 @@ type Hex = {
 
 local SPARKS = "rbxasset://textures/particles/sparkles_main.dds"
 local LAVA_BELOW_TOP = 20 -- the lava surface under the hex tops (server: LAVA_DROP)
-
-local function easeInOut(t: number): number
-	t = math.clamp(t, 0, 1)
-	return t * t * (3 - 2 * t)
-end
-
--- How far below its resting place a sinking hex is at `now`.
-local function sinkOffset(call, now: number): number
-	local move = call.Move or 0.7
-	local depth = call.Depth or 26
-	if now < call.SinkAt then
-		return 0
-	elseif now < call.SinkAt + move then
-		return -depth * easeInOut((now - call.SinkAt) / move)
-	elseif now < call.RiseAt then
-		return -depth
-	elseif now < call.RiseAt + move then
-		return -depth * (1 - easeInOut((now - call.RiseAt) / move))
-	end
-	return 0
-end
 
 -- The parts that show a hex's color: the column's tile and band (or the cap, on an old arena).
 local function findTops(model: Model): { BasePart }
@@ -220,10 +206,11 @@ function HexMeltdown.Start(api)
 			callText.Text = `{call.Shape} {string.upper(call.Name)} {call.Shape}`
 			callText.TextColor3 = color
 			bar.BackgroundColor3 = color
-			banner.Visible = true
-			UIKit.PopIn(banner, 0.3)
+			-- A call with StopAt is one the round's end called off: no reminder for it.
+			banner.Visible = call.StopAt == nil
 			if not previous or previous.Id ~= call.Id then
 				hopAt = api:Now()
+				UIKit.PopIn(banner, 0.3)
 			end
 		end
 	end
@@ -233,14 +220,14 @@ function HexMeltdown.Start(api)
 	local robotHopping = false
 	api:RenderStep(function()
 		local now = api:Now()
-		local warning = call ~= nil and now < call.SinkAt
+		local warning = call ~= nil and call.StopAt == nil and now < call.SinkAt
 		if call then
 			bar.Size =
 				UDim2.fromScale(math.clamp((call.SinkAt - now) / math.max(0.1, call.SinkAt - call.WarnAt), 0, 1), 1)
 		end
 		for _, hex in hexes do
 			local matches = call ~= nil and hex.ColorIndex == call.Color
-			local offset = if call and not matches then sinkOffset(call, now) else 0
+			local offset = if call and not matches then -Rules.Sunk(call, now) else 0
 			-- Doomed hexes tremble in the last moments of the warning.
 			local shake = 0
 			if warning and not matches and call.SinkAt - now < 0.8 then

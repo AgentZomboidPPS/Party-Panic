@@ -34,16 +34,23 @@ Config.Bots = {
 Config.ArenaOrigin = Vector3.new(0, 250, 1400)
 Config.LobbySpawnHeight = 4
 
--- §9 Example reward model
+-- §9 reward model on the low coin scale (owner: "Also lets balance the shop down. I want low
+-- currency not high."): a round pays 2 coins for playing, up to 6 for a win with a personal best,
+-- and shop items cost tens of coins, so an item takes about as many rounds as before. Coins used
+-- to be 10 times bigger; Logic/ProfileMigration moves saved balances over once. XP is unchanged.
 Config.Rewards = {
-	Participation = { Coins = 20, XP = 25 },
-	TopHalf = { Coins = 10, XP = 10 },
-	Winner = { Coins = 15, XP = 20 },
-	PersonalBest = { Coins = 5, XP = 5 },
+	Participation = { Coins = 2, XP = 25 },
+	TopHalf = { Coins = 1, XP = 10 },
+	Winner = { Coins = 2, XP = 20 },
+	PersonalBest = { Coins = 1, XP = 5 },
+	FirstWin = { Coins = 5, XP = 50 }, -- the first win of each day (UTC), on top of the rest
 }
-Config.LevelUpCoins = 25
-Config.DailyRewards = { 50, 60, 70, 80, 90, 100, 150 } -- by streak day
-Config.SecretTokenCoins = 25
+-- The Rewards Road (owner: "Also we need cool payoffs for players that keep playing the game."):
+-- every level pays coins, every 5th and 10th level more. Its exclusive cosmetics are the Cosmetics
+-- with an UnlockLevel; Logic/ProgressionLogic has the prestige colors every 10 levels.
+Config.Road = { PerLevel = 3, Every5 = 10, Every10 = 15 }
+Config.DailyRewards = { 5, 6, 7, 8, 9, 10, 15 } -- by streak day
+Config.SecretTokenCoins = 3
 Config.Quests = {
 	DailyCount = 3,
 	WeeklyCount = 2,

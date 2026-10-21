@@ -5,9 +5,13 @@
 -- toast at the top middle, under the top bar, with a thumb-sized Skip. It steps aside while the
 -- vote cards use that spot.
 -- Either way it shows in the lobby and while the rules card is up, and steps aside during the
--- round and the results (the standings use that spot); the last tip waits until you're back in
--- the lobby. Its height comes from its text (not AutomaticSize, which left one line showing on
--- phones while the tip popped in).
+-- round and the results (the standings use that spot) and while a lobby game has the screen (the
+-- HUD's PP_TipsAside attribute: Skee-Ball); the last tip waits until you're back in the lobby.
+-- Its height comes from its text (not AutomaticSize, which left one line showing on phones while
+-- the tip popped in).
+-- On phones it also steps aside while a level-up or milestone celebration uses its spot
+-- (CelebrationController sets PP_Celebrating; owner: "cool payoffs for players that keep playing").
+-- The last tip's 8 seconds only count while it's on screen, so stepping aside never uses it up.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -35,25 +39,49 @@ local PC_WIDTH, PC_HEADER, PC_TEXT = 300, 36, 20
 local TOUCH_WIDTH, TOUCH_HEIGHT, TOUCH_TEXT = 620, 88, 19
 
 local touch = false
+local hud: Instance? = nil
 local panel: Frame
 local label: TextLabel
 local stepLabel: TextLabel?
 local step = 0
 local finished = false
 local rewardTipDue = false -- the last tip, once the results are over
+local LAST_TIP_TIME = 8 -- seconds the last tip stays on screen before the tips are done
+local lastTipTimer: { any }? = nil -- the running countdown (a new one replaces it)
+local finish: () -> () -- ends the tips for good (below)
 
 local function refreshVisible()
 	local phase = GameState.Get("Phase") or "Waiting"
-	local visible = not finished and step > 0 and not HIDDEN_IN[phase] and not (touch and HIDDEN_ON_PHONES[phase])
+	local celebrating = touch and State.LocalPlayer:GetAttribute("PP_Celebrating") == true
+	local aside = hud ~= nil and hud:GetAttribute("PP_TipsAside") == true
+	local visible = not finished
+		and step > 0
+		and not aside
+		and not HIDDEN_IN[phase]
+		and not (touch and HIDDEN_ON_PHONES[phase])
+		and not celebrating
 	if visible and not panel.Visible then
 		panel.Visible = true
 		UIKit.PopIn(panel, 0.35)
 	else
 		panel.Visible = visible
 	end
+	-- The last tip finishes the tips after it has been on screen for LAST_TIP_TIME (the countdown
+	-- starts over whenever it comes back after stepping aside).
+	if visible and step == #STEPS and not lastTipTimer then
+		local timer = {}
+		lastTipTimer = timer
+		task.delay(LAST_TIP_TIME, function()
+			if lastTipTimer == timer and panel.Visible then
+				finish()
+			end
+		end)
+	elseif not visible then
+		lastTipTimer = nil
+	end
 end
 
-local function finish()
+function finish()
 	if finished then
 		return
 	end
@@ -96,9 +124,6 @@ local function show(newStep: number)
 	end
 	panel.Visible = false -- pop the new tip in
 	refreshVisible()
-	if step == #STEPS then
-		task.delay(8, finish)
-	end
 end
 
 local function buildPc(context)
@@ -192,11 +217,13 @@ end
 
 function OnboardingController.Start(context)
 	touch = UIKit.IsTouch()
+	hud = context.Hud
 	if touch then
 		buildTouch(context)
 	else
 		buildPc(context)
 	end
+	context.Hud:GetAttributeChangedSignal("PP_TipsAside"):Connect(refreshVisible)
 
 	local function begin(snapshot)
 		if snapshot.TutorialDone then
@@ -225,6 +252,11 @@ function OnboardingController.Start(context)
 	Remotes.Get("RoundResults").OnClientEvent:Connect(function()
 		if not finished and step > 0 then
 			rewardTipDue = true
+		end
+	end)
+	State.LocalPlayer:GetAttributeChangedSignal("PP_Celebrating"):Connect(function()
+		if not finished and step > 0 then
+			refreshVisible()
 		end
 	end)
 end

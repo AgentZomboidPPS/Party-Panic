@@ -12,13 +12,18 @@ Errors and warnings from all of it come back in the result.
 text measurements and wrapping, with the fonts loaded); default: the touch sizes with --touch, else
 the PC ones. The result's "textReport" lists every text that doesn't fit on one of them.
 --rich gives the player a well-used profile (every emote, lots of coins, a long name, a claimable
-daily gift) to check the layouts at their fullest; the default is a brand-new player.
+daily gift, a high level with its prestige color, the road and career rewards it has earned) to
+check the layouts at their fullest; the default is a brand-new player.
 --bots N adds N stand-in bots, shaped like BotService's (a Configuration in
 ReplicatedStorage.PartyBots with a character in the world), who play the round with the player:
 the standings, team outlines, spectating (you get knocked out), a bot leaving and one arriving
 mid-round, the results and a bot champion on the podium. The result's "botChecks" says what the
 client did with them, and the extra snapshots ("InRound teams", "Podium") show it. The stand-in
 players are in the round either way, and the player is always knocked out ("Out", "Spectate").
+In the round, the team pill under the status line shows every kind of team ("hudChecks": what it
+read and how wide it was; "InRound teams": four teams, its widest), and a mode's two action buttons
+show with two toasts up ("InRound buttons": on phones the toasts sit above the buttons; "hudChecks"
+says whether they did and came back down after, and whether the mode HUD's scales let go).
 The result's "portals" says what each of the vote stage's portals shows in each phase (its game,
 "✓ YOUR VOTE", Random's spinning reel, the winner), as text.
 After the round the player sits out (the sit-out switch by the banner): a tap with no answer from
@@ -29,13 +34,18 @@ everyone on a break", "Preparing sitting out", "InRound sitting out", "InRound b
 sitting out") next to the playing ones to compare (Intermission, Voting, Preparing, InRound,
 Results, Settings), and leaves the rest out. Open Cloud caps the size of a task's result, and every
 screen in one run is over it (about 3 MB of snapshots): Roblox then reports "Task timed out due to
-an internal error" and returns nothing.
+an internal error" and returns nothing. --shots NAME,... keeps just those snapshots (the run still
+plays everything and reports every error).
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
 (Heartbeat), StarterGui:SetCore, and the remotes (bindable events the harness can fire). The two
 ScreenGuis are made like init.client.luau makes them. Shared modules come from the working tree
-(except Remotes).
+(except Remotes), and so does the profile snapshot (DataService and the two services it needs).
+Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", "Rewards Career")
+and shows a level-up, a career milestone and a returning player's celebration ("LevelUp",
+"LevelUp2", "Milestone", "Welcome"). After the round a level-up card shows while the last
+first-join tip is due; the result's "tipChecks" says what was on screen while it was up and after.
 """
 
 import argparse
@@ -49,6 +59,8 @@ from ui_render import devices_luau, size_names  # noqa: E402  (the screens the e
 ROOT = Path(__file__).resolve().parents[2]
 CLIENT = ROOT / "src" / "client"
 SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService")
+# Server modules bundled from the working tree: the profile snapshot the client is sent.
+SERVER_MODULES = ("DataService", "Notifier", "Telemetry")
 
 
 def played_game() -> str:
@@ -73,6 +85,8 @@ def module_paths():
         if rel.parts[:1] == ("MiniGames",) and len(rel.parts) == 2 and rel.parts[1] not in ("init", played):
             continue  # only the played mode's client half (Luau execution's 1 MB script limit)
         paths["Client/" + "/".join(rel.parts)] = path
+    for name in SERVER_MODULES:
+        paths[f"Server/Services/{name}"] = ROOT / "src" / "server" / "Services" / f"{name}.luau"
     return paths
 
 
@@ -121,6 +135,31 @@ local __realStarterGui = game:GetService("StarterGui")
 local function __event()
 	return Instance.new("BindableEvent")
 end
+-- A signal that hands its handlers the very values it's fired with (a BindableEvent copies tables),
+-- for stand-in InputObjects: a drag is followed by comparing them.
+local function __luaSignal()
+	local handlers = {}
+	local signal = {}
+	function signal.Connect(_, callback)
+		local entry = { callback = callback }
+		table.insert(handlers, entry)
+		return {
+			Connected = true,
+			Disconnect = function()
+				entry.callback = nil
+			end,
+		}
+	end
+	function signal.Fire(_, ...)
+		for _, entry in table.clone(handlers) do
+			if entry.callback then
+				entry.callback(...)
+			end
+		end
+	end
+	return signal
+end
+local __inputBegan, __inputChanged, __inputEnded = __luaSignal(), __luaSignal(), __luaSignal()
 local __playerGui = Instance.new("Folder")
 __playerGui.Name = "PlayerGui"
 __playerGui.Parent = game:GetService("ServerStorage")
@@ -220,6 +259,10 @@ local __shims = {
 		TouchEnabled = __touchMode == true,
 		KeyboardEnabled = __touchMode ~= true,
 		MouseEnabled = __touchMode ~= true,
+		-- Stand-in fingers and mouse (the Skee-Ball drag checks fire them).
+		InputBegan = __inputBegan,
+		InputChanged = __inputChanged,
+		InputEnded = __inputEnded,
 	}),
 	RunService = __wrap(__realRun, {
 		RenderStepped = __realRun.Heartbeat,
@@ -246,7 +289,7 @@ local function __service(name)
 	return __shims[name] or game:GetService(name)
 end
 
-local __remotes, __sent, __soundReports = {}, {}, {}
+local __remotes, __sent, __soundReports, __skeeSent = {}, {}, {}, {}
 local __RemotesShim = {
 	Get = function(name)
 		if not __remotes[name] then
@@ -256,6 +299,9 @@ local __RemotesShim = {
 				OnClientEvent = bindable.Event,
 				FireServer = function(_, first, ...)
 					table.insert(__sent, name)
+					if name == "SkeeBall" then
+						table.insert(__skeeSent, { first, ... })
+					end
 					if name == "ClientReport" and type(first) == "table" and first.Kind == "Sound" then
 						table.insert(__soundReports, first)
 					end
@@ -322,8 +368,7 @@ local Shared = ReplicatedStorage.Shared
 local GameState = require(Shared.GameState)
 GameState.Folder()
 local GameDefinitions = require(Shared.GameDefinitions)
-local Services = game:GetService("ServerScriptService").Server.Services
-local DataService = require(Services.DataService)
+local DataService = __require("Server/Services/DataService") -- the working tree's snapshot
 local QuestDefinitions = require(Shared.QuestDefinitions)
 
 local step = "start"
@@ -388,6 +433,9 @@ local SIT_OUT_COMPARE =
 local function snap(key, root)
 	local sitOut = SIT_OUT_SHOTS[key]
 	local wanted = if __sitOutMode then sitOut == true or SIT_OUT_COMPARE[key] == true else sitOut == nil
+	if __onlyShots then
+		wanted = __onlyShots[key] == true -- --shots: just these
+	end
 	if wanted then
 		__ui[key] = __dumpGui(root or __playerGui, key)
 	end
@@ -420,7 +468,8 @@ local order = {
 	"AudioController", "NotificationController", "EffectsController", "AmbienceController",
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
-	"EmoteController", "SpectateController", "OnboardingController", "AssetReportController",
+	"RewardsController", "CelebrationController",
+	"EmoteController", "SpectateController", "OnboardingController", "SkeeBallController", "AssetReportController",
 }
 -- The ScreenGuis, made with init.client.luau's own properties (see screen_guis() in the script).
 local context = {}
@@ -460,19 +509,38 @@ for _, name in order do
 end
 
 -- 2. Profile snapshot, as DataService sends it: a new player (default items, 3 daily and 2 weekly
--- quests with the longest texts), or with --rich a well-used profile.
+-- quests with the longest texts), or with --rich a well-used profile: a high level (and its
+-- prestige color), every emote, the road and career rewards it has earned, career stats partway.
 local Cosmetics = require(Shared.Cosmetics)
+local LevelCurve = require(Shared.Logic.LevelCurve)
 local data = table.clone(DataService.Template)
 data.Owned = {}
+data.Stats = table.clone(DataService.Template.Stats)
+if __richMode then
+	data.Coins = 99999 -- the most a player plausibly saves on the low coin scale
+	data.XP = 98765
+	data.Daily = { LastClaimDay = 0, Streak = 6, SecretDay = 0, FirstWinDay = 0 }
+	data.Stats.RoundsPlayed = 180
+	data.Stats.Wins = 12
+	data.Stats.Podiums = 31
+	data.Stats.TeamWins = 4
+	data.Stats.GamesTried = 9
+	data.Stats.DaysPlayed = 8
+end
+local richLevel = LevelCurve.FromTotalXP(data.XP)
 for _, item in Cosmetics.List do
-	if item.Default or (__richMode and item.Slot == "Emote") then
+	local earned = item.Default
+		or (__richMode and item.Slot == "Emote")
+		or (item.UnlockLevel ~= nil and richLevel >= item.UnlockLevel)
+		or (item.UnlockStat ~= nil and (data.Stats[item.UnlockStat.Stat] or 0) >= item.UnlockStat.Value)
+	if earned then
 		data.Owned[item.Id] = true
 	end
 end
 if __richMode then
-	data.Coins = 1234567
-	data.XP = 98765
-	data.Daily = { LastClaimDay = 0, Streak = 6, SecretDay = 0 }
+	data.Equipped = table.clone(DataService.Template.Equipped)
+	data.Equipped.Title = "Title_Icon"
+	data.Equipped.Trail = "Trail_Starry"
 end
 local profile = { Data = data, IsVip = false, CanSave = not __richMode }
 local okSnap, snapshot = pcall(DataService.BuildSnapshot, profile)
@@ -499,10 +567,15 @@ else
 	__note("BuildSnapshot failed: " .. tostring(snapshot))
 end
 
--- 3. Screens opened by the lobby prompts and the HUD.
-for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
+-- 3. Screens opened by the lobby prompts and the HUD (the profile chip opens Rewards; its Career
+-- tab is a second snapshot).
+for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Rewards", "Rewards Career" } do
 	step = "OpenScreen " .. screen
-	State.OpenScreen:Fire(screen)
+	if screen == "Rewards Career" then
+		State.OpenScreen:Fire("Rewards", "Career")
+	else
+		State.OpenScreen:Fire(screen)
+	end
 	task.wait(1)
 	snap(screen)
 	local Modal = __require("Client/UI/Modal")
@@ -513,6 +586,281 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
 		State.OpenScreen:Fire(screen) -- the emote wheel isn't a modal: its button toggles it shut
 	end
 	task.wait(0.3)
+end
+
+-- 3b. Skee-Ball in the lobby's arcade (SkeeBallController): the player takes machine 1, charges the
+-- ROLL meter, rolls a ball (its score pops), sees the vote open ("SkeeBall voting"), finishes a
+-- game (PLAY AGAIN / DONE) and leaves; then starts again and is taken into a round. A stand-in
+-- machine, board and ball when the place's lobby is older than this client.
+local skeeChecks = {}
+do
+	local CollectionService = game:GetService("CollectionService")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local machineModel = nil
+	for _, tagged in CollectionService:GetTagged("SkeeMachine") do
+		if tagged:GetAttribute("SkeeIndex") == 1 then
+			machineModel = tagged
+		end
+	end
+	if not machineModel then
+		local frame = CFrame.new(60, 0.4, -40) * CFrame.Angles(0, math.rad(-57), 0)
+		machineModel = Instance.new("Model")
+		machineModel.Name = "ArcadeSkeeMachine"
+		local function piece(name, size, offset)
+			local part = Instance.new("Part")
+			part.Name = name
+			part.Anchored = true
+			part.Size = size
+			part.CFrame = frame * CFrame.new(offset)
+			part.Parent = machineModel
+			return part
+		end
+		piece("Cabinet", Vector3.new(5, 3, 14), Vector3.new(0, 1.5, 0))
+		piece("Screen", Vector3.new(4.3, 1.5, 0.05), Vector3.new(0, 8.3, 6.375)):AddTag("SkeeScreen")
+		piece("Band50", Vector3.new(0.1, 0.8, 0.8), Vector3.new(0, 4.4, 4.2))
+		piece("BulbsA", Vector3.new(0.3, 0.3, 0.3), Vector3.new(-1, 11, 6.4))
+		piece("BulbsB", Vector3.new(0.3, 0.3, 0.3), Vector3.new(1, 11, 6.4))
+		piece("Glow", Vector3.new(0.1, 0.1, 8), Vector3.new(1.6, 3.6, -2.6))
+		local standPart = piece("Stand", Vector3.new(3, 5, 2), Vector3.new(0, 2.5, -9))
+		standPart:AddTag("SkeeStand")
+		Instance.new("ProximityPrompt").Parent = standPart
+		machineModel:SetAttribute("SkeeIndex", 1)
+		machineModel:SetAttribute("SkeeColor", Color3.fromRGB(64, 196, 255))
+		machineModel:SetAttribute("SkeeFrame", frame)
+		machineModel.Parent = workspace
+		machineModel:AddTag("SkeeMachine")
+		skeeChecks.standIn = true
+	end
+	for key, value in { SkeeUser = 0, SkeeName = "", SkeeScore = 0, SkeeBalls = 0, SkeeState = "Idle", SkeeBest = 0 } do
+		machineModel:SetAttribute(key, value)
+	end
+	if not CollectionService:GetTagged("SkeeBestBoard")[1] then
+		local part = Instance.new("Part")
+		part.Name = "BestBoard"
+		part.Anchored = true
+		part.Size = Vector3.new(23, 5.6, 0.1)
+		part.CFrame = CFrame.new(70, 16, -48)
+		part.Parent = workspace
+		part:AddTag("SkeeBestBoard")
+	end
+	CollectionService:GetTagged("SkeeBestBoard")[1]:SetAttribute(
+		"Board",
+		'[{"N":"SuperLongDisplayNm20","S":420,"U":7},{"N":"Harness","S":310,"U":1},{"N":"Pancake","S":250,"U":9}]'
+	)
+	if not ReplicatedStorage:FindFirstChild("ArcadeAssets") then
+		local assets = Instance.new("Folder")
+		assets.Name = "ArcadeAssets"
+		local ball = Instance.new("Model")
+		ball.Name = "SkeeBall"
+		local part = Instance.new("Part")
+		part.Name = "Ball"
+		part.Shape = Enum.PartType.Ball
+		part.Size = Vector3.one * 0.72
+		part.Anchored = true
+		part.CanCollide = false
+		part.CFrame = CFrame.new(0, 0.36, 0)
+		part.Parent = ball
+		ball.PrimaryPart = part
+		ball.Parent = assets
+		assets.Parent = ReplicatedStorage
+	end
+	step = "SkeeBall"
+	task.wait(1.5) -- the controller picks the machine up
+	local SkeeBallController = __require("Client/Controllers/SkeeBallController")
+	machineModel:SetAttribute("SkeeUser", 1)
+	machineModel:SetAttribute("SkeeName", __player.DisplayName)
+	machineModel:SetAttribute("SkeeBest", 240)
+	machineModel:SetAttribute("SkeeState", "Playing")
+	__fire("SkeeBall", "Start", 1, 240)
+	task.wait(1.2)
+	__ui["SkeeBall"] = __dumpGui(__playerGui, "SkeeBall")
+	-- The ROLL meter: one press stops the swinging aim, the next starts the power filling.
+	SkeeBallController.PressRoll()
+	task.wait(0.35)
+	SkeeBallController.PressRoll()
+	task.wait(0.45)
+	__ui["SkeeBall meter"] = __dumpGui(__playerGui, "SkeeBall meter")
+	skeeChecks.rolled = SkeeBallController.Roll(0.05, 0.5)
+	__fire("SkeeBall", "Rolled", 1, 1, 1050, 500, "40", 40)
+	task.wait(1.65)
+	__ui["SkeeBall pop"] = __dumpGui(__playerGui, "SkeeBall pop")
+	machineModel:SetAttribute("SkeeScore", 40)
+	machineModel:SetAttribute("SkeeBalls", 1)
+	task.wait(0.6)
+	-- The vote opens while you play: the cards keep their places, the play screen keeps clear of
+	-- them, and the tip over the score says a round is coming.
+	local phaseBefore, endsBefore = GameState.Get("Phase"), GameState.Get("PhaseEndsAt")
+	local voteOptions = {}
+	for _, def in GameDefinitions.List do
+		if #voteOptions < 3 then
+			table.insert(voteOptions, { Id = def.Id, Mystery = false })
+		end
+	end
+	table.insert(voteOptions, { Id = voteOptions[1].Id, Mystery = true })
+	GameState.SetJSON("VoteOptions", voteOptions)
+	GameState.SetJSON("VoteCounts", { 1, 0, 2, 1 })
+	GameState.Set("Phase", "Voting")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 12)
+	task.wait(1.2)
+	__ui["SkeeBall voting"] = __dumpGui(__playerGui, "SkeeBall voting")
+	local skeeHud = __playerGui:FindFirstChild("PartyPanicHUD")
+	local skeeHolder = skeeHud and skeeHud:FindFirstChild("SkeeBallControls")
+	local skeeTip = skeeHolder and skeeHolder:FindFirstChild("Hint", true)
+	skeeChecks.votingTip = if skeeTip and skeeTip.Visible then skeeTip.Text else "(hidden)"
+	GameState.Set("Phase", phaseBefore)
+	GameState.Set("PhaseEndsAt", endsBefore or 0)
+	task.wait(0.3)
+	skeeChecks.tipAfterVote = if skeeTip and skeeTip.Visible then skeeTip.Text else "(hidden)"
+	machineModel:SetAttribute("SkeeState", "Over")
+	__fire("SkeeBall", "Over", 1, 1, 310, 240, true, 2)
+	task.wait(1)
+	__ui["SkeeBall over"] = __dumpGui(__playerGui, "SkeeBall over")
+	skeeChecks.sentToServer = table.concat(__sent, ",")
+	__fire("SkeeBall", "End", 1, "Left")
+	task.wait(0.5)
+	local controls = __playerGui:FindFirstChild("PartyPanicHUD") and __playerGui.PartyPanicHUD:FindFirstChild("SkeeBallControls")
+	skeeChecks.closed = controls ~= nil and not controls.Visible
+	-- A round taking you ends the game on this device at once and hands the camera back, before
+	-- the server's word comes.
+	machineModel:SetAttribute("SkeeState", "Playing")
+	__fire("SkeeBall", "Start", 1, 310)
+	task.wait(1)
+	local skeeCamera = workspace.CurrentCamera
+	skeeChecks.cameraPlaying = skeeCamera.CameraType.Name
+	skeeChecks.reopened = controls ~= nil and controls.Visible
+	-- The machines' prompts stay off this screen while you play, even when the server turns one on.
+	local skeeStand = machineModel:FindFirstChild("Stand")
+	local skeePrompt = skeeStand and skeeStand:FindFirstChildOfClass("ProximityPrompt")
+	if skeePrompt then
+		skeePrompt.Enabled = true
+		task.wait(0.1)
+		skeeChecks.promptWhilePlaying = skeePrompt.Enabled
+	end
+	__player:SetAttribute("PP_InRound", true)
+	task.wait(0.3)
+	skeeChecks.roundClosed = controls ~= nil and not controls.Visible
+	skeeChecks.cameraAfterRound = skeeCamera.CameraType.Name
+	__player:SetAttribute("PP_InRound", nil)
+	for key, value in { SkeeUser = 0, SkeeName = "", SkeeScore = 0, SkeeBalls = 0, SkeeState = "Idle", SkeeBest = 0 } do
+		machineModel:SetAttribute(key, value)
+	end
+	if skeePrompt then
+		skeePrompt.Enabled = true -- the server frees the machine
+		task.wait(0.1)
+		skeeChecks.promptWhenFree = skeePrompt.Enabled
+	end
+
+	-- Fingers on the lane (stand-in InputObjects through the shimmed UserInputService). A drag, with
+	-- another finger touching and lifting meanwhile: only the drag's own finger ends it, and the
+	-- roll it makes is the one its own positions give (SkeeBallView.Drag).
+	machineModel:SetAttribute("SkeeUser", 1)
+	machineModel:SetAttribute("SkeeState", "Playing")
+	__fire("SkeeBall", "Start", 1, 310)
+	task.wait(1)
+	local SkeeBallView = __require("Shared/Logic/SkeeBallView")
+	local viewport = workspace.CurrentCamera.ViewportSize
+	local inputKind = if __touchMode then Enum.UserInputType.Touch else Enum.UserInputType.MouseButton1
+	local function finger(kind, x, y)
+		return {
+			UserInputType = kind,
+			UserInputState = Enum.UserInputState.Begin,
+			KeyCode = Enum.KeyCode.Unknown,
+			Position = Vector3.new(x * viewport.X, y * viewport.Y, 0),
+			Delta = Vector3.zero,
+		}
+	end
+	local function move(input, x, y)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			-- A mouse drag moves with MouseMovement inputs, and ends with the button's own.
+			__inputChanged:Fire(finger(Enum.UserInputType.MouseMovement, x, y), false)
+		else
+			input.Position = Vector3.new(x * viewport.X, y * viewport.Y, 0)
+			input.UserInputState = Enum.UserInputState.Change
+			__inputChanged:Fire(input, false)
+		end
+	end
+	local sentBefore = #__skeeSent
+	local drag = finger(inputKind, 0.5, 0.3)
+	__inputBegan:Fire(drag, false)
+	move(drag, 0.45, 0.33)
+	skeeChecks.dragFollows = SkeeBallController.Status().Dragging
+	if __touchMode then
+		-- A second thumb brushes the screen low on the left and lifts.
+		local thumb = finger(Enum.UserInputType.Touch, 0.1, 0.9)
+		__inputBegan:Fire(thumb, false)
+		thumb.UserInputState = Enum.UserInputState.End
+		__inputEnded:Fire(thumb, false)
+		skeeChecks.otherFingerIgnored = SkeeBallController.Status().Dragging and #__skeeSent == sentBefore
+	end
+	drag.UserInputState = Enum.UserInputState.End
+	__inputEnded:Fire(drag, false)
+	task.wait(0.2)
+	local rollSent = __skeeSent[#__skeeSent]
+	local wantAim, wantPower = SkeeBallView.Drag(
+		0.5 * viewport.X,
+		0.3 * viewport.Y,
+		0.45 * viewport.X,
+		0.33 * viewport.Y,
+		viewport.X,
+		viewport.Y,
+		viewport.Y
+	)
+	skeeChecks.dragRoll = if rollSent and rollSent[1] == "Roll"
+		then string.format("ball %d aim %.3f power %.3f (want %.3f %.3f)", rollSent[2], rollSent[3], rollSent[4], wantAim, wantPower)
+		else "(no roll sent)"
+	skeeChecks.dragRollMatches = rollSent ~= nil
+		and rollSent[1] == "Roll"
+		and math.abs(rollSent[3] - wantAim) < 0.002
+		and math.abs(rollSent[4] - wantPower) < 0.002
+	-- The server refuses that ball ("Sync": none count): the device puts it back.
+	local rolledBefore = SkeeBallController.Status().Rolled
+	__fire("SkeeBall", "Sync", 1, 0)
+	task.wait(0.3)
+	__ui["SkeeBall roll again"] = __dumpGui(__playerGui, "SkeeBall roll again")
+	local skeePop = skeeHud and skeeHud:FindFirstChild("SkeeBallPop")
+	skeeChecks.syncPutBack = string.format(
+		"rolled %d -> %d, pop %q",
+		rolledBefore,
+		SkeeBallController.Status().Rolled,
+		if skeePop and skeePop.Visible then skeePop.Text else "(none)"
+	)
+	skeeChecks.syncOk = rolledBefore == 1 and SkeeBallController.Status().Rolled == 0
+	-- Someone hops into your lane: they fade on your screen while you play, and come back when
+	-- they step off (or when you stop playing).
+	local intruder = Instance.new("Model")
+	intruder.Name = "LaneIntruder"
+	local intruderRoot = Instance.new("Part")
+	intruderRoot.Name = "HumanoidRootPart"
+	intruderRoot.Anchored = true
+	intruderRoot.CanCollide = false
+	intruderRoot.Size = Vector3.new(2, 2, 1)
+	intruderRoot.CFrame = machineModel:GetAttribute("SkeeFrame") * CFrame.new(0, 5, -2)
+	intruderRoot.Parent = intruder
+	Instance.new("Humanoid").Parent = intruder
+	intruder.Parent = workspace
+	task.wait(0.5)
+	local fadedInLane = intruderRoot.LocalTransparencyModifier
+	intruderRoot.CFrame = machineModel:GetAttribute("SkeeFrame") * CFrame.new(14, 5, -2)
+	task.wait(0.5)
+	skeeChecks.laneIntruder = string.format("in the lane %.2f, stepped off %.2f", fadedInLane, intruderRoot.LocalTransparencyModifier)
+	skeeChecks.laneIntruderOk = fadedInLane > 0.5 and intruderRoot.LocalTransparencyModifier == 0
+	intruder:Destroy()
+	-- A round runs while you roll (sitting it out): the round's standings show on the left, the
+	-- controls keep clear of them.
+	__player:SetAttribute("PP_SitOut", true)
+	local phaseNow = GameState.Get("Phase")
+	GameState.Set("Phase", "InRound")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 60)
+	task.wait(1.2)
+	__ui["SkeeBall in a round"] = __dumpGui(__playerGui, "SkeeBall in a round")
+	GameState.Set("Phase", phaseNow)
+	GameState.Set("PhaseEndsAt", 0)
+	__player:SetAttribute("PP_SitOut", nil)
+	__fire("SkeeBall", "End", 1, "Left")
+	task.wait(0.3)
+	for key, value in { SkeeUser = 0, SkeeName = "", SkeeScore = 0, SkeeBalls = 0, SkeeState = "Idle", SkeeBest = 0 } do
+		machineModel:SetAttribute(key, value)
+	end
 end
 
 -- 4. A whole round, phase by phase, with three toasts on screen in the lobby. The vote shows the
@@ -643,6 +991,38 @@ local function boardRows()
 end
 
 phase("Intermission", 20)
+-- A level up with two road rewards, a first level up, then a career milestone (CelebrationController
+-- shows them in the lobby), and someone's "Lv 12!" pop over their head.
+do
+	local Celebrations = __require("Client/Controllers/CelebrationController")
+	for _, case in {
+		{
+			name = "LevelUp",
+			payload = { Kind = "LevelUp", Level = 10, From = 9, Coins = 15, Items = { "Trail_Starry", "Title_Pro" } },
+		},
+		{ name = "LevelUp2", payload = { Kind = "LevelUp", Level = 2, From = 1, Coins = 3, Items = { "Emote_Balloons" } } },
+		{ name = "Milestone", payload = { Kind = "Milestone", Coins = 0, Items = { "Title_Veteran" } } },
+		{
+			name = "Welcome",
+			payload = {
+				Kind = "Welcome",
+				Coins = 0,
+				Items = { "Emote_Balloons", "Trail_Bubblegum", "Elim_Ghost", "Title_Regular" },
+			},
+		},
+	} do
+		step = "celebration " .. case.name
+		__fire("Celebrate", case.payload)
+		task.wait(1.6) -- the rewards are revealed one by one
+		snap(case.name)
+		Celebrations.Dismiss()
+		task.wait(0.5)
+	end
+	if bots[1] and bots[1].rig then
+		__fire("LevelPop", bots[1].rig, 12)
+	end
+	__fire("LevelPop", workspace, 3) -- no head: nothing happens
+end
 phase("Voting", 12, function()
 	GameState.SetJSON("VoteOptions", {
 		{ Id = longNames[1], Mystery = false },
@@ -710,8 +1090,42 @@ if #bots > 0 then
 	for index, who in everyone() do
 		who:SetAttribute("PP_Team", if index % 2 == 0 then "Red" else "Blue")
 	end
-	task.wait(0.8)
+end
+
+-- The team pill under the status line (HudController) shows every team in the round with its mark
+-- and score: the versus modes' roles and two colour teams (hudChecks.teamPill: what it read and how
+-- wide it was, in its own units), then all four colour teams with 3-digit scores, its widest (the
+-- snapshot).
+step = "team scores"
+local hudChecks = { teamPill = {} }
+do
+	local function pill()
+		local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+		local frame = hud and hud:FindFirstChild("TeamScores", true)
+		local label = frame and frame:FindFirstChildWhichIsA("TextLabel")
+		return if label and frame.Visible then `{label.Text}  [{frame.Size.X.Offset} wide]` else "hidden"
+	end
+	for _, scores in
+		{
+			{ Sharks = 3, Swimmers = 120 },
+			{ SandKings = 85, Divers = 240 },
+			{ Archers = 4, Runners = 7 },
+			{ Red = 12, Blue = 9 },
+			{ Red = 100, Blue = 64, Green = 109, Yellow = 7 },
+		}
+	do
+		GameState.SetJSON("TeamScores", scores)
+		task.wait(0.3)
+		table.insert(hudChecks.teamPill, pill())
+	end
+	task.wait(0.5)
 	snap("InRound teams")
+	GameState.SetJSON("TeamScores", {})
+	task.wait(0.1)
+	table.insert(hudChecks.teamPill, "after the round: " .. pill())
+end
+
+if #bots > 0 then
 	local outlined = 0
 	for _, bot in bots do
 		if bot.rig and bot.rig:FindFirstChildOfClass("Highlight") then
@@ -723,7 +1137,46 @@ if #bots > 0 then
 		who:SetAttribute("PP_Team", "")
 	end
 	task.wait(0.5)
+end
 
+-- A mode's two action buttons (Kit/Api: beside the jump button on phones) with two toasts up, the
+-- first on two lines: on phones the toasts sit above the buttons' row (NotificationController), and
+-- back down once the round's HUD is gone (hudChecks.toastsAboveButtons). That HUD's UIKit.AutoScale
+-- scales let go of the camera when it's destroyed (hudChecks.autoScalesReleased).
+step = "action buttons"
+do
+	local okApi, Api = pcall(__require, "Client/MiniGames/Kit/Api")
+	if okApi then
+		local api = Api.new(ids[1])
+		api:Button({ Text = "HIT!", Key = Enum.KeyCode.E })
+		api:Button({ Text = "PULL", Key = Enum.KeyCode.Q, Color = Color3.fromRGB(255, 92, 170), Slot = 2 })
+		api:Hint("Tap HIT! when the bees come")
+		__fire("Notify", "🎃 GOLDEN RUSH! Every veggie counts double for the next ten seconds!", "success", 4)
+		__fire("Notify", "Quest complete: Play 3 rounds", "reward", 4)
+		task.wait(0.8)
+		snap("InRound buttons")
+		local toasts = __playerGui:FindFirstChild("PartyPanicToasts")
+		local area = toasts and toasts:FindFirstChild("ToastArea")
+		local function lifted()
+			return if area then area:GetAttribute("PP_AboveActions") == true else "no phone toast area (PC)"
+		end
+		hudChecks.toastsAboveButtons = { whileShown = lifted() }
+		local scales, released = 0, 0
+		for _, item in api.Gui:GetDescendants() do
+			if item:IsA("UIScale") and item:GetAttribute("AutoScale") then
+				scales += 1
+				item.Destroying:Connect(function()
+					released += 1
+				end)
+			end
+		end
+		api:Destroy()
+		task.wait(0.5)
+		hudChecks.toastsAboveButtons.afterTheRound = lifted()
+		hudChecks.autoScalesReleased = `{released} of {scales}`
+	else
+		__note("Kit/Api failed to load: " .. tostring(Api))
+	end
 end
 
 -- The player is knocked out: the out panel, then spectating (only bots have characters to watch).
@@ -790,10 +1243,11 @@ phase("Results", 8, function()
 		TopHalf = "Top half finish",
 		Winner = "Winner!",
 		PersonalBest = "New personal best",
+		FirstWin = "First win today!",
 	}
 	local lines, coins, xp = {}, 0, 0
-	for _, key in { "Participation", "TopHalf", "Winner", "PersonalBest" } do
-		if key ~= "Winner" or place == 1 then
+	for _, key in { "Participation", "TopHalf", "Winner", "PersonalBest", "FirstWin" } do
+		if Config.Rewards[key] and ((key ~= "Winner" and key ~= "FirstWin") or place == 1) then
 			local reward = Config.Rewards[key]
 			table.insert(lines, { Label = labels[key], Coins = reward.Coins, XP = reward.XP })
 			coins += reward.Coins
@@ -820,18 +1274,33 @@ phase("Results", 8, function()
 			table.insert(champions, { Name = bots[3].display, UserId = bots[3].userId, Place = 3 })
 		end
 	else
+		-- The longest results lines the modes write, beside long names: the result always reads whole
+		-- and a name gives way ("..."), like the standings board.
+		local longest = {
+			"🏊 45 coins • never chomped!", -- SHARK BAIT
+			"Yellow 🎂 33 ⭐ 30 • 71 layers", -- CAKE FACTORY
+			"Yellow 97% • 14/15 leans", -- BOBSLED RUN
+			"Yellow 100% • 22 perfect", -- PUMP & POP
+			"Lasted 54s • 120 jumps", -- FIRE ROPE
+			"🦈 11 chomps • 22 dunked", -- SHARK BAIT
+			"🏹 12 tags • +12 boards", -- ARROW AMBUSH
+			"Divers 1200 • you 450", -- SINKING SANDS
+		}
 		for index = 1, 8 do
 			local other = __players[index]
 			table.insert(standings, {
 				Name = other.DisplayName,
 				UserId = other.UserId,
 				Place = index,
-				ScoreText = if index == 1 then "Last one standing" else `Out at {80 - index * 7}s`,
+				ScoreText = longest[index],
 			})
 		end
 	end
 	__fire("RoundResults", {
-		GameId = ids[1],
+		-- A win draws the widest headline: "You won SINKING SANDS!  •  Your team won!"
+		GameId = if place == 1 then "SinkingSands" else ids[1],
+		MyTeam = if place == 1 then "Divers" else nil,
+		WinningTeam = if place == 1 then "Divers" else nil,
 		Place = place,
 		PlayerCount = #__players + #bots,
 		ScoreText = if place == 1 then "Last one standing" else "12 pts",
@@ -839,6 +1308,8 @@ phase("Results", 8, function()
 		Coins = coins,
 		XP = xp,
 		PersonalBest = true,
+		FirstWin = place == 1,
+		LevelUp = 7, -- the round took the player to a new level
 		Standings = standings,
 	})
 	GameState.SetJSON("Champions", champions)
@@ -900,6 +1371,36 @@ phase("Cleanup", 3, function()
 		who:SetAttribute("PP_Alive", false)
 	end
 end)
+-- Back in the lobby the card shows while the last first-join tip is due: on phones the tip steps
+-- aside while the card is up and comes back after it, its 8 s counted only while it's on screen
+-- (the tips never finish behind the card). tipChecks: what was on screen, and whether the client
+-- had told the server the tips were done.
+local tipChecks = {}
+do
+	local function tipPanel()
+		local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+		local holder = hud and hud:FindFirstChild("Onboarding", true)
+		return holder and (holder:FindFirstChild("Tip") or holder)
+	end
+	local function look(label)
+		local celebrate = __playerGui:FindFirstChild("PartyPanicCelebrate")
+		local tip = tipPanel()
+		local tipText = tip and tip:FindFirstChildWhichIsA("TextLabel", true)
+		tipChecks[label] = {
+			card = if celebrate and celebrate:FindFirstChild("Celebration") then "shown" else "none",
+			tip = if tip and tip.Visible then "shown" else "hidden",
+			tipText = if tipText then string.sub(tipText.Text, 1, 60) else nil,
+			tutorialDone = table.find(__sent, "TutorialDone") ~= nil,
+		}
+	end
+	-- The round levelled the player up (a new player's first win does). (Fired once the Cleanup
+	-- snapshot is taken: a snapshot in the middle of the chips popping in reads as tiny text.)
+	__fire("Celebrate", { Kind = "LevelUp", Level = 2, From = 1, Coins = 3, Items = { "Emote_Balloons" } })
+	task.wait(0.6)
+	look("cardUp")
+	task.wait(10) -- the card closes itself after 9 s
+	look("afterCard")
+end
 phase("Waiting", 0)
 task.wait(1)
 
@@ -1042,7 +1543,10 @@ return game:GetService("HttpService"):JSONEncode({
 	guiInstances = guiCount,
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
+	skeeChecks = skeeChecks,
+	hudChecks = hudChecks,
 	sitOutChecks = sitOutChecks,
+	tipChecks = tipChecks,
 	textReport = __textReport,
 	portals = __portals,
 })
@@ -1070,6 +1574,8 @@ def main():
     parser.add_argument("--bots", type=int, default=0, help="stand-in bots that play the round with the player")
     parser.add_argument("--sit-out", action="store_true", help="draw the screens of a player sitting out (and the "
                         "playing ones to compare) instead of every screen")
+    parser.add_argument("--shots", help="only these snapshots, comma-separated (e.g. Intermission,LevelUp,Rewards): "
+                        "a run with every screen at several sizes is over Open Cloud's result cap")
     parser.add_argument("--sizes", help="screens to lay the UI out on with the engine (ui_render.py's names or "
                         "groups; default: touch with --touch, else pc; none to skip)")
     args = parser.parse_args()
@@ -1080,6 +1586,11 @@ def main():
         f"__richMode = {'true' if args.rich else 'false'}\n"
         f"__botCount = {args.bots}\n"
         f"__sitOutMode = {'true' if args.sit_out else 'false'}\n"
+        + (
+            "__onlyShots = { " + ", ".join(f'["{name}"] = true' for name in args.shots.split(",")) + " }\n"
+            if args.shots
+            else "__onlyShots = nil\n"
+        )
         + (devices_luau(size_names(sizes)) if sizes != "none" else "")
     )
     out = [flags + gui_dump + PRELUDE + screen_guis()]

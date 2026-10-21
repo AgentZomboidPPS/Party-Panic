@@ -2,6 +2,8 @@
 -- rhythm, pressing Down and Up like the client does. Some hold well (perfect pumps), some let go
 -- early, some hold too long, and one in eight mashes (quick taps) to check mashing loses to rhythm.
 -- Like the client, a press waits out the spring and the mode's minimum cycle since the last one.
+-- Bot7 plays a hacked client: it fires Down and Up straight at the server as fast as the server
+-- takes them, ignoring the spring and the cycle, to check that can't out-pump rhythm either.
 return function(env)
 	local mode = env.game
 	local ctx = env.ctx
@@ -12,11 +14,22 @@ return function(env)
 		for index, player in env.players do
 			local s = state[player]
 			if not s then
-				local style = if index % 8 == 0 then "mash" else (if index % 3 == 0 then "sloppy" else "good")
+				local style = if index == 7
+					then "spam"
+					elseif index % 8 == 0 then "mash"
+					elseif index % 3 == 0 then "sloppy"
+					else "good"
 				s = { Style = style, Next = now + env.rng:NextNumber(0.2, 1), Down = false, DownAt = 0, UpAt = 0 }
 				state[player] = s
 			end
 			if not env.Alive(player) then
+				continue
+			end
+			if s.Style == "spam" then
+				-- Down and Up on alternate steps (0.05 s apart): each action every 0.1 s, under the
+				-- server's rate limit.
+				s.Down = not s.Down
+				env.Action(player, if s.Down then "Down" else "Up")
 				continue
 			end
 			if s.Down then
@@ -58,6 +71,19 @@ return function(env)
 				end
 			end
 			env.note(`air at 12s: {table.concat(parts, ", ")}`)
+			-- The hacked client's air against the best honest pumper's (it must not be ahead).
+			local spammer = env.players[7]
+			local cheat = spammer and mode.pumpers[spammer]
+			if cheat then
+				local best = 0
+				for player, pumper in mode.pumpers do
+					if player ~= spammer then
+						best = math.max(best, pumper.Air)
+					end
+				end
+				local air, bestAir = math.floor(cheat.Air * 10) / 10, math.floor(best * 10) / 10
+				env.note(`spam {spammer.Name}: air {air} in {cheat.Pumps} pumps at 12s; best rhythm player {bestAir}`)
+			end
 		end
 		local popped = env.Shared("Popped")
 		if popped and not env.poppedNoted then

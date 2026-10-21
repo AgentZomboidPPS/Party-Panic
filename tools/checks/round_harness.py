@@ -8,6 +8,17 @@ working tree. Prints errors, the end reason, results and every event the clients
 Luau execution runs scripts but not physics, so the stand-in players don't fall or walk: their
 bot (tools/checks/bots/<Id>.luau) moves them with PivotTo and sends the actions a client would.
 That's why mini-games check positions and distances on the server instead of relying on Touched.
+
+With --client, Bot1 runs the client half like a real player in the round. --client-sits-out makes it a
+spectator instead (sitting the round out: on the server with PP_SitOut, not in the round), and
+--client-out-at T knocks it out T seconds into the round (ctx:Eliminate): with --ui-at, what someone
+watching sees (no mode buttons for them, for one).
+
+During the rules card: --leave-at T makes every stand-in leave T seconds in, and --spawn-fails gives
+them no character, so with --bots only bots are left: the round is called off (summary: calledOff).
+--reset-at T kills the last stand-in's character T seconds in (a reset); the summary's "reset" says
+where it is at GO and after. --bot FILE swaps the stand-ins' script (tools/checks/bots/<Id>.luau) for
+a scenario of your own, e.g. tools/checks/scenarios/*.luau.
 """
 
 import argparse
@@ -85,7 +96,7 @@ def rewrite(module: str, text: str, is_init: bool) -> str:
 def other_mode(module: str, game: str) -> bool:
     """Another mini-game's rules, brain or client half (a round only needs its own)."""
     modes = {path.stem for path in (SRC / "server" / "MiniGames").glob("*.luau")} - {"init"}
-    for prefix in ("Server/MiniGames/", "Server/MiniGames/Bots/", "Client/MiniGames/"):
+    for prefix in ("Server/MiniGames/", "Server/MiniGames/Bots/", "Client/MiniGames/", "Server/World/Props/"):
         name = module[len(prefix):] if module.startswith(prefix) else None
         if name in modes and name != game:
             return True
@@ -102,7 +113,8 @@ PRELUDE = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (Pat
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("game", help="mode id, or LOBBY for the lobby with bots (uses --bots, --seconds)")
+    parser.add_argument("game", help="mode id, LOBBY for the lobby with bots (uses --bots, --seconds), or SKEEBALL "
+                        "for a Skee-Ball game in the lobby's arcade (tools/checks/skeeball_game.luau)")
     parser.add_argument("--players", type=int, default=12)
     parser.add_argument("--seconds", type=float, default=0, help="stop after this many seconds (0 = game length)")
     parser.add_argument("--client", action="store_true", help="also run the client half as Bot1")
@@ -113,6 +125,12 @@ def main():
     parser.add_argument("--ui-at", help="with --client: snapshot the player's screen UI at these round times, e.g. 2,10 (see ui_render.py)")
     parser.add_argument("--sizes", help="with --ui-at: screens to lay the UI out on with the engine (ui_render.py's "
                         "names or groups; default: touch with --touch, else pc)")
+    parser.add_argument("--client-sits-out", action="store_true", help="with --client: Bot1 sits this round out and watches")
+    parser.add_argument("--client-out-at", type=float, default=None, help="with --client: knock Bot1 out this many seconds in")
+    parser.add_argument("--leave-at", type=float, default=None, help="every stand-in leaves this many seconds into the rules card")
+    parser.add_argument("--spawn-fails", action="store_true", help="the stand-ins have no character, so they can't be placed")
+    parser.add_argument("--reset-at", type=float, default=None, help="the last stand-in's character dies this many seconds into the rules card")
+    parser.add_argument("--bot", help="stand-in script to use instead of tools/checks/bots/<Id>.luau")
     args = parser.parse_args()
 
     header = "__touchMode = true\n" if args.touch else "__touchMode = false\n"
@@ -127,9 +145,10 @@ def main():
     for module, path in paths.items():
         if module == "Shared/Remotes":
             continue  # replaced by the harness's recording stand-in
-        if args.game != "LOBBY" and other_mode(module, args.game):
+        lobby = args.game in ("LOBBY", "SKEEBALL")
+        if not lobby and other_mode(module, args.game):
             continue  # keeps the bundle under Luau execution's 1 MB script limit
-        if args.game == "LOBBY" and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES):
+        if lobby and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES):
             continue  # the lobby keeps LOBBY_MODES only
         is_init = path.name == "init.luau"
         body = rewrite(module, path.read_text(), is_init)
@@ -144,16 +163,29 @@ def main():
         line += 1
     if args.map:
         Path(args.map).write_text(json.dumps(line_map))
-    bot_file = BOTS / f"{args.game}.luau"
+    bot_file = Path(args.bot) if args.bot else BOTS / f"{args.game}.luau"
     bot = bot_file.read_text() if bot_file.exists() else "return function() end"
     out.append("local __bot = (function()\n" + bot + "\nend)()")
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)
     ui = "nil" if not args.ui_at else "{" + ", ".join(str(float(t)) for t in args.ui_at.split(",")) + "}"
-    if args.game == "LOBBY":
+    if args.game == "SKEEBALL":
+        out.append((Path(__file__).resolve().parent / "skeeball_game.luau").read_text())
+        out.append("return __runSkeeBall()")
+    elif args.game == "LOBBY":
         out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8}, 10)")
     else:
-        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots})')
+        def number(value):
+            return "nil" if value is None else str(value)
+
+        watch = "{ sitOut = %s, outAt = %s, leaveAt = %s, spawnFails = %s, resetAt = %s }" % (
+            "true" if args.client_sits_out else "false",
+            number(args.client_out_at),
+            number(args.leave_at),
+            "true" if args.spawn_fails else "false",
+            number(args.reset_at),
+        )
+        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots}, {watch})')
     sys.stdout.write("\n".join(out))
 
 

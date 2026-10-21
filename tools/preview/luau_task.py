@@ -8,10 +8,10 @@ that adds it). The script runs in a fresh server: the game's own scripts don't s
 is saved, so it can't change the live game.
 """
 import os
-import json, random, sys, time, urllib.request, urllib.error
+import json, random, re, sys, time, urllib.request, urllib.error
 U = int(os.environ.get("PP_UNIVERSE_ID", "10772087888"))
 P = int(os.environ.get("PP_PLACE_ID", "78868713931081"))
-RETRY_FOR = 900  # seconds to keep retrying when Roblox says "too many requests" (429) or is briefly down (5xx)
+RETRY_FOR = 1800  # seconds to keep retrying when Roblox says "too many requests" (429) or is briefly down (5xx)
 def req(method, url, body=None):
     headers = {"Content-Type": "application/json"}
     if os.environ.get("ROBLOX_API_KEY"):
@@ -27,9 +27,18 @@ def req(method, url, body=None):
         except urllib.error.HTTPError as e:
             detail = e.read().decode()[:2000]
             if (e.code == 429 or e.code >= 500) and time.time() < give_up:
-                print(f"busy ({e.code}), retrying in {wait}s", file=sys.stderr)
-                time.sleep(wait + random.uniform(0, wait / 2))
-                wait = min(wait * 2, 60)
+                # Starting a task is capped at 5 a minute for everyone sharing the place, and a 429 says
+                # when that minute is up: try again just after it, a random moment later, so a task
+                # that has waited long has the same chance as a new one (a doubling wait left it trying
+                # once a minute while newcomers tried every few seconds, and it starved).
+                reset = re.match(r"\s*(\d+)", e.headers.get("X-Ratelimit-Reset") or "") if e.code == 429 else None
+                if reset:
+                    pause = int(reset.group(1)) + random.uniform(0.2, 3)
+                else:
+                    pause = wait + random.uniform(0, wait / 2)
+                    wait = min(wait * 2, 60)
+                print(f"busy ({e.code}), retrying in {pause:.0f}s", file=sys.stderr)
+                time.sleep(pause)
                 continue
             sys.exit(f"{method} {url}: HTTP {e.code} {detail}")
         except (urllib.error.URLError, TimeoutError) as e:

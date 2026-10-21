@@ -27,7 +27,7 @@
 -- Every team gets the same plates, so a good team could finish them all: skill shows in the score
 -- through ⭐ cakes. A finished cake scores 1, a ⭐ cake (every layer a PERFECT press) scores 2, and
 -- the pills show both counts (🎂 cakes, ⭐ cakes). A tie on points is broken by perfect presses, then
--- good layers (the results say so).
+-- good layers.
 --
 -- Judged by what each player saw (owner: "We need to fine tune some of the hitboxes. the precision
 -- games will feel super bad if we dont."): the ADD button sends the time on the player's clock
@@ -44,8 +44,20 @@
 -- even the best bots slip now and then, so a sharp human team beats them. There are no moving
 -- hazards: the belt only carries cakes, so nothing needs a separate bot check. Bots on the winning
 -- team hop for joy when the belts stop.
+--
+-- Audit pass (owner: "it just has to work"): the packer judges each cake the frame it reaches it,
+-- and the frame the round ends the belt stops where the packer last looked, so time-up never
+-- leaves a cake past the packer unjudged (it used to look every 0.1 s while the belt ran on until
+-- Stop, so a finished cake could stop past it unboxed and not count). A repeat press on the cake
+-- you just did is ignored even once that cake has slid past the window (it used to SPLAT it).
+-- Presses may come 0.05 s apart (was 0.12 s): a player running two machines can need two presses
+-- a tenth of a second apart, and the old limit dropped the second one without a word while their
+-- lane showed it done.
+-- When a teammate leaves, the belt's new owners are shared before the player who took over is told,
+-- so their "You now run" hint goes under their new lane instead of over it.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Teams = require(ReplicatedStorage.Shared.Teams)
 
@@ -334,6 +346,8 @@ function CakeFactory:Prepare()
 	self.acc = (CakeFactory.V_END - CakeFactory.V0) / duration
 	self.t0 = nil :: number?
 	self.stopAt = nil :: number?
+	self.packedAt = nil :: number? -- when the packer last looked (the belt stops there)
+	self.stopped = false
 	self.workers = {} :: { [Player]: Worker }
 	self.lines = {} :: { [string]: Line }
 	self.order = {} :: { string }
@@ -810,6 +824,9 @@ function CakeFactory:_leave(player: Player)
 		end
 	end
 	self:_spots(line)
+	-- The new owners go out first: a client places the "You now run" hint under its lanes, so the
+	-- lane it just gained has to be there before the hint (it used to land on top of that lane).
+	self:_shareBelt()
 	-- Only teammates whose spot changed walk over (and are told what they run now).
 	for _, member in line.Members do
 		local other = self.workers[member]
@@ -829,7 +846,6 @@ function CakeFactory:_leave(player: Player)
 		end
 		self.context:Fire(member, "Reassigned", kinds)
 	end
-	self:_shareBelt()
 end
 
 -- When a press of ADD is judged: where the belt was on the player's screen when they pressed.
@@ -921,16 +937,18 @@ function CakeFactory:_add(player: Player, sentAt: any)
 	else
 		local cake = self:Cake(line, bestK)
 		local last = worker.Last
-		if math.abs(bestOffset) > CakeFactory.WINDOW + slack then
-			kind = "splat"
-		elseif
+		if
 			cake.N >= best
 			and last
 			and last.K == bestK
 			and last.Index == best
 			and at - last.At < CakeFactory.DOUBLE_TAP
 		then
-			return -- a double tap on the cake you just did, before its layer could show: nothing
+			-- A double tap on the cake you just did, before its layer could show: nothing (checked
+			-- before the window, as the cake may have slid past it since the first tap).
+			return
+		elseif math.abs(bestOffset) > CakeFactory.WINDOW + slack then
+			kind = "splat"
 		elseif cake.N ~= best - 1 then
 			kind = if cake.N >= best then "double" else "wrong"
 		else
@@ -967,9 +985,12 @@ function CakeFactory:Start()
 	self.started = true
 	self.t0 = ctx:Now() + 0.2
 	self:_shareBelt()
+	-- One press per 0.05 s: a player running two machines can need two presses a tenth of a second
+	-- apart (their windows come back to back), and mashing gains nothing (a repeat on the cake you
+	-- just did is ignored, an early press splats, a press with no cake near jams).
 	ctx:OnAction("Add", function(player, sentAt)
 		self:_add(player, sentAt)
-	end, { Interval = 0.12 })
+	end, { Interval = 0.05 })
 
 	-- Anyone who left (or never spawned) before the hook was set.
 	local gone = {}
@@ -982,17 +1003,29 @@ function CakeFactory:Start()
 		self:_leave(player)
 	end
 
-	-- The packer judges every cake that reaches it, and the machines note cakes that went by
-	-- without their layer (judged where the belt was MAX_LAG ago, the most a press can be judged
-	-- in the past, so no press still on its way could have counted).
+	-- The packer judges each cake the frame it reaches it; the first frame after the round ends
+	-- (time up, or everyone left) the belt stops where the packer last looked (the round manager
+	-- calls Stop a moment later), so no cake is ever left past the packer unjudged.
+	ctx:Heartbeat(function()
+		self:_pack(ctx:Now())
+	end)
+	local watch: RBXScriptConnection
+	watch = ctx:Track(RunService.Heartbeat:Connect(function()
+		if not ctx:IsRunning() then
+			watch:Disconnect()
+			self:_halt()
+		end
+	end))
+
+	-- The machines note cakes that went by without their layer (judged where the belt was MAX_LAG
+	-- ago, the most a press can be judged in the past, so no press still on its way could have
+	-- counted).
 	local lastStatus, status, faster = 0, nil, 1
 	ctx:Loop(function(): number?
 		local now = ctx:Now()
-		local distance = self:Distance(now)
 		local late = self:Distance(now - CakeFactory.MAX_LAG)
 		for _, team in self.order do
 			local line = self.lines[team]
-			local changed = false
 			for index, station in line.Stations do
 				local passed =
 					math.floor((CakeFactory.START + late - station.X - CakeFactory.RUIN) / CakeFactory.SPACING)
@@ -1005,25 +1038,7 @@ function CakeFactory:Start()
 				end
 				line.Passed[index] = math.max(line.Passed[index], passed)
 			end
-			local judged = math.floor((CakeFactory.START + distance - CakeFactory.BOX) / CakeFactory.SPACING)
-			for k = line.Judged + 1, judged do
-				local cake = self:Cake(line, k)
-				local good = not cake.Bad and cake.N == #line.Stations
-				local star = good and cake.P >= #line.Stations
-				if good then
-					line.Done += 1
-					if star then
-						line.Stars += 1
-					end
-					ctx:AddTeamScore(team, if star then 2 else 1)
-				else
-					line.Ruined += 1
-				end
-				ctx:Fire(nil, "Boxed", team, k, good, line.Done, star, line.Stars)
-				changed = true
-			end
-			line.Judged = math.max(line.Judged, judged)
-			if changed or now - lastStatus > 0.9 then
+			if now - lastStatus > 0.9 then
 				self:_shareCakes(line)
 			end
 		end
@@ -1045,6 +1060,49 @@ function CakeFactory:Start()
 		end
 		return 0.1
 	end)
+end
+
+-- The packer: each cake that has reached it by `now` is boxed if it has every layer (1 point, 2
+-- for a ⭐ cake whose every layer was perfect) or tipped into the bin.
+function CakeFactory:_pack(now: number)
+	local ctx = self.context
+	local distance = self:Distance(now)
+	for _, team in self.order do
+		local line = self.lines[team]
+		local judged = math.floor((CakeFactory.START + distance - CakeFactory.BOX) / CakeFactory.SPACING)
+		if judged > line.Judged then
+			for k = line.Judged + 1, judged do
+				local cake = self:Cake(line, k)
+				local good = not cake.Bad and cake.N == #line.Stations
+				local star = good and cake.P >= #line.Stations
+				if good then
+					line.Done += 1
+					if star then
+						line.Stars += 1
+					end
+					ctx:AddTeamScore(team, if star then 2 else 1)
+				else
+					line.Ruined += 1
+				end
+				ctx:Fire(nil, "Boxed", team, k, good, line.Done, star, line.Stars)
+			end
+			line.Judged = judged
+			self:_shareCakes(line)
+		end
+	end
+	self.packedAt = now
+end
+
+-- Stops the belts where the packer last looked (never before GO) and tells everyone.
+function CakeFactory:_halt()
+	if self.stopAt then
+		return
+	end
+	self.stopAt = math.max(self.packedAt or self.context:Now(), self.t0 or -math.huge)
+	self:_shareBelt()
+	for _, team in self.order do
+		self:_shareCakes(self.lines[team])
+	end
 end
 
 -- A team's points: 1 per finished cake, 2 per ⭐ cake.
@@ -1105,15 +1163,12 @@ function CakeFactory:_rank(team: string): number
 end
 
 function CakeFactory:Stop(_reason: string?)
-	if not self.started or self.stopAt then
+	if not self.started or self.stopped then
 		return
 	end
+	self.stopped = true
 	local ctx = self.context
-	self.stopAt = ctx:Now()
-	self:_shareBelt()
-	for _, team in self.order do
-		self:_shareCakes(self.lines[team])
-	end
+	self:_halt() -- (usually done already, the frame the round ended)
 	local team = self:_leader()
 	if team then
 		ctx:Announce(`{CakeFactory.Shapes[team]} {string.upper(team)} WINS!`, "success", 2.5)
@@ -1131,7 +1186,9 @@ function CakeFactory:Stop(_reason: string?)
 	end
 end
 
--- Team results (most points first, then perfect presses); each player's line shows their own work.
+-- Team results (most points first, then perfect presses); each player's line shows the team's 🎂 and
+-- ⭐ cakes as its pill showed them and their own good layers, the figure the standings showed all
+-- round ("Yellow 🎂 12 ⭐ 3 • 14 layers": short enough to read whole on the results card).
 function CakeFactory:GetResults()
 	local results = self.context:TeamResults()
 	for _, entry in results.Entries do
@@ -1141,8 +1198,7 @@ function CakeFactory:GetResults()
 		end
 		local worker = self.workers[entry.Player]
 		if worker and line then
-			entry.ScoreText =
-				`{entry.Team} {line.Done} cakes, {line.Stars} ⭐ • {worker.Good} layers, {worker.Perfect} perfect`
+			entry.ScoreText = `{entry.Team} 🎂 {line.Done} ⭐ {line.Stars} • {worker.Good} layers`
 		end
 	end
 	results.WinningTeam = self:_leader()

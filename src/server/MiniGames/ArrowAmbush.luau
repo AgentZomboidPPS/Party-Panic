@@ -30,6 +30,14 @@
 --  * Boards block arrows that visibly touch them: the frame is 3.78 studs either side and 8.14
 --    high (TargetBoard mesh, on 0.46 rails), plus the arrowhead's 0.15. It was 3.6 and 8, so an
 --    arrow could clip a board's edge on screen and still tag the runner hiding behind it.
+--
+-- Bug pass (owner: "it just has to work"): a runner who goes out without an arrow (a reset) reads
+-- "Out at 12s" in the standings and results instead of "Running".
+--
+-- At the buzzer (the same owner words): an arrow that came down just before time ran out used to be
+-- dropped with the round before its runners were judged, so a tag on the runner's screen didn't
+-- count. Now the round's end waits for the last look (RoundContext.HoldEnd), and nothing after the
+-- buzzer counts: no new shots, no arrow that comes down after it, no more seconds for runners.
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
@@ -704,9 +712,11 @@ function ArrowAmbush:_land(arrow: Arrow)
 			archer = player
 		end
 	end
+	-- One that comes down after the buzzer (while the round's end waits for another) is too late.
+	local inTime = ctx:InTime(arrow.T1)
 	if arrow.Board > 0 then
 		local board = self.boards[arrow.Board]
-		if archer and board then
+		if archer and board and inTime then
 			local points = math.min(board.V, BOARD_CAP - (self.bonus[archer] or 0))
 			if points > 0 then
 				self.bonus[archer] = (self.bonus[archer] or 0) + points
@@ -718,7 +728,9 @@ function ArrowAmbush:_land(arrow: Arrow)
 	end
 	-- Judge each runner by where they were on their own screen when it landed: their moves reach us
 	-- half a ping (a round trip) late, so look then, and again JUDGE_SPREAD later; a tag needs both.
-	for _, runner in ctx:GetAlivePlayers() do
+	-- If time runs out meanwhile, the round's end waits for that last look (RoundContext.HoldEnd).
+	local runners = if inTime then ctx:GetAlivePlayers() else {}
+	for _, runner in runners do
 		if self.role[runner] ~= "Runner" or self.tagged[runner] then
 			continue
 		end
@@ -726,6 +738,7 @@ function ArrowAmbush:_land(arrow: Arrow)
 			return (runner :: any):GetNetworkPing()
 		end)
 		local lag = if ok and type(ping) == "number" then math.clamp(ping, 0, 0.4) / 2 else 0.05
+		ctx:HoldEnd(lag + JUDGE_SPREAD + 0.05)
 		local function second(first: number)
 			ctx:Delay(JUDGE_SPREAD, function()
 				self:_judge(arrow, runner, archer, first)
@@ -869,13 +882,17 @@ function ArrowAmbush:Start()
 	ctx.Hooks.PlayerLeft = function()
 		self:_refresh()
 	end
-	ctx.Hooks.Eliminated = function()
+	ctx.Hooks.Eliminated = function(player)
+		if self.role[player] == "Runner" and not self.tagged[player] then
+			-- Out without an arrow (a reset): the standings and results say so, not "Running".
+			ctx:SetScoreText(player, string.format("Out at %ds", math.floor(ctx:Elapsed())))
+		end
 		self:_refresh()
 	end
 
 	ctx:OnAction("Shoot", function(player, x, z)
-		if self.role[player] ~= "Archer" or self.ended then
-			return
+		if self.role[player] ~= "Archer" or self.ended or ctx:TimeIsUp() then
+			return -- (once time is up no arrow could land in time)
 		end
 		if type(x) ~= "number" or type(z) ~= "number" or x ~= x or z ~= z then
 			return
@@ -936,7 +953,7 @@ function ArrowAmbush:Start()
 				end
 			end
 		end
-		if now - lastSecond >= 1 then
+		if now - lastSecond >= 1 and not ctx:TimeIsUp() then
 			lastSecond = now
 			for _, player in ctx:GetAlivePlayers() do
 				if self.role[player] == "Runner" and not self.tagged[player] then

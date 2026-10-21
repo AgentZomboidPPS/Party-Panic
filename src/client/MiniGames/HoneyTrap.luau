@@ -4,7 +4,15 @@
 --
 -- Art pass: warm storybook grading, a leafy vine, and (unless effects are reduced) pollen motes,
 -- blossom petals drifting off the oak, butterflies over the flower beds and bees round the hives.
+--
+-- Timing pass (owner: "the precision games will feel super bad if we dont"): the block follows the
+-- server's own rule (Logic/HoneyBlock), so it stops on the deadline's face like the server does
+-- instead of flipping on until the result arrives. A HIT says which face showed and when it was
+-- pressed, so one made just before the buzzer still counts when it gets there after it.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local HoneyBlock = require(ReplicatedStorage.Shared.Logic.HoneyBlock)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -103,14 +111,8 @@ local function fallbackModel(kind: string): Model
 	return model
 end
 
--- The time-of-turn face of the block (the server uses the same rule).
-local function faceAt(turn, t: number): number
-	if t <= turn.T0 then
-		return turn.First
-	end
-	local flips = math.floor((t - turn.T0) / turn.Flip)
-	return ((turn.First - 1 + flips) % 2) + 1
-end
+-- The time-of-turn face of the block (the server judges hits with the same rule).
+local faceAt = HoneyBlock.FaceAt
 
 function HoneyTrap.Start(api)
 	api:Mood({
@@ -480,7 +482,7 @@ function HoneyTrap.Start(api)
 		end
 		pending = turn.Id
 		predicted = faceAt(turn, t)
-		api:Action("Hit", predicted)
+		api:Action("Hit", predicted, t) -- the face on screen, and when (a hit just before the buzzer counts)
 		api:Sound("Hit")
 	end
 	hit.Pressed:Connect(tryHit)
@@ -521,7 +523,7 @@ function HoneyTrap.Start(api)
 				turnText.Text = "🎲 YOUR TURN!"
 				turnText.TextColor3 = Theme.Colors.Yellow
 				api:Sound("Countdown")
-				setHint("Press HIT or jump to stop the block on 1 or 2!")
+				setHint("🎲 HIT or jump to take 1 or 2!")
 			else
 				turnText.Text = `🎲 {new.Name}'s turn`
 				turnText.TextColor3 = Theme.Colors.Text
@@ -804,7 +806,8 @@ function HoneyTrap.Start(api)
 			local face = turn.Result or (if turn.User == me and predicted then predicted else faceAt(turn, t))
 			local drop = math.clamp((now - turnShownAt) / 0.35, 0, 1)
 			local done = turn.Result ~= nil
-			local hop = if done then 0 else math.max(0, 0.35 - ((t - turn.T0) % turn.Flip)) * 1.2
+			local stopped = done or t >= turn.Deadline -- it stops by itself at the deadline
+			local hop = if stopped then 0 else math.max(0, 0.35 - ((t - turn.T0) % turn.Flip)) * 1.2
 			local lift = (1 - ease(drop)) * 5 + hop + math.sin(now * 3) * 0.2
 			if pad then
 				dice:PivotTo(

@@ -824,7 +824,9 @@ local function buildChampions()
 	refresh()
 end
 
--- Hide today's secret token for players who already found it.
+-- Hide today's secret token for players who already found it. The token's Day attribute is the
+-- day it's for (it moves at midnight UTC), so it shows again for the new day without waiting for
+-- a new profile.
 local function bindSecretToken()
 	local lobby = workspace:WaitForChild("Lobby", 30)
 	local token = lobby and lobby:WaitForChild("SecretToken", 30) :: BasePart?
@@ -832,7 +834,14 @@ local function bindSecretToken()
 		return
 	end
 	local function refresh()
-		local found = State.Profile and State.Profile.Daily and State.Profile.Daily.SecretFound
+		local daily = State.Profile and State.Profile.Daily
+		local tokenDay = token:GetAttribute("Day")
+		local found
+		if daily and type(daily.SecretDay) == "number" and type(tokenDay) == "number" then
+			found = daily.SecretDay >= tokenDay
+		else
+			found = daily ~= nil and daily.SecretFound == true
+		end
 		token.LocalTransparencyModifier = if found then 1 else 0
 		local sparkles = token:FindFirstChildOfClass("Sparkles")
 		if sparkles then
@@ -840,6 +849,7 @@ local function bindSecretToken()
 		end
 	end
 	State.ProfileChanged:Connect(refresh)
+	token:GetAttributeChangedSignal("Day"):Connect(refresh)
 	refresh()
 end
 

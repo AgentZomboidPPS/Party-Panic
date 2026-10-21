@@ -30,6 +30,11 @@
 -- just the leeway). And the meter only starts filling when the server starts counting: the client
 -- waits out the same minimum CYCLE between presses, so a quick tap followed by a careful hold is
 -- no longer judged short of what the meter showed.
+--
+-- Audit pass ("it just has to work"): a press let go before its hold began (it came early and was
+-- waiting out the spring or the cycle) never happened: no air, no pump, and it doesn't start a new
+-- cycle. Before, every Down-Up pair counted as at least a weak puff, so a hacked client firing them
+-- at the server as fast as it takes actions out-pumped perfect timing.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -80,6 +85,7 @@ type Pumper = {
 	DownAt: number,
 	UpAt: number,
 	LastDownAt: number,
+	PrevDownAt: number, -- LastDownAt before this press (a press that never began gives it back)
 	Pumps: number,
 	Perfect: number,
 	Air: number,
@@ -446,6 +452,7 @@ function PumpAndPop:Prepare()
 				DownAt = 0,
 				UpAt = -math.huge,
 				LastDownAt = -math.huge,
+				PrevDownAt = -math.huge,
 				Pumps = 0,
 				Perfect = 0,
 				Air = 0,
@@ -586,11 +593,13 @@ function PumpAndPop:_down(player: Player)
 	end
 	-- A press that arrives while the plunger is still springing back (network jitter) counts, but
 	-- its hold starts once the plunger is up; and presses are never closer than a full cycle,
-	-- whatever the ping, so an early Down gains nothing.
+	-- whatever the ping, so an early Down gains nothing (let go before the hold starts and the
+	-- press never happened: see _up).
 	local leeway = leewayFor(player)
 	local start = math.max(now, pumper.UpAt + PumpAndPop.SPRING - leeway, pumper.LastDownAt + PumpAndPop.CYCLE)
 	pumper.Down = true
 	pumper.DownAt = start
+	pumper.PrevDownAt = pumper.LastDownAt
 	pumper.LastDownAt = start
 	ctx:Fire(nil, "Push", player.UserId)
 end
@@ -603,6 +612,13 @@ function PumpAndPop:_up(player: Player, slipped: boolean?)
 	local ctx = self.context
 	local now = ctx:Now()
 	pumper.Down = false
+	if not slipped and now < pumper.DownAt then
+		-- Let go before the hold began: the plunger never went down, so this is no pump (not even a
+		-- weak puff) and the cycle runs from the last real press.
+		pumper.LastDownAt = pumper.PrevDownAt
+		ctx:Fire(nil, "Pump", player.UserId, 0, "none")
+		return
+	end
 	pumper.UpAt = now
 	local station = self.stations[pumper.Team]
 	if self.winner or not station then
@@ -728,7 +744,9 @@ function PumpAndPop:Stop(reason: string?)
 	end
 end
 
--- Team results (best balloon first, by exact fill); each player's line shows their own pumps.
+-- Team results (best balloon first, by exact fill); each player's line shows their own perfect pumps,
+-- the figure the standings showed all round ("Yellow 100% • 22 perfect": short enough to read whole on
+-- the results card beside a name).
 function PumpAndPop:GetResults()
 	local results = self.context:TeamResults()
 	for _, entry in results.Entries do
@@ -738,8 +756,7 @@ function PumpAndPop:GetResults()
 		end
 		local pumper = self.pumpers[entry.Player]
 		if pumper then
-			entry.ScoreText =
-				`{entry.Team} {station and self:_percent(station) or 0}% • {pumper.Pumps} pumps, {pumper.Perfect} perfect`
+			entry.ScoreText = `{entry.Team} {station and self:_percent(station) or 0}% • {pumper.Perfect} perfect`
 		end
 	end
 	results.WinningTeam = self:_leader()

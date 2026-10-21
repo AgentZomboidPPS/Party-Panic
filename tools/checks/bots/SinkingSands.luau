@@ -1,7 +1,8 @@
 -- Test bot for Sinking Sands (tools/checks/round_harness.py). Stand-in Divers walk to treasure on
 -- the sand, dragged by the sand exactly as a player's device drags its own character, and one in a
 -- while one wanders into the sinkhole; stand-in Sand Kings press SWIRL and PULL. Luau execution has
--- no physics, so bots move rigs with env.Move (on the sand's surface).
+-- no physics, so bots move rigs with env.Move (on the sand's surface). Just before the buzzer it
+-- notes each real bot's (--bots) role, skill and score, to see how skill shows in the haul.
 return function(env)
 	local ctx = env.ctx
 	local mode = env.game
@@ -11,6 +12,7 @@ return function(env)
 	local plans = {}
 	local presses = { Swirl = 0, Pull = 0 }
 	local reported = false
+	local botsReported = false
 
 	return function(elapsed)
 		local now = ctx:Now()
@@ -105,6 +107,21 @@ return function(env)
 			env.note(
 				`kings {kings} divers {divers}; presses swirl {presses.Swirl} pull {presses.Pull}; team scores Divers {scores.Divers or 0} SandKings {scores.SandKings or 0}; items on sand {items}; segments {#mode.segments}`
 			)
+		end
+		-- Just before the buzzer: each real bot's skill and haul so far (for the bot brain's tuning).
+		if elapsed > 54 and not botsReported then
+			botsReported = true
+			local rows = {}
+			for _, player in ctx:GetPlayers() do
+				local bot = player :: any
+				if bot.IsBot then
+					local state = ctx:State(player)
+					local role = if mode:IsKing(player) then "king" else "diver"
+					local skill = string.format("%.2f", bot.Skill)
+					table.insert(rows, `{bot.ShortName} {role} skill {skill} score {if state then state.Score else 0}`)
+				end
+			end
+			env.note("bot skills: " .. table.concat(rows, "; "))
 		end
 	end
 end

@@ -126,3 +126,74 @@ test("a SWIRL carries treasure away from a Diver standing on it", function()
 	local apart = math.sqrt((cx - x) ^ 2 + (cz - z) ^ 2)
 	expectTrue(apart > 3, `walker and coin only {apart} studs apart`)
 end)
+
+test("SandSwirl.Detour walks round the hole, never across it", function()
+	-- Walking (one step at a time, as a bot re-plans) from one side of the hole to a coin on the
+	-- far side keeps out of the hole, and gets there: from just outside the keep-out ring, from far
+	-- up the slope, and from inside it (dragged in), where it never goes deeper.
+	local keepOut = 8
+	local ax, az = -9, 0.5
+	for _, start in { { 12, 0 }, { 25, -3 }, { 7, 1 } } do
+		local x, z = start[1], start[2]
+		local closest = math.min(math.sqrt(x * x + z * z), keepOut)
+		for _ = 1, 400 do
+			local gx, gz = SandSwirl.Detour(x, z, ax, az, keepOut)
+			local dx, dz = gx - x, gz - z
+			local d = math.sqrt(dx * dx + dz * dz)
+			if d < 0.3 then
+				break
+			end
+			x, z = x + dx / d * 0.3, z + dz / d * 0.3
+			closest = math.min(closest, math.sqrt(x * x + z * z))
+		end
+		local from = `from ({start[1]}, {start[2]})`
+		expectTrue(
+			closest > math.min(keepOut, math.sqrt(start[1] ^ 2 + start[2] ^ 2)) - 0.4,
+			`{from}: came within {closest}`
+		)
+		near(math.sqrt((x - ax) ^ 2 + (z - az) ^ 2), 0, 0.5, `{from}: reached the coin`)
+	end
+
+	-- A clear way is taken straight; an aim inside the keep-out ring is met at its edge (a grab
+	-- reaches the rest of the way).
+	local sx, sz = SandSwirl.Detour(20, 0, 15, 5, keepOut)
+	near(sx, 15, 1e-9, "straight x")
+	near(sz, 5, 1e-9, "straight z")
+	local ex, ez = SandSwirl.Detour(12, 0, 6, 0, keepOut)
+	near(ex, keepOut, 1e-9, "edge x")
+	near(ez, 0, 1e-9, "edge z")
+
+	-- Dragged a little inside the ring while waiting at its edge for treasure deeper in: straight
+	-- back to the spot on the edge, not a swing out and round.
+	local wx, wz = SandSwirl.Detour(7.8, 0, 6, 0.5, keepOut)
+	local wr = math.sqrt(6 ^ 2 + 0.5 ^ 2)
+	near(wx, 6 / wr * keepOut, 1e-9, "edge spot x")
+	near(wz, 0.5 / wr * keepOut, 1e-9, "edge spot z")
+end)
+
+test("SandSwirl.KingCount: one more Sand King than one per four, never all Kings", function()
+	local expected = {
+		[1] = 0,
+		[2] = 1,
+		[3] = 1,
+		[4] = 1,
+		[5] = 2,
+		[6] = 2,
+		[7] = 3,
+		[8] = 3,
+		[9] = 3,
+		[10] = 4,
+		[11] = 4,
+		[12] = 4,
+	}
+	for count = 1, 12 do
+		local kings = SandSwirl.KingCount(count)
+		expectTrue(kings == expected[count], `{count} players: {kings} Kings, expected {expected[count]}`)
+		if count >= 2 then
+			expectTrue(kings >= 1 and kings < count, `{count} players: someone Dives, someone is King`)
+		end
+		if count >= 3 then
+			expectTrue(kings < count - kings, `{count} players: fewer Kings than Divers`)
+		end
+	end
+end)

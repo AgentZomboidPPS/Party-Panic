@@ -1,0 +1,11 @@
+newmtl Kelp
+Kd 0.235 0.627 0.353
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bulbs
+Kd 1.000 0.941 0.667
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

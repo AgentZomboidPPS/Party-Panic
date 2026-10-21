@@ -76,6 +76,9 @@ CAMERAS: dict[str, dict] = {
     "HexMeltdown": {"yaw": 20, "pitch": 46, "distance": 86, "shift": [0, -6, 8], "raise": 5},
     # The honey tree's vine of fruit and honeycombs, bees chasing someone out, players on their pads.
     "HoneyTrap": {"yaw": -15, "pitch": 26, "distance": 44, "fov": 55, "shift": [-1, 5, -5], "raise": 12},
+    # Low in front of the launch line: two wind-up toys just launched, flying toward the camera, the
+    # players who wound them behind their pads.
+    "MechaMarathon": {"yaw": 200, "pitch": 13, "distance": 26, "fov": 46, "shift": [-3, 4, -15], "raise": 9, "sway": 8},
     # The turning field from a player's corner: lanes, veggies and bombs, the silo in the middle.
     "RakeItIn": {"look_at": "SiloBody", "yaw": 30, "pitch": 30, "distance": 50, "shift": [0, -4, 0], "raise": 2},
     # Over the cutters' shoulders: their boards with the dotted outlines half cut, the giant glass of
@@ -83,6 +86,9 @@ CAMERAS: dict[str, dict] = {
     "CrazyCutters": {"yaw": 80, "pitch": 40, "distance": 38, "shift": [-12, -5, 0], "raise": 2},
     # Across the candy factory hall at the CAKE FACTORY sign: the team belts with cakes on them.
     "CakeFactory": {"look_at": "Sign", "yaw": 200, "pitch": 24, "distance": 42, "shift": [0, -29, -26], "raise": 6},
+    # Over a team's shoulders at its grill: the giant knife lined up over the steak, the glowing line
+    # where it will cut, the coals under the grate.
+    "PrimeCut": {"look_at": "CutLine", "yaw": 28, "pitch": 36, "distance": 39, "shift": [-0.5, 0, 10.5], "raise": 4},
     # A team pumping its balloon (with a face), a rival team's balloon beside it.
     "PumpAndPop": {"yaw": 25, "pitch": 12, "distance": 40, "shift": [0, 8.5, -4], "sway": 8},
     # Two riders who just bumped, the sea and a palm island behind.
@@ -91,8 +97,15 @@ CAMERAS: dict[str, dict] = {
     "ArrowAmbush": {"yaw": 15, "pitch": 22, "distance": 40, "shift": [0, -3, 2], "raise": 12},
     # Behind the pack, down the bridge: crates ahead, the viaduct towers and the canyon either side.
     "SkateEscape": {"yaw": 12, "pitch": 15, "distance": 30, "shift": [0, 2, 0], "raise": 5, "sway": 8},
+    # Low through the gaps between the floors: rivals around a fresh hole in the packed snow, one
+    # dropping through, two more on the blue ice below (no dolly, so they stay in sight under it).
+    "Spleef": {"look_at": "Water", "yaw": 210, "pitch": 8, "distance": 49, "fov": 44, "shift": [2, 27.5, -1],
+               "raise": 7, "bob": 1, "dolly": 0},
     # Divers at the rim of the swirling sinkhole, treasure on the sand around it.
     "SinkingSands": {"yaw": 30, "pitch": 30, "distance": 36, "shift": [0, 2, 6]},
+    # Low over the water: a shark's fin between the rafts, swimmers and coins on the decks, the
+    # lighthouse and the sea stacks beyond.
+    "SharkBait": {"look_at": "Gills", "yaw": 35, "pitch": 30, "distance": 27, "shift": [0, 1, 0], "raise": 7, "fov": 58},
 }
 
 # Seconds into the round to take the snapshot, where the default (8) isn't the liveliest moment.
@@ -101,9 +114,13 @@ DUMP_AT: dict[str, float] = {
     "CakeFactory": 14,  # cakes with a few layers on every belt
     "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
+    "MechaMarathon": 12.5,  # a second after lift-off: the toys climbing away from their pads
+    "PrimeCut": 9,  # the first steak, a second before the chop: the knives lined up
     "PumpAndPop": 16,  # the balloons are big by now
     "SkateEscape": 10,
+    "Spleef": 12,  # holes dug in every floor, players on all three
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole
+    "SharkBait": 13,  # a raft tipping, coins spilled in the water, the sharks closing in
 }
 
 R15 = {

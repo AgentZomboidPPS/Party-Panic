@@ -15,6 +15,8 @@ Teams.Colors = {
 	Runners = Color3.fromRGB(80, 200, 255),
 	SandKings = Color3.fromRGB(230, 170, 70),
 	Divers = Color3.fromRGB(110, 210, 255),
+	Sharks = Color3.fromRGB(235, 85, 100),
+	Swimmers = Color3.fromRGB(255, 196, 60),
 } :: { [string]: Color3 }
 
 Teams.Icons = {
@@ -26,6 +28,17 @@ Teams.Icons = {
 	Runners = "🏃",
 	SandKings = "👑",
 	Divers = "💎", -- not 🪙: phones show nothing for it (newer than Roblox's emoji font)
+	Sharks = "🦈",
+	Swimmers = "🏊",
+} :: { [string]: string }
+
+-- The shape each colour team wears, so a team never goes by its colour alone (the team modes draw the
+-- same ones on their pills, stations and sleds: Pump & Pop, Cake Factory, Bobsled Run).
+Teams.Shapes = {
+	Red = "★",
+	Blue = "●",
+	Green = "▲",
+	Yellow = "◆",
 } :: { [string]: string }
 
 function Teams.Color(name: string?): Color3?

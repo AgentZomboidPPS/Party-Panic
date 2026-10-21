@@ -15,6 +15,12 @@
 --   api:Sound(name) / Effect     sound and particle effects for this player only
 --   api:Participants()           everyone in this round, players and bots alike
 --   api:CharacterOf(userId)      anyone's character by UserId, bots included
+--   api:CanAct() / OnCanAct      whether this player can use the mode's controls right now
+--
+-- Buttons are only for people who can use them: anyone watching the round (sitting it out with the
+-- PLAYING / SITTING OUT switch, joined after it started, or already knocked out) and everyone once it's
+-- over sees the mode without its buttons, because the server only takes actions from players still
+-- in the round. Api.Button does this for every mode; a mode's own SetVisible still applies on top.
 
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
@@ -144,6 +150,25 @@ function Api.Alive(_self: Api): boolean
 	return State.InRound() and State.Alive()
 end
 
+-- Whether this player's controls can do anything right now: they're in this round, not knocked out,
+-- and the round isn't over (the server turns away actions from anyone else: RoundContext._onAction).
+-- Someone who flips to SITTING OUT mid-round still finishes it (Services/SitOutService), so that
+-- switch alone doesn't count; they're in the round until it ends.
+function Api.CanAct(self: Api): boolean
+	local phase = GameState.Get("Phase")
+	return (phase == "Preparing" or phase == "InRound") and self:Alive()
+end
+
+-- Calls `callback(canAct)` whenever Api.CanAct may have changed (joined, knocked out, round over).
+function Api.OnCanAct(self: Api, callback: (canAct: boolean) -> ())
+	local function changed()
+		callback(self:CanAct())
+	end
+	self.Janitor:Add(self.Player:GetAttributeChangedSignal("PP_InRound"):Connect(changed))
+	self.Janitor:Add(self.Player:GetAttributeChangedSignal("PP_Alive"):Connect(changed))
+	self.Janitor:Add(GameState.Changed("Phase", changed))
+end
+
 function Api.Character(self: Api): (Model?, Humanoid?, BasePart?)
 	local character = self.Player.Character
 	if not character then
@@ -237,6 +262,7 @@ local function jumpButtonSpot(gui: ScreenGui): (number, number, number)
 end
 
 -- A big round button (beside the jump button on phones, bottom middle on PC) that also listens to a key.
+-- It only shows (and its key only works) while this player can act (Api.CanAct): spectators never see it.
 function Api.Button(self: Api, options: ButtonOptions): ActionButton
 	local slot = options.Slot or 1
 	local color = options.Color or Theme.Colors.Pink
@@ -244,6 +270,8 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 	local released = Signal.new()
 	local isDown = false
 	local enabled = true
+	local wanted = true -- the mode's own SetVisible
+	local canAct = self:CanAct()
 
 	local holder = UIKit.new("Frame", {
 		Name = "Action_" .. options.Text,
@@ -315,7 +343,7 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 	local scale = UIKit.new("UIScale", { Parent = button })
 
 	local function press()
-		if not enabled or isDown then
+		if not enabled or isDown or not canAct then
 			return
 		end
 		isDown = true
@@ -330,6 +358,17 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 		scale.Scale = 1
 		released:Fire()
 	end
+	local function refreshShown()
+		holder.Visible = wanted and canAct
+		if not holder.Visible then
+			release()
+		end
+	end
+	refreshShown()
+	self:OnCanAct(function(value)
+		canAct = value
+		refreshShown()
+	end)
 	self.Janitor:Add(button.MouseButton1Down:Connect(press))
 	self.Janitor:Add(button.MouseButton1Up:Connect(release))
 	self.Janitor:Add(button.MouseLeave:Connect(release))
@@ -365,10 +404,8 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 		end
 	end
 	function api.SetVisible(_api, value: boolean)
-		holder.Visible = value
-		if not value then
-			release()
-		end
+		wanted = value
+		refreshShown()
 	end
 	function api.SetFill(_api, fraction: number, fillColor: Color3?)
 		fill.Size = UDim2.fromScale(1, math.clamp(fraction, 0, 1))

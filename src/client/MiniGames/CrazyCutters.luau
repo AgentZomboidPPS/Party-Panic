@@ -17,6 +17,15 @@
 -- counts its stretch as cut (so "Missed a spot!" always leaves a brown dot to find), and positions
 -- the server hasn't confirmed yet go again with the next batch (a lost or dropped batch would
 -- otherwise leave the server judging a straight shortcut where you traced a curve).
+--
+-- Bug pass (owner: "it just has to work"): every batch now really carries all the positions the
+-- server hasn't confirmed (a dropped batch used to wait for a resend and be overtaken by the next
+-- one, so the server lost that stretch for good); a finger held on the screen from one cookie to
+-- the next keeps steering; the cookie's name fits on one line ("🍄 MUSHROOM 3/3" spilled over the
+-- time bar), and the bar is yellow, not the last cookie's red, during the next 3-2-1; your own
+-- board's name tag no longer sits behind the round banner on phones; and someone who rejoins
+-- mid-round watches instead of getting their old board under a camera they can't leave, with their
+-- character stuck in the lobby and a cut that can't count.
 
 local ContextActionService = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -161,6 +170,10 @@ function CrazyCutters.Start(api)
 	for _, participant in api:Participants() do
 		names[participant.UserId] = participant.DisplayName
 	end
+	-- Your board is only yours while you're in this round: someone who drops out and rejoins (same
+	-- UserId, but the server no longer counts them) watches instead of tracing a cut that can't count
+	-- under a camera they can't leave.
+	local playing = api:Alive()
 
 	-- Boards ------------------------------------------------------------------------------------
 	local boards: { [number]: Board } = {}
@@ -173,7 +186,7 @@ function CrazyCutters.Start(api)
 			User = data.User,
 			Frame = frame,
 			Top = frame * CFrame.new(0, doughTop, 0),
-			Mine = data.User == me.UserId,
+			Mine = playing and data.User == me.UserId,
 			Dots = {},
 			DotAt = {},
 			DotSize = Rules.DOT_SIZE,
@@ -222,7 +235,10 @@ function CrazyCutters.Start(api)
 				Parent = api.World,
 			})
 		end
-		-- Name and scores over the board's far edge.
+		-- Name and scores over the board's far edge. Not over your own: the camera over your board
+		-- puts that spot right behind the round banner and the status line (on a 667x375 phone the
+		-- 260x64 tag covered y 14-78, the banner and status line y 15-76), and behind your panel
+		-- and hints when it pulls back; your panel shows your score, and each cookie's grade is called.
 		local anchor = part({
 			Name = "BoardLabel",
 			Size = Vector3.one * 0.2,
@@ -234,6 +250,7 @@ function CrazyCutters.Start(api)
 		billboard.Size = UDim2.fromOffset(260, 64)
 		billboard.MaxDistance = 140
 		billboard.LightInfluence = 0
+		billboard.Enabled = not board.Mine
 		billboard.Adornee = anchor
 		billboard.Parent = anchor
 		board.Label = UIKit.Label({
@@ -242,7 +259,7 @@ function CrazyCutters.Start(api)
 			TextSize = 26,
 			TextScaled = true,
 			Size = UDim2.fromScale(1, 1),
-			TextColor3 = if board.Mine then Theme.Colors.Yellow else Color3.new(1, 1, 1),
+			TextColor3 = Color3.new(1, 1, 1),
 			Parent = billboard,
 			Children = { UIKit.TextStroke(0.2) },
 		})
@@ -492,6 +509,8 @@ function CrazyCutters.Start(api)
 		Parent = hud,
 		Children = { UIKit.Corner(14), UIKit.Stroke(rgb(255, 214, 150), 2, 0.3) },
 	})
+	-- The longest name, "🍄 MUSHROOM 3/3", is 236 wide at this size: it needs the room on one line
+	-- (in 230 it wrapped onto a second line over the time bar). The time, at most "⏱ 14", is 59 wide.
 	local shapeLabel = UIKit.Label({
 		Name = "Shape",
 		Text = "",
@@ -499,7 +518,7 @@ function CrazyCutters.Start(api)
 		TextSize = 30,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(14, 4),
-		Size = UDim2.fromOffset(230, 44),
+		Size = UDim2.fromOffset(250, 44),
 		Parent = panel,
 		Children = { UIKit.TextStroke(0.3) },
 	})
@@ -508,8 +527,8 @@ function CrazyCutters.Start(api)
 		Text = "",
 		Font = Theme.Fonts.Display,
 		TextSize = 30,
-		Position = UDim2.fromOffset(244, 4),
-		Size = UDim2.fromOffset(90, 44),
+		Position = UDim2.fromOffset(264, 4),
+		Size = UDim2.fromOffset(70, 44),
 		Parent = panel,
 		Children = { UIKit.TextStroke(0.3) },
 	})
@@ -646,7 +665,13 @@ function CrazyCutters.Start(api)
 
 	-- Touch: the wheel copies the finger's moves from where it is (from where it was when the
 	-- finger went down), so the finger can be anywhere and lifting it never makes the wheel jump.
+	-- The finger's spot is read again here, as the camera may have moved under a still finger
+	-- (pulled back to watch, and in again for the next cookie).
 	local function regrip()
+		local held = activeTouch
+		if mine and held then
+			fingerAt = boardPoint(held.Position, true) or fingerAt
+		end
 		if mine and fingerAt then
 			dragFrom = fingerAt
 			wheelFrom = mine.Pos
@@ -756,25 +781,25 @@ function CrazyCutters.Start(api)
 		return direction
 	end
 
-	-- Sends the new positions (no sooner than the server takes a batch), together with any sent a
-	-- while ago that the server still hasn't confirmed: two batches arriving in one server frame, or
-	-- a lost one, would otherwise leave a gap the server scores as a straight shortcut.
+	-- Sends the new positions (no sooner than the server takes a batch), together with every earlier
+	-- one the server hasn't confirmed yet (it skips the ones it already has). When two batches
+	-- arrive in one server frame the action limit drops the second; if its positions waited until
+	-- they looked overdue, the next batch would get there first, and once the server has taken a
+	-- newer position it can never take older ones: it would score a straight shortcut where you
+	-- traced a curve (and a cut finished on your screen could stay unfinished on the server).
 	local function flush(now: number, force: boolean?)
 		if not round or #recent == 0 or now - lastSend < 0.04 or now > round.T1 + LATE_SEND then
 			return
 		end
-		local ok, ping = pcall(function()
-			return (me :: any):GetNetworkPing()
-		end)
-		local overdue = now - SEND_EVERY - 0.1 - (if ok and type(ping) == "number" then math.clamp(ping, 0, 1) else 0.3)
 		local fresh = 0
 		local batch = {}
 		for at = 1, #recent - 2, 3 do
 			local t = recent[at]
+			if t <= confirmed then
+				continue -- the server has it
+			end
 			if t > sentUpTo then
 				fresh += 1
-			elseif t <= confirmed or t > overdue then
-				continue -- the server has it, or it may still be on its way
 			end
 			table.insert(batch, t)
 			table.insert(batch, recent[at + 1])
@@ -826,7 +851,11 @@ function CrazyCutters.Start(api)
 			end
 		end
 		if data.Phase == "Score" then
-			pointerDown = false
+			-- A mouse lets go of the wheel (the next cookie starts with a fresh grab of the green
+			-- dot); a finger still on the screen keeps steering, from wherever the wheel is then.
+			if not activeTouch then
+				pointerDown = false
+			end
 			if mine and tracker and not mine.Done then
 				watching = true
 			end
@@ -983,6 +1012,7 @@ function CrazyCutters.Start(api)
 				end
 				timeLabel.Text = `⏱ {math.floor(round.T1 - round.T0 + 0.5)}`
 				bar.Size = UDim2.fromScale(1, 1)
+				bar.BackgroundColor3 = Theme.Colors.Yellow -- a full bar, not the last cookie's red end
 			elseif cutting then
 				if lastCount ~= 0 then
 					lastCount = 0

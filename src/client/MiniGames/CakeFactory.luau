@@ -14,6 +14,10 @@
 -- answer arrives, so the cue never invites a second tap that would ruin it. A press with no cake
 -- near jams the machine: ADD turns red and says ✕ JAMMED. The pills show each team's 🎂 cakes and
 -- ⭐ cakes (every layer perfect, worth 2); the camera starts behind you, looking at your machine.
+--
+-- Audit pass (owner: "it just has to work"): when a teammate leaves, the "You now run" hint lands
+-- under the lane you gained (the server sends the new owners first; it used to cover that lane),
+-- and on phones it lists just the machines' icons, short enough to stay clear of the move stick.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -908,7 +912,12 @@ function CakeFactory.Start(api)
 		local names = {}
 		for _, kind in kinds do
 			if type(kind) == "string" then
-				table.insert(names, `{ICONS[kind] or ""} {string.upper(kind)}`)
+				-- Phones: just the icons (the lanes right above spell them out), so the line stays
+				-- short enough to keep clear of the move stick's corner.
+				table.insert(
+					names,
+					if touch then ICONS[kind] or string.upper(kind) else `{ICONS[kind] or ""} {string.upper(kind)}`
+				)
 			end
 		end
 		if #names > 0 then
