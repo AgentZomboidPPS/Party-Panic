@@ -204,6 +204,19 @@ local list: { GameDefinition } = {
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
+		Id = "ParasolPlummet",
+		Name = "Parasol Plummet",
+		Category = "Luck",
+		Icon = "☂️",
+		Color = Color3.fromRGB(110, 190, 255),
+		Objective = "Drift down the sky and catch the coins the throwers toss. Bags are worth 5! Dodge the hammers. Most coins wins!",
+		Controls = "Steer left and right (stick, A/D). Hold DIVE (Space) to shut your umbrella and drop; let go to float up.",
+		Duration = 35,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
 		Id = "Spleef",
 		Name = "Spleef",
 		Category = "Survival",
