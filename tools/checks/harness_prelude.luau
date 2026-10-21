@@ -518,6 +518,11 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		end
 		player.Parent = nil
 		__playerRemoving:Fire(player)
+		-- A BindableEvent copies a stand-in (table) player, so the round never finds the copy: tell it
+		-- directly (a no-op when the event already did).
+		if type(player) == "table" then
+			ctx:_onLeave(player)
+		end
 	end
 
 	local tick = if okPrepare then botFactory(env) else nil
