@@ -133,6 +133,17 @@ re-grants everything too). Until a mesh is uploaded and approved by moderation t
 MeshLibrary corrects for Roblox's importer, which turns glTF models half a turn.
 `Kit/Scenery` has ready-made settings: `Meadow`, `LavaLake`, `Ground`, `Volcano`, `RockRim`.
 
+Three rules that keep props visible to everyone:
+
+- **Faces point outward.** Roblox draws only the front of a face, so an inside-out part renders
+  black or hollow. The shared helpers (`tube`, `taper`, `sdf_mesh`, `extrude`) face outward; don't
+  flip their faces. The generator warns about inside-out parts, and
+  `python3 tools/checks/mesh_orientation.py assets/meshes/Pump.glb` must report 0. The previews
+  hide back faces the way Roblox does.
+- **Every prop has its own `Name = { AssetId = ..., }` block** in `World/Props/<Mode>.luau`, even
+  when a helper fills in the rest: the upload, permission and moderation tools read those blocks.
+- **Prop names start with the mode's name** (`TanksShell`, not `Shell`): props share one namespace.
+
 ## 6. Teach the bots to play it
 
 Bots fill empty spots so every round feels full (`Config.Bots`: the server keeps 8 participants while
@@ -176,6 +187,9 @@ python3 tools/checks/ui_render.py ui.json out --sizes all                       
 `render.py` needs Blender's `bpy` (Python 3.11). `ui_render.py` draws the player's screen at PC,
 phone, small phone and tablet sizes with Roblox's buttons, thumbstick and jump button, and lists
 overlaps and anything off-screen.
+
+Open Cloud runs at most 1 MB of Luau per test, so the round harness bundles only the mode it tests
+(and blanks comment lines): a mode must never require another mode's modules.
 
 ## 8. Give it a portal preview
 
