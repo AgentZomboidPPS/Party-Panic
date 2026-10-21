@@ -255,6 +255,19 @@ local list: { GameDefinition } = {
 		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "Slaparazzi",
+		Name = "Slaparazzi",
+		Category = "Knockback",
+		Icon = "📸",
+		Color = Color3.fromRGB(255, 90, 170),
+		Objective = "Be in the photo frame when the camera flashes: +3 in the middle, +2, +1. 7 photos, most points wins!",
+		Controls = "Walk into the frame. SLAP rivals out of the shot!",
+		Duration = 54,
+		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 

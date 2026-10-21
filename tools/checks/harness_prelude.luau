@@ -512,7 +512,8 @@ end
 -- What happens to the stand-ins during the rules card (round_harness.py --leave-at / --reset-at):
 -- every one of them leaves `leaveAt` seconds in (only real bots stay), or the last one's character
 -- dies `resetAt` seconds in, like a reset from the Roblox menu; the report says where it is at GO
--- and after (it should be back on its spot and still in).
+-- and after (it should be back on its spot, or where a respawn mode's Respawn hook puts it, and
+-- still in).
 function __prepEvents(ctx, roundPlayers, watch, summary, leave, prepStart, prepDeadline)
 	if watch.leaveAt then
 		task.delay(math.max(0, prepStart + watch.leaveAt - os.clock()), function()
