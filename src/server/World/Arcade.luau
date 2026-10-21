@@ -310,10 +310,11 @@ local function fitColliders(machine: Model, frame: CFrame)
 		ramp(`WallFront{tag}`, w0, w1, lip, railTop(lip), lip + WALL_SLOPE, WALL_TOP + CAP)
 		box(`Wall{tag}`, w0, w1, 0, WALL_TOP + CAP, lip + WALL_SLOPE, back - 0.05)
 	end
-	-- The chute on the right-hand rail (the tops of its two rails; the balls wait between them).
+	-- The chute on the right-hand rail: halfway between the tops of its two rails and the cap
+	-- between them, where the balls wait.
 	local lastZ = SkeeBall.CHUTE_Z + (SkeeBall.BALLS - 1) * SkeeBall.CHUTE_STEP + 0.55
 	local function chuteTop(at: number): number
-		return SkeeBall.CHUTE_Y + (at - SkeeBall.CHUTE_Z) * SkeeBall.CHUTE_RISE - 0.025
+		return SkeeBall.CHUTE_Y + (at - SkeeBall.CHUTE_Z) * SkeeBall.CHUTE_RISE - 0.15
 	end
 	ramp("Chute", SkeeBall.CHUTE_X - CHUTE_HALF, -lane, front + 0.05, chuteTop(front + 0.05), lastZ, chuteTop(lastZ))
 	-- The lane and its hop, the trough behind the hop and the ring board.

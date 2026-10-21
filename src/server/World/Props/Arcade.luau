@@ -11,6 +11,11 @@
 --   ArcadeTicketFloor  the arcade's patio of giant tickets and the ticket path to it.
 --   ArcadeBestBoard    the TODAY'S BEST board over the machines, on candy-striped posts.
 -- Names start with "Arcade" so they never clash with anyone else's props.
+--
+-- Invisible stuff (owner: "invisible stuff you can jump on and hang on in several games"): none of
+-- these meshes collides (a mesh's own collision is a guess at its shape); World/Arcade fits
+-- invisible colliders to the machine and the board, and the floor's are flat under its tickets. The
+-- machine and the board stop the camera, so it never slides inside them.
 return function(h)
 	local rgb = h.rgb
 	local Build = h.Build
