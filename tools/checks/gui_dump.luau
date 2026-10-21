@@ -314,6 +314,7 @@ function __dumpGui(playerGui, label)
 			e.inset = not inst.IgnoreGuiInset
 			e.insets = inst.ScreenInsets.Name
 			e.enabled = inst.Enabled
+			e.billboards = inst:GetAttribute("PP_Billboards") -- 3D name tags copied onto a screen to draw them
 		elseif inst:IsA("GuiObject") then
 			e.vis = inst.Visible
 			e.pos = udim2(inst.Position)

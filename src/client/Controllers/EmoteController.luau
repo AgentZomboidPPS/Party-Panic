@@ -155,7 +155,7 @@ function EmoteController.Start(context)
 		TextSize = 24,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(PADDING + 4, (header - 40) / 2),
-		Size = UDim2.new(1, -70, 0, 40),
+		Size = UDim2.new(1, -(closeSize + 2 * PADDING + 12), 0, 40),
 		Parent = panel,
 	})
 	UIKit.Button({

@@ -119,11 +119,12 @@ def size_names(spec: str) -> list:
     return names
 
 
-# Emoji newer than Roblox's emoji font (Unicode 12 and later): phones show nothing for them (the
-# coin 🪙 was missing on the owner's iPhone).
-NEW_EMOJI = re.compile("[\U0001FA70-\U0001FAFF\U0001F971-\U0001F97A\U0001F90C-\U0001F90F\U0001F6D5-\U0001F6D7"
-                       "\U0001F6FA-\U0001F6FC\U0001F7E0-\U0001F7F0\U0001F9A3-\U0001F9A4\U0001F9AB-\U0001F9AD"
-                       "\U0001F9CB-\U0001F9CC]")
+# Emoji newer than Roblox's emoji font (Unicode 13 and later): phones show nothing for them (the
+# coin 🪙, Unicode 13, was missing on the owner's iPhone; Unicode 12 ones like 🟢 are left alone).
+NEW_EMOJI = re.compile("[\U0001FA74-\U0001FA77\U0001FA7B-\U0001FA7F\U0001FA83-\U0001FA8F\U0001FA96-\U0001FAFF"
+                       "\U0001F6D6-\U0001F6D7\U0001F6DC-\U0001F6DF\U0001F6FB-\U0001F6FC\U0001F90C\U0001F972"
+                       "\U0001F977-\U0001F979\U0001F9A3-\U0001F9A4\U0001F9AB-\U0001F9AD\U0001F9CB-\U0001F9CC"
+                       "\U0001F7F0]")
 
 # Each character is drawn with the node's font when that has the glyph; pictographs prefer the
 # emoji font; anything else falls back to the emoji font, then DejaVu (which has most symbols).
@@ -407,6 +408,11 @@ def render(nodes: list, size_name: str, out: Path):
             w = max(w, need_w)
         return w, h
 
+    def text_padding(i, w, h, k):
+        """A text node's UIPadding in screen points (its box is w x h on screen at scale k)."""
+        left, right, top, bottom = padding_of(i, w / max(k, 1e-6), h / max(k, 1e-6))
+        return left * k, right * k, top * k, bottom * k
+
     def allowed_lines(n, text):
         """How many lines a text may take: PP_Lines, else one per paragraph for headlines and
         scaled text that isn't meant to wrap, else as many as fit its box."""
@@ -524,7 +530,8 @@ def render(nodes: list, size_name: str, out: Path):
         if visible:
             counter[0] += 1
             seq = counter[0]
-            text_info = text_layout(n, x1 - x0, y1 - y0, own.k, record) if "text" in n else None
+            pl, pr, pt, pb = text_padding(i, x1 - x0, y1 - y0, own.k)
+            text_info = text_layout(n, x1 - x0 - pl - pr, y1 - y0 - pt - pb, own.k, record) if "text" in n else None
             draws.append((seq, i, (x0, y0, x1, y1), own.k, clip, text_info))
             if x1 - x0 >= vw * 0.9 and y1 - y0 >= vh * 0.9 and n.get("bgt", 1) < 0.9 and not n.get("text"):
                 dimmers.append(seq)
@@ -599,6 +606,7 @@ def render(nodes: list, size_name: str, out: Path):
     screens = [i for i in children[0] if node(i)["c"] == "ScreenGui" and node(i).get("enabled", True)]
     screens.sort(key=lambda i: node(i).get("order", 0))
     screen_rect = {}
+    billboards = {node(i)["n"] for i in screens if node(i).get("billboards")}
     for i in screens:
         n = node(i)
         area = screen_area(dev, n.get("insets", "CoreUISafeInsets"), n.get("inset", True))
@@ -664,6 +672,9 @@ def render(nodes: list, size_name: str, out: Path):
             size, lines, line_h, _ = layout
             name = n.get("font", "")
             total = line_h * len(lines)
+            pl, pr, pt, pb = text_padding(i, w, h, k)
+            box = [box[0] + pl, box[1] + pt, box[2] - pr, box[3] - pb]
+            w, h = box[2] - box[0], box[3] - box[1]
             ty = {"Top": box[1], "Center": box[1] + (h - total) / 2, "Bottom": box[3] - total}.get(n.get("ya", "Center"), box[1])
             text_stroke = None
             if stroke and stroke.get("enabled", True) and stroke.get("mode") != "Border":
@@ -722,7 +733,7 @@ def render(nodes: list, size_name: str, out: Path):
     def layer_of(b):
         return math.inf if b["screen"] == "RobloxCore" else sum(1 for s in dimmers if s < b["seq"])
 
-    everything = boxes + core
+    everything = [b for b in boxes if b["screen"] not in billboards] + core
     for a in range(len(everything)):
         A = everything[a]
         ax0, ay0, ax1, ay1 = A["box"]
@@ -809,6 +820,14 @@ def main():
             return (1, 0.0, key)
 
     total = 0
+    # The harness's own list of texts the engine says don't fit (gui_dump.luau), for every screen
+    # it laid out, drawn or not.
+    report = [line for line in (data.get("textReport") or []) if not only or line.split(" ")[0] in only]
+    if report:
+        print(f"engine text report ({len(report)}):")
+        for line in report:
+            print("    ", line)
+        total += len(report)
     for at, nodes in sorted(snapshots.items(), key=lambda kv: order(kv[0])):
         if only and at not in only:
             continue

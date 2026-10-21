@@ -43,8 +43,8 @@ local touch = false
 
 local CARDS = 4
 local CARD_W = 228 -- PC
-local TOUCH_W, TOUCH_H, TOUCH_GAP = 150, 92, 10
-local TOUCH_TOP = 14 -- room above the row for the "YOUR VOTE" tag on a card's top edge
+local TOUCH_W, TOUCH_H, TOUCH_GAP = 150, 94, 10
+local TOUCH_TOP = 12 -- room above the row for the "YOUR VOTE" tag on a card's top edge
 
 local function darker(color: Color3): Color3
 	local h, s, v = color:ToHSV()
@@ -74,11 +74,11 @@ local function buildCard(index: number): Card
 	-- icon in the corner.
 	local icon = UIKit.Label({
 		Text = "",
-		TextSize = if touch then 34 else 54,
+		TextSize = if touch then 30 else 54,
 		TextWrapped = false,
 		AnchorPoint = if touch then Vector2.new(0.5, 0) else Vector2.zero,
-		Position = if touch then UDim2.new(0.5, 0, 0, 3) else UDim2.fromOffset(12, 8),
-		Size = if touch then UDim2.fromOffset(60, 36) else UDim2.fromOffset(70, 70),
+		Position = if touch then UDim2.new(0.5, 0, 0, 12) else UDim2.fromOffset(12, 8), -- under the tag
+		Size = if touch then UDim2.fromOffset(56, 32) else UDim2.fromOffset(70, 70),
 		Parent = button,
 	})
 	local name = UIKit.Label({
@@ -89,7 +89,7 @@ local function buildCard(index: number): Card
 		TextWrapped = not touch,
 		TextXAlignment = if touch then Enum.TextXAlignment.Center else Enum.TextXAlignment.Left,
 		AnchorPoint = if touch then Vector2.new(0.5, 0) else Vector2.zero,
-		Position = if touch then UDim2.new(0.5, 0, 0, 37) else UDim2.fromOffset(86, 12),
+		Position = if touch then UDim2.new(0.5, 0, 0, 43) else UDim2.fromOffset(86, 12),
 		Size = if touch then UDim2.new(1, -10, 0, 24) else UDim2.new(1, -96, 0, 60),
 		Parent = button,
 		Children = if touch then { UIKit.TextStroke(0.3) } else { UIKit.TextStroke(0.3), fitted(26) },
@@ -101,8 +101,8 @@ local function buildCard(index: number): Card
 		Text = "",
 		TextSize = 20,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(6, 4),
-		Size = UDim2.fromOffset(28, 28),
+		Position = UDim2.fromOffset(6, 14),
+		Size = UDim2.fromOffset(26, 26),
 		Visible = touch,
 		Parent = button,
 	})
@@ -133,7 +133,7 @@ local function buildCard(index: number): Card
 	local countPill = UIKit.new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, if touch then -4 else -10),
-		Size = UDim2.new(1, if touch then -16 else -24, 0, if touch then 26 else 34),
+		Size = UDim2.new(1, if touch then -16 else -24, 0, if touch then 24 else 34),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		BackgroundTransparency = 0.2,
 		Parent = button,
@@ -156,7 +156,7 @@ local function buildCard(index: number): Card
 		BackgroundColor3 = Theme.Colors.Green,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0, 0),
-		Size = if touch then UDim2.fromOffset(124, 28) else UDim2.fromOffset(150, 30),
+		Size = if touch then UDim2.fromOffset(124, 24) else UDim2.fromOffset(150, 30),
 		Visible = false,
 		Parent = button,
 		Children = { UIKit.Round(), UIKit.TextStroke(0.3) },
@@ -231,7 +231,7 @@ function VoteController.Start(context)
 		holder = UIKit.new("Frame", {
 			Name = "Vote",
 			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 4),
+			Position = UDim2.new(0.5, 0, 0, 2),
 			Size = UDim2.fromOffset(width, TOUCH_TOP + TOUCH_H + 4),
 			BackgroundTransparency = 1,
 			Visible = false,

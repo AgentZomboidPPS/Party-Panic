@@ -332,7 +332,6 @@ local function buildPhaseBanner(parent: Instance)
 		Text = "",
 		Font = Theme.Fonts.Display,
 		TextSize = 28,
-		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(28, 0),
 		Size = UDim2.new(1, -170, 1, 0),
@@ -340,6 +339,7 @@ local function buildPhaseBanner(parent: Instance)
 		Parent = banner,
 		Children = { UIKit.TextStroke(0.3) },
 	})
+	title:SetAttribute("PP_Lines", 2) -- PC: a long message ("Waiting for 1 more player...") takes two lines
 	local timerPill = UIKit.new("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0),

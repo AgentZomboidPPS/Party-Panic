@@ -738,6 +738,7 @@ if #bots > 0 then
 	local folder = Instance.new("Folder")
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "PodiumTags"
+	screen:SetAttribute("PP_Billboards", true) -- ui_render.py: check the text, not where they sit
 	screen.Parent = folder
 	local podium = {}
 	for _, gui in __playerGui:GetChildren() do
