@@ -29,7 +29,7 @@ return function(env)
 				if player.UserId == turn.User then
 					task.delay(0.35, function()
 						sent.ArrivedAt = env.ctx:Now() - turn.T0
-						env.Action(player, "Hit", face)
+						env.Action(player, "Hit", face, now) -- the face on screen, and when (like the client)
 					end)
 				end
 			end
