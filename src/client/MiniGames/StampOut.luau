@@ -26,7 +26,7 @@ local StampOut = {}
 
 local CELL = StampGrid.CELL
 local INKS = StampGrid.INKS
-local MAX_MARKS = 140
+local MAX_MARKS = 100
 local EVENT_HOLD = 0.8 -- seconds a cell an event drew ignores the shared string
 
 local function brightness(color: Color3): number
