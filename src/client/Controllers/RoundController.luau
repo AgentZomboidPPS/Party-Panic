@@ -8,6 +8,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TextService = game:GetService("TextService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
@@ -268,6 +269,20 @@ local function refreshBoard()
 			shown[#shown] = index
 		end
 	end
+	-- The score column is as wide as the widest score shown ("5 perfect", "2 KOs", "Alive"), up to
+	-- about half the board; names give way and are shortened if they must.
+	local textSize = if touch then 19 else 18
+	local scoreWidth = if touch then 60 else 76
+	for _, index in shown do
+		local entry = entries[index]
+		local plain = if entry.text ~= "" then entry.text else tostring(entry.score)
+		local ok, bounds =
+			pcall(TextService.GetTextSize, TextService, plain, textSize, Theme.Fonts.Bold, Vector2.new(1000, 100))
+		if ok then
+			scoreWidth = math.max(scoreWidth, math.ceil(bounds.X) + 8)
+		end
+	end
+	scoreWidth = math.min(scoreWidth, if touch then 120 else 140)
 	for _, index in shown do
 		local entry = entries[index]
 		local who = entry.who
@@ -281,8 +296,6 @@ local function refreshBoard()
 			elseif entry.alive then Theme.Colors.Text
 			else Theme.Colors.TextDim
 		-- The name (shortened if it must be) and the score on the right, always shown.
-		local textSize = if touch then 19 else 18
-		local scoreWidth = if touch then 60 else 76
 		local row = UIKit.new("Frame", {
 			Size = UDim2.new(1, 0, 0, if touch then TOUCH_ROW else 24),
 			BackgroundTransparency = 1,
