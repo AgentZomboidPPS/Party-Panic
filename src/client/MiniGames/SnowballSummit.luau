@@ -203,10 +203,11 @@ function SnowballSummit.Start(api)
 		Name = "Feed",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 24,
+		TextSize = 28,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, y + 50),
-		Size = UDim2.fromOffset(360, 32),
+		Size = UDim2.fromOffset(460, 36),
+		TextScaled = true,
 		Visible = false,
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.15) },
@@ -220,7 +221,7 @@ function SnowballSummit.Start(api)
 		y
 	)
 	local hintShown = true
-	task.delay(7, function()
+	task.delay(16, function() -- the client starts during the countdown: about 7 s of play
 		if hintShown then
 			hintShown = false
 			api:Hint("")
