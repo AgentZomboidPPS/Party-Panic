@@ -149,6 +149,14 @@ local function dodge(field, tank, t: number, x: number, z: number, dx: number, d
 	return bestX, bestZ
 end
 
+-- Whether a shot this way would come back off its wall at this tank (should it miss).
+local function backAtMe(field, tank, aim: number): boolean
+	local second = TankField.Path(field, tank.X, tank.Z, aim).Segments[2]
+	local reach = math.min(second.Length, 60)
+	local ex, ez = second.X + second.DX * reach, second.Z + second.DZ * reach
+	return (segmentDistance(tank.X, tank.Z, second.X, second.Z, ex, ez)) < TankField.HALF_LENGTH + 2
+end
+
 -- A one-wall bank shot at the target, or nil (never one that comes back past this tank first).
 local function bankShot(field, tank, target): number?
 	local best, bestS = nil, math.huge
@@ -191,7 +199,9 @@ function Brain.Step(bot, ctx, mode, dt)
 	m.Seq = (m.Seq or 0) + 1
 	m.Aim = m.Aim or tank.Aim
 	m.Seen = m.Seen or {}
-	m.NextShot = m.NextShot or now + 1 + rng:NextNumber(0.4, 1.6) * (1.3 - skill) -- nobody fires the instant it's GO
+	-- First real shot a while after the spawn shield drops (sooner for skilled bots), so they don't
+	-- all open fire at once; nothing is wasted on shields before that.
+	m.NextShot = m.NextShot or (mode.startAt + TankField.SHIELD + 0.5 + 2 * rng:NextNumber(0.3, 1) * (1.25 - skill))
 
 	local enemies = {}
 	for _, other in mode.list do
@@ -407,7 +417,7 @@ function Brain.Step(bot, ctx, mode, dt)
 			m.NoiseUntil = now + rng:NextNumber(0.5, 1.1)
 		end
 		wantAim = heading(px - tank.X, pz - tank.Z) + (m.Noise or 0)
-		clear = TankField.Clear(field, tank.X, tank.Z, px, pz, 0.5)
+		clear = TankField.Clear(field, tank.X, tank.Z, px, pz, 0.5) and not backAtMe(field, tank, m.Aim)
 	else
 		if skill > 0.4 and now >= (m.BankAt or 0) then
 			m.BankAt = now + rng:NextNumber(0.7, 1.2)

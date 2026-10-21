@@ -88,6 +88,7 @@ type Shell = {
 	Path: TankField.Path,
 	End: number, -- when it reaches its second wall
 	Prev: number, -- checked up to this server time
+	Aim: number,
 	Dead: boolean,
 	Counted: boolean, -- its owner got the slot back
 }
@@ -101,6 +102,7 @@ type Mine = {
 	BlowAt: number,
 	Clear: boolean, -- its layer has driven off it
 	Dead: boolean,
+	Detonator: Tank?, -- whose shell (or blast) set it off, when not its layer's
 }
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -519,10 +521,12 @@ function Tanks:_fire(player: any, aim: any, pressedAt: any, token: any)
 		Path = path,
 		End = t0 + path.Length / SPEED,
 		Prev = t0,
+		Aim = aim,
 		Dead = false,
 		Counted = false,
 	}
 	self.shells[shell.Id] = shell
+	self.shellsDirty = true
 	ctx:Fire(nil, "Shot", shell.Id, tank.Id, t0, tank.X, tank.Z, aim, if type(token) == "number" then token else 0)
 end
 
@@ -556,6 +560,7 @@ function Tanks:_layMine(player: any)
 		Dead = false,
 	}
 	self.mines[mine.Id] = mine
+	self.minesDirty = true
 	ctx:Fire(nil, "Mine", mine.Id, tank.Id, round(mine.X, 0.01), round(mine.Z, 0.01), mine.ArmAt, mine.BlowAt)
 end
 
@@ -615,6 +620,47 @@ function Tanks:_step(dt: number)
 	self:_stepShells(prev, now)
 	self:_stepMines(now)
 	self:_flushOuts()
+	self:_shareShots()
+end
+
+-- Live mines and shells as shared state too (the events are only cues): a screen that starts late
+-- (a slow phone, someone rejoining or watching) still draws every mine and shell that's out.
+function Tanks:_shareShots()
+	local ctx = self.context
+	if self.minesDirty then
+		self.minesDirty = false
+		local list = {}
+		for id, mine in self.mines do
+			if not mine.Dead then
+				list[tostring(id)] = {
+					mine.Owner.Id,
+					round(mine.X, 0.01),
+					round(mine.Z, 0.01),
+					round(mine.ArmAt, 0.001),
+					round(mine.BlowAt, 0.001),
+				}
+			end
+		end
+		ctx:SetSharedJSON("Mines", list)
+	end
+	if self.shellsDirty then
+		self.shellsDirty = false
+		local now = ctx:Now()
+		local list = {}
+		for id, shell in self.shells do
+			if not shell.Dead and now < shell.End then
+				local first = shell.Path.Segments[1]
+				list[tostring(id)] = {
+					shell.Owner.Id,
+					shell.T0,
+					first.X,
+					first.Z,
+					shell.Aim,
+				}
+			end
+		end
+		ctx:SetSharedJSON("Shells", list)
+	end
 end
 
 -- The first point (path distance) at which a shell's flight between s0 and s1 touches a hull.
@@ -646,12 +692,13 @@ local function hullHit(path: TankField.Path, s0: number, s1: number, tank: Tank)
 end
 
 -- Distance from a point to the segment a-b.
-local function segmentDistance(px: number, pz: number, ax: number, az: number, bx: number, bz: number): number
+-- Distance from a point to the segment a-b, and where along it (0..1) it's closest.
+local function segmentDistance(px: number, pz: number, ax: number, az: number, bx: number, bz: number): (number, number)
 	local dx, dz = bx - ax, bz - az
 	local length2 = dx * dx + dz * dz
 	local t = if length2 > 1e-9 then math.clamp(((px - ax) * dx + (pz - az) * dz) / length2, 0, 1) else 0
 	local cx, cz = ax + dx * t - px, az + dz * t - pz
-	return math.sqrt(cx * cx + cz * cz)
+	return math.sqrt(cx * cx + cz * cz), t
 end
 
 function Tanks:_popShell(shell: Shell, s: number, kind: string)
@@ -659,6 +706,7 @@ function Tanks:_popShell(shell: Shell, s: number, kind: string)
 		return
 	end
 	shell.Dead = true
+	self.shellsDirty = true
 	if not shell.Counted then
 		shell.Counted = true
 		shell.Owner.Shells = math.max(0, shell.Owner.Shells - 1)
@@ -701,22 +749,28 @@ function Tanks:_stepShells(prev: number, now: number)
 			end
 			continue
 		end
-		local s0 = math.max((shell.Prev - shell.T0) * SPEED, 0)
+		-- Mines it flies into (only once it's out of the barrel, as clients draw it), popping where
+		-- it meets the first one.
+		local s0 = math.max((shell.Prev - shell.T0) * SPEED, TankField.SHELL_SHOWN)
 		local s1 = math.min((now - shell.T0) * SPEED, path.Length)
-		-- Mines it flies into.
-		if s1 > s0 then
-			local ax, az = TankField.At(path, s0)
-			local bx, bz = TankField.At(path, s1)
+		local hitS, hitMine = math.huge, nil
+		TankField.Pieces(path, s0, s1, function(ax, az, bx, bz, sa, sb)
 			for _, mine in self.mines do
-				if
-					not mine.Dead
-					and segmentDistance(mine.X, mine.Z, ax, az, bx, bz) <= TankField.MINE_RADIUS + radius
-				then
-					self:_popShell(shell, s1, "mine")
-					self:_blast(mine, now)
-					break
+				if mine.Dead then
+					continue
+				end
+				local d, t = segmentDistance(mine.X, mine.Z, ax, az, bx, bz)
+				if d <= TankField.MINE_RADIUS + radius then
+					local s = sa + (sb - sa) * t
+					if s < hitS then
+						hitS, hitMine = s, mine
+					end
 				end
 			end
+		end)
+		if hitMine then
+			self:_popShell(shell, hitS, "mine")
+			self:_blast(hitMine, now, shell.Owner)
 		end
 		if shell.Dead then
 			continue
@@ -726,6 +780,7 @@ function Tanks:_stepShells(prev: number, now: number)
 			-- players judged a little in the past).
 			shell.Counted = true
 			shell.Owner.Shells = math.max(0, shell.Owner.Shells - 1)
+			self.shellsDirty = true
 		end
 		shell.Prev = now
 		if now - MAX_LAG > shell.End then
@@ -739,26 +794,31 @@ function Tanks:_stepShells(prev: number, now: number)
 			table.insert(live, shell)
 		end
 	end
+	local shown = TankField.SHELL_SHOWN / SPEED -- seconds from T0 until a shell leaves its barrel
 	for i = 1, #live do
 		local a = live[i]
-		if a.Dead then
+		if a.Dead or now < a.T0 + shown then
 			continue
 		end
-		local a0x, a0z = TankField.At(a.Path, math.max(prev - a.T0, 0) * SPEED)
-		local a1x, a1z = TankField.At(a.Path, (now - a.T0) * SPEED)
 		for j = i + 1, #live do
 			local b = live[j]
-			if b.Dead then
+			if b.Dead or now < b.T0 + shown then
 				continue
 			end
-			local b0x, b0z = TankField.At(b.Path, math.max(prev - b.T0, 0) * SPEED)
+			-- Over the part of this frame when both are out of their barrels: the closest approach of
+			-- their relative motion.
+			local from = math.max(prev, a.T0 + shown, b.T0 + shown)
+			local a0x, a0z = TankField.At(a.Path, (from - a.T0) * SPEED)
+			local a1x, a1z = TankField.At(a.Path, (now - a.T0) * SPEED)
+			local b0x, b0z = TankField.At(b.Path, (from - b.T0) * SPEED)
 			local b1x, b1z = TankField.At(b.Path, (now - b.T0) * SPEED)
-			-- Relative motion from (b0 - a0) to (b1 - a1): closest approach to zero.
 			local rx0, rz0 = b0x - a0x, b0z - a0z
 			local rx1, rz1 = b1x - a1x, b1z - a1z
-			if segmentDistance(0, 0, rx0, rz0, rx1, rz1) <= 2 * radius + 0.3 then
-				self:_popShell(a, (now - a.T0) * SPEED, "shell")
-				self:_popShell(b, (now - b.T0) * SPEED, "shell")
+			local d, t = segmentDistance(0, 0, rx0, rz0, rx1, rz1)
+			if d <= 2 * radius + 0.3 then
+				local at = from + (now - from) * t
+				self:_popShell(a, (at - a.T0) * SPEED, "shell")
+				self:_popShell(b, (at - b.T0) * SPEED, "shell")
 				break
 			end
 		end
@@ -792,13 +852,35 @@ function Tanks:_stepMines(now: number)
 			end
 		end
 		if blow then
-			self:_blast(mine, now)
+			self:_blast(mine, now, mine.Detonator)
 		end
 	end
 end
 
 -- A mine goes off: every tank, shell and mine in the blast.
-function Tanks:_blast(mine: Mine, now: number)
+-- Whether a blast at (x, z) catches a tank. A player's own screen runs their tank a one-way trip
+-- ahead of the server, so a player is spared when either where the server has them or where their
+-- screen showed them is outside the ring (the benefit of the doubt, like shells).
+function Tanks:_caught(tank: Tank, x: number, z: number, radius: number): boolean
+	if not TankField.Near(tank, x, z, radius) then
+		return false
+	end
+	if tank.Bot or tank.Lag <= 0 then
+		return true
+	end
+	local ahead = {
+		X = tank.X - math.sin(tank.H) * tank.V * tank.Lag,
+		Z = tank.Z - math.cos(tank.H) * tank.V * tank.Lag,
+		H = tank.H,
+		V = tank.V,
+		Rev = tank.Rev,
+	}
+	return TankField.Near(ahead, x, z, radius)
+end
+
+-- A mine goes off: every tank, shell and mine in the blast. `detonator` is whose shell (or blast)
+-- set it off: when the blast takes the mine's own layer, that's who gets the hit.
+function Tanks:_blast(mine: Mine, now: number, detonator: Tank?)
 	if mine.Dead then
 		return
 	end
@@ -806,10 +888,17 @@ function Tanks:_blast(mine: Mine, now: number)
 	mine.Dead = true
 	mine.Owner.Mines = math.max(0, mine.Owner.Mines - 1)
 	ctx:Fire(nil, "Boom", mine.Id, round(mine.X, 0.01), round(mine.Z, 0.01))
+	self.minesDirty = true
 	local blast = TankField.MINE_BLAST
-	for _, tank in self.list do
-		if not tank.Out and now >= self.startAt + TankField.SHIELD and TankField.Near(tank, mine.X, mine.Z, blast) then
-			self:_knockOut(tank, mine.Owner, "mined")
+	if now >= self.startAt + TankField.SHIELD then
+		for _, tank in self.list do
+			if not tank.Out and self:_caught(tank, mine.X, mine.Z, blast) then
+				local by = mine.Owner
+				if tank == mine.Owner and detonator and detonator ~= tank then
+					by = detonator
+				end
+				self:_knockOut(tank, by, "mined")
+			end
 		end
 	end
 	for _, shell in self.shells do
@@ -824,6 +913,8 @@ function Tanks:_blast(mine: Mine, now: number)
 	for _, other in self.mines do
 		if not other.Dead and (other.X - mine.X) ^ 2 + (other.Z - mine.Z) ^ 2 <= blast * blast then
 			other.BlowAt = math.min(other.BlowAt, now + TankField.CHAIN_DELAY)
+			-- A chain goes back to whoever started it.
+			other.Detonator = other.Detonator or detonator or mine.Owner
 		end
 	end
 end
