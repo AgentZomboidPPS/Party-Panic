@@ -86,7 +86,7 @@ CAMERAS: dict[str, dict] = {
     # A team pumping its balloon (with a face), a rival team's balloon beside it.
     "PumpAndPop": {"yaw": 25, "pitch": 12, "distance": 40, "shift": [0, 8.5, -4], "sway": 8},
     # Two riders who just bumped, the sea and a palm island behind.
-    "BumperBallers": {"look_at": "BoingRing", "yaw": 120, "pitch": 22, "distance": 34, "shift": [0, 6, 0]},
+    "BumperBallers": {"look_at": "BoingRing", "yaw": 120, "pitch": 34, "distance": 58, "shift": [0, 2, 0], "raise": 4},
     # The archers' tower from the field, a runner and a target board in front.
     "ArrowAmbush": {"yaw": 15, "pitch": 22, "distance": 40, "shift": [0, -3, 2], "raise": 12},
     # Behind the pack, down the bridge: crates ahead, the viaduct towers and the canyon either side.

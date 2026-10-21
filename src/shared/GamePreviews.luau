@@ -16,7 +16,7 @@ export type Preview = {
 
 local previews: { [string]: Preview } = {
 	ArrowAmbush = {
-		Image = "rbxassetid://85090344603530",
+		Image = "rbxassetid://98340695825196",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),
@@ -30,7 +30,7 @@ local previews: { [string]: Preview } = {
 		Fps = 8,
 	},
 	BumperBallers = {
-		Image = "rbxassetid://103022323251086",
+		Image = "rbxassetid://90142856374456",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),
