@@ -1,0 +1,17 @@
+newmtl Posts
+Kd 0.431 0.290 0.188
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rail
+Kd 0.510 0.345 0.220
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rope
+Kd 0.824 0.706 0.510
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

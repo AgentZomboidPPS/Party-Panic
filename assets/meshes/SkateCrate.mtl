@@ -1,0 +1,17 @@
+newmtl Slats
+Kd 0.769 0.549 0.322
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Frame
+Kd 0.549 0.361 0.204
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Metal
+Kd 0.353 0.361 0.392
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

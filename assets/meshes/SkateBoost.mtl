@@ -1,0 +1,17 @@
+newmtl Pad
+Kd 0.157 0.141 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rim
+Kd 0.353 0.314 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Arrows
+Kd 1.000 0.863 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
