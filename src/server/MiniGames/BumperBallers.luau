@@ -136,8 +136,8 @@ function BumperBallers:_buildArena()
 	Build.Part({
 		Name = "IslandTop",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(6, ISLAND_RADIUS * 2, ISLAND_RADIUS * 2),
-		CFrame = CFrame.new(center.X, top - 3, center.Z) * CFrame.Angles(0, 0, math.rad(90)),
+		Size = Vector3.new(5.5, ISLAND_RADIUS * 2, ISLAND_RADIUS * 2),
+		CFrame = CFrame.new(center.X, top - 2.75, center.Z) * CFrame.Angles(0, 0, math.rad(90)),
 		Color = Color3.fromRGB(96, 190, 80),
 		Material = Enum.Material.Grass,
 		CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.6, 0.4, 1, 1),

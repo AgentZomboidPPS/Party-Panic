@@ -81,7 +81,7 @@ def ball_dots():
 # --------------------------------------------------------------------------------------- island
 
 def island():
-    segments = 160
+    segments = 192  # 48 stripes x 4: stripe ends fall on segment edges
     # Sand: from just under the water up over a rounded lip, across the top to an inner edge that
     # tucks under the grass. Listed outside-in so the top faces up.
     sand = organic_lathe([
