@@ -22,7 +22,7 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 local EmoteController = {}
 
 local COLUMNS = 4
-local CELL = 84
+local cellSize = 84 -- a little bigger on phones, so names like Confetti Pop stay readable
 local GAP = 10
 local PADDING = 12
 local MAX_ROWS = 2
@@ -71,7 +71,7 @@ local function cell(order: number, icon: string, name: string, onClick: () -> ()
 	local button = UIKit.Button({
 		Text = icon,
 		TextSize = 38,
-		Size = UDim2.fromOffset(CELL, CELL),
+		Size = UDim2.fromOffset(cellSize, cellSize),
 		CornerRadius = 22,
 		LayoutOrder = order,
 		Parent = grid,
@@ -116,7 +116,7 @@ local function render()
 		State.OpenScreen:Fire("Shop", "Emote")
 	end, Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
 	local rows = math.min(math.ceil(count / COLUMNS), MAX_ROWS)
-	grid.Size = UDim2.new(1, 0, 0, rows * CELL + (rows - 1) * GAP + 2 * PADDING)
+	grid.Size = UDim2.new(1, 0, 0, rows * cellSize + (rows - 1) * GAP + 2 * PADDING)
 end
 
 setOpen = function(open: boolean)
@@ -133,11 +133,12 @@ end
 
 function EmoteController.Start(context)
 	touch = UIKit.IsTouch()
+	cellSize = if touch then 90 else 84
 	panel = UIKit.Panel({
 		Name = "Emotes",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.45),
-		Size = UDim2.fromOffset(COLUMNS * CELL + (COLUMNS - 1) * GAP + 2 * PADDING, 0),
+		Size = UDim2.fromOffset(COLUMNS * cellSize + (COLUMNS - 1) * GAP + 2 * PADDING, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		CornerRadius = 24,
 		Visible = false,
@@ -170,7 +171,7 @@ function EmoteController.Start(context)
 	end, Theme.Colors.Red, Color3.fromRGB(190, 40, 60))
 	grid = UIKit.new("ScrollingFrame", {
 		Position = UDim2.fromOffset(0, header),
-		Size = UDim2.new(1, 0, 0, CELL + 2 * PADDING),
+		Size = UDim2.new(1, 0, 0, cellSize + 2 * PADDING),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 6,
@@ -180,7 +181,7 @@ function EmoteController.Start(context)
 		Parent = panel,
 		Children = {
 			UIKit.new("UIGridLayout", {
-				CellSize = UDim2.fromOffset(CELL, CELL),
+				CellSize = UDim2.fromOffset(cellSize, cellSize),
 				CellPadding = UDim2.fromOffset(GAP, GAP),
 				HorizontalAlignment = Enum.HorizontalAlignment.Center,
 				SortOrder = Enum.SortOrder.LayoutOrder,

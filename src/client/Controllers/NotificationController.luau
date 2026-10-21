@@ -1,7 +1,8 @@
 -- Toast notifications: short, icon-led messages that slide in and fade out (design doc §12).
 -- They draw above the HUD and mode HUDs (but under pop-ups) in a spot nothing else uses: the top
 -- right corner on PC (above the side menu), and on phones the bottom middle like Android toasts,
--- between the thumbstick and the jump button, lifted above the "you're out" and spectate panels.
+-- between the thumbstick and the jump button, lifted above the "you're out" and spectate panels
+-- (and only the newest while the rules card is up).
 -- Two at a time (a new one pushes the oldest out), so they never reach the menu or the vote.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -141,6 +142,12 @@ function NotificationController.Start(context)
 				end
 			end
 			stack.Position = UDim2.new(0.5, 0, 1, -height)
+			-- Under the rules card there's only room for one: the newest.
+			local rules = context.Hud:FindFirstChild("Rules")
+			local crowded = rules ~= nil and rules:IsA("GuiObject") and rules.Visible
+			for index, toast in active do
+				toast.Visible = not crowded or index == #active
+			end
 		end
 		local elapsed = 0
 		RunService.Heartbeat:Connect(function(dt)
