@@ -158,14 +158,16 @@ def orient(mesh: Mesh, normal) -> Mesh:
     return mesh
 
 
-def flower_head(radius, lobes, thickness, cup=0.0, seed=0):
-    """A flat flower: a lobed outline (petals) extruded thin and cupped upward, facing +Y."""
+def flower_head(radius, lobes, thickness, cup=0.0, seed=0, per_lobe=4):
+    """A flat flower: a lobed outline (petals) extruded thin and cupped upward, facing +Y. Each petal
+    is `per_lobe` outline points (4: its tip, two shoulders and the dip to the next one; 3: two
+    shoulders and the dip, for tiny flowers)."""
     rng = np.random.default_rng(seed)
     turn = rng.uniform(0, 2 * math.pi)
     points = []
-    count = lobes * 6
+    count = lobes * per_lobe
     for i in range(count):
-        theta = 2 * math.pi * i / count + turn
+        theta = 2 * math.pi * (i + 0.5 * (per_lobe % 2)) / count + turn
         r = radius * (0.55 + 0.45 * abs(math.cos(lobes * (theta - turn) / 2)) ** 0.7)
         points.append((math.cos(theta) * r, math.sin(theta) * r))
     mesh = extrude(points, thickness).rotate("x", -90)
@@ -173,6 +175,14 @@ def flower_head(radius, lobes, thickness, cup=0.0, seed=0):
     r = np.linalg.norm(mesh.v[:, [0, 2]], axis=1)
     mesh.v[:, 1] += cup * (r / radius) ** 2
     return mesh
+
+
+def bead(radius):
+    """A tiny squashed octahedron (8 triangles): a flower's middle, too small to need more."""
+    r, h = radius, radius * 0.6
+    verts = [(r, 0, 0), (0, 0, r), (-r, 0, 0), (0, 0, -r), (0, h, 0), (0, -h, 0)]
+    faces = [(4, 1, 0), (4, 2, 1), (4, 3, 2), (4, 0, 3), (5, 0, 1), (5, 1, 2), (5, 2, 3), (5, 3, 0)]
+    return outward(Mesh(verts, faces))
 
 
 def leaf(length, width, bend=0.3, segments=8):
@@ -239,7 +249,7 @@ def honey_oak():
             d = smin(d, limb(p, points, radii), 1.2)
         return np.maximum(d, -p[:, 1])  # flat underneath, sitting on the ground
 
-    trunk = outward(sdf_mesh(trunk_sdf, (-16.0, -0.5, -17.5), (17.5, 42.5, 15.5), 0.62))
+    trunk = outward(sdf_mesh(trunk_sdf, (-16.0, -0.5, -17.5), (17.5, 42.5, 15.5), 0.78))
     trunk.v[:, 1] = np.maximum(trunk.v[:, 1], 0.0)
 
     # Canopy: big soft puffs (a little crease between them), front kept clear above the vine.
@@ -257,7 +267,7 @@ def honey_oak():
         d = blob_union(p, puffs, 1.6)
         return d + 0.35 * np.mean(np.sin(p @ noise_dirs.T * 0.55 + noise_off), axis=1)
 
-    leaves = outward(sdf_mesh(canopy_sdf, (-24, 29, -20), (24, 66, 20), 1.0))
+    leaves = outward(sdf_mesh(canopy_sdf, (-24, 29, -20), (24, 66, 20), 1.3))
 
     # Lighter highlight puffs where the sun hits: on the upper surface, half poking out.
     normals_v = leaves.normals()[1]
@@ -266,7 +276,7 @@ def honey_oak():
     for i in rng.permutation(upper):
         if all(np.linalg.norm(leaves.v[i] - leaves.v[j]) > 7.0 for j in chosen):
             chosen.append(i)
-        if len(chosen) >= 16:
+        if len(chosen) >= 12:
             break
     light = []
     for n, i in enumerate(chosen):
@@ -279,7 +289,7 @@ def honey_oak():
     # Half on the top, half on the front and the underside's rim (what the players look up at).
     top = [i for i in range(len(leaves.v)) if normals_v[i][1] > -0.2 and leaves.v[i][1] > 40]
     front = [i for i in range(len(leaves.v)) if normals_v[i][2] < -0.3 and normals_v[i][1] > -0.7 and leaves.v[i][1] > 33]
-    picks = np.concatenate([rng.choice(top, 60, replace=False), rng.choice(front, 55, replace=False)])
+    picks = np.concatenate([rng.choice(top, 40, replace=False), rng.choice(front, 40, replace=False)])
     blossoms, pollen = [], []
     for n, i in enumerate(picks):
         position = leaves.v[i] + normals_v[i] * 0.15
@@ -339,16 +349,16 @@ def honey_oak():
     frame_stones = []
     for i in range(11):
         a = math.pi * i / 10
-        frame_stones.append(rounded_box(0.75, 0.55, 0.7, 0.2, 3).rotate("z", math.degrees(a) - 90)
+        frame_stones.append(rounded_box(0.75, 0.55, 0.7, 0.2, 2).rotate("z", math.degrees(a) - 90)
                             .translate(math.cos(a) * 1.85, 2.6 + math.sin(a) * 1.85, door_z - 0.15))
     for side in (-1, 1):
         for y in (0.35, 1.1, 1.85):
-            frame_stones.append(rounded_box(0.7, 0.6, 0.7, 0.2, 3).translate(side * 1.85, y, door_z - 0.15))
+            frame_stones.append(rounded_box(0.7, 0.6, 0.7, 0.2, 2).translate(side * 1.85, y, door_z - 0.15))
     knob = icosphere(0.18, 1).translate(0.85, 1.9, door_z - 0.45)
     win_y = 7.6
     win_z = surface_z(win_y)
     window = icosphere(1.0, 2).scale(1.0, 1.0, 0.3).translate(0.0, win_y, win_z - 0.02)
-    window_frame = torus(1.05, 0.26, 24, 8).rotate("x", 90).translate(0.0, win_y, win_z - 0.18)
+    window_frame = torus(1.05, 0.26, 20, 6).rotate("x", 90).translate(0.0, win_y, win_z - 0.18)
     window_bars = [rounded_box(0.12, 2.0, 0.12, 0.05, 2).translate(0, win_y, win_z - 0.28),
                    rounded_box(2.0, 0.12, 0.12, 0.05, 2).translate(0, win_y, win_z - 0.28)]
 
@@ -362,8 +372,8 @@ def honey_oak():
         strings.append(tube([(x, top, z), (x, top - drop + 0.6, z)], 0.05, 5))
         body = lathe([(0.0, -0.75), (0.45, -0.68), (0.72, -0.3), (0.76, 0.0), (0.72, 0.3), (0.45, 0.68), (0.0, 0.75)], 16)
         lanterns.append(body.translate(x, top - drop, z))
-        strings.append(torus(0.32, 0.07, 14, 5).translate(x, top - drop + 0.7, z))
-        strings.append(torus(0.32, 0.07, 14, 5).translate(x, top - drop - 0.7, z))
+        strings.append(torus(0.32, 0.07, 10, 4).translate(x, top - drop + 0.7, z))
+        strings.append(torus(0.32, 0.07, 10, 4).translate(x, top - drop - 0.7, z))
 
     anchor = icosphere(0.3, 0).translate(*ANCHOR)
     return {
@@ -425,14 +435,14 @@ def daisy_pad():
     for ring, (count, length, width, y, turn) in enumerate(((12, 1.45, 0.78, 0.08, 0.0), (12, 1.2, 0.7, 0.13, 15.0))):
         for i in range(count):
             angle = 360 * i / count + turn
-            petal = sphere(1.0, 6, 12).scale(width / 2, 0.11, length / 2)
+            petal = sphere(1.0 / 0.866, 3, 10).scale(width / 2, 0.11, length / 2)  # widest at 0.866
             # Cup the petal: tip curls up a touch.
             petal.v[:, 1] += 0.12 * (petal.v[:, 2] / (length / 2) + 1) ** 2 * 0.25
             petals.append(petal.translate(0, y, 0.95 + length / 2 - 0.15 * ring).rotate("y", angle))
     center_profile = [(1.3, 0.06), (1.32, 0.17), (1.22, 0.25), (0.95, 0.29), (0.5, 0.3), (0.0, 0.3)]
-    center = lathe(center_profile, 32, cap_bottom=True)
+    center = lathe(center_profile, 20, cap_bottom=True)
     seeds = []
-    for ring_r, count in ((0.45, 7), (0.85, 12)):
+    for ring_r, count in ((0.45, 5), (0.85, 9)):
         for i in range(count):
             a = 2 * math.pi * i / count + ring_r
             seeds.append(icosphere(0.12, 0).scale(1, 0.5, 1).translate(math.cos(a) * ring_r, 0.3, math.sin(a) * ring_r))
@@ -450,9 +460,10 @@ def daisy_pad():
 
 def honey_basket():
     """A woven picnic basket: over-and-under wicker, a rolled rim, two side loops and a gingham
-    cloth tucked over one side. Fruit lands inside (its floor is 0.25 up)."""
-    rows = 6
-    segments = 40
+    cloth tucked over the back (clear of the neighbouring baskets). Fruit lands inside (its floor
+    is 0.25 up)."""
+    rows = 5
+    segments = 32
     stakes = 16
     weave = []
 
@@ -460,27 +471,23 @@ def honey_basket():
         return 1.3 + 0.5 * (y / 1.45)
 
     for row in range(rows):
-        y0 = 0.2 + row * 0.2
+        y0 = 0.18 + row * 0.25
         points = []
         for s in range(segments + 1):
             a = 2 * math.pi * s / segments
             over = math.sin(a * stakes / 2 + row * math.pi) * 0.05
             r = wall_r(y0) + 0.04 + over
             points.append((math.cos(a) * r, y0 + 0.1, math.sin(a) * r))
-        weave.append(tube(points, 0.1, 6))
+        weave.append(tube(points, 0.125, 4))
     bowl = lathe([(0.0, 0.05), (1.2, 0.0), (1.32, 0.12), (wall_r(1.4), 1.4), (wall_r(1.4) - 0.12, 1.4),
-                  (1.22, 0.25), (0.0, 0.25)], 40)
-    uprights = []
-    for s in range(stakes):
-        a = 2 * math.pi * s / stakes
-        uprights.append(tube([(math.cos(a) * (wall_r(y) + 0.02), y, math.sin(a) * (wall_r(y) + 0.02)) for y in (0.1, 0.8, 1.4)], 0.05, 4))
-    rim = torus(wall_r(1.45) + 0.02, 0.14, 40, 8).translate(0, 1.45, 0)
-    loops = [torus(0.32, 0.07, 14, 6, 200).rotate("x", 90).rotate("z", 10 * side).rotate("y", 90)
+                  (1.22, 0.25), (0.0, 0.25)], 24)
+    rim = torus(wall_r(1.45) + 0.02, 0.14, 28, 5).translate(0, 1.45, 0)
+    loops = [torus(0.32, 0.07, 10, 4, 200).rotate("x", 90).rotate("z", 10 * side).rotate("y", 90)
              .translate(side * (wall_r(1.45) + 0.12), 1.5, 0) for side in (-1, 1)]
     for loop, side in zip(loops, (-1, 1)):
         loop.v[:, 0] = side * np.abs(loop.v[:, 0])
     cloth_v, cloth_f = [], []
-    n = 10
+    n = 8
     for i in range(n + 1):
         for j in range(n + 1):
             u, w = i / n, j / n
@@ -497,8 +504,8 @@ def honey_basket():
             cloth_f += [(a, a + n + 1, a + 1), (a + 1, a + n + 1, a + n + 2)]
     cloth_top = Mesh(cloth_v, cloth_f)
     cloth_back = Mesh(np.array(cloth_v) * np.array([0.985, 1, 0.985]) - np.array([0, 0.04, 0]), [(f[0], f[2], f[1]) for f in cloth_f])
-    cloth = merge(cloth_top, cloth_back).rotate("y", 200)
-    return {"Basket": merge(bowl, *uprights), "Weave": merge(*weave), "Rim": merge(rim, *loops), "Cloth": cloth}
+    cloth = merge(cloth_top, cloth_back).rotate("y", 270)  # draped over the back (+Z, the vine side)
+    return {"Basket": bowl, "Weave": merge(*weave), "Rim": merge(rim, *loops), "Cloth": cloth}
 
 
 # ------------------------------------------------------------------------------------ glade
@@ -544,7 +551,7 @@ def honey_glade():
     trail = [(0.4, 25.0), (-0.8, 27.4), (0.6, 29.8), (-0.3, 32.2)]
     trail += [(-24.5, 4.0), (-25.0, 0.0), (-23.5, -4.0), (-20.5, -7.5), (24.5, 4.5), (24.8, 0.5), (23.0, -3.5), (20.0, -7.0)]
     for n, (x, z) in enumerate(trail):
-        stone = icosphere(1.0, 2, 0.1, 100 + n).scale(rng.uniform(0.9, 1.25), 0.22, rng.uniform(0.7, 0.95))
+        stone = icosphere(1.0, 1, 0.1, 100 + n).scale(rng.uniform(0.9, 1.25), 0.22, rng.uniform(0.7, 0.95))
         stones.append(stone.rotate("y", rng.uniform(0, 180)).translate(x, 0.2, z))
 
     def clear_of_game(x, z, margin=0.0):
@@ -571,25 +578,25 @@ def honey_glade():
             continue
         clusters += 1
         kind = list(petals)[clusters % 3]
-        for k in range(5):
-            yaw = 72 * k + rng.uniform(0, 40)
-            stems.append(leaf(1.3, 0.75, 0.25).rotate("x", -12).rotate("y", yaw).translate(cx, 0.24, cz))
-        for _ in range(rng.integers(8, 13)):
+        for k in range(4):
+            yaw = 90 * k + rng.uniform(0, 50)
+            stems.append(leaf(1.3, 0.75, 0.25, 5).rotate("x", -12).rotate("y", yaw).translate(cx, 0.24, cz))
+        for _ in range(rng.integers(6, 10)):
             x, z = cx + rng.normal(0, 0.75), cz + rng.normal(0, 0.75)
             if not clear_of_game(x, z):
                 continue
             h = rng.uniform(0.45, 1.0)
             size = rng.uniform(0.45, 0.65)
             tilt = (rng.normal(0, 0.15), 1.0, rng.normal(0, 0.15))
-            head = flower_head(size, 5, 0.12, 0.1, seed=int(rng.integers(0, 1 << 30)))
+            head = flower_head(size, 5, 0.12, 0.1, seed=int(rng.integers(0, 1 << 30)), per_lobe=3)
             top = np.array([x, 0.2 + h, z]) + np.array(tilt) * 0.05
             petals[kind].append(orient(head, tilt).translate(*top))
-            centers.append(icosphere(size * 0.3, 0).scale(1, 0.7, 1).translate(top[0], top[1] + 0.08, top[2]))
-            stems.append(tube([(x, 0.0, z), (x + tilt[0] * h * 0.5, 0.05 + h * 0.6, z + tilt[2] * h * 0.5), tuple(top)], 0.07, 4))
+            centers.append(bead(size * 0.3).translate(top[0], top[1] + 0.06, top[2]))
+            stems.append(tube([(x, 0.0, z), (x + tilt[0] * h * 0.5, 0.05 + h * 0.6, z + tilt[2] * h * 0.5), tuple(top)], 0.07, 3))
     # Grass tufts: around the lawn edge (softening it into the meadow) and dotted inside.
-    for n in range(170):
+    for n in range(130):
         a = rng.uniform(0, 2 * math.pi)
-        if n < 110:
+        if n < 85:
             r = edge(a) - rng.uniform(-0.4, 1.2)
         else:
             r = rng.uniform(5, GLADE_RADIUS - 3)
@@ -597,8 +604,8 @@ def honey_glade():
         if not clear_of_game(x, z):
             continue
         blades = []
-        for b in range(8):
-            yaw = 2 * math.pi * b / 8 + rng.uniform(-0.3, 0.3)
+        for b in range(5):
+            yaw = 2 * math.pi * b / 5 + rng.uniform(-0.3, 0.3)
             h = rng.uniform(0.5, 1.0)
             lean = rng.uniform(0.2, 0.45)
             base = np.array([x + math.cos(yaw) * 0.15, -0.05, z + math.sin(yaw) * 0.15])
@@ -622,7 +629,7 @@ def honey_glade():
         for k in range(5):
             sa = 2 * math.pi * k / 5 + n
             sr = 0.55 * scale
-            spot = icosphere(0.13 * scale, 1).scale(1, 0.4, 1)
+            spot = icosphere(0.13 * scale, 0).scale(1, 0.4, 1)
             spot = orient(spot, (math.cos(sa) * 0.6, 1.0, math.sin(sa) * 0.6))
             spots.append(spot.translate(math.cos(sa) * sr, h + 0.58 * scale, math.sin(sa) * sr).rotate("z", tilt).translate(x, 0, z))
     return {
@@ -662,12 +669,12 @@ def sunflower():
             petals.append(petal)
     head = lathe([(1.25, 0.0), (1.28, 0.12), (1.1, 0.3), (0.6, 0.42), (0.0, 0.45)], 28, cap_bottom=True)
     seeds = []
-    for k in range(70):
+    for k in range(48):
         # Golden-angle spiral of seeds on the face.
-        r = 1.05 * math.sqrt((k + 0.5) / 70)
+        r = 1.05 * math.sqrt((k + 0.5) / 48)
         a = k * 2.39996
         y = 0.45 - 0.18 * (r / 1.25) ** 2
-        seeds.append(icosphere(0.09, 0).translate(math.cos(a) * r, y + 0.02, math.sin(a) * r))
+        seeds.append(icosphere(0.11, 0).translate(math.cos(a) * r, y + 0.02, math.sin(a) * r))
     back = lathe([(0.0, -0.25), (0.9, -0.2), (1.25, 0.0)], 20)
 
     def place(mesh):
@@ -694,7 +701,7 @@ def skep():
         r = 1.75 * math.cos(t * math.pi / 2 * 0.92) + 0.1
         y = 1.55 + i * 0.36
         profile.append((r, y))
-        coils.append(torus(r, 0.2, 32, 7).translate(0, y, 0))
+        coils.append(torus(r, 0.2, 24, 5).translate(0, y, 0))
     profile.append((0.0, 1.55 + 9 * 0.36))
     body = lathe(profile, 32, cap_bottom=True)
     knob = icosphere(0.35, 2).translate(0, 1.55 + 8.6 * 0.36, 0)

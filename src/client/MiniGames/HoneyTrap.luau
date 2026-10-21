@@ -145,7 +145,11 @@ function HoneyTrap.Start(api)
 		end)
 	end
 	local waited = 0
-	while waited < 5 and not (templates.Fruit and templates.Honeycomb and templates.Bee and templates.DiceBlock) do
+	local function allArrived(): boolean
+		return (templates.Fruit and templates.Honeycomb and templates.Bee and templates.DiceBlock and templates.Vine)
+			~= nil
+	end
+	while waited < 5 and not allArrived() do
 		waited += task.wait(0.1)
 	end
 	local fruitColors = {}
@@ -417,7 +421,24 @@ function HoneyTrap.Start(api)
 		fruitText.Text = `🍎 {value or 0}`
 		UIKit.PopIn(fruitPill, 0.25)
 	end)
-	api:Hint("Take 1 or 2 each turn - don't take the 🍯 honeycomb!", y + 74)
+	-- The hint line under the turn panel, kept as narrow as the panel (wrapping if need be) so on a
+	-- small phone it stays clear of the standings on the left.
+	local hintFitted = false
+	local function hint(text: string)
+		api:Hint(text, y + 74)
+		local label = hud:FindFirstChild("Hint") :: TextLabel?
+		if label and not hintFitted then
+			hintFitted = true
+			label.Size = UDim2.fromOffset(420, 64)
+			label.TextWrapped = true
+			label.TextScaled = true
+			local limit = Instance.new("UITextSizeConstraint")
+			limit.MaxTextSize = 26
+			limit.MinTextSize = 14
+			limit.Parent = label
+		end
+	end
+	hint("Take 1 or 2 each turn - don't take the 🍯 honeycomb!")
 
 	local hit = api:Button({ Text = "HIT!", Key = Enum.KeyCode.E, Color = Theme.Colors.Yellow })
 	hit:SetVisible(false)
@@ -487,11 +508,11 @@ function HoneyTrap.Start(api)
 				turnText.Text = "🎲 YOUR TURN!"
 				turnText.TextColor3 = Theme.Colors.Yellow
 				api:Sound("Countdown")
-				api:Hint("Jump or press HIT to stop the block!", y + 74)
+				hint("Jump or press HIT to stop the block!")
 			else
 				turnText.Text = `🎲 {new.Name}'s turn`
 				turnText.TextColor3 = Theme.Colors.Text
-				api:Hint(if new.Next == me and api:Alive() then "You're up next - count the fruit!" else "", y + 74)
+				hint(if new.Next == me and api:Alive() then "You're up next - count the fruit!" else "")
 			end
 			UIKit.PopIn(panel, 0.3)
 		end
@@ -499,7 +520,7 @@ function HoneyTrap.Start(api)
 			announcedResult = new.Id
 			resultAt = os.clock()
 			if new.User == me then
-				api:Hint("", y + 74)
+				hint("")
 			end
 			local pad = pads[new.User]
 			if pad then
@@ -545,7 +566,9 @@ function HoneyTrap.Start(api)
 	for _, pad in pads do
 		ground = math.min(ground, pad.Pos.Y - 0.6)
 	end
-	local trunk = Vector3.new(anchor.X, ground, anchor.Z - 14.5)
+	-- The oak's trunk (the server works it out from the tree; the fallback matches the meshgen).
+	local trunkXZ = layout.Trunk or { anchor.X, anchor.Z - 14.5 }
+	local trunk = Vector3.new(trunkXZ[1], ground, trunkXZ[2])
 	local butterflies = {}
 	if effects then
 		local function carrier(name: string, size: Vector3, position: Vector3): Part

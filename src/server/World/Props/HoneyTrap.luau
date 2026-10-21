@@ -14,17 +14,19 @@ return function(h)
 	return {
 		-- The tree. "Anchor" is the tip of the front branch, where the vine hangs.
 		HoneyOak = {
-			Height = 64.698,
+			Height = 64.189,
 			AssetId = 103149679285590,
 			Collide = true,
 			Palette = {
 				Trunk = h.rgb(139, 94, 62),
 				Leaves = h.rgb(98, 190, 86),
-				LeavesLight = h.rgb(160, 222, 98),
+				LeavesLight = h.rgb(186, 226, 96),
 				Blossoms = h.rgb(255, 192, 218),
 				Pollen = h.rgb(255, 214, 70),
-				Hive = h.rgb(246, 184, 66),
-				Honey = h.rgb(255, 168, 24),
+				-- Straw and dark amber, so the bright honeycombs on the vine are the only vivid amber
+				-- near it.
+				Hive = h.rgb(206, 150, 86),
+				Honey = h.rgb(214, 128, 30),
 				Hole = h.rgb(62, 38, 26),
 				Bark = h.rgb(112, 74, 48),
 				Door = h.rgb(224, 98, 72),
@@ -108,7 +110,7 @@ return function(h)
 		},
 		-- The clearing: lawn, sand crescent, stepping stones, flower beds, toadstools, tufts.
 		HoneyGlade = {
-			Height = 2.488,
+			Height = 2.493,
 			AssetId = 123644092688627,
 			Shadow = false,
 			Palette = {

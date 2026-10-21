@@ -28,6 +28,10 @@ local TURN_TIME = 6 -- seconds to hit before the block stops by itself
 local FLIP = 0.42 -- seconds each face shows
 local PAUSE_FRUIT = 1.4 -- after a turn that took only fruit
 local PAUSE_HONEY = 3.2 -- after a honeycomb (the bees need a moment)
+local TRUNK_BEHIND = 14.5 -- the oak's trunk is this far behind its vine branch tip (TRUNK_Z in the meshgen)
+local FOREST_TINT = Color3.fromRGB(58, 140, 104) -- cools the forest so the lime-and-pink oak stands out
+-- The oak's pieces people can bump into; the canopy, honey, lanterns and swing are only looks.
+local OAK_SOLID = { Trunk = true, Bark = true, Door = true, Stone = true }
 
 -- Fruit kinds on the vine (the vine string uses their index; "H" is a honeycomb).
 HoneyTrap.Fruits = {
@@ -141,6 +145,16 @@ function HoneyTrap:Prepare()
 	-- A sunny meadow with a forest around it, and a storybook glade in the middle: a lawn with
 	-- flower beds and toadstools, and a sand crescent under the players' flowers.
 	Scenery.Meadow(ctx, origin, 300)
+	-- A cooler, deeper green for the forest ring and the hills behind it, so the oak isn't lost in them.
+	for _, part in ctx.Arena:GetDescendants() do
+		if part:IsA("BasePart") then
+			if part.Name == "Leaves" then
+				part.Color = part.Color:Lerp(FOREST_TINT, 0.35)
+			elseif part.Name == "Hill" then
+				part.Color = part.Color:Lerp(FOREST_TINT, 0.2)
+			end
+		end
+	end
 	placeByMark(MeshLibrary.Get("HoneyGlade", { Parent = ctx.Arena }), CFrame.new(origin))
 	for _, spot in SUNFLOWERS do
 		local facing = aroundMeadow(origin, spot[1], spot[2])
@@ -166,6 +180,14 @@ function HoneyTrap:Prepare()
 		anchor.Transparency = 1
 	end
 	local anchorPosition = if anchor then anchor.Position else origin + Vector3.new(0, 29.6, 0)
+	local trunkPosition = anchorPosition + tree:GetPivot():VectorToWorldSpace(Vector3.new(0, 0, TRUNK_BEHIND))
+	for _, part in tree:GetDescendants() do
+		if part:IsA("BasePart") and not OAK_SOLID[part.Name] then
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+		end
+	end
 
 	-- Pads in an arc facing the vine: a big flower to stand on (the pad itself is an invisible
 	-- disc, so the standing height never changes) and a picnic basket for the fruit.
@@ -176,6 +198,8 @@ function HoneyTrap:Prepare()
 	end
 	local count = #players
 	local span = math.rad(math.clamp((count - 1) * 15, 30, 160))
+	-- With a full meadow the arc is tight: slightly smaller flowers and baskets keep them apart.
+	local crowded = count > 10
 	local spawns = {}
 	local layoutPads = {}
 	for index, player in players do
@@ -194,6 +218,7 @@ function HoneyTrap:Prepare()
 		})
 		placeByMark(
 			MeshLibrary.Get("HoneyDaisyPad", {
+				Scale = if crowded then 0.94 else 1,
 				Colors = { Petals = PETALS[(index - 1) % #PETALS + 1] },
 				Parent = ctx.Arena,
 			}),
@@ -201,6 +226,7 @@ function HoneyTrap:Prepare()
 		)
 		local basketSpot = position - flat * 3.3
 		MeshLibrary.Get("HoneyBasket", {
+			Scale = if crowded then 0.88 else 1,
 			CFrame = CFrame.lookAt(basketSpot, basketSpot + flat) + Vector3.new(0, 0.27, 0),
 			Parent = ctx.Arena,
 		})
@@ -237,6 +263,7 @@ function HoneyTrap:Prepare()
 	end
 	ctx:SetSharedJSON("Layout", {
 		Anchor = { anchorPosition.X, anchorPosition.Y, anchorPosition.Z },
+		Trunk = { trunkPosition.X, trunkPosition.Z },
 		Bottom = origin.Y + BOTTOM,
 		Spacing = SPACING,
 		Pads = layoutPads,
