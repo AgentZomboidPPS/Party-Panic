@@ -95,6 +95,7 @@ CAMERAS: dict[str, dict] = {
 
 # Seconds into the round to take the snapshot, where the default (8) isn't the liveliest moment.
 DUMP_AT: dict[str, float] = {
+    "BobsledRun": 12,  # the sleds well down the run, a banked curve ahead
     "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
     "PumpAndPop": 16,  # the balloons are big by now
