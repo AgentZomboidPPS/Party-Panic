@@ -399,8 +399,20 @@ function SinkingSands:_buildCourtyard()
 			})
 		end
 		if slot % 4 == 2 then
+			-- Treasure heaps sit up on a stone altar step beside their column, so they read as
+			-- scenery and not as treasure to grab (the real treasure lies loose on the sand).
+			local at = facing(angle + 0.14, 64)
+			Build.Part({
+				Name = "HoardAltar",
+				Size = Vector3.new(10.5, 1.4, 10.5),
+				CFrame = at * CFrame.new(0, 0.7, 0),
+				Color = Color3.fromRGB(232, 204, 152),
+				Material = Enum.Material.Sandstone,
+				CanTouch = false,
+				Parent = arena,
+			})
 			local hoard = MeshLibrary.Get("SandHoard", {
-				CFrame = facing(angle, 58) * CFrame.Angles(0, math.pi + slot * 0.3, 0),
+				CFrame = at * CFrame.new(0, 1.4, 0) * CFrame.Angles(0, math.pi + slot * 0.3, 0),
 				Parent = arena,
 			})
 			self:_sparkle(hoard)
@@ -427,7 +439,7 @@ function SinkingSands:_sparkle(model: Model)
 		NumberSequenceKeypoint.new(1, 0),
 	})
 	glints.Lifetime = NumberRange.new(0.7, 1.2)
-	glints.Rate = 5
+	glints.Rate = 2 -- the brightest twinkles stay on the real treasure
 	glints.Speed = NumberRange.new(0.5, 1.5)
 	glints.SpreadAngle = Vector2.new(60, 60)
 	glints.LightEmission = 1
@@ -506,10 +518,12 @@ function SinkingSands:_buildBackdrop(floorY: number)
 		then
 			continue -- keep the temple, the sphinx and the big pyramid in view
 		end
+		local scale = 1 + ring * 0.3 + rng:NextNumber(0, 0.25)
 		local dune = MeshLibrary.Get("SandDune", {
-			CFrame = CFrame.new(at(angle, distance))
+			-- (its skirt sits 3 studs below its foot: sunk that far, the dune rises out of the floor)
+			CFrame = CFrame.new(at(angle, distance) - Vector3.new(0, 3 * scale, 0))
 				* CFrame.Angles(0, -angle + math.pi / 2 + rng:NextNumber(-0.4, 0.4), 0),
-			Scale = 1 + ring * 0.3 + rng:NextNumber(0, 0.25),
+			Scale = scale,
 			Colors = { Dune = near:Lerp(far, ring / 2) },
 			Parent = arena,
 		})

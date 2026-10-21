@@ -435,17 +435,18 @@ def golden_idol():
 # ---------------------------------------------------------------- the Sand Kings and the desert
 
 def sand_throne():
-    """A Sand King's royal throne on a gold-rimmed dais (faces -Z): a tall back with a turquoise cap
-    and a golden sunburst with a glowing gem, cat-head armrests, a cushion and back pad (colored per
+    """A Sand King's royal throne on a gold-rimmed dais (faces -Z): a back with a turquoise cap and a
+    golden sunburst with a glowing gem leaning back over it (kept low, so a seated King's camera
+    still sees over it into the funnel), cat-head armrests, a cushion and back pad (colored per
     team in-game) and two gold posts topped with glowing orbs. The seat stays where the game's Seat
     is (cushion top at 3.45, z = 0.5), and the footprint is centered so the pivot doesn't move."""
     stone = [box(9.6, 0.7, 7.4, y=0.35, bevel=0.15), box(8.0, 0.7, 6.0, y=1.05, z=0.5, bevel=0.15),
-             box(4.2, 1.6, 3.4, y=2.2, z=0.5, bevel=0.15), box(4.4, 8.5, 1.0, y=5.65, z=2.6, bevel=0.2)]
+             box(4.2, 1.6, 3.4, y=2.2, z=0.5, bevel=0.15), box(4.4, 6.8, 1.0, y=4.8, z=2.6, bevel=0.2)]
     gold = [box(9.8, 0.2, 7.6, y=0.42, bevel=0.06), box(8.2, 0.2, 6.2, y=1.12, z=0.5, bevel=0.06)]
-    paint = [box(4.7, 0.6, 1.3, y=9.9, z=2.6, bevel=0.15)]
+    paint = [box(4.7, 0.6, 1.3, y=8.5, z=2.6, bevel=0.15)]
     for side in (-1, 1):
         stone.append(box(1.0, 1.5, 3.6, x=side * 2.6, y=3.0, z=0.4, bevel=0.2))
-        paint.append(box(0.5, 8.4, 1.15, x=side * 2.05, y=5.65, z=2.6, bevel=0.1))
+        paint.append(box(0.5, 6.7, 1.15, x=side * 2.05, y=4.8, z=2.6, bevel=0.1))
         gold.append(box(1.1, 0.25, 3.7, x=side * 2.6, y=3.7, z=0.4, bevel=0.06))
         # A little gold cat head on the front of each armrest.
         head = solid(sphere(0.62, 8, 14), True).scale(1.0, 0.9, 0.9).translate(side * 2.6, 4.05, -1.35)
@@ -455,11 +456,11 @@ def sand_throne():
         gold.append(solid(cylinder(0.3, 7.8, 12)).translate(side * 4.2, 0.7, 1.9))
         gold.append(solid(lathe([(0.0, 8.3), (0.55, 8.3), (0.75, 8.8), (0.0, 8.8)], 14)).translate(side * 4.2, 0, 1.9))
     glow = [solid(icosphere(0.62, 2), True).translate(side * 4.2, 9.35, 1.9) for side in (-1, 1)]
-    sun = sun_disc(2.0, 0.5, rays=14).translate(0, 11.8, 2.6)
+    sun = sun_disc(1.15, 0.45, rays=12, segments=24).rotate("x", 20).translate(0, 9.55, 2.75)
     gold.append(sun)
-    glow.append(solid(icosphere(0.8, 2), True).scale(1, 1, 0.6).translate(0, 11.8, 2.2))
+    glow.append(solid(icosphere(0.5, 2), True).scale(1, 1, 0.6).rotate("x", 20).translate(0, 9.6, 2.5))
     cushion = rounded_box(3.6, 0.5, 3.0, 0.24, 6).translate(0, 3.2, 0.5)
-    back_pad = rounded_box(3.2, 4.6, 0.4, 0.18, 6).translate(0, 5.9, 1.95)
+    back_pad = rounded_box(3.2, 4.0, 0.4, 0.18, 6).translate(0, 5.6, 1.95)
     return {"Stone": merge(*stone), "Gold": merge(*gold), "Paint": merge(*paint), "Cushion": merge(cushion, back_pad), "Glow": merge(*glow)}
 
 
@@ -702,10 +703,10 @@ def column(height=28.0, radius=2.0, broken=0.0, seed=0):
     snaps the shaft off at that height (no capital). Returns pieces Stone, Paint, Gold."""
     plinth = merge(box(radius * 3.1, 0.9, radius * 3.1, y=0.45, bevel=0.15), box(radius * 2.7, 0.7, radius * 2.7, y=1.25, bevel=0.15))
     shaft_top = height - 4.6 if not broken else broken
-    base_ring = solid(lathe([(0.0, 1.6), (radius * 1.22, 1.6), (radius * 1.25, 2.0), (radius * 1.12, 2.4), (0.0, 2.4)], 40))
-    rows = 10
+    base_ring = solid(lathe([(0.0, 1.6), (radius * 1.22, 1.6), (radius * 1.25, 2.0), (radius * 1.12, 2.4), (0.0, 2.4)], 32))
+    rows = 10 if broken else 5  # (a broken top needs the rows for its jagged edge)
     profile = [(0.0, 2.3)] + [(radius * (1.02 - 0.12 * (i / rows) ** 1.4), 2.3 + (shaft_top - 2.3) * i / rows) for i in range(rows + 1)] + [(0.0, shaft_top)]
-    shaft = lathe(profile, 64)
+    shaft = lathe(profile, 48)
     a = np.arctan2(shaft.v[:, 2], shaft.v[:, 0])
     flute = 1 - 0.05 * np.abs(np.cos(a * 8)) ** 0.5
     shaft.v[:, 0] *= flute
@@ -720,12 +721,12 @@ def column(height=28.0, radius=2.0, broken=0.0, seed=0):
     shaft = solid(shaft)
     stone = [plinth, base_ring, shaft]
     gold, paint = [], []
-    gold.append(solid(lathe([(0.0, 2.9), (radius * 1.04, 2.9), (radius * 1.04, 3.4), (0.0, 3.4)], 40)))
+    gold.append(solid(lathe([(0.0, 2.9), (radius * 1.04, 2.9), (radius * 1.04, 3.4), (0.0, 3.4)], 32)))
     if not broken:
         y0 = shaft_top
-        gold.append(solid(lathe([(0.0, y0 - 1.6), (radius * 0.97, y0 - 1.6), (radius * 0.97, y0 - 0.9), (0.0, y0 - 0.9)], 40)))
+        gold.append(solid(lathe([(0.0, y0 - 1.6), (radius * 0.97, y0 - 1.6), (radius * 0.97, y0 - 0.9), (0.0, y0 - 0.9)], 32)))
         # Lotus capital: a flaring bell with eight petal lobes.
-        cap = lathe([(0.0, y0 - 0.2)] + [(radius * (0.92 + 0.62 * (i / 8) ** 1.6), y0 - 0.2 + 3.0 * i / 8) for i in range(9)] + [(0.0, y0 + 2.8)], 64)
+        cap = lathe([(0.0, y0 - 0.2)] + [(radius * (0.92 + 0.62 * (i / 6) ** 1.6), y0 - 0.2 + 3.0 * i / 6) for i in range(7)] + [(0.0, y0 + 2.8)], 48)
         ca = np.arctan2(cap.v[:, 2], cap.v[:, 0])
         lobe = 1 + 0.07 * np.cos(ca * 8) * np.clip((cap.v[:, 1] - y0) / 2.6, 0, 1)
         cap.v[:, 0] *= lobe
@@ -736,7 +737,7 @@ def column(height=28.0, radius=2.0, broken=0.0, seed=0):
         stone.append(box(radius * 3.0, 0.6, radius * 3.0, y=height - 0.3, bevel=0.1))
     else:
         rng = np.random.default_rng(seed + 9)
-        drum = solid(cylinder(radius * 0.95, 2.6, 40, 0.15)).translate(0, -1.3, 0).rotate("z", 90).rotate("y", rng.uniform(10, 50)).translate(radius * 2.4, radius * 0.95, radius * 1.6)
+        drum = solid(cylinder(radius * 0.95, 2.6, 24, 0.15)).translate(0, -1.3, 0).rotate("z", 90).rotate("y", rng.uniform(10, 50)).translate(radius * 2.4, radius * 0.95, radius * 1.6)
         chips = [solid(icosphere(0.5 + rng.uniform(0, 0.5), 1, 0.4, int(rng.integers(0, 99)))).translate(rng.uniform(-3.5, 3.5), 0.25, rng.uniform(-3.2, -1.8)) for _ in range(3)]
         stone += [drum] + chips
     return {"Stone": merge(*stone), "Paint": merge(*paint) if paint else None, "Gold": merge(*gold)}
@@ -753,8 +754,8 @@ def sand_column():
     knobs = [solid(sphere(0.38, 6, 10)).translate(side * 2.9, 21.4, -2.55) for side in (-1, 1)]
     pieces["Gold"] = merge(pieces["Gold"], rod, *knobs)
     banner = cloth(4.2, 13.5, 0.22, notch=1.8, wave=0.18, seed=1.2).translate(0, 21.2, -2.75)
-    trim = cloth(4.5, 0.7, 0.3).translate(0, 21.25, -2.8)
-    sun = sun_disc(1.0, 0.2, rays=10).translate(0, 16.4, -2.98)
+    trim = box(4.5, 0.7, 0.3, y=20.9, z=-2.8, bevel=0.08)
+    sun = sun_disc(1.0, 0.2, rays=10, segments=16).translate(0, 16.4, -2.98)
     pieces["Cloth"] = banner
     pieces["Gold"] = merge(pieces["Gold"], trim, sun)
     return _clean(pieces)
@@ -789,7 +790,7 @@ def sand_arch():
     paint = [left["Paint"], right["Paint"], *cornice]
     gold = [left["Gold"], right["Gold"], box(26.0, 0.5, 6.8, y=26.2, bevel=0.1)]
     # Winged sun on the lintel's front.
-    disc = sun_disc(1.7, 0.6).translate(0, 27.9, -3.4)
+    disc = sun_disc(1.7, 0.6, segments=24).translate(0, 27.9, -3.4)
     wing_pts = []
     for i in range(13):
         t = i / 12
@@ -883,58 +884,84 @@ def sand_temple():
 
 
 def sand_sphinx():
-    """A giant cat sphinx lying with its paws forward (-Z), wearing a striped royal headdress, with
-    glowing gem eyes and a gold collar: the Sand Kings' guardian behind the arena."""
-    def body_sdf(p):
+    """A giant cat sphinx lying with its paws forward (-Z): a striped royal nemes headdress that frames
+    the face (gold brow band and cobra, flaring wings, lappets on the chest and a braided beard), a
+    broad striped usekh collar with a gem, almond eyes that glow and a cat's muzzle: the Sand Kings'
+    guardian behind the arena."""
+    def torso_sdf(p):
         d = sd_ellipsoid(p, (0, 2.0, 1.6), (2.2, 1.7, 4.0))
         d = smin(d, sd_ellipsoid(p, (0, 2.7, -1.5), (1.85, 2.0, 1.8)), 0.6)
         for s in (-1, 1):
             d = smin(d, sd_ellipsoid(p, (s * 1.55, 1.6, 4.0), (1.15, 1.45, 1.9)), 0.5)
             d = smin(d, sd_capsule(p, (s * 1.25, 1.2, -1.2), (s * 1.25, 0.62, -4.9), 0.62), 0.45)
             d = smin(d, sd_ellipsoid(p, (s * 1.25, 0.55, -5.2), (0.78, 0.52, 0.95)), 0.25)
-            d = smin(d, sd_capsule(p, (s * 0.9, 6.4, -2.45), (s * 1.12, 7.15, -2.4), 0.34), 0.25)
-        d = smin(d, sd_ellipsoid(p, (0, 5.3, -2.55), (1.45, 1.32, 1.3)), 0.35)
-        d = smin(d, sd_ellipsoid(p, (0, 4.8, -3.62), (0.72, 0.5, 0.48)), 0.2)
         d = smin(d, sd_capsule(p, (0, 4.0, -2.2), (0, 2.8, -1.6), 1.05), 0.5)
         tail = np.minimum(sd_capsule(p, (1.6, 0.45, 5.4), (2.35, 0.45, 3.4), 0.36), sd_capsule(p, (2.35, 0.45, 3.4), (2.3, 0.45, 0.6), 0.34))
-        d = smin(d, tail, 0.2)
-        return np.maximum(d, -p[..., 1])  # flat underside
+        return smin(d, tail, 0.2)
 
-    def nemes_sdf(p):
-        cap = sd_ellipsoid(p, (0, 5.55, -2.4), (1.68, 1.42, 1.5))
-        cap = np.maximum(cap, -(p[..., 2] + 3.25))  # open at the face
-        cap = np.maximum(cap, -(p[..., 1] - 4.55 + (p[..., 2] + 2.6) * 0.0))
-        d = cap
-        for s in (-1, 1):
-            lappet = sd_box(p, (s * 1.45, 3.75, -2.75), (0.38, 1.35, 0.55)) - 0.12
-            d = smin(d, lappet, 0.3)
-        back = sd_box(p, (0, 4.0, -1.3), (1.2, 1.2, 0.45)) - 0.2
-        d = smin(d, back, 0.3)
+    def head_sdf(p):
+        d = sd_ellipsoid(p, (0, 5.3, -2.55), (1.45, 1.32, 1.3))
+        for s in (-1, 1):  # a cat's whisker pads
+            d = smin(d, sd_ellipsoid(p, (s * 0.34, 4.72, -3.6), (0.46, 0.4, 0.46)), 0.2)
         return d
 
-    def sdf(p):
-        return np.minimum(body_sdf(p), nemes_sdf(p))
+    def body_sdf(p):
+        return np.maximum(smin(torso_sdf(p), head_sdf(p), 0.35), -p[..., 1])  # flat underside
 
-    mesh = sdf_mesh(sdf, (-3.2, -0.2, -6.6), (3.4, 7.8, 6.2), 0.19)
+    def cap_sdf(p):
+        return sd_ellipsoid(p, (0, 5.6, -2.35), (1.78, 1.55, 1.62))
+
+    def nemes_sdf(p):
+        x, y, z = p[..., 0], p[..., 1], p[..., 2]
+        cap = cap_sdf(p)
+        # The wings: a trapezoid behind the face flaring out toward the shoulders, open under the chin.
+        t = np.clip((5.6 - y) / 2.2, 0.0, 1.0)
+        wing = np.maximum(np.abs(x) - (1.7 + 0.8 * t), np.maximum(np.abs(y - 4.5) - 1.15, np.abs(z + 2.4) - 0.8)) - 0.08
+        wing = np.maximum(wing, -np.maximum(np.abs(x) - 1.15, y - 4.75))
+        hood = smin(cap, wing, 0.35)
+        hood = np.minimum(np.maximum(hood, -(z + 3.28)),  # open round the face...
+                          np.maximum(np.maximum(cap, -(z + 3.8)), 5.85 - y))  # ...but covering the forehead
+        d = hood
+        for s in (-1, 1):  # lappets hanging down the chest, widening a little toward the bottom
+            w = 0.42 + 0.12 * np.clip((4.0 - y) / 1.7, 0.0, 1.0)
+            lappet = np.maximum(np.abs(x - s * 1.62) - w, np.maximum(np.abs(y - 3.15) - 0.95, np.abs(z + 2.78) - 0.36)) - 0.08
+            d = np.minimum(d, lappet)
+        d = smin(d, sd_box(p, (0, 4.3, -0.95), (0.85, 1.25, 0.4)) - 0.2, 0.3)  # the tail of cloth behind
+        beard = sd_capsule(p, (0, 4.3, -3.5), (0, 3.25, -3.85), 0.24)
+        return np.minimum(d, beard)
+
+    def collar_sdf(p):
+        # A broad bib lying on the chest and neck below the chin (a shell over the torso).
+        shell = np.abs(torso_sdf(p) - 0.12) - 0.14
+        return np.maximum(shell, sd_ellipsoid(p, (0, 3.25, -2.9), (1.55, 1.0, 1.3)))
+
+    def band_sdf(p):
+        # The gold brow band across the front of the headdress, and a little cobra rising from it.
+        band = np.maximum(np.maximum(cap_sdf(p) - 0.12, np.abs(p[..., 1] - 5.98) - 0.16), p[..., 2] + 2.6)
+        cobra = smin(sd_capsule(p, (0, 6.0, -4.02), (0, 6.55, -3.98), 0.12), sd_ellipsoid(p, (0, 6.62, -3.98), (0.24, 0.2, 0.1)), 0.08)
+        return np.minimum(band, cobra)
+
+    def sdf(p):
+        return np.minimum(np.minimum(body_sdf(p), nemes_sdf(p)), np.minimum(collar_sdf(p), band_sdf(p)))
+
+    mesh = sdf_mesh(sdf, (-3.2, -0.2, -6.6), (3.4, 7.6, 6.2), 0.18)
     outward(mesh)
     tri = mesh.v[mesh.f].mean(axis=1)
-    on_nemes = nemes_sdf(tri) < body_sdf(tri)
-    body = split_faces(mesh, ~on_nemes)
-    nemes = split_faces(mesh, on_nemes)
-    stripe = (np.floor((tri[on_nemes][:, 1] + 0.1 * tri[on_nemes][:, 2]) / 0.36) % 2) == 0
-    gold_stripes = split_faces(nemes, stripe)
-    blue_stripes = split_faces(nemes, ~stripe)
-    eyes = merge(*(solid(icosphere(0.26, 2), True).scale(1.0, 1.25, 0.55).translate(s * 0.58, 5.55, -3.72) for s in (-1, 1)))
-    nose = solid(icosphere(0.17, 1), True).scale(1.3, 0.8, 0.8).translate(0, 5.0, -4.08)
-    collar_ring = lathe([(1.15, 0.35), (1.2, 0.5), (1.8, -0.05), (1.76, -0.25), (1.15, 0.35)], 48)
-    collar = solid(collar_ring, True).rotate("x", -28).translate(0, 3.75, -2.15)
-    gem = solid(icosphere(0.32, 1)).translate(0, 3.1, -3.55)
+    label = np.argmin(np.stack([body_sdf(tri), nemes_sdf(tri), collar_sdf(tri), band_sdf(tri)]), axis=0)
+    # Stripes: level bands on the headdress, rings out from the throat on the collar.
+    stripe = (np.floor((tri[:, 1] + 0.1 * tri[:, 2]) / 0.34) % 2) == 0
+    ring = (np.floor(np.linalg.norm(tri - np.array([0.0, 4.2, -2.5]), axis=1) / 0.42) % 2) == 0
+    body = split_faces(mesh, label == 0)
+    gold = split_faces(mesh, ((label == 1) & stripe) | ((label == 2) & ring) | (label == 3))
+    blue = split_faces(mesh, ((label == 1) & ~stripe) | ((label == 2) & ~ring))
+    eyes = merge(*(solid(icosphere(0.27, 2), True).scale(1.45, 0.75, 0.55).rotate("z", s * -10).translate(s * 0.6, 5.45, -3.74) for s in (-1, 1)))
+    nose = solid(lathe([(0.0, 0.0), (0.24, 0.0), (0.0, -0.22)], 3), True).scale(1.0, 1.0, 0.6).rotate("y", 30).translate(0, 5.14, -4.02)
+    gem = merge(solid(icosphere(0.34, 1)).scale(1, 1.2, 0.7).translate(0, 3.05, -3.62), solid(icosphere(0.16, 1)).translate(0, 6.62, -4.1))
     plinth = merge(box(7.2, 0.5, 13.6, y=-0.25, bevel=0.1), box(7.8, 0.3, 14.2, y=-0.6, bevel=0.08))
-    for piece in (body, gold_stripes, blue_stripes, eyes, nose, collar, gem, plinth):
+    for piece in (body, gold, blue, eyes, nose, gem, plinth):
         piece.translate(0, 0.75, 0)
     k = 4.6
-    pieces = {"Body": body, "Nemes": gold_stripes, "NemesBlue": blue_stripes, "Eyes": eyes, "Nose": nose,
-              "Collar": merge(collar), "Gem": gem, "Plinth": plinth}
+    pieces = {"Body": body, "Nemes": gold, "NemesBlue": blue, "Eyes": eyes, "Nose": nose, "Gem": gem, "Plinth": plinth}
     for piece in pieces.values():
         piece.scale(k)
     return pieces
@@ -955,8 +982,9 @@ def sand_pyramid():
 
 def sand_dune():
     """A big crescent dune (200 x 110, 26 tall): a gentle windward back (+Z), a steep lee face and a
-    sharp curved crest. Its edges sink just below the desert floor."""
-    nx, nz = 54, 42
+    sharp curved crest. Its skirt sits 3 studs down: placed that far below the desert floor, it meets the
+    floor at a clear angle and the hidden part stays buried."""
+    nx, nz = 28, 20
     xs = np.linspace(-1, 1, nx)
     zs = np.linspace(-1, 1, nz)
     verts = []
@@ -966,7 +994,7 @@ def sand_dune():
             d = z - crest
             prof = math.exp(-(d / 0.62) ** 2) if d > 0 else math.exp(-(d / 0.34) ** 2)
             spread = math.exp(-(x / 0.78) ** 4)
-            y = 26.0 * prof * spread - 0.8
+            y = 26.0 * prof * spread - 3.0
             verts.append((x * 100, y, z * 55))
     faces = []
     for j in range(nz - 1):
@@ -992,7 +1020,7 @@ def sand_palm():
         r = 0.95 - 0.4 * i / n
         for t, scale in ((0.0, 1.14), (0.15, 1.0), (1.0, 0.86)):
             trunk_pts.append(tuple(p0 + (p1 - p0) * t))
-            sections.append([(math.cos(2 * math.pi * j / 12) * r * scale, math.sin(2 * math.pi * j / 12) * r * scale) for j in range(12)])
+            sections.append([(math.cos(2 * math.pi * j / 8) * r * scale, math.sin(2 * math.pi * j / 8) * r * scale) for j in range(8)])
     # drop duplicate consecutive points (keep the step by nudging them)
     pts = []
     for i, q in enumerate(trunk_pts):
@@ -1012,7 +1040,7 @@ def sand_palm():
         droop = rng.uniform(3.4, 4.6) if not low else rng.uniform(5.5, 6.5)
         width = rng.uniform(1.9, 2.2) if not low else 1.6
         lp, ls = [], []
-        steps = 18
+        steps = 10
         for i in range(steps + 1):
             t = i / steps
             dist = length * t
@@ -1026,9 +1054,9 @@ def sand_palm():
         leaves.append(sweep(lp, ls))
     leaf = merge(*leaves)
     leaf.smooth = False
-    nuts = merge(*(solid(sphere(0.55, 8, 12), True).translate(top[0] + math.cos(a) * 0.8, top[1] - 0.5, top[2] + math.sin(a) * 0.8)
+    nuts = merge(*(solid(sphere(0.55, 6, 8), True).translate(top[0] + math.cos(a) * 0.8, top[1] - 0.5, top[2] + math.sin(a) * 0.8)
                    for a in (0.4, 2.4, 4.3)))
-    crown = solid(sphere(0.9, 8, 12), True).translate(*top)
+    crown = solid(sphere(0.9, 6, 8), True).translate(*top)
     # Centered on the trunk's foot, so placing the palm puts its trunk on the spot.
     return {"Trunk": anchors(merge(trunk), 14.0, 0.0), "Frond": leaf, "Nut": merge(nuts, crown)}
 
@@ -1116,11 +1144,11 @@ def sand_hoard():
     mound = organic_lathe([(0.0, 0.0), (4.6, 0.0), (4.0, 0.6), (2.8, 1.6), (1.4, 2.4), (0.0, 2.7)], 40, 0.08, 5, 3)
     mound = solid(mound, True)
     coins = []
-    for i in range(60):
+    for i in range(36):
         a = rng.uniform(0, 2 * math.pi)
         r = rng.uniform(0.2, 5.6)
         h = float(np.interp(r, [0, 1.4, 2.8, 4.0, 4.6, 6], [2.7, 2.4, 1.6, 0.6, 0.0, 0.0]))
-        coin = solid(cylinder(0.42, 0.12, 14)).rotate("x", rng.uniform(-35, 35)).rotate("z", rng.uniform(-35, 35))
+        coin = solid(cylinder(0.46, 0.12, 10)).rotate("x", rng.uniform(-35, 35)).rotate("z", rng.uniform(-35, 35))
         coins.append(coin.translate(math.cos(a) * r, h + 0.02, math.sin(a) * r))
     gold = merge(mound, *coins)
     # Chest behind the mound, lid open.
@@ -1222,5 +1250,5 @@ COLORS = {
     "Collar": (255, 200, 60), "Plinth": (214, 170, 110), "Dune": (236, 184, 110), "Trunk": (150, 100, 60), "Frond": (70, 170, 70),
     "Nut": (120, 80, 40), "Water": (40, 200, 220), "Bank": (190, 150, 96), "Rock": (190, 140, 100), "Grass": (110, 190, 80),
     "Reed": (120, 150, 60), "Lily": (255, 130, 190), "Wood": (140, 84, 44), "Curb": (232, 200, 150), "Tile": (246, 222, 176),
-    "TileDark": (214, 120, 76), "Inlay": (255, 200, 60), "Accent": (48, 190, 200),
+    "TileDark": (232, 184, 112), "Inlay": (255, 200, 60), "Accent": (48, 190, 200),
 }

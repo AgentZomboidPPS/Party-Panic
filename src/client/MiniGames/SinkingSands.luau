@@ -6,6 +6,7 @@
 -- Grabs are predicted: a coin this player runs through pops at once and comes back if the server
 -- says someone else got it first (or nobody did, within PENDING_TIME).
 
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -142,6 +143,7 @@ function SinkingSands.Start(api)
 				twinkle.SpreadAngle = Vector2.new(180, 180)
 				twinkle.LightEmission = 1
 				twinkle.Parent = primary
+				CollectionService:AddTag(twinkle, "PP_Ambient") -- the reduced-effects setting switches it
 			end
 		end
 		if kind == 2 then

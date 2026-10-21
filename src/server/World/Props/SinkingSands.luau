@@ -107,10 +107,11 @@ return function(h)
 				h.ball(m, "Gold", 1.2, Vector3.new(0, 3.2, -0.2))
 			end,
 		},
-		-- A Sand King's royal throne: gold-rimmed dais, tall back with a golden sunburst and gem, cat-head
-		-- armrests and glowing orb posts. The seat stays where the mode's Seat is.
+		-- A Sand King's royal throne: gold-rimmed dais, a back (low, so the King's camera sees over it) with
+		-- a golden sunburst and gem, cat-head armrests and glowing orb posts. The seat stays where the
+		-- mode's Seat is.
 		SandThrone = {
-			Height = 14.83,
+			Height = 11.2,
 			AssetId = 131179636869596,
 			Collide = true,
 			Palette = { Stone = stone, Gold = gold, Paint = paint, Cushion = h.rgb(200, 60, 60), Glow = glow },
@@ -122,14 +123,14 @@ return function(h)
 			},
 			Fallback = function(m)
 				h.rounded(m, "Stone", Vector3.new(9.6, 1.4, 7.4), 0.3, Vector3.new(0, 0.7, 0))
-				h.rounded(m, "Stone", Vector3.new(4.4, 8.5, 1), 0.3, Vector3.new(0, 5.65, 2.6))
+				h.rounded(m, "Stone", Vector3.new(4.4, 6.8, 1), 0.3, Vector3.new(0, 4.8, 2.6))
 				h.rounded(m, "Cushion", Vector3.new(3.6, 1.6, 3), 0.3, Vector3.new(0, 2.6, 0.5))
 				for side = -1, 1, 2 do
 					h.pillar(m, "Gold", 0.6, 7.8, Vector3.new(side * 4.2, 4.6, 1.9))
 					h.ball(m, "Glow", 1.2, Vector3.new(side * 4.2, 9.3, 1.9))
 				end
-				local sun = h.pillar(m, "Gold", 4, 0.5, Vector3.new(0, 11.8, 2.6))
-				sun.CFrame = CFrame.new(0, 11.8, 2.6) * CFrame.Angles(0, math.rad(90), 0)
+				local sun = h.pillar(m, "Gold", 2.3, 0.45, Vector3.new(0, 9.55, 2.75))
+				sun.CFrame = CFrame.new(0, 9.55, 2.75) * CFrame.Angles(math.rad(20), math.rad(90), 0)
 			end,
 		},
 		SandCrown = {
@@ -175,7 +176,7 @@ return function(h)
 			Palette = {
 				Curb = h.rgb(236, 206, 156),
 				Tile = h.rgb(250, 230, 190),
-				TileDark = h.rgb(220, 120, 76),
+				TileDark = h.rgb(232, 184, 112),
 				Inlay = gold,
 				Accent = paint,
 			},
@@ -262,7 +263,7 @@ return function(h)
 		},
 		-- A giant cat sphinx in a striped royal headdress, lying with its paws forward (-Z).
 		SandSphinx = {
-			Height = 37.65,
+			Height = 36.2,
 			AssetId = 81162770836161,
 			Shadow = false,
 			Palette = {
@@ -271,11 +272,10 @@ return function(h)
 				NemesBlue = h.rgb(40, 96, 214),
 				Eyes = h.rgb(60, 235, 160),
 				Nose = h.rgb(120, 64, 64),
-				Collar = gold,
 				Gem = h.rgb(232, 50, 90),
 				Plinth = h.rgb(222, 178, 118),
 			},
-			Materials = { Body = Sandstone, Nemes = Metal, Eyes = Neon, Collar = Metal, Gem = Neon, Plinth = Sandstone },
+			Materials = { Body = Sandstone, Nemes = Metal, Eyes = Neon, Gem = Neon, Plinth = Sandstone },
 			Fallback = function(m)
 				h.block(m, "Plinth", Vector3.new(34, 3, 64), Vector3.new(0, 1.5, 0))
 				h.blob(m, "Body", Vector3.new(20, 16, 36), Vector3.new(0, 11, 6))
@@ -297,7 +297,7 @@ return function(h)
 				end
 			end,
 		},
-		-- A big crescent dune (recolored per dune for depth).
+		-- A big crescent dune (recolored per dune for depth). Its skirt sits 3 studs below its foot.
 		SandDune = {
 			Height = 26,
 			AssetId = 107954322554378,
@@ -349,7 +349,7 @@ return function(h)
 			Height = 4.77,
 			AssetId = 119732771823772,
 			Shadow = false,
-			Palette = { Gold = gold, Wood = h.rgb(150, 88, 46), Gem = h.rgb(90, 220, 255) },
+			Palette = { Gold = gold, Wood = h.rgb(150, 88, 46), Gem = h.rgb(230, 60, 90) },
 			Materials = { Gold = Metal, Wood = Enum.Material.Wood, Gem = Neon },
 			Fallback = function(m)
 				h.blob(m, "Gold", Vector3.new(9, 3, 9), Vector3.new(0, 0.8, 0))
