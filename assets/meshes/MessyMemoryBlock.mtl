@@ -1,0 +1,11 @@
+newmtl Block
+Kd 0.353 0.784 0.431
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Star
+Kd 1.000 0.510 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
