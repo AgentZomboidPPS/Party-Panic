@@ -36,7 +36,7 @@ local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 local SnowballSummit = MiniGame.Define("SnowballSummit", { Results = "Survival" })
 
 local MIN_R, MAX_R = 0.8, 3.2 -- snowball radius while it grows
-local GROW = 0.07 -- radius per stud rolled
+local GROW = 0.042 -- radius per stud rolled (smallest to biggest: about 57 studs)
 local BLIZZARD_GROW = 1.6 -- growth multiplier in the last BLIZZARD_AT of the round
 local BLIZZARD_AT = 0.72 -- share of the round before the blizzard
 local BODY = 1.0 -- half a character's width

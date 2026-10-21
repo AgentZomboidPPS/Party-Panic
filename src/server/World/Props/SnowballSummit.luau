@@ -20,7 +20,7 @@ return function(h)
 	return {
 		SnowballSummitPeak = {
 			Height = 46,
-			AssetId = 0,
+			AssetId = 140175324238200,
 			Shadow = false,
 			Palette = { Ice = ICE, Icicles = rgb(196, 234, 255), Snow = SNOW, Rock = ROCK },
 			Materials = {
@@ -40,7 +40,7 @@ return function(h)
 		},
 		SnowballSummitSnowball = {
 			Height = 2,
-			AssetId = 0,
+			AssetId = 103282587927029,
 			Palette = { Snow = SNOW, Ice = rgb(178, 218, 248) },
 			Materials = { Snow = Enum.Material.Snow, Ice = Enum.Material.Ice },
 			Fallback = function(m)
@@ -50,7 +50,7 @@ return function(h)
 		},
 		SnowballSummitPine = {
 			Height = 15.6,
-			AssetId = 0,
+			AssetId = 123253399380273,
 			Palette = { Trunk = rgb(112, 76, 52), Needles = rgb(36, 96, 82), Snow = SNOW },
 			Materials = { Trunk = Enum.Material.Wood, Needles = Enum.Material.Grass, Snow = Enum.Material.Snow },
 			Fallback = function(m)
@@ -62,7 +62,7 @@ return function(h)
 		},
 		SnowballSummitFlag = {
 			Height = 10.4,
-			AssetId = 0,
+			AssetId = 76185160576597,
 			Palette = { Mound = SNOW, Pole = rgb(200, 206, 220), Knob = rgb(255, 200, 60), Cloth = rgb(232, 60, 80) },
 			Materials = { Mound = Enum.Material.Snow, Pole = Enum.Material.Metal, Knob = Enum.Material.Metal },
 			Fallback = function(m)
@@ -74,7 +74,7 @@ return function(h)
 		},
 		SnowballSummitSpire = {
 			Height = 60,
-			AssetId = 0,
+			AssetId = 135026813494538,
 			Shadow = false,
 			Palette = { Rock = ROCK, Snow = SNOW },
 			Materials = { Rock = Enum.Material.Slate, Snow = Enum.Material.Snow },
@@ -85,7 +85,7 @@ return function(h)
 		},
 		SnowballSummitMountain = {
 			Height = 152,
-			AssetId = 0,
+			AssetId = 80154575255923,
 			Shadow = false,
 			Palette = { Rock = ROCK, Snow = SNOW },
 			Materials = { Rock = Enum.Material.Slate, Snow = Enum.Material.Snow },
