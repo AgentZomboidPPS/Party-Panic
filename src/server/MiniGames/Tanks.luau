@@ -42,6 +42,7 @@ local Build = require(script.Parent.Parent.World.Build)
 local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 
 local Tanks = MiniGame.Define("Tanks")
+Tanks.Field = TankField -- the shared rules, for the round harness's test bot
 
 local TILE = TankField.TILE
 local SPEED = TankField.SHELL_SPEED

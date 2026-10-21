@@ -191,6 +191,7 @@ function Brain.Step(bot, ctx, mode, dt)
 	m.Seq = (m.Seq or 0) + 1
 	m.Aim = m.Aim or tank.Aim
 	m.Seen = m.Seen or {}
+	m.NextShot = m.NextShot or now + bot:Reaction() * 1.5 -- nobody fires the instant it's GO
 
 	local enemies = {}
 	for _, other in mode.list do

@@ -32,7 +32,7 @@ local SPEED = TankField.SHELL_SPEED
 local SEAT_Y = 4.15 -- a driver's root above the floor (the server's too)
 local CAMERA_HEIGHT = 60
 local CAMERA_BACK = 33
-local TURRET_PIECES = { Turret = true, Barrel = true, Hatch = true }
+local TURRET_PIECES = { Turret = true, Barrel = true, Hatch = true, Badge = true }
 local AIM_DOTS = 34
 local HIDDEN = CFrame.new(0, -1e4, 0)
 

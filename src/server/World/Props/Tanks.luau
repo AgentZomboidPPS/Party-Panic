@@ -6,7 +6,7 @@
 return function(h)
 	return {
 		TanksTank = {
-			Height = 4.6,
+			Height = 5.76,
 			AssetId = 0,
 			Collide = false,
 			Palette = {
@@ -17,6 +17,7 @@ return function(h)
 				Trim = h.rgb(250, 238, 205),
 				Barrel = h.rgb(88, 92, 104),
 				Hatch = h.rgb(70, 72, 80),
+				Badge = h.rgb(250, 250, 245),
 			},
 			Materials = { Barrel = Enum.Material.Metal, Wheels = Enum.Material.Metal },
 			Fallback = function(m)
@@ -27,10 +28,11 @@ return function(h)
 				h.pillar(m, "Turret", 3.8, 1.5, Vector3.new(0, 3.65, 0))
 				h.capsule(m, "Barrel", 3.4, 0.7, CFrame.new(0, 3.1, -3.5) * CFrame.Angles(0, math.rad(90), 0))
 				h.pillar(m, "Hatch", 2.2, 0.3, Vector3.new(0, 4.45, 0))
+				h.pillar(m, "Hatch", 0.12, 2.0, Vector3.new(-1.3, 4.76, 1.3))
 			end,
 		},
 		TanksShell = {
-			Height = 0.9,
+			Height = 0.89,
 			AssetId = 0,
 			Collide = false,
 			Palette = { Shell = h.rgb(70, 72, 84) },
@@ -40,7 +42,7 @@ return function(h)
 			end,
 		},
 		TanksMine = {
-			Height = 1.1,
+			Height = 1.04,
 			AssetId = 0,
 			Collide = false,
 			Palette = {
@@ -51,11 +53,11 @@ return function(h)
 			Fallback = function(m)
 				h.pillar(m, "Body", 2.6, 0.6, Vector3.new(0, 0.3, 0))
 				h.pillar(m, "Band", 2.7, 0.2, Vector3.new(0, 0.5, 0))
-				h.ball(m, "Light", 0.6, Vector3.new(0, 0.8, 0))
+				h.ball(m, "Light", 0.6, Vector3.new(0, 0.74, 0))
 			end,
 		},
 		TanksBlock = {
-			Height = 8,
+			Height = 8.03,
 			AssetId = 0,
 			Collide = true,
 			Palette = { Wood = h.rgb(232, 196, 140), Grain = h.rgb(196, 150, 96) },
@@ -79,7 +81,7 @@ return function(h)
 			end,
 		},
 		TanksBear = {
-			Height = 34,
+			Height = 33.63,
 			AssetId = 0,
 			Collide = false,
 			Palette = {
@@ -98,7 +100,7 @@ return function(h)
 			end,
 		},
 		TanksBall = {
-			Height = 16,
+			Height = 16.06,
 			AssetId = 0,
 			Collide = false,
 			Palette = {
@@ -112,7 +114,7 @@ return function(h)
 			end,
 		},
 		TanksRug = {
-			Height = 0.5,
+			Height = 0.42,
 			AssetId = 0,
 			Collide = false,
 			Palette = {
@@ -132,16 +134,17 @@ return function(h)
 			Collide = false,
 			Palette = { Wax = h.rgb(235, 70, 60), Wrapper = h.rgb(245, 140, 130) },
 			Fallback = function(m)
-				h.capsule(m, "Wax", 16, 1.8, CFrame.new(0, 0.9, 0) * CFrame.Angles(0, math.rad(90), 0))
+				h.capsule(m, "Wax", 16, 1.9, CFrame.new(0, 0.95, 0) * CFrame.Angles(0, math.rad(90), 0))
 			end,
 		},
 		TanksWindow = {
-			Height = 46,
+			Height = 44.4,
 			AssetId = 0,
 			Collide = false,
 			Palette = {
 				Frame = h.rgb(250, 250, 245),
 				Glass = h.rgb(170, 220, 255),
+				Cloud = h.rgb(255, 255, 255),
 				Curtain = h.rgb(255, 214, 120),
 			},
 			Materials = { Glass = Enum.Material.Glass, Curtain = Enum.Material.Fabric },
