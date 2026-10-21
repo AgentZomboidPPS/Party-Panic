@@ -140,15 +140,25 @@ function EatsaPizza:_buildArena()
 		Parent = arena,
 	})
 	-- Tar seams across the roof (flat strips just over it).
+	-- (They stop short of the pan and of the teams' arcs round it.)
+	local clear = 22.2 * scale + 3
 	for k = -3, 3 do
-		Build.Decor({
-			Name = "Seam",
-			Size = Vector3.new(H * 2 - 4, 0.06, 0.5),
-			CFrame = CFrame.new(c.X, floorY + 0.08, c.Z + k * (H / 3.5)),
-			Color = rgb(150, 140, 130),
-			Material = Enum.Material.Concrete,
-			Parent = arena,
-		})
+		local z = k * (H / 3.5)
+		local gap = if math.abs(z) < clear then math.sqrt(clear * clear - z * z) else 0
+		for _, side in (if gap > 0 then { -1, 1 } else { 0 }) :: { number } do
+			local from, to = if side == 0 then -(H - 2) else gap, H - 2
+			if to - from < 1 then
+				continue
+			end
+			Build.Decor({
+				Name = "Seam",
+				Size = Vector3.new(to - from, 0.06, 0.5),
+				CFrame = CFrame.new(c.X + (if side == 0 then 0 else side * (from + to) / 2), floorY + 0.08, c.Z + z),
+				Color = rgb(150, 140, 130),
+				Material = Enum.Material.Concrete,
+				Parent = arena,
+			})
+		end
 	end
 	Build.Decor({
 		Name = "Building",
@@ -289,7 +299,7 @@ function EatsaPizza:_buildArena()
 			Build.Decor({
 				Name = "TeamArc",
 				Size = Vector3.new((t1 - t0) * r, 0.1, 1.1),
-				CFrame = CFrame.lookAt(Vector3.new(p.X, floorY + 0.15, p.Z), Vector3.new(c.X, floorY + 0.15, c.Z)),
+				CFrame = CFrame.lookAt(Vector3.new(p.X, floorY + 0.25, p.Z), Vector3.new(c.X, floorY + 0.25, c.Z)),
 				Color = color,
 				Material = Enum.Material.Neon,
 				Parent = arena,
@@ -305,7 +315,7 @@ function EatsaPizza:_buildArena()
 		local width = rng:NextNumber(26, 46)
 		local height = rng:NextNumber(70, 200)
 		local p = c + Vector3.new(math.sin(a), 0, math.cos(a)) * distance
-		local base = floorY - 160
+		local base = floorY - 160 - index * 0.7
 		local frame = CFrame.lookAt(Vector3.new(p.X, base + height / 2, p.Z), Vector3.new(c.X, base + height / 2, c.Z))
 		local tone = ({ rgb(120, 130, 150), rgb(160, 120, 100), rgb(190, 180, 160), rgb(100, 110, 130) })[index % 4 + 1]
 		Build.Decor({

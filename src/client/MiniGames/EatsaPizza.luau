@@ -88,15 +88,18 @@ function EatsaPizza.Start(api)
 	api:Mood({ Tint = Color3.fromRGB(255, 240, 222), Saturation = 0.14, Contrast = 0.05 })
 
 	-- HUD ----------------------------------------------------------------------------------------
-	local count = #order
+	-- (Phones: the team pill under the banner already shows each team's share with its shape, and
+	-- the space under it is short before the move stick's corner, so only the status line shows.)
+	local count = if touch then 0 else #order
 	local gap = 10
-	local cardW = math.min(if touch then 150 else 140, math.floor((600 - (count - 1) * gap) / count))
+	local cardW = math.min(140, math.floor((600 - (math.max(count, 1) - 1) * gap) / math.max(count, 1)))
 	local row = UIKit.new("Frame", {
 		Name = "Shares",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, hudY),
-		Size = UDim2.fromOffset(count * cardW + (count - 1) * gap, 62),
+		Size = UDim2.fromOffset(math.max(count * cardW + (count - 1) * gap, 0), 62),
 		BackgroundTransparency = 1,
+		Visible = not touch,
 		Parent = hud,
 		Children = {
 			UIKit.List(Enum.FillDirection.Horizontal, gap, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Top),
@@ -104,7 +107,7 @@ function EatsaPizza.Start(api)
 	})
 	type Card = { Frame: Frame, Fill: Frame, Percent: TextLabel }
 	local cards: { [string]: Card } = {}
-	for index, team in order do
+	for index, team in if touch then {} else order do
 		local color = Teams.Colors[team] or Color3.new(1, 1, 1)
 		local frame = UIKit.new("Frame", {
 			Name = `Team_{team}`,
@@ -167,8 +170,8 @@ function EatsaPizza.Start(api)
 		TextSize = 26,
 		TextWrapped = false,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, hudY + 68),
-		Size = UDim2.fromOffset(if touch then 470 else 600, 32),
+		Position = UDim2.new(0.5, 0, 0, if touch then hudY else hudY + 68),
+		Size = UDim2.fromOffset(if touch then 470 else 600, if touch then 28 else 32),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.1) },
 	})
@@ -190,6 +193,9 @@ function EatsaPizza.Start(api)
 	local function refreshCards()
 		for _, team in order do
 			local card = cards[team]
+			if not card then
+				continue
+			end
 			local share = teamShare(team)
 			card.Fill.Size = UDim2.fromScale(share, 1)
 			card.Percent.Text = `{math.floor(share * 100 + 1e-6)}%`
@@ -414,7 +420,8 @@ function EatsaPizza.Start(api)
 		elseif on then
 			local left = slices.L[on] or 0
 			local chomping = now - lastBite < 0.35
-			status.Text = if chomping then `CHOMP! {left} bites left` else `MASH EAT! {left} bites left`
+			local shape = if touch and mine then `{SHAPES[mine] or ""} ` else ""
+			status.Text = if chomping then `{shape}CHOMP! {left} bites left` else `{shape}MASH EAT! {left} bites left`
 			status.TextColor3 = if chomping then Theme.Colors.Yellow else Color3.new(1, 1, 1)
 		elseif now - deniedAt < 1.2 then
 			status.Text = "Not on your slice! Follow ▼"
