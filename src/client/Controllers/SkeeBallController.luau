@@ -28,10 +28,20 @@
 -- nothing else (a round's clean-up after you were knocked out) can pull it away; the move controls
 -- are put away again after each phase change for the same reason. The next machine's "Play
 -- SKEE-BALL" prompt (within reach of your spot) stays off your screen while you play.
+--
+-- Second review pass (same request): a ball you roll counts once the server says so (its echo or
+-- the machine's ball count); if the server refused it, its "Sync" puts the ball back ("ROLL
+-- AGAIN") so this device never runs ahead of the real game, and a ball's points only pop once the
+-- server has taken it. A drag from the waiting ball reaches full power at the bottom edge of the
+-- screen, in every layout (SkeeBallView: the vote's camera poses keep room below the ball and
+-- keep the camera clear of the lobby's scenery). Only the drag's own finger ends it. On PC the
+-- controls column rises above the vote cards only while they're up, and sits low the rest of the
+-- time, under the round's standings.
 
 local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
 local Debris = game:GetService("Debris")
+local GuiService = game:GetService("GuiService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -43,6 +53,7 @@ local Shared = ReplicatedStorage.Shared
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 local SkeeBall = require(Shared.Logic.SkeeBall)
+local SkeeBallView = require(Shared.Logic.SkeeBallView)
 local Sounds = require(Shared.Sounds)
 
 local State = require(script.Parent.Parent.State)
@@ -55,25 +66,28 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local remote: RemoteEvent
 
--- The play camera, in the machine's frame: behind and above the player, looking down the lane. The
--- ball waits three quarters of the way down the screen (phone toasts pop up below it) and the
--- 100 cups sit a quarter of the way down, under the top bar's pills. While the vote cards show
--- (they keep their places), phones tip the view up a little so the whole ring board sits under the
--- cards' row (the ball goes 86% of the way down), and PC pulls it back so the ball and the lane
--- stay above the cards along the bottom (the ball 59% down, the board's top 21%).
+-- The play camera, in the machine's frame (Shared/Logic/SkeeBallView has the poses and why): behind
+-- and above the player, looking down the lane, the ball three quarters of the way down the screen
+-- and the 100 cups a quarter. While the vote cards show (they keep their places), the view turns
+-- and widens so the ring board sits under the phones' row of cards, and the ball and the lane stay
+-- above the PC's cards along the bottom.
 type Pose = { Eye: Vector3, Look: Vector3, Fov: number }
-local POSES: { [string]: Pose } = {
-	Play = { Eye = Vector3.new(0, 10, -14.2), Look = Vector3.new(0, 2.6, 0.9), Fov = 54 },
-	VoteTouch = { Eye = Vector3.new(0, 10, -14.2), Look = Vector3.new(0, 3.6, 3), Fov = 54 },
-	VotePc = { Eye = Vector3.new(0, 12, -17), Look = Vector3.new(0, 2, -2), Fov = 58 },
-}
+local POSES: { [string]: Pose } = {}
+for name, pose in SkeeBallView.Poses do
+	POSES[name] = {
+		Eye = Vector3.new(pose.Eye[1], pose.Eye[2], pose.Eye[3]),
+		Look = Vector3.new(pose.Look[1], pose.Look[2], pose.Look[3]),
+		Fov = pose.Fov,
+	}
+end
 local CAMERA_BLEND = 0.7 -- seconds the camera takes to swing in behind your lane, or to a new pose
 local SELF_FADE = 0.8 -- your own character fades while you play (it would hide the ball)
-local DRAG_POWER = 0.32 -- a drag this much of the screen's height is full power
-local DRAG_AIM = 0.17 -- and this much of its width sideways is full aim
 local AIM_SWING = 1.5 -- seconds for the ROLL meter's aim to swing across and back
 local POWER_SWING = 1.25 -- and for its power to fill and empty
-local CONFIRM_TIMEOUT = 2 -- a roll the server hasn't echoed by then didn't count
+-- A ball this device rolled counts once the server says so: its echo, the machine's ball count, or
+-- (for a refused one) its "Sync". With no word by this long after the roll, the machine's ball
+-- count decides (a safety net: the server answers every roll).
+local CONFIRM_TIMEOUT = 4
 local ANIMATE_RANGE = 220
 -- The controls column low on the left (UI units): the score card over the ROLL button, the power
 -- meter beside them, and the tip on top until the first roll.
@@ -84,10 +98,12 @@ local METER_WIDTH = 40
 local HINT_HEIGHT = 84
 -- PC: a lower ROLL button and tip (Space rolls too), so the column fits between the profile pill
 -- and the room the vote cards take along the bottom (VoteController: 214 tall cards, 34 over them
--- for the YOUR VOTE tag, 18 from the bottom).
+-- for the YOUR VOTE tag, 18 from the bottom), where it rises to while the vote is up. The rest of
+-- the time it sits PC_BOTTOM from the bottom, under the round's standings.
 local PC_ROLL_HEIGHT = 72
 local PC_HINT_HEIGHT = 66
 local PC_VOTE_ROOM = 18 + 34 + 214 + 10
+local PC_BOTTOM = 24
 -- Phones: the room the vote cards take under the top bar (VoteController: 12 over the cards for
 -- the tag, 94 tall cards, then the sit-out note under them), so DONE sits below them.
 local TOUCH_VOTE_ROOM = 2 + 12 + 94 + 6 + 28 + 10
@@ -129,7 +145,8 @@ type Roll = {
 	Dropped: boolean,
 	Mine: boolean,
 	Number: number,
-	Confirmed: boolean,
+	Confirmed: boolean, -- the server took it (always, for someone else's)
+	DropWaiting: boolean, -- your ball dropped in before the server's word came: its points pop then
 }
 
 type Machine = {
@@ -185,6 +202,7 @@ local play = {
 
 local ui = {} :: { [string]: any }
 local refreshControls: () -> () -- the score, balls and ROLL button under your lane (below)
+local refreshHint: () -> () -- the tip over them (below)
 local voteShowing = false -- the vote cards are up (the Voting phase): the camera makes room
 
 -- Sound ---------------------------------------------------------------------------------------------
@@ -428,6 +446,7 @@ local function startRoll(machine: Machine, path: SkeeBall.Path, number: number, 
 		Mine = mine,
 		Number = number,
 		Confirmed = not mine,
+		DropWaiting = false,
 	}
 	table.insert(machine.Rolls, roll)
 	if mine then
@@ -438,6 +457,46 @@ local function startRoll(machine: Machine, path: SkeeBall.Path, number: number, 
 	return roll
 end
 
+-- The server took this device's ball: if it already dropped in on screen, its points pop now.
+local function confirm(machine: Machine, roll: Roll)
+	if roll.Confirmed then
+		return
+	end
+	roll.Confirmed = true
+	if roll.DropWaiting then
+		roll.DropWaiting = false
+		dropped(machine, roll)
+	end
+end
+
+-- The server counts `counted` balls of this device's game: the ones it rolled up to there count,
+-- any after that were refused and go back (gone from the lane, to be rolled again). If the server
+-- did take one of those after all, its echo brings it back ("Rolled", below).
+local function settleRolls(machine: Machine, counted: number)
+	for index = #machine.Rolls, 1, -1 do
+		local roll = machine.Rolls[index]
+		if roll.Mine and not roll.Confirmed then
+			if roll.Number <= counted then
+				confirm(machine, roll)
+			else
+				roll.Model:Destroy()
+				table.remove(machine.Rolls, index)
+			end
+		end
+	end
+	if play.Active and play.Index == machine.Index and play.Rolled > counted then
+		play.Rolled = counted
+		play.NextRollAt = 0
+		showWaiting(machine)
+		if machine.Draw then
+			machine.Draw()
+		end
+		refreshHint()
+		refreshControls()
+		popScreen("ROLL AGAIN", Color3.fromRGB(230, 230, 245), false)
+	end
+end
+
 local function stepRolls(machine: Machine, now: number)
 	local index = 1
 	while index <= #machine.Rolls do
@@ -445,23 +504,19 @@ local function stepRolls(machine: Machine, now: number)
 		local path = roll.Path
 		local t = now - roll.Start
 		if roll.Mine and not roll.Confirmed and t > CONFIRM_TIMEOUT then
-			local counted = machine.Model:GetAttribute("SkeeBalls") or 0
-			if counted >= roll.Number then
-				roll.Confirmed = true -- the server took it; its word is on the way
-			else
-				-- The server never took it (a hiccup): this ball doesn't count, roll it again.
-				roll.Model:Destroy()
-				table.remove(machine.Rolls, index)
-				if play.Active and play.Index == machine.Index then
-					play.Rolled = counted
-					play.NextRollAt = 0
-					showWaiting(machine)
-					refreshControls()
-				end
-				continue
+			-- No word from the server (it answers every roll, so this is a safety net): the
+			-- machine's ball count decides.
+			local counted = machine.Model:GetAttribute("SkeeBalls")
+			settleRolls(machine, if type(counted) == "number" then counted else 0)
+			if roll.Model.Parent == nil then
+				continue -- it went back
 			end
 		end
 		if t >= path.Done + 0.05 then
+			if roll.Mine and not roll.Confirmed then
+				index += 1 -- sunk in its hole, waiting for the server's word
+				continue
+			end
 			roll.Model:Destroy()
 			table.remove(machine.Rolls, index)
 			continue
@@ -483,7 +538,11 @@ local function stepRolls(machine: Machine, now: number)
 		local phase = path.Phases[#path.Phases]
 		if t >= phase.T0 and not roll.Dropped then
 			roll.Dropped = true
-			dropped(machine, roll)
+			if roll.Confirmed then
+				dropped(machine, roll)
+			else
+				roll.DropWaiting = true -- no points pop for a ball the server hasn't taken yet
+			end
 		end
 		if not roll.Hopped and t >= path.Phases[2].T0 then
 			roll.Hopped = true
@@ -822,6 +881,16 @@ local function addMachine(model: Instance)
 	end
 	for _, attribute in { "SkeeState", "SkeeScore", "SkeeBalls", "SkeeName", "SkeeBest" } do
 		model:GetAttributeChangedSignal(attribute):Connect(function()
+			if attribute == "SkeeBalls" then
+				-- The server took this device's balls up to its count (a ball that had to wait
+				-- its turn there is echoed a moment later).
+				local counted = model:GetAttribute("SkeeBalls") or 0
+				for _, roll in machine.Rolls do
+					if roll.Mine and roll.Number <= counted then
+						confirm(machine, roll)
+					end
+				end
+			end
 			if machine.Draw then
 				machine.Draw()
 			end
@@ -947,7 +1016,7 @@ end
 
 -- The tip over the score: how to roll (until your first ball), or, while the vote is on and you're
 -- down to play, that a round is coming (sitting out keeps you rolling).
-local function refreshHint()
+function refreshHint()
 	local hint = ui.Hint
 	if not hint then
 		return
@@ -1029,14 +1098,13 @@ local function meterValues(now: number)
 end
 
 -- Dragging back on the lane: down for power, sideways to aim (the ball goes the other way, like a
--- slingshot), let go to roll.
+-- slingshot), let go to roll (SkeeBallView.Drag). A drag that starts low, on the waiting ball,
+-- reaches full power at the screen's bottom edge, so every target can be hit from there.
 local function dragValues(): (number, number)
-	local camera = workspace.CurrentCamera
-	local size = camera.ViewportSize
-	local delta = play.DragAt - play.DragStart
-	local power = math.clamp(delta.Y / (size.Y * DRAG_POWER), 0, 1)
-	local aim = math.clamp(-delta.X / (size.X * DRAG_AIM), -1, 1)
-	return aim, power
+	local size = workspace.CurrentCamera.ViewportSize
+	-- Touch and mouse positions leave out the top bar, so the bottom edge is that much higher.
+	local bottom = size.Y - GuiService:GetGuiInset().Y
+	return SkeeBallView.Drag(play.DragStart.X, play.DragStart.Y, play.DragAt.X, play.DragAt.Y, size.X, size.Y, bottom)
 end
 
 -- Follows the finger or mouse. A locked mouse (shift lock) stays in the middle of the screen, so
@@ -1101,10 +1169,23 @@ end
 
 local function onInputEnded(input: InputObject)
 	local dragging = play.Dragging
-	if not dragging or input ~= dragging and input.UserInputType ~= dragging.UserInputType then
+	if not dragging then
+		return
+	end
+	-- Only the drag's own finger ends it: another finger lifting meanwhile (a thumb brushing the
+	-- screen, a tap on a vote card) changes nothing. A mouse drag ends with its button.
+	local mouse = dragging.UserInputType == Enum.UserInputType.MouseButton1
+		and input.UserInputType == Enum.UserInputType.MouseButton1
+	if input ~= dragging and not mouse then
 		return
 	end
 	play.Dragging = nil
+	if input.UserInputState == Enum.UserInputState.Cancel then
+		-- The system took the touch (a notification, a swipe from the edge): no roll.
+		showAim(0, 0, false)
+		refreshControls()
+		return
+	end
 	dragTo(input)
 	local aim, power = dragValues()
 	showAim(0, 0, false)
@@ -1344,29 +1425,40 @@ local function buildUi(hud: Instance)
 	-- Low on the left, beside the lane: what to do (until the first roll), your score and balls,
 	-- the big ROLL button, and the power meter between them and the lane. One scaled holder, so it
 	-- keeps its shape on every screen. (On phones that's the MOVE stick's corner: the stick is put
-	-- away while you play.) On PC the holder keeps the vote cards' room free under the controls.
+	-- away while you play.) On PC the holder has room for the vote cards under the controls: the
+	-- column sits low in it, and rises above the cards while they're up (placeColumn), so it's
+	-- never over the cards nor, during a round, over the standings on the left.
 	local rollHeight = if touch then ROLL_HEIGHT else PC_ROLL_HEIGHT
 	local hintHeight = if touch then HINT_HEIGHT else PC_HINT_HEIGHT
-	local below = if touch then 0 else PC_VOTE_ROOM
 	local controlsHeight = SCORE_HEIGHT + 12 + rollHeight
+	local width = COLUMN_WIDTH + 12 + METER_WIDTH
 	local holder = UIKit.new("Frame", {
 		Name = "SkeeBallControls",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = if touch then UDim2.new(0, 12, 1, -10) else UDim2.new(0, 24, 1, 0),
-		Size = UDim2.fromOffset(COLUMN_WIDTH + 12 + METER_WIDTH, hintHeight + controlsHeight + below),
+		Size = UDim2.fromOffset(width, hintHeight + controlsHeight + (if touch then 0 else PC_VOTE_ROOM)),
 		BackgroundTransparency = 1,
 		Visible = false,
 		Parent = hud,
 	})
 	UIKit.AutoScale(holder)
 	ui.SkeeBallControls = holder
+	local column = UIKit.new("Frame", {
+		Name = "Column",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, if touch then 0 else -PC_BOTTOM),
+		Size = UDim2.fromOffset(width, hintHeight + controlsHeight),
+		BackgroundTransparency = 1,
+		Parent = holder,
+	})
+	ui.Column = column
 	local card = UIKit.Panel({
 		Name = "ScoreCard",
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 0, 1, -(rollHeight + 12 + below)),
+		Position = UDim2.new(0, 0, 1, -(rollHeight + 12)),
 		Size = UDim2.fromOffset(COLUMN_WIDTH, SCORE_HEIGHT),
 		CornerRadius = 22,
-		Parent = holder,
+		Parent = column,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 	ui.Score = UIKit.Label({
 		Text = "SCORE 0",
@@ -1404,21 +1496,21 @@ local function buildUi(hud: Instance)
 		Text = "ROLL",
 		TextSize = if touch then 40 else 34,
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 0, 1, -below),
+		Position = UDim2.fromScale(0, 1),
 		Size = UDim2.fromOffset(COLUMN_WIDTH, rollHeight),
 		CornerRadius = 30,
-		Parent = holder,
+		Parent = column,
 	}, pressRoll, Theme.Colors.Green, Color3.fromRGB(40, 160, 90))
 
 	-- The power meter by the lane (while dragging or charging).
 	local meter = UIKit.new("Frame", {
 		Name = "Meter",
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, 0, 1, -below),
+		Position = UDim2.fromScale(1, 1),
 		Size = UDim2.fromOffset(METER_WIDTH, controlsHeight),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		Visible = false,
-		Parent = holder,
+		Parent = column,
 		Children = { UIKit.Corner(14), UIKit.Stroke(nil, 2, 0.4) },
 	})
 	ui.Meter = meter
@@ -1444,9 +1536,9 @@ local function buildUi(hud: Instance)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Bottom,
 		Position = UDim2.fromOffset(4, 0),
-		Size = UDim2.fromOffset(COLUMN_WIDTH + 12 + METER_WIDTH - 4, hintHeight - 10),
+		Size = UDim2.fromOffset(width - 4, hintHeight - 10),
 		Visible = false,
-		Parent = holder,
+		Parent = column,
 		Children = { UIKit.TextStroke(0.1) },
 	})
 	hint:SetAttribute("PP_Lines", 2)
@@ -1587,6 +1679,21 @@ local function buildUi(hud: Instance)
 	end
 end
 
+-- PC: the controls column rises above the vote cards while they're up, and sits low the rest of the
+-- time (under the round's standings on the left). Phones keep it in place.
+local function placeColumn(animate: boolean)
+	local column = ui.Column
+	if not column or UIKit.IsTouch() then
+		return
+	end
+	local goal = UDim2.new(0, 0, 1, -(if voteShowing then PC_VOTE_ROOM else PC_BOTTOM))
+	if animate then
+		UIKit.Tween(column, 0.3, { Position = goal })
+	else
+		column.Position = goal
+	end
+end
+
 -- Remote events ---------------------------------------------------------------------------------------
 
 local function onEvent(kind: any, index: any, ...: any)
@@ -1601,6 +1708,12 @@ local function onEvent(kind: any, index: any, ...: any)
 		if play.Active and play.Index == index then
 			exitPlay()
 		end
+	elseif kind == "Sync" and machine then
+		-- The server refused a roll from this device: these many balls count.
+		local counted = ...
+		if type(counted) == "number" and play.Active and play.Index == index then
+			settleRolls(machine, counted)
+		end
 	elseif kind == "Rolled" and machine then
 		local ball, aimQ, powerQ = ...
 		if type(ball) ~= "number" or type(aimQ) ~= "number" or type(powerQ) ~= "number" then
@@ -1614,7 +1727,7 @@ local function onEvent(kind: any, index: any, ...: any)
 			end
 		end
 		if existing then
-			existing.Confirmed = true
+			confirm(machine, existing)
 			return
 		end
 		local path = SkeeBall.Path(aimQ, powerQ, ball)
@@ -1669,6 +1782,17 @@ function SkeeBallController.PressRoll()
 	pressRoll()
 end
 
+-- What the local game stands at (for the UI checks): playing, balls rolled, a drag going on.
+function SkeeBallController.Status(): { Active: boolean, Rolled: number, Dragging: boolean, Aim: number, Power: number }
+	return {
+		Active = play.Active,
+		Rolled = play.Rolled,
+		Dragging = play.Dragging ~= nil,
+		Aim = play.Aim,
+		Power = play.Power,
+	}
+end
+
 function SkeeBallController.Start(context)
 	remote = Remotes.Get("SkeeBall")
 	folder = Instance.new("Folder")
@@ -1711,9 +1835,11 @@ function SkeeBallController.Start(context)
 		end
 	end)
 	voteShowing = GameState.Get("Phase") == "Voting"
+	placeColumn(false)
 	GameState.Changed("Phase", function(phase)
 		voteShowing = phase == "Voting"
 		refreshHint()
+		placeColumn(play.Active)
 		if play.Active then
 			holdControlsAway()
 		end

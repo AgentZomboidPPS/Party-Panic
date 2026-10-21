@@ -16,10 +16,19 @@
 -- ends it too, before the round's camera starts). The "someone's playing this one" note only
 -- shows when someone else really is, and a game that ends for idling says so.
 --
+-- Second review pass (same request): a roll that comes in too soon after the last one (a phone's
+-- ping bunched the two messages up) waits its turn here instead of being refused, and the device
+-- hears about any roll that is refused ("Sync", with the balls that really count), so it puts that
+-- ball back and stays in step. The game ends when the last ball to drop in has dropped in,
+-- whichever order the balls land in, so every ball's points are in the final score, the best
+-- and the board. TODAY'S BEST starts afresh when the day changes (UTC, like the daily gift), not
+-- when the next game ends.
+--
 -- The "SkeeBall" remote, both ways:
 --   client -> server  ("Roll", ball, aim, power)   ("Again")   ("Leave")
 --   server -> client  ("Start", index, best)                                   the player
 --                     ("Rolled", index, ball, aimQ, powerQ, pocket, points)     everyone
+--                     ("Sync", index, balls)  a roll was refused: balls counted  the player
 --                     ("Over", index, userId, score, best, newBest, todayRank)  everyone
 --                     ("End", index, reason)                                    the player
 -- Each machine's attributes (everyone's screens draw them): SkeeUser (UserId, 0 when free),
@@ -50,11 +59,13 @@ local BEST_KEY = "SkeeBall" -- in the profile's Stats.Best (personal bests by ga
 local LEAVE_DISTANCE = 9 -- a player further than this from their machine's stand has left it
 local IDLE_TIME = 45 -- seconds without a roll before a machine frees up
 local OVER_HOLD = 15 -- after the last ball, the machine waits this long for PLAY AGAIN
--- A roll may come this much before the last ball landed: the device rolls as soon as it saw it
--- land, and a phone's ping can bunch two messages up (rolling early wins nothing; a refused roll
--- would put back a ball the player already saw drop in).
+-- A roll may start this much before the last ball landed (the device rolls as soon as it saw it
+-- land), and never closer than MIN_GAP to the last one. One that comes in sooner than that (a
+-- phone's ping bunched two messages up) waits until then, up to MAX_WAIT; sooner still, it's
+-- refused. Rolling early wins nothing.
 local ROLL_SLACK = 0.6
-local MIN_GAP = 0.45 -- but never closer than this to the last roll
+local MIN_GAP = 0.45
+local MAX_WAIT = 1.5
 local BOARD_SIZE = 5
 local CHECK_EVERY = 0.25
 
@@ -65,6 +76,7 @@ type Session = {
 	Stand: BasePart,
 	Prompt: ProximityPrompt?,
 	Ball: number, -- balls rolled so far
+	Pending: number, -- balls rolled that haven't dropped in yet (their points still to come)
 	Score: number,
 	Best: number, -- the player's best before this game
 	State: string, -- "Playing" | "Over"
@@ -83,6 +95,7 @@ local sessions: { [Player]: Session } = {}
 local byMachine: { [number]: Session } = {}
 local board: BasePart? = nil
 local today = { Day = -1, Entries = {} :: { { U: number, N: string, S: number, At: number } } }
+SkeeBallService.Today = today -- (tools/checks/skeeball_game.luau turns its day back to test the change)
 
 local function standOf(machine: Model): BasePart?
 	return machine:FindFirstChild("Stand") :: BasePart?
@@ -199,6 +212,7 @@ local function begin(session: Session)
 	local machine = session.Machine
 	session.Token += 1
 	session.Ball = 0
+	session.Pending = 0
 	session.Score = 0
 	session.State = "Playing"
 	session.NextRollAt = 0
@@ -235,6 +249,7 @@ function SkeeBallService.Join(player: Player, index: number): boolean
 		Stand = stand,
 		Prompt = stand:FindFirstChildOfClass("ProximityPrompt"),
 		Ball = 0,
+		Pending = 0,
 		Score = 0,
 		Best = 0,
 		State = "Playing",
@@ -298,43 +313,71 @@ local function finish(session: Session)
 	Telemetry.PlayerEvent(player, "SkeeBallGame", score)
 end
 
+-- Tells the player's device which balls really count, after refusing one it sent (it rolled that
+-- ball already: it puts it back and stays in step).
+local function sync(session: Session)
+	if session.Player.Parent then
+		remote:FireClient(session.Player, "Sync", session.Index, session.Ball)
+	end
+end
+
 -- A roll from the player at their machine: `ball` is which ball (1..9), aim -1..1, power 0..1.
--- Returns the path the server rolled, or nil if the roll was refused.
+-- Returns the path the server rolled (it may start a moment later: see MAX_WAIT), or nil if the
+-- roll was refused.
 function SkeeBallService.Roll(player: Player, ball: any, aim: any, power: any): SkeeBall.Path?
 	local session = sessions[player]
-	if not session or session.State ~= "Playing" then
+	if not session then
 		return nil
 	end
-	if type(ball) ~= "number" or type(aim) ~= "number" or type(power) ~= "number" then
-		return nil
-	end
-	if ball ~= session.Ball + 1 or ball > SkeeBall.BALLS then
-		return nil
-	end
-	if aim ~= aim or power ~= power or math.abs(aim) > 1.001 or power < -0.001 or power > 1.001 then
-		return nil
-	end
+	local valid = session.State == "Playing"
+		and type(ball) == "number"
+		and type(aim) == "number"
+		and type(power) == "number"
+		and ball == session.Ball + 1
+		and ball <= SkeeBall.BALLS
+		and aim == aim
+		and power == power
+		and math.abs(aim) <= 1.001
+		and power >= -0.001
+		and power <= 1.001
 	local now = os.clock()
-	if now < session.NextRollAt - ROLL_SLACK or now - session.LastRollAt < MIN_GAP then
+	local startAt = math.max(now, session.NextRollAt - ROLL_SLACK, session.LastRollAt + MIN_GAP)
+	if not valid or startAt - now > MAX_WAIT then
+		sync(session)
 		return nil
 	end
 	local aimQ, powerQ = SkeeBall.Quantize(aim, power)
 	local path = SkeeBall.Path(aimQ, powerQ, ball)
 	session.Ball = ball
-	session.LastRollAt = now
-	session.NextRollAt = now + path.Landed
+	session.Pending += 1
+	session.LastRollAt = startAt
+	session.NextRollAt = startAt + path.Landed
 	session.LastActive = now
 	session.Machine:SetAttribute("SkeeBalls", ball)
-	remote:FireAllClients("Rolled", session.Index, ball, aimQ, powerQ, path.Pocket, path.Points)
-	-- The points count when the ball drops in, when everyone sees it go in.
 	local token = session.Token
-	task.delay(path.Done, function()
-		if session.Token ~= token or sessions[player] ~= session then
+	local function current(): boolean
+		return session.Token == token and sessions[player] == session and session.State == "Playing"
+	end
+	local function start()
+		if current() then
+			remote:FireAllClients("Rolled", session.Index, ball, aimQ, powerQ, path.Pocket, path.Points)
+		end
+	end
+	if startAt > now then
+		task.delay(startAt - now, start)
+	else
+		start()
+	end
+	-- The points count when the ball drops in, when everyone sees it go in; the game is over when
+	-- the last ball in has dropped in (a quick last ball can beat a slow one before it).
+	task.delay(startAt - now + path.Done, function()
+		if not current() then
 			return
 		end
+		session.Pending -= 1
 		session.Score += path.Points
 		session.Machine:SetAttribute("SkeeScore", session.Score)
-		if ball == SkeeBall.BALLS then
+		if session.Ball == SkeeBall.BALLS and session.Pending == 0 then
 			finish(session)
 		end
 	end)
@@ -367,8 +410,10 @@ local function onRemote(player: Player, action: any, ...: any)
 	end
 end
 
--- Walking away, a fallen character, idling, or a game left over without PLAY AGAIN ends it.
+-- Walking away, a fallen character, idling, or a game left over without PLAY AGAIN ends it. And
+-- TODAY'S BEST starts afresh as the day changes.
 local function check()
+	rollOverDay()
 	local now = os.clock()
 	for player, session in sessions do
 		local root = rootOf(player)
