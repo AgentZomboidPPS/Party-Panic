@@ -550,8 +550,7 @@ function BumperBallers:Start()
 		local _, humanoid = ctx:GetCharacter(player)
 		if not humanoid then
 			table.insert(riderless, entry)
-		end
-		if humanoid then
+		else
 			humanoid.JumpPower = 0
 			humanoid.JumpHeight = 0
 			humanoid.PlatformStand = true
