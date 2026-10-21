@@ -49,6 +49,8 @@ for key, entry in sorted(reports.items(), key=lambda item: -(item[1] or {}).get(
         print(f"    music {music.get('Track')}: loaded={music.get('Loaded')} playing={music.get('Playing')} at {music.get('Time')} s, "
               f"volume {music.get('Volume')}, loudness {music.get('Loudness')} (silent = 0), music setting {music.get('Level')}, "
               f"Roblox volume {entry.get('Master')}")
+        if entry.get("Control"):
+            print(f"    a public Roblox library sound on this device: {entry.get('Control')}")
         for line in entry.get("Messages") or []:
             print(f"    console: {line}")
         if entry.get("Policy"):
