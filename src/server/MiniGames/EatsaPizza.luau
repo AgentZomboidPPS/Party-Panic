@@ -36,6 +36,7 @@ local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 
 local EatsaPizza = MiniGame.Define("EatsaPizza", { Results = "Team" })
 
+EatsaPizza.Logic = Logic -- (for the round harness's test bot)
 EatsaPizza.Shapes = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
 
 local FINALE = 3 -- after a team clears its part, before the round ends

@@ -3,11 +3,10 @@
 -- down the list it is; the stand-in client (Bot1) is left to the client half. It notes the teams'
 -- shares every few seconds, one stand-in leaves mid-round (with 3 or more), and at the start it lists
 -- any collidable part in the arena that isn't a visible part (there should be none).
-local Logic = require(game:GetService("ReplicatedStorage").Shared.Logic.EatsaPizza)
-
 return function(env)
 	local ctx = env.ctx
 	local mode = env.game
+	local Logic = mode.Logic -- (this file is bundled as is: it reaches the shared rules through the mode)
 	local targets = {}
 	local bites = 0
 	local reported = {}
