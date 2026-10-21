@@ -1,0 +1,23 @@
+newmtl Legs
+Kd 0.275 0.275 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Board
+Kd 0.784 0.157 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Neon
+Kd 1.000 0.863 0.353
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bulbs
+Kd 1.000 0.863 0.549
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
