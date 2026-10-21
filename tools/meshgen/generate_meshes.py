@@ -71,6 +71,69 @@ class Mesh:
         return self.v, vn, self.f
 
 
+def face_outward(mesh: Mesh) -> Mesh:
+    """Turns every closed part of a mesh outward, consistently. Roblox draws only the front of a
+    face, so a face pointing in shows the part's inside (hollow, or black where the far side shades
+    it). Hand-built parts get this wrong easily: a tube whose end caps were turned by a test that
+    can't tell for a cap, a cloth slab built with its two sides turned in. Each closed part (corners
+    joined by position, every edge shared by exactly two faces) gets its faces agreeing with their
+    neighbours, then turned out if its volume comes out negative. Open sheets are left as built."""
+    if len(mesh.f) == 0:
+        return mesh
+    _, corner = np.unique(np.round(mesh.v / 1e-4).astype(np.int64), axis=0, return_inverse=True)
+    faces = corner.reshape(-1)[mesh.f]
+    usable = (faces[:, 0] != faces[:, 1]) & (faces[:, 1] != faces[:, 2]) & (faces[:, 2] != faces[:, 0])
+    users: dict[tuple[int, int], list[tuple[int, int]]] = {}  # edge -> [(face, +1 if it runs low to high)]
+    for index in np.flatnonzero(usable):
+        a, b, c = faces[index]
+        for p, q in ((a, b), (b, c), (c, a)):
+            users.setdefault((min(p, q), max(p, q)), []).append((int(index), 1 if p < q else -1))
+    flip = np.zeros(len(faces), dtype=bool)
+    seen = np.zeros(len(faces), dtype=bool)
+    for start in np.flatnonzero(usable):
+        if seen[start]:
+            continue
+        # Walk the part, giving each face the turn that makes it agree with the face it came from.
+        part, closed, clash = [int(start)], True, False
+        seen[start] = True
+        turn = {int(start): False}
+        queue = [int(start)]
+        while queue:
+            face = queue.pop()
+            a, b, c = faces[face]
+            for p, q in ((a, b), (b, c), (c, a)):
+                shared = users[(min(p, q), max(p, q))]
+                if len(shared) != 2:
+                    closed = False
+                    continue
+                mine = next(d for f, d in shared if f == face) * (-1 if turn[face] else 1)
+                other, theirs = next((f, d) for f, d in shared if f != face) if shared[0][0] != shared[1][0] else (None, 0)
+                if other is None:
+                    closed = False
+                    continue
+                wanted = theirs != -mine  # turn the neighbour if it runs the edge the same way
+                if other in turn:
+                    clash |= turn[other] != wanted
+                    continue
+                turn[other] = wanted
+                seen[other] = True
+                part.append(other)
+                queue.append(other)
+        if not closed or clash:
+            continue
+        rows = np.array(part)
+        turned = np.array([turn[f] for f in part])
+        tri = mesh.v[mesh.f[rows]]
+        tri = tri - tri.reshape(-1, 3).mean(axis=0)
+        signed = np.einsum("ij,ij->i", tri[:, 0], np.cross(tri[:, 1], tri[:, 2]))
+        volume = np.where(turned, -signed, signed).sum()
+        flip[rows] = turned if volume >= 0 else ~turned
+    if flip.any():
+        mesh.f = mesh.f.copy()
+        mesh.f[flip] = mesh.f[flip][:, ::-1]
+    return mesh
+
+
 def merge(*meshes: Mesh) -> Mesh:
     v, f, offset = [], [], 0
     for m in meshes:
@@ -1002,7 +1065,7 @@ def main():
     for name, build in PROPS.items():
         if wanted and name not in wanted:
             continue
-        pieces = build()
+        pieces = {piece: face_outward(mesh) for piece, mesh in build().items()}
         write_obj(OUT / f"{name}.obj", pieces)
         write_glb(OUT / f"{name}.glb", pieces)
         for piece, mesh in pieces.items():

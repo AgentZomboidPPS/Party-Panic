@@ -87,7 +87,7 @@ return function(h)
 		},
 		CoinBag = {
 			Height = 3.2,
-			AssetId = 74005376971390,
+			AssetId = 103647024700979,
 			Shadow = false,
 			Palette = { Sack = h.rgb(200, 144, 88), Rope = h.rgb(120, 78, 46), Emblem = h.rgb(255, 204, 50) },
 			Materials = { Sack = Enum.Material.Fabric, Emblem = Enum.Material.Metal },
@@ -158,7 +158,7 @@ return function(h)
 		},
 		SandRuin = {
 			Height = 9,
-			AssetId = 131429647301144,
+			AssetId = 109587682624587,
 			Collide = true,
 			Palette = { Stone = h.rgb(232, 196, 142), Base = h.rgb(204, 160, 108) },
 			Materials = { Stone = Enum.Material.Sandstone, Base = Enum.Material.Sandstone },

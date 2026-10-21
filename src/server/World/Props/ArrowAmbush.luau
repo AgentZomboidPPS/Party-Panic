@@ -103,7 +103,7 @@ return function(h)
 		},
 		TargetBoard = {
 			Height = 7.79,
-			AssetId = 99739879214802,
+			AssetId = 73958289178272,
 			Collide = false, -- the client moves boards; arrows are blocked by the server's own check
 			Palette = {
 				Wood = h.rgb(206, 156, 102),
@@ -322,7 +322,7 @@ return function(h)
 		-- A round festival tent in two-color stripes (StripeA is recolored per tent).
 		ArrowAmbushTent = {
 			Height = 9.62,
-			AssetId = 124230307098304,
+			AssetId = 110571830007453,
 			Collide = false,
 			Palette = {
 				StripeA = red,
@@ -363,7 +363,7 @@ return function(h)
 		-- A round straw archery target on a wooden easel, three arrows in it.
 		ArrowAmbushHayTarget = {
 			Height = 5.47,
-			AssetId = 113637795512437,
+			AssetId = 77262214149925,
 			Collide = false,
 			Palette = {
 				Straw = h.rgb(242, 208, 112),

@@ -23,5 +23,9 @@ names; give each piece a palette color (and material) in the matching `src/serve
 Roblox doesn't draw the back of a face, so every face must point outward (counter-clockwise seen
 from outside). The shared helpers do (`tube`, `taper`, `sdf_mesh` and `extrude` with points either
 way round); run `lathe` profiles bottom, outside, then top. Don't flip a helper's faces yourself.
-The generator warns about inside-out closed parts as it writes each prop, and
-`python3 tools/checks/mesh_orientation.py` checks every `assets/meshes/*.glb`.
+As it writes each prop, the generator turns every closed part outward (`face_outward`: the faces
+agree with their neighbours, then point out), so a hand-built slab or a tube cap turned the wrong
+way comes out right; open sheets (a flag cloth with no thickness, a leaf) stay as built. It warns
+about anything still inside-out, and `python3 tools/checks/mesh_orientation.py` checks every
+`assets/meshes/*.glb`, including closed parts whose faces disagree (the Hex Meltdown referee's flag
+was one: its edges faced out and its two big sides in, so it rendered black).

@@ -89,7 +89,7 @@ return function(h)
 		},
 		BobsledSled = {
 			Height = 2.5,
-			AssetId = 91750447706831,
+			AssetId = 106800169844708,
 			Palette = {
 				Body = h.rgb(230, 60, 70),
 				Rim = h.rgb(250, 250, 250),
@@ -151,7 +151,7 @@ return function(h)
 		},
 		BobsledArch = {
 			Height = 30.6,
-			AssetId = 135271869131668,
+			AssetId = 122334086348437,
 			Palette = { Arch = h.rgb(40, 120, 220), Dark = h.rgb(30, 30, 36), Light = h.rgb(250, 250, 250) },
 			Fallback = function(m)
 				for _, x in { -25.8, 25.8 } do

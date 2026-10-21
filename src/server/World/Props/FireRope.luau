@@ -12,7 +12,7 @@ return function(h)
 	return {
 		-- Backdrop centerpiece; faces -Z (turn it to face the bridge).
 		DragonTemple = {
-			AssetId = 73590362133599,
+			AssetId = 101828887502674,
 			Height = 97.5,
 			Shadow = false,
 			Palette = {
@@ -129,7 +129,7 @@ return function(h)
 		},
 		-- Basalt-column cliff with three crusted lava streams pouring over its middle; faces -Z.
 		LavaFall = {
-			AssetId = 89195661359667,
+			AssetId = 110344895154199,
 			Height = 53.1,
 			Shadow = false,
 			Palette = { Rock = h.rgb(74, 54, 66), Lava = Lava, Crust = h.rgb(200, 64, 30) },
@@ -144,7 +144,7 @@ return function(h)
 		-- A stretch of the crater's basalt wall with a lava trickle, curving to fit a 172-stud circle;
 		-- faces -Z.
 		BasaltWall = {
-			AssetId = 86197193526885,
+			AssetId = 71684404393362,
 			Height = 59.2,
 			Shadow = false,
 			Palette = { Rock = h.rgb(74, 54, 66), Lava = Lava, Crust = h.rgb(200, 64, 30) },

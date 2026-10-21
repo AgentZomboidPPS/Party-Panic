@@ -94,7 +94,7 @@ return function(h)
 		},
 		RefereeBot = {
 			Height = 18.41,
-			AssetId = 80595116655074,
+			AssetId = 123380446678206,
 			Palette = {
 				Body = rgb(248, 248, 255),
 				Dark = rgb(46, 42, 60),

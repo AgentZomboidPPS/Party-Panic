@@ -48,7 +48,10 @@ def read_glb(path: Path) -> dict[str, tuple[np.ndarray, np.ndarray]]:
 
 def inside_out_parts(positions: np.ndarray, triangles: np.ndarray) -> tuple[int, int]:
     """(inside-out closed parts, closed parts) of one piece. A part is a connected, watertight
-    group of triangles; its signed volume is negative when its faces point inward."""
+    group of triangles; its signed volume is negative when its faces point inward. A part whose
+    faces don't all agree (each edge must run one way in one face and the other way in its
+    neighbour) is partly inside-out whatever its volume: the referee's flag had its two big faces
+    turned in and its thin edges out, which reads as a positive volume but renders black."""
     # Flat-shaded pieces repeat each corner per face, so join corners by position first.
     _, corner = np.unique(np.round(positions / 1e-4).astype(np.int64), axis=0, return_inverse=True)
     faces = corner.reshape(-1)[triangles]
@@ -68,13 +71,18 @@ def inside_out_parts(positions: np.ndarray, triangles: np.ndarray) -> tuple[int,
     for part in np.unique(part_of):
         mine = part_of == part
         edges: dict[tuple[int, int], int] = {}
+        forward: dict[tuple[int, int], int] = {}  # times each edge runs from its lower corner up
         for a, b, c in faces[mine]:
             for edge in ((a, b), (b, c), (c, a)):
                 key = (min(edge), max(edge))
                 edges[key] = edges.get(key, 0) + 1
+                forward[key] = forward.get(key, 0) + (edge[0] < edge[1])
         if any(count != 2 for count in edges.values()):
             continue  # an open sheet (flag, leaf, decal): it faces whichever way its builder chose
         closed += 1
+        if any(count != 1 for count in forward.values()):
+            bad += 1  # some faces point in, some out
+            continue
         tri = positions[triangles[mine]]
         tri = tri - tri.reshape(-1, 3).mean(axis=0)
         volume = np.einsum("ij,ij->i", tri[:, 0], np.cross(tri[:, 1], tri[:, 2])).sum() / 6

@@ -81,7 +81,7 @@ return function(h)
 		-- A pastry wheel on a swivel; "Tip" is where the wheel touches the dough.
 		PastryCutter = {
 			Height = 4.77,
-			AssetId = 132752378725723,
+			AssetId = 128077506040018,
 			Shadow = false,
 			Palette = {
 				Wheel = h.rgb(215, 220, 230),

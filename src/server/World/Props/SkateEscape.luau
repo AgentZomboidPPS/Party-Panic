@@ -114,7 +114,7 @@ return function(h)
 		-- reds, so the lava is the only hot color.
 		SkateCanyonWall = {
 			Height = 45.21,
-			AssetId = 82906443897049,
+			AssetId = 122726475480222,
 			Shadow = false,
 			Palette = {
 				Basalt = h.rgb(60, 42, 50),
