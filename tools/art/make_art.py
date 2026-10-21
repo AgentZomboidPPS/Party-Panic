@@ -1535,6 +1535,96 @@ def scene_hexmeltdown(args, out):
     save_jpg(image, out / "thumb_4_hexmeltdown.jpg")
 
 
+PANEL_CAST = [("cheer", "laugh"), ("run", "panic"), ("jump", "grin"), ("flail", "scream"), ("wave", "happy"),
+              ("panic", "shock"), ("dance", "grin"), ("point", "smug")]
+
+
+def render_panel(args, out, game, size, camera_tweak=None, seed=1, view=None):
+    """One mini-game for the collage: its snapshot with the players posed, framed like its portal
+    preview (tools/preview/make_preview.py's CAMERAS) or by `view` ((eye, target, fov), Roblox)."""
+    from make_preview import camera_path, camera_settings, find_focus
+
+    data = load_dump(args, game)
+    parts, rigs = split_rigs(data["parts"])
+    arena_y = sorted(rig["y"] for rig in rigs)[len(rigs) // 2]
+    rigs = [rig for rig in rigs if abs(rig["y"] - arena_y) < 40]  # knocked-out players are back in the lobby
+    new_scene(args.samples, *size, sun=(0.35, -0.6, 0.75), sun_energy=4.2)
+    build_arena(data, parts)
+    heads = [[rig["x"], rig["y"] + 4.6, rig["z"]] for rig in rigs]
+    if view:
+        eye, target, fov = view
+    else:
+        settings = camera_settings(game, camera_tweak)
+        eye, target, fov = camera_path(settings, find_focus(settings, parts, heads), 1)["f00"]
+    rng = random.Random(seed)
+    for index, rig in enumerate(rigs):
+        pose, face = PANEL_CAST[(index + seed) % len(PANEL_CAST)]
+        spot = B(rig["x"], rig["y"] + (1.5 if pose == "jump" else 0), rig["z"])
+        avatar(spot, face_to(spot, B(*eye)) + math.radians(rng.uniform(-20, 20)), pose, index + seed * 3, face)
+    camera(B(*eye), B(*target), fov)
+    path = out / f"raw_panel_{game}.png"
+    render_to(path)
+    return path
+
+
+def scene_party(args, out):
+    """Up to 12 players: a crowd of friends in front of three more mini-games."""
+    games = [("HoneyTrap", None, None), ("RakeItIn", {"distance": 44, "raise": 6}, None),
+             ("CrazyCutters", None, ((0, 272, 1478), (0, 258, 1418), 52))]
+    w, h = args.width, args.height
+    panel_w = int(w * 0.42)
+    panels = [render_panel(args, out, game, (panel_w, h), tweak, seed=index + 1, view=view)
+              for index, (game, tweak, view) in enumerate(games)]
+
+    # Twelve friends on a clear background along the bottom: a front row and a back row on a step.
+    new_scene(args.samples, w, h, transparent=True, sun=(0.3, -0.8, 0.6), sun_energy=4.4)
+    eye = V((0, -42, 3.2))
+    front = [(-15, "cheer", "laugh"), (-10, "wave", "grin"), (-5, "cheer", "grin"), (0, "panic", "scream"),
+             (5, "cheer", "laugh"), (10, "dance", "happy"), (15, "point", "smug")]
+    back = [(-12.5, "jump", "grin"), (-7.5, "cheer", "happy"), (-2.5, "flail", "shock"), (2.5, "wave", "laugh"),
+            (7.5, "cheer", "grin")]
+    rng = random.Random(12)
+    for index, (x, pose, face) in enumerate(front):
+        spot = V((x, -1.2 if x == 0 else 0, 0))
+        avatar(spot, face_to(spot, eye) + math.radians(rng.uniform(-10, 10)), pose, index, face)
+    for index, (x, pose, face) in enumerate(back):
+        spot = V((x, 3.5, 2.2 + (1.2 if pose == "jump" else 0)))
+        avatar(spot, face_to(spot, eye) + math.radians(rng.uniform(-10, 10)), pose, index + 7, face)
+    camera(eye, (0, 0, 10.2), fov=29)
+    render_to(out / "raw_party_crowd.png")
+    crowd_layer = sticker_outline(grade(out / "raw_party_crowd.png", 1.12, 1.05), 7, (40, 14, 70))
+
+    # Three slanted panels, white seams between them.
+    image = Image.new("RGBA", (w, h), (30, 20, 60, 255))
+    slant = int(w * 0.06)
+    lefts = [-slant, int(w / 3) - slant // 2, int(2 * w / 3)]
+    for index, path in enumerate(panels):
+        picture = grade(path, 1.15, 1.06)
+        x0 = lefts[index]
+        mask = Image.new("L", (w, h), 0)
+        right = lefts[index + 1] if index + 1 < len(lefts) else w + slant
+        ImageDraw.Draw(mask).polygon([(x0 + slant, 0), (right + slant, 0), (right, h), (x0, h)], fill=255)
+        layer = Image.new("RGBA", (w, h))
+        layer.paste(picture, (x0 + (right - x0) // 2 - panel_w // 2 + slant // 2, 0))
+        image.paste(layer, (0, 0), mask)
+    seams = ImageDraw.Draw(image)
+    for x0 in lefts[1:]:
+        seams.line([(x0 + slant, 0), (x0, h)], fill=(40, 14, 70, 255), width=18)
+        seams.line([(x0 + slant, 0), (x0, h)], fill=(255, 255, 255, 255), width=9)
+    # Darken the bottom a little so the crowd stands out.
+    shade = Image.new("L", (w, h), 0)
+    for y in range(h):
+        shade.putpixel((0, y), int(150 * max(0.0, (y / h - 0.45) / 0.55) ** 1.5))
+    shade = shade.resize((1, h)).resize((w, h))
+    image.paste(Image.new("RGBA", (w, h), (30, 10, 60, 255)), (0, 0), shade)
+    image.alpha_composite(crowd_layer)
+    image = vignette(image, 0.25)
+    lettering(image, "12 PLAYERS", (w / 2, h * 0.12), int(h * 0.17), angle=-2)
+    lettering(image, "TOTAL PARTY CHAOS!", (w / 2, h * 0.27), int(h * 0.085), angle=-2,
+              top=(255, 255, 255), bottom=(200, 235, 255), outline=(220, 40, 120))
+    save_jpg(image, out / "thumb_5_party.jpg")
+
+
 def snow_spray(origin, direction, count=60, seed=3, spread=1.0, length=6.0):
     """Ice spraying off a sled's runners: white puffs fanning out along `direction`."""
     rng = random.Random(seed)
@@ -1588,7 +1678,7 @@ def scene_bobsled(args, out):
         snow_spray(B(*(center - forward * 6 + left * runner * 1.6)), B(*(-forward + left * runner * 0.4)), count=45,
                    spread=0.5, length=7, seed=runner + 5)
     streaks(B(*(center - forward * 8 + V((0, 2.0, 0)))), B(*forward), count=7, length=7, seed=2, spread=1.8, width=0.1)
-    eye_r = center + left * 12.5 + forward * 6 + V((0, 4.4, 0))
+    eye_r = center + left * 13.5 + forward * 6.5 + V((0, 4.6, 0))
     camera(B(*eye_r), B(*(center + V((0, 2.6, 0)) + forward * 0.5)), fov=46, roll=-6)
     render_to(out / "raw_bobsled.png")
     image = thumb_finish(out, "bobsled", saturation=1.15)
@@ -1622,7 +1712,8 @@ def scene_sheet(args, out):
     print("wrote", out / "icon_sheet.png", flush=True)
 
 
-SCENES = {"lobby": scene_lobby, "firerope": scene_firerope, "bobsled": scene_bobsled, "hexmeltdown": scene_hexmeltdown, "icon": scene_icon,
+SCENES = {"lobby": scene_lobby, "firerope": scene_firerope, "bobsled": scene_bobsled, "hexmeltdown": scene_hexmeltdown,
+          "party": scene_party, "icon": scene_icon,
           **{f"icon_{name}": fn for name, fn in ICONS.items()}, "sheet": scene_sheet}
 
 
