@@ -510,6 +510,20 @@ function RockinRaceway.Start(api)
 		end
 	end)
 
+	local shake = 0
+
+	-- The carousel in the infield turns slowly (only drawn here; it decides nothing).
+	local carousel: Model? = nil
+	local carouselPivot: CFrame? = nil
+	task.spawn(function()
+		local arena = api:Arena(15)
+		local found = arena and arena:FindFirstChild("Carousel", true)
+		if found and found:IsA("Model") then
+			carousel = found
+			carouselPivot = found:GetPivot()
+		end
+	end)
+
 	-- Events -------------------------------------------------------------------------------------------
 
 	api:OnEvent("Panel", function(userId, _d, result)
@@ -519,16 +533,20 @@ function RockinRaceway.Start(api)
 		if result == "dash" then
 			say("🥕 DASH!", Theme.Colors.Orange, 1)
 			api:Sound("Pickup")
+			local entry = shown[myKey]
+			if entry and entry.Frame then
+				api:Effect("Sparkles", entry.Frame.Position + Vector3.new(0, 3, 0))
+			end
 		elseif result == "bump" then
 			say("💥 BUMP! HOP the hurdles!", Theme.Colors.Cyan, 1.3)
 			api:Sound("Hit")
+			shake = math.max(shake, 0.25)
 		elseif result == "clear" then
 			say("✔ CLEAR!", Theme.Colors.Green, 0.8)
 		elseif result == "miss" then
 			say("Missed the carrot!", Theme.Colors.TextDim, 1)
 		end
 	end)
-	local shake = 0
 	api:OnEvent("Spin", function(userId)
 		local entry = shown[tostring(userId)]
 		if entry and entry.Frame then
@@ -806,6 +824,10 @@ function RockinRaceway.Start(api)
 		if hintUntil > 0 and os.clock() > hintUntil then
 			hintUntil = -1
 			api:Hint("")
+		end
+
+		if carousel and carouselPivot and carousel.Parent then
+			carousel:PivotTo(carouselPivot * CFrame.Angles(0, now * 0.35, 0))
 		end
 
 		-- Chase camera behind my horse.

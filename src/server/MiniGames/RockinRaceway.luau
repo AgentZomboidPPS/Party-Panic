@@ -214,7 +214,7 @@ function RockinRaceway:_buildArena()
 		local outward = Vector3.new(side, 0, 0)
 		local pivot = center + outward * ((R + half + 1.8) / 2)
 		MeshLibrary.Get("RockinRacewayTurn", {
-			CFrame = CFrame.lookAt(pivot, pivot + Vector3.new(0, 0, side)), -- its +X points outward
+			CFrame = CFrame.fromMatrix(pivot, outward, Vector3.yAxis), -- its +X points outward
 			Parent = field,
 		})
 	end
