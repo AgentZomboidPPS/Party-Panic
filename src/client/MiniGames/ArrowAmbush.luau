@@ -3,11 +3,13 @@
 -- that shows where it comes down, sticks arrows in the ground or in a board, and puts a bow in
 -- every archer's hands (bots too, through api:Participants()).
 --
--- ARCHERS get a fixed view over the courtyard from behind the tower, a reticle where the mouse
--- points (or where the finger is), the arrow's path as a line of beads that stops at any board
--- in the way, and a reload bar. Click, or tap and release, to shoot. Their move controls are
--- put away (they can't walk), so the whole screen is free to tap. RUNNERS play normally and
--- watch for the rings.
+-- ARCHERS get a fixed view high over the tower, a reticle where the mouse points (or where the
+-- finger is), the arrow's path as a line of beads that stops at any board in the way, and a
+-- reload bar at the bottom of the screen. Click, or tap and release, to shoot: the shot is felt at
+-- once (sound, kick, reload) without waiting for the server, and a tap a moment early is queued.
+-- Their move controls are put away (they can't walk), so the whole screen is free to tap.
+-- RUNNERS play normally, watch for the rings and hear arrows coming down near them. Anyone not in
+-- the round just watches.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -96,6 +98,8 @@ function ArrowAmbush.Start(api)
 	local boardHalf: number = layout.BoardHalf
 	local boardsT0: number = layout.BoardsT0
 	local railTop: number = layout.RailTop or 0
+	local boardHeight: number = layout.BoardHeight or 8
+	local samples: number = layout.Samples or 48
 	local me = Players.LocalPlayer
 
 	local role = api:Mine("Role")
@@ -107,6 +111,7 @@ function ArrowAmbush.Start(api)
 		role = api:Mine("Role")
 	end
 	local isArcher = role == "Archer"
+	local watching = role ~= "Archer" and role ~= "Runner" -- not in this round (lobby, or joined late)
 	local effects = not State.ReducedEffects()
 
 	-- Boards ------------------------------------------------------------------------------------
@@ -136,7 +141,7 @@ function ArrowAmbush.Start(api)
 		})
 		local badge = Instance.new("BillboardGui")
 		badge.Name = "Badge"
-		badge.Size = UDim2.fromScale(3.2, 1.8)
+		badge.Size = UDim2.new(3.2, 40, 1.8, 22) -- studs plus a pixel floor, readable from the tower
 		badge.LightInfluence = 0
 		badge.MaxDistance = 220
 		badge.Adornee = anchor
@@ -179,8 +184,8 @@ function ArrowAmbush.Start(api)
 	-- The first board a path crosses (same check as the server's), as a fraction of the path.
 	local function firstBlock(from: Vector3, to: Vector3, arc: number, t0: number, total: number): number?
 		local previous = from
-		for step = 1, 32 do
-			local s = step / 32
+		for step = 1, samples do
+			local s = step / samples
 			local point = pointAt(from, to, arc, s)
 			for _, board in boards do
 				local planeZ = origin.Z + board.Data.Z
@@ -190,10 +195,10 @@ function ArrowAmbush.Start(api)
 				end
 				local f = a / (a - b)
 				local hit = previous:Lerp(point, f)
-				local frac = (step - 1 + f) / 32
+				local frac = (step - 1 + f) / samples
 				local x = boardX(board.Data, t0 + total * frac)
 				local height = hit.Y - floorY
-				if math.abs(hit.X - x) <= boardHalf and height <= 8 and height > -0.5 then
+				if math.abs(hit.X - x) <= boardHalf and height <= boardHeight and height > -0.5 then
 					return frac
 				end
 			end
@@ -239,8 +244,18 @@ function ArrowAmbush.Start(api)
 		end
 	end
 	refreshBows()
-	task.delay(1.5, refreshBows)
-	task.delay(4, refreshBows)
+	local bowsCheckedAt = os.clock()
+	local halfPing = 0 -- how long a shot takes to reach the server (checked every 2 s)
+	local function hideModel(model: Instance?, hidden: boolean)
+		if not model then
+			return
+		end
+		for _, piece in model:GetDescendants() do
+			if piece:IsA("BasePart") then
+				piece.LocalTransparencyModifier = if hidden then 1 else 0
+			end
+		end
+	end
 
 	local arrowTemplate = api:Template("AmbushArrow") :: Model?
 	local arrowHeight = if arrowTemplate then modelHeight(arrowTemplate) else 0.63
@@ -288,10 +303,11 @@ function ArrowAmbush.Start(api)
 	end
 
 	local RING_SIZE = hitRadius * 2 + 1.4
-	local function addRing(position: Vector3)
+	local function addRing(position: Vector3, id: number)
 		local holder, canvas = marking(RING_SIZE, api.World)
 		holder.Name = "LandingRing"
-		holder.CFrame = CFrame.new(position + Vector3.new(0, 0.3, 0))
+		-- Each ring a hair higher than the last few, so overlapping rings never flicker.
+		holder.CFrame = CFrame.new(position + Vector3.new(0, 0.3 + (id % 6) * 0.012, 0))
 		local inside = hitRadius * 2 / RING_SIZE
 		circle(canvas, inside, RING_COLOR, 0.7, 7)
 		local fill = circle(canvas, 0.1, RING_COLOR, 0.25)
@@ -352,14 +368,27 @@ function ArrowAmbush.Start(api)
 			Model = model,
 			From = from,
 			To = to,
-			Ring = if data.Board == 0 then addRing(to) else nil,
+			Ring = if data.Board == 0 then addRing(to, tonumber(data.Id) or 0) else nil,
 			Done = false,
 			Board = if data.Board > 0 then boards[data.Board] else nil,
 		}
 		arrows[data.Id] = entry
-		lastShot[data.By] = os.clock()
 		if data.By == me.UserId then
-			api:Sound("Click")
+			-- Our own shot already kicked and clicked when we fired; only catch up if it didn't.
+			if os.clock() - (lastShot[data.By] or -10) > 0.5 then
+				lastShot[data.By] = os.clock()
+				api:Sound("Click")
+			end
+		else
+			lastShot[data.By] = os.clock()
+			-- Runners hear an arrow that will come down near them.
+			local _, _, root = api:Character()
+			if not isArcher and not watching and root and data.Board == 0 then
+				local near = Vector3.new(root.Position.X - to.X, 0, root.Position.Z - to.Z).Magnitude
+				if near <= 10 then
+					api:Sound("HazardWarning")
+				end
+			end
 		end
 	end)
 
@@ -408,20 +437,39 @@ function ArrowAmbush.Start(api)
 	-- HUD --------------------------------------------------------------------------------------
 	local hud = api:TopHud()
 	local y = api:HudY()
+	-- Archers have no move stick or jump button, so their role chip and reload bar sit at the bottom
+	-- of the screen, leaving the top (the far end of the courtyard) clear to aim at.
+	local bottom = nil
+	if isArcher then
+		bottom = UIKit.new("Frame", {
+			Name = "ArcherBar",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -16),
+			Size = UDim2.fromOffset(380, 86),
+			BackgroundTransparency = 1,
+			Parent = api.Gui,
+		})
+		UIKit.AutoScale(bottom)
+	end
+	local chipColor = if isArcher then ARCHER_COLOR elseif watching then Color3.fromRGB(150, 140, 175) else RUNNER_COLOR
 	local chip = UIKit.Panel(
 		{
 			Name = "Role",
 			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, y),
-			Size = UDim2.fromOffset(380, 48),
-			Parent = hud,
+			Position = if bottom then UDim2.new(0.5, 0, 0, 0) else UDim2.new(0.5, 0, 0, y),
+			Size = if watching then UDim2.fromOffset(220, 44) else UDim2.fromOffset(380, 48),
+			Parent = bottom or hud,
 		},
-		if isArcher then ARCHER_COLOR else RUNNER_COLOR,
-		if isArcher then Color3.fromRGB(200, 70, 40) else Color3.fromRGB(40, 120, 220)
+		chipColor,
+		if isArcher
+			then Color3.fromRGB(200, 70, 40)
+			elseif watching then Color3.fromRGB(90, 80, 120)
+			else Color3.fromRGB(40, 120, 220)
 	)
 	UIKit.Label({
 		Text = if isArcher
 			then (if api:IsTouch() then "🏹 ARCHER • TAP TO SHOOT" else "🏹 ARCHER • CLICK TO SHOOT")
+			elseif watching then "👀 WATCHING"
 			else "🏃 RUNNER • DODGE & HIDE",
 		Font = Theme.Fonts.Display,
 		TextScaled = true,
@@ -436,12 +484,12 @@ function ArrowAmbush.Start(api)
 	if isArcher then
 		reload = UIKit.new("Frame", {
 			Name = "Reload",
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, y + 56),
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, 0),
 			Size = UDim2.fromOffset(260, 30),
 			BackgroundColor3 = Color3.fromRGB(30, 22, 50),
 			BackgroundTransparency = 0.25,
-			Parent = hud,
+			Parent = bottom,
 			Children = { UIKit.Round(), UIKit.Stroke(Color3.new(1, 1, 1), 2, 0.4) },
 		})
 		reloadFill = UIKit.new("Frame", {
@@ -462,7 +510,9 @@ function ArrowAmbush.Start(api)
 		})
 	end
 
-	-- The role intro: big for a few seconds, then it gets out of the way.
+	-- The role intro: big for a few seconds, then it gets out of the way. (Right under the banner
+	-- for archers, whose chip is at the bottom; under the chip for runners.)
+	local introY = if isArcher or watching then y else y + 96
 	local intro = UIKit.Label({
 		Name = "Intro",
 		Text = if isArcher then "🏹 YOU'RE AN ARCHER!" else "🏃 YOU'RE A RUNNER!",
@@ -470,7 +520,7 @@ function ArrowAmbush.Start(api)
 		TextSize = 52,
 		TextColor3 = if isArcher then ARCHER_COLOR else RUNNER_COLOR,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, y + 96),
+		Position = UDim2.new(0.5, 0, 0, introY),
 		Size = UDim2.fromOffset(600, 60),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0) },
@@ -481,12 +531,17 @@ function ArrowAmbush.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 30,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, y + 156),
+		Position = UDim2.new(0.5, 0, 0, introY + 60),
 		Size = UDim2.fromOffset(600, 40),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.1) },
 	})
-	UIKit.PopIn(intro, 0.45)
+	if watching then
+		intro.Visible = false -- spectators get no role intro
+		introSub.Visible = false
+	else
+		UIKit.PopIn(intro, 0.45)
+	end
 	-- The client half starts with the countdown: keep the intro up until a moment after GO.
 	local function afterGo(seconds: number, callback: () -> ())
 		task.spawn(function()
@@ -526,8 +581,21 @@ function ArrowAmbush.Start(api)
 			intro.Text = "🎯 TAGGED!"
 			intro.TextColor3 = RING_COLOR
 			intro.TextTransparency = 0
+			intro.Visible = true
+			local stroke = intro:FindFirstChildOfClass("UIStroke")
+			if stroke then
+				stroke.Transparency = 0 -- (the intro fade may have hidden it)
+			end
 			introSub.Text = ""
 			UIKit.PopIn(intro, 0.3)
+			task.delay(2.5, function()
+				if intro.Parent then
+					UIKit.Tween(intro, 0.5, { TextTransparency = 1 })
+					if stroke then
+						UIKit.Tween(stroke, 0.5, { Transparency = 1 })
+					end
+				end
+			end)
 		end
 	end)
 
@@ -535,15 +603,26 @@ function ArrowAmbush.Start(api)
 	local aim: Vector3? = nil
 	local aimingTouch: InputObject? = nil
 	local reticle: Part?, beads, reticleRing: Frame?, reticleSpin: Frame?
+	local predictedNext = 0 -- when our next arrow is ready, as we predicted it on firing
+	local queuedUntil = 0 -- a tap a moment early is fired as soon as the bow is ready
+	local flashAt = -10 -- when the reload bar last flashed "not ready"
+	local cameraBase: CFrame? = nil
+	local spotData = layout.Spots and layout.Spots[tostring(me.UserId)]
+	local bowBase = if type(spotData) == "table" then v3(spotData) else nil
+	local function readyAt(): number
+		return math.max(api:Mine("NextShot") or 0, predictedNext)
+	end
 	if isArcher then
 		local camera = workspace.CurrentCamera
 		local savedType, savedFov = camera.CameraType, camera.FieldOfView
 		camera.CameraType = Enum.CameraType.Scriptable
-		camera.FieldOfView = 52
-		-- High over the front of the tower, so the whole courtyard shows over the parapet.
-		local eye = tower + Vector3.new(0, 22, 4)
-		local focus = Vector3.new(origin.X, floorY, origin.Z + 2)
-		camera.CFrame = CFrame.lookAt(eye, focus)
+		camera.FieldOfView = 56
+		-- High over the front of the tower (above the parapet), looking well out over the courtyard,
+		-- so the far end sits under the round banner and the near wall at the bottom of the screen.
+		local eye = tower + Vector3.new(0, 28, 4)
+		local focus = Vector3.new(origin.X, floorY, origin.Z + 12)
+		cameraBase = CFrame.lookAt(eye, focus)
+		camera.CFrame = cameraBase :: CFrame
 		api:Track(function()
 			camera.CameraType = savedType
 			camera.FieldOfView = savedFov
@@ -625,15 +704,34 @@ function ArrowAmbush.Start(api)
 				math.clamp(hit.Z, bounds[3] - 1, bounds[4] + 1)
 			)
 		end
+		local function release(at: Vector3)
+			api:Action("Shoot", at.X, at.Z)
+			-- Felt at once, without waiting for the server: the click, the bow's kick, the reload.
+			lastShot[me.UserId] = os.clock()
+			predictedNext = api:Now() + cooldown
+			api:Sound("Click")
+		end
 		local function shoot(at: Vector3?)
 			if not at or not api:Alive() then
 				return
 			end
-			local ready = api:Mine("NextShot") or 0
-			if api:Now() < ready - 0.05 then
-				return
+			local wait = readyAt() - api:Now()
+			if wait <= 0.05 then
+				release(at)
+			elseif wait < 0.35 then
+				-- Just early: fire the moment the bow is ready.
+				local queuedAt = at
+				queuedUntil = api:Now() + wait
+				task.delay(wait, function()
+					queuedUntil = 0
+					if api:Alive() and readyAt() - api:Now() <= 0.06 then
+						release(queuedAt)
+					end
+				end)
+			else
+				flashAt = os.clock() -- too early: the reload bar flashes
+				api:Sound("Countdown")
 			end
-			api:Action("Shoot", at.X, at.Z)
 		end
 
 		api:Track(UserInputService.InputBegan:Connect(function(input, processed)
@@ -660,12 +758,12 @@ function ArrowAmbush.Start(api)
 				shoot(aim)
 			end
 		end))
-		api:Hint(if api:IsTouch() then "Tap where to shoot!" else "Click where to shoot!", y + 200)
+		api:Hint(if api:IsTouch() then "Tap where to shoot!" else "Click where to shoot!", introY + 104)
 		afterGo(5, function()
 			api:Hint("")
 		end)
-	else
-		api:Hint("Watch for the red rings! Hide behind the boards!", y + 200)
+	elseif not watching then
+		api:Hint("Watch for the red rings! Hide behind the boards!", introY + 104)
 		afterGo(5, function()
 			api:Hint("")
 		end)
@@ -710,12 +808,30 @@ function ArrowAmbush.Start(api)
 			end
 		end
 
-		-- Bows: held in front of each archer, kicking back when they shoot.
+		-- Bows: held in front of each archer, kicking back when they shoot. (Every 2 s the list is
+		-- checked again, so an archer who leaves takes their bow with them.)
+		if clock - bowsCheckedAt > 2 then
+			bowsCheckedAt = clock
+			refreshBows()
+			local ok, ping = pcall(function()
+				return me:GetNetworkPing()
+			end)
+			halfPing = if ok and type(ping) == "number" then math.clamp(ping / 2, 0, 0.3) else 0
+		end
 		for userId, entry in bows do
 			local character = entry.Who:Character()
 			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if not root or not entry.Model then
+				if not entry.Hidden then
+					entry.Hidden = true -- their character is gone: don't leave the bow in mid-air
+					hideModel(entry.Model, true)
+					hideModel(entry.Nocked, true)
+				end
 				continue
+			end
+			if entry.Hidden then
+				entry.Hidden = false
+				hideModel(entry.Model, false)
 			end
 			local since = clock - (lastShot[userId] or -10)
 			local kick = if since < 0.25 then (1 - since / 0.25) * 0.35 else 0
@@ -734,13 +850,27 @@ function ArrowAmbush.Start(api)
 
 		-- The local archer: face the aim, draw the reticle, the path and the reload bar.
 		if isArcher and reticle and reticleRing and beads then
-			local nextShot = api:Mine("NextShot") or 0
+			local nextShot = readyAt()
 			local ready = now >= nextShot - 0.05
 			local fraction = if ready then 1 else math.clamp(1 - (nextShot - now) / cooldown, 0, 1)
-			if reloadFill and reloadText then
+			if reloadFill and reloadText and reload then
+				local flash = clock - flashAt < 0.3
 				reloadFill.Size = UDim2.fromScale(fraction, 1)
-				reloadFill.BackgroundColor3 = if ready then READY_COLOR else Color3.fromRGB(150, 140, 170)
-				reloadText.Text = if ready then "READY!" else "RELOADING..."
+				reloadFill.BackgroundColor3 = if ready
+					then READY_COLOR
+					elseif flash then RING_COLOR
+					else Color3.fromRGB(150, 140, 170)
+				reloadText.Text = if ready
+					then "READY!"
+					elseif now < queuedUntil then "NEXT ARROW..."
+					else "RELOADING..."
+				reload.Rotation = if flash then math.sin((clock - flashAt) * 60) * 3 else 0
+			end
+			-- A little recoil on the camera when we shoot.
+			local since = clock - (lastShot[me.UserId] or -10)
+			if cameraBase then
+				local kick = if since < 0.18 then math.sin(since / 0.18 * math.pi) * 0.006 else 0
+				workspace.CurrentCamera.CFrame = (cameraBase :: CFrame) * CFrame.Angles(kick, 0, 0)
 			end
 			local _, humanoid, root = api:Character()
 			local showAim = aim ~= nil and (not api:IsTouch() or aimingTouch ~= nil)
@@ -772,12 +902,14 @@ function ArrowAmbush.Start(api)
 					end
 				end
 				-- The path: beads from the bow to the spot, stopping at the first board in the way.
-				local base = if root then root.Position else tower
+				-- (From our spot on the tower, exactly as the server plans it.)
+				local base = bowBase or (if root then root.Position else tower)
 				local dir = Vector3.new(aim.X - base.X, 0, aim.Z - base.Z)
 				dir = if dir.Magnitude > 0.1 then dir.Unit else Vector3.new(0, 0, 1)
 				local from = base + Vector3.new(0, 1.2, 0) + dir * 1.6
 				local total, arc = flight((aim - from).Magnitude)
-				local block = firstBlock(from, aim, arc, now, total)
+				-- The server plans the shot when it gets it, about half a ping from now.
+				local block = firstBlock(from, aim, arc, now + halfPing, total)
 				for index, bead in beads do
 					local s = index / (BEADS + 1)
 					bead.CFrame = CFrame.new(pointAt(from, aim, arc, s))

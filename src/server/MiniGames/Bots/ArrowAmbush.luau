@@ -33,7 +33,7 @@ end
 
 -- Archers -----------------------------------------------------------------------------------------
 
-local function pickTarget(bot, ctx, mode, from: Vector3, now: number)
+local function pickTarget(bot, ctx, mode, now: number)
 	local memory = bot.Memory
 	local best, bestScore, bestAim = nil, -math.huge, nil
 	for _, runner in ctx:GetAlivePlayers() do
@@ -44,14 +44,16 @@ local function pickTarget(bot, ctx, mode, from: Vector3, now: number)
 		if not seen then
 			continue
 		end
+		local from = mode:ShotFrom(bot, seen.Pos)
 		local distance = (flat(seen.Pos) - flat(from)).Magnitude
 		local flight = mode.Flight(distance + 16)
 		-- Lead: skilled bots aim most of the way to where the runner will be.
 		local lead = math.clamp(bot.Skill * 1.1, 0.3, 0.95)
 		local aim = flat(seen.Pos) + seen.Vel * flight * lead
 		aim = Vector3.new(aim.X, mode.floorY, aim.Z)
-		local _, arc = mode.Flight((aim - from).Magnitude)
-		local blocked = mode:_firstBoard(from, aim, now, flight, arc)
+		from = mode:ShotFrom(bot, aim) -- the same bow point the server will plan the shot from
+		local full, arc = mode.Flight((aim - from).Magnitude)
+		local blocked = mode:_firstBoard(from, aim, now, full, arc)
 		local score = -distance * 0.05 + bot.Rng:NextNumber(0, 1.2)
 		if blocked then
 			score -= 2.5 * bot.Skill + 0.5
@@ -76,8 +78,7 @@ local function archerStep(bot, ctx, mode)
 	if now < (mode.nextShot[bot] or 0) or now < (memory.WaitUntil or 0) then
 		return
 	end
-	local from = root.Position + Vector3.new(0, 1.2, 0)
-	local target, aim = pickTarget(bot, ctx, mode, from, now)
+	local target, aim = pickTarget(bot, ctx, mode, now)
 	if not target or not aim then
 		return
 	end
@@ -132,12 +133,13 @@ local function coverSpot(mode, index: number, now: number, side: number): Vector
 	return Vector3.new(x + side, mode.floorY + 3, mode.origin.Z + board.Z + HIDE_BEHIND)
 end
 
+-- Hiding spots are spread out: the mode keeps which board each bot is behind (never read off
+-- other participants, which may be real Players).
 local function pickCover(bot, ctx, mode, position: Vector3, now: number): number?
 	local claims = {}
-	for _, other in ctx:GetAlivePlayers() do
-		local memory = (other :: any).Memory
-		if other ~= bot and type(memory) == "table" and memory.Board then
-			claims[memory.Board] = (claims[memory.Board] or 0) + 1
+	for other, index in mode.coverClaims do
+		if other ~= bot and ctx:IsAlive(other) and not mode.tagged[other] then
+			claims[index] = (claims[index] or 0) + 1
 		end
 	end
 	local best, bestScore = nil, math.huge
@@ -179,6 +181,7 @@ local function runnerStep(bot, ctx, mode)
 		memory.Dodge = spot
 		memory.DodgeUntil = arrow.T1 + 0.25
 		memory.Board = nil
+		mode.coverClaims[bot] = nil
 		bot:MoveTo(spot)
 		if bot:Chance(0.2) then
 			bot:Jump()
@@ -193,8 +196,10 @@ local function runnerStep(bot, ctx, mode)
 		if #mode.boards > 0 and bot:Chance(0.35 + bot.Skill * 0.55) then
 			memory.Board = pickCover(bot, ctx, mode, position, now)
 			memory.Roam = nil
+			mode.coverClaims[bot] = memory.Board
 		else
 			memory.Board = nil
+			mode.coverClaims[bot] = nil
 			memory.Roam = clampToCourtyard(
 				mode,
 				mode.origin + Vector3.new(bot.Rng:NextNumber(-22, 22), 0, bot.Rng:NextNumber(-10, 22))

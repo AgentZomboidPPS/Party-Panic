@@ -4,7 +4,8 @@
 -- runners dodge, and hide behind the big target boards that roll slowly back and forth on rails.
 -- One arrow tags a runner. Archers win by tagging every runner; runners win if anyone is still
 -- untagged when time runs out. Like the bonus panels in the original, an arrow that hits a target
--- board is blocked, but scores the archer the board's number (+1, +2 or +3).
+-- board is blocked, but scores the archer the board's number (+1, +2 or +3; at most 5 board points
+-- each, so shooting the boards never pays like tagging a runner).
 --
 -- The server owns everything. The boards follow a schedule shared with every client (MG_Layout:
 -- each board's rail and sine motion from one start time), so clients move them smoothly and the
@@ -44,6 +45,8 @@ local SHOVE_RADIUS = 5.5 -- near misses get a little shove
 ArrowAmbush.BOARD_HALF = 3.6 -- half the width of a target board (what blocks arrows)
 ArrowAmbush.BOARD_HEIGHT = 8 -- boards block arrows below this height above the floor
 local SAMPLES = 48 -- flight samples when looking for a board in the way
+local BOARD_CAP = 5 -- the most board points one archer can score
+local SPAWN_LIFT = 3 -- an archer's root stands this high over their spot on the deck
 
 local rng = Random.new()
 
@@ -98,6 +101,7 @@ function ArrowAmbush:Prepare()
 	self.arrowId = 0
 	self.track = {} :: { [Player]: { Pos: Vector3, Vel: Vector3, T: number } }
 	self.runnerCount = 0
+	self.coverClaims = {} :: { [any]: number } -- runner bots: the board each is hiding behind
 	self.ended = false
 	self.shownRunners = 0
 
@@ -140,7 +144,8 @@ function ArrowAmbush:Prepare()
 		local column = (index - 1) % columns
 		local row = math.floor((index - 1) / columns)
 		local x = (column - (columns - 1) / 2) * 8.5 + (if row % 2 == 1 then 4 else 0)
-		local position = origin + Vector3.new(x, 0, Z_MAX - 5 - row * 5)
+		-- Rows at z 22 and 18: clear of the back board row's track (z 14, 2.5 deep) with 3 rows.
+		local position = origin + Vector3.new(x, 0, Z_MAX - 3 - row * 4)
 		spawnFor[player] = CFrame.lookAt(position, position - Vector3.new(0, 0, 1))
 		self.role[player] = "Runner"
 		ctx:SetTeam(player, ArrowAmbush.RUNNERS)
@@ -157,6 +162,13 @@ function ArrowAmbush:Prepare()
 	ctx:ShareTemplate("AmbushBow", MeshLibrary.Get("AmbushBow"))
 	ctx:ShareTemplate("TargetBoard", MeshLibrary.Get("TargetBoard"))
 
+	-- Each archer's bow point base (their spot on the deck), so the client's aim path starts where
+	-- the server's flight plan does.
+	local spots = {}
+	for player, spot in self.spots do
+		local base = spot.Position + Vector3.new(0, SPAWN_LIFT, 0)
+		spots[tostring(player.UserId)] = { base.X, base.Y, base.Z }
+	end
 	local boards = {}
 	for _, board in self.boards do
 		table.insert(boards, { C = board.C, Z = board.Z, A = board.A, W = board.W, P = board.P, V = board.V })
@@ -167,8 +179,11 @@ function ArrowAmbush:Prepare()
 		Tower = { origin.X, origin.Y + TOWER_TOP, origin.Z + TOWER_Z },
 		Bounds = { origin.X - X_HALF, origin.X + X_HALF, origin.Z + Z_MIN, origin.Z + Z_MAX },
 		Boards = boards,
+		Spots = spots,
 		BoardsT0 = self.boardsT0,
 		BoardHalf = ArrowAmbush.BOARD_HALF,
+		BoardHeight = ArrowAmbush.BOARD_HEIGHT,
+		Samples = SAMPLES,
 		RailTop = ArrowAmbush.RAIL_TOP + 0.04, -- where the boards' wheels sit
 		Hit = ArrowAmbush.HIT_RADIUS,
 		Cooldown = self.cooldown,
@@ -440,15 +455,21 @@ local function faceShot(archer: any, ctx, target: Vector3)
 	end
 end
 
+-- Where an archer's arrow leaves the bow for a shot at `target`: from the archer's own spot on the
+-- tower (server-owned, never the character's position, which the archer's client controls).
+-- The client half draws the aim path from the same point.
+function ArrowAmbush:ShotFrom(archer: Player, target: Vector3): Vector3
+	local spot = self.spots[archer]
+	local base = (if spot then spot.Position else self.origin) + Vector3.new(0, SPAWN_LIFT, 0)
+	local flat = Vector3.new(target.X - base.X, 0, target.Z - base.Z)
+	local dir = if flat.Magnitude > 0.1 then flat.Unit else Vector3.new(0, 0, 1)
+	return base + Vector3.new(0, 1.2, 0) + dir * 1.6
+end
+
 -- Plans a shot (the caller has already checked it may be fired) and tells everyone.
 function ArrowAmbush:_fire(archer: Player, target: Vector3)
 	local ctx = self.context
-	local spot = self.spots[archer]
-	local _, _, root = ctx:GetCharacter(archer)
-	local base = if root then root.Position else (spot and spot.Position or self.origin)
-	local flat = Vector3.new(target.X - base.X, 0, target.Z - base.Z)
-	local dir = if flat.Magnitude > 0.1 then flat.Unit else Vector3.new(0, 0, 1)
-	local from = base + Vector3.new(0, 1.2, 0) + dir * 1.6
+	local from = self:ShotFrom(archer, target)
 	local distance = (target - from).Magnitude
 	local flight, arc = ArrowAmbush.Flight(distance)
 	local now = ctx:Now()
@@ -498,8 +519,11 @@ function ArrowAmbush:_land(arrow: Arrow)
 	if arrow.Board > 0 then
 		local board = self.boards[arrow.Board]
 		if archer and board then
-			self.bonus[archer] = (self.bonus[archer] or 0) + board.V
-			ctx:AddScore(archer, board.V)
+			local points = math.min(board.V, BOARD_CAP - (self.bonus[archer] or 0))
+			if points > 0 then
+				self.bonus[archer] = (self.bonus[archer] or 0) + points
+				ctx:AddScore(archer, points)
+			end
 		end
 		ctx:Fire(nil, "BoardHit", arrow.Id, arrow.Board, board and board.V or 0)
 		return
@@ -533,11 +557,9 @@ function ArrowAmbush:_judge(arrow: Arrow, runner: Player, archer: Player?)
 	if not root then
 		return
 	end
+	-- Inside the walls every runner is reachable (the arrow comes down from above, so a jump
+	-- doesn't dodge it; runners can't get higher than a jump, see the bounds check in Start).
 	local offset = Vector3.new(root.Position.X - arrow.To.X, 0, root.Position.Z - arrow.To.Z)
-	local height = root.Position.Y - self.floorY
-	if height > 9 then
-		return -- somewhere the arrow can't reach (shouldn't happen inside the walls)
-	end
 	local away = if offset.Magnitude > 0.1 then offset.Unit else Vector3.new(0, 0, 1)
 	if offset.Magnitude <= ArrowAmbush.HIT_RADIUS then
 		self:_tag(runner, archer, away)
@@ -602,6 +624,16 @@ function ArrowAmbush:_refresh()
 	end
 	if self.runnerCount > 0 and left == 0 then
 		self.ended = true
+		local tagged = 0
+		for _ in self.tagged do
+			tagged += 1
+		end
+		if tagged == 0 then
+			-- Nobody was tagged: the runners left (or never made it in).
+			ctx:SetStatus("🏃 The runners left!")
+			ctx:End("NoRunners")
+			return
+		end
 		ctx:SetStatus("🏹 Every runner is tagged! ARCHERS win!")
 		ctx:Delay(1.3, function()
 			ctx:End("AllTagged")
@@ -654,7 +686,8 @@ function ArrowAmbush:Start()
 			self.floorY,
 			math.clamp(z, origin.Z + Z_MIN - 1, origin.Z + Z_MAX + 1)
 		)
-		self.nextShot[player] = now + self.cooldown
+		-- (From the later of now and when it was due, so the early leeway never adds up.)
+		self.nextShot[player] = math.max(now, self.nextShot[player] or 0) + self.cooldown
 		ctx:SetPlayerShared(player, "NextShot", self.nextShot[player])
 		self:_fire(player, target)
 	end, { Interval = 0.2 })
@@ -683,6 +716,7 @@ function ArrowAmbush:Start()
 				local outside = math.abs(position.X - origin.X) > X_HALF + 4
 					or position.Z - origin.Z < Z_MIN - 4
 					or position.Z - origin.Z > Z_MAX + 4
+					or position.Y - self.floorY > 14 -- higher than any jump: put back on the floor
 				if outside then
 					local back = Vector3.new(
 						math.clamp(position.X, origin.X - X_HALF + 2, origin.X + X_HALF - 2),
@@ -711,8 +745,8 @@ function ArrowAmbush:Start()
 	self:_refresh()
 end
 
--- The winning side shares first place; inside each side, archers by points (tags and boards),
--- runners by how long they stayed untagged.
+-- Everyone on the winning side shares first place (equal Rank); the losing side is ordered by
+-- points: archers by tags and boards, runners by how long they stayed untagged.
 function ArrowAmbush:GetResults()
 	local ctx = self.context
 	local runnersWin = self:RunnersLeft() > 0 or self:ArchersLeft() == 0
@@ -737,7 +771,7 @@ function ArrowAmbush:GetResults()
 		end
 		table.insert(entries, {
 			Player = player,
-			Rank = (if team == winner then 1e6 else 0) + state.Score,
+			Rank = if team == winner then 1e6 else state.Score,
 			ScoreText = text,
 			BestScore = state.Score,
 			Team = team,
