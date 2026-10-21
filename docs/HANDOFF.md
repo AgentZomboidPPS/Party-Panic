@@ -1,176 +1,188 @@
-# Handoff: Party Panic (for the Claude joining the project)
+# Handoff: Party Panic (for the next Claude)
 
-Written for a second Claude that joins while the first one keeps working. Last updated: **2026-10-21 16:40 UTC
-(12:40 PM Eastern)**. Live: **version 29**. Session A keeps updating this file as its lanes land.
+Last updated: **2026-10-21 17:40 UTC (1:40 PM Eastern)** by Session A, which is wrapping up (owner: "can you wrap this up
+and give me a handoff document?"). **You now own everything.** Nothing else is running: Session A's helper agents
+were stopped, and their unfinished work is saved in `docs/wip/` (section 3).
 
-**At a glance (12:40 PM ET):** all 11 precision games have fair hitboxes (live). Six Session A agents are still working
-(payoffs + low currency, sit-out toggle, lobby obby, Skee-Ball, Sinking Sands bots, Skate Escape start float); Session A
-merges, tests and publishes each as it lands. Open with the owner: friends' audio (waiting on a device report), the store
-description (owner pastes it, or adds a key scope), icon/thumbnails (owner uploads). Free for Session B: games 13-25 and
-per-game music (section 2).
+## 0. Start here (the first 10 minutes)
 
-- **Session A** is the Claude that wrote this. It keeps its current lanes until they are finished (owner: "you can finish
-  all work in here. I just want to make the other claude work on other things").
-- **Session B** is you. You take other work: the obvious candidates are the backlog games 13-25 and custom music per
-  mini-game (see "What's free for you"). Ask the owner which.
+1. Read section 1 (the owner and the house rules), then skim section 6 (map of the code).
+2. Check what's live: `git log --oneline -5` on `claude/quirky-hopper-5yk8zk`, and the "Live version" line below.
+3. **Tell the owner to restart the game's servers after every publish.** Their client reports showed everyone still
+   on **version 27** at 17:15 UTC, two publishes behind, so they were reporting bugs that were already fixed (the rules card
+   covered by game UI was fixed in version 28). Live servers keep the version they started with. Creator Hub > Party
+   Panic > the "..." menu > **Restart servers** (or "Shut down all servers"), then rejoin.
+   `python3 tools/checks/client_reports.py` shows which place version each player's device is on.
+4. Ask the owner which of the open items (section 2) to do first.
+
+**Live version:** 29 (published about 17:10 UTC). **Not live yet:** commit `bed7669` (Hex Meltdown floating bots +
+Honey Trap tutorial, section 2.1). If Session A managed to publish it before closing, a line "Version 30 is live" is at
+the bottom of this file; otherwise publish it (section 7) once its last test runs are clean.
 
 ## 1. The owner and the house rules
 
 - The owner is **not a programmer**. Explain in plain words, say what to click, keep updates short and concrete. They
-  play-test on **phones** with friends (iPhone, small screens) and on PC, and they report what feels wrong in a sentence or
-  a screenshot. They want a "masterpiece": great looks, great UX, "it just has to work". They dislike workarounds that hide
-  a problem (owner: "I dont want you to do a fix for if they dont load. I want you to fucking make our own meshes work").
-- The game is a Roblox party game, **Party Panic**: a lobby, a vote on 4 cards (3 games + RANDOM; bots never vote),
-  then a mini-game for up to 12 players, bots filling empty spots, results, back to the lobby.
+  play-test on **phones** (iPhone, small screens) and PC with friends, and report problems as one sentence or a
+  screenshot ("This", "Bot is floating."). Read screenshots closely: zoom into them (crop + upscale with Pillow); the
+  floating bots were small figures at the edge of the frame.
+- They want a "masterpiece": great looks, great UX, "it just has to work". No workarounds that hide a problem (owner: "I
+  dont want you to do a fix for if they dont load. I want you to fucking make our own meshes work").
 - **Private only.** Universe `10772087888`, place `78868713931081`, owner user `11690979745`. The experience stays
-  PRIVATE; `tools/publish_place.py` refuses to publish to a public experience. All uploads go under user `11690979745`.
-- **Git:** Session A works on branch `claude/quirky-hopper-5yk8zk` (pushed after every change). Every commit message
-  ends with the session's attribution lines (Session A uses its own; use yours). No pull requests unless the owner asks.
-  Never put model names in commits or files.
-- **Style:** Luau with tabs and StyLua; every module starts with a comment block saying what it does and quoting the
-  owner's words that asked for it; game names in capitals in player-facing text; colour is never the only cue; phones
-  first (big touch targets, inside the safe area, never over the right-hand menu column, the jump button or the MOVE stick).
-- **Server owns everything:** scoring, positions, eliminations, timing. Clients only ask and draw. Every mode needs a
-  bot brain with hazard parity (whatever hurts players on the server must hurt bots too).
-- **Fair hits** (owner, today: "the precision games will feel super bad if we dont"): if it looks like a hit/catch on the
-  player's screen it counts, if it looks like a dodge it doesn't; judge against what the client saw (lag leeway from
-  `GetNetworkPing`), make server radii match the visible meshes, and make client cues (highlights, rings) use the server's
-  exact rule. Reference: `src/server/MiniGames/RakeItIn.luau` (top comment and `Takes`).
+  PRIVATE; `tools/publish_place.py` refuses to publish to a public one. All uploads go under user `11690979745`.
+- **Git:** branch `claude/quirky-hopper-5yk8zk`, push after every change. Every commit message ends with your session's
+  attribution lines. No pull requests unless the owner asks. Never put model names in commits or files.
+- **Style:** Luau, tabs, StyLua. Every module starts with a comment block saying what it does and quoting the owner's
+  words that asked for it (each later pass adds a paragraph the same way). Game names in capitals in player-facing text,
+  colour never the only cue, English only (no localization table in this project). Phones first: big touch targets,
+  inside the safe area, never over the right-hand menu column, the jump button or the MOVE stick.
+- **Server owns everything:** scoring, positions, eliminations, timing; clients ask and draw. Every mode has a bot brain
+  with hazard parity (whatever hurts players must hurt bots).
+- **Fair hits** (owner: "the precision games will feel super bad if we dont"): if it looks like a hit on the player's
+  screen it counts, if it looks like a dodge it doesn't. Judge against what the client saw (ping leeway), make server
+  radii match the visible meshes, make client cues use the server's exact rule. Reference: `RakeItIn.luau` (`Takes`).
+- The game: a lobby (plaza, obby, beach balls), a vote on 4 cards (3 games + RANDOM; bots never vote), a mini-game for
+  up to 12 players with bots filling empty spots, results, back to the lobby. A PLAYING / SITTING OUT switch lets people
+  skip rounds.
 
-## 2. Who works on what (until Session A says it's done)
+## 2. Open work, most urgent first
 
-**Session A's lanes** (please don't edit these files until Session A has merged its work; check `git log` on
-`origin/claude/quirky-hopper-5yk8zk`):
+### 2.1 Done but not yet seen by the owner (commit `bed7669`; ask them to try it after the restart)
 
-| Lane | Status | Files |
+- **Hex Meltdown, "Theres invisible stuff." / "Bot is floating."** Zooming into the owner's two screenshots showed bots
+  hanging high in the air near the crater wall. Cause: the server moves bots and each player's device moves that
+  player, so when they touched (a player landing on a bot to stomp it, or walking into it) Roblox shoved the bot out of
+  the way, sometimes hard enough to fly it over the lava; a stomp on two heads at once also added two bounces. Fix in
+  `src/server/MiniGames/HexMeltdown.luau`: bots (`PP_HexBots`) and players (the lobby's `PP_Players` group, set by
+  `World/BeachBalls.luau`) don't collide in this mode (stomps go by position, so they still work); a stomp bounces once
+  per landing; `_limitBots` caps every bot's speed (30 flat, 60 up) as a safety net. Tested: 12-player round, 10 real bots,
+  phone HUD: 0 errors. **Not testable here:** Open Cloud test servers have no physics, so the owner has to confirm in a
+  real game. If bots fly in other games too, the same split (bots vs `PP_Players`) is the fix; it's only in Hex Meltdown
+  so far.
+- **Hex Meltdown, "This"** (screenshot of the big "● RED ●" panel covering the referee's call board): the call banner is
+  now a small pill under the status line (`src/client/MiniGames/HexMeltdown.luau`).
+- **Honey Trap, "Players think they have to go to the tree."** Players are frozen on their flowers (WalkSpeed 0) and play
+  with HIT or a jump, but the old rules said "Take 1 or 2 from the tree". New rules card text in `GameDefinitions.luau`
+  ("Stay on your flower! ..." / "No walking! On your turn, press HIT or jump ..."), the between-turn hint says "Stay on
+  your flower - the fruit comes to you!", and pushing the stick shows "No walking needed - you play from your flower!"
+  for 3.5 s (`src/client/MiniGames/HoneyTrap.luau`). Checked: the card fits the smallest phone; 12-player round 0 errors.
+- **Rules card covered by game UI** ("a lot of mini games are having issues where the UI is on top of the tutorial"):
+  fixed in version 28 (the mode's whole ScreenGui hides while `PP_RulesShowing` is true; `Kit/Api.luau`), and the card
+  stays 10 s. The owner's Pump & Pop screenshot was from a version 27 server. If they still see it after a restart, find
+  which ScreenGui draws over the card (the main HUD is DisplayOrder 5, a mode's is 6).
+- **Friends' music:** works now. The friend's device report (version 27) says the lobby music loaded and plays, not
+  silent. If the friend still hears nothing, it's their device volume or Roblox music setting. Tell the owner.
+
+### 2.2 Stopped half-way (the owner asked for these; work saved in `docs/wip/`, unmerged and unreviewed)
+
+Restore one with `git fetch docs/wip/<name>.bundle wip/<name>:wip/<name>` then `git checkout wip/<name>` (or diff it
+against `claude/quirky-hopper-5yk8zk`). Each bundle's last commit, "WIP (stopped)", is the uncommitted state at the
+moment it was stopped, never tested. Read before reusing: continue it, take parts, or redo.
+
+| Request (owner's words) | Saved as | State when stopped |
 | --- | --- | --- |
-| Hitbox pass for all 11 precision games | **done, live in version 24** (each game's commit message says what changed) | the mini-game files are free again, except the two rows below |
-| Sinking Sands diver bots (owner: "Bots are terrible at this game") (agent; worktree `.claude/worktrees/bots-SinkingSands`, branch `bots/SinkingSands`) | started (investigating why divers score 0-4) | `src/server/MiniGames/Bots/SinkingSands.luau` and the other Sinking Sands files |
-| Skate Escape start float (owner: the character floats onto the bridge "on the countdown and go") | **fixed, live in version 26** (skaters are held on their boards on the start line until GO, then handed back to their device) | free again |
-| Lobby obby rebuild + scenery not climbable | **done, live in version 29**: a goo-pool course round a candy tower (17 jumps, 3 checkpoints; `src/shared/Logic/ParkourCourse.luau`, `src/server/World/LobbyObby.luau`, `tools/checks/obby_jumps.luau`), foliage never collides | free again (Skee-Ball still adds a hook in LobbyBuilder) |
-| Skee-Ball arcade in the lobby (agent; branch `lobby/skeeball`) | WIP: the shared ball path (roll, hop, flight, rings) is in; machine, props and UI in progress | a new arcade module + props, a one-line hook in LobbyBuilder, a new SkeeBallController |
-| "Sit out next round" toggle | **done, live in version 27**: a PLAYING / SITTING OUT switch by the phase banner and in Settings (`SitOutService`, `Logic/Roster`, `PP_SitOut`); sitting-out players don't vote or play, and rounds pause if everyone sits out | free again |
-| Long-term payoffs + low currency (agent; branch `feature/payoffs`) | WIP: low coin scale, Rewards Road, career milestones, celebrations | `src/shared/Config.luau` (rewards), `Cosmetics.luau`, `QuestDefinitions.luau`, `src/shared/Logic/{RewardLogic,LevelCurve,DailyLogic,QuestLogic}.luau`, `src/server/Services/{DataService,Economy,RewardService,ShopService,CosmeticService,QuestService}.luau`, `CommerceConfig`, Shop/Quest/Results controllers, level-up UI |
-| Friends can't hear our music (section 6) | waiting for the friend's report from version 25 | `src/client/Controllers/AudioController.luau`, `AssetReportController.luau`, `src/server/Services/ClientReports.luau`, `src/shared/AudioAssets.luau`, `Sounds.luau` |
-| Publishing the place | Session A publishes after each merge | `tools/publish_place.py` |
+| "we need cool payoffs for players that keep playing the game" + "balance the shop down. I want low currency not high" | `payoffs.bundle` (3 commits, ~3000 lines, 30 files) | Low coin scale, a "Rewards Road", career milestones, celebration pop-ups (`Progression.luau`, `CelebrationController`, `RewardsController`, `Economy`/`RewardService`/`ShopService` changes). **Risky: it changes saved coin balances**; check the migration of existing players' coins (DataService) and every price before shipping. |
+| "Can we also add skiball to the lobby?" | `skeeball.bundle` (7 commits) | An arcade corner with four Skee-Ball machines: shared ball path `Logic/SkeeBall.luau`, `SkeeBallService`, `World/Arcade.luau`, `SkeeBallController` (play screen, meter), props in `tools/meshgen/props/Arcade.py` with meshes **already uploaded** (asset ids in `World/Props/Arcade.luau`), a 9-ball game check on a real server (`tools/checks/skeeball_game.luau`). Last work: phone layout of the play screen. Needs: a review, a phone pass, the LobbyBuilder hook checked against the obby. |
+| "Bots are terrible at this game" (Sinking Sands) | `sinkingsands-bots.bundle` (1 commit) | Changes to `Bots/SinkingSands.luau`, `MiniGames/SinkingSands.luau` and its client: the agent had found divers scoring 0-4 and was comparing brains in an offline simulator plus test-server runs. Also meant to shorten the Sand King hint that wraps on phones. Untested as saved. |
+| "Bumper balls control scheme is really bad on mobile" | `bumper-controls.bundle` (1 commit) | New `src/shared/Logic/BumperDrive.luau` (how the stick steers the ball, unit-tested in `tests/BumperDrive.spec.luau`, response table from `tools/checks/bumper_drive.luau`) wired into the server's steering and the client's controls and camera. Not run on a test server; the tilt option must keep working. |
+| "I keep clipping into some chair on fire rope what is going on?" | nothing saved (no code changed) | Diagnosis only: there is no chair in the arena. The agent rendered player-height views and was checking where Roblox's default camera (12.5 studs behind the player) ends up inside props near the back of the deck: the braziers, wheels and towers. Most likely the camera sliding into a prop, which shows its inside. Next: ask the owner for a screenshot, then make those props non-colliding for the camera (or move them back) and check from the same views (`tools/preview` renders). |
 
-The agents' branches and worktrees exist only in Session A's container (they're merged into
-`claude/quirky-hopper-5yk8zk` and pushed as they finish), so you won't see them on GitHub until then.
+### 2.3 Other open items
 
-**What's free for you:**
+- **Store description:** text ready in `docs/STORE_DESCRIPTION.txt`; our key can't save it (the place PATCH answers 403
+  "Scope not authorized"; the universe PATCH answers 200 but stores nothing). The owner pastes it (Creator Hub > Configure
+  > Basic Settings; also remove the trailing space in the name "Party Panic ") or adds **universe.place (write)** to the API
+  key, after which `publish_place.py` sets it every time.
+- **Icon and thumbnails:** made (`assets/store/`), sent to the owner; they upload them by hand.
+- **Known phone-HUD nits:** Skate Escape's race-bar racer dots overlap when riders are side by side; Bumper Ballers' "X"
+  sits over a knocked-out rider's icon; Sinking Sands' Sand King hint wraps to two lines; mode buttons (`Api.Button`) still
+  show for spectators.
+- **Backlog, after everything above** (owner: "dont start on game 13+ untill everything else is finished"): games 13-25
+  ([MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md): 13 briefs in the owner's order with categories; category counts are in
+  that file) and **custom music for each mini-game** (pipeline in `tools/music`, see `docs/ASSETS.md`).
 
-- **Games 13-25** ([docs/MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md): the 13 briefs, in the owner's order, with planned
-  categories). They are mostly new files. Shared touch points: one entry each in `src/shared/GameDefinitions.luau`
-  (append above `-- NEW MINI-GAMES GO ABOVE THIS LINE`), `src/shared/GamePreviews.luau` (written by `make_preview.py`),
-  `assets/previews/previews.json`. Merge conflicts there are "keep both".
-- **Custom music for each mini-game** (owner, today: "put in the backlog custom music for each mini game"). The music
-  pipeline is `tools/music` (see `docs/ASSETS.md`). Shipping it is blocked until other players can hear our uploaded
-  audio at all (section 6), but tracks can be composed and previewed now. Coordinate the `AudioController`/`AudioAssets`
-  changes with Session A.
-- Anything else the owner gives you.
+## 3. What's in `docs/wip/`
 
-**Working together:**
+Git bundles of the stopped lanes (section 2.2). They're only there so the work isn't lost; delete the folder once each
+lane is merged or dropped. `git bundle list-heads docs/wip/<name>.bundle` shows the branch inside.
 
-- Work on your own branch; merge `origin/claude/quirky-hopper-5yk8zk` into it often (`git fetch origin
-  claude/quirky-hopper-5yk8zk && git merge FETCH_HEAD`). Session A will merge your pushed branch when the owner asks.
-- **Publishing replaces the whole live place.** Only publish a build that contains the latest
-  `origin/claude/quirky-hopper-5yk8zk`, or you roll back Session A's fixes in the live game (and vice versa). Tell the owner
-  the version number you published (`publish_place.py` prints it).
-- Prop names share one namespace across modes: prefix yours with the mode id (e.g. `TanksShell`).
-
-## 3. Setting up (a fresh cloud container)
+## 4. Setting up (a fresh cloud container)
 
 - Toolchain: `rokit install` (Rojo, Selene, StyLua, Lune from `rokit.toml`), plus `luau-lsp` and Python 3 with numpy and
-  Pillow. Type-checking needs `globalTypes.d.luau` in the repo root (Roblox's definitions; it's git-ignored: fetch the
-  luau-lsp Roblox definitions file).
-- Roblox access goes through the environment's proxy: requests to `apis.roblox.com` get the owner's Open Cloud credential
-  injected ("Roblox Publish"); no key in the repo. It can publish places, upload assets, grant asset permissions, run Luau
-  on test servers (Luau execution) and read data stores. It **cannot** change place settings (403 "Scope not authorized"),
-  and the universe description PATCH is blocked by Roblox's firewall (section 6). Icons and thumbnails have no API: the
-  owner uploads them in the Creator Hub (`assets/store/README.md`).
+  Pillow. Type-checking needs `globalTypes.d.luau` in the repo root (Roblox's definitions; git-ignored: fetch the luau-lsp
+  Roblox definitions file).
+- Roblox access goes through the environment's proxy: requests to `apis.roblox.com` get the owner's Open Cloud
+  credential injected ("Roblox Publish"); no key in the repo. It can publish places, upload assets, grant asset
+  permissions, run Luau on test servers (Luau execution) and read data stores. It **cannot** change place settings.
 - Renders (portal previews, arena checks, store art) need Blender's Python module: `pip install bpy` under **Python 3.11**
-  in a venv, then `export PP_BPY_PYTHON=/path/to/venv/bin/python`. Keep renders few and small (4 CPUs).
-
-## 4. Map of the code (start with [README.md](../README.md) and [ADDING_MINIGAMES.md](ADDING_MINIGAMES.md))
-
-- `src/server/Services/RoundManager.luau` runs the loop (Waiting, Intermission, Voting, Preparing, InRound, Results,
-  Cleanup). `RoundContext.luau` is a round's API for modes (players, teams, scores, eliminations, knockback, shared state
-  `MG_*`, actions, bots). At the end of a round it gives everyone who isn't already back in the lobby a fresh character
-  there (it tracks the character a player got in the lobby after going out; distance alone failed for Bobsled Run).
-- `src/server/MiniGames/<Id>.luau` + `src/client/MiniGames/<Id>.luau` + `Bots/<Id>.luau`: one mode. Templates in
-  `tools/templates`, the Kit in `src/server/MiniGames/Kit` and `src/client/MiniGames/Kit/Api.luau`.
-- `src/server/Services/BotService.luau`: bots are fake Player-likes with real characters; `RoundContext:RunBots` drives
-  their brains.
-- Props: `src/server/World/Props/<File>.luau` (one spec block per prop with its own `AssetId`, a primitive `Fallback`, a
-  `Palette`), `src/server/World/MeshLibrary.luau`, generators in `tools/meshgen/props/<Mode>.py` with shared helpers in
-  `tools/meshgen/generate_meshes.py` (which also turns every closed part outward, `face_outward`).
-- Lobby: `src/server/World/LobbyBuilder.luau`, `Environment.luau`; client controllers in `src/client/Controllers`.
-- Shared: `GameDefinitions.luau` (Id, Category, Duration, MinPlayers, IsTeam, IsNew, texts), `GameState.luau`, `Remotes.luau`,
-  `Config.luau`, `Teams.luau`, `Logic/*` (pure, unit-tested with Lune in `tests/`).
+  in a venv, then `export PP_BPY_PYTHON=/path/to/venv/bin/python`. Keep renders few and small.
 
 ## 5. Testing without Studio (there is no Roblox client here)
 
-Everything below runs real Roblox servers through Open Cloud Luau execution (no physics: harness bots move rigs with
-`PivotTo`; real bots' walking is simulated).
+Everything below runs real Roblox servers through Open Cloud Luau execution. **No physics** there: harness bots move
+rigs with `PivotTo`, real bots' walking is simulated, so anything physical (flings, collisions, falling) can only be
+confirmed by the owner in a real game.
 
-- `tools/checks/mode_check.sh <Id>`: code checks, a 12-player round with the client half, a round with 10 real bots, and
-  the phone HUD drawn at phone sizes (PNGs in `/tmp/mode_check/<Id>/`). Must show 0 errors, `notHomeAfterCleanup []`.
-- `tools/checks/round_harness.py` / `client_harness.py` + `tools/preview/luau_task.py`: single rounds, the whole client
-  with every screen, `LOBBY` with bots. `tools/checks/ui_render.py` draws the UI snapshots. `summarize.py` reads results.
-- Gotchas: Open Cloud caps a script at 1 MiB (the round harness bundles only the tested mode; `LOBBY` bundles
-  `LOBBY_MODES`); "INTERNAL_ERROR Task timed out" is transient (re-run once); HTTP 429 means wait and retry.
-- Meshes: `python3 tools/checks/mesh_orientation.py` (inside-out or half-flipped closed parts; must report 0),
-  `tools/checks/regen_compare.py` (would regenerating change a prop?), `tools/checks/merge_check.sh <Id>` (run after
-  `git merge --no-ff --no-commit <branch>`, before committing a mode/art branch).
-- Assets for other players: `python3 tools/checks/asset_status.py --meshes` (moderation of every model and the mesh files
-  inside), `tools/asset_permissions.py` (the game may Use every model and sound; the mesh files inside are Open Use: both
-  were needed before friends could see props). `publish_place.py` runs the grants every time.
-- What players' devices actually load: `python3 tools/checks/client_reports.py` (mesh and sound reports each device sends;
-  sound reports include whether the music plays, and, when something fails, Roblox's console lines and the account's
-  content-policy flags).
-- Workflows used for big batches (Claude Code's Workflow tool): `tools/workflows/build-minigame.js` (one game: build,
-  review, fix; args are one brief from the backlog plus `ownDefinition: true`), `arena-polish.js`, `hitbox-pass.js`.
+- `tools/checks/mode_check.sh <Id>` (set `OUT=/tmp/mode_check/<name>` to keep runs apart): code checks, a 12-player
+  round with the client half, a round with 10 real bots, and the phone HUD drawn at phone sizes (PNGs). Must show 0
+  errors. About 5-10 minutes.
+- `tools/checks/client_harness.py [--touch]` + `tools/preview/luau_task.py` + `tools/checks/ui_render.py`: the whole
+  client, every screen and phase, drawn at real phone sizes; `textReport` lists any text that doesn't fit. It plays the
+  game with the longest objective (Honey Trap right now), which is how its rules card was checked.
+- Before committing: `stylua src tools/checks tests`, `selene src`, `luau-lsp analyze` (see `merge_check.sh` for the
+  exact line), `lune run tests/run` (55 tests).
+- Meshes: `python3 tools/checks/mesh_orientation.py` (inside-out or half-flipped parts; must report 0),
+  `tools/checks/regen_compare.py`, `tools/checks/merge_check.sh <Id>` after `git merge --no-ff --no-commit <branch>`.
+- Assets for other players: `python3 tools/checks/asset_status.py --meshes` and `tools/asset_permissions.py`
+  (`publish_place.py` runs the grants every time). An "NOT APPROVED" from asset_status can be HTTP 429: re-check.
+- What players' devices load: `python3 tools/checks/client_reports.py` (mesh and sound reports from each device, with
+  the place version they're on).
+- Gotchas: Open Cloud caps a script at 1 MiB; "INTERNAL_ERROR Task timed out" is transient (re-run once); HTTP 429
+  means wait and retry.
 
-Publishing: `python3 tools/publish_place.py --universe-id 10772087888 --place-id 78868713931081` (builds, publishes,
-grants asset permissions; prints the version; the settings PATCH warning at the end is expected). Push the branch after.
+## 6. Map of the code (start with [README.md](../README.md) and [ADDING_MINIGAMES.md](ADDING_MINIGAMES.md))
 
-## 6. Open problems (Session A is on these; context so you don't trip on them)
+- `src/server/Services/RoundManager.luau` runs the loop (Waiting, Intermission, Voting, Preparing, InRound, Results,
+  Cleanup). `RoundContext.luau` is a round's API for modes (players, teams, scores, eliminations, stun, knockback,
+  shared state `MG_*`, actions, bots, `Track` for cleanup). After a round, everyone not already in the lobby gets a
+  fresh character there.
+- One mode = `src/server/MiniGames/<Id>.luau` + `src/client/MiniGames/<Id>.luau` + `src/server/MiniGames/Bots/<Id>.luau`,
+  plus an entry in `src/shared/GameDefinitions.luau` (name, category, duration, rules card text: Objective and Controls;
+  keep them about as long as the others, the card is small on phones). Kit: `src/server/MiniGames/Kit`,
+  `src/client/MiniGames/Kit/Api.luau` (TopHud, HudY, Hint, Button, mode ScreenGui).
+- `src/server/Services/BotService.luau`: bots are fake Player-likes with real R15 characters, moved by the server's
+  physics on live servers (`RoundContext:RunBots` drives the mode's brain).
+- Props: `src/server/World/Props/<File>.luau` (one spec per prop with its own `AssetId`, a primitive `Fallback`, a
+  `Palette`; props don't collide unless `Collide = true`), `World/MeshLibrary.luau`, generators in
+  `tools/meshgen/props/<Mode>.py` (shared helpers in `tools/meshgen/generate_meshes.py`, which turns every closed part
+  outward). Invisible colliders built with `Shapes.*` are what players stand on in several arenas.
+- Lobby: `World/LobbyBuilder.luau`, `LobbyObby.luau` (+ `Logic/ParkourCourse.luau`), `BeachBalls.luau`,
+  `Environment.luau`. Client controllers in `src/client/Controllers` (`RoundController` has the rules card).
+- Shared: `Config.luau`, `GameState.luau`, `Remotes.luau`, `Teams.luau`, `Logic/*` (pure, unit-tested with Lune).
 
-- **Friends can't hear our music.** The friend's phone (version 22) failed to load all 4 uploaded sounds (both lobby
-  tracks, the round track, the effects sprite) while all 146 meshes loaded; the owner's devices play them. Checked: all 4
-  are Approved and Active, owned by the game's owner; the game's Use grant succeeds (re-granted today); audio can't be made
-  Open Use (the API answers InvalidRequest). Since version 23 a failing device reports Roblox's own console lines and its
-  account policy flags; version 25 also loads a public Roblox library track (APM "Bossa Nova Party", 1845764031) as a
-  control. Next: the friend joins version 25 in a fresh server (old servers keep their version; the owner restarts them in
-  the Creator Hub) and waits ~40 s in the lobby; then `python3 tools/checks/client_reports.py` shows the reason. If the
-  library track plays and ours don't, Roblox refuses our uploads for that player; if neither plays, it's their device or
-  account. Asked the owner whether the friend hears music in other games and is under 13 or parental controls.
-- **Store description:** the new text is ready in `docs/STORE_DESCRIPTION.txt`, but our key can't set it. Roblox only
-  saves a description through the place (`PATCH cloud/v2/universes/{u}/places/{p}`), which answers 403 "Scope not
-  authorized" for this key. The universe PATCH answers 200 for a description but stores nothing (the live text is still
-  the old one), and its firewall rejects long multi-line texts anyway. So: the owner pastes it (Creator Hub > Configure >
-  Basic Settings) and removes the trailing space in the name "Party Panic ", or adds **universe.place (write)** for this
-  experience to the API key, after which every `publish_place.py` sets the name and description.
-- **Icon and thumbnails:** done (`assets/store/`, sent to the owner); the owner uploads them by hand.
+## 7. Publishing
 
-## 7. Recent history (what's live)
+`python3 tools/publish_place.py --universe-id 10772087888 --place-id 78868713931081` builds, publishes, grants asset
+permissions and prints the new version (the settings warning at the end is expected). Then push the branch, tell the
+owner the version number, and remind them to restart servers.
 
-Version **24** (published 16:15 UTC today) has the 12 games below, fair hitboxes in all 11 precision games (Honey Trap is
-turn-based), the carnival Pump & Pop arena, rounds 5-10 s longer, players always sent back to the lobby after Bobsled Run,
-every prop facing outward (the black Hex Meltdown flag fixed), and sound reports. Known phone-HUD nits from the last test
-rounds: Skate Escape's progress-bar racer numbers overlap when riders are side by side, Bumper Ballers' "X" sits over the
-rider icon of a knocked-out rider, and the Sinking Sands Sand King hint wraps to two lines (being fixed with the bots). Games: Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking
-Sands, Arrow Ambush, Pump & Pop, Rake It In, Crazy Cutters, Cake Factory, Bobsled Run. All hold 12 players (each has a
-clean 12-player test round).
+## 8. History (what each version added)
 
-## 8. The owner's recent requests (newest last), for context
+21 Bobsled return fix, sound reports, store art. 22 Pump & Pop carnival art. 23 Rake It In hitboxes, rounds 5-10 s
+longer, console capture in reports. 24 fair hitboxes in all 11 precision games. 25 control track in sound reports.
+26 Skate Escape start (skaters held on the line until GO). 27 sit-out switch, countdown beeps only for players in the
+round. 28 rules card (10 s, nothing drawn over it). 29 lobby obby (a goo-pool course, scenery you can't climb).
+Games (12, all hold 12 players): Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking Sands, Arrow
+Ambush, Pump & Pop, Rake It In, Crazy Cutters, Cake Factory, Bobsled Run.
 
-"For bumper balls you get bounced off way too quickly." (tuned) / "Music isn't working for my friend." (open) / "When I
-finished bobsled I go out here" (fixed) / "hitboxes for rake game suck" (fixed) / "We need to fine tune some of the
-hitboxes. the precision games will feel super bad if we dont." (in progress) / "we need cool payoffs for players that keep
-playing the game." (in progress) / "the obby in the lobby is terrible. trees and stuff collides and you can just run up
-it." (in progress) / "Bots are terrible at this game" (Sinking Sands; queued) / "On the skateboard one it spawns you
-when the game starts not on the bridge and you kinda just float to the bridge" (countdown and GO; queued) / "make sure all
-games can hold 12 people" (checked: they do) / "a toggle where you skip next round" (in progress) / "balance the shop down.
-I want low currency not high." (in progress) / "add skiball to the lobby" (in progress) / "make the games a little longer
-5-10 seconds" (done) / "custom music for each mini game" (backlog) / games 13-25 (backlog, after everything else).
+## 9. The owner's requests today (newest last)
+
+"When I finished bobsled I go out here" (fixed) / icon and thumbnail downloads (sent) / "We also need a new
+description" (section 2.3) / "hitboxes for rake game suck" + "fine tune some of the hitboxes" (fixed) / "cool payoffs
+for players that keep playing" (2.2) / category counts (answered) / "the obby in the lobby is terrible" (fixed) / "Bots
+are terrible at this game" (Sinking Sands, 2.2) / skateboard start float (fixed) / "make sure all games can hold 12
+people" (they do) / "a toggle where you skip next round" (done) / "I want low currency not high" (2.2) / "add skiball to
+the lobby" (2.2) / "make the games a little longer" (done) / "Music still not working" (works now, 2.1) / "custom music
+for each mini game" (backlog) / rules card "looks bad", "more time to read", "happening to all of the games" (fixed in
+28) / "Bumper balls control scheme is really bad on mobile" (2.2) / "clipping into some chair on fire rope" (2.2) / Hex
+Meltdown "This", "Theres invisible stuff.", "Bot is floating." (2.1) / "UI is on top of the tutorial UI" (fixed in 28,
+2.1) / "Make the little tutorial for Honey trap better. Players think they have to go to the tree." (2.1).
