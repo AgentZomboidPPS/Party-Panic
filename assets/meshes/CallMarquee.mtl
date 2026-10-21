@@ -1,0 +1,29 @@
+newmtl Frame
+Kd 0.902 0.235 0.275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 1.000 0.804 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bulbs
+Kd 1.000 0.941 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Badge
+Kd 1.000 0.471 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Flame
+Kd 1.000 0.588 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

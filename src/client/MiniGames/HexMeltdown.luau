@@ -1,12 +1,29 @@
 -- Client half of Hex Meltdown: sinks and raises the hexes smoothly from the server's schedule
 -- (MG_Call), makes the hexes of the called color glow, and shows the call big on screen.
+-- Art pass ("make every arena look really cool"): sinking hexes splash lava sparks as they plunge
+-- in, the referee robot hops when it raises a new flag, and the lava torches throw embers (ambient,
+-- off with reduced effects).
 
+local CollectionService = game:GetService("CollectionService")
+
+local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local HexMeltdown = {}
 
-type Hex = { Model: Model, Base: CFrame, ColorIndex: number, Cap: BasePart?, Offset: number }
+type Hex = {
+	Model: Model,
+	Base: CFrame,
+	ColorIndex: number,
+	Tops: { BasePart },
+	Offset: number,
+	Splash: ParticleEmitter?,
+	SplashedCall: number,
+}
+
+local SPARKS = "rbxasset://textures/particles/sparkles_main.dds"
+local LAVA_BELOW_TOP = 20 -- the lava surface under the hex tops (server: LAVA_DROP)
 
 local function easeInOut(t: number): number
 	t = math.clamp(t, 0, 1)
@@ -29,19 +46,61 @@ local function sinkOffset(call, now: number): number
 	return 0
 end
 
+-- The parts that show a hex's color: the column's tile and band (or the cap, on an old arena).
+local function findTops(model: Model): { BasePart }
+	local column = model:WaitForChild("HexColumn", 5)
+	local tops = {}
+	if column then
+		for _, part in column:GetDescendants() do
+			if part:IsA("BasePart") and part.Name == "Top" then
+				table.insert(tops, part)
+			end
+		end
+	end
+	if #tops == 0 then
+		local cap = model:FindFirstChild("Cap")
+		if cap and cap:IsA("BasePart") then
+			table.insert(tops, cap)
+		end
+	end
+	return tops
+end
+
+local function sparks(parent: Instance, color: Color3): ParticleEmitter
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Texture = SPARKS
+	emitter.Color = ColorSequence.new(Color3.fromRGB(255, 230, 120), color)
+	emitter.LightEmission = 1
+	emitter.Rate = 0
+	emitter.Parent = parent
+	return emitter
+end
+
 function HexMeltdown.Start(api)
 	api:Mood({
 		Tint = Color3.fromRGB(255, 232, 214),
-		Saturation = 0.12,
-		Contrast = 0.08,
+		Saturation = 0.18,
+		Contrast = 0.1,
 		Haze = Color3.fromRGB(255, 170, 120),
 		HazeDecay = Color3.fromRGB(150, 70, 50),
-		Density = 0.32,
+		Density = 0.3,
 	})
 	local arena = api:Arena()
 	if not arena then
 		return
 	end
+
+	-- Lava sparks where each hex plunges in: one emitter per hex, on an attachment at the lava.
+	local splashAnchor = Instance.new("Part")
+	splashAnchor.Name = "SplashAnchor"
+	splashAnchor.Anchored = true
+	splashAnchor.CanCollide = false
+	splashAnchor.CanQuery = false
+	splashAnchor.CanTouch = false
+	splashAnchor.Transparency = 1
+	splashAnchor.Size = Vector3.one
+	splashAnchor.CFrame = CFrame.identity
+	splashAnchor.Parent = api.World
 
 	local hexes: { Hex } = {}
 	local function addHex(child: Instance)
@@ -49,19 +108,59 @@ function HexMeltdown.Start(api)
 			return
 		end
 		local model = child :: Model
-		local cap = model:WaitForChild("Cap", 5) :: BasePart?
+		model:WaitForChild("Cap", 5)
+		local base = model:GetPivot()
+		local attachment = Instance.new("Attachment")
+		attachment.WorldPosition = base.Position - Vector3.new(0, LAVA_BELOW_TOP - 0.5, 0)
+		attachment.Parent = splashAnchor
+		local splash = sparks(attachment, Color3.fromRGB(255, 90, 30))
+		splash.Size = NumberSequence.new(1.1, 0)
+		splash.Lifetime = NumberRange.new(0.6, 1.1)
+		splash.Speed = NumberRange.new(16, 30)
+		splash.SpreadAngle = Vector2.new(40, 40)
+		splash.Acceleration = Vector3.new(0, -60, 0)
+		splash.EmissionDirection = Enum.NormalId.Top
 		table.insert(hexes, {
 			Model = model,
-			Base = model:GetPivot(),
+			Base = base,
 			ColorIndex = model:GetAttribute("ColorIndex") or 0,
-			Cap = cap,
+			Tops = findTops(model),
 			Offset = 0,
+			Splash = splash,
+			SplashedCall = 0,
 		})
 	end
 	for _, child in arena:GetChildren() do
 		task.spawn(addHex, child)
 	end
 	api:Track(arena.ChildAdded:Connect(addHex))
+
+	-- The referee robot (it hops when it raises a new flag) and embers off the lava torches.
+	local robot: Model? = nil
+	local robotBase = CFrame.identity
+	task.spawn(function()
+		local found = arena:WaitForChild("RefereeBot", 5)
+		if found and found:IsA("Model") then
+			robotBase = found:GetPivot()
+			robot = found
+		end
+	end)
+	-- Tagged ambient, so the reduced effects setting turns them off (AmbienceController).
+	for _, child in arena:GetChildren() do
+		local flame = child.Name == "LavaTorch" and child:FindFirstChild("Flame", true)
+		if flame and flame:IsA("BasePart") then
+			local embers = sparks(flame, Color3.fromRGB(255, 120, 30))
+			embers.Rate = 6
+			embers.Size = NumberSequence.new(0.5, 0)
+			embers.Lifetime = NumberRange.new(1.2, 2.2)
+			embers.Speed = NumberRange.new(5, 9)
+			embers.SpreadAngle = Vector2.new(25, 25)
+			embers.Acceleration = Vector3.new(1.5, 2, 0)
+			embers.EmissionDirection = Enum.NormalId.Top
+			embers.Enabled = not State.ReducedEffects()
+			CollectionService:AddTag(embers, "PP_Ambient")
+		end
+	end
 
 	-- The call banner: shape and color name with a bar that runs out when the hexes sink.
 	local banner = UIKit.Panel({
@@ -98,7 +197,9 @@ function HexMeltdown.Start(api)
 	})
 
 	local call = nil
+	local hopAt = -math.huge
 	local function refreshCall()
+		local previous = call
 		call = api:SharedJSON("Call")
 		if call then
 			local color = Color3.fromRGB(call.RGB[1], call.RGB[2], call.RGB[3])
@@ -107,11 +208,15 @@ function HexMeltdown.Start(api)
 			bar.BackgroundColor3 = color
 			banner.Visible = true
 			UIKit.PopIn(banner, 0.3)
+			if not previous or previous.Id ~= call.Id then
+				hopAt = api:Now()
+			end
 		end
 	end
 	api:OnShared("Call", refreshCall)
 	refreshCall()
 
+	local robotHopping = false
 	api:RenderStep(function()
 		local now = api:Now()
 		local warning = call ~= nil and now < call.SinkAt
@@ -131,9 +236,27 @@ function HexMeltdown.Start(api)
 				hex.Offset = offset + shake
 				hex.Model:PivotTo(hex.Base * CFrame.new(0, hex.Offset, 0))
 			end
+			-- A spray of lava sparks as the hex top plunges past the lava.
+			if call and not matches and hex.Splash and hex.SplashedCall ~= call.Id and offset < -LAVA_BELOW_TOP then
+				hex.SplashedCall = call.Id
+				hex.Splash:Emit(if State.ReducedEffects() then 5 else 14)
+			end
 			local material = if warning and matches then Enum.Material.Neon else Enum.Material.SmoothPlastic
-			if hex.Cap and hex.Cap.Material ~= material then
-				hex.Cap.Material = material
+			for _, top in hex.Tops do
+				if top.Material ~= material then
+					top.Material = material
+				end
+			end
+		end
+		-- The referee hops as the new flag goes up.
+		local hop = now - hopAt
+		if robot then
+			if hop >= 0 and hop < 0.5 then
+				robotHopping = true
+				robot:PivotTo(robotBase * CFrame.new(0, math.sin(hop / 0.5 * math.pi) * 1.8, 0))
+			elseif robotHopping then
+				robotHopping = false
+				robot:PivotTo(robotBase)
 			end
 		end
 	end)
