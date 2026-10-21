@@ -1,0 +1,53 @@
+newmtl Stone
+Kd 0.769 0.471 0.361
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 1.000 0.769 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Dark
+Kd 0.282 0.196 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Glow
+Kd 1.000 0.510 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Eyes
+Kd 1.000 0.941 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Teeth
+Kd 0.980 0.941 0.843
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Lava
+Kd 1.000 0.471 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cloth
+Kd 0.863 0.157 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Emblem
+Kd 1.000 0.824 0.275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

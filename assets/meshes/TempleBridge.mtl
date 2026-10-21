@@ -1,0 +1,23 @@
+newmtl Stone
+Kd 0.769 0.471 0.361
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 1.000 0.769 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Glow
+Kd 1.000 0.510 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Dark
+Kd 0.282 0.196 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
