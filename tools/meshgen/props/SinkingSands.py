@@ -926,7 +926,7 @@ def sand_sphinx():
     blue_stripes = split_faces(nemes, ~stripe)
     eyes = merge(*(solid(icosphere(0.26, 2), True).scale(1.0, 1.25, 0.55).translate(s * 0.58, 5.55, -3.72) for s in (-1, 1)))
     nose = solid(icosphere(0.17, 1), True).scale(1.3, 0.8, 0.8).translate(0, 5.0, -4.08)
-    collar_ring = lathe([(1.2, 0.4), (1.25, 0.55), (2.1, -0.15), (2.05, -0.35), (1.2, 0.4)], 48)
+    collar_ring = lathe([(1.15, 0.35), (1.2, 0.5), (1.8, -0.05), (1.76, -0.25), (1.15, 0.35)], 48)
     collar = solid(collar_ring, True).rotate("x", -28).translate(0, 3.75, -2.15)
     gem = solid(icosphere(0.32, 1)).translate(0, 3.1, -3.55)
     plinth = merge(box(7.2, 0.5, 13.6, y=-0.25, bevel=0.1), box(7.8, 0.3, 14.2, y=-0.6, bevel=0.08))

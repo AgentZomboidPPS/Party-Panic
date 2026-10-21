@@ -263,7 +263,7 @@ return function(h)
 		-- A giant cat sphinx in a striped royal headdress, lying with its paws forward (-Z).
 		SandSphinx = {
 			Height = 37.65,
-			AssetId = 97448802400676,
+			AssetId = 81162770836161,
 			Shadow = false,
 			Palette = {
 				Body = h.rgb(242, 198, 122),
