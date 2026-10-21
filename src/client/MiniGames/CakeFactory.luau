@@ -641,17 +641,18 @@ function CakeFactory.Start(api)
 	end)
 
 	-- A cake's layers and whether it's ruined, from the shared string.
-	local function cakeState(line: Line, k: number): (number, boolean)
+	-- (A cake the server no longer lists, already past the end, keeps what it showed: `known` false.)
+	local function cakeState(line: Line, k: number): (number, boolean, boolean)
 		local index = k - line.State.K + 1
 		local s = line.State.S
 		if index < 1 or index > #s then
-			return 0, false
+			return 0, false, index > #s
 		end
 		local byte = string.byte(s, index)
 		if byte >= 97 then
-			return byte - 97, true
+			return byte - 97, true, true
 		end
-		return byte - 48, false
+		return byte - 48, false, true
 	end
 	for _, team in order do
 		local line = lines[team]
@@ -848,7 +849,10 @@ function CakeFactory.Start(api)
 					line.Cakes[k] = view
 				end
 				local u = start + d - k * spacing
-				local n, bad = cakeState(line, k)
+				local n, bad, known = cakeState(line, k)
+				if not known then
+					n, bad = math.max(view.N, 0), view.Bad
+				end
 				if n ~= view.N or bad ~= view.Bad then
 					if bad and not view.Bad then
 						view.Tilt = CFrame.new(rng:NextNumber(-0.5, 0.5), 0, rng:NextNumber(-0.4, 0.4))
