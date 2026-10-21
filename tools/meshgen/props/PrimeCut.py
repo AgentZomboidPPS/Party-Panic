@@ -662,7 +662,7 @@ def lights():
         x = -18 + i * 2.25
         y = 0.95 + 2.6 * (x / 20) ** 2
         parts.append(cylinder(0.13, 0.3, 10).translate(x, y - 0.3, 0))
-        bulbs.append(sphere(0.24, 8, 12).scale(1.0, 1.35, 1.0).translate(x, y - 0.62, 0))
+        bulbs.append(sphere(0.24, 6, 8).scale(1.0, 1.35, 1.0).translate(x, y - 0.62, 0))
     return {"Wire": merge(*parts), "Bulbs": merge(*bulbs)}
 
 

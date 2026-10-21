@@ -62,7 +62,7 @@ return function(h)
 
 	local props = {
 		PrimeCutRibeye = {
-			AssetId = 0,
+			AssetId = 136449307569510,
 			Steak = "Ribeye",
 		},
 		PrimeCutStrip = {
@@ -74,20 +74,20 @@ return function(h)
 			Steak = "TriTip",
 		},
 		PrimeCutKidney = {
-			AssetId = 0,
+			AssetId = 82082073436404,
 			Steak = "Kidney",
 		},
 		PrimeCutHeart = {
-			AssetId = 0,
+			AssetId = 95000294024880,
 			Steak = "Heart",
 		},
 		PrimeCutChuck = {
-			AssetId = 0,
+			AssetId = 117430903998715,
 			Steak = "Chuck",
 		},
 		PrimeCutKnife = {
 			Height = 3.3,
-			AssetId = 0,
+			AssetId = 108387426433490,
 			Shadow = true,
 			Palette = {
 				Blade = h.rgb(196, 204, 216),
@@ -105,7 +105,7 @@ return function(h)
 		},
 		PrimeCutGrill = {
 			Height = 23.5,
-			AssetId = 0,
+			AssetId = 78887571401658,
 			Palette = {
 				Enamel = h.rgb(220, 60, 60), -- recolored per team
 				Steel = h.rgb(178, 184, 194),
@@ -142,7 +142,7 @@ return function(h)
 		},
 		PrimeCutFence = {
 			Height = 4.39,
-			AssetId = 0,
+			AssetId = 78309083580880,
 			Palette = { Paint = h.rgb(246, 246, 240) },
 			Materials = { Paint = wood },
 			Fallback = function(m)
@@ -153,7 +153,7 @@ return function(h)
 		},
 		PrimeCutLights = {
 			Height = 3.6,
-			AssetId = 0,
+			AssetId = 123247863598789,
 			Shadow = false,
 			Palette = { Wire = h.rgb(34, 34, 34), Bulbs = h.rgb(255, 214, 130) },
 			Materials = { Wire = smooth, Bulbs = Enum.Material.Neon },
@@ -166,7 +166,7 @@ return function(h)
 		},
 		PrimeCutPost = {
 			Height = 12.25,
-			AssetId = 0,
+			AssetId = 82146741120949,
 			Palette = { Wood = h.rgb(140, 92, 56), Wire = h.rgb(34, 34, 34) },
 			Materials = { Wood = wood },
 			Fallback = function(m)
@@ -186,7 +186,7 @@ return function(h)
 		},
 		PrimeCutCooler = {
 			Height = 3.21,
-			AssetId = 0,
+			AssetId = 89014426844667,
 			Palette = { Body = h.rgb(40, 124, 222), Lid = h.rgb(246, 246, 246), Steel = h.rgb(178, 184, 194) },
 			Materials = { Body = smooth, Lid = smooth, Steel = metal },
 			Fallback = function(m)
@@ -196,7 +196,7 @@ return function(h)
 		},
 		PrimeCutSauces = {
 			Height = 3.5,
-			AssetId = 0,
+			AssetId = 85512946993024,
 			Palette = { Ketchup = h.rgb(212, 32, 32), Mustard = h.rgb(246, 192, 32), Caps = h.rgb(246, 246, 246) },
 			Materials = { Ketchup = smooth, Mustard = smooth, Caps = smooth },
 			Fallback = function(m)
