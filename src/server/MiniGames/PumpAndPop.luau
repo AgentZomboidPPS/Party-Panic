@@ -451,7 +451,8 @@ function PumpAndPop:GetResults()
 	for _, entry in results.Entries do
 		local pumper = self.pumpers[entry.Player]
 		if pumper then
-			entry.ScoreText = `{entry.Team} {self.stations[entry.Team] and self:_percent(self.stations[entry.Team]) or 0}% • {pumper.Pumps} pumps, {pumper.Perfect} perfect`
+			entry.ScoreText =
+				`{entry.Team} {self.stations[entry.Team] and self:_percent(self.stations[entry.Team]) or 0}% • {pumper.Pumps} pumps, {pumper.Perfect} perfect`
 		end
 	end
 	return results
