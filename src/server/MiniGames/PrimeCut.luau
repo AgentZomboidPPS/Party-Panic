@@ -383,6 +383,10 @@ function PrimeCut:Prepare()
 	for cut = 1, PrimeCutLogic.CUTS do
 		table.insert(self.plan, { Id = steakIds[(cut - 1) % #steakIds + 1], Angle = rng:NextNumber(0, math.pi * 2) })
 	end
+	-- (Loaded up front, so serving the next steak never waits on a mesh.)
+	for _, plan in self.plan do
+		MeshLibrary.Get(PrimeCutLogic.Steak(plan.Id).Prop):Destroy()
+	end
 	self.cut = 0
 	self.phase = "Wait"
 	self.history = {}
@@ -585,8 +589,11 @@ function PrimeCut:_tick(now: number)
 			if self.cut >= PrimeCutLogic.CUTS then
 				self:_finish()
 			else
-				self:_serve(self.cut + 1)
+				-- (Ready first: a steak's mesh can yield on its first load, and this runs every frame.)
 				self.phase = "Ready"
+				self.nextAt = math.huge
+				self:_serve(self.cut + 1)
+				now = ctx:Now()
 				self.readyAt = now
 				self.nextAt = now + READY
 				self.chopped = false
