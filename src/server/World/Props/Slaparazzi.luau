@@ -8,7 +8,7 @@ return function(h)
 		-- The photo frame on the stage. Its rings' outer edges are the scoring radii
 		-- (Logic/Slaparazzi.luau RINGS: 3.6, 7.2, 11); the whole frame is 24.35 studs across.
 		SlaparazziFrame = {
-			Height = 0.12
+			Height = 0.12,
 			AssetId = 113926669652250,
 			Shadow = false,
 			Palette = {
