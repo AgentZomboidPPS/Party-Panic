@@ -201,7 +201,7 @@ function Brain.Step(bot, ctx, mode, dt)
 	m.Seen = m.Seen or {}
 	-- First real shot a while after the spawn shield drops (sooner for skilled bots), so they don't
 	-- all open fire at once; nothing is wasted on shields before that.
-	m.NextShot = m.NextShot or (mode.startAt + TankField.SHIELD + 0.5 + 2 * rng:NextNumber(0.3, 1) * (1.25 - skill))
+	m.NextShot = m.NextShot or (mode.startAt + TankField.SHIELD + 0.5 + rng:NextNumber(0.5, 3) * (1.3 - skill))
 
 	local enemies = {}
 	for _, other in mode.list do
@@ -413,7 +413,7 @@ function Brain.Step(bot, ctx, mode, dt)
 			px, pz = target.X + vx * fly * lead, target.Z + vz * fly * lead
 		end
 		if now >= (m.NoiseUntil or 0) then
-			m.Noise = (rng:NextNumber() - 0.5 + rng:NextNumber() - 0.5) * (1 - skill) * 0.22
+			m.Noise = (rng:NextNumber() - 0.5 + rng:NextNumber() - 0.5) * (1.15 - skill) * 0.4
 			m.NoiseUntil = now + rng:NextNumber(0.5, 1.1)
 		end
 		wantAim = heading(px - tank.X, pz - tank.Z) + (m.Noise or 0)

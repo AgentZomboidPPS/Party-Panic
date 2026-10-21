@@ -59,7 +59,7 @@ return function(env)
 				local toward = math.atan2(dx, dz) + wander[player].Angle
 				local push = if bestD > 30 then 1 elseif bestD < 16 then -0.8 else 0.4
 				mx, mz = math.sin(toward) * push, math.cos(toward) * push
-				aim = math.atan2(-dx, -dz) + env.rng:NextNumber(-0.3, 0.3)
+				aim = math.atan2(-dx, -dz) + env.rng:NextNumber(-0.45, 0.45)
 			end
 			seqs[player] = (seqs[player] or 1e6) + 1
 			env.Action(player, "In", seqs[player], mx, mz, aim)
