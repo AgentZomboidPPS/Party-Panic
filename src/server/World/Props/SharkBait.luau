@@ -306,7 +306,7 @@ return function(h)
 		},
 		SharkBaitLighthouse = {
 			Height = 46,
-			AssetId = 0,
+			AssetId = 133994622737467,
 			Palette = {
 				Rock = h.rgb(120, 112, 104),
 				Grass = h.rgb(100, 180, 80),
@@ -336,7 +336,7 @@ return function(h)
 		},
 		SharkBaitShipwreck = {
 			Height = 34,
-			AssetId = 0,
+			AssetId = 107993268017094,
 			Palette = {
 				Hull = h.rgb(110, 70, 45),
 				Planks = h.rgb(150, 100, 60),
@@ -365,7 +365,7 @@ return function(h)
 		-- A tall limestone sea stack with jungle on top; its waterline is about 4 studs up.
 		SharkBaitSeaStack = {
 			Height = 48,
-			AssetId = 0,
+			AssetId = 81005352097958,
 			Shadow = false,
 			Palette = { Rock = h.rgb(170, 160, 140), Jungle = h.rgb(70, 150, 70), Foam = h.rgb(240, 250, 255) },
 			Materials = { Rock = Enum.Material.Limestone, Jungle = Enum.Material.Grass },

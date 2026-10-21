@@ -1912,6 +1912,404 @@ def lighthouse():
             "Lantern": lantern, "Roof": merge(roof_m, ball), "Door": merge(*door)}
 
 
+# =============================================================================== backdrop: the sea stack
+
+def sea_stack():
+    """A tall limestone sea stack: eroded ledges, a notch worn at the water line (y = 4) with a foam
+    ring round it, and a cap of jungle that spills over the top with hanging vines."""
+    rng = np.random.default_rng(23)
+    top_y = 42.5
+    prof_y = [0.0, 2.0, 3.4, 4.0, 4.7, 6.0, 9.0, 14.0, 20.0, 26.0, 32.0, 37.0, 40.5, 42.0, 42.5]
+    prof_r = [9.0, 8.6, 7.7, 7.45, 7.7, 8.3, 8.1, 7.6, 7.4, 7.2, 6.9, 6.7, 6.2, 4.8, 0.0]
+    rows = np.concatenate([np.linspace(0, 6, 9), np.linspace(6.6, 40.5, 40), [41.3, 42.0, 42.35, 42.5]])
+    segs = 56
+    verts = []
+    for y in rows:
+        r = float(pchip(prof_y, prof_r, y))
+        ledge = 0.75 * np.clip(np.sin(y * 0.75 + 0.6 * np.sin(y * 0.23)), 0, None) ** 4 * (y > 6) * (y < 40.5)
+        for k in range(segs):
+            a = TAU * k / segs
+            rr = r + ledge if r > 0 else 0.0
+            verts.append((math.cos(a) * rr, y, math.sin(a) * rr * 0.86))
+    verts = np.array(verts)
+    p = verts.copy()
+    radial = np.column_stack([p[:, 0], np.zeros(len(p)), p[:, 2]])
+    rl = np.linalg.norm(radial, axis=1, keepdims=True)
+    radial = radial / np.maximum(rl, 1e-9)
+    bump = wobble(p, 31, 1.7, 4.0) + wobble(p, 32, 0.8, 1.5) + wobble(p, 33, 0.35, 0.6)
+    bump *= np.clip(p[:, 1] / 1.5, 0, 1) * (rl[:, 0] > 0.5)
+    p += radial * bump[:, None]
+    p[:, 0] += 0.06 * p[:, 1] ** 1.1 * 0.25  # a gentle lean
+    faces = ring_faces(len(rows), segs)
+    rock = Mesh(p, faces)
+    # close the bottom with a fan (the top row is a point ring already)
+    center = len(rock.v)
+    rock.v = np.vstack([rock.v, [[0.0, 0.0, 0.0]]])
+    rock.f = np.vstack([rock.f, np.array([(center, (k + 1) % segs, k) for k in range(segs)])])
+    rock = orient_closed(weld(rock, 1e-6))
+    rock.smooth = False  # chiselled limestone facets
+
+    # Jungle: a lumpy canopy over the cap and down its shoulders, and vines hanging from the rim.
+    lean_top = 0.06 * top_y ** 1.1 * 0.25
+    jungle = []
+    for k in range(30):
+        a = rng.uniform(0, TAU) if k >= 6 else k * TAU / 6
+        rr = rng.uniform(3.0, 7.0) if k > 5 else rng.uniform(0, 2.2)
+        y = top_y - 0.3 - 0.16 * rr ** 1.45 + rng.uniform(-0.3, 0.5)
+        size = rng.uniform(2.0, 3.1) if rr < 4.0 else rng.uniform(1.4, 2.3)
+        jungle.append(lumpy(size, (1.15, 0.78, 1.15), 70 + k, 0.35, 2).translate(math.cos(a) * rr + lean_top, y, math.sin(a) * rr * 0.86))
+    trunks = []
+    for k, (a, tilt) in enumerate(((0.6, 0.9), (3.4, 0.7))):
+        base_p = np.array([math.cos(a) * 3.2 + lean_top, top_y + 0.8, math.sin(a) * 3.2 * 0.86])
+        d = np.array([math.cos(a) * tilt, 1.0, math.sin(a) * tilt])
+        pts = [base_p + d * 6.5 * t + np.array([0, -1.2 * t * t, 0]) for t in np.linspace(0, 1, 9)]
+        trunks.append(taper([tuple(q) for q in pts], 0.45, 0.28, 8))
+        crown = pts[-1]
+        for j in range(8):
+            yaw = j * 45 + k * 20
+            leaf = pillow(smooth_outline([(0.0, -0.08), (1.4, -0.5), (3.2, -0.42), (4.4, 0.0), (3.2, 0.42), (1.4, 0.5), (0.0, 0.08)], 26, 1),
+                          (1.5, 0.0), lambda q: np.full(len(q), 0.07), rings=3, edge=0.07)
+            leaf = place(leaf, (0, 0, 0), (1, 0, 0), (0, 0, 1), (0, 1, 0))
+            x = leaf.v[:, 0]
+            leaf.v[:, 1] += 0.55 * x - 0.16 * x * x  # arch up then droop
+            jungle.append(leaf.rotate("y", yaw).translate(*crown))
+        jungle.append(sphere(0.55, 6, 8).translate(*crown))
+    for k in range(9):
+        a = k * TAU / 9 + rng.uniform(-0.2, 0.2)
+        length = rng.uniform(4.0, 11.0)
+        pts = []
+        for t in np.linspace(0, 1, 8):
+            y = top_y - 2.5 - length * t
+            r = float(pchip(prof_y, prof_r, y)) + 0.45 + 0.25 * math.sin(t * 7 + k)
+            lean = 0.06 * y ** 1.1 * 0.25
+            pts.append((math.cos(a + 0.05 * math.sin(t * 5)) * r + lean, y, math.sin(a + 0.05 * math.sin(t * 5)) * r * 0.86))
+        jungle.append(strip_tube(pts, np.linspace(0.3, 0.14, 8), 6))
+        for j in (1, 2, 3, 4, 5, 6, 7):
+            leaf = lumpy(0.75 - 0.05 * j, (1.1, 0.75, 0.9), 120 + k * 7 + j, 0.35, 1)
+            jungle.append(leaf.translate(*pts[j]))
+    jungle_m = merge(*jungle)
+
+    # Foam where the sea meets the rock (y = 4): a lumpy, flattened ring hugging the notch.
+    ring = []
+    for k in range(72):
+        a = TAU * k / 72
+        d = np.array([math.cos(a), 0.0, math.sin(a) * 0.86])
+        hit = raycast(rock, d * 30 + np.array([0, 4.0, 0]), -d)
+        rr = np.linalg.norm(hit[0][[0, 2]] - 0) if hit else 8.0
+        ring.append((hit[0] if hit else d * 8) + unit(d) * 0.45)
+    ring = np.array(ring)
+    foam_rings = []
+    for k, c in enumerate(ring):
+        tangent = unit(ring[(k + 1) % 72] - ring[k - 1])
+        out = unit(np.cross(tangent, (0, 1, 0)))
+        if out @ (c - np.array([c[0] * 0, 0, 0])) < 0:
+            out = -out
+        swell = 1 + 0.25 * math.sin(k * 0.9) + 0.15 * math.sin(k * 2.3)
+        sec = [c + out * math.cos(b) * 0.85 * swell + np.array([0, math.sin(b) * 0.28 * swell + 0.05, 0]) for b in np.linspace(0, TAU, 8, endpoint=False)]
+        foam_rings.append(sec)
+    foam_rings = np.array(foam_rings)
+    fv = foam_rings.reshape(-1, 3)
+    ff = []
+    n = 8
+    for k in range(72):
+        for j in range(n):
+            a0 = k * n + j
+            b0 = k * n + (j + 1) % n
+            c0 = ((k + 1) % 72) * n + j
+            d0 = ((k + 1) % 72) * n + (j + 1) % n
+            ff += [(a0, b0, c0), (b0, d0, c0)]
+    foam = orient_closed(Mesh(fv, ff))
+    foam.v[:, 1] = np.maximum(foam.v[:, 1], 3.7)
+
+    pieces = {"Rock": merge(rock, *trunks), "Jungle": jungle_m, "Foam": foam}
+    top = max(m.v[:, 1].max() for m in pieces.values())
+    for m in pieces.values():
+        m.v[:, 1] = np.where(m.v[:, 1] > 4.0, 4.0 + (m.v[:, 1] - 4.0) * (48.0 - 4.0) / (top - 4.0), m.v[:, 1])
+    return pieces
+
+
+# =============================================================================== backdrop: the shipwreck
+
+_HZ = [-23.0, -22.3, -21.0, -18.5, -15.0, -10.0, -4.0, 2.0, 8.0, 13.5, 18.0, 21.5, 23.0]
+_HW = [0.3, 1.6, 3.2, 4.8, 5.8, 6.35, 6.5, 6.5, 6.3, 5.9, 5.3, 4.7, 4.5]
+_HD = [12.8, 12.3, 11.6, 10.9, 10.3, 9.9, 9.7, 9.7, 9.9, 10.5, 11.5, 12.7, 13.2]
+_HB = [8.0, 5.6, 3.6, 1.9, 0.8, 0.25, 0.0, 0.0, 0.15, 0.5, 1.2, 2.3, 3.0]
+
+
+def hull_at(z: float):
+    return tuple(float(pchip(_HZ, s_, z)) for s_ in (_HW, _HD, _HB))
+
+
+def hull_side(z: float, t, offset: float = 0.0):
+    """Points on the starboard (+X) side at height fractions t (0 keel .. 1 deck edge)."""
+    w, yd, yb = hull_at(z)
+    t = np.asarray(t, float)
+    x = w * np.sqrt(np.clip(1 - (1 - t) ** 2.2, 0, 1)) * (1 - 0.08 * t ** 4)
+    y = yb + (yd - yb) * t
+    # push out along the section's normal (approximately: away from the keel line)
+    nx = np.gradient(y) if len(np.atleast_1d(t)) > 1 else np.array([1.0])
+    ny = -np.gradient(x) if len(np.atleast_1d(t)) > 1 else np.array([0.0])
+    n = np.column_stack([nx, ny])
+    n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-12
+    return np.column_stack([x + n[:, 0] * offset, y + n[:, 1] * offset])
+
+
+def hull_ring(z: float, n_side: int = 14, n_deck: int = 8):
+    ts = np.linspace(1, 0, n_side + 1)
+    side = hull_side(z, ts)
+    w, yd, yb = hull_at(z)
+    star = side  # deck edge down to the keel
+    port = side[::-1][1:] * np.array([-1, 1])  # keel up to the port deck edge
+    xs = np.linspace(-star[0, 0], star[0, 0], n_deck + 2)[1:-1]
+    deck = np.column_stack([xs, yd + 0.18 * (1 - (xs / max(star[0, 0], 1e-6)) ** 2)])
+    ring = np.vstack([star, port, deck])
+    return np.column_stack([ring[:, 0], ring[:, 1], np.full(len(ring), z)])
+
+
+def strake(z0: float, z1: float, t0: float, t1: float, side: int, proud: float = 0.09, count: int = 26) -> Mesh:
+    rings = []
+    for z in np.linspace(z0, z1, count):
+        ts = np.linspace(t0, t1, 4)
+        outer = hull_side(z, ts, proud)
+        inner = hull_side(z, ts, -0.08)
+        ring = np.vstack([outer, inner[::-1]])
+        rings.append(np.column_stack([ring[:, 0] * side, ring[:, 1], np.full(len(ring), z)]))
+    return loft(rings)
+
+
+def skull_mark(size: float, half: float) -> Mesh:
+    """A cartoon shark skull (a fin on its crown) over crossed bones, in the XY plane."""
+    skull = [(0.0, 0.62), (0.3, 0.56), (0.5, 0.36), (0.55, 0.1), (0.42, -0.12), (0.3, -0.2), (0.3, -0.36), (0.12, -0.42),
+             (-0.12, -0.42), (-0.3, -0.36), (-0.3, -0.2), (-0.42, -0.12), (-0.55, 0.1), (-0.5, 0.36), (-0.3, 0.56)]
+    head = pillow(smooth_outline(np.array(skull) * size, 36), (0.0, 0.1 * size), lambda q: np.full(len(q), half), rings=3, edge=half)
+    fin = pillow(smooth_outline(np.array([(-0.18, 0.5), (0.2, 0.5), (0.12, 0.68), (0.16, 0.92), (0.0, 0.8), (-0.12, 0.62)]) * size, 20),
+                 (0.0, 0.6 * size), lambda q: np.full(len(q), half), rings=2, edge=half)
+    bones = []
+    for sgn in (-1, 1):
+        a = math.radians(32 * sgn)
+        d = np.array([math.cos(a), math.sin(a), 0.0])
+        c = np.array([0.0, -0.55, 0.0]) * size
+        bones.append(strip_tube([tuple(c - d * 0.75 * size), tuple(c + d * 0.75 * size)], [half * 1.6, half * 1.6], 8))
+        for end in (-1, 1):
+            for off in (-1, 1):
+                q = c + d * end * 0.78 * size + np.array([-d[1], d[0], 0]) * off * 0.08 * size
+                bones.append(sphere(half * 2.6, 5, 8).scale(1, 1, 0.6).translate(*q))
+    return merge(head, fin, *bones)
+
+
+def skull_holes(size: float, half: float) -> Mesh:
+    """The skull's eyes and grin (black, sat on the white skull)."""
+    eyes = [pillow(smooth_outline([(-0.13, -0.09), (0.13, -0.09), (0.15, 0.05), (0.0, 0.13), (-0.15, 0.05)], 16), (0, 0),
+                   lambda q: np.full(len(q), half), rings=2, edge=half).scale(size).translate(sx * 0.22 * size, 0.15 * size, 0)
+            for sx in (-1, 1)]
+    nose = pillow(smooth_outline([(-0.05, 0.0), (0.05, 0.0), (0.0, 0.08)], 8), (0, 0.03), lambda q: np.full(len(q), half), rings=2,
+                  edge=half).scale(size).translate(0, -0.08 * size, 0)
+    grin = strip_tube([(x * size, (-0.24 + 0.05 * math.cos(x * 9)) * size, 0.0) for x in np.linspace(-0.26, 0.26, 9)], [half * 1.4] * 9, 6)
+    return merge(*eyes, nose, grin)
+
+
+def shipwreck_parts(main_top: float):
+    rng = np.random.default_rng(41)
+    hull_mesh = loft([hull_ring(z) for z in np.linspace(-23.0, 23.0, 46)], start=(0.0, 9.8, -23.25), end=None)
+    # The deck faces (the last 8 points of each ring) are planks.
+    n_ring = 15 + 14 + 8
+    face_ring_pos = np.zeros(len(hull_mesh.f), dtype=int)
+    count_rings = 46
+    quad_faces = (count_rings - 1) * n_ring * 2
+    j = (np.arange(quad_faces) // 2) % n_ring
+    deck_mask = np.zeros(len(hull_mesh.f), dtype=bool)
+    deck_mask[:quad_faces] = j >= 29 - 1
+    deck_mask[:quad_faces] &= j != n_ring - 1 + 99
+    deck, hull_body = split_faces(hull_mesh, deck_mask)
+
+    hull_parts, plank_parts, trim, mast, sail, rope = [hull_body], [deck], [], [], [], []
+    # Strakes: six light planks a side, a gap between each; a broken hole on the starboard side.
+    bands = [(0.2, 0.33), (0.35, 0.47), (0.49, 0.6), (0.62, 0.72), (0.74, 0.83)]
+    for side in (1, -1):
+        for k, (t0, t1) in enumerate(bands):
+            z0, z1 = -21.2 + 1.4 * (k < 2) + 0.9 * (k == 0), 22.7
+            if side > 0 and k in (0, 1, 2):
+                plank_parts.append(strake(z0, -5.5 + 0.8 * k, t0, t1, side, count=16))
+                plank_parts.append(strake(0.8 - 0.6 * k, z1, t0, t1, side, count=16))
+            else:
+                plank_parts.append(strake(z0, z1, t0, t1, side))
+        trim.append(strake(-21.6, 22.8, 0.86, 0.9, side, proud=0.12))  # the gold wale
+    # Splintered plank ends round the hole.
+    for k in range(9):
+        z = rng.choice([-5.6, 0.9]) + rng.uniform(-0.3, 0.3)
+        t = rng.uniform(0.22, 0.58)
+        x, y = hull_side(z, [t], 0.05)[0]
+        d = 1 if z > -2 else -1
+        sp = box(-0.12, -0.18, 0.0, 0.12, 0.18, rng.uniform(0.6, 1.3), 0.04, 1)
+        sp.rotate("y", -d * rng.uniform(5, 25)).rotate("x", rng.uniform(-20, 20))
+        if d < 0:
+            sp.rotate("y", 180)
+        plank_parts.append(sp.translate(x + 0.08, y, z))
+    # Bulwarks along both sides with a gold cap rail, from bow to stern.
+    for side in (1, -1):
+        rings = []
+        for z in np.linspace(-22.6, 22.9, 40):
+            w, yd, yb = hull_at(z)
+            x = hull_side(z, [1.0])[0][0] * side
+            rings.append([(x - side * 0.05, yd - 0.1, z), (x + side * 0.12, yd - 0.1, z), (x + side * 0.1, yd + 1.0, z), (x - side * 0.08, yd + 1.0, z)])
+        hull_parts.append(loft(rings))
+        cap = [(hull_side(z, [1.0])[0][0] * side + side * 0.01, hull_at(z)[1] + 1.05, z) for z in np.linspace(-22.6, 22.9, 40)]
+        trim.append(strip_tube(cap, [0.16] * len(cap), 8))
+    # A two-storey stern castle: planked walls, windows on the transom and sides, a gold-railed top.
+    castle_y = hull_at(18.0)[1] - 0.6
+    ch = 4.4
+    hull_parts.append(box(-4.7, castle_y - 0.5, 15.0, 4.7, castle_y + ch, 23.1, 0.25, 2))
+    plank_parts.append(box(-4.5, castle_y + ch, 15.2, 4.5, castle_y + ch + 0.2, 22.9, 0.08, 1))
+    for y in (castle_y + 0.55, castle_y + 2.5):
+        plank_parts.append(box(-4.82, y, 15.1, 4.82, y + 1.2, 23.22, 0.1, 1))
+    for side in (1, -1):
+        trim.append(strip_tube([(side * 4.6, castle_y + ch + 1.0, 15.2), (side * 4.6, castle_y + ch + 1.0, 23.0)], [0.14, 0.14], 8))
+        for z in np.linspace(15.4, 22.9, 7):
+            trim.append(bar_between((side * 4.6, castle_y + ch + 0.1, z), (side * 4.6, castle_y + ch + 1.0, z), 0.08, 6))
+        for z in (17.0, 19.6):  # side windows
+            hull_parts.append(box(side * 4.84, castle_y + 2.75, z - 0.55, side * 4.98, castle_y + 3.55, z + 0.55, 0.05, 1))
+            trim.append(box(side * 4.86, castle_y + 2.6, z - 0.7, side * 4.94, castle_y + 3.7, z + 0.7, 0.03, 1))
+    trim.append(strip_tube([(-4.6, castle_y + ch + 1.0, 23.0), (4.6, castle_y + ch + 1.0, 23.0)], [0.14, 0.14], 8))
+    for row, (y0, y1) in enumerate(((castle_y + 0.75, castle_y + 1.6), (castle_y + 2.7, castle_y + 3.6))):
+        for x in (-3.0, -1.0, 1.0, 3.0):
+            hull_parts.append(box(x - 0.62, y0, 23.25, x + 0.62, y1, 23.42, 0.06, 1))
+            trim.append(box(x - 0.75, y0 - 0.14, 23.2, x + 0.75, y0, 23.5, 0.03, 1))
+            trim.append(box(x - 0.75, y1, 23.2, x + 0.75, y1 + 0.14, 23.5, 0.03, 1))
+            trim.append(box(x - 0.06, y0, 23.4, x + 0.06, y1, 23.48, 0.02, 1))
+    for side in (1, -1):
+        trim.append(lathe([(0.0, 0.0), (0.35, 0.05), (0.45, 0.5), (0.35, 0.95), (0.0, 1.0)], 10).translate(side * 4.2, castle_y + ch + 1.2, 22.8))
+    # A forecastle at the bow.
+    fc_y = hull_at(-18.0)[1] - 0.3
+    hull_parts.append(box(-4.0, fc_y - 0.4, -20.2, 4.0, fc_y + 1.6, -15.4, 0.2, 2))
+    plank_parts.append(box(-3.85, fc_y + 1.6, -20.0, 3.85, fc_y + 1.78, -15.6, 0.06, 1))
+    for side in (1, -1):
+        trim.append(strip_tube([(side * 3.95, fc_y + 2.5, -20.0), (side * 3.95, fc_y + 2.5, -15.5)], [0.12, 0.12], 8))
+        for z in np.linspace(-19.9, -15.6, 4):
+            trim.append(bar_between((side * 3.95, fc_y + 1.7, z), (side * 3.95, fc_y + 2.5, z), 0.07, 6))
+    # Gun ports with cannon muzzles along both sides (none where the hole is).
+    for side in (1, -1):
+        for z in (-11.0, -5.5, 0.0, 5.5, 11.0):
+            if side > 0 and -7.0 < z < 2.0:
+                continue
+            t = 0.79
+            x, y = hull_side(z, [t], 0.12)[0]
+            hull_parts.append(box(side * x - 0.1, y - 0.5, z - 0.55, side * x + 0.1, y + 0.5, z + 0.55, 0.05, 1))
+            for dz0, dz1, dy0, dy1 in ((-0.7, 0.7, 0.5, 0.64), (-0.7, 0.7, -0.64, -0.5), (-0.7, -0.55, -0.5, 0.5), (0.55, 0.7, -0.5, 0.5)):
+                trim.append(box(side * x - 0.12, y + dy0, z + dz0, side * x + 0.14, y + dy1, z + dz1, 0.03, 1))
+            mast.append(strip_tube([(side * (x - 0.3), y, z), (side * (x + 0.75), y + 0.05, z)], [0.24, 0.2], 10))
+            mast.append(torus(0.24, 0.07, 12, 5).rotate("z", 90).translate(side * (x + 0.75), y + 0.05, z))
+    # Bowsprit and a gold scroll at the stem.
+    mast.append(strip_tube([(0, 10.9, -21.6), (0, 13.6, -27.4)], [0.38, 0.2], 10))
+    trim.append(torus(0.55, 0.16, 16, 8).rotate("z", 90).translate(0, 10.2, -23.15))
+    # Main mast (standing): mast, topmast, yards, crow's nest, the torn sail and the black flag.
+    mz = 1.0
+    deck_y = hull_at(mz)[1]
+    mast.append(strip_tube([(0, deck_y - 0.5, mz), (0, main_top * 0.72, mz)], [0.62, 0.42], 12))
+    mast.append(strip_tube([(0, main_top * 0.7, mz), (0, main_top - 0.15, mz)], [0.3, 0.2], 10))
+    mast.append(sphere(0.32, 8, 10).translate(0, main_top - 0.2, mz))
+    yard_y = deck_y + 9.4
+    mast.append(strip_tube([(-6.6, yard_y, mz - 0.6), (6.6, yard_y, mz - 0.6)], [0.22, 0.22], 10))
+    nest_y = main_top * 0.7
+    mast.append(lathe([(0.0, 0.0), (1.1, 0.0), (1.25, 0.9), (1.05, 0.95), (0.95, 0.15), (0.0, 0.15)], 16).translate(0, nest_y - 0.9, mz))
+    mast.append(strip_tube([(-4.0, nest_y + 1.6, mz - 0.4), (4.0, nest_y + 1.6, mz - 0.4)], [0.16, 0.16], 8))
+    sail_pts = [(-6.2, 0.0), (-3.0, -0.15), (0.0, -0.1), (3.0, -0.2), (6.2, 0.0), (5.7, -2.6), (5.9, -4.4), (5.1, -5.2), (4.3, -4.6),
+                (3.3, -6.1), (2.2, -5.4), (1.0, -6.4), (-0.6, -5.6), (-1.6, -6.0), (-2.8, -4.8), (-3.8, -5.7), (-5.0, -4.9),
+                (-5.6, -3.6), (-6.0, -2.0)]
+    cloth = pillow(smooth_outline(sail_pts, 70, 1), (0.0, -2.6), lambda q: np.full(len(q), 0.09), rings=4, edge=0.08)
+    x, y = cloth.v[:, 0], cloth.v[:, 1]
+    cloth.v[:, 2] += -1.6 * np.sin(np.pi * np.clip(-y / 6.2, 0, 1)) * (1 - (x / 6.6) ** 2)  # billows forward
+    sail.append(cloth.translate(0, yard_y - 0.15, mz - 0.75))
+    top_pts = [(-3.8, 0.0), (0.0, -0.08), (3.8, 0.0), (3.4, -2.2), (2.6, -2.9), (1.5, -2.4), (0.4, -3.2), (-0.9, -2.6), (-2.2, -3.1), (-3.3, -2.3)]
+    top_cloth = pillow(smooth_outline(top_pts, 44, 1), (0.0, -1.4), lambda q: np.full(len(q), 0.08), rings=3, edge=0.07)
+    x, y = top_cloth.v[:, 0], top_cloth.v[:, 1]
+    top_cloth.v[:, 2] += -0.9 * np.sin(np.pi * np.clip(-y / 3.2, 0, 1)) * (1 - (x / 4.0) ** 2)
+    sail.append(top_cloth.translate(0, nest_y + 1.45, mz - 0.55))
+    flag_pts = [(0.0, 0.0), (3.4, 0.05), (3.0, -0.45), (3.5, -0.9), (2.9, -1.25), (3.4, -1.75), (2.6, -2.2), (0.0, -2.2)]
+    flag = pillow(smooth_outline(flag_pts, 40, 1), (1.2, -1.1), lambda q: np.full(len(q), 0.06), rings=3, edge=0.06)
+    wave_cloth(flag, 0.0, 0.25, 1.9, 1.2)
+    mark = skull_mark(0.9, 0.03)
+    holes = skull_holes(0.9, 0.02)
+    flag_marks, flag_dark = [], [flag]
+    for side in (1, -1):
+        mk = mark.copy().translate(1.55, -1.05, side * 0.09)
+        hk = holes.copy().translate(1.55, -1.05, side * 0.125)
+        if side < 0:
+            for m_ in (mk, hk):
+                m_.v[:, 2] = -0.09 * 2 - m_.v[:, 2] + 0.0 if False else m_.v[:, 2]
+        for m_ in (mk, hk):
+            wave_cloth(m_, 0.0, 0.25, 1.9, 1.2)
+        flag_marks.append(mk)
+        flag_dark.append(hk)
+    for m_ in flag_dark + flag_marks:
+        m_.rotate("y", 180).translate(0.0, main_top - 0.55, mz)
+    # Foremast, snapped: a jagged stump and its broken top fallen across the starboard rail.
+    fz = -12.0
+    fdeck = hull_at(fz)[1]
+    stump_top = fdeck + 7.5
+    mast.append(strip_tube([(0, fdeck - 0.5, fz), (0, stump_top, fz)], [0.55, 0.45], 12))
+    for k in range(6):
+        a = k * TAU / 6 + 0.3
+        h = rng.uniform(0.4, 1.3)
+        mast.append(taper([(math.cos(a) * 0.3, stump_top - 0.1, fz + math.sin(a) * 0.3),
+                           (math.cos(a) * 0.36, stump_top + h, fz + math.sin(a) * 0.36)], 0.2, 0.02, 5))
+    fallen_a = np.array([0.6, fdeck + 1.0, fz - 1.5])
+    fallen_b = np.array([7.6, fdeck - 3.2, fz - 6.0])
+    mast.append(strip_tube([tuple(fallen_a), tuple(fallen_b)], [0.42, 0.34], 10))
+    yard_mid = fallen_a + (fallen_b - fallen_a) * 0.55
+    mast.append(strip_tube([tuple(yard_mid + np.array([-0.6, 2.4, 3.0])), tuple(yard_mid + np.array([0.6, -2.0, -3.4]))], [0.18, 0.18], 8))
+    # Rigging.
+    for side in (1, -1):
+        for k, z in enumerate((-1.5, 0.0, 1.5, 3.0)):
+            x = hull_side(mz + z, [1.0])[0][0] * side
+            rope.append(bar_between((x, hull_at(mz + z)[1] + 1.0, mz + z), (side * 0.3, nest_y - 0.6, mz), 0.07, 5))
+    rope.append(bar_between((0, main_top * 0.72, mz), (0, 13.4, -27.0), 0.08, 5))
+    rope.append(bar_between((0, main_top * 0.72, mz), (0, castle_y + 3.4, 21.5), 0.08, 5))
+    rope.append(strip_tube([(0.3, stump_top - 0.4, fz), (2.5, stump_top - 3.5, fz - 2.0), (3.2, fdeck - 0.5, fz - 4.3)], [0.07, 0.07, 0.07], 5))
+    coil = torus(0.6, 0.16, 18, 6).translate(-2.5, hull_at(6.0)[1] + 0.35, 6.0)
+    coil2 = torus(0.42, 0.15, 16, 6).translate(-2.5, hull_at(6.0)[1] + 0.62, 6.0)
+    rope += [coil, coil2]
+    # A keel along the bottom.
+    keel = []
+    for z in np.linspace(-21.5, 22.5, 2):
+        pass
+    keel_pts = [(0.0, hull_at(z)[2] - 0.25, z) for z in np.linspace(-21.0, 22.8, 14)]
+    hull_parts.append(strip_tube(keel_pts, [0.35] * len(keel_pts), 6))
+    return {
+        "Hull": merge(*hull_parts),
+        "Planks": merge(*plank_parts),
+        "Trim": merge(*trim),
+        "Mast": merge(*mast),
+        "Sail": merge(*sail),
+        "Flag": merge(*flag_dark),
+        "FlagMark": merge(*flag_marks),
+        "Rope": merge(*rope),
+    }
+
+
+def shipwreck():
+    """A cartoon pirate wreck for the backdrop: tilted 15 degrees, bow up and stern sunk (the hull's
+    lowest point is y = 0), a hole stove in its starboard side, the foremast snapped, the main mast
+    standing with a torn sail and a black flag with a white shark-skull mark."""
+    def build(main_top):
+        pieces = shipwreck_parts(main_top)
+        for m in pieces.values():
+            m.rotate("x", 15)
+        low = min(m.v[:, 1].min() for m in pieces.values())
+        for m in pieces.values():
+            m.translate(0, -low, 0)
+        return pieces
+
+    lo, hi = 24.0, 40.0
+    for _ in range(30):
+        mid = (lo + hi) / 2
+        top = max(m.v[:, 1].max() for m in build(mid).values())
+        if top > 34.0:
+            hi = mid
+        else:
+            lo = mid
+    return build(lo)
+
+
 PROPS = {
     "SharkBaitShark": shark,
     "SharkBaitRaft": raft,
@@ -1928,6 +2326,8 @@ PROPS = {
     "SharkBaitSandBar": sand_bar,
     "SharkBaitHut": hut,
     "SharkBaitLighthouse": lighthouse,
+    "SharkBaitSeaStack": sea_stack,
+    "SharkBaitShipwreck": shipwreck,
 }
 
 # Preview colors (the game colors pieces by name from the Luau palette).
@@ -1990,4 +2390,10 @@ COLORS = {
     "Rail": (60, 60, 70),
     "Lantern": (255, 230, 140),
     "Door": (110, 70, 45),
+    "Jungle": (70, 150, 70),
+    "Foam": (240, 250, 255),
+    "Hull": (110, 70, 45),
+    "Planks": (150, 100, 60),
+    "Mast": (120, 80, 50),
+    "Sail": (235, 225, 200),
 }
