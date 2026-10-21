@@ -13,7 +13,7 @@ Config.Session = {
 	IntermissionTime = 20, -- lobby social time before each vote
 	VoteTime = 12,
 	VoteChoices = 3, -- games shown in a vote; a 4th card, Random, is always added (owner: "4 options always")
-	RulesTime = 6,
+	RulesTime = 10, -- the rules card's time on screen before 3-2-1 (owner: "give players more time to read the instructions")
 	CountdownTime = 3,
 	ResultsTime = 8,
 	RoundGraceTime = 10, -- watchdog: hard stop this long after a mode's own time limit
@@ -67,6 +67,7 @@ Config.RateLimits = {
 	Settings = { 10, 5 },
 	Tutorial = { 5, 5 },
 	ClientReport = { 3, 60 },
+	SitOut = { 4, 4 }, -- the sit-out switch: a few quick changes of mind, not a stream
 }
 
 Config.EmoteCooldown = 1.5

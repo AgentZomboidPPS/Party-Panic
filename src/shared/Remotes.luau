@@ -16,6 +16,7 @@ local NAMES = {
 	"PromptVip", -- ()
 	"MiniGameAction", -- (action: string, ...) a mini-game control (pump, push, shoot...); see RoundContext:OnAction
 	"ClientReport", -- (report: table) which uploaded meshes this device couldn't load; see Services/ClientReports
+	"SetSitOut", -- (sitOut: boolean) sit out the next rounds, or play again; see Services/SitOutService
 	"SkeeBall", -- both ways: the lobby arcade's Skee-Ball games; see Services/SkeeBallService
 	-- server -> client
 	"ProfileData", -- (snapshot)

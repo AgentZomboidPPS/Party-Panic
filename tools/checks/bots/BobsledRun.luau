@@ -1,5 +1,5 @@
 -- Test bot for Bobsled Run (tools/checks/round_harness.py): every stand-in player leans the next
--- curve's way about a second before it, through the same action a client sends. The first ones lean
+-- curve's way about a second before it, through the same action a client sends (with its time). The first ones lean
 -- well; later ones are sloppier (wrong way, late or not at all), so crews take some curves clean
 -- and bump others. No physics here, so their rigs are put in their seats (the stand-in client, Bot1,
 -- seats its own from the client half). With 2 or more, one rider leaves mid-run.
@@ -17,17 +17,18 @@ return function(env)
 				continue
 			end
 			local skill = math.clamp(1 - index * 0.07, 0.2, 0.95)
-			local curve = mode.course.Curves[sled.Next]
-			if curve and sled.OpenAt and not sled.Place and planned[player] ~= curve.Index then
+			local index, openedAt = mode:_openCurve(sled, now)
+			local curve = mode.course.Curves[index]
+			if curve and openedAt and not sled.Place and planned[player] ~= curve.Index then
 				local seconds = (curve.D0 - sled.D) / math.max(sled.V, 1)
 				if seconds <= 1 then
 					planned[player] = curve.Index
 					local roll = env.rng:NextNumber()
 					if roll < skill then
-						env.Action(player, "Lean", curve.Dir)
+						env.Action(player, "Lean", curve.Dir, now) -- (with the press's time, like the client)
 						leans += 1
 					elseif roll < skill + (1 - skill) * 0.5 then
-						env.Action(player, "Lean", -curve.Dir)
+						env.Action(player, "Lean", -curve.Dir, now)
 						leans += 1
 					end
 				end

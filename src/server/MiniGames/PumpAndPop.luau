@@ -22,11 +22,20 @@
 -- the stations stand on a round sunburst stage in front of a striped bandshell, ringed by
 -- candy-striped light poles strung with bunting, team-colored grandstands full of fans, and a
 -- fairground beyond: big tops, game booths and a Ferris wheel. Looks only; the gameplay is as was.
+--
+-- Fair timing ("We need to fine tune some of the hitboxes. the precision games will feel super bad
+-- if we dont."): a release that looked green on your meter is a PERFECT. The meter on screen is a
+-- frame or two behind your finger and a phone's touch arrives a little late, so the server allows
+-- SCREEN_GRACE past the top of the band on top of the ping leeway (bots, who have no screen, get
+-- just the leeway). And the meter only starts filling when the server starts counting: the client
+-- waits out the same minimum CYCLE between presses, so a quick tap followed by a careful hold is
+-- no longer judged short of what the meter showed.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Teams = require(ReplicatedStorage.Shared.Teams)
 
+local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
 local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
@@ -39,6 +48,13 @@ PumpAndPop.SWEET = 0.72 -- from this much of the meter to the top is a full pump
 PumpAndPop.SPRING = 0.22 -- the plunger springs back up for this long after a pump
 PumpAndPop.STUCK = 1.6 -- a plunger held down this long slips back up (the air is lost)
 PumpAndPop.PUMPS_PER_PLAYER = 22 -- full pumps per team member to pop the balloon
+-- Presses start at least this far apart (the shortest perfect pump and its spring, less some slack
+-- for the network), so pressing Down early never gains air. The client waits it out too.
+PumpAndPop.CYCLE = PumpAndPop.FILL_TIME * PumpAndPop.SWEET + PumpAndPop.SPRING - 0.12
+-- Past the top of the green band, a release still counts as perfect for this long: what the player
+-- saw when they let go is about 1-2 frames old, and a touch reaches the game ~20-40 ms after the
+-- finger lifts (phones often draw at 30 frames a second).
+PumpAndPop.SCREEN_GRACE = 0.07
 
 -- Balloon size (its scale; 1 = 15 studs tall) from empty to bursting. Clients use these too.
 PumpAndPop.EMPTY_SCALE = 0.45
@@ -269,10 +285,11 @@ local function buildFairground(ctx, origin: Vector3, deck: Vector3, radius: numb
 end
 
 -- How much air a press held for `held` seconds is worth, with `leeway` seconds of slack on both
--- edges of the green band. Returns the air (0..1) and its kind: "perfect", "weak" or "over".
-function PumpAndPop.Judge(held: number, leeway: number): (number, string)
+-- edges of the green band and `grace` more past its top. Returns the air (0..1) and its kind:
+-- "perfect", "weak" or "over".
+function PumpAndPop.Judge(held: number, leeway: number, grace: number?): (number, string)
 	local fill = PumpAndPop.FILL_TIME
-	if held > fill + leeway then
+	if held > fill + leeway + (grace or 0) then
 		return 0.1, "over"
 	elseif held >= fill * PumpAndPop.SWEET - leeway then
 		return 1, "perfect"
@@ -462,6 +479,7 @@ function PumpAndPop:Prepare()
 		Sweet = PumpAndPop.SWEET,
 		Spring = PumpAndPop.SPRING,
 		Stuck = PumpAndPop.STUCK,
+		Cycle = PumpAndPop.CYCLE,
 		Empty = PumpAndPop.EMPTY_SCALE,
 		Full = PumpAndPop.FULL_SCALE,
 	})
@@ -570,11 +588,7 @@ function PumpAndPop:_down(player: Player)
 	-- its hold starts once the plunger is up; and presses are never closer than a full cycle,
 	-- whatever the ping, so an early Down gains nothing.
 	local leeway = leewayFor(player)
-	local start = math.max(
-		now,
-		pumper.UpAt + PumpAndPop.SPRING - leeway,
-		pumper.LastDownAt + PumpAndPop.FILL_TIME * PumpAndPop.SWEET + PumpAndPop.SPRING - 0.12
-	)
+	local start = math.max(now, pumper.UpAt + PumpAndPop.SPRING - leeway, pumper.LastDownAt + PumpAndPop.CYCLE)
 	pumper.Down = true
 	pumper.DownAt = start
 	pumper.LastDownAt = start
@@ -597,7 +611,8 @@ function PumpAndPop:_up(player: Player, slipped: boolean?)
 	end
 	local air, kind = 0, "over"
 	if not slipped then
-		air, kind = PumpAndPop.Judge(math.max(now - pumper.DownAt, 0), leewayFor(player))
+		local grace = if BotRegistry.IsBot(player) then 0 else PumpAndPop.SCREEN_GRACE
+		air, kind = PumpAndPop.Judge(math.max(now - pumper.DownAt, 0), leewayFor(player), grace)
 	end
 	pumper.Pumps += 1
 	pumper.Air += air

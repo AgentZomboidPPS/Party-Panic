@@ -1,7 +1,9 @@
 -- Test bot for Pump & Pop (tools/checks/round_harness.py): every stand-in player pumps in its own
 -- rhythm, pressing Down and Up like the client does. Some hold well (perfect pumps), some let go
 -- early, some hold too long, and one in eight mashes (quick taps) to check mashing loses to rhythm.
+-- Like the client, a press waits out the spring and the mode's minimum cycle since the last one.
 return function(env)
+	local mode = env.game
 	local ctx = env.ctx
 	local state = {}
 	local reported = false
@@ -11,7 +13,7 @@ return function(env)
 			local s = state[player]
 			if not s then
 				local style = if index % 8 == 0 then "mash" else (if index % 3 == 0 then "sloppy" else "good")
-				s = { Style = style, Next = now + env.rng:NextNumber(0.2, 1), Down = false, UpAt = 0 }
+				s = { Style = style, Next = now + env.rng:NextNumber(0.2, 1), Down = false, DownAt = 0, UpAt = 0 }
 				state[player] = s
 			end
 			if not env.Alive(player) then
@@ -21,7 +23,8 @@ return function(env)
 				if now >= s.UpAt then
 					s.Down = false
 					env.Action(player, "Up")
-					s.Next = now + 0.25 + env.rng:NextNumber(0, if s.Style == "good" then 0.15 else 0.4)
+					s.Next = math.max(now + mode.SPRING, s.DownAt + mode.CYCLE) + 0.03
+					s.Next += env.rng:NextNumber(0, if s.Style == "good" then 0.15 else 0.4)
 				end
 			elseif now >= s.Next then
 				local hold
@@ -33,6 +36,7 @@ return function(env)
 					hold = env.rng:NextNumber(0.47, 0.58)
 				end
 				s.Down = true
+				s.DownAt = now
 				s.UpAt = now + hold
 				env.Action(player, "Down")
 			end

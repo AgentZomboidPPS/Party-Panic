@@ -13,6 +13,14 @@
 -- accepted ones and relays them to every client, which draws everyone's cut on their boards. Bots
 -- send positions through the very same action (bot paths: CrazyCutters:BotSamples), so they are
 -- checked, scored and drawn exactly like players.
+--
+-- Judging matches what a player sees (owner: "We need to fine tune some of the hitboxes. the
+-- precision games will feel super bad if we dont."): a cut gets full credit wherever its drawn line
+-- touches the dots (Rules.FULL comes from the dots' and the line's sizes), a dot on your board turns
+-- pale exactly when this tracker counts it as cut, and the client resends any positions this server
+-- hasn't relayed back, so a batch lost on the way (or two arriving in one frame, which the action
+-- limit drops) never turns a traced curve into a straight shortcut. Positions are judged at the
+-- time they were traced, so ping never costs a cut.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

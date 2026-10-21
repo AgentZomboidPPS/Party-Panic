@@ -8,9 +8,12 @@
 -- ruined: let it go) or ● (already done). The gate posts over your machine light up and the gate in
 -- the lane grows and says TAP! while a cake that needs you is inside, so the cue is never color
 -- alone. The server judges every press; the words over your machine (and in the lane's gate) are
--- its verdict. A press with no cake near jams the machine: ADD turns red and says ✕ JAMMED. The
--- pills show each team's 🎂 cakes and ⭐ cakes (every layer perfect, worth 2); the camera starts
--- behind you, looking at your machine.
+-- its verdict. ADD sends the moment you pressed (on the synced clock), so the server judges the
+-- belt as your screen showed it; a lit gate is always a good press. The moment you press, the
+-- cake you pressed for stops asking (its gate goes dark, its dot shows ●) until the server's
+-- answer arrives, so the cue never invites a second tap that would ruin it. A press with no cake
+-- near jams the machine: ADD turns red and says ✕ JAMMED. The pills show each team's 🎂 cakes and
+-- ⭐ cakes (every layer perfect, worth 2); the camera starts behind you, looking at your machine.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -598,10 +601,16 @@ function CakeFactory.Start(api)
 			end
 		end
 	end
+	-- Set below, once the cakes' state can be read: notes which cake this press is for.
+	local predictPress: ((at: number) -> ())? = nil
 	if add then
 		add.Pressed:Connect(function()
 			if live and not belt.StopAt and os.clock() >= jamUntil then
-				api:Action("Add")
+				local at = api:Now()
+				api:Action("Add", at)
+				if predictPress then
+					predictPress(at)
+				end
 			end
 		end)
 	end
@@ -752,6 +761,49 @@ function CakeFactory.Start(api)
 		end
 		return byte - 48, false, true
 	end
+	-- Your press on its way: the cake it's for, per k, counts as done for that machine on your
+	-- lanes until the server's state says what happened (or a moment passes).
+	local pending = {} :: { [number]: { Index: number, Until: number } }
+	local function speedAt(t: number): number
+		local t0 = belt.T0
+		if type(t0) ~= "number" or t < t0 or (type(belt.StopAt) == "number" and t >= belt.StopAt) then
+			return 0
+		end
+		return belt.V0 + belt.Acc * (t - t0)
+	end
+	-- The server's rule (CakeFactory:_add): a cake that needs this machine, its middle within the
+	-- window (plus SLACK of belt) where the belt was SEEN before the press; the nearest one.
+	predictPress = function(at: number)
+		local line = myLine
+		if not line then
+			return
+		end
+		local clock = os.clock()
+		for k, mark in pending do
+			if mark.Until < clock then
+				pending[k] = nil
+			end
+		end
+		local t = at - (tonumber(belt.Seen) or 0.05)
+		local d = distance(t)
+		local reach = window + speedAt(t) * (tonumber(belt.Slack) or 0.05)
+		local bestK, bestIndex, bestOffset = nil, nil, math.huge
+		for _, machine in mine do
+			local k = math.floor((start + d - machine.X) / spacing + 0.5)
+			if k < 0 or k * spacing > d + 1e-6 then
+				continue
+			end
+			local offset = start + d - k * spacing - machine.X
+			local n, bad = cakeState(line, k)
+			if not bad and n == machine.Index - 1 and math.abs(offset) <= reach and math.abs(offset) < bestOffset then
+				bestK, bestIndex, bestOffset = k, machine.Index, math.abs(offset)
+			end
+		end
+		if bestK and bestIndex then
+			pending[bestK] = { Index = bestIndex, Until = clock + 1 }
+		end
+	end
+
 	for _, team in order do
 		local line = lines[team]
 		local function readCakes()
@@ -802,6 +854,7 @@ function CakeFactory.Start(api)
 		if userId == me then
 			if kind == "miss" then
 				jamUntil = os.clock() + (tonumber(belt.Jam) or 0.5)
+				table.clear(pending) -- nothing was under the machine after all
 			end
 			feedback(machine, kind)
 			if kind == "perfect" or kind == "good" then
@@ -1112,6 +1165,16 @@ function CakeFactory.Start(api)
 					break
 				end
 				local n, bad = cakeState(line, k)
+				local mark = pending[k]
+				if
+					mark
+					and mark.Index == machine.Index
+					and not bad
+					and n == machine.Index - 1
+					and clock < mark.Until
+				then
+					n = machine.Index -- you pressed for it: shown as done while the answer is on its way
+				end
 				local needs = not bad and n == machine.Index - 1
 				local done = not bad and n >= machine.Index
 				dot.Visible = true

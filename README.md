@@ -1,5 +1,8 @@
 # 🎉 Party Panic
 
+> Two Claudes are working on this project: read [docs/HANDOFF.md](docs/HANDOFF.md) first (who works on what, how to
+> test without Studio, what's open). The next games are in [docs/MINIGAME_BACKLOG.md](docs/MINIGAME_BACKLOG.md).
+
 A Roblox multiplayer party game: hang out in a lively lobby, vote on the next mini-game, compete in
 short chaotic rounds, earn rewards, and do it all again. Built from the *Party Panic Game Design
 Outline*.
@@ -11,12 +14,13 @@ Outline*.
 | Area | Highlights |
 | --- | --- |
 | **Core loop** | A server-authoritative state machine (Waiting → Intermission → Voting → Preparing → In Round → Results → Cleanup) with a watchdog. Every mini-game call runs with a timeout, so a broken mode can't stall the server. |
+| **Sitting out** | A big switch right by the phase banner (and in Settings): 🎮 PLAYING or 💤 SITTING OUT. Sitting out keeps you in the lobby while rounds go on and bots take your spot; you finish a round you're in, don't vote while you're out, and jump back in with one tap. If everyone sits out, rounds wait in the lobby. It resets when you leave. |
 | **Voting** | Four cards: three games and Random (a hidden pick, revealed if it wins), with live counts; change your vote until time runs out; random tie-breaks; recently played modes down-weighted; category mixing. Tap a card to vote. The stage's four portals play a little looping preview of each option (Random's spins through the games like a slot machine and lands on its game if it wins), and take turns showing every game between votes. |
 | **Mini-games** | Twelve party classics rebuilt for 12 players: 🔥 Fire Rope · ⚡ Hex Meltdown · 🍯 Honey Trap · 🎈 Pump & Pop · 🛹 Skate Escape · 🏹 Arrow Ambush · 🏜️ Sinking Sands · 🔵 Bumper Ballers · 🥕 Rake It In · 🍪 Crazy Cutters · 🎂 Cake Factory · 🛷 Bobsled Run |
 | **Bots** | Friendly AI players fill empty spots so every round feels full (8 by default): they fade out when someone joins, fade back in when someone leaves, play every mode with their own brain at varied skill, and are clearly labelled 🤖 with a BOT nameplate. No rewards, no saved data. |
 | **Progression** | Coins, XP and levels, itemized round rewards, personal bests, daily and weekly quests, a daily gift with streaks, a hidden daily token, level and stat unlocks |
 | **Cosmetics** | Trails, titles, emotes (dances and effect emotes), victory and knockout effects, a coin shop with confirmation, an optional VIP pass (cosmetic only, never pay-to-win) |
-| **Lobby** | A sunny theme-park plaza built around the vote stage: four portal bays that play previews of the games under a scalloped carnival crown with neon tubes, flanked by candy-striped turrets; a scalloped stone fountain with rubber ducks, arcing water jets and a turning gold trophy (players can wade in); a sunburst court and patterned promenade on a grass lawn with flower beds and tree clusters; a turning Ferris wheel and drifting hot-air balloons on the skyline; beach balls to kick around (players pass through them and the server punts them, so there's no lag-bump on phones); a winner podium of gold, silver and bronze tiers under a bulb-lit candy arch; a shop with a mannequin gallery; a wooden quest kiosk and a giant gumball gift machine; a carnival shooting gallery (striped awning, bulbs, tin ducks) for the arcade target range; an emote stage with a dance floor under a fan-crowned arch with speakers and a circus confetti cannon; a spiral parkour tower to a view deck, lamp posts strung with bunting, floating confetti, and a ring of trees and hills |
+| **Lobby** | A sunny theme-park plaza built around the vote stage: four portal bays that play previews of the games under a scalloped carnival crown with neon tubes, flanked by candy-striped turrets; a scalloped stone fountain with rubber ducks, arcing water jets and a turning gold trophy (players can wade in); a sunburst court and patterned promenade on a grass lawn with flower beds and tree clusters; a turning Ferris wheel and drifting hot-air balloons on the skyline; beach balls to kick around (players pass through them and the server punts them, so there's no lag-bump on phones); a winner podium of gold, silver and bronze tiers under a bulb-lit candy arch; a shop with a mannequin gallery; a wooden quest kiosk and a giant gumball gift machine; a carnival shooting gallery (striped awning, bulbs, tin ducks) for the arcade target range; an emote stage with a dance floor under a fan-crowned arch with speakers and a circus confetti cannon; an obby in a pool of goo (hops, candy pillars, beams and ledges up a lookout tower to a view deck, with checkpoints: a fall puts you back on the last one), lamp posts strung with bunting, floating confetti, and a ring of trees and hills |
 | **Look** | Rounded CSG geometry instead of blocks, over a hundred detailed original mesh props (every arena has its own set), ShadowMap lighting (sharp sun shadows, light on phones), bloom, sun rays, clouds, ambient particles and bobbing decorations |
 | **Audio** | An original soundtrack (two lobby tracks plus a round track that speeds up near the end) and 15 original sound effects |
 | **UI** | Mobile-first scaling, rounded glossy panels, toasts, rules card with a 3-2-1 countdown, standings, results breakdown, spectate, settings (music volume, reduced effects), onboarding tips |
@@ -135,6 +139,8 @@ python3 tools/checks/client_harness.py --touch --bots 8 > client.luau   # leave 
 python3 tools/preview/luau_task.py client.luau - client.json
 python3 tools/checks/ui_render.py client.json /tmp/screens              # PNGs + the problem list
 ```
+
+Add `--sit-out` to draw the screens of a player sitting out instead (next to the playing ones).
 
 Type checking uses [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp) with the Roblox API
 definitions:

@@ -14,6 +14,21 @@
 -- server's skater reached an obstacle still counts if it would have cleared it, allowing for ping.
 -- Bots skate the same simulation and the server moves their characters; the collapse (animated on
 -- clients from the shared schedule MG_Collapse) is checked against everyone's distance here.
+--
+-- Judged by what the skater sees (hitbox pass, owner: "the precision games will feel super bad if we
+-- dont"): crates and barriers by the board's wheels over the whole obstacle, gaps and the collapse
+-- only once no wheel is left on the planks, boost pads wherever a wheel touches (Shared/Logic/
+-- SkateCourse). A jump counts from the spot the player pressed it on their own screen, and the
+-- collapse allows for how far ahead their screen draws them, so ping never decides a wipeout or a fall.
+--
+-- The start (owner: "it spawns you when the game starts not on the bridge and you kinda just float to
+-- the bridge", on the countdown and at GO): every skater is put exactly where their own screen draws
+-- them (their lane, the start line, on the board at their avatar's riding height) and held there by
+-- the server until GO: anchored, so neither gravity, nor a late position report from a phone still
+-- loading the arena, nor the order things arrive in can move them on anyone's screen. At GO each is
+-- let go from that same spot: a player's character goes back to their own device, a bot's stays the
+-- server's (anchoring drops the owner a part was given, and Roblox would hand the bot to the nearest
+-- player's device, which then fights the server over where it is).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
@@ -700,6 +715,55 @@ function SkateEscape:_attachBoard(player: any, character: Model)
 	board.Parent = character
 end
 
+-- Where a skater's root goes at distance `d`, standing on their board: the same spot their own
+-- screen holds them at (client: StanceCFrame with RootHeight), so placing them here never moves them.
+function SkateEscape:_spot(racer, humanoid: Humanoid, root: BasePart, d: number): CFrame
+	local x = SkateCourse.LaneX(racer.Lane, LANES)
+	return SkateCourse.StanceCFrame(self.origin, x, d, SkateCourse.RootHeight(humanoid, root), 0)
+end
+
+-- Puts a skater on their board at their lane's start (or where they are on the course, if they only
+-- got a character after GO). Before GO they're held there: anchored, so the server decides where
+-- everyone sees them until the race starts, and nothing (gravity, a late position report from their
+-- device, a slow phone) can move them in the meantime. PlatformStand: the humanoid mustn't try to
+-- stand up on its own either, here or on their device.
+function SkateEscape:_seat(player: any, character: Model)
+	local racer = self.racers[tostring(player.UserId)]
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not racer or not humanoid or not root then
+		return
+	end
+	character:PivotTo(self:_spot(racer, humanoid, root, if self.startAt then racer.D else 0))
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+	humanoid.PlatformStand = true
+	if not self.startAt then
+		root.Anchored = true
+	end
+	racer.Character = character
+	self:_attachBoard(player, character)
+end
+
+-- GO: lets a skater's character go from the spot it was held at. A player's goes back to their own
+-- device (which skates it from there: nothing moves until they push); a bot's stays the server's,
+-- which moves it: anchoring dropped the owner it was given, and Roblox would otherwise give it to the
+-- nearest player's device.
+function SkateEscape:_release(racer)
+	local ctx = self.context
+	local _, _, root = ctx:GetCharacter(racer.Player)
+	if not root then
+		return
+	end
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.Anchored = false
+	if racer.IsBot then
+		pcall(root.SetNetworkOwner, root, nil)
+	else
+		ctx:GiveOwnership(root, racer.Player)
+	end
+end
+
 function SkateEscape:Prepare()
 	local ctx = self.context
 	ctx.RespawnMode = "Eliminate"
@@ -733,8 +797,12 @@ function SkateEscape:Prepare()
 		racer.Leeway = 0
 		self.racers[tostring(player.UserId)] = racer
 		lanes[tostring(player.UserId)] = lane
-		local x = SkateCourse.LaneX(lane, LANES)
-		points[index] = SkateCourse.StanceCFrame(self.origin, x, 0, 0, 0)
+		-- Straight onto their board (SpawnPlayer lifts the point 3 studs); a character that loads
+		-- meanwhile is put right by CharacterReady.
+		local _, humanoid, root = ctx:GetCharacter(player)
+		points[index] = if humanoid and root
+			then self:_spot(racer, humanoid, root, 0) - Vector3.new(0, 3, 0)
+			else SkateCourse.StanceCFrame(self.origin, SkateCourse.LaneX(lane, LANES), 0, 0, 0)
 	end
 
 	local obstacles = {}
@@ -750,7 +818,7 @@ function SkateEscape:Prepare()
 	})
 
 	ctx.Hooks.CharacterReady = function(player, character)
-		self:_attachBoard(player, character)
+		self:_seat(player, character)
 	end
 	ctx.Hooks.PlayerLeft = function(player)
 		self.racers[tostring(player.UserId)] = nil
@@ -765,17 +833,7 @@ function SkateEscape:Prepare()
 			racer.Pending = nil
 		end
 	end
-	ctx:SpawnAll(points, true)
-	-- Bots wait on their boards in the skating stance (held still until GO).
-	for _, racer in self.racers do
-		if racer.IsBot then
-			local _, _, root = ctx:GetCharacter(racer.Player)
-			if root then
-				root.Anchored = true
-				self:_moveBot(racer, ctx:Now())
-			end
-		end
-	end
+	ctx:SpawnAll(points, true) -- everyone waits on their board, held still until GO (CharacterReady)
 	self:_share() -- the progress bar shows every lane during the countdown
 	self.status = nil
 	ctx:SetStatus("Get ready to PUSH!")
@@ -791,6 +849,18 @@ function SkateEscape:_ping(player: any): number
 	return if ok and type(ping) == "number" then math.clamp(ping, 0, 0.3) else 0.1
 end
 
+-- How far ahead of the server's skater (in seconds of skating) a player's own client draws them: their
+-- pushes reach the server one trip later. The same estimate the client steers its skater by.
+function SkateEscape:_lag(player: any): number
+	if BotRegistry.IsBot(player) then
+		return 0
+	end
+	local ok, ping = pcall(function()
+		return player:GetNetworkPing()
+	end)
+	return math.clamp(if ok and type(ping) == "number" then ping * 0.5 else 0.05, 0, 0.3)
+end
+
 function SkateEscape:_wipe(racer, event)
 	-- As of the moment of the hit, however long the ping allowance held it.
 	SkateCourse.Apply(racer, event, self.obstacles, event.At)
@@ -801,17 +871,21 @@ end
 function SkateEscape:Start()
 	local ctx = self.context
 	local now = ctx:Now()
+	-- Everyone is let go from their start spot before the race's schedule goes out, so a client
+	-- that can push (it knows the collapse) already holds its own skater.
+	for _, racer in self.racers do
+		if not ctx:State(racer.Player) then
+			continue -- never placed (their character didn't load): not in this round
+		end
+		local character = ctx:GetCharacter(racer.Player)
+		if character and character ~= racer.Character then
+			self:_seat(racer.Player, character) -- reset during the countdown: back on the start line
+		end
+		self:_release(racer)
+	end
 	self.startAt = now
 	self.collapse = SkateCourse.NewCollapse(now)
 	ctx:SetSharedJSON("Collapse", self.collapse)
-	for _, racer in self.racers do
-		if racer.IsBot then
-			local _, _, root = ctx:GetCharacter(racer.Player)
-			if root then
-				root.Anchored = false
-			end
-		end
-	end
 
 	-- Pushes are capped by a small bucket (PUSH_RATE a second on average, a few at once) rather than
 	-- a fixed gap, so taps the network bunched together aren't dropped.
@@ -829,30 +903,43 @@ function SkateEscape:Start()
 		end
 		racer.Tokens -= 1
 		racer.Leeway = 0.06 + self:_ping(player)
+		racer.Lag = self:_lag(player)
 		SkateCourse.Push(racer, ctx:Now())
 	end, { Interval = 0.04 })
 
-	ctx:OnAction("Jump", function(player)
+	-- `claimed` is where the player's own client had them (distance) when they pressed JUMP. The ollie
+	-- counts from the moment the server's skater is (or was) at that spot, so it clears exactly what it
+	-- cleared on their screen: ping, and the small drift between the two simulations, can't turn a
+	-- clean jump into a wipeout. It may move the take-off by at most the ping allowance either way.
+	ctx:OnAction("Jump", function(player, claimed)
 		local racer = self.racers[tostring(player.UserId)]
 		if not racer then
 			return
 		end
 		local at = ctx:Now()
 		racer.Leeway = 0.06 + self:_ping(player)
+		racer.Lag = self:_lag(player)
+		local start: number? = nil
+		if type(claimed) == "number" and claimed == claimed and racer.V >= 1 then
+			start = at + math.clamp((claimed - racer.D) / racer.V, -racer.Leeway, racer.Leeway)
+		end
 		local pending = racer.Pending
 		if pending then
-			-- The skater already reached the obstacle here; would a jump pressed up to `Leeway` ago
-			-- (and not before the last landing) have cleared it?
-			local start = math.max(at - racer.Leeway, racer.AirEnd or -math.huge)
+			-- The skater already reached the obstacle here; would this jump (without a spot: one
+			-- pressed up to `Leeway` ago), not before the last landing, have cleared it?
+			local from = math.max(start or (at - racer.Leeway), racer.AirEnd or -math.huge)
 			local o = self.obstacles[pending.Event.Index]
-			if o and start <= at and SkateCourse.WouldClear(o, start, pending.Event.At, pending.Speed) then
+			if o and from <= at and SkateCourse.WouldClear(o, from, pending.Event.At, pending.Speed) then
 				racer.Pending = nil
-				racer.Air = start
-				racer.AirEnd = start + SkateCourse.AirTime
+				racer.Air = from
+				racer.AirEnd = from + SkateCourse.AirTime
 				return
 			end
 		end
-		SkateCourse.Jump(racer, at)
+		if racer.Air and racer.Air > at then
+			return -- one is already waiting for the skater to reach its spot
+		end
+		SkateCourse.Jump(racer, at, if start then math.max(start, racer.AirEnd or -math.huge) else nil)
 	end, { Interval = 0.15 })
 
 	-- Small steps, so a server hitch doesn't cost anyone distance while the collapse runs on.
@@ -874,6 +961,11 @@ end
 function SkateEscape:_moveBot(racer, now: number)
 	local character, humanoid, root = self.context:GetCharacter(racer.Player)
 	if not character or not humanoid or not root then
+		return
+	end
+	if racer.Character and character ~= racer.Character then
+		-- A new character: a fallen bot is sent back to the lobby 1.2 s after it went in, while its
+		-- fall is still drawn here, and this used to drag that lobby character back over the canyon.
 		return
 	end
 	local d, lift, tumble, drop = SkateCourse.Pose(racer, now)
@@ -935,7 +1027,8 @@ function SkateEscape:_tick(dt: number, now: number)
 			if event.Kind == "Boost" then
 				SkateCourse.Apply(racer, event, self.obstacles, now)
 				ctx:Fire(nil, "Boost", key)
-			elseif racer.Leeway > 0 and not racer.Pending then
+			elseif racer.Leeway > 0 and not racer.Pending and not event.Landed then
+				-- (Coming down inside a gap is the last jump's doing: no later press can change it.)
 				racer.Pending = { Event = event, Until = now + racer.Leeway, Speed = math.max(racer.V, 1) }
 			else
 				self:_wipe(racer, event)
@@ -947,7 +1040,9 @@ function SkateEscape:_tick(dt: number, now: number)
 			racer.Wipe = nil
 			racer.Pending = nil
 			table.insert(crossed, { Key = key, Racer = racer, At = now - (racer.D - length) / math.max(racer.V, 1) })
-		elseif racer.D < front then
+		elseif SkateCourse.Caught(front, racer.D, racer.V * (racer.Lag or 0), length) then
+			-- Only once the front is past their front wheels as their own screen draws them (it shows
+			-- them `Lag` seconds of skating ahead of these numbers), as the client checks it.
 			racer.Out = true
 			racer.OutAt = now
 			racer.Done = true

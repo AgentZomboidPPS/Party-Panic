@@ -16,7 +16,13 @@
 
 local CrazyCutters = {}
 
-CrazyCutters.FULL = 0.15 -- full credit this close to the line (studs)
+-- What a player sees on their own board: the dotted line's dots and the cut line the wheel leaves.
+CrazyCutters.DOT_SIZE = 0.3 -- the dots' width (studs)
+CrazyCutters.CUT_WIDTH = 0.2 -- the cut line's width
+-- Full credit while the cut line visibly touches the dots (its middle within half a dot plus half a
+-- line of the outline): a cut that looks right on the line is a perfect cut. (It was 0.15, so a cut
+-- drawn over the dots lost up to 9 points; owner: "the precision games will feel super bad".)
+CrazyCutters.FULL = (CrazyCutters.DOT_SIZE + CrazyCutters.CUT_WIDTH) / 2
 CrazyCutters.ZERO = 1.2 -- no credit this far from it
 CrazyCutters.COVER = 0.75 -- an outline point counts as cut when the cutter passes this close
 CrazyCutters.COVER_NEEDED = 0.98 -- this share of the points counts as the whole outline

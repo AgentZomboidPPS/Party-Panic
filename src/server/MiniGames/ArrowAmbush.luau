@@ -16,6 +16,20 @@
 -- fired. When it lands the server checks every runner's distance to the spot, a little later for
 -- runners with more lag, so a dodge that looked clean on your screen counts. Bots are judged by
 -- the same code, so arrows and boards treat them exactly like players.
+--
+-- Hit judging (the hitbox pass; owner: "We need to fine tune some of the hitboxes. the
+-- precision games will feel super bad if we dont."): being tagged is the bad thing, so it only
+-- happens when it clearly looked like one on the runner's own screen.
+--  * The red ring is drawn RING_RADIUS (3.5) wide and a runner is tagged only when their middle is
+--    inside HIT_RADIUS (3): at least half a stud inside the ring, most of the body in it. (It used
+--    to be drawn at 3, so a runner straddling the line, half their body outside, was tagged.)
+--  * Each runner is checked twice: when their own screen showed the landing (half their ping
+--    after it: their moves reach us one way) and 0.1 s later (allowing for replication). Only
+--    inside both times is a tag. Before, one check a full ping later could tag a runner who was
+--    clearly outside when it landed on their screen and then walked over the spot.
+--  * Boards block arrows that visibly touch them: the frame is 3.78 studs either side and 8.14
+--    high (TargetBoard mesh, on 0.46 rails), plus the arrowhead's 0.15. It was 3.6 and 8, so an
+--    arrow could clip a board's edge on screen and still tag the runner hiding behind it.
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
@@ -39,10 +53,17 @@ ArrowAmbush.RAIL_TOP = 0.42 -- the boards' wheels run on rails this high above t
 function ArrowAmbush.Cooldown(runnersPerArcher: number): number
 	return math.clamp(1 - 0.07 * (runnersPerArcher - 1), 0.68, 0.95)
 end
-ArrowAmbush.HIT_RADIUS = 3 -- a runner this close to where an arrow lands is tagged
+ArrowAmbush.HIT_RADIUS = 3 -- a runner whose middle is this close to where an arrow lands is tagged
+-- The landing ring's drawn radius: a tag needs the runner's middle half a stud inside it, so a runner
+-- half outside the line (R15 is about 2 wide) isn't tagged.
+ArrowAmbush.RING_RADIUS = ArrowAmbush.HIT_RADIUS + 0.5
 local SHOVE_RADIUS = 5.5 -- near misses get a little shove
-ArrowAmbush.BOARD_HALF = 3.6 -- half the width of a target board (what blocks arrows)
-ArrowAmbush.BOARD_HEIGHT = 8 -- boards block arrows below this height above the floor
+local JUDGE_SPREAD = 0.1 -- a tag needs the runner inside at their screen's landing and this long after
+-- Half a target board's width (what blocks arrows): the visible frame (3.78) plus the arrowhead.
+ArrowAmbush.BOARD_HALF = 3.93
+-- Boards block arrows below this height above the floor: the frame's top (0.46 rails + 7.68) plus
+-- the arrowhead.
+ArrowAmbush.BOARD_HEIGHT = 8.3
 local SAMPLES = 48 -- flight samples when looking for a board in the way
 local BOARD_CAP = 5 -- the most board points one archer can score
 local SPAWN_LIFT = 3 -- an archer's root stands this high over their spot on the deck
@@ -185,6 +206,7 @@ function ArrowAmbush:Prepare()
 		Samples = SAMPLES,
 		RailTop = ArrowAmbush.RAIL_TOP + 0.04, -- where the boards' wheels sit
 		Hit = ArrowAmbush.HIT_RADIUS,
+		Ring = ArrowAmbush.RING_RADIUS, -- the landing ring's drawn radius
 		Cooldown = self.cooldown,
 	})
 	ctx:SetStatus(if #archers > 1 then "2 ARCHERS vs the RUNNERS!" else "1 ARCHER vs the RUNNERS!")
@@ -694,7 +716,8 @@ function ArrowAmbush:_land(arrow: Arrow)
 		ctx:Fire(nil, "BoardHit", arrow.Id, arrow.Board, board and board.V or 0)
 		return
 	end
-	-- Judge each runner when their own view of the landing has reached us (ping leeway).
+	-- Judge each runner by where they were on their own screen when it landed: their moves reach us
+	-- half a ping (a round trip) late, so look then, and again JUDGE_SPREAD later; a tag needs both.
 	for _, runner in ctx:GetAlivePlayers() do
 		if self.role[runner] ~= "Runner" or self.tagged[runner] then
 			continue
@@ -702,19 +725,34 @@ function ArrowAmbush:_land(arrow: Arrow)
 		local ok, ping = pcall(function()
 			return (runner :: any):GetNetworkPing()
 		end)
-		local lag = if ok and type(ping) == "number" then math.clamp(ping, 0, 0.3) else 0.1
-		if lag <= 0.03 then
-			self:_judge(arrow, runner, archer)
+		local lag = if ok and type(ping) == "number" then math.clamp(ping, 0, 0.4) / 2 else 0.05
+		local function second(first: number)
+			ctx:Delay(JUDGE_SPREAD, function()
+				self:_judge(arrow, runner, archer, first)
+			end)
+		end
+		if lag <= 0.01 then
+			second(self:_distance(arrow, runner))
 		else
 			ctx:Delay(lag, function()
-				self:_judge(arrow, runner, archer)
+				second(self:_distance(arrow, runner))
 			end)
 		end
 	end
 	ctx:Fire(nil, "Landed", arrow.Id)
 end
 
-function ArrowAmbush:_judge(arrow: Arrow, runner: Player, archer: Player?)
+-- How far (flat) a runner's middle is from where an arrow came down (math.huge if they're gone).
+function ArrowAmbush:_distance(arrow: Arrow, runner: Player): number
+	local _, _, root = self.context:GetCharacter(runner)
+	if not root then
+		return math.huge
+	end
+	return Vector3.new(root.Position.X - arrow.To.X, 0, root.Position.Z - arrow.To.Z).Magnitude
+end
+
+-- The second look at a runner after a landing (`first` is the distance at the first look).
+function ArrowAmbush:_judge(arrow: Arrow, runner: Player, archer: Player?, first: number)
 	local ctx = self.context
 	if self.tagged[runner] or not ctx:IsAlive(runner) then
 		return
@@ -727,9 +765,9 @@ function ArrowAmbush:_judge(arrow: Arrow, runner: Player, archer: Player?)
 	-- doesn't dodge it; runners can't get higher than a jump, see the bounds check in Start).
 	local offset = Vector3.new(root.Position.X - arrow.To.X, 0, root.Position.Z - arrow.To.Z)
 	local away = if offset.Magnitude > 0.1 then offset.Unit else Vector3.new(0, 0, 1)
-	if offset.Magnitude <= ArrowAmbush.HIT_RADIUS then
+	if first <= ArrowAmbush.HIT_RADIUS and offset.Magnitude <= ArrowAmbush.HIT_RADIUS then
 		self:_tag(runner, archer, away)
-	elseif offset.Magnitude <= SHOVE_RADIUS then
+	elseif math.min(first, offset.Magnitude) <= SHOVE_RADIUS then
 		ctx:Knockback(runner, away * 22 + Vector3.new(0, 14, 0), 0)
 	end
 end

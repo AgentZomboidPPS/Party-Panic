@@ -39,6 +39,20 @@ local function music(value: any): { [string]: any }?
 	}
 end
 
+-- Console lines the device saw about loading sounds (Roblox's reason for a failure).
+local function messages(value: any): { string }?
+	if type(value) ~= "table" then
+		return nil
+	end
+	local list = {}
+	for _, text in value do
+		if type(text) == "string" and #list < 6 then
+			table.insert(list, string.sub(text, 1, 200))
+		end
+	end
+	return list
+end
+
 -- Keeps only what a report can sensibly hold: content ids mapped to a short status.
 local function clean(report: any): { [string]: any }?
 	if type(report) ~= "table" then
@@ -63,6 +77,9 @@ local function clean(report: any): { [string]: any }?
 		Touch = report.Touch == true,
 		Music = music(report.Music),
 		Master = number(report.Master),
+		Messages = messages(report.Messages),
+		Policy = if type(report.Policy) == "string" then string.sub(report.Policy, 1, 400) else nil,
+		Control = if type(report.Control) == "string" then string.sub(report.Control, 1, 24) else nil,
 		Time = os.time(),
 		Version = Config.Version,
 		PlaceVersion = game.PlaceVersion,

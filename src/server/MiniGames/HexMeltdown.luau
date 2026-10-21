@@ -13,6 +13,19 @@
 -- with candy-colored tiles, a crater wall with lava falls and rock spires, cracked crust rafts on
 -- the lava, and a game-show referee robot on a striped stage under a light-bulb call board, between
 -- two lava torches. The meshes are in World/Props/HexMeltdown.luau; the colliders are unchanged.
+--
+-- Hitbox pass (owner: "We need to fine tune some of the hitboxes. the precision games will feel super
+-- bad if we dont."): what you see on your screen is what counts.
+--   Players fall by their own device's physics on the hexes it sinks, so the colliders match the
+--   visible column: the cap is the 6.95 tile (collider 7), and the rim collider now fills the
+--   visible cream rim (7.45 out, 0.65 to 1.7 below the top; it used to stop 0.15 below the rim's top).
+--   A bot is on a hex while any of its footprint (about 2 wide) is over the hex's top, rim
+--   included: a true hexagon test, not a 7 stud circle that counted half the gap along an edge and
+--   dropped a bot standing on a rim corner. It is judged on the picture everyone else sees (the
+--   hexes as they sink now, the bot as drawn about 0.15s late), and a dropped bot rides its hex
+--   down instead of hanging in the air while the hex sinks out from under it.
+--   A stomp counts if you land on a rival where your screen showed them: up to your ping plus
+--   0.15s back (they are drawn that late, and at walking speed that is more than the 2.2 reach).
 
 local ArenaKit = require(script.Parent.Kit.ArenaKit)
 local MiniGame = require(script.Parent.Kit.MiniGame)
@@ -31,6 +44,13 @@ local GRID_RADIUS = 2 -- rings around the center: 19 hexes
 local SINK_DEPTH = 26
 local LAVA_DROP = 20 -- lava surface below the hex tops
 local DROP_DEPTH = 3 -- a bot off the called color falls once the other hexes are this far down
+local RIM_SIZE = HEX_SIZE + 0.45 -- the cream rim, the widest part of a hex's top (the mesh: 7.45)
+local FOOT = 1 -- half a character's width: any of its footprint over a hex top holds it up
+-- Other players' characters (bots too) are drawn about this far behind the server on your screen.
+local SEEN_LAG = 0.15
+local STOMP_REACH = 2.2 -- flat: feet on the head or shoulders (both characters about 2 wide)
+local STOMP_LOW, STOMP_HIGH = 2.5, 6 -- the stomper's root this far above the victim's (on the head: 5.3)
+local STOMP_PING_MAX = 0.2 -- the most of a stomper's ping that is made up for
 
 -- Art (World/Props/HexMeltdown.luau). Mesh props pivot at their bounding box's bottom center:
 local WALL_PIVOT = Vector3.new(-0.11, 0, -103.91) -- a CraterWall arc's pivot from the crater center
@@ -74,6 +94,31 @@ local function sunkBy(call, now: number): number
 		return call.Depth * ease((now - call.SinkAt) / call.Move)
 	end
 	return call.Depth * (1 - ease((now - call.RiseAt) / call.Move))
+end
+
+-- Whether a character whose root is at `point` stands on the hex whose top center is at
+-- `hexPosition`: any of its footprint over the top, rim included (flat-top: corners on +-X; the
+-- hexagon grown by FOOT). Across the 1.45 stud gap between two hexes both count, as a character
+-- straddling it is held up by either rim.
+local REACH = RIM_SIZE * math.sqrt(3) / 2 + FOOT
+function HexMeltdown.StandsOn(hexPosition: Vector3, point: Vector3): boolean
+	local x = math.abs(point.X - hexPosition.X)
+	local z = math.abs(point.Z - hexPosition.Z)
+	return z <= REACH and x * math.sqrt(3) / 2 + z / 2 <= REACH
+end
+
+-- How far a stomper's screen is behind the server, as the others go: their ping (their landing
+-- reaches the server that late) plus the time others are drawn late. Bots see the server directly.
+local function stompRewind(player): number
+	local ok, ping = pcall(function()
+		return (player :: any):GetNetworkPing()
+	end)
+	return SEEN_LAG + math.clamp(if ok and type(ping) == "number" then ping else 0, 0, STOMP_PING_MAX)
+end
+
+local function stompsOn(top: Vector3, bottom: Vector3): boolean
+	local dy = top.Y - bottom.Y
+	return dy > STOMP_LOW and dy < STOMP_HIGH and ArenaKit.FlatDistance(top, bottom) < STOMP_REACH
 end
 
 -- A hexagonal prism: three boxes turned 60 degrees apart, unioned once and cloned.
@@ -281,12 +326,12 @@ function HexMeltdown:Prepare()
 			Transparency = 1,
 			Parent = model,
 		})
-		hexPrism(0.7, {
+		hexPrism(1.05, {
 			Name = "Rim",
-			CFrame = CFrame.new(top - Vector3.new(0, 1.15, 0)),
+			CFrame = CFrame.new(top - Vector3.new(0, 1.175, 0)), -- the mesh's rim: 0.65 to 1.7 below the top
 			Transparency = 1,
 			Parent = model,
-		}, HEX_SIZE + 0.45)
+		}, RIM_SIZE)
 		local cap = hexPrism(1, {
 			Name = "Cap",
 			CFrame = CFrame.new(top - Vector3.new(0, 0.5, 0)),
@@ -379,16 +424,33 @@ function HexMeltdown:Start()
 		return warn + 0.7 + down + 0.7 + pause
 	end)
 
-	-- Stomps: land on a rival's head to stun them for a moment.
+	-- Stomps: land on a rival's head to stun them for a moment. The stomper's screen shows the
+	-- rival a little in the past, so each rival's recent spots are kept and any of them, back as
+	-- far as the stomper's screen lags, counts.
 	local previousY: { [Player]: number } = {}
+	local trails: { [Player]: { { Time: number, Position: Vector3 } } } = {}
 	local shownStatus = ""
 	ctx:Heartbeat(function()
+		local clock = os.clock()
 		local alive = ctx:GetAlivePlayers()
 		local roots = {}
 		for _, player in alive do
 			local _, _, root = ctx:GetCharacter(player)
-			if root then
+			if root and not self.falling[player] then
 				roots[player] = root.Position
+			end
+		end
+		for player in trails do
+			if not roots[player] then
+				trails[player] = nil
+			end
+		end
+		for player, position in roots do
+			local trail = trails[player] or {}
+			trails[player] = trail
+			table.insert(trail, { Time = clock, Position = position })
+			while trail[1].Time < clock - SEEN_LAG - STOMP_PING_MAX - 0.05 do
+				table.remove(trail, 1)
 			end
 		end
 		for attacker, top in roots do
@@ -397,19 +459,27 @@ function HexMeltdown:Start()
 			if not falling then
 				continue
 			end
-			for victim, bottom in roots do
+			local since = clock - stompRewind(attacker)
+			for victim, trail in trails do
 				if victim == attacker or ctx:IsStunned(victim) then
 					continue
 				end
-				local dy = top.Y - bottom.Y
-				if dy > 2.5 and dy < 6 and ArenaKit.FlatDistance(top, bottom) < 2.2 then
-					local key = attacker.Name .. ">" .. victim.Name
-					if os.clock() - (self.lastStomp[key] or 0) > 1.5 then
-						self.lastStomp[key] = os.clock()
-						ctx:Stun(victim, 1.2)
-						ctx:Knockback(attacker, Vector3.new(0, 45, 0), 0) -- the stomper bounces off
-						ctx:Sound("Boing")
+				local hit = false
+				for index = #trail, 1, -1 do
+					local sample = trail[index]
+					if sample.Time < since then
+						break
+					elseif stompsOn(top, sample.Position) then
+						hit = true
+						break
 					end
+				end
+				local key = attacker.Name .. ">" .. victim.Name
+				if hit and clock - (self.lastStomp[key] or 0) > 1.5 then
+					self.lastStomp[key] = clock
+					ctx:Stun(victim, 1.2)
+					ctx:Knockback(attacker, Vector3.new(0, 45, 0), 0) -- the stomper bounces off
+					ctx:Sound("Boing")
 				end
 			end
 		end
@@ -427,11 +497,14 @@ end
 
 -- Players fall when the hexes sink on their screens. The server moves bots, and on the server the
 -- hexes never sink, so while they're down a bot standing anywhere but on a hex of the called color
--- falls into the lava here, and the round's fall check knocks it out the same way.
+-- falls into the lava here, and the round's fall check knocks it out the same way. It is judged on
+-- what the others see: the hexes as they are now, the bot as it was SEEN_LAG ago (where it's drawn).
 function HexMeltdown:_dropBots(dt: number)
 	local ctx = self.context
 	local call = self.call
-	if call and sunkBy(call, ctx:Now()) > DROP_DEPTH then
+	local seen = ctx:Now() + SEEN_LAG -- the hexes' time when the others see the bot as it is now
+	local sunk = if call then sunkBy(call, seen) else 0
+	if call and sunk > DROP_DEPTH then
 		local floorY = ctx.Origin.Position.Y
 		for _, player in ctx:GetAlivePlayers() do
 			if not BotRegistry.IsBot(player) or self.falling[player] then
@@ -445,15 +518,23 @@ function HexMeltdown:_dropBots(dt: number)
 			local feet = root.Position.Y - humanoid.HipHeight - root.Size.Y / 2
 			local safe = feet > floorY + 1
 			for _, hex in self.hexes do
-				if hex.ColorIndex == call.Color and ArenaKit.FlatDistance(hex.Position, root.Position) < HEX_SIZE then
+				if hex.ColorIndex == call.Color and HexMeltdown.StandsOn(hex.Position, root.Position) then
 					safe = true
 					break
 				end
 			end
 			if not safe then
 				(player :: any):Stop()
+				-- Standing on a hex as it started down, it rides the hex down (or falls faster);
+				-- landing from a hop on a hex that is already down, it just keeps falling.
+				local riding = seen < call.RiseAt and sunk < DROP_DEPTH * 2
 				root.Anchored = true
-				self.falling[player] = { Character = character, Speed = 0 }
+				self.falling[player] = {
+					Character = character,
+					Speed = math.max(0, -root.AssemblyLinearVelocity.Y),
+					Ride = if riding then call else nil,
+					Top = character:GetPivot().Y,
+				}
 			end
 		end
 	end
@@ -462,9 +543,17 @@ function HexMeltdown:_dropBots(dt: number)
 		local character = fall.Character
 		if player.Character ~= character or not character.Parent then
 			self.falling[player] = nil -- out, and back in the lobby
-		elseif character:GetPivot().Y > lavaY - 4 then
+			continue
+		end
+		local pivot = character:GetPivot()
+		if pivot.Y > lavaY - 4 then
 			fall.Speed += workspace.Gravity * dt
-			character:PivotTo(character:GetPivot() - Vector3.new(0, fall.Speed * dt, 0))
+			local y = pivot.Y - fall.Speed * dt
+			local ride = fall.Ride
+			if ride and ride == call and seen < ride.RiseAt then
+				y = math.min(y, fall.Top - sunkBy(ride, seen))
+			end
+			character:PivotTo(pivot - Vector3.new(0, pivot.Y - y, 0))
 		end
 	end
 end

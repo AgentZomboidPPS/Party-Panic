@@ -223,8 +223,8 @@ function OnboardingController.Start(context)
 		if finished or step == 0 then
 			return
 		end
-		if phase == "Preparing" or phase == "InRound" then
-			show(2)
+		if (phase == "Preparing" or phase == "InRound") and State.InRound() then
+			show(2) -- "Read the rules card": only the round's players get one
 		elseif rewardTipDue and LOBBY[phase] then
 			rewardTipDue = false
 			show(3)
