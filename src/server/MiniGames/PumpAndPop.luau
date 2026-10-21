@@ -132,7 +132,7 @@ local function buildFairground(ctx, origin: Vector3, deck: Vector3, radius: numb
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(0.4, (radius + 40) * 2, (radius + 40) * 2),
 		CFrame = upright(deck),
-		Color = rgb(246, 222, 170),
+		Color = rgb(232, 196, 140),
 		Material = Enum.Material.Sand,
 		Parent = arena,
 	})
@@ -217,9 +217,8 @@ local function buildFairground(ctx, origin: Vector3, deck: Vector3, radius: numb
 			Parent = arena,
 		})
 	end
-	-- Bunches of party balloons tied by the booths and the stands, in the teams' colors.
-	for index = 1, 8 do
-		local angle = (if index <= 4 then -1 else 1) * (52 + ((index - 1) % 4) * 22)
+	-- Bunches of party balloons tied in the gaps between the booths and the stands, in the teams' colors.
+	for _, angle in { -152, -93, -31, 31, 93, 152 } do
 		local spot = around(angle, radius + 30)
 		for bunch = 1, 3 do
 			local team = names[rng:NextInteger(1, #names)]
@@ -333,7 +332,7 @@ function PumpAndPop:Prepare()
 		CastShadow = false,
 		Parent = ctx.Arena,
 	})
-	local deckRadius = math.max(stageRadius, 40)
+	local deckRadius = math.max(stageRadius, 34)
 	local deckScale = deckRadius / 40
 	local deckCenter = stageCenter + Vector3.new(0, 0, stageRadius - deckRadius)
 	MeshLibrary.Get("PumpStageDeck", {

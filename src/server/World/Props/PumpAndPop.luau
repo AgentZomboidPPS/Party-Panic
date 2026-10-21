@@ -158,7 +158,7 @@ return function(h)
 			Shadow = false,
 			Palette = {
 				DeckA = rgb(255, 246, 228),
-				DeckB = rgb(255, 222, 168),
+				DeckB = rgb(255, 205, 120),
 				Lip = rgb(255, 190, 60),
 				SkirtA = rgb(132, 86, 220),
 				SkirtB = rgb(255, 242, 220),
@@ -169,7 +169,7 @@ return function(h)
 			Fallback = function(m)
 				h.pillar(m, "SkirtA", 79.9, 0.9, Vector3.new(0, 0.45, 0))
 				h.pillar(m, "DeckA", 76.8, 0.5, Vector3.new(0, 0.95, 0))
-				h.pillar(m, "Lip", 80.1, 0.25, Vector3.new(0, 1.2, 0))
+				h.pillar(m, "Lip", 80.1, 0.3, Vector3.new(0, 1.0, 0))
 				h.ball(m, "BulbsA", 0.6, Vector3.new(0, 1.56, -39))
 				h.ball(m, "BulbsB", 0.6, Vector3.new(0, 1.56, 39))
 			end,

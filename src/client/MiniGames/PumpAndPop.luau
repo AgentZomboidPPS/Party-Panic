@@ -29,7 +29,7 @@ local TRAVEL = 0.8 -- how far a plunger's handle goes down (studs)
 local METER_TOP = 1.25 -- the meter shows holds up to this much of FILL_TIME (the red band above 1)
 local DIAL_HUB = CFrame.new(0, 2.15, -2.8) -- the gauge needle's hub in the tank's space
 local BULB_LIT = Color3.fromRGB(255, 238, 170)
-local BULB_DIM = Color3.fromRGB(196, 150, 92)
+local BULB_DIM = Color3.fromRGB(255, 222, 170)
 local GREEN = Color3.fromRGB(90, 225, 120)
 local RED = Color3.fromRGB(255, 80, 80)
 
@@ -760,7 +760,7 @@ function PumpAndPop.Start(api)
 				popped = popped or stations[team].Popped
 			end
 			bulbClock += dt
-			local period = if popped then 0.12 elseif fullest > 0.75 then 0.25 else 0.5
+			local period = if popped then 0.2 elseif fullest > 0.75 then 0.25 else 0.5
 			if bulbClock >= period then
 				bulbClock = 0
 				bulbTurn = bulbTurn % 2 + 1
