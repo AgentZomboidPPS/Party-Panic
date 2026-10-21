@@ -48,7 +48,7 @@ return function(h)
 		},
 		CraterWall = {
 			Height = 38.3,
-			AssetId = 91122088728380,
+			AssetId = 72361166933085,
 			Shadow = false,
 			Palette = { Rock = rgb(96, 66, 88), Ledge = rgb(158, 106, 124), Lava = LAVA },
 			Materials = { Lava = Enum.Material.Neon },
@@ -63,7 +63,7 @@ return function(h)
 		},
 		LavaCrust = {
 			Height = 2.73,
-			AssetId = 125133549228210,
+			AssetId = 140539903076790,
 			Shadow = false,
 			Palette = { Crust = rgb(88, 52, 58), Glow = rgb(255, 176, 64) },
 			Materials = { Glow = Enum.Material.Neon },
@@ -94,7 +94,7 @@ return function(h)
 		},
 		RefereeBot = {
 			Height = 18.41,
-			AssetId = 94134489281399,
+			AssetId = 124935401518839,
 			Collide = true,
 			Palette = {
 				Body = rgb(248, 248, 255),
@@ -120,7 +120,7 @@ return function(h)
 		},
 		CallMarquee = {
 			Height = 39.7,
-			AssetId = 115360607581019,
+			AssetId = 121121312136938,
 			Palette = {
 				Frame = rgb(124, 64, 214),
 				Trim = GOLD,
@@ -141,7 +141,7 @@ return function(h)
 		},
 		LavaTorch = {
 			Height = 30.9,
-			AssetId = 79224408418074,
+			AssetId = 78134047543428,
 			Palette = { Rock = BASALT, Gold = GOLD, Flame = rgb(255, 120, 30), Core = rgb(255, 230, 110) },
 			Materials = { Flame = Enum.Material.Neon, Core = Enum.Material.Neon },
 			Fallback = function(m)
