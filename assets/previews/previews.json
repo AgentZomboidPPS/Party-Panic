@@ -8,5 +8,15 @@
     "image": 96774319824802,
     "made": "2026-10-21",
     "width": 168
+  },
+  "SkateEscape": {
+    "columns": 6,
+    "decal": 74376335637679,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 84838781366141,
+    "made": "2026-10-21",
+    "width": 168
   }
 }
