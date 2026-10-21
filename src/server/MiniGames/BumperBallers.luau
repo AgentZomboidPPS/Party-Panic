@@ -361,9 +361,9 @@ function BumperBallers:_buildArena()
 				Parent = ctx.Arena,
 			})
 		elseif index == 2 or index == 6 then
-			local spot = onIslet(-4, 2).Position
+			local totemSpot = onIslet(-4, 2).Position
 			MeshLibrary.Get("BumperTikiTotem", {
-				CFrame = CFrame.lookAt(spot, Vector3.new(center.X, spot.Y, center.Z)),
+				CFrame = CFrame.lookAt(totemSpot, Vector3.new(center.X, totemSpot.Y, center.Z)),
 				Parent = ctx.Arena,
 			})
 		end
