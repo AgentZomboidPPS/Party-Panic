@@ -1032,6 +1032,9 @@ end
 
 -- Puts a participant's new character on the spot SpawnPlayer gave them: frozen until GO (if they
 -- were spawned frozen), free to play after it. The fall check leaves them alone until it's there.
+-- In a mode where people respawn, its Respawn hook says where they belong now, if it says: someone
+-- leaving during the rules card can have moved them (Cake Factory hands the leaver's machines to the
+-- crew and moves them, and a press only counts near your own spot).
 function RoundContext._backToSpot(self: RoundContext, player: Player, character: Model)
 	local spot = self._spots[player]
 	if not spot then
@@ -1041,7 +1044,9 @@ function RoundContext._backToSpot(self: RoundContext, player: Player, character:
 	task.defer(function()
 		local root = character:WaitForChild("HumanoidRootPart", 5) :: BasePart?
 		if root and character.Parent and player.Character == character and self.Active and self:IsAlive(player) then
-			character:PivotTo(spot.CFrame + Vector3.new(0, 3, 0))
+			local hook = if self.RespawnMode == "Respawn" then self.Hooks.Respawn else nil
+			local cframe = (if hook then hook(player) else nil) or spot.CFrame
+			character:PivotTo(cframe + Vector3.new(0, 3, 0))
 			root.AssemblyLinearVelocity = Vector3.zero
 			if not self.Started then
 				self:Freeze(player, spot.Frozen)
