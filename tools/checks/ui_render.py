@@ -487,6 +487,10 @@ def render(nodes: list, size_name: str, out: Path):
         if w <= 0 or h <= 0:
             continue
         margin = 8
+        if w * h > 2 * vw * vh and not n.get("text") and not modifier(i, "UICorner"):
+            # A plain frame much bigger than the screen (a modal's dim backdrop): paint what's on it.
+            x0, y0, x1, y1 = max(x0, -margin), max(y0, -margin), min(x1, vw + margin), min(y1, vh + margin)
+            w, h = x1 - x0, y1 - y0
         ox, oy = int(math.floor(x0)) - margin, int(math.floor(y0)) - margin
         lw_, lh_ = int(math.ceil(w)) + 2 * margin + 1, int(math.ceil(h)) + 2 * margin + 1
         if lw_ * lh_ > 4 * vw * vh:

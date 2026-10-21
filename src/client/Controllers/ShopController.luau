@@ -105,10 +105,13 @@ local function render()
 			Text = item.Name,
 			Font = Theme.Fonts.Display,
 			TextSize = 20,
+			TextScaled = true, -- long names shrink a little to fit the card
+			TextWrapped = false,
 			Position = UDim2.fromOffset(8, 106),
 			Size = UDim2.new(1, -16, 0, 26),
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = card,
+			Children = { UIKit.new("UITextSizeConstraint", { MaxTextSize = 20, MinTextSize = 15 }) },
 		})
 		UIKit.Label({
 			Text = item.Description,
@@ -201,7 +204,7 @@ function ShopController.Start(context)
 	end
 	UIKit.Label({
 		Text = "Cosmetics only - no gameplay advantages.",
-		TextSize = 16,
+		TextSize = 17,
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, 0, 0, 40),
 		LayoutOrder = 99,

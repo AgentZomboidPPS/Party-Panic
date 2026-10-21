@@ -196,12 +196,14 @@ function VoteController.Start(context)
 	)
 	if touch then
 		-- Anchored like the menu (top right) and scaled the same way, so the cards sit just under
-		-- the round banner (70 tall) and just left of the menu column (70 wide) on every screen.
+		-- the round banner (80 down, with room for the "YOUR VOTE" tag on a card's top edge) and
+		-- just left of the menu column (70 wide) on every screen.
+		local top = 80 + 16
 		holder = UIKit.new("Frame", {
 			Name = "Vote",
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -10, 0, 10),
-			Size = UDim2.fromOffset(78 + 3 * 166 + 2 * 10, 78 + 220),
+			Size = UDim2.fromOffset(78 + 3 * 166 + 2 * 10, top + 220),
 			BackgroundTransparency = 1,
 			Visible = false,
 			Parent = context.Hud,
@@ -210,7 +212,7 @@ function VoteController.Start(context)
 		row = UIKit.new("Frame", {
 			Name = "Cards",
 			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -78, 0, 78),
+			Position = UDim2.new(1, -78, 0, top),
 			Size = UDim2.fromOffset(3 * 166 + 2 * 10, 220),
 			BackgroundTransparency = 1,
 			Parent = holder,

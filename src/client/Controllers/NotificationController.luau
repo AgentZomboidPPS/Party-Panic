@@ -2,6 +2,7 @@
 -- They draw above the HUD and mode HUDs (but under pop-ups) in a spot nothing else uses: the top
 -- right corner on PC (above the side menu), and on phones the bottom middle like Android toasts,
 -- between the thumbstick and the jump button, lifted above the "you're out" and spectate panels.
+-- Two at a time (a new one pushes the oldest out), so they never reach the menu or the vote.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -23,7 +24,7 @@ local KINDS = {
 -- name -> their height plus a gap, in the same scaled units.
 local BOTTOM_PANELS = { OutPanel = 120 + 24, Spectate = 76 + 24, SpectateButton = 56 + 24 }
 
-local maxToasts = 3
+local MAX_TOASTS = 2
 local newestLast = false -- phones: the newest toast sits at the bottom of the stack
 local stack: Frame
 local active: { Frame } = {}
@@ -60,7 +61,7 @@ function NotificationController.Show(text: string, kind: string?, duration: numb
 		Children = { UIKit.Padding(10, 18) },
 	})
 	table.insert(active, toast)
-	while #active > maxToasts do
+	while #active > MAX_TOASTS do
 		local oldest = table.remove(active, 1)
 		if oldest then
 			oldest:Destroy()
@@ -104,7 +105,6 @@ function NotificationController.Start(context)
 		Parent = context.Hud.Parent,
 	})
 	if touch then
-		maxToasts = 2
 		newestLast = true
 		local holder = UIKit.new("Frame", {
 			Name = "ToastArea",
@@ -124,7 +124,12 @@ function NotificationController.Start(context)
 			BackgroundTransparency = 1,
 			Parent = holder,
 			Children = {
-				UIKit.List(Enum.FillDirection.Vertical, 8, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Bottom),
+				UIKit.List(
+					Enum.FillDirection.Vertical,
+					8,
+					Enum.HorizontalAlignment.Center,
+					Enum.VerticalAlignment.Bottom
+				),
 			},
 		})
 		local function lift()

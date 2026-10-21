@@ -18,7 +18,7 @@ client did with them, and the extra snapshots ("InRound teams", "Podium") show i
 players are in the round either way, and the player is always knocked out ("Out", "Spectate").
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
-PlayerGui folder and attributes) and 11 other fake players for the standings, RenderStepped
+PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
 (Heartbeat), StarterGui:SetCore, and the remotes (bindable events the harness can fire). The two
 ScreenGuis are made like init.client.luau makes them. Shared modules come from the working tree
 (except Remotes).
@@ -156,9 +156,11 @@ local __player = __makePlayer(
 	1,
 	{ PlayerGui = __playerGui, CharacterAdded = __characterAdded.Event }
 )
+-- With --bots the bots are the others (the only ones with characters to spectate).
 local __players = { __player }
-for index, name in { "Bubbles", "xX_Speedy_Xx", "Pancake", "NoodleArms", "Captain Waffles", "Zoomer",
-	"Mochi", "LavaLarry", "SirHopsALot", "Tiny Tim", "Glitch" } do
+local __otherNames = { "Bubbles", "xX_Speedy_Xx", "Pancake", "NoodleArms", "Captain Waffles", "Zoomer",
+	"Mochi", "LavaLarry", "SirHopsALot", "Tiny Tim", "Glitch" }
+for index, name in if __botCount > 0 then {} else __otherNames do
 	table.insert(__players, __makePlayer(name, name, 100 + index))
 end
 
@@ -523,18 +525,22 @@ phase("Preparing", 6, function()
 	end
 end)
 phase("InRound", 60, function()
-	GameState.Set("Status", `Survivors: {9 + math.max(#bots - 1, 0)}`)
-	-- Scores spread out and three players already out; bots' scores spread around the player's,
-	-- and one bot already out.
+	-- Stand-in players: scores spread out and three already out. Bots: scores spread around the
+	-- player's, and one bot already out.
 	for index, other in __players do
 		other:SetAttribute("PP_Alive", index <= 9)
-		other:SetAttribute("PP_Score", 13 - index)
+		other:SetAttribute("PP_Score", if #bots > 0 then 5 else 13 - index)
 		other:SetAttribute("PP_ScoreText", if index <= 9 then "Alive" else "Out")
 	end
 	for index, bot in bots do
 		bot.info:SetAttribute("PP_Score", (#bots - index) * 3)
 		bot.info:SetAttribute("PP_Alive", index ~= 2)
 	end
+	local survivors = 0
+	for _, who in everyone() do
+		survivors += if who:GetAttribute("PP_Alive") then 1 else 0
+	end
+	GameState.Set("Status", `Survivors: {survivors}`)
 end)
 step = "remotes"
 __fire("Notify", "Harness notification", "reward", 2)

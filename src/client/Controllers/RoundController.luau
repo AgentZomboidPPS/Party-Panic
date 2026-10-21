@@ -33,7 +33,8 @@ local function buildRules(parent: Instance)
 	rules = UIKit.Panel({
 		Name = "Rules",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.45),
+		-- Phones: a little lower, clear of the round banner.
+		Position = UDim2.fromScale(0.5, if UIKit.IsTouch() then 0.52 else 0.45),
 		Size = UDim2.fromOffset(620, 330),
 		CornerRadius = 26,
 		Visible = false,
@@ -69,11 +70,13 @@ local function buildRules(parent: Instance)
 	rulesFields.Objective = UIKit.Label({
 		Text = "",
 		TextSize = 28,
+		TextScaled = true, -- long objectives shrink a little to fit
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		Position = UDim2.fromOffset(28, 128),
-		Size = UDim2.new(1, -56, 0, 80),
+		Size = UDim2.new(1, -56, 0, 84),
 		Parent = rules,
+		Children = { UIKit.new("UITextSizeConstraint", { MaxTextSize = 28, MinTextSize = 20 }) },
 	})
 	local controls = UIKit.new("Frame", {
 		Position = UDim2.fromOffset(24, 222),
