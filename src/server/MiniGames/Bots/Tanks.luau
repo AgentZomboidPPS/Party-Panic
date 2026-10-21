@@ -201,7 +201,7 @@ function Brain.Step(bot, ctx, mode, dt)
 	m.Seen = m.Seen or {}
 	-- First real shot a while after the spawn shield drops (sooner for skilled bots), so they don't
 	-- all open fire at once; nothing is wasted on shields before that.
-	m.NextShot = m.NextShot or (mode.startAt + TankField.SHIELD + 0.5 + rng:NextNumber(0.5, 3) * (1.3 - skill))
+	m.NextShot = m.NextShot or (mode.startAt + TankField.SHIELD + 1 + rng:NextNumber(0.5, 3) * (1.3 - skill))
 
 	local enemies = {}
 	for _, other in mode.list do
@@ -239,7 +239,7 @@ function Brain.Step(bot, ctx, mode, dt)
 	if shell then
 		local seen = m.Seen[shell.Id]
 		if not seen then
-			seen = { At = now + bot:Reaction() * 0.6, Dodge = bot:Chance(0.3 + 0.65 * skill) }
+			seen = { At = now + bot:Reaction() * 0.5, Dodge = bot:Chance(0.55 + 0.4 * skill) }
 			m.Seen[shell.Id] = seen
 		end
 		noticed = now >= seen.At and seen.Dodge
@@ -339,7 +339,7 @@ function Brain.Step(bot, ctx, mode, dt)
 			end
 			mx, mz = px * 0.9 + ux * 0.15, pz * 0.9 + uz * 0.15
 			-- Both shells out: duck behind something for a moment (skilled bots more often).
-			if tank.Shells >= TankField.MAX_SHELLS and bot:Chance(0.08 + 0.25 * skill) then
+			if tank.Shells >= mode:ShellCap() and bot:Chance(0.08 + 0.25 * skill) then
 				local c0, r0 = TankField.Tile(field, tank.X, tank.Z)
 				local best, bestD = nil, math.huge
 				for r = r0 - 3, r0 + 3 do
@@ -394,7 +394,7 @@ function Brain.Step(bot, ctx, mode, dt)
 
 	-- Aiming and firing.
 	local wantAim, clear = m.Aim, false
-	if shell and noticed and skill > 0.55 and tank.Shells < TankField.MAX_SHELLS and m.ShootDown ~= shell.Id then
+	if shell and noticed and skill > 0.55 and tank.Shells < mode:ShellCap() and m.ShootDown ~= shell.Id then
 		-- Shoot it down: aim where it will be when a shell from here meets it.
 		local d = math.sqrt((sx - tank.X) ^ 2 + (sz - tank.Z) ^ 2)
 		local meet = d / (2 * SPEED)
@@ -412,8 +412,11 @@ function Brain.Step(bot, ctx, mode, dt)
 			local fly = math.max(math.sqrt((px - tank.X) ^ 2 + (pz - tank.Z) ^ 2) - TankField.MUZZLE, 0) / SPEED
 			px, pz = target.X + vx * fly * lead, target.Z + vz * fly * lead
 		end
+		-- Bots warm up: looser aim early in the round, their own skill by ~30 s after the shield.
+		local warmup = math.clamp(1 - (now - mode.startAt - TankField.SHIELD) / 30, 0, 1)
 		if now >= (m.NoiseUntil or 0) then
-			m.Noise = (rng:NextNumber() - 0.5 + rng:NextNumber() - 0.5) * (1.15 - skill) * 0.4
+			m.Noise = (rng:NextNumber() - 0.5 + rng:NextNumber() - 0.5)
+				* ((1.15 - skill) * 0.4 + warmup * 0.45 + (if (mode.alive or 0) > TankField.CROWD then 0.12 else 0))
 			m.NoiseUntil = now + rng:NextNumber(0.5, 1.1)
 		end
 		wantAim = heading(px - tank.X, pz - tank.Z) + (m.Noise or 0)
@@ -438,11 +441,13 @@ function Brain.Step(bot, ctx, mode, dt)
 	if
 		clear
 		and math.abs(wrap(wantAim - m.Aim)) < math.rad(5)
-		and tank.Shells < TankField.MAX_SHELLS
+		and tank.Shells < mode:ShellCap()
 		and now >= (m.NextShot or 0)
 	then
 		ctx:BotAction(bot, "Fire", m.Aim, now)
-		m.NextShot = now + rng:NextNumber(0.6, 1.5) * (1.5 - skill)
+		-- (More patient while the room is crowded.)
+		m.NextShot = now
+			+ rng:NextNumber(0.6, 1.5) * (1.5 - skill) * (if (mode.alive or 0) > TankField.CROWD then 2.2 else 1)
 		m.Bank = nil
 	end
 
