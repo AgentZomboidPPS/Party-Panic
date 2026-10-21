@@ -204,6 +204,19 @@ local list: { GameDefinition } = {
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
+		Id = "ParasolPlummet",
+		Name = "Parasol Plummet",
+		Category = "Luck",
+		Icon = "☂️",
+		Color = Color3.fromRGB(110, 190, 255),
+		Objective = "Drift down the sky and catch the coins the throwers toss. Bags are worth 5! Dodge the hammers. Most coins wins!",
+		Controls = "Steer left and right (stick, A/D). Hold DIVE (Space) to shut your umbrella and drop; let go to float up.",
+		Duration = 35,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
 		Id = "Spleef",
 		Name = "Spleef",
 		Category = "Survival",
@@ -211,6 +224,19 @@ local list: { GameDefinition } = {
 		Color = Color3.fromRGB(120, 200, 255),
 		Objective = "Break the snow under your rivals! Fall through all 3 floors into the water and you're out. Last one standing wins!",
 		Controls = "Click or tap a block near you to break it. DIG (E) breaks the block under the nearest rival.",
+		Duration = 75,
+		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "Tanks",
+		Name = "Tanks!",
+		Category = "Versus",
+		Icon = "💣",
+		Color = Color3.fromRGB(110, 170, 90),
+		Objective = "Drive your toy tank and blast the others! One hit and you're out. Last tank rolling wins!",
+		Controls = "Drive with WASD or the stick, aim with the mouse (phones: drag right side), FIRE to shoot (bounces once), E: mine.",
 		Duration = 75,
 		MinPlayers = 2,
 		IsTeam = false,

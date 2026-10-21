@@ -20,20 +20,25 @@
 -- flow: a Diver takes it in a reaction time after the King presses it and only then re-aims, so a
 -- SWIRL can still whip treasure away from it. Divers keep out of the hole the way a player does:
 -- they walk round it, not across it, grab treasure sliding past the edge from the edge (a grab
--- reaches), back out of the funnel while a PULL drains it (sloppy ones sometimes miss the alarm)
--- and run outward when the sand has them near the lip, the good ones hopping as they go (the sand
--- drags less in the air). Now and then a sloppy one follows a coin in. With nothing to chase, a
+-- reaches), back right out of the funnel while a PULL drains it, as people do when it drags them
+-- at 10 studs a second (sloppy ones sometimes miss the alarm), and run outward when the sand has
+-- them near the lip, the good ones hopping as they go (the sand drags less in the air). Now and
+-- then a sloppy one follows a coin in. With nothing to chase, a
 -- Diver waits on its own ring of the middle of the slope (good ones nearer the hole, where all
 -- the treasure slides past), a few steps from the next Diver. Skill shows in all of it: in
--- simulated 8- and 12-player rounds good bots (Skill 0.7-0.9) haul about 23-28 and average ones
--- (0.35-0.55) about 14-15. (Before this pass it was the other way round: Skill only made a bot more
--- timid, so the sloppiest bots, diving deepest, hauled the most.)
--- SAND KINGS watch the sand: PULL when a good haul lies out of the Divers' reach or a Diver strays
+-- simulated 8-player rounds good bots (Skill 0.7-0.9) haul about 15 and average ones (0.35-0.55)
+-- about 10, against the stronger Kings below. (Before this pass it was the other way round: Skill
+-- only made a bot more timid, so the sloppiest bots, diving deepest, hauled the most.)
+-- SAND KINGS watch the sand: PULL when there's treasure out of the Divers' reach or a Diver strays
 -- deep, SWIRL when Divers are closing in on treasure (once they're on it, it's too late). They
 -- take turns with the PULL the way people do: nobody PULLs again until the last one (anyone's)
--- has drained and the sand has settled a moment, so the funnel drains well under half the round,
--- a little less than with a player who presses PULL whenever it's ready (review: chained PULLs had
--- it draining nearly all round, hard on the people diving).
+-- has drained and the sand has settled a moment, a shorter moment the more Kings there are to take
+-- turns (three Kings wait half a second, four keep it draining, a lone King waits longer).
+--
+-- Owner, told the bot Divers now won almost every round: "lets make it stronger and add another
+-- king". With the stronger PULL and the extra King (SandSwirl.PULL, SandSwirl.KingCount) and the
+-- Divers backing out of a PULL, simulated rounds of bot Kings against bot Divers come out close:
+-- the Kings win about half of them at 8 players and two in five at 12 (before: none).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SandSwirl = require(ReplicatedStorage.Shared.Logic.SandSwirl)
@@ -45,7 +50,7 @@ local LOOK = 2.6 -- how far ahead a Diver looks for where it can meet a treasure
 local STEP = 0.1 -- between the moments it checks
 local SLACK = 1.5 -- a meeting is planned this close to the treasure (a grab reaches 3.4 or more)
 local CLOSE = 7 -- nearer than this, a Diver steers straight at the treasure
-local PULL_LENGTH = 2.45 -- a PULL drains this long from its start (SandSwirl.PullEnvelope)
+local PULL_LENGTH = SandSwirl.PullTime() -- a PULL drains this long from its start
 local ROOM = 6 -- a waiting Diver keeps this far from the next one
 local FAR = WALK * LOOK + 30 -- treasure further off than this can't be met within LOOK
 -- How a Diver's Skill shows (each pair goes from Skill 0 to Skill 1):
@@ -56,15 +61,17 @@ local RING = { 20, 14 } -- radius it waits at for treasure (all of it slides pas
 local SAFE = { 6, 3 } -- meeting treasure this close to the hole's edge is a risk it rarely takes
 local DANGER = { 2.5, 2 } -- this close to the hole's edge, it turns and runs out
 local MARGIN = 1 -- it aims and walks no nearer the middle than this outside that (the drag has room)
+local PULL_BACK = 8 -- while a PULL drains it backs out to this much past its risky radius (and its Skill)
 local THROWN = 1.6 -- a SWIRL or PULL throws it for this many reaction times before it re-aims
 local CARELESS = 0.3 -- chance (at Skill 0) that it chases its pick with its eyes only on the treasure...
 local CUT = -2 -- ...noticing the hole only this far from its edge (inside it: following a coin in)
 -- And a Sand King's:
 local KING_LOOK = 0.4 -- it looks over the sand every this many reaction times (and a moment)
 local KING_PULL = { 0.5, 1 } -- chance it PULLs (when ready) with good reason: treasure worth...
-local PULL_WORTH = 5 -- ...this many coins lying out of the Divers' reach (half for treasure they're nearing)...
+local PULL_WORTH = 2 -- ...this many coins lying out of the Divers' reach (half for treasure they're nearing)...
 local DEEP = 10 -- ...or a Diver this near the middle
-local PULL_REST = 1.5 -- after a PULL (anyone's) ends, the Kings let the sand settle this long before the next
+local PULL_REST = 0.5 -- three Kings let the sand settle this long after a PULL (anyone's) ends before the next...
+local REST_PER_KING = 2.5 -- ...each King more this much less (4 Kings keep it draining), each King fewer this much more
 local KING_SWIRL = { 0.5, 1 } -- chance it SWIRLs (when ready) with Divers closing in on treasure
 
 local function flat(a: Vector3, b: Vector3): number
@@ -125,8 +132,10 @@ local function kingStep(bot, ctx, mode)
 	local effects = mode.effects
 	local lastPull = if effects and #effects.Pulls > 0 then effects.Pulls[#effects.Pulls] else -math.huge
 	-- (the Kings take turns with the sand the way people do: nobody PULLs until the last PULL,
-	-- anyone's, has drained and the sand has settled a moment; a PULL lasts PULL_LENGTH)
-	local settled = now >= lastPull + PULL_LENGTH + PULL_REST
+	-- anyone's, has drained and the sand has settled a moment, a shorter moment the more Kings
+	-- there are to take turns; a PULL lasts PULL_LENGTH)
+	local rest = PULL_REST + REST_PER_KING * (3 - #mode.kings)
+	local settled = now >= lastPull + PULL_LENGTH + rest
 
 	local swirlCool, pullCool = mode:Cooldowns()
 	if clock >= (memory.PullReady or 0) and settled then
@@ -356,7 +365,7 @@ local function diverStep(bot, ctx, mode)
 	local item = memory.Target and mode.items[memory.Target]
 	local danger = memory.Danger
 	if pulling then
-		danger = math.max(danger, memory.Safe + 1 + skill)
+		danger = math.max(danger, memory.Safe + PULL_BACK + skill)
 	end
 	-- (a careless moment: eyes on the treasure, not on the edge)
 	if r < (if memory.Careless and item then SandSwirl.HOLE + CUT else danger) then

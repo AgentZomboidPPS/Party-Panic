@@ -37,6 +37,22 @@
 --    which is right on every screen: whoever stands on it falls.
 --  * A grab is a swept test along the swimmer's path since the last check (coins don't move), so a
 --    coin brushed mid-hop counts. The client half pops a coin it judges grabbed by the same rule.
+--
+-- Nobody stays stuck (owner: "Broke. I chomped someone and now cant move."). Each device moves its
+-- own character and runs a little ahead of what the server sees, so a raft that comes back up can
+-- close round a shark or a swimmer that was under it on their screen, and that device's physics can
+-- throw them anywhere, even down through the sea floor. So besides keeping sharks in the water,
+-- every tick brings back anyone below the sea floor, lifts a swimmer caught inside a raft that's up
+-- onto its deck, and every move the server makes stops the character dead (no leftover throw or spin
+-- carries it off again). A watchdog catches the rest: a device that sees its character trying to
+-- move without getting anywhere, with nothing in the way, says so ("Stuck", with what it sees; only
+-- the device knows where its player is trying to go), and the server looks for a humanoid stuck
+-- sitting, ragdolled or the like, for a bot with somewhere to go that isn't moving, and for a
+-- shark it keeps having to put back. They're moved somewhere free (a fresh character if that didn't
+-- do it a moment ago), and everything seen goes to the server log (Telemetry) and to the player's
+-- client report (PP_ClientReports, read with tools/checks/client_reports.py), so the next report
+-- says what held them. Heights are measured from each character's own feet (its hip height), so
+-- tall and short avatars play by the same rules.
 
 local PhysicsService = game:GetService("PhysicsService")
 local RunService = game:GetService("RunService")
@@ -45,6 +61,8 @@ local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
 local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
+local ClientReports = require(script.Parent.Parent.Services.ClientReports)
+local Telemetry = require(script.Parent.Parent.Services.Telemetry)
 
 local SharkBait = MiniGame.Define("SharkBait")
 
@@ -100,6 +118,24 @@ local CLIMB_TIME = 0.8 -- no-physics test servers: how long a swimmer takes to c
 -- shove it hard enough to fling it into the sky (Hex Meltdown's "Bot is floating."); and a shark is
 -- drawn as a mesh far longer than the body it swims with, which mustn't stop anyone.
 local BODY_GROUP, PEOPLE_GROUP = "PP_SharkBodies", "PP_Players"
+-- Nobody stays stuck (see the top).
+local FREE = 2.6 -- a shark taken off a raft is put this far out past its edge (clear of the others)
+local CLEAR = 1.2 -- a shark's middle this close to a raft's edge is touching it
+local SURFACE_SLACK = 2 -- a raft coming back up moves sharks this close to its edge out too
+local SUNK = 1.5 -- feet this far under the sea floor have gone through it
+local STILL_TIME = 3 -- a bot this long trying to go somewhere, nothing in the way, not moving: stuck
+local ODD_TIME = 2.5 -- this long sitting, ragdolled or the like, not moving: stuck
+local FREE_AGAIN = 6 -- stuck again this soon after being freed: a fresh character instead
+local PIN_LIMIT, PIN_TIME = 12, 4 -- a shark put back this often this quickly is stuck too
+local ODD_STATES = {
+	[Enum.HumanoidStateType.Seated] = true,
+	[Enum.HumanoidStateType.PlatformStanding] = true,
+	[Enum.HumanoidStateType.Physics] = true,
+	[Enum.HumanoidStateType.Ragdoll] = true,
+	[Enum.HumanoidStateType.FallingDown] = true,
+	[Enum.HumanoidStateType.Climbing] = true, -- (nothing here to climb)
+	[Enum.HumanoidStateType.Swimming] = true, -- (no terrain water here)
+}
 local WATER_LIFE = 9 -- coins in the water sink after this long
 local CHEST_LIFE = 12
 local POP_IN = 0.35 -- a new coin rises into view this long before it can be grabbed
@@ -199,6 +235,19 @@ local function isBot(player: any): boolean
 	return BotRegistry.IsBot(player)
 end
 
+-- How far a character's middle (its root) is above its feet: its hip height and half its root (an
+-- R6 rig's legs hang 3 under it). A standard character's is SharkBait.HIP.
+local function legsOf(humanoid: Humanoid?, root: BasePart?): number
+	if not humanoid or not root then
+		return SharkBait.HIP
+	end
+	if humanoid.RigType == Enum.HumanoidRigType.R6 then
+		return 3
+	end
+	local legs = humanoid.HipHeight + root.Size.Y / 2
+	return if legs > 0.5 and legs < 12 then legs else SharkBait.HIP
+end
+
 -- Sets up BODY_GROUP's collisions; false if it can't (then everyone collides as usual).
 local function setUpBodies(): boolean
 	local ok = pcall(function()
@@ -276,6 +325,15 @@ function SharkBait:Prepare()
 	self.nextChomp = {} :: { [any]: number }
 	self.chomps = {} :: { [any]: number }
 	self.dunks = {} :: { [any]: number }
+	-- The watchdog: where each one was when they last got anywhere (and since when), when they went
+	-- into a state they can't walk in, how often a shark was put back lately, when each was last
+	-- freed, and what's been reported about whom this round.
+	self.watch = {} :: { [any]: { At: Vector3, Since: number, Odd: number? } }
+	self.pins = {} :: { [any]: { number } }
+	self.freedAt = {} :: { [any]: number }
+	self.records = {} :: { [any]: { string } }
+	self.placed = {} :: { [any]: Model } -- each one's character the round has put in the arena
+	self.arriving = {} :: { [any]: { Character: Model, Since: number } } -- and a fresh one not yet
 	self.haul = 0
 	self.goal = 1
 	self.swimmerCount = 0
@@ -328,6 +386,8 @@ function SharkBait:Prepare()
 	end
 	ctx.Hooks.CharacterReady = function(player, character)
 		self.spots[player] = nil
+		self.watch[player] = nil
+		self.placed[player] = character
 		if self.bodies and (isBot(player) or self.role[player] == "Shark") then
 			self:_passThrough(character)
 		end
@@ -830,8 +890,11 @@ function SharkBait:IsGulped(player: any): boolean
 	return self.gulped[player] ~= nil
 end
 
-function SharkBait:InWater(position: Vector3): boolean
-	return position.Y < self.origin.Y + SharkBait.WET
+-- Whether a character whose middle is at `position` is in the water. `legs`: how far its middle is
+-- above its feet (its own hip height; a standard character's if not given), so a tall avatar
+-- standing on the sea floor is in the water like everyone else.
+function SharkBait:InWater(position: Vector3, legs: number?): boolean
+	return position.Y - (legs or SharkBait.HIP) < self.origin.Y + SharkBait.WET - SharkBait.HIP
 end
 
 -- When a shark can chomp next (server time).
@@ -886,10 +949,10 @@ function SharkBait:_chomp(shark: any)
 		if self.role[swimmer] ~= "Swimmer" or self.gulped[swimmer] then
 			continue
 		end
-		local _, _, swimmerRoot = ctx:GetCharacter(swimmer)
+		local _, swimmerHumanoid, swimmerRoot = ctx:GetCharacter(swimmer)
 		if
 			swimmerRoot
-			and self:InWater(swimmerRoot.Position)
+			and self:InWater(swimmerRoot.Position, legsOf(swimmerHumanoid, swimmerRoot))
 			and SharkBait.JawDistance(swimmerRoot.Position, from, look) <= SharkBait.BITE_RADIUS + BITE_SLACK
 		then
 			table.insert(victims, swimmer)
@@ -936,8 +999,8 @@ end
 
 -- How far a swimmer's middle is from a chomp's jaws (math.huge unless they're in the water).
 function SharkBait:_jawReach(swimmer: any, from: Vector3, look: Vector3): number
-	local _, _, root = self.context:GetCharacter(swimmer)
-	if not root or self.gulped[swimmer] or not self:InWater(root.Position) then
+	local _, humanoid, root = self.context:GetCharacter(swimmer)
+	if not root or self.gulped[swimmer] or not self:InWater(root.Position, legsOf(humanoid, root)) then
 		return math.huge
 	end
 	return SharkBait.JawDistance(root.Position, from, look)
@@ -951,7 +1014,7 @@ function SharkBait:_gulp(swimmer: any, shark: any)
 	if self.gulped[swimmer] or self.ended or not ctx:IsAlive(swimmer) then
 		return
 	end
-	local character, _, root = ctx:GetCharacter(swimmer)
+	local character, humanoid, root = ctx:GetCharacter(swimmer)
 	if not character or not root then
 		return
 	end
@@ -985,7 +1048,11 @@ function SharkBait:_gulp(swimmer: any, shark: any)
 	end
 	self.bellySpot[swimmer] = spot
 	local column, row = (spot - 1) % 4, (spot - 1) // 4
-	character:PivotTo(CFrame.new(self.origin + Vector3.new(-7.5 + 5 * column, POCKET + SharkBait.HIP, -5 + 5 * row)))
+	local legs = legsOf(humanoid, root)
+	character:PivotTo(CFrame.new(self.origin + Vector3.new(-7.5 + 5 * column, POCKET + legs, -5 + 5 * row)))
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+	self.watch[swimmer] = nil
 	ctx:Freeze(swimmer, true)
 	ctx:Delay(GULP_TIME, function()
 		self:_spitOut(swimmer)
@@ -1007,7 +1074,7 @@ function SharkBait:_spitOut(swimmer: any)
 		return
 	end
 	local spot = self:_raftSpot()
-	character:PivotTo(spot + Vector3.new(0, SharkBait.HIP, 0))
+	self:_place(swimmer, spot.Position, true)
 	ctx:Freeze(swimmer, false)
 	ctx:Fire(nil, "SpatOut", swimmer.UserId, round(spot.X, 2), round(spot.Z, 2))
 end
@@ -1155,30 +1222,296 @@ function SharkBait:_surface(raft: Raft)
 	raft.Since = now
 	raft.SafeUntil = now + SharkBait.SAFE
 	-- Whoever is in the water where it comes up: swimmers are scooped up onto the deck, sharks are
-	-- pushed out past its edge (a shark never gets onto a raft).
+	-- pushed out past its edge (a shark never gets onto a raft), stopped dead. A shark's own screen can
+	-- be a stroke or two ahead of the server's, so sharks just outside the edge go too: one the
+	-- raft closed round on its screen would be stuck inside it (the tick lifts out any that still are).
 	for _, player in ctx:GetAlivePlayers() do
-		local character, _, root = ctx:GetCharacter(player)
+		local character, humanoid, root = ctx:GetCharacter(player)
 		if not character or not root or self.gulped[player] then
 			continue
 		end
+		local shark = self.role[player] == "Shark"
 		local position = root.Position
 		local offset = flat(position - raft.Center)
-		if offset.Magnitude > raft.Radius + 0.4 or position.Y > self.deckY + 0.5 then
+		local reach = raft.Radius + (if shark then SURFACE_SLACK else 0.4)
+		if offset.Magnitude > reach or position.Y - legsOf(humanoid, root) > self.deckY - 2.5 then
 			continue
 		end
 		local dir = if offset.Magnitude > 0.2 then offset.Unit else self:_randomDir()
-		if self.role[player] == "Shark" then
-			local out = raft.Center + dir * (raft.Radius + 2.6)
-			local spot = Vector3.new(out.X, self.floorY + SharkBait.HIP, out.Z)
-			character:PivotTo(CFrame.lookAt(spot, spot + dir))
+		if shark then
+			-- (One that was inside it is turned to face out; one just outside its edge keeps facing
+			-- its own way, so a shark waiting by the raft isn't spun round with its jaws away from it.)
+			local face = if offset.Magnitude <= raft.Radius then dir else nil
+			self:_place(player, raft.Center + dir * (raft.Radius + FREE), false, face)
 		else
-			local spot = raft.Center + dir * math.min(offset.Magnitude, raft.Radius - 1.2)
-			character:PivotTo(CFrame.new(spot.X, self.deckY + SharkBait.HIP, spot.Z) * root.CFrame.Rotation)
+			self:_place(player, raft.Center + dir * math.min(offset.Magnitude, raft.Radius - 1.2), true)
 		end
 	end
 	raft.Collider.CanCollide = true
 	self.raftsDirty = true
 	self:_publishRafts()
+end
+
+-- Nobody stays stuck (see the top) -----------------------------------------------------------------
+
+-- Puts a character at `spot` (flat), standing on the sea floor or on a deck (`onDeck`), facing `face`
+-- (flat; the way it faced if not given), and stops it dead: a throw or a spin it still had would
+-- carry it straight back to where it was taken from.
+function SharkBait:_place(player: any, spot: Vector3, onDeck: boolean, face: Vector3?)
+	local character, humanoid, root = self.context:GetCharacter(player)
+	if not character or not root then
+		return
+	end
+	local at = Vector3.new(spot.X, (if onDeck then self.deckY else self.floorY) + legsOf(humanoid, root), spot.Z)
+	local look = if face and flat(face).Magnitude > 0.01 then flat(face).Unit else flatLook(root.CFrame)
+	character:PivotTo(CFrame.lookAt(at, at + look))
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+	self.spots[player] = nil -- (a grab sweep never spans the move)
+	self.watch[player] = nil
+end
+
+-- The nearest water to `position` a shark may be in (flat): inside the float line and off the
+-- rafts (out past the edge of one it's on or touching; each raft's way out is clear of the others).
+function SharkBait:_waterSpot(position: Vector3): Vector3
+	local origin: Vector3 = self.origin
+	local offset = flat(position - origin)
+	local dir = if offset.Magnitude > 0.1 then offset.Unit else Vector3.new(1, 0, 0)
+	local spot = origin + dir * math.min(offset.Magnitude, SharkBait.LAGOON - 3)
+	local raft = self:RaftUnder(spot, CLEAR)
+	if raft then
+		local out = flat(spot - raft.Center)
+		spot = raft.Center + (if out.Magnitude > 0.1 then out.Unit else dir) * (raft.Radius + FREE)
+	end
+	return Vector3.new(spot.X, origin.Y, spot.Z)
+end
+
+-- A spot on the deck of the raft that's up nearest `position` (flat), as close to `position` as the
+-- deck allows; any raft that's up if none is near.
+function SharkBait:_deckSpot(position: Vector3): Vector3
+	local best, bestDistance = nil, math.huge
+	for _, raft in self.rafts do
+		local distance = flatDistance(position, raft.Center) - raft.Radius
+		if raft.State == SharkBait.READY and distance < bestDistance then
+			best, bestDistance = raft, distance
+		end
+	end
+	if not best then
+		return self:_raftSpot().Position
+	end
+	local offset = flat(position - best.Center)
+	local dir = if offset.Magnitude > 0.2 then offset.Unit else self:_randomDir()
+	return best.Center + dir * math.min(offset.Magnitude, best.Radius - 1.2)
+end
+
+-- The raft that's up whose solid body a character's middle is inside of, if any. That can only
+-- happen when it came back up round them (on their own screen): a jump onto a deck clears its top.
+function SharkBait:_insideRaft(root: BasePart): Raft?
+	local position = root.Position
+	if position.Y - root.Size.Y / 2 >= self.deckY - 0.3 then
+		return nil
+	end
+	local raft = self:RaftUnder(position, -0.5)
+	return if raft and raft.State ~= SharkBait.FLIPPED then raft else nil
+end
+
+-- Where a bot is trying to go (flat, unit), if anywhere: its goal. Only bots: a player's own device
+-- says when they're pushing and getting nowhere ("Stuck"). The server's copy of their humanoid can't
+-- tell: its MoveDirection may never come over from the device, and what does come is only as fresh
+-- as the device's last update, so a phone whose connection stalled for a few seconds mid-run would
+-- look stuck (moved, then a fresh character) with nothing wrong.
+function SharkBait:_wayOf(player: any, humanoid: Humanoid, root: BasePart): Vector3?
+	if humanoid.WalkSpeed <= 1 or not isBot(player) then
+		return nil -- frozen on purpose, or a player
+	end
+	local goal = player.Goal
+	local to = if typeof(goal) == "Vector3" then flat(goal - root.Position) else Vector3.zero
+	return if to.Magnitude > 2 then to.Unit else nil
+end
+
+-- Whether something solid is right in front of a bot going `way`: a raft's side (from the water) or
+-- the float line (bots pass through everyone). Pushing into those is just being in the way, not stuck.
+function SharkBait:_blocked(root: BasePart, feet: number, way: Vector3): boolean
+	local position = root.Position
+	if feet < self.deckY - 0.5 then
+		for _, raft in self.rafts do
+			local to = flat(raft.Center - position)
+			if
+				raft.State ~= SharkBait.FLIPPED
+				and to.Magnitude <= raft.Radius + 2.5
+				and (to.Magnitude < 0.1 or way:Dot(to.Unit) > 0.2)
+			then
+				return true
+			end
+		end
+	end
+	local out = flat(position - self.origin)
+	return out.Magnitude > SharkBait.LAGOON - 2.5 and way:Dot(out.Unit) > 0.2
+end
+
+-- The watchdog, each tick for everyone the rules didn't just move: stuck in a state they can't
+-- walk in, or (bots) trying to go somewhere with nothing in the way and not moving.
+function SharkBait:_watch(player: any, humanoid: Humanoid, root: BasePart, now: number)
+	local position = root.Position
+	local entry = self.watch[player]
+	if not entry or (position - entry.At).Magnitude > 0.75 then
+		entry = { At = position, Since = now, Odd = nil }
+		self.watch[player] = entry
+	end
+	local watched = entry :: { At: Vector3, Since: number, Odd: number? }
+	-- (Humanoid states only mean something where physics runs: not on the test servers.)
+	watched.Odd = if physics and ODD_STATES[humanoid:GetState()] then watched.Odd or now else nil
+	local still = now - watched.Since
+	if watched.Odd and now - watched.Odd >= ODD_TIME and still >= ODD_TIME then
+		self:_rescue(player, "a state it can't walk in", nil)
+		return
+	end
+	local way = if still >= STILL_TIME then self:_wayOf(player, humanoid, root) else nil
+	if way and not self:_blocked(root, position.Y - legsOf(humanoid, root), way) then
+		self:_rescue(player, "trying to move, not moving, nothing in the way", nil)
+	end
+end
+
+-- Counts a shark put back by the rules; true once it's been put back so often so quickly that
+-- something keeps sending it back there (stuck too). Only on real servers: without physics the
+-- test servers' stand-ins walk through rafts and get put back all the time.
+function SharkBait:_pinned(player: any, now: number): boolean
+	if not physics then
+		return false
+	end
+	local list = self.pins[player] or {}
+	self.pins[player] = list
+	table.insert(list, now)
+	while list[1] and now - list[1] > PIN_TIME do
+		table.remove(list, 1)
+	end
+	if #list >= PIN_LIMIT then
+		table.clear(list)
+		return true
+	end
+	return false
+end
+
+local STATE_NAMES = { [0] = "up", [1] = "wobbling", [2] = "flipped" }
+
+-- What the server sees of a character, for the log: where (from the arena's middle and the
+-- waterline), its feet against the sea floor, the raft under it and the arena parts it's inside of,
+-- its humanoid, who simulates it.
+function SharkBait:_describe(player: any, humanoid: Humanoid, root: BasePart): string
+	local p = root.Position
+	local raft = self:RaftUnder(p, 0)
+	local owner = "?"
+	pcall(function()
+		local who = root:GetNetworkOwner()
+		owner = if who then who.Name else "server"
+	end)
+	local inside = {}
+	pcall(function()
+		local params = OverlapParams.new()
+		params.FilterType = Enum.RaycastFilterType.Include
+		params.FilterDescendantsInstances = { self.context.Arena }
+		for _, part in workspace:GetPartsInPart(root, params) do
+			if #inside < 6 then
+				table.insert(inside, part.Name)
+			end
+		end
+	end)
+	local v = root.AssemblyLinearVelocity
+	local move = humanoid.MoveDirection
+	return table.concat({
+		`{player.Name} ({if isBot(player) then "bot" else "player"} {self.role[player] or "?"})`,
+		string.format("%.1fs in", self.context:Elapsed()),
+		string.format(
+			"at %.1f,%.1f,%.1f (%.1f from the middle)",
+			p.X - self.origin.X,
+			p.Y - self.waterY,
+			p.Z - self.origin.Z,
+			flatDistance(p, self.origin)
+		),
+		string.format("feet %.2f over the sea floor", p.Y - legsOf(humanoid, root) - self.floorY),
+		if raft
+			then string.format(
+				"over raft %d (%s) %.1f from its middle of %.1f",
+				raft.Index,
+				STATE_NAMES[raft.State] or "?",
+				flatDistance(p, raft.Center),
+				raft.Radius
+			)
+			else "over open water",
+		`inside [{table.concat(inside, ", ")}]`,
+		`state {humanoid:GetState().Name}`,
+		string.format("walk %.0f jump %.1f hip %.2f", humanoid.WalkSpeed, humanoid.JumpHeight, humanoid.HipHeight),
+		string.format("move %.2f,%.2f vel %.1f,%.1f,%.1f", move.X, move.Z, v.X, v.Y, v.Z),
+		`sit {humanoid.Sit} stand {humanoid.PlatformStand} anchored {root.Anchored}`,
+		`owner {owner} group {root.CollisionGroup}`,
+	}, "; ")
+end
+
+-- A device's own report of what it sees (from the client half), cut down to short plain values.
+local function seenOf(report: any): string?
+	if type(report) ~= "table" then
+		return nil
+	end
+	local lines = {}
+	for key, value in report do
+		if type(key) ~= "string" or #key > 16 or #lines >= 24 then
+			continue
+		end
+		local kind = type(value)
+		if kind == "number" and value == value then
+			table.insert(lines, `{key}={math.floor(value * 100 + 0.5) / 100}`)
+		elseif kind == "boolean" then
+			table.insert(lines, `{key}={value}`)
+		elseif kind == "string" then
+			table.insert(lines, `{key}={string.sub(value, 1, 120)}`)
+		end
+	end
+	table.sort(lines)
+	return table.concat(lines, ", ")
+end
+
+-- Puts something that happened to someone on record: the server log, and (a real player) their
+-- client report, which keeps everything about them from this round (a few lines at most).
+function SharkBait:_record(player: any, what: string, text: string)
+	local lines = self.records[player] or {}
+	self.records[player] = lines
+	if #lines >= 6 then
+		return -- (enough about one player for one round)
+	end
+	table.insert(lines, `{what}: {text}`)
+	Telemetry.Error("SharkBait" .. what, text)
+	ClientReports.Record(player, "SharkBait", what, table.concat(lines, " | "))
+end
+
+-- Frees someone stuck: a shark to the nearest clear water, a swimmer onto the nearest raft that's
+-- up, stopped dead and let go (not sitting, not floppy); a fresh character, put back by the round,
+-- if they were freed only a moment ago and are stuck again. What held them goes on record.
+function SharkBait:_rescue(player: any, why: string, seen: string?)
+	local ctx = self.context
+	local character, humanoid, root = ctx:GetCharacter(player)
+	if not character or not humanoid or not root or self.gulped[player] or self.ended then
+		return
+	end
+	local now = ctx:Now()
+	local again = now - (self.freedAt[player] or -math.huge) < FREE_AGAIN
+	self.freedAt[player] = now
+	local text = `{why}{if again then " (again: a fresh character)" else ""}; {self:_describe(player, humanoid, root)}`
+	if seen then
+		text ..= `; their device: {seen}`
+	end
+	self:_record(player, "Stuck", text)
+	self.watch[player] = nil
+	if again then
+		task.spawn(pcall, player.LoadCharacterAsync, player)
+		return
+	end
+	humanoid.Sit = false
+	humanoid.PlatformStand = false
+	if self.role[player] == "Shark" then
+		self:_place(player, self:_waterSpot(root.Position), false)
+	else
+		self:_place(player, self:_deckSpot(root.Position), true)
+	end
 end
 
 -- Coins ----------------------------------------------------------------------------------------------
@@ -1455,6 +1788,22 @@ function SharkBait:Start()
 		self:_chomp(player)
 	end, { Interval = 0.15 })
 
+	-- A device whose character is trying to move without getting anywhere, nothing in the way (the
+	-- client half), with what it sees there. The server's own look has to agree it hasn't moved.
+	ctx:OnAction("Stuck", function(player, report)
+		local entry = self.watch[player]
+		if self.ended or self.gulped[player] or not entry or ctx:Now() - entry.Since < 1 then
+			return
+		end
+		self:_rescue(player, "their device says it's stuck", seenOf(report))
+	end, { Interval = 1 })
+	-- The first error each part of a device's client half hit (it carries on without that part).
+	ctx:OnAction("Trouble", function(player, text)
+		if type(text) == "string" then
+			self:_record(player, "Client", `{player.Name}'s device: {string.sub(text, 1, 300)}`)
+		end
+	end, { Interval = 2 })
+
 	-- Coins: a steady drizzle (quicker with more swimmers), and a treasure chest or two.
 	for _ = 1, math.min(6, 2 + self.swimmerCount) do
 		self:_spawnCoin()
@@ -1498,24 +1847,51 @@ function SharkBait:_tick(now: number)
 		if not character or not humanoid or not root or self.gulped[player] then
 			continue
 		end
+		if self.placed[player] ~= character then
+			-- A fresh character on its way in from the lobby: the round places it in a moment. One it
+			-- didn't place (it took too long to load) is brought in here, the way the round would.
+			local arriving = self.arriving[player]
+			if not arriving or arriving.Character ~= character then
+				self.arriving[player] = { Character = character, Since = now }
+			elseif now - arriving.Since > 2 and ctx.Hooks.Respawn and ctx.Hooks.CharacterReady then
+				local spot = ctx.Hooks.Respawn(player)
+				if spot then
+					self:_place(player, spot.Position, self.role[player] ~= "Shark")
+				end
+				ctx.Hooks.CharacterReady(player, character)
+			end
+			continue
+		end
 		local position = root.Position
 		local away = flatDistance(position, origin)
+		local legs = legsOf(humanoid, root)
+		local feet = position.Y - legs
 		if self.role[player] == "Shark" then
-			-- Sharks stay in the water, inside the float line, fast and unable to jump.
+			-- Sharks stay in the water, inside the float line, fast and unable to jump: one up out of
+			-- the water (on a raft, or thrown), over a raft that's up, past the float line or down
+			-- through the sea floor goes to the nearest water it may be in.
 			local raft = self:RaftUnder(position)
-			local up = position.Y > self.waterY + 1.6
-			if up or away > SharkBait.LAGOON + 2 or (raft and raft.State ~= SharkBait.FLIPPED) then
-				local dir = flat(position - origin)
-				dir = if dir.Magnitude > 0.1 then dir.Unit else Vector3.new(1, 0, 0)
-				local back = origin
-					+ dir * math.clamp(away, SharkBait.RING + SharkBait.RING_RADIUS + 3, SharkBait.LAGOON - 3)
-				if raft and away <= SharkBait.LAGOON then
-					local out = flat(position - raft.Center)
-					out = if out.Magnitude > 0.1 then out.Unit else dir
-					back = raft.Center + out * (raft.Radius + 2.6)
+			local up = feet > self.floorY + 2.1
+			local sunk = feet < self.floorY - SUNK
+			local over = raft ~= nil and raft.State ~= SharkBait.FLIPPED
+			if up or sunk or away > SharkBait.LAGOON + 2 or over then
+				if physics then
+					-- With physics a shark only gets there if something threw it (rafts and the float
+					-- line are solid to it): on record, it says what the device's physics did.
+					local why = if sunk
+						then "under the sea floor"
+						elseif over and raft then `inside raft {raft.Index}`
+						elseif up then "up out of the water"
+						else "past the float line"
+					self:_record(player, "PutBack", `{why}; {self:_describe(player, humanoid, root)}`)
 				end
-				local spot = Vector3.new(back.X, self.floorY + SharkBait.HIP, back.Z)
-				character:PivotTo(CFrame.lookAt(spot, spot + flatLook(root.CFrame)))
+				if self:_pinned(player, now) then
+					self:_rescue(player, "put back in the water again and again", nil)
+				else
+					self:_place(player, self:_waterSpot(position), false)
+				end
+			else
+				self:_watch(player, humanoid, root, now)
 			end
 			if humanoid.WalkSpeed ~= SharkBait.SHARK_SPEED or humanoid.JumpHeight > 0 or humanoid.JumpPower > 0 then
 				self:_sharkSpeed(player)
@@ -1523,13 +1899,34 @@ function SharkBait:_tick(now: number)
 			continue
 		end
 
-		-- Swimmers.
-		if away > SharkBait.LAGOON + 2 then
-			character:PivotTo(self:_raftSpot() + Vector3.new(0, SharkBait.HIP, 0))
-			self.spots[player] = nil
+		-- Swimmers: past the float line or down through the sea floor, back up on a raft; caught
+		-- inside a raft that's up (it came back up round them on their screen), onto its deck. (The
+		-- test servers' stand-ins walk into rafts with no physics to stop them: they climb, below.)
+		local inside = if physics then self:_insideRaft(root) else nil
+		if away > SharkBait.LAGOON + 2 or feet < self.floorY - SUNK or inside then
+			if physics then
+				local why = if inside
+					then `inside raft {inside.Index}`
+					elseif away > SharkBait.LAGOON + 2 then "past the float line"
+					else "under the sea floor"
+				self:_record(player, "PutBack", `{why}; {self:_describe(player, humanoid, root)}`)
+			end
+		end
+		if away > SharkBait.LAGOON + 2 or feet < self.floorY - SUNK then
+			self:_place(player, self:_deckSpot(position), true)
 			continue
 		end
-		local wet = self:InWater(position)
+		if inside then
+			local offset = flat(position - inside.Center)
+			local dir = if offset.Magnitude > 0.2 then offset.Unit else self:_randomDir()
+			self:_place(player, inside.Center + dir * math.min(offset.Magnitude, inside.Radius - 1.2), true)
+			continue
+		end
+		self:_watch(player, humanoid, root, now)
+		if not self.watch[player] then
+			continue -- just freed (moved)
+		end
+		local wet = self:InWater(position, legs)
 		if wet ~= (self.wet[player] == true) then
 			self.wet[player] = wet
 			self.wetSince[player] = if wet then now else nil
