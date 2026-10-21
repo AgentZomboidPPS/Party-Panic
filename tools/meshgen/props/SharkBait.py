@@ -21,7 +21,7 @@ import math
 
 import numpy as np
 
-from generate_meshes import Mesh, capsule, cylinder, extrude, icosphere, lathe, merge, rounded_box, sphere, taper, torus, tube, weld
+from generate_meshes import Mesh, capsule, cylinder, extrude, icosphere, lathe, merge, organic_lathe, rounded_box, sphere, taper, torus, tube, weld
 
 TAU = 2 * math.pi
 
@@ -1708,6 +1708,210 @@ def sand_bar():
     return {"Sand": dry, "WetSand": wet_part, "Shells": merge(*shells)}
 
 
+# =============================================================================== backdrop: the lifeguard hut
+
+def bar_between(p0, p1, r: float, sides: int = 8) -> Mesh:
+    return strip_tube([tuple(p0), tuple(p1)], [r, r], sides)
+
+
+def box(x0, y0, z0, x1, y1, z1, r: float = 0.06, n: int = 2) -> Mesh:
+    return rounded_box(abs(x1 - x0), abs(y1 - y0), abs(z1 - z0), r, n).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)
+
+
+def hip_roof(half_x: float, half_z: float, y0: float, thick: float, rise: float, ridge: float) -> Mesh:
+    """A hip roof: a rectangular eave (with a fascia `thick` deep) rising to a ridge along X."""
+    rings = []
+    for hx, hz, y in ((half_x - 0.3, half_z - 0.3, y0), (half_x, half_z, y0), (half_x, half_z, y0 + thick)):
+        rings.append([(hx, y, -hz), (hx, y, hz), (-hx, y, hz), (-hx, y, -hz)])
+    for t in (0.35, 0.7, 0.92):
+        hx = ridge + (half_x - ridge) * (1 - t) ** 1.15
+        hz = half_z * (1 - t) ** 1.15 + 0.08
+        rings.append([(hx, y0 + thick + rise * t, -hz), (hx, y0 + thick + rise * t, hz), (-hx, y0 + thick + rise * t, hz),
+                      (-hx, y0 + thick + rise * t, -hz)])
+    rings = [resample(np.array(r_), 24) for r_ in rings]
+    return loft(rings, start=(0, y0, 0), end=(0, y0 + thick + rise, 0))
+
+
+def lifebuoy(radius: float, tube_r: float, stripes: int = 4):
+    ring = torus_e(radius, tube_r, tube_r, 40, 12)
+    bands = []
+    for k in range(stripes):
+        a = k * TAU / stripes + TAU / (2 * stripes)
+        bands.append(torus_e(radius, tube_r + 0.02, tube_r + 0.02, 6, 12, a - 0.22, a + 0.22, closed=False))
+    rope = torus(radius + tube_r + 0.02, 0.035, 40, 5)
+    return ring, merge(*bands), rope
+
+
+def diamond_sign(size: float, depth: float) -> Mesh:
+    """A yellow warning diamond (a square on its corner) with rounded corners, facing -Z."""
+    h = size / 2
+    pts = []
+    for k in range(4):
+        c = np.array([math.cos(k * math.pi / 2), math.sin(k * math.pi / 2)]) * (h - 0.25)
+        for a in np.linspace(k * math.pi / 2 - math.pi / 4, k * math.pi / 2 + math.pi / 4, 5):
+            pts.append(c + np.array([math.cos(a), math.sin(a)]) * 0.25)
+    m = slab(np.array(pts), -depth / 2, depth / 2, min(0.08, depth / 3), 2, bottom_round=True)
+    return m.rotate("x", 90)  # its faces now look along -Z / +Z
+
+
+def hut():
+    """A lifeguard tower on four splayed white stilts: a red cabin with a wide window and a white hip
+    roof, a red flag on the roof, a ladder at the back, a lifebuoy on the rail and a big yellow
+    shark-warning diamond on the front (-Z). It stands on its stilt feet at y = 0."""
+    stilts, cabin, roof, ladder, sign, mark = [], [], [], [], [], []
+    deck_y = 8.8
+    feet = [(sx * 3.1, sz * 2.7) for sx in (-1, 1) for sz in (-1, 1)]
+    tops = [(sx * 2.45, sz * 2.15) for sx in (-1, 1) for sz in (-1, 1)]
+    for (fx, fz), (tx, tz) in zip(feet, tops):
+        stilts.append(strip_tube([(fx, 0.25, fz), (tx, deck_y, tz)], [0.32, 0.26], 10))
+        stilts.append(cylinder(0.48, 0.3, 12, 0.08).translate(fx, 0.0, fz))
+    # X braces on all four sides, two storeys.
+    def leg_at(i, y):
+        (fx, fz), (tx, tz) = feet[i], tops[i]
+        t = (y - 0.25) / (deck_y - 0.25)
+        return np.array([fx + (tx - fx) * t, y, fz + (tz - fz) * t])
+    sides_ = ((0, 1), (2, 3), (0, 2), (1, 3))
+    for a, b in sides_:
+        for y0, y1 in ((1.0, 4.6), (4.6, 8.2)):
+            stilts.append(bar_between(leg_at(a, y0), leg_at(b, y1), 0.12))
+            stilts.append(bar_between(leg_at(b, y0), leg_at(a, y1), 0.12))
+        stilts.append(bar_between(leg_at(a, 4.6), leg_at(b, 4.6), 0.14))
+    # The deck: planks over joists, a porch out front.
+    for k in range(9):
+        x0 = -3.2 + k * 0.712
+        ladder.append(box(x0 + 0.03, deck_y, -3.6, x0 + 0.68, deck_y + 0.28, 2.9, 0.05))
+    stilts.append(box(-3.3, deck_y - 0.4, -3.7, 3.3, deck_y, 3.0, 0.08))
+    # Railing round the deck (open at the back for the ladder).
+    rail_y = deck_y + 1.35
+    corners = [(-3.15, -3.5), (3.15, -3.5), (3.15, 2.8), (-3.15, 2.8)]
+    for x, z in corners + [(-1.05, -3.5), (1.05, -3.5), (-3.15, -0.35), (3.15, -0.35)]:
+        stilts.append(box(x - 0.1, deck_y + 0.25, z - 0.1, x + 0.1, rail_y + 0.12, z + 0.1, 0.05))
+    for (x0, z0), (x1, z1) in ((corners[0], corners[1]), (corners[1], corners[2]), (corners[3], corners[0])):
+        for y in (rail_y, deck_y + 0.75):
+            stilts.append(bar_between((x0, y, z0), (x1, y, z1), 0.085))
+    # The cabin: red walls, a wide front window (dark panes in white frames), a side door.
+    cy0, cy1 = deck_y + 0.28, deck_y + 4.0
+    cabin.append(box(-2.4, cy0, -1.7, 2.4, cy1, 2.2, 0.08))
+    for x0, x1 in ((-1.95, -0.05), (0.05, 1.95)):
+        mark.append(box(x0, cy0 + 1.55, -1.76, x1, cy1 - 0.45, -1.68, 0.03))
+    roof.append(box(-2.15, cy0 + 1.4, -1.85, 2.15, cy0 + 1.55, -1.62, 0.04))
+    roof.append(box(-2.15, cy1 - 0.45, -1.85, 2.15, cy1 - 0.3, -1.62, 0.04))
+    for x in (-2.07, 0.0, 2.07):
+        roof.append(box(x - 0.08, cy0 + 1.4, -1.85, x + 0.08, cy1 - 0.3, -1.62, 0.03))
+    wy0, wy1, wz0, wz1 = cy0 + 1.7, cy1 - 0.6, -0.9, 1.4  # a window in each side wall
+    for sx in (-1, 1):
+        mark.append(box(sx * 2.37, wy0, wz0, sx * 2.45, wy1, wz1, 0.03))
+        for y0_, y1_, z0_, z1_ in ((wy0 - 0.15, wy0, wz0 - 0.15, wz1 + 0.15), (wy1, wy1 + 0.15, wz0 - 0.15, wz1 + 0.15),
+                                   (wy0, wy1, wz0 - 0.15, wz0), (wy0, wy1, wz1, wz1 + 0.15), (wy0, wy1, 0.18, 0.32)):
+            roof.append(box(sx * 2.38, y0_, z0_, sx * 2.52, y1_, z1_, 0.03))
+    ladder.append(box(-0.75, cy0, 2.16, 0.75, cy0 + 2.9, 2.3, 0.04))  # back door
+    # Roof and flag.
+    roof.append(hip_roof(3.05, 2.85, cy1, 0.32, 1.9, 0.6).translate(0, 0, 0.25))
+    roof_top = cy1 + 0.32 + 1.9
+    pole_top = 18.0
+    stilts.append(bar_between((0, roof_top - 0.3, 0.25), (0, pole_top - 0.2, 0.25), 0.1, 10))
+    stilts.append(sphere(0.22, 8, 12).translate(0, pole_top - 0.22, 0.25))
+    flag_cloth = pillow(smooth_outline([(0, -0.75), (2.4, -0.62), (2.25, 0.0), (2.4, 0.62), (0, 0.75)], 30, 1), (0.9, 0.0),
+                        lambda q: np.full(len(q), 0.05), rings=3, edge=0.05)
+    wave_cloth(flag_cloth, 0.0, 0.18, 2.3, 1.0)
+    flag_cloth.rotate("y", 25).translate(0.12, pole_top - 1.25, 0.25)
+    # Ladder up the back, leaning on the deck edge.
+    for x in (-0.75, 0.75):
+        ladder.append(bar_between((x, 0.13, 5.0), (x, deck_y + 1.2, 2.95), 0.13, 8))
+    for k in range(11):
+        t = (k + 0.6) / 11.5
+        y = t * (deck_y + 1.2)
+        z = 5.0 + (2.95 - 5.0) * t
+        ladder.append(bar_between((-0.8, y, z), (0.8, y, z), 0.085, 6))
+    # The warning sign on the front rail and the lifebuoy hanging beside it.
+    sign.append(diamond_sign(3.6, 0.22).translate(0, deck_y + 2.05, -3.72))
+    fin = pillow(smooth_outline(np.array(FIN_EMBLEM) * 2.4, 40), (0.0, 0.1), lambda q: np.full(len(q), 0.06), rings=3, edge=0.07)
+    fin.v[:, 0] *= -1
+    fin.f = fin.f[:, ::-1].copy()
+    mark.append(fin.translate(0, deck_y + 2.1, -3.84))
+    waves = strip_tube([(x, deck_y + 1.38 + 0.12 * math.sin(x * 6.0), -3.84) for x in np.linspace(-0.85, 0.85, 15)], [0.07] * 15, 6)
+    mark.append(waves)
+    ring, bands, rope = lifebuoy(0.72, 0.2)
+    for m in (ring, bands, rope):
+        m.rotate("x", 90).translate(2.35, deck_y + 0.95, -3.72)
+    hook = bar_between((2.35, rail_y + 0.05, -3.62), (2.35, rail_y - 0.15, -3.72), 0.05, 6)
+    return {"Stilts": merge(*stilts, hook), "Cabin": merge(*cabin), "Roof": merge(*roof), "Ladder": merge(*ladder),
+            "Sign": merge(*sign), "SignMark": merge(*mark), "Float": ring, "FloatStripe": merge(bands, rope), "Flag": flag_cloth}
+
+
+# =============================================================================== backdrop: the lighthouse
+
+def lighthouse():
+    """A red-and-white lighthouse on a grassy rock islet: a gallery rail, a glowing lantern room and
+    a red cap. The door faces -Z."""
+    rng = np.random.default_rng(17)
+    # The islet: a craggy rock dome, boulders round its foot, a grass cap.
+    base = organic_lathe([(11.0, 0.0), (10.6, 1.2), (9.6, 2.8), (8.6, 4.6), (7.9, 5.9), (7.2, 6.6), (5.0, 7.0), (0.0, 7.1)], 40, 0.07, waves=7, seed=4)
+    base.v[:, 1] += wobble(base.v, 9, 0.6, 3.0) * (base.v[:, 1] > 0.3) * (base.v[:, 1] < 6.8)
+    rocks = [base]
+    for k in range(14):
+        a = k * TAU / 14 + rng.uniform(-0.15, 0.15)
+        r = rng.uniform(9.0, 10.6)
+        rocks.append(lumpy(rng.uniform(1.0, 1.9), (1.2, 0.8, 1.0), 40 + k, 0.35, 1).translate(math.cos(a) * r, 0.7, math.sin(a) * r))
+    rock = merge(*rocks)
+    rock.v[:, 1] = np.maximum(rock.v[:, 1], 0.0)  # boulders sit flat on the sea bed
+    rock.smooth = False
+    grass = organic_lathe([(8.1, 6.0), (7.9, 6.6), (6.5, 7.35), (3.5, 7.75), (0.0, 7.85)], 40, 0.05, waves=6, seed=6)
+    tufts = [lumpy(rng.uniform(0.6, 1.0), (1.3, 0.6, 1.3), 60 + k, 0.3, 1).translate(math.cos(a) * r, 7.5 - 0.07 * r, math.sin(a) * r)
+             for k, (a, r) in enumerate([(rng.uniform(0, TAU), rng.uniform(4.5, 7.0)) for _ in range(8)])]
+    # The tower: tapered, in bands; red bands are their own piece (they share the band edges).
+    y0, y1, r0, r1 = 7.4, 35.6, 3.4, 2.3
+    bands = 8
+    prof = [(0.0, y0), (r0 + 0.25, y0), (r0 + 0.25, y0 + 0.5), (r0, y0 + 0.5)]
+    for k in range(1, bands + 1):
+        y = y0 + 0.5 + (y1 - y0 - 0.5) * k / bands
+        prof.append((r0 + (r1 - r0) * (y - y0) / (y1 - y0), y))
+    prof += [(0.0, y1)]
+    # resample the straight run so each band has a few rows (for smooth shading on the taper)
+    tower = lathe(prof, 40)
+    c = tower.v[tower.f].mean(axis=1)
+    band_index = np.floor((c[:, 1] - (y0 + 0.5)) / ((y1 - y0 - 0.5) / bands)).astype(int)
+    red = (band_index % 2 == 0) & (c[:, 1] > y0 + 0.5) & (c[:, 1] < y1 - 0.01)
+    stripes, tower_w = split_faces(tower, red)
+    # Little windows up the tower and the door at its foot (-Z).
+    door = []
+    for y in (14.5, 22.0, 29.0):
+        r = r0 + (r1 - r0) * (y - y0) / (y1 - y0)
+        door.append(box(-0.35, y - 0.6, -r - 0.12, 0.35, y + 0.6, -r + 0.3, 0.12, 2))
+    door_poly = [(-0.95, 0.0), (0.95, 0.0)] + [(0.95 * math.cos(a), 1.9 + 0.95 * math.sin(a)) for a in np.linspace(0, math.pi, 10)]
+    dm = extrude(door_poly, 0.3).translate(0, y0 + 0.4, -(r0 + 0.02))
+    door.append(dm)
+    step = box(-1.4, y0 - 0.1, -r0 - 1.0, 1.4, y0 + 0.4, -r0 + 0.2, 0.1)
+    # Gallery: a deck with corbels, a rail; the lantern room and its frame; the cap.
+    rail = []
+    gal_y = y1
+    rail.append(cylinder(3.3, 0.45, 40, 0.1).translate(0, gal_y - 0.05, 0))
+    for k in range(16):
+        a = k * TAU / 16
+        rail.append(box(-0.15, -0.9, -0.2, 0.15, 0.0, 0.2, 0.06).rotate("y", -math.degrees(a)).translate(math.cos(a) * 2.6, gal_y, math.sin(a) * 2.6))
+    for k in range(24):
+        a = k * TAU / 24
+        rail.append(bar_between((math.cos(a) * 3.1, gal_y + 0.4, math.sin(a) * 3.1), (math.cos(a) * 3.1, gal_y + 1.7, math.sin(a) * 3.1), 0.06, 6))
+    for y in (gal_y + 1.0, gal_y + 1.72):
+        rail.append(torus(3.1, 0.08, 48, 6).translate(0, y, 0))
+    lan_y0, lan_y1, lan_r = gal_y + 0.4, gal_y + 4.6, 1.75
+    rail.append(cylinder(2.0, 0.8, 32, 0.08).translate(0, lan_y0, 0))
+    lantern = lathe([(0.0, lan_y0 + 0.8), (lan_r, lan_y0 + 0.8), (lan_r, lan_y1), (0.0, lan_y1)], 24)
+    for k in range(8):
+        a = k * TAU / 8 + TAU / 16
+        rail.append(bar_between((math.cos(a) * (lan_r + 0.04), lan_y0 + 0.8, math.sin(a) * (lan_r + 0.04)),
+                                (math.cos(a) * (lan_r + 0.04), lan_y1, math.sin(a) * (lan_r + 0.04)), 0.09, 6))
+    rail.append(torus(lan_r + 0.05, 0.12, 32, 6).translate(0, lan_y1, 0))
+    cap_top = 46.0
+    roof_m = lathe([(0.0, lan_y1), (2.45, lan_y1), (2.5, lan_y1 + 0.25), (2.0, lan_y1 + 1.2), (1.2, lan_y1 + 2.3), (0.55, lan_y1 + 2.85),
+                    (0.0, lan_y1 + 3.0)], 32)
+    ball = sphere(0.45, 10, 14).translate(0, lan_y1 + 3.3, 0)
+    rod = bar_between((0, lan_y1 + 3.5, 0), (0, cap_top - 0.1, 0), 0.08, 6)
+    tip = sphere(0.12, 6, 8).translate(0, cap_top - 0.12, 0)
+    return {"Rock": merge(rock, step), "Grass": merge(grass, *tufts), "Tower": tower_w, "Stripes": stripes, "Rail": merge(*rail, rod, tip),
+            "Lantern": lantern, "Roof": merge(roof_m, ball), "Door": merge(*door)}
+
+
 PROPS = {
     "SharkBaitShark": shark,
     "SharkBaitRaft": raft,
@@ -1722,6 +1926,8 @@ PROPS = {
     "SharkBaitKelp": kelp,
     "SharkBaitStarfish": starfish,
     "SharkBaitSandBar": sand_bar,
+    "SharkBaitHut": hut,
+    "SharkBaitLighthouse": lighthouse,
 }
 
 # Preview colors (the game colors pieces by name from the Luau palette).
@@ -1772,4 +1978,16 @@ COLORS = {
     "Sand": (240, 220, 170),
     "WetSand": (200, 175, 130),
     "Shells": (255, 235, 220),
+    "Stilts": (235, 235, 230),
+    "Cabin": (230, 70, 60),
+    "Roof": (250, 250, 245),
+    "Ladder": (200, 150, 90),
+    "Sign": (255, 210, 60),
+    "SignMark": (25, 25, 30),
+    "FloatStripe": (255, 255, 255),
+    "Grass": (100, 180, 80),
+    "Tower": (245, 245, 240),
+    "Rail": (60, 60, 70),
+    "Lantern": (255, 230, 140),
+    "Door": (110, 70, 45),
 }

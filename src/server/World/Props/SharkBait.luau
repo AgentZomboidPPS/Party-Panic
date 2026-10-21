@@ -207,7 +207,7 @@ return function(h)
 		-- Under the water: coral heads, kelp and starfish on the lagoon floor.
 		SharkBaitCoral = {
 			Height = 6,
-			AssetId = 0,
+			AssetId = 78476909007682,
 			Palette = {
 				Rock = h.rgb(150, 140, 130),
 				CoralA = h.rgb(255, 110, 140),
@@ -226,7 +226,7 @@ return function(h)
 		},
 		SharkBaitKelp = {
 			Height = 12,
-			AssetId = 0,
+			AssetId = 90541970109554,
 			Shadow = false,
 			Palette = { Kelp = h.rgb(60, 160, 90), Bulbs = h.rgb(150, 190, 70) },
 			Fallback = level(function(m)
@@ -245,7 +245,7 @@ return function(h)
 		},
 		SharkBaitStarfish = {
 			Height = 0.5,
-			AssetId = 0,
+			AssetId = 134189417101621,
 			Shadow = false,
 			Palette = { Star = h.rgb(255, 130, 60), Dots = h.rgb(255, 220, 170) },
 			Fallback = level(function(m)
@@ -261,7 +261,7 @@ return function(h)
 		-- A low sand bar for the scenery; its base sits 2 studs under the water.
 		SharkBaitSandBar = {
 			Height = 3,
-			AssetId = 0,
+			AssetId = 114062864335104,
 			Shadow = false,
 			Palette = { Sand = h.rgb(240, 220, 170), WetSand = h.rgb(200, 175, 130), Shells = h.rgb(255, 235, 220) },
 			Materials = { Sand = Enum.Material.Sand, WetSand = Enum.Material.Sand },
@@ -273,7 +273,7 @@ return function(h)
 		-- A lifeguard tower on stilts, its warning sign facing -Z.
 		SharkBaitHut = {
 			Height = 18,
-			AssetId = 0,
+			AssetId = 91252373330148,
 			Palette = {
 				Stilts = h.rgb(235, 235, 230),
 				Cabin = h.rgb(230, 70, 60),
