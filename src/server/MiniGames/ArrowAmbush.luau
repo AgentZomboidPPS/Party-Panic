@@ -18,7 +18,6 @@
 -- the same code, so arrows and boards treat them exactly like players.
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
-local Scenery = require(script.Parent.Kit.Scenery)
 local Build = require(script.Parent.Parent.World.Build)
 local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 local Shapes = require(script.Parent.Parent.World.Shapes)
@@ -191,52 +190,130 @@ function ArrowAmbush:Prepare()
 	ctx:SetStatus(if #archers > 1 then "2 ARCHERS vs the RUNNERS!" else "1 ARCHER vs the RUNNERS!")
 end
 
+-- The meadow round the castle grounds (Scenery.Meadow's look: grass to the horizon, a ring of forest,
+-- flowering bushes, soft hills), keeping trees and bushes off the castle and the festival.
+local function meadow(ctx, center: Vector3, radius: number, clear: (Vector3) -> boolean)
+	Build.Part({
+		Name = "Grass",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(4, radius * 2, radius * 2),
+		CFrame = CFrame.new(center - Vector3.new(0, 2, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = rgb(106, 188, 82),
+		Material = Enum.Material.Grass,
+		Parent = ctx.Arena,
+	})
+	local leafColors = { rgb(80, 190, 90), rgb(110, 200, 80), rgb(70, 165, 95), rgb(140, 205, 85) }
+	for index = 0, 29 do
+		local angle = (index + rng:NextNumber(-0.35, 0.35)) / 30 * math.pi * 2
+		local distance = rng:NextNumber(58, 100)
+		local at = center + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance)
+		if clear(at) then
+			MeshLibrary.Get("Tree", {
+				Scale = rng:NextNumber(1.5, 2.7),
+				Colors = { Leaves = leafColors[rng:NextInteger(1, #leafColors)] },
+				CFrame = CFrame.new(at) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+				Parent = ctx.Arena,
+			})
+		end
+	end
+	local flowerColors = { rgb(255, 130, 190), rgb(255, 220, 90), rgb(180, 140, 255), rgb(255, 255, 255) }
+	for index = 0, 23 do
+		local angle = (index + rng:NextNumber(-0.4, 0.4)) / 24 * math.pi * 2
+		local distance = rng:NextNumber(50, 62)
+		local at = center + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance)
+		if clear(at) then
+			MeshLibrary.Get("Bush", {
+				Scale = rng:NextNumber(1.1, 1.9),
+				Colors = { Flowers = flowerColors[rng:NextInteger(1, #flowerColors)] },
+				CFrame = CFrame.new(at) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+				Parent = ctx.Arena,
+			})
+		end
+	end
+	for index = 0, 11 do
+		local angle = (index + rng:NextNumber(-0.3, 0.3)) / 12 * math.pi * 2
+		local distance = radius * rng:NextNumber(0.7, 0.85)
+		local size = Vector3.new(rng:NextNumber(150, 230), rng:NextNumber(50, 90), rng:NextNumber(110, 160))
+		local hill = Build.Part({
+			Name = "Hill",
+			Size = size,
+			CFrame = CFrame.new(
+				center + Vector3.new(math.cos(angle) * distance, -size.Y * 0.2, math.sin(angle) * distance)
+			) * CFrame.Angles(0, -angle + math.pi / 2, 0),
+			Color = rgb(96, 176, 86):Lerp(rgb(70, 140, 90), rng:NextNumber(0, 1)),
+			Material = Enum.Material.Grass,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+			Parent = ctx.Arena,
+		})
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = hill
+	end
+end
+
+-- The look: a storybook castle archery tournament. The archers' tower (blue-roofed stair turret,
+-- banners, painted shields) stands in front of a castle curtain wall with towers; the courtyard is
+-- cobbled in cream, honey and blue stones inside a low crenellated wall with corner turrets and
+-- bunting; banner poles line the sides, and past the far wall a row of hay targets stands before
+-- striped festival tents. Everything outside the walls is scenery: the courtyard, its colliders,
+-- barriers and the boards are as they were.
 function ArrowAmbush:_buildArena()
 	local ctx = self.context
 	local origin: Vector3 = self.origin
-	Scenery.Meadow(ctx, origin - Vector3.new(0, 0.6, 0), 300)
+	local ground = origin.Y - 0.5 -- the tournament field's top, round the courtyard
+	local function at(x: number, z: number, y: number?): Vector3
+		return Vector3.new(origin.X + x, y or ground, origin.Z + z)
+	end
+	local grass = origin.Y - 0.6 -- the meadow's top
+	local castleZ = TOWER_Z - 16 -- the curtain wall behind the tower
+	local castleX = 56 -- ... and its side walls
+	meadow(ctx, origin - Vector3.new(0, 0.6, 0), 300, function(point: Vector3): boolean
+		local x, z = point.X - origin.X, point.Z - origin.Z
+		return not (math.abs(x) < castleX + 8 and z < -2) and not (math.abs(x) < 48 and z > 24 and z < 60)
+	end)
+	-- The tournament field: trampled sand round the courtyard, the meadow beyond.
+	Shapes.Slab(Vector3.new(90, 0.4, 86), 10, {
+		Name = "Field",
+		CFrame = CFrame.new(at(0, 6, ground - 0.2)),
+		Color = rgb(226, 204, 156),
+		Material = Enum.Material.Sand,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		Parent = ctx.Arena,
+	})
 
-	-- The courtyard: a flagstone floor inside a low stone wall.
+	-- The courtyard floor (what runners stand on): its top shows between the cobbles as grout.
 	local floorSize = Vector3.new(X_HALF * 2 + 7.2, 1.6, Z_MAX - Z_MIN + 7.2)
 	local floorCenter = origin + Vector3.new(0, -0.8, (Z_MIN + Z_MAX) / 2)
 	Shapes.Slab(floorSize, 1, {
 		Name = "Courtyard",
 		CFrame = CFrame.new(floorCenter),
-		Color = rgb(214, 200, 178),
-		Material = Enum.Material.Cobblestone,
+		Color = rgb(150, 134, 120),
+		Material = Enum.Material.Slate,
 		Parent = ctx.Arena,
 	})
-	-- A checker of lighter flagstones, a hair above the floor (never coplanar).
-	for gx = -4, 4 do
-		for gz = 0, 6 do
-			if (gx + gz) % 2 == 0 then
-				Build.Decor({
-					Name = "Flag",
-					Size = Vector3.new(5.4, 0.3, 5.4),
-					CFrame = CFrame.new(origin + Vector3.new(gx * 5.8, -0.05, Z_MIN + 2.6 + gz * 5.8)),
-					Color = rgb(232, 222, 202),
-					Material = Enum.Material.Slate,
-					Parent = ctx.Arena,
-				})
-			end
+	-- Cobbles: 5 x 4 tiles fill the inside of the walls, their tops a little over the floor.
+	for i = 0, 4 do
+		for j = 0, 3 do
+			MeshLibrary.Get("ArrowAmbushCobbles", {
+				CFrame = CFrame.new(origin + Vector3.new(-21.2 + i * 10.6, -0.24, Z_MIN - 1.4 + 5.35 + j * 10.7))
+					* CFrame.Angles(0, if (i + j) % 2 == 0 then 0 else math.pi, 0),
+				Parent = ctx.Arena,
+			})
 		end
 	end
-	local wallColor = rgb(176, 164, 150)
-	local capColor = rgb(226, 214, 196)
-	-- A wall from post to post (its ends tucked into the posts), sunk a little into the floor.
-	local function wall(center: Vector3, size: Vector3, barrierLength: number, capHeight: number)
+
+	-- The low wall: an invisible collider with the barrier above it (as before), dressed in stone
+	-- sections with coping and little merlons.
+	local function wall(center: Vector3, size: Vector3, barrierLength: number)
 		Shapes.RoundedBox(size + Vector3.new(0, 0.2, 0), 0.5, {
 			Name = "Wall",
 			CFrame = CFrame.new(center + Vector3.new(0, size.Y / 2 - 0.1, 0)),
-			Color = wallColor,
-			Material = Enum.Material.Slate,
-			Parent = ctx.Arena,
-		})
-		Shapes.RoundedBox(Vector3.new(size.X + 0.5, capHeight, size.Z + 0.5), 0.2, {
-			Name = "WallCap",
-			CFrame = CFrame.new(center + Vector3.new(0, size.Y + 0.25, 0)),
-			Color = capColor,
-			Material = Enum.Material.Slate,
+			Transparency = 1,
 			Parent = ctx.Arena,
 		})
 		Build.Barrier({
@@ -247,37 +324,47 @@ function ArrowAmbush:_buildArena()
 			CFrame = CFrame.new(center + Vector3.new(0, size.Y + 8, 0)),
 			Parent = ctx.Arena,
 		})
+		local alongX = size.X > size.Z
+		local length = if alongX then size.X else size.Z
+		local count = math.round(length / 8.8)
+		local step = length / count
+		for k = 0, count - 1 do
+			local offset = -length / 2 + step * (k + 0.5)
+			MeshLibrary.Get("ArrowAmbushWall", {
+				Scale = step / 8.8,
+				CFrame = CFrame.new(center + if alongX then Vector3.new(offset, 0, 0) else Vector3.new(0, 0, offset))
+					* CFrame.Angles(0, if alongX then 0 else math.pi / 2, 0),
+				Parent = ctx.Arena,
+			})
+		end
 	end
 	local wx, z0, z1 = X_HALF + 2.2, Z_MIN - 2.2, Z_MAX + 2.2
-	-- (The side walls' caps are a little taller, so caps meeting inside a post never share a face.)
-	wall(origin + Vector3.new(0, 0, z1), Vector3.new(wx * 2 - 1.6, WALL, 1.6), wx * 2 + 2.6, 0.5)
-	wall(origin + Vector3.new(0, 0, z0), Vector3.new(wx * 2 - 1.6, WALL, 1.6), wx * 2 + 2.6, 0.5)
-	wall(origin + Vector3.new(-wx, 0, (z0 + z1) / 2), Vector3.new(1.6, WALL, z1 - z0 - 1.6), z1 - z0 + 2.6, 0.74)
-	wall(origin + Vector3.new(wx, 0, (z0 + z1) / 2), Vector3.new(1.6, WALL, z1 - z0 - 1.6), z1 - z0 + 2.6, 0.74)
-	-- Corner posts with banners.
+	wall(origin + Vector3.new(0, 0, z1), Vector3.new(wx * 2 - 1.6, WALL, 1.6), wx * 2 + 2.6)
+	wall(origin + Vector3.new(0, 0, z0), Vector3.new(wx * 2 - 1.6, WALL, 1.6), wx * 2 + 2.6)
+	wall(origin + Vector3.new(-wx, 0, (z0 + z1) / 2), Vector3.new(1.6, WALL, z1 - z0 - 1.6), z1 - z0 + 2.6)
+	wall(origin + Vector3.new(wx, 0, (z0 + z1) / 2), Vector3.new(1.6, WALL, z1 - z0 - 1.6), z1 - z0 + 2.6)
+	-- Corner turrets round the corner posts (the posts stay as invisible colliders).
+	local red, gold, blue = rgb(226, 62, 74), rgb(255, 200, 70), rgb(64, 112, 214)
 	for _, cx in { -1, 1 } do
 		for _, cz in { z0, z1 } do
 			local post = origin + Vector3.new(cx * wx, 0, cz)
 			Shapes.RoundedBox(Vector3.new(2.6, WALL + 2.8, 2.6), 0.5, {
 				Name = "Post",
 				CFrame = CFrame.new(post + Vector3.new(0, (WALL + 2.8) / 2 - 0.4, 0)),
-				Color = wallColor,
-				Material = Enum.Material.Slate,
+				Transparency = 1,
 				Parent = ctx.Arena,
 			})
-			Build.Decor({
-				Name = "PostCap",
-				Shape = Enum.PartType.Ball,
-				Size = Vector3.one * 1.6,
-				CFrame = CFrame.new(post + Vector3.new(0, WALL + 2.9, 0)),
-				Color = rgb(255, 150, 70),
+			MeshLibrary.Get("ArrowAmbushTurret", {
+				Colors = { Flag = if cx < 0 then red else gold },
+				CFrame = CFrame.new(post - Vector3.new(0, 0.15, 0))
+					* CFrame.Angles(0, if cz == z0 then math.pi else 0, 0),
 				Parent = ctx.Arena,
 			})
 		end
 	end
 
-	-- Bunting from post to post along the side and back walls, held up by a pole halfway.
-	local hang = WALL + 2.6
+	-- Bunting from turret to turret along the side and far walls, held up by a pole halfway.
+	local hang = WALL + 3.1
 	local function bunting(a: Vector3, b: Vector3)
 		local scale = (b - a).Magnitude / 20
 		local mid = (a + b) / 2
@@ -301,7 +388,7 @@ function ArrowAmbush:_buildArena()
 			Shape = Enum.PartType.Cylinder,
 			Size = Vector3.new(hang + 0.4, 0.3, 0.3),
 			CFrame = CFrame.new(mid + Vector3.new(0, (hang + 0.4) / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)),
-			Color = rgb(255, 205, 80),
+			Color = gold,
 			Material = Enum.Material.Metal,
 			Parent = ctx.Arena,
 		})
@@ -309,25 +396,19 @@ function ArrowAmbush:_buildArena()
 		bunting(mid, b)
 	end
 
-	-- Hay bales outside the walls and barrels of arrows at the tower's foot.
-	local bales =
-		{ { -wx - 4, z1 + 2.5, 20 }, { wx + 4.5, z1 + 1.5, -15 }, { -wx - 3.5, z0 + 6, 80 }, { wx + 3.5, z0 + 9, 100 } }
-	for _, spot in bales do
-		MeshLibrary.Get("HayBale", {
-			CFrame = CFrame.new(origin + Vector3.new(spot[1], 0, spot[2])) * CFrame.Angles(0, math.rad(spot[3]), 0),
-			Parent = ctx.Arena,
-		})
-	end
-	for _, x in { -6.2, 6.2 } do
-		MeshLibrary.Get("ArrowBarrel", {
-			CFrame = CFrame.new(origin + Vector3.new(x, 0, TOWER_Z + 5.4)) * CFrame.Angles(0, x, 0),
-			Parent = ctx.Arena,
-		})
-	end
-
-	-- The archers' tower behind the north wall, with a solid core to stand on.
+	-- The archers' tower behind the north wall on a stone plinth, with a solid core to stand on.
 	MeshLibrary.Get("ArcherTower", {
 		CFrame = CFrame.new(origin + Vector3.new(0, 0, TOWER_Z)) * CFrame.Angles(0, math.pi, 0),
+		Parent = ctx.Arena,
+	})
+	Build.Part({
+		Name = "TowerPlinth",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.8, 15.2, 15.2),
+		CFrame = CFrame.new(origin + Vector3.new(0, -0.3, TOWER_Z)) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = rgb(198, 186, 170),
+		Material = Enum.Material.Slate,
+		CanCollide = false,
 		Parent = ctx.Arena,
 	})
 	Build.Part({
@@ -344,11 +425,97 @@ function ArrowAmbush:_buildArena()
 		CFrame = CFrame.new(origin + Vector3.new(0, TOWER_TOP + 5, TOWER_Z + 6.8)),
 		Parent = ctx.Arena,
 	})
+	for _, x in { -6.2, 6.2 } do
+		MeshLibrary.Get("ArrowBarrel", {
+			CFrame = CFrame.new(at(x, TOWER_Z + 5.4)) * CFrame.Angles(0, x, 0),
+			Parent = ctx.Arena,
+		})
+	end
 
-	-- Whether an x is within a hair of a flagstone's edge (faces that close would flicker).
-	local function nearFlagEdge(x: number): boolean
-		local offset = (x - origin.X + 2.9) % 5.8 -- flagstone edges sit 0.2 either side of these lines
-		return math.abs(offset - 0.2) < 0.12 or math.abs(offset - 5.6) < 0.12
+	-- The castle behind the tower: curtain walls with banners between round towers, and side walls
+	-- reaching forward, so the runners look up at a storybook castle.
+	local castleBanners = { blue, red, blue, red, blue, red, blue }
+	for k = -3, 3 do
+		MeshLibrary.Get("ArrowAmbushCastleWall", {
+			Colors = { Banner = castleBanners[k + 4] },
+			CFrame = CFrame.new(at(k * 16, castleZ, grass - 0.05)) * CFrame.Angles(0, math.pi, 0),
+			Parent = ctx.Arena,
+		})
+	end
+	for _, side in { -1, 1 } do
+		for k = 0, 1 do
+			MeshLibrary.Get("ArrowAmbushCastleWall", {
+				Colors = { Banner = if k == 0 then red else blue },
+				CFrame = CFrame.new(at(side * castleX, castleZ + 8 + k * 16, grass - 0.05))
+					* CFrame.Angles(0, side * math.pi / 2, 0),
+				Parent = ctx.Arena,
+			})
+		end
+	end
+	local towers = {
+		{ 8, castleZ, 1.6 },
+		{ 40, castleZ, 2 },
+		{ castleX, castleZ, 2.4 },
+		{ castleX, castleZ + 32, 1.9 },
+	}
+	for _, tower in towers do
+		for _, side in { -1, 1 } do
+			MeshLibrary.Get("ArrowAmbushTurret", {
+				Scale = tower[3],
+				Colors = { Flag = if side < 0 then red else gold },
+				CFrame = CFrame.new(at(side * tower[1], tower[2], grass - 0.15))
+					* CFrame.Angles(0, math.pi, 0),
+				Parent = ctx.Arena,
+			})
+		end
+	end
+
+	-- Banner poles along the outside of the side walls, their banners facing in.
+	for _, side in { -1, 1 } do
+		for index, z in { -8, 6, 20 } do
+			MeshLibrary.Get("ArrowAmbushBanner", {
+				Colors = { Cloth = if (index + (if side < 0 then 0 else 1)) % 2 == 0 then red else blue },
+				CFrame = CFrame.new(at(side * (wx + 4.4), z)) * CFrame.Angles(0, side * math.pi / 2, 0),
+				Parent = ctx.Arena,
+			})
+		end
+	end
+
+	-- The festival past the far wall: hay targets facing the tower, striped tents behind them.
+	for _, x in { -16, -8, 8, 16 } do
+		MeshLibrary.Get("ArrowAmbushHayTarget", {
+			CFrame = CFrame.new(at(x, z1 + 6)) * CFrame.Angles(0, math.rad(x * 0.6), 0),
+			Parent = ctx.Arena,
+		})
+	end
+	local tents = {
+		{ -31, z1 + 12, 1, rgb(226, 62, 74), gold },
+		{ -17, z1 + 17, 1, rgb(64, 120, 226), red },
+		{ 0, z1 + 15, 1.25, rgb(156, 88, 214), gold },
+		{ 17, z1 + 17, 1, rgb(60, 176, 110), red },
+		{ 31, z1 + 12, 1, rgb(255, 150, 50), gold },
+	}
+	for _, tent in tents do
+		MeshLibrary.Get("ArrowAmbushTent", {
+			Scale = tent[3],
+			Colors = { StripeA = tent[4], Flag = tent[5] },
+			CFrame = CFrame.new(at(tent[1], tent[2])) * CFrame.Angles(0, math.rad(-tent[1] * 0.8), 0),
+			Parent = ctx.Arena,
+		})
+	end
+	local bales = {
+		{ -wx - 5, z1 + 3, 20 },
+		{ wx + 5.5, z1 + 2.5, -15 },
+		{ -wx - 6, z0 + 3, 80 },
+		{ wx + 6, z0 + 5, 100 },
+		{ -24, z1 + 7, 5 },
+		{ 24, z1 + 7, -10 },
+	}
+	for _, spot in bales do
+		MeshLibrary.Get("HayBale", {
+			CFrame = CFrame.new(at(spot[1], spot[2])) * CFrame.Angles(0, math.rad(spot[3]), 0),
+			Parent = ctx.Arena,
+		})
 	end
 
 	-- Target boards on rails: two rows of boards with 4 runners or fewer, three rows otherwise.
@@ -376,12 +543,9 @@ function ArrowAmbush:_buildArena()
 	end
 	for index, board in self.boards do
 		board.V = values[index]
-		-- Its rail: two metal strips the board's wheels run on, over wooden sleepers. Every layer's
-		-- top and bottom are at their own heights (never coplanar with the flagstones).
+		-- Its rail: two metal strips the board's wheels run on, over wooden sleepers set in the
+		-- cobbles. Every layer's top and bottom are at their own heights (never coplanar).
 		local length = board.A * 2 + 6.6
-		if nearFlagEdge(origin.X + board.C + length / 2) or nearFlagEdge(origin.X + board.C - length / 2) then
-			length += 0.3
-		end
 		for _, offset in { -0.78, 0.78 } do
 			Build.Decor({
 				Name = "Rail",
@@ -395,9 +559,6 @@ function ArrowAmbush:_buildArena()
 		local sleepers = math.floor(length / 2.2)
 		for step = 0, sleepers do
 			local x = origin.X + board.C - length / 2 + 0.7 + step * (length - 1.4) / sleepers
-			if nearFlagEdge(x - 0.3) or nearFlagEdge(x + 0.3) then
-				x += 0.2
-			end
 			Build.Decor({
 				Name = "Sleeper",
 				Size = Vector3.new(0.6, 0.5, 2.6),

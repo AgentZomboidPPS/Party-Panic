@@ -1,0 +1,29 @@
+newmtl Foot
+Kd 0.784 0.745 0.690
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Pole
+Kd 0.902 0.902 0.925
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Gold
+Kd 1.000 0.784 0.196
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cloth
+Kd 0.922 0.329 0.329
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Emblem
+Kd 1.000 0.925 0.510
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
