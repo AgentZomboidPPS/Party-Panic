@@ -73,7 +73,7 @@ SharkBait.WOBBLE = 1.2 -- warning before a chomped raft flips
 SharkBait.DUNK = 3 -- how long a flipped raft stays under
 SharkBait.SAFE = 2.5 -- a raft that just came up can't be chomped for this long
 SharkBait.BITE_COOLDOWN = 0.8
-SharkBait.RAM_COOLDOWN = 2.2
+SharkBait.RAM_COOLDOWN = 1.8 -- the jaws are ready again just after the raft goes over
 SharkBait.MIN_READY = 2 -- a chomp never leaves fewer rafts than this to stand on
 -- The jaws' reach along the shark's facing (its middle to its snout thrust forward in the lunge),
 -- and how far round that line a swimmer's middle may be.

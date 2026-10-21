@@ -1287,6 +1287,7 @@ function SharkBait.Start(api)
 	-- Every frame ------------------------------------------------------------------------------------------
 
 	local nextBob = 0
+	local started = false
 	local lastWet = false
 	local nextWarning = 0
 	api:RenderStep(function(dt: number)
@@ -1532,6 +1533,17 @@ function SharkBait.Start(api)
 		-- The role hint stays through the countdown and 6 seconds into the round.
 		if hintUntil == math.huge and inRound then
 			hintUntil = clock + 6
+		end
+		-- GO: every shark bursts out of the water with its jaws wide.
+		if inRound and not started then
+			started = true
+			for _, view in sharks do
+				view.LungeAt = now
+				if view.Last then
+					splash(view.Last, 1.3)
+				end
+			end
+			api:Sound("Splash")
 		end
 		if hintUntil > 0 and clock > hintUntil then
 			hintUntil = 0
