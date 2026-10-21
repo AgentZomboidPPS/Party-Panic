@@ -1,0 +1,29 @@
+newmtl Deck
+Kd 1.000 0.471 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Beams
+Kd 0.376 0.251 0.173
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Barrels
+Kd 0.627 0.408 0.243
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Hoops
+Kd 0.353 0.353 0.392
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rope
+Kd 0.871 0.745 0.518
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

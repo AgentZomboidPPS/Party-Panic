@@ -21,7 +21,7 @@ return function(h)
 		-- A cartoon great white, snout at -Z. The game floats it with y = 2.6 at the waterline.
 		SharkBaitShark = {
 			Height = 6,
-			AssetId = 0,
+			AssetId = 99900036698603,
 			Palette = {
 				Body = h.rgb(110, 130, 160),
 				Tail = h.rgb(110, 130, 160),
@@ -54,7 +54,7 @@ return function(h)
 		-- A round log raft: deck radius 7 (the game scales it per raft), the deck's top at y = 2.
 		SharkBaitRaft = {
 			Height = 2,
-			AssetId = 0,
+			AssetId = 72954904653443,
 			Palette = {
 				Deck = h.rgb(196, 146, 92),
 				Beams = h.rgb(140, 96, 60),
@@ -81,7 +81,7 @@ return function(h)
 		},
 		SharkBaitCoin = {
 			Height = 2,
-			AssetId = 0,
+			AssetId = 102971836785377,
 			Shadow = false,
 			Palette = { Coin = h.rgb(255, 205, 50), Rim = h.rgb(230, 165, 30) },
 			Materials = { Coin = Enum.Material.Metal, Rim = Enum.Material.Metal },
@@ -92,7 +92,7 @@ return function(h)
 		},
 		SharkBaitPearl = {
 			Height = 1.6,
-			AssetId = 0,
+			AssetId = 97962283838819,
 			Shadow = false,
 			Palette = {
 				Shell = h.rgb(255, 150, 170),
@@ -113,7 +113,7 @@ return function(h)
 		},
 		SharkBaitChest = {
 			Height = 2.4,
-			AssetId = 0,
+			AssetId = 136486848365204,
 			Palette = {
 				Wood = h.rgb(150, 90, 50),
 				Trim = h.rgb(255, 200, 60),
@@ -131,7 +131,7 @@ return function(h)
 		-- An inflatable swim ring, worn by swimmers while they're in the water.
 		SharkBaitFloatie = {
 			Height = 1,
-			AssetId = 0,
+			AssetId = 105609274155626,
 			Shadow = false,
 			Palette = { Ring = h.rgb(255, 120, 60), Stripes = h.rgb(255, 255, 255) },
 			Fallback = level(function(m)
@@ -149,7 +149,7 @@ return function(h)
 		-- The float line round the lagoon (radius 44), centered on the arena.
 		SharkBaitFloatLine = {
 			Height = 1.2,
-			AssetId = 0,
+			AssetId = 136466135059047,
 			Shadow = false,
 			Palette = { FloatsA = h.rgb(255, 210, 60), FloatsB = h.rgb(240, 70, 70), Rope = h.rgb(230, 225, 210) },
 			Materials = { Rope = Enum.Material.Fabric },
@@ -167,7 +167,7 @@ return function(h)
 		},
 		SharkBaitBuoy = {
 			Height = 7,
-			AssetId = 0,
+			AssetId = 85083594096246,
 			Palette = {
 				Float = h.rgb(220, 60, 60),
 				Stripe = h.rgb(245, 245, 245),
@@ -188,7 +188,7 @@ return function(h)
 		-- A seagull gliding, wings spread (it circles high over the lagoon).
 		SharkBaitGull = {
 			Height = 1,
-			AssetId = 0,
+			AssetId = 82748078681255,
 			Shadow = false,
 			Palette = {
 				Body = h.rgb(250, 250, 250),
