@@ -1,4 +1,4 @@
--- Rake It In (Reaction, 45s, 1-12 players). After "Rakin' 'em In" (Mario Party 2): a round table of
+-- Rake It In (Reaction, 55s, 1-12 players). After "Rakin' 'em In" (Mario Party 2): a round table of
 -- mushrooms turns slowly and everyone rakes them into their own basket; a regular one is worth 1, a
 -- gold one 3 and a poison one takes 3 away. Here the table is a big round field turning around a red
 -- harvest silo that keeps popping produce onto it. Everyone stands at the rim with a lane in front of
@@ -19,6 +19,15 @@
 -- drag, so whatever you see the rake sweep through is yours; a bomb only counts if it was clearly
 -- inside the lines when you pressed, so one you dodged at the edge never jams you. The client lifts
 -- exactly the produce a rake would take and outlines exactly the bombs it would.
+--
+-- Two rakes after the same veggie (fair hits, owner: "the precision games will feel super bad if we
+-- dont"): with that leeway, neighbouring lanes overlap once 9 or more play (with 12, 12-29% of what's
+-- lifted in a lane is lifted next door too), and a veggie can slide from one lane into the next
+-- before the news of the first rake reaches the next screen. It used to go to whichever press
+-- reached the server first, so a neighbour with a faster connection (or a bot) won it even after
+-- pressing later, and the other rake came back empty: a MISS and the longer wait. Now produce
+-- another rake took still counts for yours if it was in your lane on your screen when you pressed
+-- (it left less than your one-way ping before): both get it, a copy for each basket.
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Scenery = require(script.Parent.Kit.Scenery)
@@ -48,6 +57,7 @@ local COOLDOWN = 0.8 -- between rakes
 local JAM = 1.6 -- a bomb jams your rake this long
 local MISS = 1.3 -- a rake that catches nothing takes this long to come back (so mashing doesn't pay)
 local GONE_FOR = 2.5 -- how long a raked item stays listed (so clients can fly it to the basket)
+local SEEN_FOR = 0.5 -- how long a raked item can still count for another press (beyond any ping leeway)
 local RUSH = 0.7 -- the share of the round after which the GOLDEN RUSH starts
 
 -- Produce kinds: index = the number shared with clients.
@@ -81,6 +91,8 @@ local rng = Random.new()
 export type Spin = { T: number, A: number, W0: number, W1: number, Ramp: number }
 export type Item = { Id: number, Kind: number, R: number, Th: number, Land: number, Fuse: number? }
 export type Station = { Player: Player, Index: number, Angle: number, Stand: Vector3, Basket: Vector3 }
+-- An item a rake took a moment ago: who took it, when (server time) and who else it counted for.
+export type Raked = { Item: Item, By: Player, At: number, Also: { [Player]: boolean } }
 
 -- The field's angle at server time `t` along one segment of the schedule: it turns at W0, easing to
 -- W1 over Ramp seconds (clients use the same formula).
@@ -168,6 +180,7 @@ function RakeItIn:Prepare()
 	self.center = origin
 	self.items = {} :: { [number]: Item }
 	self.gone = {} :: { { number } }
+	self.raked = {} :: { [number]: Raked }
 	self.nextId = 0
 	self.stations = {} :: { [Player]: Station }
 	self.readyAt = {} :: { [Player]: number }
@@ -480,16 +493,34 @@ function RakeItIn:_setScore(player: Player, score: number)
 	end
 end
 
--- A rake: everything in the player's lane at time t goes to their basket.
-function RakeItIn:_rake(player: Player, t: number)
+-- A rake: everything in the player's lane at time t goes to their basket, and so does produce
+-- another rake took less than the player's one-way ping (`lag` is their round trip) before they
+-- pressed, if this rake takes it too: it was still in their lane on their screen (see the top).
+function RakeItIn:_rake(player: Player, t: number, lag: number)
 	local ctx = self.context
 	local station = self.stations[player]
 	if not station then
 		return
 	end
+	local now = ctx:Now()
 	local taken, value, bomb = self:LaneHaul(station, t)
 	for _, item in taken do
 		self:_remove(item, player.UserId)
+		self.raked[item.Id] = { Item = item, By = player, At = now, Also = {} }
+	end
+	for _, raked in self.raked do
+		local item = raked.Item
+		if
+			item.Kind ~= BOMB
+			and raked.By ~= player
+			and not raked.Also[player]
+			and t <= raked.At + lag / 2
+			and self:Takes(station, item, t)
+		then
+			raked.Also[player] = true
+			table.insert(taken, item)
+			value += RakeItIn.Kinds[item.Kind].Value
+		end
 	end
 	local old = self.scores[player] or 0
 	local score = math.max(0, old + value)
@@ -545,7 +576,7 @@ function RakeItIn:Start()
 		if t < self:ReadyAt(player) - 0.05 then
 			return
 		end
-		self:_rake(player, t)
+		self:_rake(player, t, lag)
 	end, { Interval = 0.3 })
 
 	-- The silo keeps the field stocked (more players, more produce).
@@ -563,13 +594,18 @@ function RakeItIn:Start()
 		return gap * rng:NextNumber(0.7, 1.3) * (if count < target * 0.6 then 0.6 else 1)
 	end)
 
-	-- Bombs nobody raked go off by themselves; the list of recently raked items is trimmed; the
+	-- Bombs nobody raked go off by themselves; the lists of recently raked items are trimmed; the
 	-- field is shared when it changed.
 	ctx:Loop(function(): number?
 		local now = ctx:Now()
 		for _, item in self.items do
 			if item.Fuse and now >= item.Fuse then
 				self:_remove(item, 0)
+			end
+		end
+		for id, raked in self.raked do
+			if now - raked.At > SEEN_FOR then
+				self.raked[id] = nil
 			end
 		end
 		local keep = {}
