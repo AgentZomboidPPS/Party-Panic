@@ -190,6 +190,19 @@ local list: { GameDefinition } = {
 		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "PrimeCut",
+		Name = "Prime Cut",
+		Category = "Team",
+		Icon = "🥩",
+		Color = Color3.fromRGB(214, 96, 72),
+		Objective = "Line up your team's giant knife and cut the steak exactly 50 : 50. Closest split wins - 3 steaks!",
+		Controls = "Tap or hold ◀ ▶ (A / D) to nudge the knife. Teammates push it too: agree on the middle!",
+		Duration = 52,
+		MinPlayers = 2,
+		IsTeam = true,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
