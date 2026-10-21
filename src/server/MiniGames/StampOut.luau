@@ -526,6 +526,10 @@ function StampOut:Start()
 			ctx:Announce("BIG STAMPS! Every stamp is bigger now!", "warning", 2.5)
 			ctx:Sound("HazardWarning")
 		end
+		local tip = ctx:Elapsed() < 6 -- the status line explains the game for the first seconds
+		if tip then
+			ctx:SetStatus("Jump: every landing stamps! Hold STAMP to hop far")
+		end
 		if self.Dirty then
 			self.Dirty = false
 			ctx:SetShared("Grid", StampGrid.Encode(self.Owners))
@@ -537,7 +541,7 @@ function StampOut:Start()
 				end
 			end
 			local leader = bestInk and self.PlayerOf[bestInk]
-			if leader then
+			if leader and not tip then
 				local symbol = StampGrid.INKS[bestInk].Symbol
 				ctx:SetStatus(`{symbol} {leader.DisplayName} leads with {StampGrid.Percent(best)}%`)
 			end
