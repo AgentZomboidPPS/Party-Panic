@@ -11,9 +11,9 @@ return function(h)
 			AssetId = 128624548370320,
 			Shadow = false,
 			Palette = {
-				TileA = rgb(255, 222, 178),
-				TileB = rgb(244, 172, 132),
-				Band = rgb(120, 206, 238),
+				TileA = rgb(255, 208, 150),
+				TileB = rgb(238, 138, 104),
+				Band = rgb(84, 190, 238),
 				Stripe = rgb(255, 255, 255),
 			},
 			Fallback = function(m)
@@ -26,8 +26,8 @@ return function(h)
 			AssetId = 103368218308832,
 			Shadow = false,
 			Palette = {
-				RayA = rgb(255, 236, 196),
-				RayB = rgb(255, 150, 120),
+				RayA = rgb(255, 238, 200),
+				RayB = rgb(255, 120, 150),
 				Accent = rgb(255, 92, 160),
 				Ring = rgb(255, 204, 64),
 			},

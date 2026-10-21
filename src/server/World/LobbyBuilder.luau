@@ -68,6 +68,7 @@ local PARTY_COLORS = {
 local PLAZA_RADIUS = 75
 local PAVED_RADIUS = 45.9 -- the court and promenade (LobbyCourt + LobbyPavers); lawn beyond
 local SIGN_FONT = Enum.Font.LuckiestGuy
+local BUNTING_LENGTH = 24 -- LobbyBunting's length at scale 1
 
 -- Zone anchors (ground level).
 local STAGE_Z = -53 -- center of the vote stage platform
@@ -99,26 +100,27 @@ local function prompt(parent: BasePart, actionText: string, objectText: string, 
 end
 
 local function setupLighting()
-	-- Light, warm haze: enough depth to soften the hills, never a blue wash over the plaza.
+	-- Warm, sunny haze: golden toward the horizon so the park glows, never a blue wash over the plaza.
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.24
+	atmosphere.Density = 0.26
 	atmosphere.Offset = 0.2
-	atmosphere.Color = rgb(214, 230, 255)
-	atmosphere.Decay = rgb(140, 170, 215)
-	atmosphere.Glare = 0.2
-	atmosphere.Haze = 0.45
+	atmosphere.Color = rgb(255, 236, 214)
+	atmosphere.Decay = rgb(186, 196, 236)
+	atmosphere.Glare = 0.3
+	atmosphere.Haze = 0.5
 	atmosphere.Parent = Lighting
 
+	-- Rich, warm color, and enough bloom that neon bulbs and signs glow.
 	local correction = Instance.new("ColorCorrectionEffect")
-	correction.Saturation = 0.14
-	correction.Contrast = 0.07
-	correction.TintColor = rgb(255, 252, 246)
+	correction.Saturation = 0.22
+	correction.Contrast = 0.1
+	correction.TintColor = rgb(255, 247, 236)
 	correction.Parent = Lighting
 
 	local bloom = Instance.new("BloomEffect")
-	bloom.Intensity = 0.4
-	bloom.Size = 24
-	bloom.Threshold = 1.3
+	bloom.Intensity = 0.6
+	bloom.Size = 28
+	bloom.Threshold = 1.05
 	bloom.Parent = Lighting
 end
 
@@ -278,8 +280,9 @@ local function buildGround(root: Model)
 		{ target = PODIUM + Vector3.new(-10, 0, 0), width = 10, color = rgb(255, 96, 110) }, -- podium (red carpet)
 		{ target = SHOP + Vector3.new(10, 0, 0), width = 10, color = rgb(255, 120, 190) }, -- shop
 		{ target = EMOTE + Vector3.new(0, 0, -12), width = 10, color = rgb(80, 200, 255) }, -- emote stage
-		{ target = QUESTS * 0.86, width = 9, color = rgb(160, 120, 255) }, -- quests
-		{ target = ARCADE * 0.86, width = 9, color = rgb(100, 220, 140) }, -- arcade
+		-- (these two stop just short of their corner floors, whose tops share the walkway's height)
+		{ target = QUESTS * 0.81, width = 9, color = rgb(160, 120, 255) }, -- quests
+		{ target = ARCADE * 0.81, width = 9, color = rgb(100, 220, 140) }, -- arcade
 	}
 	for _, walk in walkways do
 		local direction = Vector3.new(walk.target.X, 0, walk.target.Z).Unit
@@ -344,62 +347,93 @@ end
 
 -- Central plaza: fountain landmark, seating -----------------------------------------------------
 
+local function waterJet(parent: Instance, from: Vector3, toward: Vector3, speed: number, rate: number)
+	-- An arcing stream of spray: the holder's Top face points up and in, toward `toward`.
+	local flatDirection = Vector3.new(toward.X - from.X, 0, toward.Z - from.Z).Unit
+	local aim = (flatDirection + Vector3.new(0, 1.6, 0)).Unit
+	local holder = Build.Decor({
+		Name = "Jet",
+		Size = Vector3.one * 0.4,
+		Transparency = 1,
+		CFrame = CFrame.lookAt(from, from + aim) * CFrame.Angles(math.rad(-90), 0, 0),
+		Parent = parent,
+	})
+	local jet = Instance.new("ParticleEmitter")
+	jet.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	jet.Color = ColorSequence.new(rgb(220, 244, 255))
+	jet.LightEmission = 0.3
+	jet.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0.9) })
+	jet.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) })
+	jet.Lifetime = NumberRange.new(0.9, 1.1)
+	jet.Speed = NumberRange.new(speed, speed * 1.08)
+	jet.Acceleration = Vector3.new(0, -workspace.Gravity * 0.16, 0)
+	jet.SpreadAngle = Vector2.new(4, 4)
+	jet.EmissionDirection = Enum.NormalId.Top
+	jet.Rate = rate
+	jet.Parent = holder
+	tag(jet, "PP_Ambient")
+end
+
 local function buildFountain(root: Model)
 	local center = Build.Model("Fountain", root)
-	local water = { Color = rgb(90, 200, 245), Material = Enum.Material.Glass, Transparency = 0.25, Reflectance = 0.15 }
+	local water = {
+		Color = rgb(70, 196, 240),
+		Material = Enum.Material.Glass,
+		Transparency = 0.3,
+		Reflectance = 0.2,
+	}
 
-	-- Big scalloped basin: a rim of rounded segments around a water disc.
-	disc("BasinFloor", 24, 1.2, Vector3.new(0, 0.6, 0), { Color = rgb(150, 205, 240), Parent = center })
-	local waterDisc = disc("Water", 22.5, 0.2, Vector3.new(0, 1.35, 0), flat({ Parent = center }))
-	for key, value in water do
-		(waterDisc :: any)[key] = value
+	-- The scalloped basin, fluted column and upper bowl are one mesh prop; the water surfaces are
+	-- glass discs, and invisible colliders let players wade in (the pool is knee deep).
+	local fountain = MeshLibrary.Get("LobbyFountain", { CFrame = CFrame.new(0, 0.2, 0), Parent = center })
+	for _, descendant in fountain:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			descendant.CanCollide = false
+		end
 	end
-	for index, point in Build.Ring(Vector3.new(0, 1.2, 0), 12, 16) do
-		Shapes.Capsule(5.4, 2.4, {
-			Name = "Rim",
-			CFrame = point * CFrame.Angles(0, math.rad(90), 0),
-			Color = if index % 2 == 0 then rgb(255, 255, 255) else rgb(255, 214, 236),
-			Parent = center,
+	local waterDisc = disc("Water", 22.4, 0.2, Vector3.new(0, 2.05, 0), flat({ Parent = center }))
+	local upperWater = disc("UpperWater", 9.4, 0.2, Vector3.new(0, 8.3, 0), flat({ Parent = center }))
+	for key, value in water do
+		(waterDisc :: any)[key] = value;
+		(upperWater :: any)[key] = value
+	end
+	local colliders = Build.Model("Colliders", center)
+	disc("PoolFloor", 22.6, 1, Vector3.new(0, 0.6, 0), { Transparency = 1, Parent = colliders })
+	disc("ColumnCollider", 3.6, 8.6, Vector3.new(0, 4.5, 0), { Transparency = 1, Parent = colliders })
+	for _, point in Build.Ring(Vector3.new(0, 1.6, 0), 12.1, 24) do
+		Build.Part({
+			Name = "RimCollider",
+			Size = Vector3.new(3.4, 2.8, 1.4),
+			CFrame = point,
+			Transparency = 1,
+			Parent = colliders,
 		})
 	end
 
-	-- Column and upper bowl.
-	disc("Column", 4, 6, Vector3.new(0, 4, 0), { Color = rgb(255, 255, 255), Parent = center })
-	disc("ColumnBand", 4.6, 0.8, Vector3.new(0, 3, 0), { Color = PALETTE.Trim, Parent = center })
-	Shapes.Custom(
-		"FountainBowl",
-		function(piece)
-			return {
-				piece(
-					Vector3.new(1.6, 9, 9),
-					CFrame.new(0, 0, 0) * CFrame.Angles(0, 0, math.rad(90)),
-					Enum.PartType.Cylinder
-				),
-				piece(
-					Vector3.new(1.2, 11, 11),
-					CFrame.new(0, 0.8, 0) * CFrame.Angles(0, 0, math.rad(90)),
-					Enum.PartType.Cylinder
-				),
-			}
-		end,
-		Vector3.new(11, 2, 11),
-		{ Name = "Bowl", CFrame = CFrame.new(0, 7.4, 0), Color = rgb(255, 255, 255), Parent = center }
-	)
-	local upperWater = disc("UpperWater", 10, 0.2, Vector3.new(0, 8.45, 0), flat({ Parent = center }))
-	for key, value in water do
-		(upperWater :: any)[key] = value
+	-- Rubber ducks bob in the pool; one rides the top bowl.
+	local rng = Random.new(5)
+	for index = 1, 6 do
+		local angle = (index + rng:NextNumber(-0.25, 0.25)) / 6 * math.pi * 2
+		local distance = rng:NextNumber(6.2, 9.2)
+		local position = Vector3.new(math.cos(angle) * distance, 1.75, math.sin(angle) * distance)
+		local duck = MeshLibrary.Get("LobbyDuck", {
+			Scale = if index == 1 then 1.4 else 1,
+			CFrame = CFrame.new(position) * CFrame.Angles(0, angle + math.rad(rng:NextNumber(60, 120)), 0),
+			Parent = center,
+		})
+		tag(duck, "PP_Bob")
 	end
 
 	-- The landmark: a giant golden trophy that slowly turns (clients animate it).
-	local trophy = MeshLibrary.Get("Trophy", { Scale = 1.5, CFrame = CFrame.new(0, 8.5, 0), Parent = center })
+	local trophy = MeshLibrary.Get("Trophy", { Scale = 1.5, CFrame = CFrame.new(0, 8.6, 0), Parent = center })
 	tag(trophy, "PP_Spin")
 
-	-- Water spray from the bowl into the basin.
+	-- Water spray from the bowl into the basin, and arcing jets from the rim toward the column.
 	local spout = Build.Decor({
 		Name = "Spray",
 		Size = Vector3.one,
 		Transparency = 1,
-		CFrame = CFrame.new(0, 8.6, 0),
+		CFrame = CFrame.new(0, 8.8, 0),
 		Parent = center,
 	})
 	local spray = Instance.new("ParticleEmitter")
@@ -417,6 +451,18 @@ local function buildFountain(root: Model)
 	tag(spray, "PP_Ambient")
 	Build.Light(spout, rgb(255, 230, 160), 22, 1)
 	sparkleEmitter(spout, rgb(255, 230, 140), 4)
+	for _, point in Build.Ring(Vector3.new(0, 2.6, 0), 11.2, 8, math.pi / 8) do
+		waterJet(center, point.Position, Vector3.zero, 13, 14)
+	end
+	-- A soft glow from under the water.
+	local glow = Build.Decor({
+		Name = "PoolGlow",
+		Size = Vector3.one,
+		Transparency = 1,
+		CFrame = CFrame.new(0, 1.4, 0),
+		Parent = center,
+	})
+	Build.Light(glow, rgb(120, 220, 255), 18, 1.2)
 
 	-- Benches facing the fountain, between the walkways (seating from §5).
 	for _, degrees in { 0, 50, 130, 180, 200, 340 } do
@@ -1296,13 +1342,146 @@ local function buildBouncePads(root: Model)
 	end
 end
 
--- Scenery: hedges, lamps with light strings, trees -------------------------------------------------
+-- Skyline: Ferris wheel, carnival turrets, hot-air balloons ------------------------------------------
+
+-- Where the big landmarks stand (outside the plaza, so they never block a path). Trees keep clear.
+local FERRIS = Vector3.new(64, -0.5, -99)
+local TOWERS = {
+	{ position = Vector3.new(-50, -0.4, -70), scale = 1.25, roof = rgb(120, 84, 230) },
+	{ position = Vector3.new(50, -0.4, -70), scale = 1.25, roof = rgb(120, 84, 230) },
+	{ position = Vector3.new(-27, -0.4, 82), scale = 1, roof = rgb(64, 180, 255) },
+	{ position = Vector3.new(27, -0.4, 82), scale = 1, roof = rgb(64, 180, 255) },
+}
+
+local function clearOfLandmarks(position: Vector3): boolean
+	local flatPosition = Vector3.new(position.X, 0, position.Z)
+	if (flatPosition - Vector3.new(FERRIS.X, 0, FERRIS.Z)).Magnitude < 34 then
+		return false
+	end
+	for _, tower in TOWERS do
+		if (flatPosition - Vector3.new(tower.position.X, 0, tower.position.Z)).Magnitude < 10 then
+			return false
+		end
+	end
+	return true
+end
+
+local function buildFerrisWheel(parent: Instance)
+	-- The stand faces the plaza; the wheel turns about its axle and the cabins hang level (clients
+	-- animate it: AmbienceController, tag PP_Wheel).
+	local ferris = Build.Model("FerrisWheel", parent)
+	local standCFrame = facing(FERRIS, Vector3.zero)
+	MeshLibrary.Get("LobbyFerrisStand", { CFrame = standCFrame, Parent = ferris })
+	local hub = standCFrame * Vector3.new(0, 43, 0.625)
+	local wheel = MeshLibrary.Get("LobbyFerrisWheel", { CFrame = standCFrame, Parent = ferris })
+	local box = wheel:GetBoundingBox()
+	wheel:PivotTo(wheel:GetPivot() + (hub - box.Position))
+	local cabinColors = { rgb(64, 196, 255), rgb(255, 204, 64), rgb(120, 224, 96), rgb(156, 108, 255) }
+	for index = 0, 11 do
+		local angle = index / 12 * math.pi * 2
+		local hang = hub + standCFrame:VectorToWorldSpace(Vector3.new(math.cos(angle), math.sin(angle), 0) * 32)
+		local cabin = MeshLibrary.Get("LobbyFerrisCabin", {
+			Scale = 0.85,
+			Colors = { Body = cabinColors[index % #cabinColors + 1] },
+			Parent = ferris,
+		})
+		local _, size = cabin:GetBoundingBox()
+		cabin:PivotTo(standCFrame.Rotation + (hang - Vector3.new(0, size.Y, 0)))
+		cabin:SetAttribute("Hang", Vector3.new(0, size.Y, 0)) -- from its pivot to where it hangs
+	end
+	ferris:SetAttribute("Hub", hub)
+	ferris:SetAttribute("Axis", standCFrame.LookVector)
+	tag(ferris, "PP_Wheel")
+	local glow = Build.Decor({
+		Name = "HubGlow",
+		Size = Vector3.one,
+		Transparency = 1,
+		CFrame = CFrame.new(hub),
+		Parent = ferris,
+	})
+	Build.Light(glow, rgb(255, 160, 210), 40, 1.5)
+end
+
+local function buildSkyline(root: Model)
+	local skyline = Build.Model("Skyline", root)
+	buildFerrisWheel(skyline)
+	for _, tower in TOWERS do
+		MeshLibrary.Get("LobbyTower", {
+			Scale = tower.scale,
+			Colors = { Roof = tower.roof },
+			CFrame = facing(tower.position, Vector3.zero),
+			Parent = skyline,
+		})
+	end
+	-- Hot-air balloons drifting over the park (clients bob them slowly: tag PP_Float).
+	local balloons = {
+		{ Vector3.new(-78, 58, -112), rgb(255, 92, 150), rgb(255, 236, 120), 1.1 },
+		{ Vector3.new(128, 70, 6), rgb(64, 196, 255), rgb(255, 255, 255), 1.2 },
+		{ Vector3.new(-126, 64, 46), rgb(156, 108, 255), rgb(255, 204, 64), 1 },
+		{ Vector3.new(42, 88, 132), rgb(255, 140, 70), rgb(255, 255, 255), 1.3 },
+		{ Vector3.new(-12, 96, -170), rgb(120, 224, 96), rgb(255, 92, 150), 1.4 },
+	}
+	for _, spec in balloons do
+		local balloon = MeshLibrary.Get("LobbyHotAirBalloon", {
+			Scale = spec[4],
+			Colors = { Envelope = spec[2], Stripes = spec[3] },
+			CFrame = CFrame.new(spec[1]) * CFrame.Angles(0, math.rad(spec[1].X), 0),
+			Parent = skyline,
+		})
+		tag(balloon, "PP_Float")
+	end
+end
+
+-- Gardens: flower beds and tree clusters on the lawn between the walkways ---------------------------
+
+local function buildGardens(root: Model)
+	local gardens = Build.Model("Gardens", root)
+	local rng = Random.new(9)
+	local flowerSets = {
+		{ FlowerA = rgb(255, 92, 150), FlowerB = rgb(255, 255, 255), FlowerC = rgb(255, 170, 60) },
+		{ FlowerA = rgb(170, 120, 255), FlowerB = rgb(255, 120, 190), FlowerC = rgb(255, 236, 120) },
+		{ FlowerA = rgb(255, 84, 84), FlowerB = rgb(255, 214, 92), FlowerC = rgb(120, 200, 255) },
+	}
+	-- { angle in degrees, radius }: the lawn wedges between the zones.
+	local spots = { { 22, 58 }, { 158, 58 }, { 70, 62 }, { 110, 62 }, { -32, 56 }, { 212, 56 } }
+	for index, spot in spots do
+		local angle = math.rad(spot[1])
+		local radial = Vector3.new(math.cos(angle), 0, math.sin(angle))
+		local position = radial * spot[2]
+		-- The bed's long axis runs along the circle, so it lines the lawn instead of blocking it.
+		MeshLibrary.Get("LobbyFlowerBed", {
+			Colors = flowerSets[index % #flowerSets + 1],
+			Scale = 1.3,
+			CFrame = CFrame.lookAt(position, position + radial),
+			Parent = gardens,
+		})
+		-- A clump of trees and bushes behind it, for height and shade.
+		local side = Vector3.new(-radial.Z, 0, radial.X)
+		local behind = radial * (spot[2] + 9)
+		for _, offset in { side * -4.5, side * 4.5 + radial * 2.5 } do
+			MeshLibrary.Get("Tree", {
+				Scale = rng:NextNumber(1.05, 1.35),
+				CFrame = CFrame.new(behind + offset) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+				Parent = gardens,
+			})
+		end
+		for _, offset in { side * -9, side * 0.5 - radial * 1.5, side * 9 } do
+			MeshLibrary.Get("Bush", {
+				Scale = rng:NextNumber(0.9, 1.2),
+				CFrame = CFrame.new(behind + offset) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+				Parent = gardens,
+			})
+		end
+	end
+end
+
+-- Scenery: hedges, lamps with bunting, trees, floating confetti ---------------------------------------
 
 local function buildScenery(root: Model)
 	local scenery = Build.Model("Scenery", root)
 	local rng = Random.new(42)
 
-	-- Lamp posts around the plaza edge, strung together with party lights.
+	-- Lamp posts around the plaza edge, strung together with pennant bunting.
 	local lampPositions = {}
 	local lampCount = 16
 	for index = 0, lampCount - 1 do
@@ -1317,8 +1496,18 @@ local function buildScenery(root: Model)
 	end
 	for index = 1, #lampPositions - 1 do
 		local a, b = lampPositions[index], lampPositions[index + 1]
-		if (a - b).Magnitude < 40 then
-			lightString(scenery, a + Vector3.new(0, 10.4, 0), b + Vector3.new(0, 10.4, 0), 3, index)
+		local span = (a - b).Magnitude
+		if span < 40 then
+			local middle = (a + b) / 2
+			local scale = span / BUNTING_LENGTH
+			local bunting = MeshLibrary.Get("LobbyBunting", {
+				Scale = scale,
+				Parent = scenery,
+			})
+			local _, size = bunting:GetBoundingBox()
+			local direction = (b - a).Unit
+			-- The bunting runs along its X axis; its ends are the top of its bounding box.
+			bunting:PivotTo(CFrame.fromMatrix(middle + Vector3.new(0, 10.4 - size.Y, 0), direction, Vector3.yAxis))
 		end
 	end
 	-- Light strings from the stage's light towers out over the plaza.
@@ -1327,28 +1516,14 @@ local function buildScenery(root: Model)
 		lightString(scenery, Vector3.new(side * 45, 32, STAGE_Z + 12), Vector3.new(side * 40, 10.4, 16), 4, 4)
 	end
 
-	-- Round planters with trees between the zones break up the open floor.
-	for _, degrees in { -28, 208, 115, 65 } do
-		local angle = math.rad(degrees)
-		local position = Vector3.new(math.cos(angle) * 61, 0, math.sin(angle) * 61)
-		disc("Planter", 10, 2.4, position + Vector3.new(0, 1.2, 0), { Color = rgb(255, 255, 255), Parent = scenery })
-		disc("PlanterTrim", 10.6, 0.6, position + Vector3.new(0, 2.2, 0), { Color = PALETTE.Trim, Parent = scenery })
-		disc("Soil", 9, 0.2, position + Vector3.new(0, 2.55, 0), flat({ Color = rgb(120, 85, 60), Parent = scenery }))
-		MeshLibrary.Get(
-			"Tree",
-			{ Scale = 1.15, CFrame = CFrame.new(position + Vector3.new(0, 2.4, 0)), Parent = scenery }
-		)
-		MeshLibrary.Get(
-			"Bush",
-			{ Scale = 0.8, CFrame = CFrame.new(position + Vector3.new(2.6, 2.4, 1.5)), Parent = scenery }
-		)
-	end
-
 	-- Hedges along the edge.
 	for index = 0, 59 do
 		local angle = index / 60 * math.pi * 2
 		local position =
 			Vector3.new(math.cos(angle) * (PLAZA_RADIUS + 3.5), -0.2, math.sin(angle) * (PLAZA_RADIUS + 3.5))
+		if not clearOfLandmarks(position) then
+			continue
+		end
 		MeshLibrary.Get("Bush", {
 			Scale = rng:NextNumber(1.1, 1.5),
 			CFrame = CFrame.new(position) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
@@ -1363,9 +1538,14 @@ local function buildScenery(root: Model)
 			local angle = (index + ring * 0.5) / count * math.pi * 2 + rng:NextNumber(-0.04, 0.04)
 			local distance = radius + rng:NextNumber(-4, 4)
 			local position = Vector3.new(math.cos(angle) * distance, -0.4, math.sin(angle) * distance)
+			local scale = rng:NextNumber(1.2, 1.8) + (ring - 1) * 0.3
+			local yaw = rng:NextNumber(0, math.pi * 2)
+			if not clearOfLandmarks(position) then
+				continue
+			end
 			MeshLibrary.Get("Tree", {
-				Scale = rng:NextNumber(1.2, 1.8) + (ring - 1) * 0.3,
-				CFrame = CFrame.new(position) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+				Scale = scale,
+				CFrame = CFrame.new(position) * CFrame.Angles(0, yaw, 0),
 				Parent = scenery,
 			})
 		end
@@ -1385,6 +1565,43 @@ local function buildScenery(root: Model)
 		emitter.Speed = NumberRange.new(0.5, 1.5)
 		emitter.Lifetime = NumberRange.new(4, 6)
 	end
+
+	-- Confetti drifting down over the whole plaza, in party colors.
+	local sky = Build.Decor({
+		Name = "ConfettiSky",
+		Size = Vector3.new(110, 1, 110),
+		Transparency = 1,
+		CFrame = CFrame.new(0, 42, 0),
+		Parent = scenery,
+	})
+	local confetti = Instance.new("ParticleEmitter")
+	confetti.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	confetti.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, PARTY_COLORS[1]),
+		ColorSequenceKeypoint.new(0.25, PARTY_COLORS[2]),
+		ColorSequenceKeypoint.new(0.5, PARTY_COLORS[3]),
+		ColorSequenceKeypoint.new(0.75, PARTY_COLORS[4]),
+		ColorSequenceKeypoint.new(1, PARTY_COLORS[5]),
+	})
+	confetti.LightEmission = 0.4
+	confetti.Size = NumberSequence.new(0.45)
+	confetti.Squash = NumberSequence.new(0.6)
+	confetti.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.1, 0.1),
+		NumberSequenceKeypoint.new(0.85, 0.2),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	confetti.Lifetime = NumberRange.new(12, 16)
+	confetti.Speed = NumberRange.new(2, 3.5)
+	confetti.Acceleration = Vector3.new(0, -0.6, 0)
+	confetti.Rotation = NumberRange.new(0, 360)
+	confetti.RotSpeed = NumberRange.new(-160, 160)
+	confetti.SpreadAngle = Vector2.new(25, 25)
+	confetti.EmissionDirection = Enum.NormalId.Bottom
+	confetti.Rate = 7
+	confetti.Parent = sky
+	tag(confetti, "PP_Ambient")
 end
 
 function LobbyBuilder.Build(): LobbyRefs
@@ -1403,6 +1620,8 @@ function LobbyBuilder.Build(): LobbyRefs
 	local confettiPrompt, confettiPosition = buildEmoteStage(root)
 	local deckSpot = buildParkour(root)
 	buildBouncePads(root)
+	buildGardens(root)
+	buildSkyline(root)
 	buildScenery(root)
 
 	return {
