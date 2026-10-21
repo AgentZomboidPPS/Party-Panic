@@ -114,6 +114,8 @@ def main():
             continue  # replaced by the harness's recording stand-in
         is_init = path.name == "init.luau"
         body = rewrite(module, path.read_text(), is_init)
+        # Blank comment-only lines (line numbers stay put for the map): Open Cloud caps a script at 1 MiB.
+        body = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", body)
         out.append(f'__modules["{module}"] = function()')
         line += 1
         line_map.append((line, module))

@@ -161,7 +161,31 @@ end
 
 local __byCharacter = {}
 local __playerAdded = Instance.new("BindableEvent")
-local __playerRemoving = Instance.new("BindableEvent")
+-- Not a BindableEvent: it would copy the stand-in player tables, so nobody could tell who left.
+local __playerRemoving = (function()
+	local handlers = {}
+	local signal = {
+		Event = {
+			Connect = function(_, fn)
+				table.insert(handlers, fn)
+				return {
+					Disconnect = function()
+						local index = table.find(handlers, fn)
+						if index then
+							table.remove(handlers, index)
+						end
+					end,
+				}
+			end,
+		},
+	}
+	function signal.Fire(_, ...)
+		for _, fn in table.clone(handlers) do
+			task.spawn(fn, ...)
+		end
+	end
+	return signal
+end)()
 local __playersShim
 
 local function __makeRig(name)
