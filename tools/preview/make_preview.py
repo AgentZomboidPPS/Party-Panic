@@ -68,11 +68,12 @@ FPS = 8
 # sits below the middle of the frame: the portal covers the top with the game's icon and name.
 DEFAULT_CAMERA = {"yaw": 0, "pitch": 30, "distance": 40, "fov": 50, "sway": 10, "raise": 8, "shift": [0, 0, 0]}
 CAMERAS: dict[str, dict] = {
-    # Down the line of jumpers to the fire wheel, the rope sweeping along the bridge.
-    "FireRope": {"yaw": 62, "pitch": 15, "distance": 34, "shift": [0, 1, 0]},
+    # Behind the line of jumpers, looking out over the lava at the Dragon Temple, the rope sweeping
+    # along the bridge.
+    "FireRope": {"yaw": 14, "pitch": 9, "distance": 30, "shift": [0, 2, 0], "raise": 13, "fov": 62},
     # Players on the hexes of the called color, the other colors sinking into the lava, the
     # referee's flag behind.
-    "HexMeltdown": {"yaw": 20, "pitch": 40, "distance": 44, "shift": [0, -6, 0], "raise": 10},
+    "HexMeltdown": {"yaw": 20, "pitch": 46, "distance": 86, "shift": [0, -6, 8], "raise": 5},
     # The honey tree's vine of fruit and honeycombs, bees chasing someone out, players on their pads.
     "HoneyTrap": {"yaw": -15, "pitch": 26, "distance": 44, "fov": 55, "shift": [-1, 5, -5], "raise": 12},
     # A team pumping its balloon (with a face), a rival team's balloon beside it.
