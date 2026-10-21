@@ -323,7 +323,7 @@ local function runCycle()
 			5
 		)
 	else
-		local suffix = if winner.Mystery then " (Mystery revealed!)" elseif wasTie then " (tie broken randomly)" else ""
+		local suffix = if winner.Mystery then " (the Random pick!)" elseif wasTie then " (tie broken randomly)" else ""
 		Notifier.All(`{definition.Icon} {definition.Name} wins the vote!{suffix}`, "success", 4)
 	end
 	Telemetry.ServerEvent("GameSelected", { game = gameId, tie = wasTie, mystery = winner.Mystery })

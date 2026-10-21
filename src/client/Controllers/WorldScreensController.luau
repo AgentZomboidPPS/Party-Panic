@@ -185,9 +185,9 @@ local function buildVoteScreen(part: BasePart)
 				`{categoryInfo and categoryInfo.Icon or ""} {definition.Category} • ~{definition.Duration}s`
 			objective.Text = definition.Objective
 		else
-			icon.Text = "❓"
-			name.Text = "MYSTERY GAME"
-			category.Text = "Revealed only if it wins!"
+			icon.Text = "🎲"
+			name.Text = "RANDOM"
+			category.Text = "Any game - revealed if it wins!"
 			objective.Text = "Feeling lucky?"
 		end
 		local total = 0

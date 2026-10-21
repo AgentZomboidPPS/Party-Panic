@@ -12,13 +12,12 @@ Config.Session = {
 	IgnoreModePlayerLimitsInStudio = true,
 	IntermissionTime = 20, -- lobby social time before each vote
 	VoteTime = 12,
-	VoteChoices = 3,
+	VoteChoices = 3, -- games shown in a vote; a 4th card, Random, is always added (owner: "4 options always")
 	RulesTime = 6,
 	CountdownTime = 3,
 	ResultsTime = 8,
 	RoundGraceTime = 10, -- watchdog: hard stop this long after a mode's own time limit
 	RecentGameMemory = 2,
-	MysteryOptionChance = 0.1, -- §6 "Mystery option": one card hidden until it wins
 }
 
 -- Bots: friendly AI players that fill empty spots so every round feels full. They fade in when

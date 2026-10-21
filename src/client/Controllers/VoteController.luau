@@ -1,5 +1,6 @@
--- Vote UI (design doc §6): three big cards with icon, name, category, one-line objective,
--- estimated duration and live vote counts. Tap a card or walk onto a portal pad to vote;
+-- Vote UI (design doc §6): four cards, three games and Random (a hidden pick, revealed if it wins;
+-- owner: "4 options always. and the 4th option should be random"), each with icon, name, category,
+-- one-line objective, estimated duration and live vote counts. Tap a card or walk onto a portal pad to vote;
 -- your choice is clearly marked and can be changed until the timer ends.
 -- PC: a row along the bottom. Phones and tablets: compact upright cards under the round banner,
 -- beside the menu, where the right thumb reaches them and they stay clear of the thumbstick and
@@ -37,6 +38,10 @@ local holder: Frame
 local row: Frame
 local touch = false
 
+local CARDS = 4
+local CARD_W = 228 -- PC
+local TOUCH_W = 150
+
 local function darker(color: Color3): Color3
 	local h, s, v = color:ToHSV()
 	return Color3.fromHSV(h, math.min(1, s * 1.1), v * 0.62)
@@ -51,7 +56,7 @@ local function buildCard(index: number): Card
 	local button = UIKit.Button({
 		Name = "Card" .. index,
 		Text = "",
-		Size = if touch then UDim2.fromOffset(166, 220) else UDim2.fromOffset(280, 206),
+		Size = if touch then UDim2.fromOffset(TOUCH_W, 220) else UDim2.fromOffset(CARD_W, 214),
 		CornerRadius = 22,
 		LayoutOrder = index,
 		Parent = row,
@@ -98,8 +103,8 @@ local function buildCard(index: number): Card
 		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		Position = UDim2.fromOffset(16, 104),
-		Size = UDim2.new(1, -32, 0, 52),
+		Position = UDim2.fromOffset(14, 104),
+		Size = UDim2.new(1, -28, 0, 60),
 		Visible = not touch,
 		Parent = button,
 		Children = { fitted(18) },
@@ -170,10 +175,10 @@ local function refresh()
 			card.objective.Text = definition.Objective
 			card.gradient.Color = ColorSequence.new(definition.Color, darker(definition.Color))
 		else
-			card.icon.Text = "❓"
-			card.name.Text = "Mystery Game"
-			card.category.Text = if touch then "Revealed if it wins" else "Revealed only if it wins"
-			card.objective.Text = "Could be anything. Feeling lucky?"
+			card.icon.Text = "🎲"
+			card.name.Text = "Random"
+			card.category.Text = if touch then "Any game!" else "Any game • revealed if it wins"
+			card.objective.Text = "Could be any game. Feeling lucky?"
 			card.gradient.Color = ColorSequence.new(Color3.fromRGB(150, 110, 255), Color3.fromRGB(70, 40, 140))
 		end
 		local votes = counts[index] or 0
@@ -203,7 +208,7 @@ function VoteController.Start(context)
 			Name = "Vote",
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -10, 0, 10),
-			Size = UDim2.fromOffset(78 + 3 * 166 + 2 * 10, top + 220),
+			Size = UDim2.fromOffset(78 + CARDS * TOUCH_W + (CARDS - 1) * 10, top + 220),
 			BackgroundTransparency = 1,
 			Visible = false,
 			Parent = context.Hud,
@@ -213,7 +218,7 @@ function VoteController.Start(context)
 			Name = "Cards",
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -78, 0, top),
-			Size = UDim2.fromOffset(3 * 166 + 2 * 10, 220),
+			Size = UDim2.fromOffset(CARDS * TOUCH_W + (CARDS - 1) * 10, 220),
 			BackgroundTransparency = 1,
 			Parent = holder,
 			Children = { list },
@@ -223,7 +228,7 @@ function VoteController.Start(context)
 			Name = "Vote",
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -18),
-			Size = UDim2.fromOffset(900, 240),
+			Size = UDim2.fromOffset(CARDS * CARD_W + (CARDS - 1) * 16 + 20, 248),
 			BackgroundTransparency = 1,
 			Visible = false,
 			Parent = context.Hud,
@@ -232,7 +237,7 @@ function VoteController.Start(context)
 		UIKit.AutoScale(holder)
 		row = holder
 	end
-	for index = 1, 3 do
+	for index = 1, CARDS do
 		table.insert(cards, buildCard(index))
 	end
 

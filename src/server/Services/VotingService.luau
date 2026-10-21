@@ -35,6 +35,9 @@ local function publishCounts()
 	GameState.SetJSON("VoteCounts", counts)
 end
 
+-- The vote: three games, then always a fourth card, Random (owner: "4 options always. and the 4th
+-- option should be random"). Random is a game picked now and kept hidden (Mystery) until it wins:
+-- one that isn't on the other cards when there's one to spare.
 function VotingService.BuildOptions(playerCount: number, recent: { string }, ignoreLimits: boolean): { VoteOption }
 	local pool = {}
 	for _, definition in GameDefinitions.List do
@@ -47,24 +50,37 @@ function VotingService.BuildOptions(playerCount: number, recent: { string }, ign
 			Enabled = definition.Enabled,
 		})
 	end
-	local ids = GamePicker.Pick(pool, {
-		PlayerCount = playerCount,
-		Count = Config.Session.VoteChoices,
-		Recent = recent,
-		RecentMemory = Config.Session.RecentGameMemory,
-		RandomFloat = function()
-			return rng:NextNumber()
-		end,
-		IgnorePlayerLimits = ignoreLimits,
-	})
+	local function pick(from, count: number): { string }
+		return GamePicker.Pick(from, {
+			PlayerCount = playerCount,
+			Count = count,
+			Recent = recent,
+			RecentMemory = Config.Session.RecentGameMemory,
+			RandomFloat = function()
+				return rng:NextNumber()
+			end,
+			IgnorePlayerLimits = ignoreLimits,
+		})
+	end
 	local result: { VoteOption } = {}
-	for _, id in ids do
+	for _, id in pick(pool, Config.Session.VoteChoices) do
 		table.insert(result, { Id = id, Mystery = false })
 	end
-	-- §6 Mystery option: occasionally hide one card until it wins. Never when it is the only choice.
-	if #result >= 3 and rng:NextNumber() < Config.Session.MysteryOptionChance then
-		result[rng:NextInteger(1, #result)].Mystery = true
+	if #result == 0 then
+		return result
 	end
+	local rest = {}
+	for _, entry in pool do
+		local shown = false
+		for _, option in result do
+			shown = shown or option.Id == entry.Id
+		end
+		if not shown then
+			table.insert(rest, entry)
+		end
+	end
+	local random = pick(rest, 1)[1] or result[rng:NextInteger(1, #result)].Id
+	table.insert(result, { Id = random, Mystery = true })
 	return result
 end
 

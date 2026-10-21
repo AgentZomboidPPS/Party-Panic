@@ -508,9 +508,10 @@ phase("Voting", 12, function()
 	GameState.SetJSON("VoteOptions", {
 		{ Id = ids[1], Mystery = false },
 		{ Id = ids[2], Mystery = false },
-		{ Id = ids[3], Mystery = true },
+		{ Id = ids[3], Mystery = false },
+		{ Id = ids[1], Mystery = true },
 	})
-	GameState.SetJSON("VoteCounts", { 1, 0, 2 })
+	GameState.SetJSON("VoteCounts", { 1, 0, 2, 1 })
 	__player:SetAttribute("PP_Vote", 1)
 end)
 phase("Preparing", 6, function()
