@@ -39,6 +39,7 @@ local MAX_LEEWAY = 0.35 -- the most lag leeway a press gets after the winding en
 local CELEBRATE = 3.2 -- seconds between the last landing and the end of the round
 local BUNTING_TIE = 8.25 -- where bunting is tied to a board's posts (their tops)
 local BUNTING_HEIGHT = 2.47 -- the bunting mesh's height (its string ends are at the top)
+local STANDS = { -14, -40 } -- grandstand middles along the first stretch (studs from the pads)
 
 -- Lane colors (each toy, pad and landing flag; the lane number is the second cue).
 local COLORS = {
@@ -86,6 +87,41 @@ local function leewayFor(player: Player): number
 	end)
 	local lag = if ok and type(ping) == "number" then ping else 0.1
 	return math.clamp(lag * 0.6 + 0.05, 0.05, MAX_LEEWAY)
+end
+
+-- Scenery props here are only to look at: nothing solid where nothing is drawn (a tree's collision
+-- hull is bigger than its leaves), and nobody can walk to them anyway.
+local function decor(model: Instance): Instance
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+		end
+	end
+	return model
+end
+
+-- Party balloons tied to a post top at `top`, bobbing a little apart.
+local BALLOON_COLORS = {
+	Color3.fromRGB(255, 90, 140),
+	Color3.fromRGB(255, 205, 50),
+	Color3.fromRGB(80, 170, 255),
+	Color3.fromRGB(120, 220, 110),
+	Color3.fromRGB(190, 120, 255),
+	Color3.fromRGB(255, 140, 60),
+}
+local function balloonBunch(parent: Instance, top: Vector3, count: number)
+	for index = 1, count do
+		local angle = (index / count) * math.pi * 2 + rng:NextNumber(-0.4, 0.4)
+		local tilt = math.rad(rng:NextNumber(6, 14))
+		decor(MeshLibrary.Get("Balloon", {
+			Scale = rng:NextNumber(0.5, 0.62),
+			Colors = { Balloon = BALLOON_COLORS[rng:NextInteger(1, #BALLOON_COLORS)] },
+			CFrame = CFrame.new(top) * CFrame.Angles(0, angle, 0) * CFrame.Angles(tilt, 0, 0),
+			Parent = parent,
+		}))
+	end
 end
 
 -- A flat painted strip lying on the field (lines, bands), `top` its upper face.
@@ -245,6 +281,7 @@ local function buildField(ctx, origin: Vector3, laneCount: number)
 				Enum.Font.FredokaOne
 			signs[side] = signs[side] or {}
 			table.insert(signs[side], base)
+			balloonBunch(field, base + Vector3.new(side * 2.35, 8.3, 0), 2)
 		end
 	end
 	-- Bunting from board to board along both sides, tied to the outer posts' tops.
@@ -265,6 +302,20 @@ local function buildField(ctx, origin: Vector3, laneCount: number)
 			CFrame = CFrame.new(origin.X + side * (half + 3), ground, origin.Z - 3),
 			Parent = field,
 		})
+		balloonBunch(field, Vector3.new(origin.X + side * (half + 3), ground + 18.2, origin.Z - 3), 3)
+	end
+
+	-- Grandstands full of fans along the first stretch, facing the track.
+	local stands = Build.Folder("Stands", field)
+	for _, side in { -1, 1 } do
+		for _, standZ in STANDS do
+			MeshLibrary.Get("MechaMarathonStand", {
+				Colors = { Seats = if side < 0 then rgb(70, 150, 255) else rgb(255, 110, 80) },
+				CFrame = CFrame.new(origin.X + side * (half + 13.6), ground - 0.33, origin.Z + standZ)
+					* CFrame.Angles(0, side * math.pi / 2, 0), -- facing the track
+				Parent = stands,
+			})
+		end
 	end
 	local banner = Build.Decor({
 		Name = "Banner",
@@ -292,26 +343,29 @@ local function buildField(ctx, origin: Vector3, laneCount: number)
 		local treeZ = origin.Z + 40
 		while treeZ > origin.Z - trackEnd - 60 do
 			for column = 0, 1 do
-				local x = origin.X + side * (half + 24 + column * 22 + rng:NextNumber(-5, 5))
-				MeshLibrary.Get("Tree", {
+				-- (the near row steps back behind the grandstands)
+				local behindStands = treeZ > origin.Z - 60 and treeZ < origin.Z + 6
+				local x = origin.X
+					+ side * (half + 24 + column * 22 + (if behindStands then 10 else 0) + rng:NextNumber(-5, 5))
+				decor(MeshLibrary.Get("Tree", {
 					Scale = rng:NextNumber(1.6, 2.6),
 					Colors = { Leaves = leafColors[rng:NextInteger(1, #leafColors)] },
 					CFrame = CFrame.new(x, ground - 0.3, treeZ + rng:NextNumber(-8, 8))
 						* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
 					Parent = field,
-				})
+				}))
 			end
 			treeZ -= rng:NextNumber(24, 32)
 		end
-		local bushZ = origin.Z - 20
+		local bushZ = origin.Z - 64
 		while bushZ > origin.Z - trackEnd do
-			MeshLibrary.Get("Bush", {
+			decor(MeshLibrary.Get("Bush", {
 				Scale = rng:NextNumber(1.1, 1.7),
 				Colors = { Flowers = flowerColors[rng:NextInteger(1, #flowerColors)] },
 				CFrame = CFrame.new(origin.X + side * (half + 12 + rng:NextNumber(-1.5, 1.5)), ground - 0.3, bushZ)
 					* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
 				Parent = field,
-			})
+			}))
 			bushZ -= rng:NextNumber(26, 40)
 		end
 	end

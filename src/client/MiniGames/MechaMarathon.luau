@@ -236,6 +236,25 @@ function MechaMarathon.Start(api)
 		end
 	end
 
+	-- The crowd in the grandstands bounces while the toys fly (each stand in its own time).
+	local crowd = {} :: { { Parts: { BasePart }, Rest: { CFrame }, Phase: number } }
+	local field = arena:FindFirstChild("Field")
+	local standsFolder = field and field:FindFirstChild("Stands")
+	if standsFolder and effects then
+		for index, stand in standsFolder:GetChildren() do
+			local entry = { Parts = {}, Rest = {}, Phase = index * 1.7 }
+			for _, part in stand:GetDescendants() do
+				if part:IsA("BasePart") and (string.match(part.Name, "^Fans") or part.Name == "Heads") then
+					table.insert(entry.Parts, part)
+					table.insert(entry.Rest, part.CFrame)
+				end
+			end
+			if #entry.Parts > 0 then
+				table.insert(crowd, entry)
+			end
+		end
+	end
+
 	-- HUD -----------------------------------------------------------------------------------------
 	local hud = api:TopHud()
 	local y = api:HudY()
@@ -730,6 +749,17 @@ function MechaMarathon.Start(api)
 				table.insert(frames, cframe)
 			end
 		end
+		local cheer = if stage == "flight" then 0.3 elseif stage == "launch" then 0.18 else 0.06
+		local beat = if stage == "flight" or stage == "launch" then 9 else 3
+		for _, stand in crowd do
+			local hop = math.abs(math.sin(os.clock() * beat + stand.Phase)) * cheer
+			for index, part in stand.Parts do
+				if part.Parent then
+					table.insert(parts, part)
+					table.insert(frames, stand.Rest[index] + Vector3.new(0, hop, 0))
+				end
+			end
+		end
 		if #parts > 0 then
 			workspace:BulkMoveTo(parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
 		end
@@ -793,8 +823,8 @@ function MechaMarathon.Start(api)
 				local x = if frontCount > 0 then frontX / frontCount else pad.X
 				x = x * 0.75 + origin.X * 0.25
 				local ahead = origin.Z - front
-				eye = Vector3.new(x + 9, origin.Y + 21, ahead + 30)
-				look = Vector3.new(x, origin.Y + 6, ahead - 22)
+				eye = Vector3.new(x + 7, origin.Y + Flight.HEIGHT + 7, ahead + 21)
+				look = Vector3.new(x, origin.Y + Flight.HEIGHT - 3, ahead - 16)
 			else
 				local target = winner or mine
 				local plan = target.Plan

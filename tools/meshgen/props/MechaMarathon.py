@@ -2,7 +2,7 @@
 the distance boards along the field, the flag that marks a landing, bunting, the start gantry's
 towers and the hot air balloons over the field.
 
-    python3 tools/meshgen/generate_meshes.py --only MechaMarathonFlyer,MechaMarathonPad,MechaMarathonSign,MechaMarathonFlag,MechaMarathonBunting,MechaMarathonTower,MechaMarathonSkyBalloon
+    python3 tools/meshgen/generate_meshes.py --only MechaMarathonStand,MechaMarathonFlyer,MechaMarathonPad,MechaMarathonSign,MechaMarathonFlag,MechaMarathonBunting,MechaMarathonTower,MechaMarathonSkyBalloon
 
 Units are studs, +Y is up, the base sits on y = 0 and -Z is the front:
   * MechaMarathonFlyer: a chubby tin copter-bot (Body in the player's color) with a porthole face, stubby
@@ -16,6 +16,7 @@ Units are studs, +Y is up, the base sits on y = 0 and -Z is the front:
   * MechaMarathonBunting: 40 studs of bunting along Z, sagging; its string ends are at the top (y 2.55).
   * MechaMarathonTower: a candy-striped pylon with a gold ball on top (the start gantry).
   * MechaMarathonSkyBalloon: a hot air balloon; StripesA is recolored per balloon.
+  * MechaMarathonStand: a grandstand of cheering fans under a striped awning, facing -Z.
 """
 
 import math
@@ -378,7 +379,87 @@ def sky_balloon():
     }
 
 
+# ---------------------------------------------------------------------------- the grandstands
+
+STAND_WIDTH = 24.0
+
+
+def fan(x: float, seat_y: float, z: float, cheering: bool, seed: int) -> tuple[Mesh, Mesh]:
+    """A seated peg-doll fan facing -Z: (shirt, head). Cheering fans have both arms up."""
+    rng = np.random.default_rng(seed)
+    lean = rng.uniform(-6, 6)
+    body = capsule(1.25, 0.4, 8).rotate("z", lean).translate(x, seat_y + 0.62, z)
+    head = sphere(0.36, 5, 9).translate(x + math.sin(math.radians(-lean)) * 0.95, seat_y + 1.62, z - 0.05)
+    arms = []
+    for side in (-1, 1):
+        if cheering:
+            tip = (x + side * 0.75, seat_y + 2.15, z - 0.15)
+        else:
+            tip = (x + side * 0.5, seat_y + 0.5, z - 0.45)
+        arms.append(tube([(x + side * 0.32, seat_y + 1.0, z), tip], 0.11, 5))
+        arms.append(sphere(0.13, 4, 6).translate(*tip))
+    return merge(body, *arms), head
+
+
+def stand():
+    """A three-tier grandstand facing -Z under a striped awning, full of cheering fans in three
+    shirt colors (FansA, FansB, FansC: the client bounces them when the toys fly)."""
+    half = STAND_WIDTH / 2
+    tiers = []
+    seats = []
+    fans = {"FansA": [], "FansB": [], "FansC": []}
+    heads = []
+    names = list(fans)
+    seed = 0
+    for k in range(3):
+        top = 1.0 + k * 1.1
+        front = -4.5 + k * 2.6
+        depth = 4.5 - front
+        tiers.append(rounded_box(STAND_WIDTH, top, depth, 0.1, 3).translate(0, top / 2, front + depth / 2))
+        seats.append(rounded_box(STAND_WIDTH - 0.8, 0.2, 1.0, 0.06, 3).translate(0, top + 0.1, front + 1.0))
+        for i in range(7):
+            x = -half + 1.9 + i * (STAND_WIDTH - 3.8) / 6 + (0.45 if k % 2 else -0.45)
+            shirt, head = fan(x, top + 0.2, front + 1.05, (i + k) % 3 != 1, seed)
+            seed += 1
+            fans[names[(i * 2 + k) % 3]].append(shirt)
+            heads.append(head)
+    back = rounded_box(STAND_WIDTH, 5.8, 0.3, 0.08, 3).translate(0, 2.9, 4.45)
+    # The awning: striped panels sloping from the back wall down toward the front, on four posts.
+    back_y, front_y, back_z, front_z = 6.7, 5.3, 4.6, -3.2
+    slope = math.degrees(math.atan2(back_y - front_y, back_z - front_z))
+    length = math.hypot(back_y - front_y, back_z - front_z)
+    stripes = {"AwningA": [], "AwningB": []}
+    panels = 8
+    for i in range(panels):
+        width = STAND_WIDTH / panels
+        x = -half + width * (i + 0.5)
+        panel = rounded_box(width + 0.02, 0.16, length, 0.05, 3).rotate("x", slope)
+        panel = panel.translate(x, (back_y + front_y) / 2, (back_z + front_z) / 2)
+        stripes["AwningA" if i % 2 == 0 else "AwningB"].append(panel)
+        # A scalloped valance along the front edge.
+        scallop = [(math.cos(a) * width / 2, -math.sin(a) * width * 0.3) for a in np.linspace(0, math.pi, 12)]
+        flap = extrude(scallop, 0.12).translate(x, front_y - 0.02, front_z - 0.04)
+        stripes["AwningB" if i % 2 == 0 else "AwningA"].append(flap)
+    posts = []
+    for x in (-half + 0.4, -4.0, 4.0, half - 0.4):
+        posts.append(cylinder(0.14, front_y - 1.0, 10).translate(x, 1.0, front_z))
+    rail = tube([(-half + 0.3, 1.85, -4.3), (half - 0.3, 1.85, -4.3)], 0.08, 6)
+    rail_posts = [cylinder(0.07, 0.85, 6).translate(x, 1.0, -4.3) for x in np.linspace(-half + 0.3, half - 0.3, 9)]
+    return {
+        "Frame": merge(*tiers, back),
+        "Seats": merge(*seats),
+        "AwningA": merge(*stripes["AwningA"]),
+        "AwningB": merge(*stripes["AwningB"]),
+        "Rail": merge(*posts, rail, *rail_posts),
+        "Heads": merge(*heads),
+        "FansA": merge(*fans["FansA"]),
+        "FansB": merge(*fans["FansB"]),
+        "FansC": merge(*fans["FansC"]),
+    }
+
+
 PROPS = {
+    "MechaMarathonStand": stand,
     "MechaMarathonFlyer": flyer,
     "MechaMarathonPad": pad,
     "MechaMarathonSign": sign,
@@ -420,4 +501,12 @@ COLORS = {
     "Basket": (170, 120, 70),
     "Rope": (150, 120, 90),
     "Burner": (90, 90, 100),
+    "Seats": (70, 150, 255),
+    "AwningA": (255, 80, 90),
+    "AwningB": (255, 250, 240),
+    "Rail": (250, 250, 250),
+    "Heads": (240, 200, 160),
+    "FansA": (255, 205, 50),
+    "FansB": (90, 210, 120),
+    "FansC": (190, 110, 255),
 }

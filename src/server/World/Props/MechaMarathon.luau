@@ -10,6 +10,8 @@
 --   MechaMarathonBunting     40 studs of sagging bunting along Z, its string ends at the top.
 --   MechaMarathonTower       a candy-striped pylon of the start gantry.
 --   MechaMarathonSkyBalloon  a hot air balloon over the field (StripesA recolored per balloon).
+--   MechaMarathonStand       a grandstand of cheering fans under a striped awning, facing -Z; the
+--                            client bounces the fans (FansA, FansB, FansC) while the toys fly.
 return function(h)
 	local rgb = h.rgb
 	local Build = h.Build
@@ -163,6 +165,40 @@ return function(h)
 				end
 				h.ball(m, "Gold", 1.9, Vector3.new(0, 19.05, 0))
 				h.ball(m, "Gold", 0.9, Vector3.new(0, 20.85, 0))
+			end,
+		},
+		MechaMarathonStand = {
+			Height = 6.8,
+			AssetId = 83974444150620,
+			Collide = false, -- decoration only: nothing solid where nothing is drawn
+			Palette = {
+				Frame = rgb(236, 242, 255),
+				Seats = rgb(70, 150, 255),
+				AwningA = rgb(255, 80, 90),
+				AwningB = rgb(255, 250, 240),
+				Rail = rgb(250, 250, 250),
+				Heads = rgb(240, 200, 160),
+				FansA = rgb(255, 205, 50),
+				FansB = rgb(90, 210, 120),
+				FansC = rgb(190, 110, 255),
+			},
+			Materials = { AwningA = Enum.Material.Fabric, AwningB = Enum.Material.Fabric },
+			Fallback = function(m)
+				for k = 0, 2 do
+					local top = 1 + k * 1.1
+					local front = -4.5 + k * 2.6
+					local depth = 4.5 - front
+					h.block(m, "Frame", Vector3.new(24, top, depth), Vector3.new(0, top / 2, front + depth / 2))
+					for i = 0, 3 do
+						h.ball(
+							m,
+							if i % 2 == 0 then "FansA" else "FansB",
+							1.0,
+							Vector3.new(-9 + i * 6, top + 0.6, front + 1)
+						)
+					end
+				end
+				h.block(m, "AwningA", Vector3.new(24, 0.2, 8), Vector3.new(0, 6.1, 0.7))
 			end,
 		},
 		MechaMarathonSkyBalloon = {
