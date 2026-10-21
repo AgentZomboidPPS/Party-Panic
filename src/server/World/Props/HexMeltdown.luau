@@ -47,10 +47,10 @@ return function(h)
 			end,
 		},
 		CraterWall = {
-			Height = 38.17,
-			AssetId = 99274008931021,
+			Height = 38.48,
+			AssetId = 91122088728380,
 			Shadow = false,
-			Palette = { Rock = rgb(96, 66, 88), Ledge = rgb(176, 120, 136), Lava = LAVA },
+			Palette = { Rock = rgb(96, 66, 88), Ledge = rgb(158, 106, 124), Lava = LAVA },
 			Materials = { Lava = Enum.Material.Neon },
 			Fallback = function(m)
 				-- Three lumpy ridges along the arc (mesh coordinates: the arc bulges toward -Z).
@@ -62,10 +62,10 @@ return function(h)
 			end,
 		},
 		LavaCrust = {
-			Height = 2.43,
-			AssetId = 92675712266884,
+			Height = 2.19,
+			AssetId = 125133549228210,
 			Shadow = false,
-			Palette = { Crust = rgb(62, 44, 58), Glow = rgb(255, 170, 60) },
+			Palette = { Crust = rgb(88, 52, 58), Glow = rgb(255, 176, 64) },
 			Materials = { Glow = Enum.Material.Neon },
 			Fallback = function(m)
 				h.blob(m, "Crust", Vector3.new(13, 1.6, 11), Vector3.new(0, 1, 0))

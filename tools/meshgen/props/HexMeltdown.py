@@ -124,7 +124,7 @@ WALL_PROFILE = [  # (radius, y) from the outer foot over the crest to the inner 
 
 def crater_wall():
     rng = np.random.default_rng(31)
-    thetas = np.radians(np.linspace(-WALL_ARC / 2, WALL_ARC / 2, 101))
+    thetas = np.radians(np.linspace(-WALL_ARC / 2, WALL_ARC / 2, 67))
     profile = []
     # Subdivide the profile so crags have vertices to move.
     for (r0, y0), (r1, y1) in zip(WALL_PROFILE, WALL_PROFILE[1:]):
@@ -150,11 +150,12 @@ def crater_wall():
 
     verts = np.array([point(theta, r, y) for (r, y) in profile for theta in thetas])
     lumps = waves(verts, 5, count=9, low=0.05, high=0.16)
+    crags = waves(verts, 6, count=9, low=0.22, high=0.45)
     center_dir = verts * np.array([1, 0, 1])
     center_dir /= np.linalg.norm(center_dir, axis=1, keepdims=True)
-    height = verts[:, 1] / 34
-    verts += center_dir * (lumps[:, None] * 3.2 * np.clip(height, 0.15, 1)[:, None])
-    verts[:, 1] += lumps * 1.6 * np.clip(height, 0, 1)
+    height = np.clip(verts[:, 1] / 34, 0, 1)
+    verts += center_dir * ((lumps * 3.6 + crags * 2.2) * np.clip(height, 0.15, 1))[:, None]
+    verts[:, 1] += (lumps * 1.8 + crags * 1.2) * height
     seg = len(thetas)
     faces = []
     for i in range(rows - 1):
@@ -169,7 +170,7 @@ def crater_wall():
     if np.dot(n[-1], inner * np.array([1, 0, 1])) > 0:
         wall.f = wall.f[:, ::-1].copy()
         n = -n
-    ledge = n[:, 1] > 0.8
+    ledge = n[:, 1] > 0.9
     rock, top = subset(wall, ~ledge), subset(wall, ledge)
 
     # Lava falls pouring from notches in the crest down the inner face into the lake.
@@ -195,22 +196,18 @@ def crater_wall():
 # ---------------------------------------------------------------------------- lava crust
 
 def lava_crust():
-    plates, glows, bubbles = [], [], []
-    rng = np.random.default_rng(12)
-    for i, (x, z, radius) in enumerate(((0, 0, 6.5), (11, 4, 4.2), (-9, 6, 4.8), (5, -10, 3.6), (-6, -9, 3.0), (15, -6, 2.6))):
-        profile = [(radius * 0.95, 0.0), (radius, 0.55), (radius * 0.86, 1.3), (radius * 0.4, 1.6), (0.0, 1.62)]
-        plate = lathe([(0.0, 0.0)] + profile, 9)
-        wobble = waves(plate.v + np.array([x, 0, z]) * 3, 20 + i, low=0.3, high=0.7)
-        plate.v[:, [0, 2]] *= (1 + 0.16 * wobble)[:, None]
-        plate.v[:, 1] *= 1 + 0.2 * wobble
-        plate.rotate("y", rng.uniform(0, 360)).translate(x, 0, z)
-        plates.append(plate)
-        halo = cylinder(radius * 1.12, 0.5, 12).translate(0, 0.1, 0)
-        halo.v[:, [0, 2]] *= (1 + 0.1 * waves(halo.v, 40 + i, low=0.3, high=0.7))[:, None]
-        glows.append(halo.translate(x, 0, z))
-    for x, z, radius in ((-14, -3, 1.3), (8, 12, 0.9), (-2, 12, 1.1), (19, 3, 0.8)):
-        bubbles.append(sphere(radius, 6, 10).scale(1, 0.7, 1).translate(x, 0.35, z))
-    crust = merge(*plates)
+    """An island of crust: lumpy flattened rocks run together, a hot glowing edge under them and a
+    few lava bubbles around."""
+    rocks, glows, bubbles = [], [], []
+    for i, (x, z, radius) in enumerate(((0, 0, 6.0), (6.5, 2.5, 4.6), (-5.5, 3.2, 4.4), (2.5, -5.2, 4.0), (-3.5, -4.0, 3.2), (10.5, -2.0, 2.8))):
+        rock = icosphere(radius, 2, 0.45, seed=60 + i).scale(1, 0.24, 1)
+        rock.v[:, 1] = np.maximum(rock.v[:, 1], -0.2)  # flat underside, just under the lava
+        rocks.append(rock.translate(x, 0.2, z))
+        halo = icosphere(radius * 1.14, 1, 0.35, seed=80 + i).scale(1, 0.1, 1)
+        glows.append(halo.translate(x, 0.15, z))
+    for x, z, radius in ((-10, -1, 1.2), (5, 8.5, 0.9), (-2, 8.0, 1.0), (13.5, 3, 0.8)):
+        bubbles.append(sphere(radius, 6, 10).scale(1, 0.7, 1).translate(x, 0.3, z))
+    crust = merge(*rocks)
     crust.smooth = False
     return {"Crust": crust, "Glow": merge(*glows, *bubbles)}
 

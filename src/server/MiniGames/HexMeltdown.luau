@@ -28,13 +28,15 @@ local LAVA_DROP = 20 -- lava surface below the hex tops
 local DROP_DEPTH = 3 -- a bot off the called color falls once the other hexes are this far down
 
 -- Art (World/Props/HexMeltdown.luau). Mesh props pivot at their bounding box's bottom center:
-local WALL_PIVOT = Vector3.new(-0.04, 0, -103.85) -- a CraterWall arc's pivot from the crater center
+local WALL_PIVOT = Vector3.new(-0.16, 0, -103.96) -- a CraterWall arc's pivot from the crater center
 local ROBOT_PIVOT = Vector3.new(3.38, 0.04, -0.05) -- the RefereeBot's pivot from its feet
 local STAND_HEIGHT = 19.3 -- RefereeStand: its top is the stage
 local MARQUEE_CENTER_Y = 23.5 -- the CallMarquee's opening, above the stage
+local STAND_SCALE, ROBOT_SCALE, MARQUEE_SCALE = 1.15, 1.35, 1.25
 local BASALT = Color3.fromRGB(84, 60, 80)
 local RIM = Color3.fromRGB(255, 244, 226)
 local GOLD = Color3.fromRGB(255, 196, 60)
+local WALL_ROCK = Color3.fromRGB(96, 66, 88)
 
 -- Every color comes with a shape so color is never the only cue (design doc §12).
 HexMeltdown.Palette = {
@@ -117,14 +119,28 @@ local function buildCrater(ctx, origin: Vector3, lake: Vector3)
 		local turn = CFrame.new(lake.X, lake.Y - 3, lake.Z) * CFrame.Angles(0, math.rad(index * 90 + 45), 0)
 		MeshLibrary.Get("CraterWall", { CFrame = turn * CFrame.new(WALL_PIVOT), Parent = ctx.Arena })
 	end
+	-- Rock spires along the crest break up the skyline (none behind the referee's board).
+	for index = 0, 13 do
+		local degrees = (index / 14 * 360 + rng:NextNumber(-8, 8)) % 360
+		if degrees > 240 and degrees < 300 then
+			continue
+		end
+		local angle = math.rad(degrees)
+		local distance = rng:NextNumber(102, 112)
+		MeshLibrary.Get("Spire", {
+			Scale = rng:NextNumber(1.4, 2.1),
+			Colors = { Rock = WALL_ROCK },
+			CFrame = CFrame.new(lake + Vector3.new(math.cos(angle) * distance, 8, math.sin(angle) * distance))
+				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+			Parent = ctx.Arena,
+		})
+	end
 	-- Rafts sit in the open lava between the grid and the wall, never in front of the referee.
-	for _, raft in
-		{ { 15, 60 }, { 62, 58 }, { 110, 62 }, { 160, 56 }, { 205, 60 }, { 330, 58 }, { 20, 76 }, { 140, 76 } }
-	do
+	for _, raft in { { 20, 60 }, { 75, 62 }, { 125, 60 }, { 170, 58 }, { 215, 62 }, { 325, 60 } } do
 		local angle = math.rad(raft[1])
 		local spot = lake + Vector3.new(math.cos(angle) * raft[2], -0.9, math.sin(angle) * raft[2])
 		MeshLibrary.Get("LavaCrust", {
-			Scale = rng:NextNumber(0.75, 1),
+			Scale = rng:NextNumber(0.9, 1.15),
 			CFrame = CFrame.new(spot) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
 			Parent = ctx.Arena,
 		})
@@ -157,18 +173,28 @@ local function buildReferee(ctx, origin: Vector3): (BasePart, TextLabel)
 		Parent = ctx.Arena,
 	})
 	local facing = CFrame.lookAt(stageTop, Vector3.new(origin.X, stageTop.Y, origin.Z))
-	MeshLibrary.Get("RefereeStand", { CFrame = facing * CFrame.new(0, -STAND_HEIGHT, 0), Parent = ctx.Arena })
+	MeshLibrary.Get("RefereeStand", {
+		Scale = STAND_SCALE,
+		CFrame = facing * CFrame.new(0, -STAND_HEIGHT * STAND_SCALE, 0),
+		Parent = ctx.Arena,
+	})
 	local robot = MeshLibrary.Get("RefereeBot", {
-		CFrame = facing * CFrame.new(0, 0, -3) * CFrame.new(ROBOT_PIVOT),
+		Scale = ROBOT_SCALE,
+		CFrame = facing * CFrame.new(0, 0, -3.5) * CFrame.new(ROBOT_PIVOT * ROBOT_SCALE),
 		Parent = ctx.Arena,
 	})
 	local flag = robot:FindFirstChild("Flag", true) :: BasePart
 	flag:SetAttribute("Flag", true)
-	MeshLibrary.Get("CallMarquee", { CFrame = facing * CFrame.new(0, 0, 5), Parent = ctx.Arena })
+	MeshLibrary.Get("CallMarquee", {
+		Scale = MARQUEE_SCALE,
+		CFrame = facing * CFrame.new(0, 0, 3.5),
+		Parent = ctx.Arena,
+	})
+	-- The board fills the marquee's opening, its edges hidden inside the frame.
 	local board = Build.Decor({
 		Name = "CallBoard",
-		Size = Vector3.new(26.6, 9.4, 0.6),
-		CFrame = facing * CFrame.new(0, MARQUEE_CENTER_Y, 5),
+		Size = Vector3.new(26.6 * MARQUEE_SCALE, 9.4 * MARQUEE_SCALE, 0.6),
+		CFrame = facing * CFrame.new(0, MARQUEE_CENTER_Y * MARQUEE_SCALE, 3.5),
 		Color = rgb(28, 20, 56),
 		Parent = ctx.Arena,
 	})
@@ -213,7 +239,7 @@ function HexMeltdown:Prepare()
 		local top = origin + hexOffset(q, r)
 		local entry = HexMeltdown.Palette[colorIndex]
 		local color = if entry then entry.Color else rgb(255, 250, 240)
-		local model = Build.Model("Hex" .. index, ctx.Arena)
+		local model = Build.Model("Hex" .. index) -- parented once complete (the client reads its pivot)
 		-- The pillar, rim and cap you stand on are invisible colliders (the same shapes as ever);
 		-- the carved column mesh inside them is what you see.
 		hexPrism(HEX_HEIGHT, {
@@ -255,6 +281,7 @@ function HexMeltdown:Prepare()
 		model:SetAttribute("ColorIndex", colorIndex)
 		model:SetAttribute("Index", index)
 		model.PrimaryPart = cap
+		model.Parent = ctx.Arena
 		table.insert(self.hexes, { Position = top, ColorIndex = colorIndex })
 	end
 	addHex(0, 0, 0, 0)
