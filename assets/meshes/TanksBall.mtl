@@ -1,0 +1,23 @@
+newmtl Red
+Kd 0.922 0.235 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl White
+Kd 0.980 0.980 0.961
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Yellow
+Kd 0.980 0.824 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Blue
+Kd 0.235 0.510 0.922
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
