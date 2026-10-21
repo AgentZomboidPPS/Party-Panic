@@ -1,0 +1,491 @@
+-- Client half of Bumper Ballers: rolls this player's own ball and draws the round.
+--
+-- The server gives each player's ball to their device (ball model attribute ClientDriven). This
+-- client then pushes it every frame with the same drive model the server uses for bots (MG_Tuning):
+-- force = mass * (input * Accel - flat velocity * drag). Input is Roblox's own move vector (WASD,
+-- arrows, thumbstick, gamepad: PlayerModule's controls), or phone TILT when the stick is idle.
+-- On phones with an accelerometer there are CALIBRATE and FLIP buttons and a TILT ON/OFF switch.
+-- The server decides bumps and sends "Bump" (a velocity kick for this ball); everyone gets "Boing"
+-- (a squash, a ring and a sound where two balls met) and "Splash" (someone fell in).
+--
+-- Also: a strip of every rider's shape and color (dimmed with a cross when they're out), an EDGE!
+-- warning near the rim, a YOU marker over this player's ball and gentle foam rings on the sea.
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local State = require(script.Parent.Parent.State)
+local Theme = require(script.Parent.Parent.UI.Theme)
+local UIKit = require(script.Parent.Parent.UI.UIKit)
+
+local BumperBallers = {}
+
+local EDGE_WARNING = 8 -- studs from the rim
+
+local function flat(v: Vector3): Vector3
+	return Vector3.new(v.X, 0, v.Z)
+end
+
+-- Roblox's own move input (keyboard, thumbstick, gamepad), camera-relative like walking.
+local function moveControls(): any
+	local ok, controls = pcall(function()
+		local playerScripts = Players.LocalPlayer:FindFirstChild("PlayerScripts")
+		local module = playerScripts and playerScripts:FindFirstChild("PlayerModule")
+		if not module then
+			return nil
+		end
+		return (require(module) :: any):GetControls()
+	end)
+	return if ok then controls else nil
+end
+
+local function cameraAxes(): (Vector3, Vector3)
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return Vector3.new(0, 0, -1), Vector3.new(1, 0, 0)
+	end
+	local look = flat(camera.CFrame.LookVector)
+	if look.Magnitude < 0.05 then
+		look = flat(camera.CFrame.UpVector)
+	end
+	local forward = if look.Magnitude > 0.01 then look.Unit else Vector3.new(0, 0, -1)
+	return forward, Vector3.new(-forward.Z, 0, forward.X)
+end
+
+function BumperBallers.Start(api)
+	api:Mood({
+		Tint = Color3.fromRGB(250, 252, 255),
+		Saturation = 0.18,
+		Contrast = 0.06,
+		Brightness = 0.02,
+		Haze = Color3.fromRGB(190, 230, 255),
+		HazeDecay = Color3.fromRGB(120, 190, 230),
+		Density = 0.26,
+	})
+	local arena = api:Arena()
+	if not arena then
+		return
+	end
+	local ballsFolder = arena:WaitForChild("Balls", 10)
+	if not ballsFolder then
+		return
+	end
+	local player = api.Player or Players.LocalPlayer
+	local myId = player and player.UserId
+	local tuning = api:SharedJSON("Tuning") or { Accel = 46, MaxSpeed = 24, Relief = 0.5, ReliefDrag = 0.3 }
+	local island = api:SharedJSON("Island")
+	local drag = tuning.Accel / tuning.MaxSpeed
+	local hud = api:TopHud()
+	local touch = api:IsTouch()
+
+	-- Riders strip ----------------------------------------------------------------------------
+	local strip = UIKit.new("Frame", {
+		Name = "Riders",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, api:HudY()),
+		Size = UDim2.fromOffset(600, 40),
+		BackgroundTransparency = 1,
+		Parent = hud,
+		Children = {
+			UIKit.new("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				Padding = UDim.new(0, 6),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+		},
+	})
+	local icons: { [number]: { Frame: Frame, Cross: TextLabel, Out: boolean } } = {}
+	local function participantAlive(userId: number): boolean
+		for _, participant in api:Participants() do
+			if participant.UserId == userId then
+				return participant:GetAttribute("PP_Alive") ~= false
+			end
+		end
+		return false
+	end
+	local function addIcon(model: Instance)
+		local userId = model:GetAttribute("Owner")
+		if type(userId) ~= "number" or icons[userId] then
+			return
+		end
+		local color = model:GetAttribute("Color") or Color3.new(1, 1, 1)
+		local mine = userId == myId
+		local frame = UIKit.new("Frame", {
+			Name = "Rider" .. tostring(userId),
+			Size = UDim2.fromOffset(if mine then 40 else 34, if mine then 40 else 34),
+			BackgroundColor3 = color,
+			LayoutOrder = if mine then -1 else model:GetAttribute("Index") or 0,
+			Parent = strip,
+			Children = {
+				UIKit.Round(),
+				UIKit.Stroke(Color3.new(1, 1, 1), if mine then 3 else 2, 0),
+			},
+		})
+		UIKit.Label({
+			Text = model:GetAttribute("Shape") or "●",
+			Font = Enum.Font.GothamBlack,
+			TextScaled = true,
+			Size = UDim2.fromScale(0.7, 0.7),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			TextColor3 = Color3.new(1, 1, 1),
+			Parent = frame,
+			Children = { UIKit.TextStroke(0.3) },
+		})
+		local cross = UIKit.Label({
+			Text = "✕",
+			Font = Enum.Font.GothamBlack,
+			TextScaled = true,
+			Size = UDim2.fromScale(1.1, 1.1),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			TextColor3 = Theme.Colors.Red,
+			Visible = false,
+			ZIndex = 3,
+			Parent = frame,
+			Children = { UIKit.TextStroke(0) },
+		})
+		icons[userId] = { Frame = frame, Cross = cross, Out = false }
+	end
+
+	local bigBadge = UIKit.Label({
+		Name = "BigBumps",
+		Text = "💥 BIG BUMPS!",
+		Font = Theme.Fonts.Display,
+		TextSize = 30,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + 46),
+		Size = UDim2.fromOffset(320, 36),
+		TextColor3 = Theme.Colors.Orange,
+		Visible = false,
+		Parent = hud,
+		Children = { UIKit.TextStroke(0.1) },
+	})
+	local function refreshBig()
+		local on = api:Shared("BigBumps") == true
+		if on and not bigBadge.Visible then
+			bigBadge.Visible = true
+			UIKit.PopIn(bigBadge, 0.3)
+		end
+		bigBadge.Visible = on
+	end
+	api:OnShared("BigBumps", refreshBig)
+	refreshBig()
+
+	local edgeLabel = UIKit.Label({
+		Name = "Edge",
+		Text = "⚠ EDGE! ⚠",
+		Font = Theme.Fonts.Display,
+		TextSize = 40,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + 84),
+		Size = UDim2.fromOffset(320, 46),
+		TextColor3 = Theme.Colors.Red,
+		Visible = false,
+		Parent = hud,
+		Children = { UIKit.TextStroke(0) },
+	})
+
+	-- Balls --------------------------------------------------------------------------------------
+	type Ball = { Model: Model, Body: BasePart?, Pieces: { { Part: BasePart, Size: Vector3 } }, Pulse: number }
+	local balls: { [number]: Ball } = {}
+	local function addBall(model: Instance)
+		if not model:IsA("Model") then
+			return
+		end
+		local userId = model:GetAttribute("Owner")
+		if type(userId) ~= "number" or balls[userId] then
+			return
+		end
+		local body = model:WaitForChild("Body", 5) :: BasePart?
+		local visual = model:WaitForChild("Visual", 5)
+		local pieces = {}
+		if visual then
+			for _, part in visual:GetDescendants() do
+				if part:IsA("BasePart") then
+					table.insert(pieces, { Part = part, Size = part.Size })
+				end
+			end
+		end
+		balls[userId] = { Model = model :: Model, Body = body, Pieces = pieces, Pulse = 0 }
+		addIcon(model)
+	end
+	for _, child in ballsFolder:GetChildren() do
+		task.spawn(addBall, child)
+	end
+	api:Track(ballsFolder.ChildAdded:Connect(addBall))
+
+	-- "Boing": both balls squash and spring back, a ring flashes where they met.
+	local function pulse(userId: number, strength: number)
+		local ball = balls[userId]
+		if ball then
+			ball.Pulse = math.max(ball.Pulse, 0.12 + strength * 0.16)
+		end
+	end
+	local function ring(position: Vector3, color: Color3, size: number)
+		local part = Instance.new("Part")
+		part.Name = "BoingRing"
+		part.Shape = Enum.PartType.Cylinder
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanQuery = false
+		part.CanTouch = false
+		part.CastShadow = false
+		part.Material = Enum.Material.Neon
+		part.Color = color
+		part.Transparency = 0.25
+		part.Size = Vector3.new(0.2, 2, 2)
+		part.CFrame = CFrame.new(position) * CFrame.Angles(0, 0, math.rad(90))
+		part.Parent = api.World
+		local tween = TweenService:Create(
+			part,
+			TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Size = Vector3.new(0.2, size, size), Transparency = 1 }
+		)
+		tween:Play()
+		task.delay(0.5, function()
+			part:Destroy()
+		end)
+	end
+	api:OnEvent("Boing", function(position: Vector3, strength: number, a: number, b: number)
+		if typeof(position) ~= "Vector3" or type(strength) ~= "number" then
+			return
+		end
+		pulse(a, strength)
+		pulse(b, strength)
+		ring(position, Color3.fromRGB(255, 245, 200), 8 + strength * 10)
+		api:Effect("Stars", position)
+		local camera = workspace.CurrentCamera
+		local near = camera and (camera.CFrame.Position - position).Magnitude < 70
+		if a == myId or b == myId or near then
+			api:Sound("Boing")
+		end
+	end)
+	api:OnEvent("Splash", function(position: Vector3, userId: number)
+		if typeof(position) ~= "Vector3" then
+			return
+		end
+		ring(position + Vector3.new(0, 0.2, 0), Color3.fromRGB(235, 250, 255), 16)
+		api:Effect("Bubbles", position)
+		api:Sound("Splash")
+		local icon = icons[userId]
+		if icon then
+			icon.Out = true
+		end
+	end)
+
+	-- Driving this player's own ball --------------------------------------------------------------
+	local controls = moveControls()
+	local tilt = if touch then api:Tilt() else nil
+	local tiltOn = tilt ~= nil
+	local reliefUntil = 0
+	local yaw: number? = nil
+	local driving = false
+
+	api:OnEvent("Bump", function(dv: Vector3, relief: number)
+		local ball = balls[myId]
+		local body = ball and ball.Body
+		if typeof(dv) ~= "Vector3" or not body or not driving then
+			return
+		end
+		reliefUntil = os.clock() + math.clamp(type(relief) == "number" and relief or 0.5, 0, 1)
+		local _, _, root = api:Character()
+		local mass = body.AssemblyMass + (if root then root.AssemblyMass else 0)
+		body:ApplyImpulse(dv * mass)
+	end)
+
+	if tilt then
+		local calibrate = api:Button({ Text = "CALIBRATE", Key = Enum.KeyCode.C, Color = Theme.Colors.Cyan })
+		calibrate.Pressed:Connect(function()
+			tilt:Calibrate()
+			api:Sound("Click")
+			api:Hint("Tilt set! Lean your phone to roll.")
+			task.delay(2, function()
+				api:Hint("")
+			end)
+		end)
+		local flip = api:Button({ Text = "FLIP ⇄", Key = Enum.KeyCode.F, Color = Theme.Colors.Yellow, Slot = 2 })
+		flip.Pressed:Connect(function()
+			tilt:Flip()
+			api:Sound("Click")
+		end)
+		local switch
+		switch = UIKit.Button({
+			Name = "TiltSwitch",
+			Text = "📱 TILT: ON",
+			Font = Theme.Fonts.Display,
+			TextSize = 22,
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, api:HudY() + 136),
+			Size = UDim2.fromOffset(190, 42),
+			Parent = hud,
+		}, function()
+			tiltOn = not tiltOn
+			switch.Text = if tiltOn then "📱 TILT: ON" else "🕹 STICK"
+			calibrate:SetVisible(tiltOn)
+			flip:SetVisible(tiltOn)
+			api:Sound("Click")
+		end)
+		api:Hint("Hold your phone comfy, tap CALIBRATE, then tilt to roll!")
+		task.delay(5, function()
+			api:Hint("")
+		end)
+	else
+		api:Hint(if touch then "Use the stick to roll. Bump them off!" else "Move to roll. Bump them off!")
+		task.delay(4, function()
+			api:Hint("")
+		end)
+	end
+
+	-- A YOU marker over this player's ball, so they find themselves in a crowd.
+	local marker: BillboardGui? = nil
+	local function ensureMarker(body: BasePart)
+		if marker and marker.Parent then
+			return
+		end
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "YouMarker"
+		gui.Adornee = body
+		gui.Size = UDim2.fromOffset(70, 34)
+		gui.StudsOffsetWorldSpace = Vector3.new(0, 15, 0)
+		gui.AlwaysOnTop = true
+		gui.LightInfluence = 0
+		gui.Parent = api.World
+		UIKit.Label({
+			Text = "YOU ▼",
+			Font = Theme.Fonts.Display,
+			TextSize = 26,
+			Size = UDim2.fromScale(1, 1),
+			TextColor3 = Theme.Colors.Yellow,
+			Parent = gui,
+			Children = { UIKit.TextStroke(0) },
+		})
+		marker = gui
+	end
+
+	local function input(): Vector3
+		local forward, right = cameraAxes()
+		local move = Vector3.zero
+		if controls then
+			local ok, value = pcall(controls.GetMoveVector, controls)
+			if ok and typeof(value) == "Vector3" then
+				move = right * value.X - forward * value.Z
+			end
+		end
+		if move.Magnitude < 0.15 and tilt and tiltOn then
+			local value = tilt:Get()
+			move = right * value.X + forward * value.Y
+		end
+		if move.Magnitude > 1 then
+			move = move.Unit
+		end
+		return move
+	end
+
+	-- Foam rings that breathe around the island (ambient: off with reduced effects).
+	local foam: { Part } = {}
+	if island and not State.ReducedEffects() then
+		for index = 1, 3 do
+			local part = Instance.new("Part")
+			part.Name = "Foam"
+			part.Shape = Enum.PartType.Cylinder
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.CastShadow = false
+			part.Material = Enum.Material.SmoothPlastic
+			part.Color = Color3.fromRGB(240, 252, 255)
+			part.Transparency = 0.6
+			part.Size = Vector3.new(0.12, 2, 2)
+			part.Parent = api.World
+			part:SetAttribute("Phase", index / 3)
+			table.insert(foam, part)
+		end
+	end
+
+	api:RenderStep(function(dt: number)
+		local now = os.clock()
+		-- Squash-and-stretch pulses (uniform, so they look right however the ball has rolled).
+		for _, ball in balls do
+			if ball.Pulse > 0.001 then
+				ball.Pulse = math.max(0, ball.Pulse - dt * 0.9)
+				local scale = 1 + math.sin(ball.Pulse * 40) * ball.Pulse
+				for _, piece in ball.Pieces do
+					if piece.Part.Parent then
+						piece.Part.Size = piece.Size * scale
+					end
+				end
+			end
+		end
+		-- Riders strip.
+		for userId, icon in icons do
+			local out = icon.Out or not participantAlive(userId)
+			icon.Cross.Visible = out
+			icon.Frame.BackgroundTransparency = if out then 0.65 else 0
+		end
+		for _, part in foam do
+			local phase = ((now * 0.18) + part:GetAttribute("Phase")) % 1
+			local size = island.R * 2 + 6 + phase * 26
+			part.Size = Vector3.new(0.12, size, size)
+			part.Transparency = 0.55 + phase * 0.45
+			part.CFrame = CFrame.new(island.X, island.Water + 0.05 + math.sin(now * 1.3 + phase * 6) * 0.06, island.Z)
+				* CFrame.Angles(0, 0, math.rad(90))
+		end
+
+		local ball = balls[myId]
+		local body = ball and ball.Body
+		if not body or not body.Parent then
+			edgeLabel.Visible = false
+			return
+		end
+		ensureMarker(body)
+		if island then
+			local fromCenter = flat(body.Position - Vector3.new(island.X, 0, island.Z)).Magnitude
+			local near = api:Alive() and fromCenter > island.R - EDGE_WARNING and body.Position.Y > island.Water
+			edgeLabel.Visible = near and (now * 4) % 1 < 0.7
+		end
+		driving = ball.Model:GetAttribute("ClientDriven") == true and api:Alive()
+		if not driving then
+			return
+		end
+		local character, humanoid, root = api:Character()
+		if humanoid and not humanoid.PlatformStand then
+			humanoid.PlatformStand = true
+		end
+		local force = body:FindFirstChild("Drive") :: VectorForce?
+		local move = input()
+		local velocity = body.AssemblyLinearVelocity
+		local k = if now < reliefUntil then drag * tuning.ReliefDrag else drag
+		local mass = body.AssemblyMass + (if root then root.AssemblyMass else 0)
+		if force then
+			force.Force = (move * tuning.Accel - flat(velocity) * k) * mass
+		end
+		-- Face where we roll.
+		local align = root and root:FindFirstChild("BumperUpright") :: AlignOrientation?
+		if align and character then
+			local heading = if flat(velocity).Magnitude > 2 then flat(velocity) else move
+			if heading.Magnitude > 0.1 then
+				local target = math.atan2(-heading.X, -heading.Z)
+				local current = yaw or target
+				local delta = (target - current + math.pi) % (math.pi * 2) - math.pi
+				yaw = current + delta * math.min(1, dt * 8)
+				align.CFrame = CFrame.Angles(0, yaw :: number, 0)
+			end
+		end
+	end)
+
+	api:Track(function()
+		if RunService:IsClient() then
+			local _, humanoid = api:Character()
+			if humanoid then
+				humanoid.PlatformStand = false
+			end
+		end
+	end)
+end
+
+return BumperBallers
