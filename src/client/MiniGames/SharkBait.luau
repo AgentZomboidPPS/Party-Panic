@@ -91,6 +91,7 @@ type CoinView = {
 	From: Vector3?,
 	SpillAt: number?,
 	Model: Model,
+	BaseScale: number, -- the model's own scale (animations scale relative to it)
 	Ring: BasePart?,
 	Beam: BasePart?,
 	Spin: number,
@@ -876,6 +877,7 @@ function SharkBait.Start(api)
 						CFrame = CFrame.new(position + Vector3.new(0, 30, 0)) * CFrame.Angles(0, 0, math.rad(90)),
 					})
 				end
+				local model = newCoinModel(kind)
 				coins[id] = {
 					Id = id,
 					Kind = kind,
@@ -884,7 +886,8 @@ function SharkBait.Start(api)
 					Expires = entry[7],
 					From = if entry[11] then Vector3.new(entry[8], entry[9], entry[10]) else nil,
 					SpillAt = entry[11],
-					Model = newCoinModel(kind),
+					Model = model,
+					BaseScale = model:GetScale(),
 					Ring = ring,
 					Beam = beam,
 					Spin = math.random() * math.pi * 2,
@@ -925,6 +928,14 @@ function SharkBait.Start(api)
 	-- Shark controls: CHOMP (the button, E, or the jump button, which a shark has no other use for).
 	local chompButton = nil
 	local lastPress = 0
+	local punch = 0 -- the shark's camera lurches forward on a chomp (field of view)
+	local camera = workspace.CurrentCamera
+	local baseFov = if camera then camera.FieldOfView else 70
+	api:Track(function()
+		if camera then
+			camera.FieldOfView = baseFov
+		end
+	end)
 	local function chomp()
 		local clock = os.clock()
 		if clock - lastPress < 0.15 then
@@ -937,6 +948,7 @@ function SharkBait.Start(api)
 				mine.LungeAt = api:Now() -- the lunge starts on my screen at once; the server's echo is skipped
 			end
 			api:Sound("Hit")
+			punch = if reduced then 0 else 1
 		end
 		api:Action("Chomp")
 	end
@@ -1224,7 +1236,7 @@ function SharkBait.Start(api)
 					end
 					coin.Pending = nil
 					coin.Model.Parent = api.World
-					coin.Model:ScaleTo(1)
+					coin.Model:ScaleTo(coin.BaseScale)
 				else
 					local from = coin.Shown or coin.Position
 					local to = if myRoot then myRoot.Position + Vector3.new(0, 1.5, 0) else from + Vector3.new(0, 4, 0)
@@ -1236,7 +1248,7 @@ function SharkBait.Start(api)
 							CFrame.new(from:Lerp(to, k) + Vector3.new(0, math.sin(k * math.pi) * 2.5, 0))
 								* CFrame.Angles(0, coin.Spin + t * 20, 0)
 						)
-						coin.Model:ScaleTo(math.max(0.1, 1 - k * 0.8))
+						coin.Model:ScaleTo(coin.BaseScale * math.max(0.1, 1 - k * 0.8))
 					end
 					continue
 				end
@@ -1259,7 +1271,7 @@ function SharkBait.Start(api)
 						CFrame.new(from:Lerp(to, k) + Vector3.new(0, math.sin(k * math.pi) * 2.5, 0))
 							* CFrame.Angles(0, coin.Spin + t * 20, 0)
 					)
-					coin.Model:ScaleTo(math.max(0.1, 1 - k * 0.8))
+					coin.Model:ScaleTo(coin.BaseScale * math.max(0.1, 1 - k * 0.8))
 					if k >= 1 then
 						removeCoin(id)
 					end
@@ -1303,10 +1315,9 @@ function SharkBait.Start(api)
 			if coin.Kind == 3 then
 				turn *= CFrame.Angles(math.sin(now * 1.6 + coin.Spin) * 0.08, 0, math.cos(now * 1.3) * 0.08)
 			end
-			if scale ~= 1 then
-				coin.Model:ScaleTo(scale)
-			elseif coin.Model:GetScale() ~= 1 then
-				coin.Model:ScaleTo(1)
+			local want = coin.BaseScale * scale
+			if math.abs(coin.Model:GetScale() - want) > 1e-3 then
+				coin.Model:ScaleTo(want)
 			end
 			coin.Model:PivotTo(CFrame.new(target) * turn)
 			if coin.Ring then
@@ -1355,6 +1366,10 @@ function SharkBait.Start(api)
 			cameraHumanoid = myHumanoid
 		end
 		shake = math.max(0, shake - dt)
+		if camera and (punch > 0 or camera.FieldOfView ~= baseFov) then
+			punch = math.max(0, punch - dt * 3)
+			camera.FieldOfView = baseFov + 7 * math.sin(punch * math.pi) * punch
+		end
 		local humanoid = cameraHumanoid or myHumanoid
 		if humanoid and humanoid.Parent then
 			local base = if isShark then SHARK_CAMERA else Vector3.zero

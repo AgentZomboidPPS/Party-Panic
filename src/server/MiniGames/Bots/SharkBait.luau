@@ -257,11 +257,13 @@ local function sharkStep(bot, ctx, mode, now: number)
 		bot:MoveTo(Vector3.new(goal.X, position.Y, goal.Z))
 		if ready and now >= (memory.ChompAt or 0) then
 			-- Chomp once the swimmer is well inside the jaws (better bots wait for a surer bite).
-			local dir = unit(preyRoot.Position - position, unit(root.CFrame.LookVector, Vector3.new(0, 0, -1)))
+			local facing = unit(root.CFrame.LookVector, Vector3.new(0, 0, -1))
+			local dir = unit(preyRoot.Position - position, facing)
 			local reach = mode.JawDistance(preyRoot.Position, position, dir)
 			local along = flat(preyRoot.Position - position):Dot(dir)
 			local sure = mode.BITE_RADIUS - 0.4 - bot.Skill * 0.6
-			if reach <= sure and along <= mode.JAW_FAR - 1.2 then
+			-- (Only at prey roughly ahead: a bot turns to bite, but not right round.)
+			if reach <= sure and along <= mode.JAW_FAR - 1.2 and facing:Dot(dir) > 0.4 then
 				mode:Aim(bot, preyRoot.Position)
 				ctx:BotAction(bot, "Chomp")
 				memory.ChompAt = now + 0.25 + (1 - bot.Skill) * 0.5
