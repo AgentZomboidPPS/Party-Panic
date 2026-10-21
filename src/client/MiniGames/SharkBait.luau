@@ -427,7 +427,8 @@ function SharkBait.Start(api)
 		TextScaled = true,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, api:HudY() + 66),
-		Size = UDim2.fromOffset(440, 62),
+		-- Phones: narrower, so the long flashes stay clear of the thumbstick's corner.
+		Size = UDim2.fromOffset(if api:IsTouch() then 330 else 440, 62),
 		Visible = false,
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.05), UIKit.new("UITextSizeConstraint", { MaxTextSize = 50 }) },
@@ -1301,7 +1302,7 @@ function SharkBait.Start(api)
 			end
 			local safe = raft.State == READY and now < raft.SafeUntil
 			-- Foam: a faint rim round a raft, churning white where one just went under.
-			raft.Foam.Transparency = if raft.State == FLIPPED then 0.3 + 0.12 * math.sin(clock * 7) else 0.62
+			raft.Foam.Transparency = if raft.State == FLIPPED then 0.55 + 0.1 * math.sin(clock * 7) else 0.62
 			raft.Foam.Color = if safe then Color3.fromRGB(150, 255, 210) else Color3.fromRGB(235, 250, 255)
 			if raft.State == WOBBLING then
 				local pulse = 1 + 0.18 * math.sin(clock * 18)

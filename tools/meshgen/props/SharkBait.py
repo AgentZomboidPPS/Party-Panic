@@ -959,8 +959,8 @@ def coin():
     """A gold coin standing up, facing -Z: a raised rim and a shark-fin-on-a-wave badge each side."""
     r, t = 1.0, 0.32
     rim = lathe([(0.8, -0.13), (0.86, -0.158), (0.95, -0.16), (0.995, -0.11), (1.0, 0.0), (0.995, 0.11), (0.95, 0.16),
-                 (0.86, 0.158), (0.8, 0.13), (0.8, -0.13)], 40)
-    face = lathe([(0.0, -0.125), (0.45, -0.122), (0.83, -0.11), (0.83, 0.11), (0.45, 0.122), (0.0, 0.125)], 40)
+                 (0.86, 0.158), (0.8, 0.13), (0.8, -0.13)], 32)
+    face = lathe([(0.0, -0.125), (0.45, -0.122), (0.83, -0.11), (0.83, 0.11), (0.45, 0.122), (0.0, 0.125)], 32)
     badges = []
     for side in (-1, 1):
         b = fin_badge(1.05, 0.04)
@@ -1073,6 +1073,9 @@ def pearl_clam():
     low = min(m.v[:, 1].min() for m in pieces.values())
     for m in pieces.values():
         m.translate(0, -low, 0)
+    top = max(m.v[:, 1].max() for m in pieces.values())
+    for m in pieces.values():
+        m.scale(1.6 / top)  # exactly 1.6 tall
     return pieces
 
 
@@ -1957,7 +1960,7 @@ def sea_stack():
         rr = rng.uniform(3.0, 7.0) if k > 5 else rng.uniform(0, 2.2)
         y = top_y - 0.3 - 0.16 * rr ** 1.45 + rng.uniform(-0.3, 0.5)
         size = rng.uniform(2.0, 3.1) if rr < 4.0 else rng.uniform(1.4, 2.3)
-        jungle.append(lumpy(size, (1.15, 0.78, 1.15), 70 + k, 0.35, 2).translate(math.cos(a) * rr + lean_top, y, math.sin(a) * rr * 0.86))
+        jungle.append(lumpy(size, (1.15, 0.78, 1.15), 70 + k, 0.35, 2 if size > 1.9 else 1).translate(math.cos(a) * rr + lean_top, y, math.sin(a) * rr * 0.86))
     trunks = []
     for k, (a, tilt) in enumerate(((0.6, 0.9), (3.4, 0.7))):
         base_p = np.array([math.cos(a) * 3.2 + lean_top, top_y + 0.8, math.sin(a) * 3.2 * 0.86])
@@ -1984,8 +1987,8 @@ def sea_stack():
             lean = 0.06 * y ** 1.1 * 0.25
             pts.append((math.cos(a + 0.05 * math.sin(t * 5)) * r + lean, y, math.sin(a + 0.05 * math.sin(t * 5)) * r * 0.86))
         jungle.append(strip_tube(pts, np.linspace(0.3, 0.14, 8), 6))
-        for j in (1, 2, 3, 4, 5, 6, 7):
-            leaf = lumpy(0.75 - 0.05 * j, (1.1, 0.75, 0.9), 120 + k * 7 + j, 0.35, 1)
+        for j in (1, 3, 5, 7):
+            leaf = lumpy(0.8 - 0.05 * j, (1.1, 0.75, 0.9), 120 + k * 7 + j, 0.35, 1)
             jungle.append(leaf.translate(*pts[j]))
     jungle_m = merge(*jungle)
 
@@ -2225,19 +2228,20 @@ def shipwreck_parts(main_top: float):
     top_cloth.v[:, 2] += -0.9 * np.sin(np.pi * np.clip(-y / 3.2, 0, 1)) * (1 - (x / 4.0) ** 2)
     sail.append(top_cloth.translate(0, nest_y + 1.45, mz - 0.55))
     flag_pts = [(0.0, 0.0), (3.4, 0.05), (3.0, -0.45), (3.5, -0.9), (2.9, -1.25), (3.4, -1.75), (2.6, -2.2), (0.0, -2.2)]
-    flag = pillow(smooth_outline(flag_pts, 40, 1), (1.2, -1.1), lambda q: np.full(len(q), 0.06), rings=3, edge=0.06)
-    wave_cloth(flag, 0.0, 0.25, 1.9, 1.2)
-    mark = skull_mark(0.9, 0.03)
-    holes = skull_holes(0.9, 0.02)
+    flag_pts = [(x * 1.5, y * 1.5) for x, y in flag_pts]
+    flag = pillow(smooth_outline(flag_pts, 44, 1), (1.8, -1.65), lambda q: np.full(len(q), 0.07), rings=3, edge=0.07)
+    wave_cloth(flag, 0.0, 0.35, 1.3, 1.8)
+    mark = skull_mark(1.35, 0.035)
+    holes = skull_holes(1.35, 0.025)
     flag_marks, flag_dark = [], [flag]
     for side in (1, -1):
-        mk = mark.copy().translate(1.55, -1.05, side * 0.09)
-        hk = holes.copy().translate(1.55, -1.05, side * 0.125)
+        mk = mark.copy().translate(2.3, -1.6, side * 0.1)
+        hk = holes.copy().translate(2.3, -1.6, side * 0.14)
         if side < 0:
             for m_ in (mk, hk):
                 m_.v[:, 2] = -0.09 * 2 - m_.v[:, 2] + 0.0 if False else m_.v[:, 2]
         for m_ in (mk, hk):
-            wave_cloth(m_, 0.0, 0.25, 1.9, 1.2)
+            wave_cloth(m_, 0.0, 0.35, 1.3, 1.8)
         flag_marks.append(mk)
         flag_dark.append(hk)
     for m_ in flag_dark + flag_marks:
@@ -2330,70 +2334,42 @@ PROPS = {
     "SharkBaitShipwreck": shipwreck,
 }
 
-# Preview colors (the game colors pieces by name from the Luau palette).
+# Preview colors baked into the files (the game colors pieces by name from the Luau palette). Only
+# names no other mode uses: COLORS is shared, so a shared name here would recolor their files too.
 COLORS = {
     "Belly": (240, 240, 232),
     "Tail": (110, 130, 160),
     "Mouth": (170, 40, 60),
-    "Teeth": (255, 255, 250),
     "Jaw": (240, 240, 232),
     "JawTeeth": (255, 255, 250),
     "EyeShine": (255, 255, 255),
     "Gills": (70, 85, 110),
-    "Deck": (196, 146, 92),
-    "Beams": (130, 88, 55),
     "Barrels": (160, 104, 62),
-    "Hoops": (90, 90, 100),
-    "Rope": (226, 200, 150),
-    "Coin": (255, 205, 50),
-    "Rim": (230, 165, 30),
-    "Shell": (255, 150, 170),
     "ShellInside": (255, 225, 230),
     "Pearl": (250, 245, 255),
-    "Wood": (150, 90, 50),
-    "Trim": (255, 200, 60),
-    "Gold": (255, 215, 70),
     "Lock": (90, 90, 100),
-    "Ring": (255, 120, 60),
-    "Stripes": (255, 255, 255),
     "FloatsA": (255, 210, 60),
     "FloatsB": (240, 70, 70),
     "Float": (220, 60, 60),
-    "Stripe": (245, 245, 245),
     "Cage": (70, 70, 80),
-    "Lamp": (255, 220, 120),
-    "Flag": (255, 210, 60),
     "FlagMark": (25, 25, 30),
-    "Wings": (235, 238, 245),
     "WingTips": (70, 75, 90),
-    "Beak": (255, 170, 40),
     "CoralA": (255, 110, 140),
     "CoralB": (255, 170, 60),
     "CoralC": (150, 110, 255),
     "Fan": (255, 90, 90),
     "Kelp": (60, 160, 90),
-    "Bulbs": (150, 190, 70),
     "Star": (255, 130, 60),
-    "Dots": (255, 220, 170),
-    "Sand": (240, 220, 170),
     "WetSand": (200, 175, 130),
     "Shells": (255, 235, 220),
     "Stilts": (235, 235, 230),
     "Cabin": (230, 70, 60),
-    "Roof": (250, 250, 245),
     "Ladder": (200, 150, 90),
-    "Sign": (255, 210, 60),
     "SignMark": (25, 25, 30),
     "FloatStripe": (255, 255, 255),
-    "Grass": (100, 180, 80),
     "Tower": (245, 245, 240),
-    "Rail": (60, 60, 70),
     "Lantern": (255, 230, 140),
-    "Door": (110, 70, 45),
-    "Jungle": (70, 150, 70),
-    "Foam": (240, 250, 255),
     "Hull": (110, 70, 45),
-    "Planks": (150, 100, 60),
     "Mast": (120, 80, 50),
     "Sail": (235, 225, 200),
 }

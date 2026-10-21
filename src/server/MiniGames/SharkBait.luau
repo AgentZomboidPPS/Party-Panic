@@ -24,6 +24,7 @@
 -- the shark is a character walking on the sea floor, fast and unable to jump. Everything is judged
 -- by position on the server, never Touched, so bots and the no-physics test servers play by the
 -- same rules: bots are thrown and lifted by the server (hazard parity), players by their device.
+-- Bots and the sharks' hidden bodies pass through every character (BODY_GROUP).
 --
 -- Fair judging (owner: "the precision games will feel super bad if we dont"):
 --  * A bite only takes a swimmer who is in the water and inside the jaws' reach when their own
@@ -37,6 +38,7 @@
 --  * A grab is a swept test along the swimmer's path since the last check (coins don't move), so a
 --    coin brushed mid-hop counts. The client half pops a coin it judges grabbed by the same rule.
 
+local PhysicsService = game:GetService("PhysicsService")
 local RunService = game:GetService("RunService")
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
@@ -89,6 +91,12 @@ local GULP_TIME = 4 -- a swallowed swimmer is spat back out onto a raft after th
 SharkBait.CHOMP_COST = 2 -- coins a chomp takes off the swimmers' haul
 local POCKET = -32.5 -- the shark's belly: a hidden ledge under the sea bed, where swallowed swimmers wait
 local CLIMB_TIME = 0.8 -- no-physics test servers: how long a swimmer takes to climb out at a raft
+-- Bots and the sharks' hidden bodies pass through every character (players keep the lobby's
+-- PP_Players group and bump each other as everywhere else). On a live server each device moves its
+-- own player and the server moves the bots, so a player walking into a bot on a crowded raft could
+-- shove it hard enough to fling it into the sky (Hex Meltdown's "Bot is floating."); and a shark is
+-- drawn as a mesh far longer than the body it swims with, which mustn't stop anyone.
+local BODY_GROUP, PEOPLE_GROUP = "PP_SharkBodies", "PP_Players"
 local WATER_LIFE = 9 -- coins in the water sink after this long
 local CHEST_LIFE = 12
 local POP_IN = 0.35 -- a new coin rises into view this long before it can be grabbed
@@ -188,6 +196,20 @@ local function isBot(player: any): boolean
 	return BotRegistry.IsBot(player)
 end
 
+-- Sets up BODY_GROUP's collisions; false if it can't (then everyone collides as usual).
+local function setUpBodies(): boolean
+	local ok = pcall(function()
+		for _, group in { BODY_GROUP, PEOPLE_GROUP } do
+			if not PhysicsService:IsCollisionGroupRegistered(group) then
+				PhysicsService:RegisterCollisionGroup(group)
+			end
+		end
+		PhysicsService:CollisionGroupSetCollidable(BODY_GROUP, PEOPLE_GROUP, false)
+		PhysicsService:CollisionGroupSetCollidable(BODY_GROUP, BODY_GROUP, false)
+	end)
+	return ok
+end
+
 local function pingOf(player: any): number
 	local ok, ping = pcall(function()
 		return player:GetNetworkPing()
@@ -257,6 +279,7 @@ function SharkBait:Prepare()
 	self.rush = false
 	self.ended = false
 	self.won = nil :: string?
+	self.bodies = setUpBodies()
 
 	self:_buildRafts()
 	self:_buildArena()
@@ -301,6 +324,9 @@ function SharkBait:Prepare()
 	end
 	ctx.Hooks.CharacterReady = function(player, character)
 		self.spots[player] = nil
+		if self.bodies and (isBot(player) or self.role[player] == "Shark") then
+			self:_passThrough(character)
+		end
 		if self.role[player] == "Swimmer" then
 			self.wet[player] = false -- a fresh character starts dry, up on a raft
 			ctx:SetPlayerShared(player, "InWater", false)
@@ -765,6 +791,22 @@ function SharkBait:_dressShark(character: Model)
 			descendant.Enabled = false
 		end
 	end
+end
+
+-- A bot's or a shark's character into BODY_GROUP, parts it gets later too (deferred: after the
+-- lobby's own handler, which puts a player's new parts in PP_Players).
+function SharkBait:_passThrough(character: Model)
+	local function join(item: Instance)
+		if item:IsA("BasePart") then
+			item.CollisionGroup = BODY_GROUP
+		end
+	end
+	for _, item in character:GetDescendants() do
+		join(item)
+	end
+	self.context:Track(character.DescendantAdded:Connect(function(item)
+		task.defer(join, item)
+	end))
 end
 
 function SharkBait:_sharkSpeed(player: any)
