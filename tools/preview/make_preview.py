@@ -74,13 +74,13 @@ CAMERAS: dict[str, dict] = {
     # referee's flag behind.
     "HexMeltdown": {"yaw": 20, "pitch": 40, "distance": 44, "shift": [0, -6, 0], "raise": 10},
     # The honey tree's vine of fruit and honeycombs, bees chasing someone out, players on their pads.
-    "HoneyTrap": {"yaw": -20, "pitch": 24, "distance": 36, "shift": [-2, 1, -6], "raise": 10},
+    "HoneyTrap": {"yaw": -15, "pitch": 26, "distance": 44, "fov": 55, "shift": [-1, 5, -5], "raise": 12},
     # A team pumping its balloon (with a face), a rival team's balloon beside it.
-    "PumpAndPop": {"yaw": 25, "pitch": 12, "distance": 36, "shift": [0, 4, 0], "sway": 8},
+    "PumpAndPop": {"yaw": 25, "pitch": 12, "distance": 40, "shift": [0, 8.5, -4], "sway": 8},
     # Two riders who just bumped, the sea and a palm island behind.
-    "BumperBallers": {"look_at": "BoingRing", "yaw": 120, "pitch": 22, "distance": 30},
+    "BumperBallers": {"look_at": "BoingRing", "yaw": 120, "pitch": 22, "distance": 34, "shift": [0, 6, 0]},
     # The archers' tower from the field, a runner and a target board in front.
-    "ArrowAmbush": {"yaw": 15, "pitch": 22, "distance": 46, "shift": [0, -3, 2], "raise": 12},
+    "ArrowAmbush": {"yaw": 15, "pitch": 22, "distance": 40, "shift": [0, -3, 2], "raise": 12},
     # A skater mid-ollie, the crates and the leaders ahead, lava and spires around.
     "SkateEscape": {"subject": "highest", "yaw": 50, "pitch": 10, "distance": 20, "sway": 8},
 }

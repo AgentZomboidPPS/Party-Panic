@@ -326,8 +326,10 @@ local function updatePortal(portal: Portal, dt: number, now: number, reduced: bo
 		end
 	elseif portal.mode == "Reveal" then
 		setPortal(portal, "Winner", portal.gameId, now, reduced) -- reduced effects: no reel
-	elseif portal.mode == "Mystery" and portal.reelFrame.Visible then
-		setReel(portal, portal.reelPos + dt * REEL_SPEED)
+	elseif portal.mode == "Mystery" then
+		if portal.reelFrame.Visible and not reduced then
+			setReel(portal, portal.reelPos + dt * REEL_SPEED)
+		end
 	elseif portal.mode ~= "Loser" then
 		portal.main.book:Step(dt, if reduced then 0 else 1)
 	end
@@ -367,7 +369,13 @@ local function buildPortal(part: BasePart)
 		Visible = false,
 		ZIndex = 3,
 		Parent = root,
-		Children = { UIKit.TextStroke(0) },
+		Children = {
+			UIKit.new("UIStroke", {
+				Color = Color3.fromRGB(30, 15, 60),
+				Thickness = 6,
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+			}),
+		},
 	})
 	-- The game's icon in a medallion in the round top, its name on a plate under it: high on the
 	-- portal, where people standing on the stage don't hide it.
@@ -491,7 +499,7 @@ local function startPortals()
 	end)
 	RunService.Heartbeat:Connect(function(dt)
 		local camera = workspace.CurrentCamera
-		local now = os.clock()
+		local now = workspace:GetServerTimeNow() -- everyone sees the same game on the same portal
 		local reduced = State.ReducedEffects()
 		for _, portal in portals do
 			if camera and (camera.CFrame.Position - portal.part.Position).Magnitude > ANIMATE_RANGE then
