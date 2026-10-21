@@ -501,7 +501,7 @@ local function __grantRewards(definition, results, before)
 			level = `{was.level} -> {LevelCurve.FromTotalXP(data.XP)}`,
 			migrated = was.migrated,
 			unlocked = unlocked,
-			stats = `rounds {data.Stats.RoundsPlayed}, wins {data.Stats.Wins}, podiums {data.Stats.Podiums}, games {data.Stats.GamesTried}, days {data.Stats.DaysPlayed}`,
+			stats = `rounds {data.Stats.RoundsPlayed}, wins {data.Stats.Wins}, podiums {data.Stats.Podiums}, race podiums {data.Stats.RacePodiums}, team wins {data.Stats.TeamWins}, games {data.Stats.GamesTried}, days {data.Stats.DaysPlayed}`,
 			firstWinDay = data.Daily.FirstWinDay,
 			quests = table.concat(quests, ", "),
 		}
