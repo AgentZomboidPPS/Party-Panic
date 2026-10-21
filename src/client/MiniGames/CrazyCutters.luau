@@ -1,15 +1,18 @@
 -- Client half of Crazy Cutters: everyone's cutting board, the dotted outline, each cutter and the
 -- line it has cut, the cookie that pops out onto the plate, and this player's controls and HUD.
 --
--- YOUR BOARD fills the screen (a fixed camera over it). The pastry wheel follows your finger or
--- the mouse while it's held down (WASD / arrow keys / a gamepad stick steer it too) and cuts
--- wherever it goes, so the cut is one continuous line from the start flag. Your cut and your score
+-- YOUR BOARD fills the screen (a fixed camera over it). On a phone the pastry wheel moves with
+-- your finger wherever you put it on the screen (it copies the finger's moves, so the finger never
+-- hides the line and lifting it never makes the wheel jump); with a mouse you grab the wheel and
+-- drag it (WASD / arrow keys / a gamepad stick steer it too). It cuts wherever it goes, so the cut
+-- is one continuous line from the green start. Your cut and your score
 -- are drawn at once from your own moves (Shared/Logic/CrazyCutters scores them exactly like the
 -- server); the positions go to the server in small batches, and the server's score is the one
 -- that counts. When you finish a shape early, the camera pulls back so you can watch the others.
--- EVERYONE ELSE's cutter replays the positions the server relays ("Cut"), a moment behind, so it
--- glides smoothly; bots' cuts arrive the same way.
+-- EVERYONE ELSE's cutter replays the positions the server relays ("Cut"), a moment behind (as far
+-- behind as their positions arrive late), so it glides smoothly; bots' cuts arrive the same way.
 
+local ContextActionService = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
@@ -38,8 +41,14 @@ local START_TOP = 0.19
 local CUT_LIFT = 0.275
 local CUT_STEP = 0.09
 local ARROW_LIFT = 0.68
-local REPLAY_DELAY = 0.3 -- others' cutters replay this far behind, so they glide
+local REPLAY_DELAY = 0.3 -- others' cutters replay at least this far behind, so they glide
+local REPLAY_MAX = 0.8 -- ...and at most this far
 local SEND_EVERY = 0.12
+local RESEND_EVERY = 0.25 -- a finished cut's last positions go again until the server confirms it
+local RESEND_FOR = 1.5 -- ...for this long; then the cut carries on (the server is missing a bit)
+local GRAB = 1.5 -- a mouse click this close to the wheel grabs it
+local HINT_GAP = 68 -- hints sit just under the panel (clear of the start, at the outline's top)
+local SHOUT_GAP = 96 -- big messages under the hints
 local KEY_SPEED = 5.5 -- studs/s with keys or a stick
 local FOLLOW_SPEED = Rules.MAX_SPEED * 0.85 -- the cutter chases a finger this fast
 local SHAPE_ICONS = {
@@ -92,6 +101,8 @@ type Board = {
 	Mine: boolean,
 	Dots: { Part },
 	DotAt: { Vector2 },
+	DotSize: number,
+	StartDisc: Part?,
 	Trail: { Part },
 	TrailUsed: number,
 	TrailFrom: Vector2,
@@ -106,6 +117,9 @@ type Board = {
 	Scores: { number },
 	Plate: number, -- cookies on the plate
 	Done: boolean,
+	Popped: boolean, -- this shape's cookie has popped out
+	Lag: number, -- how late this board's positions arrive (seconds), for the replay
+	Left: boolean,
 }
 
 function CrazyCutters.Start(api)
@@ -154,6 +168,8 @@ function CrazyCutters.Start(api)
 			Mine = data.User == me.UserId,
 			Dots = {},
 			DotAt = {},
+			DotSize = 0.3,
+			StartDisc = nil,
 			Trail = {},
 			TrailUsed = 0,
 			TrailFrom = Vector2.zero,
@@ -168,6 +184,9 @@ function CrazyCutters.Start(api)
 			Scores = {},
 			Plate = 0,
 			Done = false,
+			Popped = false,
+			Lag = REPLAY_DELAY,
+			Left = false,
 		}
 		boards[data.User] = board
 		if board.Mine then
@@ -286,6 +305,7 @@ function CrazyCutters.Start(api)
 			table.clear(board.Samples)
 			clearTrail(board)
 			board.Done = false
+			board.Popped = false
 			board.Pos = Vector2.new(su, sv)
 			board.TrailFrom = board.Pos
 			board.TrailLen = 0
@@ -294,6 +314,7 @@ function CrazyCutters.Start(api)
 			-- Dotted outline: closer dots on your own board.
 			local spacing = if board.Mine then 0.55 else 1.1
 			local size = if board.Mine then 0.3 else 0.36
+			board.DotSize = size
 			local count = math.max(8, math.floor(current.Length / spacing))
 			for index = 1, count - 1 do
 				local u, v = Rules.PointAt(current, current.Length * index / count)
@@ -322,8 +343,10 @@ function CrazyCutters.Start(api)
 				CFrame = CFrame.new(at(board, su, sv, START_TOP / 2))
 					* board.Top.Rotation
 					* CFrame.Angles(0, 0, math.rad(90)),
+				Transparency = if board.Left then 0.6 else 0,
 				Parent = api.World,
 			})
+			board.StartDisc = disc
 			table.insert(startMarkers, disc)
 			-- The arrowhead: two wedges lying flat, mirrored about the way to go. (A wedge's triangle
 			-- is in its YZ plane with its sharp corner at -Z, -Y; X is its thickness.)
@@ -387,6 +410,7 @@ function CrazyCutters.Start(api)
 			if dot.Color ~= DOT_DONE and (dotAt - position).Magnitude ^ 2 <= r2 then
 				dot.Color = DOT_DONE
 				dot.Transparency = 0.35
+				dot.Size = Vector3.new(DOT_TOP, board.DotSize, board.DotSize)
 			end
 		end
 	end
@@ -472,7 +496,7 @@ function CrazyCutters.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 64,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, hudY + 76),
+		Position = UDim2.new(0.5, 0, 0, hudY + SHOUT_GAP),
 		Size = UDim2.fromOffset(560, 76),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.1) },
@@ -530,16 +554,24 @@ function CrazyCutters.Start(api)
 	end
 
 	-- Your cutter: input ------------------------------------------------------------------------
-	local pointer: Vector2? = nil -- where the finger / mouse is, in board coordinates
+	local pointer: Vector2? = nil -- where the wheel is steered to, in board coordinates
 	local pointerDown = false
 	local activeTouch: InputObject? = nil
+	local dragFrom: Vector2? = nil -- touch: the finger's board point when the wheel was last at wheelFrom
+	local wheelFrom = Vector2.zero
+	local fingerAt: Vector2? = nil
 	local pending = {}
+	local recent = {} -- the last positions sent, flat, for resending a finished cut
 	local lastSend = 0
 	local lastSample = 0
 	local lastSamplePos = Vector2.zero
 	local moved = false
+	local hintState: string? = nil -- "Back" (go back to the start) or "Missed" (dots still to cut)
+	local flashUntil = 0 -- the start disc pulses until then (a click that missed the wheel)
+	local doneAt = 0 -- when this client saw the cut finish (resends until the server confirms it)
+	local lastResend = 0
 
-	local function boardPoint(screen: Vector3): Vector2?
+	local function boardPoint(screen: Vector3, free: boolean?): Vector2?
 		if not mine then
 			return nil
 		end
@@ -554,7 +586,20 @@ function CrazyCutters.Start(api)
 			return nil
 		end
 		local hit = mine.Top:PointToObjectSpace(ray.Origin + ray.Direction * t)
+		if free then
+			return Vector2.new(hit.X, -hit.Z)
+		end
 		return Vector2.new(math.clamp(hit.X, -Rules.LIMIT, Rules.LIMIT), math.clamp(-hit.Z, -Rules.LIMIT, Rules.LIMIT))
+	end
+
+	-- Touch: the wheel copies the finger's moves from where it is (from where it was when the
+	-- finger went down), so the finger can be anywhere and lifting it never makes the wheel jump.
+	local function regrip()
+		if mine and fingerAt then
+			dragFrom = fingerAt
+			wheelFrom = mine.Pos
+			pointer = mine.Pos
+		end
 	end
 
 	if mine then
@@ -563,25 +608,60 @@ function CrazyCutters.Start(api)
 				return
 			end
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
-				pointerDown = true
-				pointer = boardPoint(input.Position)
+				local point = boardPoint(input.Position)
+				if point and (point - mine.Pos).Magnitude <= GRAB then
+					pointerDown = true
+					pointer = point
+					if flashUntil > 0 then
+						-- Clear the "grab it" hint (a "what's left" hint comes back with the next move).
+						flashUntil = 0
+						hintState = nil
+						api:Hint("")
+					end
+				elseif round and round.Phase == "Cut" and not mine.Done then
+					-- Missed the wheel: show where it is.
+					flashUntil = os.clock() + 1
+					api:Hint(
+						if mine.TrailLen < 0.1 then "Start on the green dot!" else "Grab your cutter to carry on!",
+						hudY + HINT_GAP
+					)
+				end
 			elseif input.UserInputType == Enum.UserInputType.Touch and not activeTouch then
-				activeTouch = input
-				pointerDown = true
-				pointer = boardPoint(input.Position)
+				local point = boardPoint(input.Position, true)
+				if point then
+					activeTouch = input
+					pointerDown = true
+					fingerAt = point
+					regrip()
+				end
 			end
 		end))
 		api:Track(UserInputService.InputChanged:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseMovement or input == activeTouch then
+			if input.UserInputType == Enum.UserInputType.MouseMovement then
 				pointer = boardPoint(input.Position)
+			elseif input == activeTouch then
+				local point = boardPoint(input.Position, true)
+				if point and dragFrom then
+					fingerAt = point
+					pointer = wheelFrom + (point - dragFrom)
+				end
 			end
 		end))
 		api:Track(UserInputService.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input == activeTouch then
 				pointerDown = false
 				activeTouch = nil
+				dragFrom = nil
+				fingerAt = nil
 			end
 		end))
+		-- Shift slows the wheel; keep it from also toggling Roblox's Shift Lock.
+		ContextActionService:BindActionAtPriority("CutterSlow", function()
+			return Enum.ContextActionResult.Sink
+		end, false, 3000, Enum.KeyCode.LeftShift)
+		api:Track(function()
+			ContextActionService:UnbindAction("CutterSlow")
+		end)
 	end
 
 	local function keyDirection(): Vector2
@@ -620,10 +700,12 @@ function CrazyCutters.Start(api)
 		return direction
 	end
 
+	-- Sends the positions waiting to go (no sooner than the server takes a batch, so none is lost).
 	local function flush(now: number, force: boolean?)
 		if
 			#pending > 0
 			and round
+			and now - lastSend >= 0.04
 			and (force or now - lastSend >= SEND_EVERY or #pending >= Rules.MAX_CHUNK * 3 - 3)
 		then
 			api:Action("Cut", round.Index, pending)
@@ -644,6 +726,9 @@ function CrazyCutters.Start(api)
 		if fresh then
 			setupShape(data.Shape)
 			pending = {}
+			recent = {}
+			doneAt = 0
+			hintState = nil
 			moved = false
 			watching = false
 			lastSample = 0
@@ -658,8 +743,8 @@ function CrazyCutters.Start(api)
 			if mine and not hinted then
 				hinted = true
 				api:Hint(
-					if touch then "Drag your finger along the dots!" else "Hold the mouse and trace the dots!",
-					hudY + 158
+					if touch then "Drag anywhere to trace the dots!" else "Grab the green dot and trace the dots!",
+					hudY + HINT_GAP
 				)
 			end
 		end
@@ -680,6 +765,38 @@ function CrazyCutters.Start(api)
 		end
 		for at = 1, #flat - 2, 3 do
 			table.insert(board.Samples, { flat[at], flat[at + 1], flat[at + 2] })
+		end
+		-- How late this batch's oldest position arrived: replay at least that far behind (the
+		-- delay creeps back down when the connection gets better).
+		local late = if type(flat[1]) == "number" then api:Now() - flat[1] else 0
+		board.Lag = math.clamp(math.max(board.Lag - 0.01, late + 0.1), REPLAY_DELAY, REPLAY_MAX)
+	end)
+
+	-- A player left: their board stays, faded, so it doesn't look like someone stuck.
+	api:OnEvent("Left", function(userId: number)
+		local board = boards[userId]
+		if not board or board.Left then
+			return
+		end
+		board.Left = true
+		table.clear(board.Samples)
+		local cutter = board.Cutter
+		if cutter then
+			for _, descendant in cutter:GetDescendants() do
+				if descendant:IsA("BasePart") then
+					descendant.Transparency = 1 - (1 - descendant.Transparency) * 0.4
+				end
+			end
+		end
+		for _, dot in board.Dots do
+			dot.Transparency = 0.6
+		end
+		if board.StartDisc then
+			board.StartDisc.Transparency = 0.6
+		end
+		if board.Label then
+			board.Label.Text = `{names[board.User] or ""} left`
+			board.Label.TextTransparency = 0.4
 		end
 	end)
 
@@ -717,12 +834,14 @@ function CrazyCutters.Start(api)
 			return
 		end
 		board.Done = true
+		board.Popped = true
+		popCookie(board)
 		if board.Mine then
 			local grade, symbol = Rules.Grade(score)
 			shout(`{symbol} {score}%`, Theme.Colors.Yellow)
 			api:Sound("Pickup")
 			watching = true
-			api:Hint(`{grade} Now watch the others!`, hudY + 158)
+			api:Hint(`{grade} Now watch the others!`, hudY + HINT_GAP)
 		end
 	end)
 
@@ -734,12 +853,17 @@ function CrazyCutters.Start(api)
 			local board = boards[tonumber(key) or 0]
 			if board and type(score) == "number" then
 				board.Scores[index] = score
-				refreshLabel(board)
-				popCookie(board)
+				if not board.Left then
+					refreshLabel(board)
+				end
+				if not board.Popped and score >= 50 then
+					board.Popped = true
+					popCookie(board)
+				end
 				if board.Mine then
 					local grade, symbol = Rules.Grade(score)
 					shout(`{symbol} {score}%`, if score >= 80 then Theme.Colors.Yellow else Color3.new(1, 1, 1))
-					api:Hint(grade, hudY + 158)
+					api:Hint(grade, hudY + HINT_GAP)
 					api:Sound(if score >= 80 then "Victory" else "Click")
 				end
 			end
@@ -790,6 +914,9 @@ function CrazyCutters.Start(api)
 			end
 
 			-- Your cutter.
+			if mine and (not cutting or mine.Done) then
+				regrip() -- a finger held down before CUT! starts from where the wheel is
+			end
 			if mine and tracker and shape and cutting and not mine.Done and not tracker.Done then
 				local position = mine.Pos
 				local target = position
@@ -818,26 +945,89 @@ function CrazyCutters.Start(api)
 				if now - lastSample >= Rules.SAMPLE_GAP + 0.005 and (mine.Pos - lastSamplePos).Magnitude >= 0.05 then
 					lastSample = now
 					lastSamplePos = mine.Pos
-					table.insert(pending, math.floor(now * 1000 + 0.5) / 1000)
+					local t = math.floor(now * 1000 + 0.5) / 1000
+					table.insert(pending, t)
 					table.insert(pending, mine.Pos.X)
 					table.insert(pending, mine.Pos.Y)
+					table.insert(recent, t)
+					table.insert(recent, mine.Pos.X)
+					table.insert(recent, mine.Pos.Y)
+					if #recent > Rules.MAX_CHUNK * 3 then
+						table.move(recent, 4, #recent, 1)
+						for _ = 1, 3 do
+							table.remove(recent)
+						end
+					end
 					tracker:Add(mine.Pos.X, mine.Pos.Y)
 					scoreLabel.Text = `✂ {tracker:Score()}%`
 					if tracker.Done then
 						cutTo(mine, mine.Pos, true)
 						flush(now, true)
+						doneAt = now
+						lastResend = now
+					else
+						-- Tell the player what's left: back to the start, or dots they skipped.
+						local coverage = tracker:Coverage()
+						local su, sv = shape.U[1], shape.V[1]
+						local near = (mine.Pos.X - su) ^ 2 + (mine.Pos.Y - sv) ^ 2 <= (Rules.DONE_RADIUS * 1.5) ^ 2
+						local state = hintState
+						if coverage >= 1 then
+							state = "Back"
+						elseif near and coverage >= 0.5 then
+							state = "Missed"
+						end
+						if state ~= hintState then
+							hintState = state
+							if state == "Back" then
+								api:Hint("Back to the green dot to finish!", hudY + HINT_GAP)
+							else
+								api:Hint("Missed a spot! Cut the brown dots", hudY + HINT_GAP)
+								-- The dots still to cut grow, so they're easy to find.
+								for _, dot in mine.Dots do
+									if dot.Color ~= DOT_DONE then
+										local size = mine.DotSize * 2
+										dot.Size = Vector3.new(DOT_TOP, size, size)
+									end
+								end
+							end
+						end
 					end
 				end
 			end
 			flush(now)
+			-- The cut is finished here but the server hasn't said so yet (a batch got lost on the
+			-- way): send the last positions again (it skips the ones it has). If it still hasn't
+			-- after a while, it is missing a bit of the cut: let the player carry on cutting.
+			if mine and tracker and tracker.Done and not mine.Done and doneAt > 0 then
+				if now - doneAt > RESEND_FOR then
+					if round.Phase == "Cut" and now < round.T1 then
+						tracker.Done = false
+						doneAt = 0
+						hintState = nil
+					end
+				elseif now - lastResend >= RESEND_EVERY and #recent > 0 then
+					lastResend = now
+					api:Action("Cut", round.Index, table.clone(recent))
+				end
+			end
+
+			-- The start disc pulses when it's where to go next.
+			local disc = if mine then mine.StartDisc else nil
+			if mine and disc then
+				local pulse = (hintState == "Back" and not mine.Done) or os.clock() < flashUntil
+				local size = if pulse then 0.9 + 0.35 * (0.5 + 0.5 * math.sin(os.clock() * 10)) else 0.9
+				if math.abs(disc.Size.Y - size) > 1e-3 then
+					disc.Size = Vector3.new(START_TOP, size, size)
+				end
+			end
 		end
 
 		-- Everyone else's cutters replay what the server relayed, a moment behind.
-		local replayAt = now - REPLAY_DELAY
 		for _, board in boards do
 			if board.Mine then
 				continue
 			end
+			local replayAt = now - board.Lag
 			local samples = board.Samples
 			while #samples > 0 and samples[1][1] <= replayAt do
 				local sample = table.remove(samples, 1) :: { number }
@@ -880,8 +1070,12 @@ function CrazyCutters.Start(api)
 			end
 		end
 
-		-- Camera: over your board (eased, so pulling back to watch is smooth).
+		-- Camera: over your board (eased, so pulling back to watch is smooth). (A respawn puts the
+		-- camera back to following the character: take it back.)
 		if mine then
+			if camera.CameraType ~= Enum.CameraType.Scriptable then
+				camera.CameraType = Enum.CameraType.Scriptable
+			end
 			local target = cameraTarget(mine)
 			camera.CFrame = camera.CFrame:Lerp(target, math.clamp(dt * 4, 0, 1))
 		end

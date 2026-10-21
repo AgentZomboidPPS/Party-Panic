@@ -27,7 +27,7 @@ return function(env)
 					table.insert(line, `{player.Name}={scores[round.Index]}`)
 				end
 			end
-			-- (The scores are final 0.35 s after the cut ends; this may print before some are in.)
+			-- (The scores are final 0.6 s after the cut ends; this may print before some are in.)
 			env.note(`shape {round.Index} {round.Shape}: sent {sent} batches, {junk} junk; {table.concat(line, " ")}`)
 		end
 		if round.Phase ~= "Cut" or elapsed - lastSend < 0.15 then

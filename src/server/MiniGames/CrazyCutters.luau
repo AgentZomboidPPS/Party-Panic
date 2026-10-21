@@ -33,6 +33,8 @@ local DOUGH_TOP = 1.22 -- the dough's top surface above the board's bottom
 local STAND = 11.2 -- players stand this far behind their board's middle
 local SHOW = 3.2 -- seconds a shape is shown before cutting starts (the first one a little longer)
 local SCORE_TIME = 3.4 -- seconds the scores show after each shape
+local LATE = 0.3 -- positions may still arrive this long (plus ping, up to 0.25 s) after the cut ends
+local SCORE_DELAY = 0.6 -- the scores are final this long after the cut ends (after LATE + ping)
 local SHAPES_PER_GAME = 3
 
 local rng = Random.new()
@@ -265,8 +267,9 @@ function CrazyCutters:_finishShape()
 	round.Phase = "Score"
 	round.T1 = math.min(round.T1, ctx:Now())
 	self:_shareRound()
-	-- Positions sent just before the end may still be on their way: score a moment later.
-	ctx:Delay(0.35, function()
+	-- Positions sent just before the end may still be on their way (_onCut takes them for a
+	-- moment after the end): score a moment later.
+	ctx:Delay(SCORE_DELAY, function()
 		local results = {}
 		for player, track in self.tracks do
 			if not player.Parent then
@@ -299,7 +302,7 @@ function CrazyCutters:_onCut(player: Player, index: any, data: any)
 	local ctx = self.context
 	local round = self.round
 	local track = self.tracks[player]
-	if not round or round.Phase ~= "Cut" or index ~= round.Index or not track or track.Done then
+	if not round or index ~= round.Index or not track or track.Done then
 		return
 	end
 	if type(data) ~= "table" or #data % 3 ~= 0 or #data == 0 or #data > Rules.MAX_CHUNK * 3 then
@@ -310,7 +313,7 @@ function CrazyCutters:_onCut(player: Player, index: any, data: any)
 		return (player :: any):GetNetworkPing()
 	end)
 	local lag = if ok and type(ping) == "number" then math.clamp(ping, 0, 0.5) else 0.2
-	if now < round.T0 - 0.2 or now > round.T1 + lag + 0.3 then
+	if now < round.T0 - 0.2 or now > round.T1 + math.min(lag, 0.25) + LATE then
 		return
 	end
 	local accepted = {}
@@ -335,7 +338,8 @@ function CrazyCutters:_onCut(player: Player, index: any, data: any)
 		if math.abs(u) > limit or math.abs(v) > limit then
 			continue
 		end
-		local reach = Rules.MAX_SPEED * 1.25 * (t - track.LastT) + 0.25
+		-- (Clients cap the wheel at 0.85 of MAX_SPEED; the 15% over that covers frame timing.)
+		local reach = Rules.MAX_SPEED * 0.85 * 1.15 * (t - track.LastT) + 0.1
 		if (u - track.U) ^ 2 + (v - track.V) ^ 2 > reach * reach then
 			continue
 		end
@@ -390,12 +394,13 @@ function CrazyCutters:Start()
 	end
 	ctx.Hooks.PlayerLeft = function(player)
 		self.tracks[player] = nil
+		ctx:Fire(nil, "Left", player.UserId)
 		self:_checkAllDone()
 	end
 
 	ctx:OnAction("Cut", function(player, index, data)
 		self:_onCut(player, index, data)
-	end, { Interval = 0.08 })
+	end, { Interval = 0.03 }) -- every position is checked on its own, so batches can come quickly
 
 	self:_startShape(1)
 	ctx:Loop(function(): number?
@@ -469,22 +474,19 @@ function CrazyCutters:BotSamples(player: Player, skill: number, random: Random, 
 	while t + 0.07 <= now and #out < Rules.MAX_CHUNK * 3 do
 		t += 0.07
 		local s = (t - plan.Start) * plan.Speed
-		local u, v, du, dv
-		if s >= shape.Length then
-			u, v = shape.U[1], shape.V[1] -- the lap is closed: back at the start
-		else
-			u, v, du, dv = Rules.PointAt(shape, s)
-			local w = wobble(plan, t)
+		local u, v, du, dv = Rules.PointAt(shape, s)
+		local w = wobble(plan, t)
+		if s < shape.Length then
 			-- Ease in from the start and out at the end, where a player slows down to line up.
 			w *= math.clamp(s / 2, 0.3, 1) * math.clamp((shape.Length - s) / 2, 0.3, 1)
-			u, v = u - dv * w, v + du * w
+		else
+			-- The lap is closed but a dot was missed: go round again, carefully, until the cut is done.
+			w *= 0.3
 		end
+		u, v = u - dv * w, v + du * w
 		table.insert(out, t)
 		table.insert(out, math.clamp(u, -Rules.LIMIT, Rules.LIMIT))
 		table.insert(out, math.clamp(v, -Rules.LIMIT, Rules.LIMIT))
-		if s >= shape.Length then
-			break
-		end
 	end
 	plan.Last = t
 	return if #out > 0 then out else nil

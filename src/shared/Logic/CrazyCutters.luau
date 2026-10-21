@@ -8,8 +8,9 @@
 -- cutters in the arena always have exactly the same shape.
 --
 -- A cut is scored by a Tracker fed the cutter's positions one by one:
---   * Precision: every stretch of the cut earns full credit within FULL studs of the line and none
---     beyond ZERO studs, weighted by its length (wandering off costs as much as it is long).
+--   * Precision: each point of the outline earns full credit if the cutter first passes it within
+--     FULL studs and none beyond COVER (later passes don't change it, so going back over a stretch
+--     can't raise the score); stretches cut away from the line count against it by their length.
 --   * Coverage: the share of the outline's points the cutter passed within COVER studs of.
 --   score = coverage x precision, as a percentage. Nothing here touches instances.
 
@@ -160,9 +161,9 @@ function CrazyCutters.PointAt(shape: Shape, s: number): (number, number, number,
 	return shape.U[a] + du * f, shape.V[a] + dv * f, du / l, dv / l
 end
 
--- Distance from (u, v) to the outline, and how much credit a cut there earns (0..1).
-function CrazyCutters.Distance(shape: Shape, u: number, v: number): number
-	local best = math.huge
+-- Distance from (u, v) to the outline, and the outline point nearest to (u, v).
+function CrazyCutters.Distance(shape: Shape, u: number, v: number): (number, number)
+	local best, nearest = math.huge, 1
 	local U, V, n = shape.U, shape.V, shape.N
 	for a = 1, n do
 		local b = if a == n then 1 else a + 1
@@ -175,9 +176,10 @@ function CrazyCutters.Distance(shape: Shape, u: number, v: number): number
 		local d2 = ex * ex + ey * ey
 		if d2 < best then
 			best = d2
+			nearest = if t < 0.5 then a else b
 		end
 	end
-	return math.sqrt(best)
+	return math.sqrt(best), nearest
 end
 
 function CrazyCutters.Credit(distance: number): number
@@ -189,8 +191,10 @@ export type Tracker = {
 	Shape: Shape,
 	U: number,
 	V: number,
-	Len: number,
-	Good: number,
+	Credit: { [number]: number }, -- outline point -> credit from the first pass over it
+	Credited: number,
+	CreditSum: number,
+	OffLen: number, -- studs cut away from the line (weighted by how far)
 	Covered: { [number]: boolean },
 	Count: number,
 	Done: boolean,
@@ -209,8 +213,10 @@ function CrazyCutters.Tracker(shape: Shape): Tracker
 		Shape = shape,
 		U = shape.U[1],
 		V = shape.V[1],
-		Len = 0,
-		Good = 0,
+		Credit = {},
+		Credited = 0,
+		CreditSum = 0,
+		OffLen = 0,
 		Covered = {},
 		Count = 0,
 		Done = false,
@@ -244,13 +250,20 @@ function Tracker.Add(self: Tracker, u: number, v: number): number
 		for step = 1, steps do
 			local f = step / steps
 			local pu, pv = self.U + du * f, self.V + dv * f
-			distance = CrazyCutters.Distance(shape, pu, pv)
-			self.Good += CrazyCutters.Credit(distance) * length / steps
+			local nearest
+			distance, nearest = CrazyCutters.Distance(shape, pu, pv)
+			local credit = CrazyCutters.Credit(distance)
 			if distance <= CrazyCutters.COVER then
+				if self.Credit[nearest] == nil then
+					self.Credit[nearest] = credit
+					self.Credited += 1
+					self.CreditSum += credit
+				end
 				self:_cover(pu, pv)
+			else
+				self.OffLen += (1 - credit) * length / steps
 			end
 		end
-		self.Len += length
 	else
 		distance = CrazyCutters.Distance(shape, u, v)
 	end
@@ -270,7 +283,11 @@ function Tracker.Coverage(self: Tracker): number
 end
 
 function Tracker.Precision(self: Tracker): number
-	return if self.Len > 0.5 then self.Good / self.Len else 0
+	if self.Credited == 0 then
+		return 0
+	end
+	local length = self.Shape.Length
+	return self.CreditSum / self.Credited * length / (length + self.OffLen)
 end
 
 -- The cut's score, 0..100.
