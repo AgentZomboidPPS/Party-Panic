@@ -118,7 +118,16 @@ end
 
 -- A flat painted strip lying on the ground, rotated by `yaw`, its top `top` above the ground and
 -- its bottom sunk a little (so it never shares a plane with the track under it).
-function RockinRaceway:_strip(parent: Instance, name: string, x: number, z: number, size: Vector2, top: number, color: Color3, yaw: number?)
+function RockinRaceway:_strip(
+	parent: Instance,
+	name: string,
+	x: number,
+	z: number,
+	size: Vector2,
+	top: number,
+	color: Color3,
+	yaw: number?
+)
 	local origin = self.origin
 	local height = top + 0.06
 	return Build.Decor({
@@ -171,7 +180,15 @@ function RockinRaceway:_buildArena()
 		for line = 0, Track.LANES do
 			local offset = -half + line * Track.LANE
 			local edge = line == 0 or line == Track.LANES
-			self:_strip(field, "LaneLine", 0, side * (R + offset), Vector2.new(Track.STRAIGHT, if edge then 0.5 else 0.3), 0.1, white)
+			self:_strip(
+				field,
+				"LaneLine",
+				0,
+				side * (R + offset),
+				Vector2.new(Track.STRAIGHT - 0.3, if edge then 0.5 else 0.3),
+				0.1,
+				white
+			)
 		end
 		-- Red and white curbs just outside both edges.
 		for _, edge in { -1, 1 } do
@@ -179,7 +196,15 @@ function RockinRaceway:_buildArena()
 			local count = math.floor(Track.STRAIGHT / 5)
 			for k = 0, count - 1 do
 				local x = -s + (k + 0.5) * 5
-				self:_strip(field, "Curb", x, zc, Vector2.new(5, 1.8), 0.18, if k % 2 == 0 then rgb(235, 60, 60) else white)
+				self:_strip(
+					field,
+					"Curb",
+					x,
+					zc,
+					Vector2.new(4.9, 1.8),
+					0.18,
+					if k % 2 == 0 then rgb(235, 60, 60) else white
+				)
 			end
 		end
 	end
@@ -202,7 +227,15 @@ function RockinRaceway:_buildArena()
 		for column = 0, 1 do
 			local z = R - half + (row + 0.5) * cell
 			local dark = (row + column) % 2 == 0
-			self:_strip(squares, "Check", (column - 0.5) * cell, z, Vector2.new(cell, cell), 0.12, if dark then rgb(35, 35, 45) else white)
+			self:_strip(
+				squares,
+				"Check",
+				(column - 0.5) * cell,
+				z,
+				Vector2.new(cell, cell),
+				0.22,
+				if dark then rgb(35, 35, 45) else white
+			)
 		end
 	end
 	-- The finish arch over it (its span runs across the track: the mesh's X along world Z).
@@ -303,7 +336,8 @@ function RockinRaceway:_buildArena()
 	MeshLibrary.Get("RockinRacewayCarousel", {
 		CFrame = CFrame.new(origin.X, ground, origin.Z),
 		Parent = infield,
-	}).Name = "Carousel"
+	}).Name =
+		"Carousel"
 	local tentColors = { rgb(235, 60, 70), rgb(70, 140, 235), rgb(250, 190, 40), rgb(120, 200, 90) }
 	for index, spot in { { -62, -6 }, { 60, 8 }, { -34, 14 }, { 36, -14 }, { -88, 10 }, { 88, -10 } } do
 		MeshLibrary.Get("RockinRacewayTent", {
@@ -313,7 +347,8 @@ function RockinRaceway:_buildArena()
 			Parent = infield,
 		})
 	end
-	local balloonColors = { rgb(255, 90, 140), rgb(255, 205, 50), rgb(80, 170, 255), rgb(120, 220, 110), rgb(190, 120, 255) }
+	local balloonColors =
+		{ rgb(255, 90, 140), rgb(255, 205, 50), rgb(80, 170, 255), rgb(120, 220, 110), rgb(190, 120, 255) }
 	for _, spot in { { -20, -6 }, { 18, 6 }, { -76, -2 }, { 76, 2 } } do
 		for k = 1, 3 do
 			local angle = k * 2.1 + rng:NextNumber(-0.3, 0.3)
@@ -348,7 +383,8 @@ function RockinRaceway:_buildArena()
 		decor(MeshLibrary.Get("Tree", {
 			Scale = rng:NextNumber(1.7, 2.6),
 			Colors = { Leaves = leafColors[rng:NextInteger(1, #leafColors)] },
-			CFrame = CFrame.new(origin.X + x, ground - 0.3, origin.Z + z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+			CFrame = CFrame.new(origin.X + x, ground - 0.3, origin.Z + z)
+				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
 			Parent = field,
 		}))
 	end
@@ -724,7 +760,10 @@ function RockinRaceway:GetResults()
 			table.insert(entries, {
 				Player = player,
 				Rank = 1e6 - rider.Place,
-				ScoreText = `{Track.Ordinal(rider.Place)} · {string.format("%.1f", (rider.Finish or 0) - (self.startAt or 0))}s`,
+				ScoreText = `{Track.Ordinal(rider.Place)} · {string.format(
+					"%.1f",
+					(rider.Finish or 0) - (self.startAt or 0)
+				)}s`,
 				BestScore = 100,
 			})
 		else

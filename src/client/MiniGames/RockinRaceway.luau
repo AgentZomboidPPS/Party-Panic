@@ -66,11 +66,10 @@ local function ridePose(phase: number, stride: number, air: number, dizzy: boole
 			then angles(0, 0, -80 + math.sin(t * 14) * 20)
 			elseif cheer then angles(0, 0, -armUp)
 			else angles(52, 0, 10),
-		RightShoulder = if dizzy then angles(0, 0, 80 - math.sin(t * 14) * 20) elseif cheer then angles(
-			0,
-			0,
-			armUp
-		) else angles(52, 0, -10),
+		RightShoulder = if dizzy
+			then angles(0, 0, 80 - math.sin(t * 14) * 20)
+			elseif cheer then angles(0, 0, armUp)
+			else angles(52, 0, -10),
 		LeftElbow = angles(if dizzy or cheer then 10 else 34, 0, 0),
 		RightElbow = angles(if dizzy or cheer then 10 else 34, 0, 0),
 		LeftHip = angles(swing + tuck, 0, -6),
@@ -373,14 +372,14 @@ function RockinRaceway.Start(api)
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		ClipsDescendants = true,
 		Parent = meter,
-		Children = { UIKit.Round(8) },
+		Children = { UIKit.new("UICorner", { CornerRadius = UDim.new(0, 8) }) },
 	})
 	UIKit.new("Frame", {
 		Name = "RedZone",
 		Size = UDim2.fromScale(Track.RED / Track.CARROTS, 1),
 		BackgroundColor3 = Color3.fromRGB(150, 30, 45),
 		Parent = well,
-		Children = { UIKit.Round(8) },
+		Children = { UIKit.new("UICorner", { CornerRadius = UDim.new(0, 8) }) },
 	})
 	local fill = UIKit.new("Frame", {
 		Name = "Fill",
@@ -388,7 +387,7 @@ function RockinRaceway.Start(api)
 		BackgroundColor3 = Theme.Colors.Orange,
 		ZIndex = 2,
 		Parent = well,
-		Children = { UIKit.Round(8) },
+		Children = { UIKit.new("UICorner", { CornerRadius = UDim.new(0, 8) }) },
 	})
 	UIKit.new("Frame", {
 		Name = "RedLine",
@@ -669,13 +668,17 @@ function RockinRaceway.Start(api)
 			local x, z, fx, fz = Track.At(shownEntry.D, offset)
 			local hopAt = if key == myKey then myHopAt else (data.H or -math.huge)
 			local lift = Track.HopHeight(now - hopAt)
-			local bounce = if lift > 0 then 0 else math.abs(math.sin(shownEntry.Phase)) * 0.35 * math.clamp(shownEntry.V / 12, 0, 1)
+			local bounce = if lift > 0
+				then 0
+				else math.abs(math.sin(shownEntry.Phase)) * 0.35 * math.clamp(shownEntry.V / 12, 0, 1)
 			local spinning = data.S ~= nil and now < data.S
 			local yaw = if spinning then (data.S - now) / Track.SPIN_TIME * math.pi * 4 else 0
 			local position = origin.Position + Vector3.new(x, 0, z)
 			local frame = CFrame.lookAt(position, position + Vector3.new(fx, 0, fz)) * CFrame.Angles(0, yaw, 0)
 			shownEntry.Frame = frame
-			local pitch = if lift > 0 then -0.25 * (1 - 2 * math.clamp((now - hopAt) / Track.HOP_TIME, 0, 1)) else math.sin(shownEntry.Phase * 1) * 0.07
+			local pitch = if lift > 0
+				then -0.25 * (1 - 2 * math.clamp((now - hopAt) / Track.HOP_TIME, 0, 1))
+				else math.sin(shownEntry.Phase * 1) * 0.07
 			local horse = horseFor(key, info)
 			if horse then
 				horse:PivotTo(frame * CFrame.new(0, lift + bounce, 0) * CFrame.Angles(pitch, 0, 0))
@@ -794,7 +797,11 @@ function RockinRaceway.Start(api)
 		if stage == "Race" and not hintShown then
 			hintShown = true
 			hintUntil = os.clock() + 5
-			api:Hint(if touch then "Hold GALLOP · let go in the red! HOP the blue hurdles" else "Hold W to GALLOP · let go in the red! SPACE hops the blue hurdles")
+			api:Hint(
+				if touch
+					then "Hold GALLOP · let go in the red! HOP the blue hurdles"
+					else "Hold W to GALLOP · let go in the red! SPACE hops the blue hurdles"
+			)
 		end
 		if hintUntil > 0 and os.clock() > hintUntil then
 			hintUntil = -1
@@ -814,14 +821,15 @@ function RockinRaceway.Start(api)
 				camera.CameraType = Enum.CameraType.Scriptable
 			end
 			shake = math.max(0, shake - dt)
-			local jolt = if shake > 0 then Vector3.new(math.sin(now * 61), math.sin(now * 73), 0) * shake else Vector3.zero
+			local jolt = if shake > 0
+				then Vector3.new(math.sin(now * 61), math.sin(now * 73), 0) * shake
+				else Vector3.zero
 			camera.CFrame = CFrame.lookAt((cameraPosition :: Vector3) + jolt, (flat * CFrame.new(0, 3, -14)).Position)
 			camera.FieldOfView = 64 + 14 * math.clamp((me.V - Track.TROT) / (Track.DASH - Track.TROT), 0, 1)
 		else
 			releaseCamera()
 		end
 	end)
-
 end
 
 return RockinRaceway

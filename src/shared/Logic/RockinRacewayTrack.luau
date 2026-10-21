@@ -139,7 +139,10 @@ function Track.Ride(rider: Rider, dt: number, now: number): boolean
 	local rate = if spinning then 4 elseif target > rider.V then Track.RISE else Track.FALL
 	rider.V += (target - rider.V) * (1 - math.exp(-rate * dt))
 	if now < rider.DashUntil and not spinning then
-		rider.V = math.max(rider.V, Track.DASH - (Track.DASH - Track.GALLOP) * (1 - (rider.DashUntil - now) / Track.DASH_TIME))
+		rider.V = math.max(
+			rider.V,
+			Track.DASH - (Track.DASH - Track.GALLOP) * (1 - (rider.DashUntil - now) / Track.DASH_TIME)
+		)
 	end
 	if now < rider.SlowUntil then
 		rider.V = math.min(rider.V, Track.SLOW)

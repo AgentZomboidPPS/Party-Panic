@@ -153,14 +153,14 @@ def carrot_panel():
     """An orange dash panel: a big carrot pointing forward and two arrows."""
     pad, rim = panel_base()
     # The carrot lies flat, its tip forward: a flattened cone with ridges, leaves at the back.
-    root = taper([(0, 0.26, 0.55), (0, 0.26, -0.2), (0, 0.26, -0.95)], 0.42, 0.06, 14).scale(1.0, 0.35, 1.0)
+    root = taper([(0, 0.26, 0.85), (0, 0.26, -0.15), (0, 0.26, -1.2)], 0.58, 0.07, 16).scale(1.0, 0.32, 1.0)
     root = root.translate(0, 0.17, 0)
-    ridges = merge(*[torus(0.36 - k * 0.09, 0.025, 14, 4).rotate("x", 90).scale(1.0, 0.35, 1.0)
-                     .translate(0, 0.27, 0.25 - k * 0.32) for k in range(3)])
-    leaves = merge(*[ellipsoid(0.13, 0.06, 0.38, 1).rotate("y", a).translate(math.sin(math.radians(a)) * 0.3, 0.28,
-                                                                                0.95 + math.cos(math.radians(a)) * 0.15)
-                     for a in (-28, 0, 28)])
-    arrows = merge(chevron(-1.15, 0.7, 0.24), chevron(-1.6, 0.7, 0.24))
+    ridges = merge(*[torus(0.5 - k * 0.13, 0.03, 16, 4).rotate("x", 90).scale(1.0, 0.32, 1.0)
+                     .translate(0, 0.26, 0.5 - k * 0.42) for k in range(3)])
+    leaves = merge(*[ellipsoid(0.16, 0.06, 0.42, 1).rotate("y", a).translate(math.sin(math.radians(a)) * 0.32, 0.28,
+                                                                                1.2 + math.cos(math.radians(a)) * 0.12)
+                     for a in (-30, 0, 30)])
+    arrows = merge(chevron(-1.35, 0.42, 0.24), chevron(-1.62, 0.42, 0.24))
     return {"Pad": pad, "Trim": merge(rim, arrows), "Carrot": merge(root, ridges), "Leaves": leaves}
 
 
