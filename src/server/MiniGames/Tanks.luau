@@ -154,7 +154,7 @@ function Tanks:_buildArena()
 	local wallpaper = rgb(176, 208, 236)
 	for _, spec in
 		{
-			{ Vector3.new(width + 2 * 70 + 8, 72, 4), Vector3.new(0, 36, northZ - 2) },
+			{ Vector3.new(width + 2 * 70 + 7.8, 72, 4), Vector3.new(0, 36, northZ - 2) },
 			{ Vector3.new(4, 72, depth + 220), Vector3.new(-sideX - 2, 36, 46) },
 			{ Vector3.new(4, 72, depth + 220), Vector3.new(sideX + 2, 36, 46) },
 		}
@@ -172,21 +172,21 @@ function Tanks:_buildArena()
 	Build.Decor({
 		Name = "Baseboard",
 		Size = Vector3.new(width + 2 * 70, 5, 1.2),
-		CFrame = self:_at(0, floorY + 2.5, northZ + 0.6),
+		CFrame = self:_at(0, floorY + 2.5, northZ + 0.7),
 		Color = rgb(250, 248, 240),
 		Parent = room,
 	})
 	for _, side in { -1, 1 } do
 		Build.Decor({
 			Name = "Baseboard",
-			Size = Vector3.new(1.2, 5, depth + 220 - 4),
-			CFrame = self:_at(side * (sideX - 0.6), floorY + 2.5, 46 + 2),
+			Size = Vector3.new(1.2, 5.2, depth + 220 - 4), -- (not flush with the north one's faces)
+			CFrame = self:_at(side * (sideX - 0.7), floorY + 2.5, 46 + 2),
 			Color = rgb(250, 248, 240),
 			Parent = room,
 		})
 	end
 	MeshLibrary.Get("TanksWindow", {
-		CFrame = self:_at(0, floorY + 14, northZ) * CFrame.Angles(0, math.pi, 0),
+		CFrame = self:_at(0, floorY + 14, northZ + 2) * CFrame.Angles(0, math.pi, 0), -- the frame proud of the wall (pivot is the box center)
 		Parent = room,
 	})
 	-- Giant toys around the arena (north and the sides: the camera looks north).
@@ -233,7 +233,7 @@ function Tanks:_buildArena()
 	for col = 1, field.Cols - 1 do
 		Build.Decor({
 			Name = "Groove",
-			Size = Vector3.new(0.16, 0.08, depth),
+			Size = Vector3.new(0.16, 0.2, depth),
 			CFrame = self:_at(-width / 2 + col * TILE, 0, 0),
 			Color = groove,
 			Material = Enum.Material.Sand,
@@ -243,7 +243,7 @@ function Tanks:_buildArena()
 	for row = 1, field.Rows - 1 do
 		Build.Decor({
 			Name = "Groove",
-			Size = Vector3.new(width, 0.06, 0.16),
+			Size = Vector3.new(width, 0.4, 0.16), -- (faces 0.1 apart where they cross: no flicker)
 			CFrame = self:_at(0, 0, -depth / 2 + row * TILE),
 			Color = groove,
 			Material = Enum.Material.Sand,

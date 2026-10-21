@@ -912,7 +912,7 @@ function Tanks.Start(api)
 				Name = "Scorch",
 				Shape = Enum.PartType.Cylinder,
 				Size = Vector3.new(0.05, 7, 7),
-				CFrame = CFrame.new(world(x, 0.05, z)) * CFrame.Angles(0, 0, math.rad(90)),
+				CFrame = CFrame.new(world(x, 0.31, z)) * CFrame.Angles(0, 0, math.rad(90)), -- over the grooves
 				Color = Color3.fromRGB(70, 52, 40),
 				Transparency = 0.35,
 				Parent = marks,
@@ -1019,7 +1019,7 @@ function Tanks.Start(api)
 			decor({
 				Name = "Cross",
 				Size = Vector3.new(0.9, 0.06, 7),
-				CFrame = CFrame.new(world(visual.X, 0.07 + index * 0.005, visual.Z))
+				CFrame = CFrame.new(world(visual.X, 0.48 + index * 0.06, visual.Z))
 					* CFrame.Angles(0, math.rad(45 * index), 0),
 				Color = colorOf(userId),
 				Material = Enum.Material.SmoothPlastic,
@@ -1402,7 +1402,7 @@ function Tanks.Start(api)
 					Name = "Blast",
 					Shape = Enum.PartType.Cylinder,
 					Size = Vector3.new(0.06, TankField.MINE_BLAST * 2, TankField.MINE_BLAST * 2),
-					CFrame = CFrame.new(world(entry.X, 0.1, entry.Z)) * CFrame.Angles(0, 0, math.rad(90)),
+					CFrame = CFrame.new(world(entry.X, 0.7, entry.Z)) * CFrame.Angles(0, 0, math.rad(90)),
 					Color = Color3.fromRGB(255, 70, 60),
 					Material = Enum.Material.Neon,
 					Transparency = 0.75,
