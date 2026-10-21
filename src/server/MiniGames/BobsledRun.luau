@@ -169,7 +169,7 @@ function BobsledRun:_buildArena()
 		local look = CFrame.lookAt(middle, middle + run)
 		Build.Part({
 			Name = "Snowfield",
-			Size = Vector3.new(1600, 6, run.Magnitude),
+			Size = Vector3.new(1600 + (index % 2) * 6, 6, run.Magnitude), -- (neighbors' side faces apart)
 			CFrame = originCF * look * CFrame.new(0, -3, 0),
 			Color = rgb(238, 244, 252),
 			Material = Enum.Material.Snow,

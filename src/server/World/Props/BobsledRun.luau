@@ -9,10 +9,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local BobsledCourse = require(ReplicatedStorage.Shared.Logic.BobsledCourse)
 
 return function(h)
-	local ice = h.rgb(206, 234, 250)
+	local ice = h.rgb(168, 214, 246)
 	local snow = h.rgb(244, 248, 255)
 	local trim = h.rgb(230, 56, 66)
-	local trackPalette = { Ice = ice, Snow = snow, Trim = trim, Kicker = h.rgb(176, 220, 248) }
+	local trackPalette = { Ice = ice, Snow = snow, Trim = trim, Kicker = h.rgb(200, 232, 252) }
 	local trackMaterials = {
 		Ice = Enum.Material.Ice,
 		Snow = Enum.Material.Snow,
