@@ -20,9 +20,10 @@ the standings, team outlines, spectating (you get knocked out), a bot leaving an
 mid-round, the results and a bot champion on the podium. The result's "botChecks" says what the
 client did with them, and the extra snapshots ("InRound teams", "Podium") show it. The stand-in
 players are in the round either way, and the player is always knocked out ("Out", "Spectate").
-In the round, the team pill under the status line shows every kind of team ("teamChecks": what it
+In the round, the team pill under the status line shows every kind of team ("hudChecks": what it
 read and how wide it was; "InRound teams": four teams, its widest), and a mode's two action buttons
-show with two toasts up ("InRound buttons": on phones the toasts sit above the buttons).
+show with two toasts up ("InRound buttons": on phones the toasts sit above the buttons; "hudChecks"
+says whether they did and came back down after, and whether the mode HUD's scales let go).
 The result's "portals" says what each of the vote stage's portals shows in each phase (its game,
 "✓ YOUR VOTE", Random's spinning reel, the winner), as text.
 After the round the player sits out (the sit-out switch by the banner): a tap with no answer from
@@ -785,10 +786,11 @@ if #bots > 0 then
 end
 
 -- The team pill under the status line (HudController) shows every team in the round with its mark
--- and score: the versus modes' roles and two colour teams (teamChecks: what it read and how wide it
--- was, in its own units), then all four colour teams with 3-digit scores, its widest (the snapshot).
+-- and score: the versus modes' roles and two colour teams (hudChecks.teamPill: what it read and how
+-- wide it was, in its own units), then all four colour teams with 3-digit scores, its widest (the
+-- snapshot).
 step = "team scores"
-local teamChecks = {}
+local hudChecks = { teamPill = {} }
 do
 	local function pill()
 		local hud = __playerGui:FindFirstChild("PartyPanicHUD")
@@ -807,13 +809,13 @@ do
 	do
 		GameState.SetJSON("TeamScores", scores)
 		task.wait(0.3)
-		table.insert(teamChecks, pill())
+		table.insert(hudChecks.teamPill, pill())
 	end
 	task.wait(0.5)
 	snap("InRound teams")
 	GameState.SetJSON("TeamScores", {})
 	task.wait(0.1)
-	table.insert(teamChecks, "after the round: " .. pill())
+	table.insert(hudChecks.teamPill, "after the round: " .. pill())
 end
 
 if #bots > 0 then
@@ -831,7 +833,9 @@ if #bots > 0 then
 end
 
 -- A mode's two action buttons (Kit/Api: beside the jump button on phones) with two toasts up, the
--- first on two lines: on phones the toasts sit above the buttons' row (NotificationController).
+-- first on two lines: on phones the toasts sit above the buttons' row (NotificationController), and
+-- back down once the round's HUD is gone (hudChecks.toastsAboveButtons). That HUD's UIKit.AutoScale
+-- scales let go of the camera when it's destroyed (hudChecks.autoScalesReleased).
 step = "action buttons"
 do
 	local okApi, Api = pcall(__require, "Client/MiniGames/Kit/Api")
@@ -839,12 +843,30 @@ do
 		local api = Api.new(ids[1])
 		api:Button({ Text = "HIT!", Key = Enum.KeyCode.E })
 		api:Button({ Text = "PULL", Key = Enum.KeyCode.Q, Color = Color3.fromRGB(255, 92, 170), Slot = 2 })
+		api:Hint("Tap HIT! when the bees come")
 		__fire("Notify", "🎃 GOLDEN RUSH! Every veggie counts double for the next ten seconds!", "success", 4)
 		__fire("Notify", "Quest complete: Play 3 rounds", "reward", 4)
 		task.wait(0.8)
 		snap("InRound buttons")
+		local toasts = __playerGui:FindFirstChild("PartyPanicToasts")
+		local area = toasts and toasts:FindFirstChild("ToastArea")
+		local function lifted()
+			return if area then area:GetAttribute("PP_AboveActions") == true else "no phone toast area (PC)"
+		end
+		hudChecks.toastsAboveButtons = { whileShown = lifted() }
+		local scales, released = 0, 0
+		for _, item in api.Gui:GetDescendants() do
+			if item:IsA("UIScale") and item:GetAttribute("AutoScale") then
+				scales += 1
+				item.Destroying:Connect(function()
+					released += 1
+				end)
+			end
+		end
 		api:Destroy()
-		task.wait(0.3)
+		task.wait(0.5)
+		hudChecks.toastsAboveButtons.afterTheRound = lifted()
+		hudChecks.autoScalesReleased = `{released} of {scales}`
 	else
 		__note("Kit/Api failed to load: " .. tostring(Api))
 	end
@@ -1211,7 +1233,7 @@ return game:GetService("HttpService"):JSONEncode({
 	guiInstances = guiCount,
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
-	teamChecks = teamChecks,
+	hudChecks = hudChecks,
 	sitOutChecks = sitOutChecks,
 	tipChecks = tipChecks,
 	textReport = __textReport,
