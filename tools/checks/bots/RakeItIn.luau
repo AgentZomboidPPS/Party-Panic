@@ -33,12 +33,9 @@ return function(env)
 			for _, player in env.players do
 				table.insert(scores, tostring(env.Mine(player, "Score") or 0))
 			end
-			env.note(
-				`t={math.floor(elapsed)}s rakes {rakes} (junk {junk}), on field {if field then #field.Items else 0}, scores {table.concat(
-					scores,
-					","
-				)}`
-			)
+			local onField = if field then #field.Items else 0
+			local list = table.concat(scores, ",")
+			env.note(`t={math.floor(elapsed)}s rakes {rakes} (junk {junk}), on field {onField}, scores {list}`)
 		end
 	end
 end

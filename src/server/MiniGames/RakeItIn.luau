@@ -171,8 +171,8 @@ function RakeItIn:Prepare()
 	Build.Part({
 		Name = "Pedestal",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(1.9, 39.2, 39.2),
-		CFrame = CFrame.new(origin + Vector3.new(0, 0.95, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Size = Vector3.new(2.2, 39.2, 39.2),
+		CFrame = CFrame.new(origin + Vector3.new(0, 0.8, 0)) * CFrame.Angles(0, 0, math.rad(90)),
 		Color = brown,
 		Material = Enum.Material.WoodPlanks,
 		Parent = ctx.Arena,
@@ -186,6 +186,21 @@ function RakeItIn:Prepare()
 		CFrame = CFrame.new(origin + Vector3.new(0, SILO_Y, 0)),
 		Parent = ctx.Arena,
 	})
+
+	-- Hay bales stacked around the edge of the yard.
+	for index = 0, 7 do
+		local angle = (index + 0.5) / 8 * math.pi * 2 + rng:NextNumber(-0.15, 0.15)
+		local spot = origin + Vector3.new(math.cos(angle), 0, math.sin(angle)) * rng:NextNumber(29, 31)
+		local facing = CFrame.lookAt(spot, origin) * CFrame.Angles(0, math.pi / 2 + rng:NextNumber(-0.2, 0.2), 0)
+		for layer = 0, if index % 2 == 0 then 1 else 0 do
+			MeshLibrary.Get("HayBale", {
+				CFrame = facing
+					* CFrame.new(rng:NextNumber(-0.3, 0.3), layer * 2.5, 0)
+					* CFrame.Angles(0, rng:NextNumber(-0.25, 0.25), 0),
+				Parent = ctx.Arena,
+			})
+		end
+	end
 
 	-- Stations around the rim, evenly spaced; the first faces the silo's door.
 	local players = ctx:GetPlayers()
@@ -235,7 +250,7 @@ function RakeItIn:Prepare()
 		local laneFrame = CFrame.lookAt(mid, mid + out)
 		Build.Decor({
 			Name = "Lane_" .. player.UserId,
-			Size = Vector3.new(HALF * 2, 0.06, R_OUT - R_IN),
+			Size = Vector3.new(HALF * 2 - 0.22, 0.06, R_OUT - R_IN),
 			CFrame = laneFrame,
 			Color = color,
 			Material = Enum.Material.SmoothPlastic,
@@ -247,7 +262,7 @@ function RakeItIn:Prepare()
 			Build.Decor({
 				Name = "LaneEdge",
 				Size = Vector3.new(0.22, 0.08, R_OUT - R_IN),
-				CFrame = laneFrame * CFrame.new(edge * HALF, 0.02, 0),
+				CFrame = laneFrame * CFrame.new(edge * HALF, 0.01, 0),
 				Color = Color3.new(1, 1, 1),
 				Material = Enum.Material.SmoothPlastic,
 				Transparency = 0.25,
@@ -487,7 +502,7 @@ function RakeItIn:Start()
 		if count < target then
 			self:_spawn()
 		end
-		local gap = if self.rush then 0.22 else 0.34
+		local gap = (if self.rush then 0.22 else 0.32) * math.sqrt(6 / math.max(players, 6))
 		return gap * rng:NextNumber(0.7, 1.3) * (if count < target * 0.6 then 0.6 else 1)
 	end)
 

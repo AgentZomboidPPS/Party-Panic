@@ -377,7 +377,7 @@ function RakeItIn.Start(api)
 		local mid = hands + along / 2
 		station.Handle.Size = Vector3.new(length, 0.34, 0.34)
 		station.Handle.CFrame = CFrame.lookAt(mid, socket) * CFrame.Angles(0, math.pi / 2, 0)
-		station.Grip.CFrame = CFrame.lookAt(hands, socket) * CFrame.new(0, 0, -0.4) * CFrame.Angles(0, math.pi / 2, 0)
+		station.Grip.CFrame = CFrame.lookAt(hands, socket) * CFrame.new(0, 0, -0.65) * CFrame.Angles(0, math.pi / 2, 0)
 	end
 
 	-- HUD: your score, the legend (what's in your lane now), and RAKE.
@@ -387,14 +387,14 @@ function RakeItIn.Start(api)
 		Name = "Legend",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, y),
-		Size = UDim2.fromOffset(330, 46),
-		CornerRadius = 23,
+		Size = UDim2.fromOffset(350, 50),
+		CornerRadius = 25,
 		Parent = hud,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 	local legendText = UIKit.Label({
 		Text = "🥕🍅 +1   🎃 +3   💣 -3",
 		Font = Theme.Fonts.Display,
-		TextSize = 26,
+		TextSize = 30,
 		Size = UDim2.fromScale(1, 1),
 		Parent = legend,
 		Children = { UIKit.TextStroke(0.2) },
@@ -403,15 +403,15 @@ function RakeItIn.Start(api)
 		Name = "Score",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, y),
-		Size = UDim2.fromOffset(104, 46),
-		CornerRadius = 23,
+		Size = UDim2.fromOffset(128, 50),
+		CornerRadius = 25,
 		Visible = mine ~= nil,
 		Parent = hud,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 	local scoreText = UIKit.Label({
 		Text = "🥕 0",
 		Font = Theme.Fonts.Display,
-		TextSize = 26,
+		TextSize = 30,
 		Size = UDim2.fromScale(1, 1),
 		Parent = scorePill,
 		Children = { UIKit.TextStroke(0.2) },
@@ -424,25 +424,19 @@ function RakeItIn.Start(api)
 		Name = "Lane",
 		AnchorPoint = Vector2.new(0, 0),
 		Position = UDim2.new(0, 0, 0, y),
-		Size = UDim2.fromOffset(104, 46),
-		CornerRadius = 23,
+		Size = UDim2.fromOffset(128, 50),
+		CornerRadius = 25,
 		Visible = mine ~= nil,
 		Parent = hud,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 	local laneText = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 26,
+		TextSize = 30,
 		Size = UDim2.fromScale(1, 1),
 		Parent = lanePill,
 		Children = { UIKit.TextStroke(0.2) },
 	})
-	if mine then
-		api:Hint("Rake when your lane is full - skip the 💣!", y + 56)
-		task.delay(6, function()
-			api:Hint("", y + 56)
-		end)
-	end
 	local function showRush()
 		if rush then
 			legendText.Text = "🎃 GOLDEN RUSH! 🎃"
@@ -512,9 +506,9 @@ function RakeItIn.Start(api)
 		if userId == me then
 			if bomb then
 				api:Sound("Hit")
-				api:Hint("💣 Your rake is jammed!", y + 56)
+				api:Hint("💣 Your rake is jammed!", y + 60)
 				task.delay(layout.Jam, function()
-					api:Hint("", y + 56)
+					api:Hint("", y + 60)
 				end)
 			elseif value > 0 then
 				task.delay(FLY, function()
@@ -603,10 +597,10 @@ function RakeItIn.Start(api)
 		-- HUD: what raking now would get, and the rake's recharge.
 		if mine then
 			if laneCount == 0 then
-				laneText.Text = "· · ·"
+				laneText.Text = "LANE -"
 				laneText.TextColor3 = Theme.Colors.TextDim
 			else
-				laneText.Text = if laneBomb then `💣{laneValue}` else `+{laneValue}`
+				laneText.Text = if laneBomb then `💣 {laneValue}` else `LANE +{laneValue}`
 				laneText.TextColor3 = if laneBomb or laneValue < 0 then Theme.Colors.Red else Theme.Colors.Green
 			end
 			local wait = readyAt - t
