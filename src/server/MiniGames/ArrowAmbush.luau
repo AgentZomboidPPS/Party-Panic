@@ -233,7 +233,9 @@ local function meadow(ctx, center: Vector3, radius: number, clear: (Vector3) -> 
 	for index = 0, 11 do
 		local angle = (index + rng:NextNumber(-0.3, 0.3)) / 12 * math.pi * 2
 		local distance = radius * rng:NextNumber(0.7, 0.85)
-		local size = Vector3.new(rng:NextNumber(150, 230), rng:NextNumber(50, 90), rng:NextNumber(110, 160))
+		-- (Each hill gets its own height step, so no two buried bottoms ever share a plane.)
+		local height = 50 + (index * 7 % 12) * 3.3 + rng:NextNumber(0, 0.5)
+		local size = Vector3.new(rng:NextNumber(150, 230), height, rng:NextNumber(110, 160))
 		local hill = Build.Part({
 			Name = "Hill",
 			Size = size,

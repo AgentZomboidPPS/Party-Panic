@@ -7,7 +7,7 @@
 return function(h)
 	local stone = h.rgb(232, 220, 200)
 	local mortar = h.rgb(176, 164, 152)
-	local trim = h.rgb(244, 236, 220)
+	local trim = h.rgb(240, 218, 176) -- warm sandstone coping, so the merlons read against the stone
 	local gold = h.rgb(255, 200, 70)
 	local roof = h.rgb(72, 118, 222)
 	local red = h.rgb(226, 62, 74)
