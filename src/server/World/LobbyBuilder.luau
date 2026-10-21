@@ -1532,6 +1532,21 @@ local function buildScenery(root: Model)
 			})
 		end
 	end
+	-- The rings leave a gap round the obby: a crescent of trees behind its pool closes the view
+	-- again, past the boundary where nobody can reach them.
+	local crescent = Random.new(23)
+	for index = 0, 6 do
+		local angle = math.rad(112 + index * 22 + crescent:NextNumber(-5, 5))
+		local distance = LobbyObby.Radius + 15 + crescent:NextNumber(-1.5, 2.5)
+		local scale = crescent:NextNumber(1.3, 1.75)
+		local position =
+			PARKOUR_FRAME:PointToWorldSpace(Vector3.new(math.sin(angle) * distance, -0.4, math.cos(angle) * distance))
+		MeshLibrary.Get("Tree", {
+			Scale = scale,
+			CFrame = CFrame.new(position) * CFrame.Angles(0, crescent:NextNumber(0, math.pi * 2), 0),
+			Parent = scenery,
+		})
+	end
 
 	-- Floating sparkles over the plaza.
 	for _, point in Build.Ring(Vector3.new(0, 0, 0), 30, 3, 0.5) do

@@ -292,6 +292,28 @@ function ParkourCourse.InGoo(x: number, z: number, feet: number): boolean
 	return feet < ParkourCourse.GooTop - 0.2 and x * x + z * z < ParkourCourse.PoolRadius ^ 2
 end
 
+-- One look at a player in the obby: their feet are at (x, feet, z) in course space and they've reached
+-- checkpoint `reached` (0: none yet). Returns the checkpoint they have now, whether to put them back on
+-- it (they're in the goo, or they fell onto an earlier section), and whether they just reached it.
+-- The start pad begins a new run and the view deck ends one, so after either a fall goes to the start.
+function ParkourCourse.Step(reached: number, x: number, z: number, feet: number): (number, boolean, boolean)
+	if ParkourCourse.InGoo(x, z, feet) then
+		return reached, true, false
+	end
+	local piece = ParkourCourse.PieceAt(x, z, feet)
+	if not piece then
+		return reached, false, false
+	end
+	if piece == ParkourCourse.Start or piece.Finish then
+		return 0, false, false
+	end
+	local checkpoint = piece.Checkpoint
+	if checkpoint and checkpoint > reached then
+		return checkpoint, false, true
+	end
+	return reached, piece.Stage < reached, false
+end
+
 -- Where a player on checkpoint `index` is put back: the pad's centre, and the direction (course
 -- space, flat) to face, toward the next piece.
 function ParkourCourse.Respawn(index: number): (number, number, number, number, number)

@@ -138,3 +138,26 @@ test("ParkourCourse.PieceAt and InGoo tell where feet are", function()
 	expectEqual(ParkourCourse.PieceAt(x, z, top), ParkourCourse.Checkpoints[2], "respawn on checkpoint 2")
 	near(fx * fx + fz * fz, 1, 1e-6, "facing is a unit vector")
 end)
+
+test("ParkourCourse.Step keeps checkpoints and puts fallers back", function()
+	local Step = ParkourCourse.Step
+	local cp1, cp2 = ParkourCourse.Checkpoints[1], ParkourCourse.Checkpoints[2]
+	local hop, pillar = Pieces[3], Pieces[8]
+	-- reaching a glowing pad saves it, once
+	expectEqual(table.pack(Step(0, cp1.X, cp1.Z, cp1.Top)), table.pack(1, false, true), "reach checkpoint 1")
+	expectEqual(table.pack(Step(1, cp1.X, cp1.Z, cp1.Top)), table.pack(1, false, false), "stand on it")
+	-- the goo puts you back on the last one (or the start)
+	expectEqual(table.pack(Step(1, 0, 15, ParkourCourse.Floor)), table.pack(1, true, false), "fall in the goo")
+	expectEqual(table.pack(Step(0, 0, 15, ParkourCourse.Floor)), table.pack(0, true, false), "fall before any")
+	-- landing on an earlier section after a fall puts you back too; the same section doesn't
+	expectEqual(table.pack(Step(2, hop.X, hop.Z, hop.Top)), table.pack(2, true, false), "fell onto the hops")
+	expectEqual(table.pack(Step(2, cp1.X, cp1.Z, cp1.Top)), table.pack(2, true, false), "fell onto checkpoint 1")
+	expectEqual(table.pack(Step(1, pillar.X, pillar.Z, pillar.Top)), table.pack(1, false, false), "on its own section")
+	expectEqual(table.pack(Step(2, cp2.X, cp2.Z, cp2.Top + 3)), table.pack(2, false, false), "in the air")
+	-- the start pad begins a run and the deck ends it
+	local start, deck = ParkourCourse.Start, ParkourCourse.Deck
+	expectEqual(table.pack(Step(3, start.X, start.Z, start.Top)), table.pack(0, false, false), "back at the start")
+	expectEqual(table.pack(Step(3, deck.X + 1, deck.Z, deck.Top)), table.pack(0, false, false), "on the deck")
+	-- outside the pool nothing happens
+	expectEqual(table.pack(Step(2, 0, 40, 2)), table.pack(2, false, false), "on the lawn")
+end)

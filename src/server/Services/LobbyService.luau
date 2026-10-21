@@ -223,23 +223,13 @@ local function setupParkour()
 			-- Where the feet are (an R15 root's bottom is HipHeight above the ground under it).
 			local hip = if humanoid.RigType == Enum.HumanoidRigType.R6 then 2 else humanoid.HipHeight
 			local feet = p.Y - root.Size.Y / 2 - hip
-			if ParkourCourse.InGoo(p.X, p.Z, feet) then
+			local checkpoint, fell, gained = ParkourCourse.Step(reached[player] or 0, p.X, p.Z, feet)
+			reached[player] = if checkpoint > 0 then checkpoint else nil
+			if fell then
 				putBack(player, character, root, humanoid)
-				continue
-			end
-			local piece = ParkourCourse.PieceAt(p.X, p.Z, feet)
-			if not piece then
-				continue
-			end
-			local current = reached[player] or 0
-			if piece == ParkourCourse.Start or piece.Finish then
-				reached[player] = nil -- a new run starts here, or this one is done
-			elseif piece.Checkpoint and piece.Checkpoint > current then
-				reached[player] = piece.Checkpoint
-				Notifier.Send(player, `🚩 Checkpoint {piece.Checkpoint}/{total}!`, "success", 2)
+			elseif gained then
+				Notifier.Send(player, `🚩 Checkpoint {checkpoint}/{total}!`, "success", 2)
 				Notifier.Sound({ player }, "Pickup")
-			elseif piece.Stage < current then
-				putBack(player, character, root, humanoid) -- fell back onto an earlier section
 			end
 		end
 	end)
