@@ -12,7 +12,8 @@ Errors and warnings from all of it come back in the result.
 text measurements and wrapping, with the fonts loaded); default: the touch sizes with --touch, else
 the PC ones. The result's "textReport" lists every text that doesn't fit on one of them.
 --rich gives the player a well-used profile (every emote, lots of coins, a long name, a claimable
-daily gift) to check the layouts at their fullest; the default is a brand-new player.
+daily gift, a high level with its prestige color, the road and career rewards it has earned) to
+check the layouts at their fullest; the default is a brand-new player.
 --bots N adds N stand-in bots, shaped like BotService's (a Configuration in
 ReplicatedStorage.PartyBots with a character in the world), who play the round with the player:
 the standings, team outlines, spectating (you get knocked out), a bot leaving and one arriving
@@ -35,7 +36,9 @@ Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake pl
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
 (Heartbeat), StarterGui:SetCore, and the remotes (bindable events the harness can fire). The two
 ScreenGuis are made like init.client.luau makes them. Shared modules come from the working tree
-(except Remotes).
+(except Remotes), and so does the profile snapshot (DataService and the two services it needs).
+Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", "Rewards Career")
+and shows a level-up and a career milestone celebration ("LevelUp", "Milestone").
 """
 
 import argparse
@@ -49,6 +52,8 @@ from ui_render import devices_luau, size_names  # noqa: E402  (the screens the e
 ROOT = Path(__file__).resolve().parents[2]
 CLIENT = ROOT / "src" / "client"
 SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService")
+# Server modules bundled from the working tree: the profile snapshot the client is sent.
+SERVER_MODULES = ("DataService", "Notifier", "Telemetry")
 
 
 def played_game() -> str:
@@ -73,6 +78,8 @@ def module_paths():
         if rel.parts[:1] == ("MiniGames",) and len(rel.parts) == 2 and rel.parts[1] not in ("init", played):
             continue  # only the played mode's client half (Luau execution's 1 MB script limit)
         paths["Client/" + "/".join(rel.parts)] = path
+    for name in SERVER_MODULES:
+        paths[f"Server/Services/{name}"] = ROOT / "src" / "server" / "Services" / f"{name}.luau"
     return paths
 
 
@@ -322,8 +329,7 @@ local Shared = ReplicatedStorage.Shared
 local GameState = require(Shared.GameState)
 GameState.Folder()
 local GameDefinitions = require(Shared.GameDefinitions)
-local Services = game:GetService("ServerScriptService").Server.Services
-local DataService = require(Services.DataService)
+local DataService = __require("Server/Services/DataService") -- the working tree's snapshot
 local QuestDefinitions = require(Shared.QuestDefinitions)
 
 local step = "start"
@@ -420,6 +426,7 @@ local order = {
 	"AudioController", "NotificationController", "EffectsController", "AmbienceController",
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
+	"RewardsController", "CelebrationController",
 	"EmoteController", "SpectateController", "OnboardingController", "AssetReportController",
 }
 -- The ScreenGuis, made with init.client.luau's own properties (see screen_guis() in the script).
@@ -460,19 +467,38 @@ for _, name in order do
 end
 
 -- 2. Profile snapshot, as DataService sends it: a new player (default items, 3 daily and 2 weekly
--- quests with the longest texts), or with --rich a well-used profile.
+-- quests with the longest texts), or with --rich a well-used profile: a high level (and its
+-- prestige color), every emote, the road and career rewards it has earned, career stats partway.
 local Cosmetics = require(Shared.Cosmetics)
+local LevelCurve = require(Shared.Logic.LevelCurve)
 local data = table.clone(DataService.Template)
 data.Owned = {}
+data.Stats = table.clone(DataService.Template.Stats)
+if __richMode then
+	data.Coins = 99999 -- the most a player plausibly saves on the low coin scale
+	data.XP = 98765
+	data.Daily = { LastClaimDay = 0, Streak = 6, SecretDay = 0, FirstWinDay = 0 }
+	data.Stats.RoundsPlayed = 180
+	data.Stats.Wins = 12
+	data.Stats.Podiums = 31
+	data.Stats.TeamWins = 4
+	data.Stats.GamesTried = 9
+	data.Stats.DaysPlayed = 8
+end
+local richLevel = LevelCurve.FromTotalXP(data.XP)
 for _, item in Cosmetics.List do
-	if item.Default or (__richMode and item.Slot == "Emote") then
+	local earned = item.Default
+		or (__richMode and item.Slot == "Emote")
+		or (item.UnlockLevel ~= nil and richLevel >= item.UnlockLevel)
+		or (item.UnlockStat ~= nil and (data.Stats[item.UnlockStat.Stat] or 0) >= item.UnlockStat.Value)
+	if earned then
 		data.Owned[item.Id] = true
 	end
 end
 if __richMode then
-	data.Coins = 1234567
-	data.XP = 98765
-	data.Daily = { LastClaimDay = 0, Streak = 6, SecretDay = 0 }
+	data.Equipped = table.clone(DataService.Template.Equipped)
+	data.Equipped.Title = "Title_Icon"
+	data.Equipped.Trail = "Trail_Starry"
 end
 local profile = { Data = data, IsVip = false, CanSave = not __richMode }
 local okSnap, snapshot = pcall(DataService.BuildSnapshot, profile)
@@ -499,10 +525,15 @@ else
 	__note("BuildSnapshot failed: " .. tostring(snapshot))
 end
 
--- 3. Screens opened by the lobby prompts and the HUD.
-for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
+-- 3. Screens opened by the lobby prompts and the HUD (the profile chip opens Rewards; its Career
+-- tab is a second snapshot).
+for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Rewards", "Rewards Career" } do
 	step = "OpenScreen " .. screen
-	State.OpenScreen:Fire(screen)
+	if screen == "Rewards Career" then
+		State.OpenScreen:Fire("Rewards", "Career")
+	else
+		State.OpenScreen:Fire(screen)
+	end
 	task.wait(1)
 	snap(screen)
 	local Modal = __require("Client/UI/Modal")
@@ -643,6 +674,30 @@ local function boardRows()
 end
 
 phase("Intermission", 20)
+-- A level up with two road rewards, a first level up, then a career milestone (CelebrationController
+-- shows them in the lobby), and someone's "Lv 12!" pop over their head.
+do
+	local Celebrations = __require("Client/Controllers/CelebrationController")
+	for _, case in {
+		{
+			name = "LevelUp",
+			payload = { Kind = "LevelUp", Level = 10, From = 9, Coins = 15, Items = { "Trail_Starry", "Title_Pro" } },
+		},
+		{ name = "LevelUp2", payload = { Kind = "LevelUp", Level = 2, From = 1, Coins = 3, Items = { "Emote_Balloons" } } },
+		{ name = "Milestone", payload = { Kind = "Milestone", Coins = 0, Items = { "Title_Veteran" } } },
+	} do
+		step = "celebration " .. case.name
+		__fire("Celebrate", case.payload)
+		task.wait(1.6) -- the rewards are revealed one by one
+		__ui[case.name] = __dumpGui(__playerGui, case.name)
+		Celebrations.Dismiss()
+		task.wait(0.5)
+	end
+	if bots[1] and bots[1].rig then
+		__fire("LevelPop", bots[1].rig, 12)
+	end
+	__fire("LevelPop", workspace, 3) -- no head: nothing happens
+end
 phase("Voting", 12, function()
 	GameState.SetJSON("VoteOptions", {
 		{ Id = longNames[1], Mystery = false },
@@ -790,10 +845,11 @@ phase("Results", 8, function()
 		TopHalf = "Top half finish",
 		Winner = "Winner!",
 		PersonalBest = "New personal best",
+		FirstWin = "First win today!",
 	}
 	local lines, coins, xp = {}, 0, 0
-	for _, key in { "Participation", "TopHalf", "Winner", "PersonalBest" } do
-		if key ~= "Winner" or place == 1 then
+	for _, key in { "Participation", "TopHalf", "Winner", "PersonalBest", "FirstWin" } do
+		if Config.Rewards[key] and ((key ~= "Winner" and key ~= "FirstWin") or place == 1) then
 			local reward = Config.Rewards[key]
 			table.insert(lines, { Label = labels[key], Coins = reward.Coins, XP = reward.XP })
 			coins += reward.Coins
@@ -839,6 +895,8 @@ phase("Results", 8, function()
 		Coins = coins,
 		XP = xp,
 		PersonalBest = true,
+		FirstWin = place == 1,
+		LevelUp = 7, -- the round took the player to a new level
 		Standings = standings,
 	})
 	GameState.SetJSON("Champions", champions)

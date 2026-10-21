@@ -1,15 +1,18 @@
 -- The only place coins and XP are granted or spent. Amounts are always computed on the server;
 -- clients never submit coin totals, placements or rewards (design doc §14 "Server authority").
+-- Coins are on the low scale (owner: "I want low currency not high"; see Config.Rewards). Each
+-- level reached pays the Rewards Road's coins (Config.Road) exactly once, since XP only goes up,
+-- and ProgressionService unlocks the level's cosmetics and celebrates.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local LevelCurve = require(Shared.Logic.LevelCurve)
+local ProgressionLogic = require(Shared.Logic.ProgressionLogic)
 
-local CosmeticService = require(script.Parent.CosmeticService)
 local DataService = require(script.Parent.DataService)
-local Notifier = require(script.Parent.Notifier)
+local ProgressionService = require(script.Parent.ProgressionService)
 local Telemetry = require(script.Parent.Telemetry)
 
 local Economy = {}
@@ -45,16 +48,10 @@ function Economy.AddXP(player: Player, amount: number)
 	profile.Data.XP += math.floor(amount)
 	local after = LevelCurve.FromTotalXP(profile.Data.XP)
 	if after > before then
-		local bonus = (after - before) * Config.LevelUpCoins
-		profile.Data.Coins += bonus
-		Notifier.Send(player, `Level up! You're now level {after}. +{bonus} coins`, "reward", 5)
+		local coins = ProgressionLogic.CoinsBetween(before, after, Config.Road)
+		profile.Data.Coins += coins
 		Telemetry.PlayerEvent(player, "LevelUp", after)
-		CosmeticService.CheckUnlocks(player)
-		CosmeticService.Refresh(player)
-		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		if root then
-			Notifier.Effect("Sparkles", root.Position + Vector3.new(0, 3, 0))
-		end
+		ProgressionService.LevelUp(player, before, after, coins)
 	end
 	DataService.Changed(player)
 end

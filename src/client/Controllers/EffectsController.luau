@@ -1,5 +1,7 @@
 -- Renders celebratory and feedback effects locally. The server only says what and where, so each
 -- player's "reduced effects" setting is respected (design doc §12 accessibility).
+-- The Rewards Road and career rewards add balloons, ghosts, music notes, crowns, trophies and a
+-- grand finale (owner: "Also we need cool payoffs for players that keep playing the game.").
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -46,10 +48,11 @@ local function burst(parent: Part, props: { [string]: any }, count: number)
 	emitter:Emit(count)
 end
 
--- Emoji that float up and fade (hearts, stars, bubbles).
-local function emojiBurst(position: Vector3, emoji: string, count: number)
+-- Emoji that float up and fade (hearts, stars, bubbles). Several emoji take turns.
+local function emojiBurst(position: Vector3, emoji: string | { string }, count: number)
 	local holder = anchor(position, 2.5)
-	for _ = 1, count do
+	local choices = if type(emoji) == "table" then emoji else { emoji }
+	for index = 1, count do
 		local gui = Instance.new("BillboardGui")
 		gui.Size = UDim2.fromOffset(46, 46)
 		gui.LightInfluence = 0
@@ -62,7 +65,7 @@ local function emojiBurst(position: Vector3, emoji: string, count: number)
 		label.BackgroundTransparency = 1
 		label.Size = UDim2.fromScale(1, 1)
 		label.TextScaled = true
-		label.Text = emoji
+		label.Text = choices[(index - 1) % #choices + 1]
 		label.Parent = gui
 		local rise = Vector3.new(0, 4 + math.random() * 3, 0)
 		TweenService:Create(
@@ -158,7 +161,28 @@ local EFFECTS: { [string]: (position: Vector3, colors: { Color3 }?, scale: numbe
 	Bubbles = function(position, _colors, scale)
 		emojiBurst(position, "🔵", math.max(2, math.floor(7 * scale))) -- 🫧 is blank on phones
 	end,
+	Balloons = function(position, _colors, scale)
+		emojiBurst(position, "🎈", math.max(3, math.floor(9 * scale)))
+	end,
+	Ghosts = function(position, _colors, scale)
+		emojiBurst(position, "👻", math.max(2, math.floor(5 * scale)))
+	end,
+	Notes = function(position, _colors, scale)
+		emojiBurst(position, { "🎵", "🎶" }, math.max(2, math.floor(8 * scale)))
+	end,
+	Crowns = function(position, _colors, scale)
+		emojiBurst(position, "👑", math.max(2, math.floor(7 * scale)))
+	end,
+	Trophies = function(position, _colors, scale)
+		emojiBurst(position, { "🏆", "🥇" }, math.max(2, math.floor(7 * scale)))
+	end,
 }
+-- Everything at once: the Grand Finale victory effect.
+EFFECTS.Finale = function(position, colors, scale)
+	EFFECTS.Confetti(position, colors, scale)
+	EFFECTS.Sparkles(position, { Color3.fromRGB(255, 225, 120) }, scale)
+	EFFECTS.Fireworks(position, colors, scale)
+end
 
 function EffectsController.Play(name: string, position: Vector3, colors: { Color3 }?)
 	local effect = EFFECTS[name]

@@ -29,8 +29,10 @@ export type PeriodState = {
 
 export type PickIndex = (count: number) -> number
 
--- Re-rolls the quest list when the period (day or week number) has changed.
--- Returns true when a new set of quests was rolled.
+-- Re-rolls the quest list when the period (day or week number) has changed. Within a period the
+-- list stays, except that a quest whose definition was retired is replaced by a fresh one, so the
+-- list is never left short or holding a quest that can't be finished.
+-- Returns true when the list changed.
 function QuestLogic.Refresh(
 	state: PeriodState,
 	defs: { QuestDef },
@@ -39,19 +41,37 @@ function QuestLogic.Refresh(
 	count: number,
 	pickIndex: PickIndex
 ): boolean
-	if state.Number == periodNumber and #state.Active > 0 then
-		return false
-	end
-
-	local candidates: { QuestDef } = {}
+	local known: { [string]: boolean } = {}
 	for _, def in defs do
 		if def.Period == period then
-			table.insert(candidates, def)
+			known[def.Id] = true
 		end
 	end
 
 	local active: { ActiveQuest } = {}
-	for _ = 1, math.min(count, #candidates) do
+	if state.Number == periodNumber and #state.Active > 0 then
+		for _, quest in state.Active do
+			if known[quest.Id] then
+				table.insert(active, quest)
+			end
+		end
+		if #active == #state.Active then
+			return false
+		end
+	end
+
+	local taken: { [string]: boolean } = {}
+	for _, quest in active do
+		taken[quest.Id] = true
+	end
+	local candidates: { QuestDef } = {}
+	for _, def in defs do
+		if def.Period == period and not taken[def.Id] then
+			table.insert(candidates, def)
+		end
+	end
+
+	while #active < count and #candidates > 0 do
 		local index = math.clamp(math.floor(pickIndex(#candidates)), 1, #candidates)
 		local def = table.remove(candidates, index) :: QuestDef
 		table.insert(active, { Id = def.Id, Progress = 0, Done = false, Seen = if def.Unique then {} else nil })

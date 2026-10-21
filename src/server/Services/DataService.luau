@@ -5,6 +5,8 @@
 -- server has taken the lock over, so two servers can never overwrite each other's progress.
 -- When DataStores are unavailable (e.g. an unpublished place in Studio) players get a temporary
 -- profile that is never saved, and they are told so.
+-- Saved profiles go through Logic/ProfileMigration on load (the move to the low coin scale, owner:
+-- "I want low currency not high"); a player whose coins were just converted is told so, once.
 
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
@@ -15,6 +17,7 @@ local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local DailyLogic = require(Shared.Logic.DailyLogic)
 local LevelCurve = require(Shared.Logic.LevelCurve)
+local ProfileMigration = require(Shared.Logic.ProfileMigration)
 local Remotes = require(Shared.Remotes)
 local TableUtil = require(Shared.Logic.TableUtil)
 
@@ -24,7 +27,8 @@ local Telemetry = require(script.Parent.Telemetry)
 local DataService = {}
 
 DataService.Template = {
-	Version = 1,
+	Version = 2, -- 2: the low coin scale and the career stats
+	EconomyVersion = ProfileMigration.EconomyVersion, -- coins are on the low scale (see ProfileMigration)
 	Coins = 0,
 	XP = 0,
 	Owned = {} :: { [string]: boolean },
@@ -45,6 +49,13 @@ DataService.Template = {
 		TreasureDelivered = 0,
 		RaceFinishes = 0,
 		Knockouts = 0,
+		-- Career milestones (Logic/ProgressionLogic.RecordRound keeps these)
+		Podiums = 0, -- 1st to 3rd
+		TeamWins = 0, -- on the winning team
+		RacePodiums = 0, -- 1st to 3rd in race games
+		GamesTried = 0, -- different games played (worked out from ModePlays on load)
+		DaysPlayed = 0, -- different days (UTC) with a round played
+		LastPlayDay = 0,
 		ModePlays = {} :: { [string]: number },
 		CategoryPlays = {} :: { [string]: number },
 		Best = {} :: { [string]: number },
@@ -53,6 +64,7 @@ DataService.Template = {
 		LastClaimDay = 0,
 		Streak = 0,
 		SecretDay = 0,
+		FirstWinDay = 0, -- the day the first-win-of-the-day bonus was last paid
 	},
 	Quests = {
 		Daily = { Number = 0, Active = {} },
@@ -79,6 +91,7 @@ export type Profile = {
 	CanSave: boolean,
 	IsVip: boolean,
 	Released: boolean,
+	Migration: ProfileMigration.Report?, -- what loading changed (this session only, never saved)
 }
 
 local profiles: { [Player]: Profile } = {}
@@ -104,12 +117,17 @@ local function newData(): ProfileData
 	return data
 end
 
-local function migrate(data: any): ProfileData
-	-- Future schema changes go here, keyed on data.Version.
+-- Brings a saved profile up to date: the one-time changes first (keyed on their own markers, see
+-- ProfileMigration), then any field the template has and the save doesn't gets its default.
+-- Saved values always win over defaults, and owned items are never touched.
+local function migrate(data: any): (ProfileData, ProfileMigration.Report)
+	local report = ProfileMigration.Run(data)
 	TableUtil.Reconcile(data, DataService.Template)
-	data.Version = DataService.Template.Version
-	return data
+	-- Never lower it: a newer server may have saved this profile.
+	data.Version = math.max(tonumber(data.Version) or 1, DataService.Template.Version)
+	return data, report
 end
+DataService.Migrate = migrate
 
 local function openStore()
 	local ok, result = pcall(function()
@@ -256,6 +274,7 @@ function DataService.BuildSnapshot(profile: Profile)
 			NextStreak = nextStreak,
 			NextReward = Config.DailyRewards[math.min(nextStreak, #Config.DailyRewards)],
 			SecretFound = data.Daily.SecretDay >= today,
+			FirstWinReady = (data.Daily.FirstWinDay or 0) < today, -- today's first-win bonus is still to win
 		},
 		TutorialDone = data.Tutorial.Done,
 		Settings = data.Settings,
@@ -338,7 +357,12 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 
-	local data = if stored then migrate(stored) else newData()
+	local data, migration
+	if stored then
+		data, migration = migrate(stored)
+	else
+		data = newData()
+	end
 	data.Meta.LastJoin = os.time()
 	data.Meta.Sessions += 1
 
@@ -349,8 +373,25 @@ local function onPlayerAdded(player: Player)
 		CanSave = canSave,
 		IsVip = false,
 		Released = false,
+		Migration = migration,
 	}
 	profiles[player] = profile
+
+	if migration and migration.CoinsBefore and migration.CoinsBefore > 0 then
+		-- Once, the first time this profile loads on the low coin scale: say what happened to the coins.
+		local before, after = migration.CoinsBefore, migration.CoinsAfter
+		task.delay(6, function()
+			if player.Parent then
+				Notifier.Send(
+					player,
+					`Coins got smaller numbers, and prices too! Your {before} coins are now {after}.`,
+					"reward",
+					9
+				)
+			end
+		end)
+		Telemetry.PlayerEvent(player, "EconomyMigrated", before)
+	end
 
 	if not canSave then
 		task.delay(3, function()

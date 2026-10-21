@@ -1,5 +1,8 @@
 -- Applies equipped cosmetics to characters, grants unlocks, and handles the optional VIP pass.
 -- Cosmetics are purely visual (design doc §10 "Economy guardrails").
+-- Name tags show the level in its prestige color, which changes every 10 levels, so long-time
+-- players stand out in the lobby (owner: "Also we need cool payoffs for players that keep playing
+-- the game."; colors in Shared/Progression).
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
@@ -9,6 +12,7 @@ local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local Cosmetics = require(Shared.Cosmetics)
 local LevelCurve = require(Shared.Logic.LevelCurve)
+local Progression = require(Shared.Progression)
 local Remotes = require(Shared.Remotes)
 
 local DataService = require(script.Parent.DataService)
@@ -57,7 +61,14 @@ local function buildNameplate(player: Player, head: BasePart)
 	nameLabel.TextScaled = true
 	nameLabel.TextColor3 = Color3.new(1, 1, 1)
 	nameLabel.TextStrokeTransparency = 0.4
-	nameLabel.Text = `{player.DisplayName}  Lv {level}`
+	nameLabel.RichText = true
+	local text, gradient = Progression.NameTag(player.DisplayName, level)
+	nameLabel.Text = text
+	if gradient then
+		local tint = Instance.new("UIGradient")
+		tint.Color = gradient
+		tint.Parent = nameLabel
+	end
 	nameLabel.Parent = gui
 
 	local titleLabel = Instance.new("TextLabel")
@@ -142,11 +153,14 @@ local function onCharacterAdded(player: Player, character: Model)
 	end
 end
 
--- Grants default, level, stat and VIP cosmetics the player qualifies for.
-function CosmeticService.CheckUnlocks(player: Player, silent: boolean?)
+-- Grants default, level, stat and VIP cosmetics the player qualifies for, once each (owning an
+-- item is the record). Returns the ones it just unlocked (not the defaults); `silent` leaves the
+-- telling to the caller (ProgressionService celebrates level and milestone unlocks).
+function CosmeticService.CheckUnlocks(player: Player, silent: boolean?): { Cosmetics.Cosmetic }
+	local unlocked: { Cosmetics.Cosmetic } = {}
 	local profile = DataService.Get(player)
 	if not profile then
-		return
+		return unlocked
 	end
 	local data = profile.Data
 	local level = LevelCurve.FromTotalXP(data.XP)
@@ -162,6 +176,7 @@ function CosmeticService.CheckUnlocks(player: Player, silent: boolean?)
 		if qualifies then
 			data.Owned[item.Id] = true
 			if not item.Default then
+				table.insert(unlocked, item)
 				table.insert(unlockedNames, `{item.Icon} {item.Name}`)
 			end
 		end
@@ -170,6 +185,7 @@ function CosmeticService.CheckUnlocks(player: Player, silent: boolean?)
 		Notifier.Send(player, `Unlocked: {table.concat(unlockedNames, ", ")}! Equip it in the Shop.`, "reward", 6)
 	end
 	DataService.Changed(player)
+	return unlocked
 end
 
 local function effectFor(player: Player, slot: string, fallback: string): (string, { Color3 }?)
@@ -206,10 +222,25 @@ local function checkVip(player: Player)
 end
 
 function CosmeticService.Init()
-	DataService.ProfileLoaded:Connect(function(player: Player)
-		CosmeticService.CheckUnlocks(player, true)
+	DataService.ProfileLoaded:Connect(function(player: Player, profile)
+		local unlocked = CosmeticService.CheckUnlocks(player, true)
 		CosmeticService.Refresh(player)
 		task.spawn(checkVip, player)
+		-- A returning player whose level or career already earned rewards that are new to the game
+		-- (the Rewards Road's first day, or new items added later): tell them where to find them.
+		if #unlocked > 0 and profile and profile.Data.Meta.Sessions > 1 then
+			local count = #unlocked
+			task.delay(10, function()
+				if player.Parent then
+					Notifier.Send(
+						player,
+						`You've unlocked {count} new reward{if count == 1 then "" else "s"}! Tap your level to see the Rewards Road.`,
+						"reward",
+						8
+					)
+				end
+			end)
+		end
 	end)
 
 	local function track(player: Player)

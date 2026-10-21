@@ -1,9 +1,12 @@
 -- Quests and daily reward window (design doc §9): progress toward goals, exact rewards, and a daily
--- gift that's a welcome bonus rather than a requirement.
+-- gift that's a welcome bonus rather than a requirement. The first win of each day pays a bonus,
+-- shown with the daily quests (owner: "Also we need cool payoffs for players that keep playing the
+-- game.").
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
+local Config = require(Shared.Config)
 local QuestDefinitions = require(Shared.QuestDefinitions)
 local Remotes = require(Shared.Remotes)
 
@@ -141,6 +144,17 @@ local function render()
 
 	local order = 10
 	header(order, "📅 Daily Quests")
+	local firstWin = Config.Rewards.FirstWin
+	if firstWin and daily.FirstWinReady ~= nil then
+		order += 1
+		local done = not daily.FirstWinReady
+		questRow(order, {
+			Text = "First win of the day: bonus!",
+			Target = 1,
+			RewardCoins = firstWin.Coins,
+			RewardXP = firstWin.XP,
+		}, { Progress = if done then 1 else 0, Done = done })
+	end
 	for _, quest in profile.Quests.Daily do
 		local def = QuestDefinitions.ById[quest.Id]
 		if def then

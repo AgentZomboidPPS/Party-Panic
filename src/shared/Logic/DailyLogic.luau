@@ -1,5 +1,5 @@
 --!strict
--- Daily reward streaks and day/week numbering.
+-- Daily reward streaks, the first win of the day, and day/week numbering.
 -- Leaf module: no requires, no Roblox APIs.
 
 local DailyLogic = {}
@@ -7,6 +7,7 @@ local DailyLogic = {}
 export type DailyState = {
 	LastClaimDay: number,
 	Streak: number,
+	FirstWinDay: number?,
 }
 
 local SECONDS_PER_DAY = 86400
@@ -44,6 +45,16 @@ function DailyLogic.Claim(state: DailyState, today: number, rewardTable: { numbe
 	state.LastClaimDay = today
 	state.Streak = streak
 	return true, streak, coins
+end
+
+-- The first win of the day pays a bonus (RewardLogic). True for the first win today, which marks
+-- the day so a second win the same day doesn't pay it again.
+function DailyLogic.ClaimFirstWin(state: DailyState, today: number): boolean
+	if (state.FirstWinDay or 0) >= today then
+		return false
+	end
+	state.FirstWinDay = today
+	return true
 end
 
 return DailyLogic
