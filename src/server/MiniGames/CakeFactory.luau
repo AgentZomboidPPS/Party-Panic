@@ -453,7 +453,7 @@ function CakeFactory:_buildHall(origin: Vector3, lineCount: number)
 	Build.Part({
 		Name = "WallBase",
 		Size = Vector3.new(floorWidth + 2, 2.4, 3.6),
-		CFrame = CFrame.new(floorCenter.X, origin.Y + 1.25, wallZ - 0.3),
+		CFrame = CFrame.new(floorCenter.X, origin.Y + 1.45, wallZ - 0.3),
 		Color = rgb(255, 120, 150),
 		Material = Enum.Material.SmoothPlastic,
 		Parent = ctx.Arena,
@@ -542,7 +542,7 @@ function CakeFactory:_buildHall(origin: Vector3, lineCount: number)
 				Build.Part({
 					Name = "Lollipop",
 					Shape = Enum.PartType.Cylinder,
-					Size = Vector3.new(1.2 + ring * 0.12, size, size),
+					Size = Vector3.new(1.2 + ring * 0.3, size, size),
 					CFrame = facing,
 					Color = if ring % 2 == 1 then color else rgb(255, 250, 245),
 					Material = Enum.Material.SmoothPlastic,
@@ -603,7 +603,7 @@ function CakeFactory:_buildLine(line: Line)
 	Build.Decor({
 		Name = "Mat",
 		Size = Vector3.new(CakeFactory.BELT_LENGTH + 10, 0.2, 7),
-		CFrame = CFrame.new(self:World(line, CakeFactory.BELT_LENGTH / 2, FLOOR_Y + 0.13, STAND_Z)),
+		CFrame = CFrame.new(self:World(line, CakeFactory.BELT_LENGTH / 2, FLOOR_Y + 0.2, STAND_Z)),
 		Color = color:Lerp(Color3.new(1, 1, 1), 0.5),
 		Parent = folder,
 	})
