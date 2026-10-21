@@ -11,6 +11,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 
+local Sounds = require(ReplicatedStorage.Shared.Sounds)
 local Teams = require(ReplicatedStorage.Shared.Teams)
 
 local State = require(script.Parent.Parent.State)
@@ -86,17 +87,27 @@ local function springBack(from: number, t: number, duration: number): number
 	return from * math.exp(-4 * alpha) * math.cos(alpha * 7)
 end
 
-local function playSound(api, id: string, speed: number, volume: number)
+-- One of the shared sound effects at a pitch of our own (the pump's whoosh rises as the balloon
+-- fills). Without the uploaded effects sprite it falls back to the plain effect.
+local function playSound(api, name: string, speed: number, volume: number)
+	local sprite = Sounds.Sprite
+	local region = sprite and sprite.Regions[name]
+	if not sprite or not region then
+		api:Sound(name)
+		return
+	end
 	local sound = Instance.new("Sound")
-	sound.SoundId = id
+	sound.SoundId = sprite.Id
+	sound.PlaybackRegionsEnabled = true
+	sound.PlaybackRegion = NumberRange.new(region.Start, region.Start + region.Length)
 	sound.PlaybackSpeed = speed
 	sound.Volume = volume
 	sound.Parent = SoundService
 	api:Track(sound)
-	sound.Ended:Once(function()
+	sound:Play()
+	task.delay(region.Length / speed + 0.3, function()
 		sound:Destroy()
 	end)
-	sound:Play()
 end
 
 function PumpAndPop.Start(api)
@@ -469,9 +480,9 @@ function PumpAndPop.Start(api)
 		local held = (os.clock() - downClock) / fill
 		playSound(
 			api,
-			"rbxasset://sounds/swoosh.wav",
-			(if held > 1 then 0.55 else 0.8) + 0.5 * (if station then station.Shown else 0),
-			if held >= sweet then 0.7 else 0.4
+			"ReturnToLobby",
+			(if held > 1 then 0.8 else 1.3) + 0.7 * (if station then station.Shown else 0),
+			if held >= sweet then 0.6 else 0.35
 		)
 	end
 	if pump then
@@ -501,7 +512,7 @@ function PumpAndPop.Start(api)
 		if station and type(air) == "number" and air > 0 then
 			station.PuffSpeed += 2.2 * math.clamp(air, 0, 1)
 			if station.Team == myTeam and station.Shown > 0.75 and rng:NextNumber() < 0.35 then
-				api:Sound("Boing")
+				playSound(api, "Boing", 1.7 + rng:NextNumber(0, 0.3), 0.4) -- the rubber squeaks
 			end
 		end
 		if userId == me and type(kind) == "string" then
@@ -532,8 +543,8 @@ function PumpAndPop.Start(api)
 			api:Effect("Fireworks", center + Vector3.new(0, 4, 0), { station.Color, Theme.Colors.Yellow })
 			api:Sound("Victory")
 		end
-		api:Sound("Hit")
-		playSound(api, "rbxasset://sounds/swoosh.wav", 0.35, 1)
+		playSound(api, "Hit", 0.75, 1)
+		playSound(api, "Boing", 0.6, 0.7)
 		-- Shreds of rubber fly everywhere.
 		local shreds = if effects then 16 else 5
 		for _ = 1, shreds do

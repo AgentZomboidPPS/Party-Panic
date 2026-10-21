@@ -36,18 +36,17 @@ PumpAndPop.STUCK = 1.6 -- a plunger held down this long slips back up (the air i
 PumpAndPop.PUMPS_PER_PLAYER = 24 -- full pumps per team member to pop the balloon
 
 -- Balloon size (its scale; 1 = 15 studs tall) from empty to bursting. Clients use these too.
-PumpAndPop.EMPTY_SCALE = 0.38
+PumpAndPop.EMPTY_SCALE = 0.45
 PumpAndPop.FULL_SCALE = 1.12
 
 -- A shape for every team, so a team never reads by color alone.
 PumpAndPop.Shapes = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
 
-local FOCUS = 24 -- the stations face a point this far in front of the arena's center
-local ARC_RADIUS = 38 -- ... from this far away
+local ARC_RADIUS = 38 -- the stations face a point this far in front of them
 local STATION_GAP = 20 -- between neighboring stations (the biggest balloon is ~14 wide)
-local PAD_RADIUS = 9.6
+local PAD_RADIUS = 9.4
 local PLUNGER_DISTANCE = 7.5 -- tank center to each pump (the pump's hose is made for this)
-local STAND_DISTANCE = 9.2 -- tank center to where the player stands
+local STAND_DISTANCE = 9.1 -- tank center to where the player stands
 local PLUNGER_SPREAD = math.rad(30) -- between neighboring pumps around the tank
 local TANK_TOP = 4.6 -- where the balloon's knot sits on the tank
 local REACH = 7 -- how far from their spot a player may be and still pump
@@ -83,6 +82,16 @@ end
 
 local function upright(position: Vector3): CFrame
 	return CFrame.new(position) * CFrame.Angles(0, 0, math.rad(90))
+end
+
+-- Slides a prop sideways so its piece `name` stands right over `spot` (a prop's pivot is the middle
+-- of its whole footprint: the pump's hose and the tank's valve wheel pull it off the barrel/body).
+local function centerOn(model: Model, name: string, spot: Vector3)
+	local piece = model:FindFirstChild(name, true) :: BasePart?
+	if piece then
+		local offset = spot - piece.Position
+		model:PivotTo(model:GetPivot() + Vector3.new(offset.X, 0, offset.Z))
+	end
 end
 
 -- How much air a press held for `held` seconds is worth, with `leeway` seconds of slack on both
@@ -125,13 +134,25 @@ function PumpAndPop:Prepare()
 	end
 	local teams = ctx:AssignTeams(names)
 
+	-- The stations sit on an arc facing a point in front of them, placed so the row is centered on
+	-- the arena: neighbors see each other's balloons, and everyone faces the same way.
+	local step = STATION_GAP / ARC_RADIUS
+	local depth = 0
+	for index = 1, #names do
+		depth += math.cos((index - (#names + 1) / 2) * step) * ARC_RADIUS / #names
+	end
+	local focus = origin + Vector3.new(0, 0, depth)
+	local span = math.sin(((#names - 1) / 2) * step) * ARC_RADIUS -- the outer stations' distance from the middle
+	local stageRadius = math.sqrt(span * span + 16) + PAD_RADIUS + 6
+
 	-- A sunny fairground: meadow, a round stage and bunches of party balloons around the back.
 	Scenery.Meadow(ctx, origin, 300)
+	local stageCenter = origin + Vector3.new(0, 0, 3)
 	Build.Part({
 		Name = "Stage",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.4, 80, 80),
-		CFrame = upright(origin + Vector3.new(0, 0.1, 0)),
+		Size = Vector3.new(0.75, stageRadius * 2, stageRadius * 2),
+		CFrame = upright(stageCenter + Vector3.new(0, 0.075, 0)),
 		Color = rgb(250, 240, 222),
 		Material = Enum.Material.SmoothPlastic,
 		Parent = ctx.Arena,
@@ -139,14 +160,12 @@ function PumpAndPop:Prepare()
 	Build.Decor({
 		Name = "StageTrim",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.3, 82, 82),
-		CFrame = upright(origin + Vector3.new(0, 0.05, 0)),
+		Size = Vector3.new(0.75, stageRadius * 2 + 2, stageRadius * 2 + 2),
+		CFrame = upright(stageCenter + Vector3.new(0, -0.125, 0)),
 		Color = rgb(255, 196, 80),
 		Parent = ctx.Arena,
 	})
 
-	local focus = origin + Vector3.new(0, 0, FOCUS)
-	local step = STATION_GAP / ARC_RADIUS
 	local layout = {}
 	local spotOf = {} :: { [Player]: CFrame }
 	for index, team in names do
@@ -156,12 +175,14 @@ function PumpAndPop:Prepare()
 		local cframe = CFrame.lookAt(center, center + forward) -- -Z (the props' fronts) faces the players
 		local color = Teams.Colors[team]
 		local members = teams[team] or {}
+		-- Every other station stands a little higher, so neighbors' rims never share a plane.
+		local lift = (index % 2) * 0.45
 
 		Build.Part({
 			Name = "Pad_" .. team,
 			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.4, PAD_RADIUS * 2, PAD_RADIUS * 2),
-			CFrame = upright(center + Vector3.new(0, 0.25, 0)),
+			Size = Vector3.new(0.6, PAD_RADIUS * 2, PAD_RADIUS * 2),
+			CFrame = upright(center + Vector3.new(0, 0.55 + lift, 0)),
 			Color = color:Lerp(Color3.new(1, 1, 1), 0.55),
 			Material = Enum.Material.SmoothPlastic,
 			Parent = ctx.Arena,
@@ -169,13 +190,14 @@ function PumpAndPop:Prepare()
 		Build.Decor({
 			Name = "PadRim_" .. team,
 			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.36, PAD_RADIUS * 2 + 0.7, PAD_RADIUS * 2 + 0.7),
-			CFrame = upright(center + Vector3.new(0, 0.2, 0)),
+			Size = Vector3.new(0.6, PAD_RADIUS * 2 + 0.7, PAD_RADIUS * 2 + 0.7),
+			CFrame = upright(center + Vector3.new(0, 0.35 + lift, 0)),
 			Color = color,
 			Parent = ctx.Arena,
 		})
-		local floor = cframe + Vector3.new(0, 0.45, 0)
+		local floor = cframe + Vector3.new(0, 0.85 + lift, 0)
 		local tank = MeshLibrary.Get("AirTank", { CFrame = floor, Parent = ctx.Arena })
+		centerOn(tank, "Tank", floor.Position)
 		tank.Name = "Tank_" .. team
 		local balloon = MeshLibrary.Get("PumpBalloon", {
 			Scale = PumpAndPop.EMPTY_SCALE,
@@ -184,6 +206,7 @@ function PumpAndPop:Prepare()
 			Parent = ctx.Arena,
 		})
 		balloon.Name = "Balloon_" .. team
+		centerOn(balloon, "Skin", floor.Position)
 		for _, part in balloon:GetDescendants() do
 			if part:IsA("BasePart") then
 				part.CanCollide = false
@@ -217,6 +240,7 @@ function PumpAndPop:Prepare()
 				CFrame = CFrame.lookAt(plungerAt, Vector3.new(center.X, plungerAt.Y, center.Z)),
 				Parent = ctx.Arena,
 			})
+			centerOn(plunger, "Barrel", plungerAt)
 			plunger.Name = "Plunger_" .. player.UserId
 			plunger:SetAttribute("Team", team)
 			local stand = floor.Position + direction * STAND_DISTANCE
@@ -258,11 +282,11 @@ function PumpAndPop:Prepare()
 	local decor = Random.new()
 	for index = 0, 8 do
 		local angle = (index - 4) * 0.21
-		local spot = focus + Vector3.new(math.sin(angle) * 64, 0, -math.cos(angle) * 64)
+		local spot = focus + Vector3.new(math.sin(angle) * 70, 0, -math.cos(angle) * 70)
 		for bunch = 1, 3 do
 			local team = names[decor:NextInteger(1, #names)]
 			MeshLibrary.Get("Balloon", {
-				Scale = decor:NextNumber(1.3, 1.8),
+				Scale = decor:NextNumber(0.9, 1.25),
 				Colors = { Balloon = Teams.Colors[team] },
 				CFrame = CFrame.new(spot + Vector3.new(decor:NextNumber(-2, 2), 0, decor:NextNumber(-2, 2)))
 					* CFrame.Angles(0, decor:NextNumber(0, math.pi * 2), (bunch - 2) * 0.12),
