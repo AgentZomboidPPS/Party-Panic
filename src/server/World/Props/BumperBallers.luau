@@ -173,7 +173,7 @@ return function(h)
 		-- The beach bar on the party islet: deck on stilts, bamboo counter, thatched roof, bottles.
 		BumperTikiBar = {
 			Height = 13.9,
-			AssetId = 71603764276721,
+			AssetId = 114373899397541,
 			Palette = {
 				Wood = h.rgb(168, 108, 62),
 				Bamboo = h.rgb(222, 196, 112),
@@ -239,7 +239,7 @@ return function(h)
 		-- Big jungle islands on the horizon (beach at y = 6 unscaled).
 		BumperFarIslandA = {
 			Height = 95.18,
-			AssetId = 91040437822529,
+			AssetId = 82796407079713,
 			Shadow = false,
 			Palette = { Sand = h.rgb(244, 226, 168), Jungle = h.rgb(62, 158, 78), Rock = h.rgb(132, 150, 112) },
 			Materials = { Rock = Enum.Material.Slate },
@@ -250,7 +250,7 @@ return function(h)
 		},
 		BumperFarIslandB = {
 			Height = 81.96,
-			AssetId = 122168403471281,
+			AssetId = 124367681049793,
 			Shadow = false,
 			Palette = { Sand = h.rgb(244, 226, 168), Jungle = h.rgb(74, 166, 86), Rock = h.rgb(132, 150, 112) },
 			Materials = { Rock = Enum.Material.Slate },
