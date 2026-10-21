@@ -33,9 +33,9 @@ function Brain.Step(bot, ctx, mode, _dt)
 	memory.Planned = curve.Index
 	local skill = bot.Skill
 	local roll = bot.Rng:NextNumber()
-	local miss = 0.1 * (1 - skill) + 0.02
-	local wrong = miss + 0.1 * (1 - skill) + 0.02
-	local late = wrong + 0.08 * (1 - skill)
+	local miss = 0.16 * (1 - skill) + 0.04
+	local wrong = miss + 0.14 * (1 - skill) + 0.03
+	local late = wrong + 0.12 * (1 - skill) + 0.02
 	if roll < miss then
 		return -- didn't see it coming
 	end
@@ -51,7 +51,7 @@ function Brain.Step(bot, ctx, mode, _dt)
 		ctx:BotAction(bot, "Lean", dir)
 	end)
 	-- A wrong lean is sometimes corrected in time.
-	if dir ~= curve.Dir and bot:Chance(skill * 0.6) then
+	if dir ~= curve.Dir and bot:Chance(skill * 0.4) then
 		ctx:Delay(math.max(0, delay + 0.25 + bot.Rng:NextNumber(0, 0.25)), function()
 			ctx:BotAction(bot, "Lean", curve.Dir)
 		end)

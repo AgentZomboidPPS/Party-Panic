@@ -234,6 +234,20 @@ function BobsledRun:_buildArena()
 		CFrame = self:_upright(-6) * CFrame.new(0, -8, 0),
 		Parent = arena,
 	})
+	-- START on the banner's back, the side the crews (and their cameras) look at from the sled.
+	local sign = Build.Decor({
+		Name = "StartSign",
+		Size = Vector3.new(30, 3.4, 0.1),
+		CFrame = self:_upright(-6) * CFrame.new(0, 11.7, 0.32),
+		Transparency = 1,
+		Parent = arena,
+	})
+	Build.SurfaceText(sign, Enum.NormalId.Back, "🛷  START  🛷", {
+		PixelsPerStud = 14,
+		TextColor3 = rgb(255, 255, 255),
+		TextStrokeTransparency = 0.5,
+		Font = Enum.Font.FredokaOne,
+	})
 	local floorWidth = BobsledCourse.FLOOR_HALF * 2 - 4
 	Build.Decor({
 		Name = "StartLine",
