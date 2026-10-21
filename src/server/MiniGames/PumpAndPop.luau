@@ -12,7 +12,8 @@
 -- air it pumped. Air needed grows with team size, so uneven teams are fair. The team's air is
 -- shared ("Air_<Team>", 0..1) and each client grows, wobbles and pops the balloons from it; the
 -- "Push" and "Pump" events animate everyone's plungers, bots' included. First team to pop wins;
--- when time runs out the fullest balloon wins (team scores are the balloons' percentages).
+-- when time runs out the fullest balloon wins and bursts anyway (team scores are the balloons'
+-- percentages; the results rank the exact fill, so 99% vs 99% still has a winner).
 --
 -- Bots press Down and Up through ctx:BotAction with skill-based timing (Bots/PumpAndPop.luau);
 -- there are no hazards here, so nothing needs a separate server check for them.
@@ -33,7 +34,7 @@ PumpAndPop.FILL_TIME = 0.6 -- holding this long fills the meter to the top
 PumpAndPop.SWEET = 0.72 -- from this much of the meter to the top is a full pump
 PumpAndPop.SPRING = 0.22 -- the plunger springs back up for this long after a pump
 PumpAndPop.STUCK = 1.6 -- a plunger held down this long slips back up (the air is lost)
-PumpAndPop.PUMPS_PER_PLAYER = 24 -- full pumps per team member to pop the balloon
+PumpAndPop.PUMPS_PER_PLAYER = 22 -- full pumps per team member to pop the balloon
 
 -- Balloon size (its scale; 1 = 15 studs tall) from empty to bursting. Clients use these too.
 PumpAndPop.EMPTY_SCALE = 0.45
@@ -58,6 +59,7 @@ type Pumper = {
 	Down: boolean,
 	DownAt: number,
 	UpAt: number,
+	LastDownAt: number,
 	Pumps: number,
 	Perfect: number,
 	Air: number,
@@ -129,7 +131,8 @@ function PumpAndPop:Prepare()
 
 	local players = ctx:GetPlayers()
 	local names = {}
-	for index = 1, Teams.CountFor(#players, 3) do
+	-- (A solo test gets a single station instead of an empty rival that can never fill.)
+	for index = 1, math.min(Teams.CountFor(#players, 3), math.max(#players, 1)) do
 		table.insert(names, Teams.Order[index])
 	end
 	local teams = ctx:AssignTeams(names)
@@ -253,6 +256,7 @@ function PumpAndPop:Prepare()
 				Down = false,
 				DownAt = 0,
 				UpAt = -math.huge,
+				LastDownAt = -math.huge,
 				Pumps = 0,
 				Perfect = 0,
 				Air = 0,
@@ -315,9 +319,49 @@ function PumpAndPop:Prepare()
 		return if pumper then pumper.Spot else nil
 	end
 	for _, player in players do
-		ctx:SetScoreText(player, "0 pumps")
+		ctx:SetScoreText(player, "0 perfect")
 	end
 	ctx:SetStatus("Hold PUMP, let go in the green!")
+
+	-- Leaving is handled from now on (the rules card and countdown included); Start also catches
+	-- anyone who left or failed to spawn before this was set.
+	ctx.Hooks.PlayerLeft = function(player)
+		self:_leave(player)
+	end
+end
+
+-- A team that loses members needs less air in all (the same per player as every other team); a
+-- team with nobody left drops out of the scores and its pill says so.
+function PumpAndPop:_leave(player: Player)
+	local ctx = self.context
+	local pumper = self.pumpers[player]
+	self.pumpers[player] = nil
+	if pumper and pumper.Down then
+		ctx:Fire(nil, "Pump", player.UserId, 0, "none") -- their plunger springs back up everywhere
+	end
+	local station = pumper and self.stations[pumper.Team]
+	if not station then
+		return
+	end
+	local index = table.find(station.Members, player)
+	if index then
+		table.remove(station.Members, index)
+	end
+	if #station.Members == 0 then
+		ctx:SetShared("Gone_" .. station.Team, true)
+		if self.winner ~= station.Team then
+			ctx:AddTeamScore(station.Team, -station.Shown)
+			station.Shown = 0
+			station.Air = 0
+			ctx:SetShared("Air_" .. station.Team, 0)
+		end
+		return
+	end
+	-- The balloon stays as full as it was; what's left to pump shrinks with the team.
+	local need = PumpAndPop.PUMPS_PER_PLAYER * #station.Members
+	station.Air *= need / station.Need
+	station.Need = need
+	self:_publish(station)
 end
 
 -- The team's balloon as a whole percentage (what the team scores show).
@@ -350,20 +394,33 @@ end
 
 function PumpAndPop:_down(player: Player)
 	local pumper = self.pumpers[player]
-	if not pumper or pumper.Down or self.winner then
+	if not pumper or self.winner then
 		return
 	end
 	local ctx = self.context
 	local now = ctx:Now()
-	if now < pumper.UpAt + PumpAndPop.SPRING - leewayFor(player) then
-		return -- still springing back up
+	if pumper.Down and now - pumper.DownAt > PumpAndPop.STUCK - 0.15 then
+		self:_up(player, true) -- a re-press right after a stuck hold: slip that one now
+	end
+	if pumper.Down then
+		return
 	end
 	local _, _, root = ctx:GetCharacter(player)
 	if not root or (flat(root.Position) - flat(pumper.Spot.Position)).Magnitude > REACH then
 		return
 	end
+	-- A press that arrives while the plunger is still springing back (network jitter) counts, but
+	-- its hold starts once the plunger is up; and presses are never closer than a full cycle,
+	-- whatever the ping, so an early Down gains nothing.
+	local leeway = leewayFor(player)
+	local start = math.max(
+		now,
+		pumper.UpAt + PumpAndPop.SPRING - leeway,
+		pumper.LastDownAt + PumpAndPop.FILL_TIME * PumpAndPop.SWEET + PumpAndPop.SPRING - 0.12
+	)
 	pumper.Down = true
-	pumper.DownAt = now
+	pumper.DownAt = start
+	pumper.LastDownAt = start
 	ctx:Fire(nil, "Push", player.UserId)
 end
 
@@ -378,12 +435,12 @@ function PumpAndPop:_up(player: Player, slipped: boolean?)
 	pumper.UpAt = now
 	local station = self.stations[pumper.Team]
 	if self.winner or not station then
-		ctx:Fire(nil, "Pump", player.UserId, 0, "over")
+		ctx:Fire(nil, "Pump", player.UserId, 0, "none") -- the plunger springs back, no verdict
 		return
 	end
 	local air, kind = 0, "over"
 	if not slipped then
-		air, kind = PumpAndPop.Judge(now - pumper.DownAt, leewayFor(player))
+		air, kind = PumpAndPop.Judge(math.max(now - pumper.DownAt, 0), leewayFor(player))
 	end
 	pumper.Pumps += 1
 	pumper.Air += air
@@ -392,7 +449,7 @@ function PumpAndPop:_up(player: Player, slipped: boolean?)
 	end
 	station.Air += air
 	ctx:AddScore(player, math.floor(air * 10 + 0.5))
-	ctx:SetScoreText(player, `{pumper.Pumps} pumps`)
+	ctx:SetScoreText(player, `{pumper.Perfect} perfect`)
 	ctx:Fire(nil, "Pump", player.UserId, air, kind)
 	if station.Air >= station.Need then
 		self:_pop(station)
@@ -403,6 +460,7 @@ end
 
 function PumpAndPop:Start()
 	local ctx = self.context
+	self.started = true
 	-- Everyone stays at their pump (jumping still works, for joy).
 	for _, player in ctx:GetPlayers() do
 		ctx:SetWalkSpeed(player, 0)
@@ -418,31 +476,15 @@ function PumpAndPop:Start()
 		self:_up(player)
 	end, { Interval = 0.08 })
 
-	-- A team that loses members needs less air in all (the same per player as every other team);
-	-- a team with nobody left drops out of the scores.
-	ctx.Hooks.PlayerLeft = function(player)
-		local pumper = self.pumpers[player]
-		self.pumpers[player] = nil
-		local station = pumper and self.stations[pumper.Team]
-		if not station then
-			return
+	-- Anyone who left (or never spawned) before the hook was set.
+	local gone = {}
+	for player in self.pumpers do
+		if not ctx:State(player) then
+			table.insert(gone, player)
 		end
-		local index = table.find(station.Members, player)
-		if index then
-			table.remove(station.Members, index)
-		end
-		if #station.Members == 0 then
-			ctx:AddTeamScore(station.Team, -station.Shown)
-			station.Shown = 0
-			station.Air = 0
-			ctx:SetShared("Air_" .. station.Team, 0)
-			return
-		end
-		-- The balloon stays as full as it was; what's left to pump shrinks with the team.
-		local need = PumpAndPop.PUMPS_PER_PLAYER * #station.Members
-		station.Air *= need / station.Need
-		station.Need = need
-		self:_publish(station)
+	end
+	for _, player in gone do
+		self:_leave(player)
 	end
 
 	-- Plungers held down too long slip back up, and the status line shows who's ahead.
@@ -472,16 +514,63 @@ function PumpAndPop:Start()
 	end)
 end
 
--- Team results (best balloon first); each player's line shows their own pumps.
+-- How full a team's balloon is, exactly (1 for the team that popped it).
+function PumpAndPop:_fill(team: string): number
+	local station = self.stations[team]
+	if not station then
+		return 0
+	end
+	return if self.winner == team then 1 else math.min(station.Air / station.Need, 0.999)
+end
+
+-- The fullest balloon among teams that still have players, or nil on an exact tie (or no air).
+function PumpAndPop:_leader(): string?
+	if self.winner then
+		return self.winner
+	end
+	local best, bestFill, tie = nil, 0, false
+	for _, team in self.order do
+		local fill = self:_fill(team)
+		if #self.stations[team].Members == 0 then
+			continue
+		elseif fill > bestFill then
+			best, bestFill, tie = team, fill, false
+		elseif fill == bestFill and fill > 0 then
+			tie = true
+		end
+	end
+	return if tie then nil else best
+end
+
+-- Time's up with nobody popped: the fullest balloon bursts anyway, so every round ends with a bang.
+function PumpAndPop:Stop(reason: string?)
+	if reason ~= "TimeUp" or self.winner or not self.started then
+		return
+	end
+	local ctx = self.context
+	local team = self:_leader()
+	if team then
+		ctx:SetShared("Popped", team)
+		ctx:Fire(nil, "Pop", team)
+		ctx:Announce(`{PumpAndPop.Shapes[team]} {string.upper(team)} WINS!`, "success", 2.5)
+	end
+end
+
+-- Team results (best balloon first, by exact fill); each player's line shows their own pumps.
 function PumpAndPop:GetResults()
 	local results = self.context:TeamResults()
 	for _, entry in results.Entries do
+		local station = entry.Team and self.stations[entry.Team]
+		if station then
+			entry.Rank = self:_fill(entry.Team) * 100
+		end
 		local pumper = self.pumpers[entry.Player]
 		if pumper then
 			entry.ScoreText =
-				`{entry.Team} {self.stations[entry.Team] and self:_percent(self.stations[entry.Team]) or 0}% • {pumper.Pumps} pumps, {pumper.Perfect} perfect`
+				`{entry.Team} {station and self:_percent(station) or 0}% • {pumper.Pumps} pumps, {pumper.Perfect} perfect`
 		end
 	end
+	results.WinningTeam = self:_leader()
 	return results
 end
 

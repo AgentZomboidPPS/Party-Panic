@@ -11,6 +11,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 
+local GameState = require(ReplicatedStorage.Shared.GameState)
 local Sounds = require(ReplicatedStorage.Shared.Sounds)
 local Teams = require(ReplicatedStorage.Shared.Teams)
 
@@ -268,11 +269,13 @@ function PumpAndPop.Start(api)
 	end
 	refreshTags()
 
-	-- HUD: one pill per team (shape, name, how full), yours outlined.
+	-- HUD: one pill per team (shape, name, how full), yours outlined. With 3-4 teams the pills are
+	-- compact (shape and %; the name floats over each station) so they clear the Standings panel.
 	local hud = api:TopHud()
 	local y = api:HudY()
 	local count = #order
-	local pillWidth = math.min(150, math.floor(600 / count) - 10)
+	local compact = count >= 3
+	local pillWidth = if compact then math.min(150, math.floor(470 / count) - 10) else 150
 	for index, team in order do
 		local station = stations[team]
 		local mine = team == myTeam
@@ -291,11 +294,13 @@ function PumpAndPop.Start(api)
 		})
 		UIKit.Label({
 			Name = "Name",
-			Text = `{station.Shape} {string.upper(team)}`,
+			Text = if compact then station.Shape else `{station.Shape} {string.upper(team)}`,
 			Font = Theme.Fonts.Display,
 			TextSize = 20,
 			TextColor3 = station.Color,
 			TextXAlignment = Enum.TextXAlignment.Left,
+			TextWrapped = false,
+			TextTruncate = Enum.TextTruncate.AtEnd,
 			Position = UDim2.fromOffset(10, 3),
 			Size = UDim2.new(1, -60, 0, 26),
 			Parent = pill,
@@ -344,15 +349,35 @@ function PumpAndPop.Start(api)
 		end
 		station.Pill = pill
 	end
-	if myTeam then
-		api:Hint("Hold PUMP, let go in the green ✓", y + 74)
-		task.delay(8, function()
-			api:Hint("")
-		end)
-	end
-
-	-- PUMP: the button, with a meter beside it showing how long you've held.
+	-- PUMP: the button, with a meter beside it showing how long you've held. It wakes up at GO (the
+	-- rules card and countdown come first), and the hint shows from then on for 8 seconds.
 	local pump = if myTeam then api:Button({ Text = "PUMP", Key = Enum.KeyCode.E, Color = myColor }) else nil
+	local live = false
+	local hintUntil = math.huge
+	local function goLive(now: number)
+		if live then
+			if now > hintUntil then
+				hintUntil = math.huge
+				api:Hint("")
+			end
+			return
+		elseif GameState.Get("Phase") ~= "InRound" or api:Shared("Popped") then
+			return
+		end
+		live = true
+		if pump then
+			pump:SetEnabled(true)
+			api:Hint("Hold PUMP, let go in the green ✓", y + 74)
+			local hint = api:TopHud():FindFirstChild("Hint") :: TextLabel?
+			if hint then
+				hint.Size = UDim2.fromOffset(300, 64) -- narrow, so it clears the Standings panel on phones
+			end
+			hintUntil = now + 8
+		end
+	end
+	if pump then
+		pump:SetEnabled(false)
+	end
 	local meterFill: Frame? = nil
 	local meterMark: Frame? = nil
 	if pump then
@@ -416,7 +441,7 @@ function PumpAndPop.Start(api)
 	-- Words over your pump: the server's verdict on each press.
 	local streak = 0
 	local function feedback(kind: string)
-		if not feedbackAnchor then
+		if not feedbackAnchor or (kind ~= "perfect" and kind ~= "weak" and kind ~= "over") then
 			return
 		end
 		local text, color
@@ -564,7 +589,7 @@ function PumpAndPop.Start(api)
 		local pill = station.Pill
 		if pill then
 			local name = pill:FindFirstChild("Name") :: TextLabel?
-			if name then
+			if name and not compact then
 				name.Text = `{station.Shape} POP!`
 			end
 			UIKit.PopIn(pill, 0.3)
@@ -583,8 +608,10 @@ function PumpAndPop.Start(api)
 		local now = os.clock()
 		dt = math.min(dt, 0.1)
 
+		goLive(now)
+
 		-- Start a press once the plunger is back up (a press during the spring waits for it).
-		if wantDown and not holding and pump and pump:IsDown() and now >= upClock + spring + 0.03 then
+		if live and wantDown and not holding and pump and pump:IsDown() and now >= upClock + spring + 0.03 then
 			if not api:Shared("Popped") then
 				holding = true
 				downClock = now
@@ -652,9 +679,11 @@ function PumpAndPop.Start(api)
 					bar.Size = UDim2.fromScale(shown, 1)
 				end
 				local percent = pill:FindFirstChild("Percent") :: TextLabel?
+				local gone = api:Shared("Gone_" .. team) == true
 				if percent then
-					percent.Text = `{math.floor(math.clamp(target, 0, 1) * 100)}%`
+					percent.Text = if gone then "LEFT" else `{math.floor(math.clamp(target, 0, 1) * 100)}%`
 				end
+				pill.BackgroundTransparency = if gone then 0.6 else 0.15
 			end
 			if station.Needle then
 				local angle = math.rad(-120 + 240 * shown)
