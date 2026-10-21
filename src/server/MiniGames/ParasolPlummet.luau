@@ -181,7 +181,7 @@ function ParasolPlummet:_buildArena()
 			})
 		end
 	end
-	for _, spot in { { -70, 40, -160, 1.4 }, { 95, 52, -300, 1.9 }, { -230, -15, -360, 2.2 } } do
+	for _, spot in { { -45, -5, -170, 1.4 }, { 95, 52, -300, 1.9 }, { -230, -15, -360, 2.2 } } do
 		MeshLibrary.Get("ParasolPlummetBalloon", {
 			Scale = spot[4],
 			CFrame = CFrame.new(center + Vector3.new(spot[1], spot[2], spot[3])),
