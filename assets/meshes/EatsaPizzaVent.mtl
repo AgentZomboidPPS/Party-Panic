@@ -1,0 +1,29 @@
+newmtl Body
+Kd 0.918 0.737 0.439
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Feet
+Kd 0.275 0.235 0.353
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Fan
+Kd 1.000 0.353 0.353
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Grille
+Kd 0.549 0.565 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Slats
+Kd 0.957 0.753 0.361
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
