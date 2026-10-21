@@ -1,7 +1,7 @@
 # Handoff: Party Panic (for the Claude joining the project)
 
 Written for a second Claude that joins while the first one keeps working. Last updated: **2026-10-21 16:40 UTC
-(12:40 PM Eastern)**. Live: **version 26**. Session A keeps updating this file as its lanes land.
+(12:40 PM Eastern)**. Live: **version 27**. Session A keeps updating this file as its lanes land.
 
 **At a glance (12:40 PM ET):** all 11 precision games have fair hitboxes (live). Six Session A agents are still working
 (payoffs + low currency, sit-out toggle, lobby obby, Skee-Ball, Sinking Sands bots, Skate Escape start float); Session A
@@ -49,7 +49,7 @@ per-game music (section 2).
 | Skate Escape start float (owner: the character floats onto the bridge "on the countdown and go") | **fixed, live in version 26** (skaters are held on their boards on the start line until GO, then handed back to their device) | free again |
 | Lobby obby rebuild + scenery not climbable (agent; branch `lobby/obby`) | first WIP committed: a goo-pool course with checkpoints, foliage that never collides | `src/server/World/LobbyBuilder.luau` (buildParkour, scenery placement), `src/client/Controllers/MovementController.luau` |
 | Skee-Ball arcade in the lobby (agent; branch `lobby/skeeball`) | WIP: the shared ball path (roll, hop, flight, rings) is in; machine, props and UI in progress | a new arcade module + props, a one-line hook in LobbyBuilder, a new SkeeBallController |
-| "Sit out next round" toggle (agent; branch `feature/sitout`) | built ("a big switch right by the phase banner"), finishing tests | `src/server/Services/RoundManager.luau`, `VotingService.luau`, `src/client/Controllers/HudController.luau`, `VoteController.luau`, settings UI |
+| "Sit out next round" toggle | **done, live in version 27**: a PLAYING / SITTING OUT switch by the phase banner and in Settings (`SitOutService`, `Logic/Roster`, `PP_SitOut`); sitting-out players don't vote or play, and rounds pause if everyone sits out | free again |
 | Long-term payoffs + low currency (agent; branch `feature/payoffs`) | WIP: low coin scale, Rewards Road, career milestones, celebrations | `src/shared/Config.luau` (rewards), `Cosmetics.luau`, `QuestDefinitions.luau`, `src/shared/Logic/{RewardLogic,LevelCurve,DailyLogic,QuestLogic}.luau`, `src/server/Services/{DataService,Economy,RewardService,ShopService,CosmeticService,QuestService}.luau`, `CommerceConfig`, Shop/Quest/Results controllers, level-up UI |
 | Friends can't hear our music (section 6) | waiting for the friend's report from version 25 | `src/client/Controllers/AudioController.luau`, `AssetReportController.luau`, `src/server/Services/ClientReports.luau`, `src/shared/AudioAssets.luau`, `Sounds.luau` |
 | Publishing the place | Session A publishes after each merge | `tools/publish_place.py` |
