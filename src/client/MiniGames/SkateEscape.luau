@@ -195,7 +195,8 @@ function SkateEscape.Start(api)
 
 	local hud = api:TopHud()
 	local hudY = api:HudY()
-	local touch = api:IsTouch() -- the HUD is scaled down on phones: bigger dots keep the numbers readable
+	-- Phones draw the HUD at 75%: bigger dots, numbers and icons there keep them readable (11 pt+).
+	local touch = api:IsTouch()
 	local barWidth = 560
 	local bar = UIKit.Panel({
 		Name = "RaceBar",
@@ -224,19 +225,19 @@ function SkateEscape.Start(api)
 	local fireIcon = UIKit.Label({
 		Name = "FireIcon",
 		Text = "🔥",
-		TextSize = 20,
-		AnchorPoint = Vector2.new(0.5, 0.5),
+		TextSize = if touch then 24 else 20,
+		AnchorPoint = Vector2.new(1, 0.5), -- just behind the front, so it only covers a racer it's catching
 		Position = UDim2.fromScale(0, 0.5),
-		Size = UDim2.fromOffset(24, 24),
+		Size = if touch then UDim2.fromOffset(28, 28) else UDim2.fromOffset(24, 24),
 		Parent = track,
 	})
 	UIKit.Label({
 		Name = "Goal",
 		Text = "🏁",
-		TextSize = 22,
+		TextSize = if touch then 24 else 22,
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(1, 4, 0.5, 0),
-		Size = UDim2.fromOffset(26, 26),
+		Size = if touch then UDim2.fromOffset(28, 28) else UDim2.fromOffset(26, 26),
 		Parent = track,
 	})
 	local markers: { [string]: Frame } = {}
@@ -246,7 +247,7 @@ function SkateEscape.Start(api)
 			return existing
 		end
 		local mine = key == myKey
-		local size = if touch then (if mine then 34 else 26) else (if mine then 26 else 18)
+		local size = if touch then (if mine then 36 else 30) else (if mine then 26 else 18)
 		local dot = UIKit.new("Frame", {
 			Name = "Racer" .. key,
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -262,7 +263,7 @@ function SkateEscape.Start(api)
 		})
 		UIKit.Label({
 			Text = tostring(lane),
-			TextSize = if touch then (if mine then 22 else 18) else (if mine then 16 else 12),
+			TextSize = if touch then (if mine then 26 else 24) else (if mine then 16 else 12),
 			Font = Theme.Fonts.Bold,
 			TextColor3 = Color3.fromRGB(30, 24, 40),
 			Size = UDim2.fromScale(1, 1),
@@ -279,7 +280,7 @@ function SkateEscape.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 34,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, hudY + 38),
+		Position = UDim2.new(0.5, 0, 0, hudY + if touch then 44 else 38), -- (under the taller phone bar)
 		Size = UDim2.fromOffset(300, 40),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.15) },
@@ -291,14 +292,23 @@ function SkateEscape.Start(api)
 		TextSize = 40,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, hudY + 84),
-		Size = UDim2.fromOffset(560, 48),
+		Size = UDim2.fromOffset(660, 48), -- the bridge warning is one long line
+		TextWrapped = false,
 		Visible = false,
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.1) },
 	})
+	local function setCallout(text: string)
+		callout.Text = text
+		if touch then
+			-- Phones: only as wide as the words, so it stays clear of the move stick's corner.
+			local width = UIKit.TextWidth(text, 40, Theme.Fonts.Display) + 24
+			callout.Size = UDim2.fromOffset(math.ceil(width), 48)
+		end
+	end
 	local calloutUntil = 0
 	local function say(text: string, color: Color3, seconds: number)
-		callout.Text = text
+		setCallout(text)
 		callout.TextColor3 = color
 		callout.Visible = true
 		calloutUntil = os.clock() + seconds
@@ -806,7 +816,12 @@ function SkateEscape.Start(api)
 				if collapse and not me.Done then
 					if hintUntil == 0 then
 						hintUntil = os.clock() + 6
-						api:Hint("Mash PUSH • JUMP crates & gaps • ride ⚡ pads", hudY + 140)
+						api:Hint(
+							if touch
+								then "Mash PUSH • JUMP gaps • ride ⚡" -- (short: clear of the move stick)
+								else "Mash PUSH • JUMP crates & gaps • ride ⚡ pads",
+							hudY + 140
+						)
 					end
 					local event = SkateCourse.Step(me, obstacles, now, dt)
 					if event then
@@ -909,7 +924,10 @@ function SkateEscape.Start(api)
 				api:Sound("HazardWarning")
 			end
 			if danger then
-				callout.Text = "⚠ THE BRIDGE IS FALLING! PUSH! ⚠"
+				local warning = if touch then "⚠ FALLING! PUSH! ⚠" else "⚠ THE BRIDGE IS FALLING! PUSH! ⚠"
+				if callout.Text ~= warning then
+					setCallout(warning)
+				end
 				callout.TextColor3 = Color3.fromRGB(255, 110 + math.floor(math.sin(now * 12) * 60), 60)
 				callout.Visible = true
 				calloutUntil = os.clock() + 0.2
