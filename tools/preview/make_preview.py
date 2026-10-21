@@ -94,6 +94,10 @@ CAMERAS: dict[str, dict] = {
     "ArrowAmbush": {"yaw": 15, "pitch": 22, "distance": 40, "shift": [0, -3, 2], "raise": 12},
     # Behind the pack, down the bridge: crates ahead, the viaduct towers and the canyon either side.
     "SkateEscape": {"yaw": 12, "pitch": 15, "distance": 30, "shift": [0, 2, 0], "raise": 5, "sway": 8},
+    # Low through the gaps between the floors: rivals around a fresh hole in the packed snow, one
+    # dropping through, two more on the blue ice below (no dolly, so they stay in sight under it).
+    "Spleef": {"look_at": "Water", "yaw": 210, "pitch": 8, "distance": 49, "fov": 44, "shift": [2, 27.5, -1],
+               "raise": 7, "bob": 1, "dolly": 0},
     # Divers at the rim of the swirling sinkhole, treasure on the sand around it.
     "SinkingSands": {"yaw": 30, "pitch": 30, "distance": 36, "shift": [0, 2, 6]},
     # Low over the water: a shark's fin between the rafts, swimmers and coins on the decks, the
@@ -110,6 +114,7 @@ DUMP_AT: dict[str, float] = {
     "MechaMarathon": 12.5,  # a second after lift-off: the toys climbing away from their pads
     "PumpAndPop": 16,  # the balloons are big by now
     "SkateEscape": 10,
+    "Spleef": 12,  # holes dug in every floor, players on all three
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole
     "SharkBait": 13,  # a raft tipping, coins spilled in the water, the sharks closing in
 }

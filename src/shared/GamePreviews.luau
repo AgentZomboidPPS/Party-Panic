@@ -113,6 +113,13 @@ local previews: { [string]: Preview } = {
 		FrameSize = Vector2.new(168, 240),
 		Fps = 8,
 	},
+	Spleef = {
+		Image = "rbxassetid://107314965132268",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
 }
 
 return previews
