@@ -8,6 +8,11 @@
 -- anyone who sinks into the lava. Bots are the exception: the server moves them, and on the server
 -- the hexes never sink, so while they're down a bot that isn't on a hex of the called color is
 -- dropped into the lava here (Bots/HexMeltdown.luau is how they play).
+--
+-- Art pass ("make every arena look really cool"): a toy volcano crater. Carved basalt hex columns
+-- with candy-colored tiles, a crater wall with lava falls and rock spires, crust islands on the
+-- lava, and a game-show referee robot on a striped stage under a light-bulb call board, between
+-- two lava torches. The meshes are in World/Props/HexMeltdown.luau; the colliders are unchanged.
 
 local ArenaKit = require(script.Parent.Kit.ArenaKit)
 local MiniGame = require(script.Parent.Kit.MiniGame)
