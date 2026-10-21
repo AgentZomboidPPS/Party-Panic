@@ -135,7 +135,7 @@ local route: { any } = {
 	disc("Pillar3", 2, 1, 105.3, 17, 15.4, 5.5),
 	disc("Checkpoint2", 3, 2, 74.2, 17, 19, 7.5),
 	-- 3 BALANCE: a beam off the pad, a hop, a jump up, a jump onto a narrow beam and off it.
-	beam("Beam1", 2, { 66.2, 13.6 }, { 38.2, 12 }, 19, 1.8),
+	beam("Beam1", 2, { 66.2, 13.6 }, { 38.2, 12 }, 19, 2),
 	disc("Hop5", 3, 2, 5.8, 12, 19, 4.4),
 	disc("Hop6", 3, 2, -28, 12, 22.6, 4.4),
 	beam("Beam2", 2, { -62.4, 12 }, { -103.1, 11 }, 22.6, 1.8),
