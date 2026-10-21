@@ -615,14 +615,20 @@ function BotService.LobbyStep(bot: Bot, now: number)
 	end
 end
 
--- Without physics, walk and jump by moving the rig directly.
+-- Without physics, walk, jump and fall by moving the rig directly: a jump is a fixed arc, and
+-- outside a jump the rig settles onto whatever is under it or falls if there's nothing (so a bot
+-- that misses a hop drops like a player would, and never drifts upward jump after jump).
+local groundParams = RaycastParams.new()
+groundParams.FilterType = Enum.RaycastFilterType.Exclude
+groundParams.RespectCanCollide = true -- stand only on what a player could stand on
+
 local function simulate(dt: number)
 	local now = os.clock()
 	for _, bot in BotRegistry.List() do
 		local root, humanoid = bot:Root(), bot:Humanoid()
 		local character = bot.Character
-		if not root or not humanoid or not character then
-			continue
+		if not root or not humanoid or not character or root.Anchored then
+			continue -- anchored: the mode is moving it itself
 		end
 		local position = root.Position
 		local goal = bot.Goal
@@ -633,21 +639,31 @@ local function simulate(dt: number)
 				step = flat.Unit * math.min(flat.Magnitude, humanoid.WalkSpeed * dt)
 			end
 		end
-		local lift = 0
+		local y = position.Y
+		local jumping = false
 		if bot.JumpStart then
 			local t = (now - bot.JumpStart) / JUMP_TIME
 			if t >= 1 then
 				bot.JumpStart = nil
 			else
-				lift = 4 * JUMP_HEIGHT * t * (1 - t)
+				jumping = true
+				y = (bot.JumpBase or position.Y) + 4 * JUMP_HEIGHT * t * (1 - t)
 			end
 		end
-		if step.Magnitude > 0 or bot.JumpStart or lift ~= 0 then
-			local base = bot.JumpBase or position.Y
-			local y = if bot.JumpStart then base + lift else position.Y
-			if not bot.JumpStart then
-				bot.JumpBase = nil
+		if not jumping then
+			bot.JumpBase = nil
+			groundParams.FilterDescendantsInstances = { character }
+			local hit = workspace:Raycast(position + step, Vector3.new(0, -400, 0), groundParams)
+			local rest = if hit then hit.Position.Y + humanoid.HipHeight + root.Size.Y / 2 else -math.huge
+			if y > rest + 0.05 then
+				bot.FallSpeed = (bot.FallSpeed or 0) + workspace.Gravity * dt
+				y = math.max(rest, y - bot.FallSpeed * dt)
+			else
+				bot.FallSpeed = 0
+				y = math.max(y, rest)
 			end
+		end
+		if step.Magnitude > 0 or math.abs(y - position.Y) > 1e-3 then
 			local target = Vector3.new(position.X + step.X, y, position.Z + step.Z)
 			local look = if step.Magnitude > 0.01 then target + step else target + root.CFrame.LookVector
 			character:PivotTo(CFrame.lookAt(target, Vector3.new(look.X, target.Y, look.Z)))

@@ -5,15 +5,14 @@
 --
 -- The hexes move on each client from a shared schedule (MG_Call), so they glide smoothly; the
 -- server never needs their position, only the players', and the round's fall check knocks out
--- anyone who sinks into the lava.
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Remotes = require(ReplicatedStorage.Shared.Remotes)
+-- anyone who sinks into the lava. Bots are the exception: the server moves them, and on the server
+-- the hexes never sink, so while they're down a bot that isn't on a hex of the called color is
+-- dropped into the lava here (Bots/HexMeltdown.luau is how they play).
 
 local ArenaKit = require(script.Parent.Kit.ArenaKit)
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Scenery = require(script.Parent.Kit.Scenery)
+local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
 local Build = require(script.Parent.Parent.World.Build)
 local Shapes = require(script.Parent.Parent.World.Shapes)
 
@@ -25,6 +24,7 @@ local SPACING = 1.12 -- leaves a gap between hexes you have to hop
 local GRID_RADIUS = 2 -- rings around the center: 19 hexes
 local SINK_DEPTH = 26
 local LAVA_DROP = 20 -- lava surface below the hex tops
+local DROP_DEPTH = 3 -- a bot off the called color falls once the other hexes are this far down
 
 -- Every color comes with a shape so color is never the only cue (design doc §12).
 HexMeltdown.Palette = {
@@ -36,11 +36,23 @@ HexMeltdown.Palette = {
 	{ Name = "Pink", Shape = "♥", Color = Color3.fromRGB(255, 110, 200) },
 }
 
-local knockbackRemote = Remotes.Get("Knockback")
 local rng = Random.new()
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
+end
+
+-- How far the sinking hexes are below their resting place at `now` on players' screens (the client
+-- half eases them down and back up with this same curve).
+local function sunkBy(call, now: number): number
+	local function ease(t: number): number
+		t = math.clamp(t, 0, 1)
+		return t * t * (3 - 2 * t)
+	end
+	if now < call.RiseAt then
+		return call.Depth * ease((now - call.SinkAt) / call.Move)
+	end
+	return call.Depth * (1 - ease((now - call.RiseAt) / call.Move))
 end
 
 -- A hexagonal prism: three boxes turned 60 degrees apart, unioned once and cloned.
@@ -95,6 +107,8 @@ function HexMeltdown:Prepare()
 	ctx.KillY = ctx.Origin.Y - 14
 	self.hexes = {} :: { { Position: Vector3, ColorIndex: number } }
 	self.lastStomp = {} :: { [string]: number }
+	self.call = nil :: { [string]: any }? -- the current call (also shared with clients as MG_Call)
+	self.falling = {} :: { [any]: { Character: Model, Speed: number } } -- bots dropping into the lava
 	local origin = ctx.Origin.Position
 
 	-- A lava lake in a volcanic crater; volcanoes behind the referee close off the view.
@@ -253,7 +267,7 @@ function HexMeltdown:Start()
 		local entry = HexMeltdown.Palette[colorIndex]
 		callId += 1
 		local now = ctx:Now()
-		ctx:SetSharedJSON("Call", {
+		self.call = {
 			Id = callId,
 			Color = colorIndex,
 			Name = entry.Name,
@@ -264,7 +278,8 @@ function HexMeltdown:Start()
 			RiseAt = now + warn + 0.7 + down,
 			Move = 0.7,
 			Depth = SINK_DEPTH,
-		})
+		}
+		ctx:SetSharedJSON("Call", self.call)
 		self.flag.Color = entry.Color
 		self.boardLabel.Text = `{entry.Shape} {string.upper(entry.Name)} {entry.Shape}`
 		self.boardLabel.TextColor3 = entry.Color
@@ -301,9 +316,7 @@ function HexMeltdown:Start()
 					if os.clock() - (self.lastStomp[key] or 0) > 1.5 then
 						self.lastStomp[key] = os.clock()
 						ctx:Stun(victim, 1.2)
-						if typeof(attacker) == "Instance" then
-							knockbackRemote:FireClient(attacker, Vector3.new(0, 45, 0), 0)
-						end
+						ctx:Knockback(attacker, Vector3.new(0, 45, 0), 0) -- the stomper bounces off
 						ctx:Sound("Boing")
 					end
 				end
@@ -315,6 +328,54 @@ function HexMeltdown:Start()
 			ctx:SetStatus(status)
 		end
 	end)
+
+	ctx:Heartbeat(function(dt)
+		self:_dropBots(dt)
+	end)
+end
+
+-- Players fall when the hexes sink on their screens. The server moves bots, and on the server the
+-- hexes never sink, so while they're down a bot standing anywhere but on a hex of the called color
+-- falls into the lava here, and the round's fall check knocks it out the same way.
+function HexMeltdown:_dropBots(dt: number)
+	local ctx = self.context
+	local call = self.call
+	if call and sunkBy(call, ctx:Now()) > DROP_DEPTH then
+		local floorY = ctx.Origin.Position.Y
+		for _, player in ctx:GetAlivePlayers() do
+			if not BotRegistry.IsBot(player) or self.falling[player] then
+				continue
+			end
+			local character, humanoid, root = ctx:GetCharacter(player)
+			if not character or not humanoid or not root then
+				continue
+			end
+			-- In the air (a hop) it may still land on a safe hex; standing, its hex must be safe.
+			local feet = root.Position.Y - humanoid.HipHeight - root.Size.Y / 2
+			local safe = feet > floorY + 1
+			for _, hex in self.hexes do
+				if hex.ColorIndex == call.Color and ArenaKit.FlatDistance(hex.Position, root.Position) < HEX_SIZE then
+					safe = true
+					break
+				end
+			end
+			if not safe then
+				(player :: any):Stop()
+				root.Anchored = true
+				self.falling[player] = { Character = character, Speed = 0 }
+			end
+		end
+	end
+	local lavaY = ctx.Origin.Position.Y - LAVA_DROP
+	for player, fall in self.falling do
+		local character = fall.Character
+		if player.Character ~= character or not character.Parent then
+			self.falling[player] = nil -- out, and back in the lobby
+		elseif character:GetPivot().Y > lavaY - 4 then
+			fall.Speed += workspace.Gravity * dt
+			character:PivotTo(character:GetPivot() - Vector3.new(0, fall.Speed * dt, 0))
+		end
+	end
 end
 
 return HexMeltdown
