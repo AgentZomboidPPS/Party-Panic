@@ -34,7 +34,8 @@
 -- as cleared, and they stood above the fall-out height, so they could outlast everyone. Now being
 -- off the deck when the rope comes by is no jump, and anyone still in who has been off the deck
 -- for more than OFF_DECK_TIME is out ("fell"), bots included. Nobody standing on the bridge is
--- ever off it: the deck counts 2 studs past its ends and 4 past its sides.
+-- ever off it: the deck counts 2 studs past its ends and 4 past its sides. Nor is someone whose
+-- new character is still on its way to their spot after a reset just before GO (RoundContext).
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
@@ -505,6 +506,11 @@ function FireRope:Start()
 				self.onDeckAt[player] = now
 			else
 				table.insert(samples, { T = now, F = 0, Z = 0, Off = true })
+				if not root then
+					-- No body yet (a reset just before GO: the new one is on its way to their spot): not
+					-- standing anywhere, so the clock below waits; a pass meanwhile is still no jump.
+					self.onDeckAt[player] = now
+				end
 			end
 			while samples[1] and now - samples[1].T > 2 do
 				table.remove(samples, 1)
