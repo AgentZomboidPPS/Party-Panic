@@ -52,6 +52,8 @@ local order = {
 	"ResultsController",
 	"ShopController",
 	"QuestController",
+	"RewardsController", -- after HudController: it adds to the profile chip
+	"CelebrationController",
 	"EmoteController",
 	"SpectateController",
 	"OnboardingController",

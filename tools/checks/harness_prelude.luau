@@ -406,6 +406,109 @@ local function __round(value)
 	return value
 end
 
+-- Rewards ---------------------------------------------------------------------------------------
+
+-- Profiles for the stand-in players, loaded the way DataService loads a saved one (no DataStore):
+-- Bot1 is a new player a few XP from level 2 (the Rewards Road's first reward), Bot2 a saved
+-- profile still on the old, high coin scale 10 XP short of level 10, Bot3 one round short of the
+-- Party Animal milestone; the rest are new players.
+local function __seedProfiles()
+	local DataService = __require("Server/Services/DataService")
+	local CosmeticService = __require("Server/Services/CosmeticService")
+	local QuestService = __require("Server/Services/QuestService")
+	local LevelCurve = __require("Shared/Logic/LevelCurve")
+	local seeds = {
+		{ EconomyVersion = 2, Coins = 4, XP = 95 },
+		{ Version = 1, Coins = 1234, XP = LevelCurve.TotalXPForLevel(10) - 10, Stats = { Wins = 7 } },
+		{ EconomyVersion = 2, Coins = 10, XP = 500, Stats = { RoundsPlayed = 49, Wins = 9 } },
+	}
+	local before = {}
+	for index, player in __fakePlayers do
+		local data, migration = DataService.Migrate(seeds[index] or { EconomyVersion = 2 })
+		DataService.All()[player] = {
+			Player = player,
+			Key = "Harness_" .. index,
+			Data = data,
+			CanSave = false,
+			IsVip = false,
+			Released = false,
+			Migration = migration,
+		}
+		-- What ProfileLoaded does: free items and what the level has earned, quests for today.
+		CosmeticService.CheckUnlocks(player, true)
+		QuestService.Refresh(player)
+		DataService.Changed(player)
+		local owned = {}
+		for itemId in data.Owned do
+			owned[itemId] = true
+		end
+		before[player] = {
+			coins = data.Coins,
+			xp = data.XP,
+			level = LevelCurve.FromTotalXP(data.XP),
+			owned = owned,
+			migrated = if migration and migration.CoinsBefore
+				then `{migration.CoinsBefore} -> {migration.CoinsAfter}`
+				else nil,
+		}
+	end
+	return before
+end
+
+-- Grants the round's rewards as RoundManager does, and reports what each stand-in got.
+local function __grantRewards(definition, results, before)
+	local DataService = __require("Server/Services/DataService")
+	local LevelCurve = __require("Shared/Logic/LevelCurve")
+	local Placement = __require("Shared/Logic/Placement")
+	local RewardService = __require("Server/Services/RewardService")
+	local entries = {}
+	for _, entry in results.Entries do
+		if entry.Player.Parent then
+			entry.Key = entry.Player
+			table.insert(entries, entry)
+		end
+	end
+	local placed = Placement.Assign(entries)
+	local ok, err = pcall(RewardService.GrantRound, definition, placed, results.WinningTeam)
+	local report = { granted = if ok then "ok" else tostring(err), players = {} }
+	local places = {}
+	for _, item in placed do
+		places[item.Entry.Player] = item.Place
+	end
+	for player, was in before do
+		local profile = DataService.Get(player)
+		if not profile then
+			continue
+		end
+		local data = profile.Data
+		local unlocked = {}
+		for itemId in data.Owned do
+			if not was.owned[itemId] then
+				table.insert(unlocked, itemId)
+			end
+		end
+		table.sort(unlocked)
+		local quests = {}
+		for _, period in { "Daily", "Weekly" } do
+			for _, quest in data.Quests[period].Active do
+				table.insert(quests, `{quest.Id} {quest.Progress}{if quest.Done then " done" else ""}`)
+			end
+		end
+		report.players[player.Name] = {
+			place = places[player],
+			coins = `{was.coins} -> {data.Coins}`,
+			xp = `{was.xp} -> {data.XP}`,
+			level = `{was.level} -> {LevelCurve.FromTotalXP(data.XP)}`,
+			migrated = was.migrated,
+			unlocked = unlocked,
+			stats = `rounds {data.Stats.RoundsPlayed}, wins {data.Stats.Wins}, podiums {data.Stats.Podiums}, race podiums {data.Stats.RacePodiums}, team wins {data.Stats.TeamWins}, games {data.Stats.GamesTried}, days {data.Stats.DaysPlayed}`,
+			firstWinDay = data.Daily.FirstWinDay,
+			quests = table.concat(quests, ", "),
+		}
+	end
+	return report
+end
+
 -- `watch` (round_harness.py --client-sits-out / --client-out-at): the stand-in client sits the round
 -- out ({ sitOut = true }), or is knocked out `outAt` seconds in.
 function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, uiAt, botCount, watch)
@@ -446,7 +549,16 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 			context[key] = gui
 		end
 		for _, name in
-			{ "NotificationController", "EffectsController", "HudController", "RoundController", "MiniGameController" }
+			{
+				"NotificationController",
+				"EffectsController",
+				"HudController",
+				"RoundController",
+				"ResultsController",
+				"RewardsController",
+				"CelebrationController",
+				"MiniGameController",
+			}
 		do
 			local okLoad, controller = pcall(__require, "Client/Controllers/" .. name)
 			if not okLoad then
@@ -462,6 +574,13 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		end
 		clientGuis = __localPlayer.PlayerGui
 		__uiScaleFor = __require("Client/UI/UIKit").ScaleFor -- gui_dump.luau: the scale per screen
+	end
+
+	-- The stand-ins' profiles, so the round can grant rewards like a real one (__seedProfiles).
+	local okSeed, seeded = pcall(__seedProfiles)
+	if not okSeed then
+		__note("seeding profiles failed: " .. tostring(seeded))
+		seeded = nil
 	end
 
 	-- Real bots (Services/BotService) driven by the mode's brain, alongside the scripted stand-ins.
@@ -648,6 +767,10 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 			end)
 			summary.results = rows
 			summary.winningTeam = results.WinningTeam
+			if seeded then
+				local okGrant, report = pcall(__grantRewards, definition, results, seeded)
+				summary.rewards = if okGrant then report else tostring(report)
+			end
 		else
 			summary.results = tostring(results)
 		end
@@ -658,6 +781,25 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		summary.clientGuiDuringResults = #clientGuis:GetDescendants()
 	end
 	setPhase("Cleanup")
+	if clientGuis then
+		-- Back in the lobby, the stand-in client celebrates what the round's rewards unlocked.
+		task.wait(1.2)
+		local celebrate = clientGuis:FindFirstChild("PartyPanicCelebrate")
+		local shown = celebrate and celebrate:FindFirstChild("Celebration")
+		local texts = {}
+		for _, item in if shown then shown:GetDescendants() else {} do
+			if item:IsA("TextLabel") or item:IsA("TextButton") then
+				if item.Text ~= "" and item.Visible then
+					table.insert(texts, item.Text)
+				end
+			end
+		end
+		summary.clientCelebration = if shown then table.concat(texts, " | ") else "none"
+		local chip = clientGuis:FindFirstChild("ProfileChip", true)
+		local tab = chip and chip:FindFirstChild("NextReward")
+		local tabLabel = tab and tab:FindFirstChildWhichIsA("TextLabel", true)
+		summary.clientNextReward = if tabLabel then tabLabel.Text else "none"
+	end
 	local okCleanup, cleanupErr = pcall(miniGame.Cleanup, miniGame)
 	summary.cleanup = if okCleanup then "ok" else tostring(cleanupErr)
 	local okDestroy, destroyErr = pcall(ctx.Destroy, ctx)

@@ -1,6 +1,9 @@
 -- Results screen (design doc §12): placement, standings, an itemized reward breakdown and a
 -- "next vote soon" cue. Short and skippable; it closes itself when the lobby returns. Bots' names
 -- in the standings are a little softer than people's (Participants).
+-- The breakdown includes the first win of the day's bonus, and a round that levels you up says so
+-- in place of the "next vote" cue (owner: "Also we need cool payoffs for players that keep playing
+-- the game.").
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -114,14 +117,28 @@ local function show(data)
 			Parent = rewards,
 		})
 	end
-	UIKit.Label({
-		Text = "Next vote soon - get ready!",
-		TextSize = 18,
-		TextColor3 = Theme.Colors.TextDim,
-		Size = UDim2.new(1, 0, 0, 26),
-		LayoutOrder = 102,
-		Parent = rewards,
-	})
+	if type(data.LevelUp) == "number" then
+		-- The full celebration plays once everyone's back in the lobby (CelebrationController).
+		UIKit.Label({
+			Text = `⭐ LEVEL UP! You're level {data.LevelUp}!`,
+			Font = Theme.Fonts.Display,
+			TextSize = 22,
+			TextColor3 = Theme.Colors.Cyan,
+			Size = UDim2.new(1, 0, 0, 30),
+			LayoutOrder = 102,
+			Parent = rewards,
+			Children = { UIKit.TextStroke(0.2) },
+		})
+	else
+		UIKit.Label({
+			Text = "Next vote soon - get ready!",
+			TextSize = 18,
+			TextColor3 = Theme.Colors.TextDim,
+			Size = UDim2.new(1, 0, 0, 26),
+			LayoutOrder = 102,
+			Parent = rewards,
+		})
+	end
 
 	modal:Open()
 	AudioController.Play(if data.Place == 1 then "Victory" else "Results")

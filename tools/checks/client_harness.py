@@ -12,7 +12,8 @@ Errors and warnings from all of it come back in the result.
 text measurements and wrapping, with the fonts loaded); default: the touch sizes with --touch, else
 the PC ones. The result's "textReport" lists every text that doesn't fit on one of them.
 --rich gives the player a well-used profile (every emote, lots of coins, a long name, a claimable
-daily gift) to check the layouts at their fullest; the default is a brand-new player.
+daily gift, a high level with its prestige color, the road and career rewards it has earned) to
+check the layouts at their fullest; the default is a brand-new player.
 --bots N adds N stand-in bots, shaped like BotService's (a Configuration in
 ReplicatedStorage.PartyBots with a character in the world), who play the round with the player:
 the standings, team outlines, spectating (you get knocked out), a bot leaving and one arriving
@@ -29,13 +30,18 @@ everyone on a break", "Preparing sitting out", "InRound sitting out", "InRound b
 sitting out") next to the playing ones to compare (Intermission, Voting, Preparing, InRound,
 Results, Settings), and leaves the rest out. Open Cloud caps the size of a task's result, and every
 screen in one run is over it (about 3 MB of snapshots): Roblox then reports "Task timed out due to
-an internal error" and returns nothing.
+an internal error" and returns nothing. --shots NAME,... keeps just those snapshots (the run still
+plays everything and reports every error).
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
 (Heartbeat), StarterGui:SetCore, and the remotes (bindable events the harness can fire). The two
 ScreenGuis are made like init.client.luau makes them. Shared modules come from the working tree
-(except Remotes).
+(except Remotes), and so does the profile snapshot (DataService and the two services it needs).
+Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", "Rewards Career")
+and shows a level-up, a career milestone and a returning player's celebration ("LevelUp",
+"LevelUp2", "Milestone", "Welcome"). After the round a level-up card shows while the last
+first-join tip is due; the result's "tipChecks" says what was on screen while it was up and after.
 """
 
 import argparse
@@ -49,6 +55,8 @@ from ui_render import devices_luau, size_names  # noqa: E402  (the screens the e
 ROOT = Path(__file__).resolve().parents[2]
 CLIENT = ROOT / "src" / "client"
 SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService")
+# Server modules bundled from the working tree: the profile snapshot the client is sent.
+SERVER_MODULES = ("DataService", "Notifier", "Telemetry")
 
 
 def played_game() -> str:
@@ -73,6 +81,8 @@ def module_paths():
         if rel.parts[:1] == ("MiniGames",) and len(rel.parts) == 2 and rel.parts[1] not in ("init", played):
             continue  # only the played mode's client half (Luau execution's 1 MB script limit)
         paths["Client/" + "/".join(rel.parts)] = path
+    for name in SERVER_MODULES:
+        paths[f"Server/Services/{name}"] = ROOT / "src" / "server" / "Services" / f"{name}.luau"
     return paths
 
 
@@ -322,8 +332,7 @@ local Shared = ReplicatedStorage.Shared
 local GameState = require(Shared.GameState)
 GameState.Folder()
 local GameDefinitions = require(Shared.GameDefinitions)
-local Services = game:GetService("ServerScriptService").Server.Services
-local DataService = require(Services.DataService)
+local DataService = __require("Server/Services/DataService") -- the working tree's snapshot
 local QuestDefinitions = require(Shared.QuestDefinitions)
 
 local step = "start"
@@ -388,6 +397,9 @@ local SIT_OUT_COMPARE =
 local function snap(key, root)
 	local sitOut = SIT_OUT_SHOTS[key]
 	local wanted = if __sitOutMode then sitOut == true or SIT_OUT_COMPARE[key] == true else sitOut == nil
+	if __onlyShots then
+		wanted = __onlyShots[key] == true -- --shots: just these
+	end
 	if wanted then
 		__ui[key] = __dumpGui(root or __playerGui, key)
 	end
@@ -420,6 +432,7 @@ local order = {
 	"AudioController", "NotificationController", "EffectsController", "AmbienceController",
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
+	"RewardsController", "CelebrationController",
 	"EmoteController", "SpectateController", "OnboardingController", "AssetReportController",
 }
 -- The ScreenGuis, made with init.client.luau's own properties (see screen_guis() in the script).
@@ -460,19 +473,38 @@ for _, name in order do
 end
 
 -- 2. Profile snapshot, as DataService sends it: a new player (default items, 3 daily and 2 weekly
--- quests with the longest texts), or with --rich a well-used profile.
+-- quests with the longest texts), or with --rich a well-used profile: a high level (and its
+-- prestige color), every emote, the road and career rewards it has earned, career stats partway.
 local Cosmetics = require(Shared.Cosmetics)
+local LevelCurve = require(Shared.Logic.LevelCurve)
 local data = table.clone(DataService.Template)
 data.Owned = {}
+data.Stats = table.clone(DataService.Template.Stats)
+if __richMode then
+	data.Coins = 99999 -- the most a player plausibly saves on the low coin scale
+	data.XP = 98765
+	data.Daily = { LastClaimDay = 0, Streak = 6, SecretDay = 0, FirstWinDay = 0 }
+	data.Stats.RoundsPlayed = 180
+	data.Stats.Wins = 12
+	data.Stats.Podiums = 31
+	data.Stats.TeamWins = 4
+	data.Stats.GamesTried = 9
+	data.Stats.DaysPlayed = 8
+end
+local richLevel = LevelCurve.FromTotalXP(data.XP)
 for _, item in Cosmetics.List do
-	if item.Default or (__richMode and item.Slot == "Emote") then
+	local earned = item.Default
+		or (__richMode and item.Slot == "Emote")
+		or (item.UnlockLevel ~= nil and richLevel >= item.UnlockLevel)
+		or (item.UnlockStat ~= nil and (data.Stats[item.UnlockStat.Stat] or 0) >= item.UnlockStat.Value)
+	if earned then
 		data.Owned[item.Id] = true
 	end
 end
 if __richMode then
-	data.Coins = 1234567
-	data.XP = 98765
-	data.Daily = { LastClaimDay = 0, Streak = 6, SecretDay = 0 }
+	data.Equipped = table.clone(DataService.Template.Equipped)
+	data.Equipped.Title = "Title_Icon"
+	data.Equipped.Trail = "Trail_Starry"
 end
 local profile = { Data = data, IsVip = false, CanSave = not __richMode }
 local okSnap, snapshot = pcall(DataService.BuildSnapshot, profile)
@@ -499,10 +531,15 @@ else
 	__note("BuildSnapshot failed: " .. tostring(snapshot))
 end
 
--- 3. Screens opened by the lobby prompts and the HUD.
-for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
+-- 3. Screens opened by the lobby prompts and the HUD (the profile chip opens Rewards; its Career
+-- tab is a second snapshot).
+for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Rewards", "Rewards Career" } do
 	step = "OpenScreen " .. screen
-	State.OpenScreen:Fire(screen)
+	if screen == "Rewards Career" then
+		State.OpenScreen:Fire("Rewards", "Career")
+	else
+		State.OpenScreen:Fire(screen)
+	end
 	task.wait(1)
 	snap(screen)
 	local Modal = __require("Client/UI/Modal")
@@ -643,6 +680,38 @@ local function boardRows()
 end
 
 phase("Intermission", 20)
+-- A level up with two road rewards, a first level up, then a career milestone (CelebrationController
+-- shows them in the lobby), and someone's "Lv 12!" pop over their head.
+do
+	local Celebrations = __require("Client/Controllers/CelebrationController")
+	for _, case in {
+		{
+			name = "LevelUp",
+			payload = { Kind = "LevelUp", Level = 10, From = 9, Coins = 15, Items = { "Trail_Starry", "Title_Pro" } },
+		},
+		{ name = "LevelUp2", payload = { Kind = "LevelUp", Level = 2, From = 1, Coins = 3, Items = { "Emote_Balloons" } } },
+		{ name = "Milestone", payload = { Kind = "Milestone", Coins = 0, Items = { "Title_Veteran" } } },
+		{
+			name = "Welcome",
+			payload = {
+				Kind = "Welcome",
+				Coins = 0,
+				Items = { "Emote_Balloons", "Trail_Bubblegum", "Elim_Ghost", "Title_Regular" },
+			},
+		},
+	} do
+		step = "celebration " .. case.name
+		__fire("Celebrate", case.payload)
+		task.wait(1.6) -- the rewards are revealed one by one
+		snap(case.name)
+		Celebrations.Dismiss()
+		task.wait(0.5)
+	end
+	if bots[1] and bots[1].rig then
+		__fire("LevelPop", bots[1].rig, 12)
+	end
+	__fire("LevelPop", workspace, 3) -- no head: nothing happens
+end
 phase("Voting", 12, function()
 	GameState.SetJSON("VoteOptions", {
 		{ Id = longNames[1], Mystery = false },
@@ -790,10 +859,11 @@ phase("Results", 8, function()
 		TopHalf = "Top half finish",
 		Winner = "Winner!",
 		PersonalBest = "New personal best",
+		FirstWin = "First win today!",
 	}
 	local lines, coins, xp = {}, 0, 0
-	for _, key in { "Participation", "TopHalf", "Winner", "PersonalBest" } do
-		if key ~= "Winner" or place == 1 then
+	for _, key in { "Participation", "TopHalf", "Winner", "PersonalBest", "FirstWin" } do
+		if Config.Rewards[key] and ((key ~= "Winner" and key ~= "FirstWin") or place == 1) then
 			local reward = Config.Rewards[key]
 			table.insert(lines, { Label = labels[key], Coins = reward.Coins, XP = reward.XP })
 			coins += reward.Coins
@@ -839,6 +909,8 @@ phase("Results", 8, function()
 		Coins = coins,
 		XP = xp,
 		PersonalBest = true,
+		FirstWin = place == 1,
+		LevelUp = 7, -- the round took the player to a new level
 		Standings = standings,
 	})
 	GameState.SetJSON("Champions", champions)
@@ -900,6 +972,36 @@ phase("Cleanup", 3, function()
 		who:SetAttribute("PP_Alive", false)
 	end
 end)
+-- Back in the lobby the card shows while the last first-join tip is due: on phones the tip steps
+-- aside while the card is up and comes back after it, its 8 s counted only while it's on screen
+-- (the tips never finish behind the card). tipChecks: what was on screen, and whether the client
+-- had told the server the tips were done.
+local tipChecks = {}
+do
+	local function tipPanel()
+		local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+		local holder = hud and hud:FindFirstChild("Onboarding", true)
+		return holder and (holder:FindFirstChild("Tip") or holder)
+	end
+	local function look(label)
+		local celebrate = __playerGui:FindFirstChild("PartyPanicCelebrate")
+		local tip = tipPanel()
+		local tipText = tip and tip:FindFirstChildWhichIsA("TextLabel", true)
+		tipChecks[label] = {
+			card = if celebrate and celebrate:FindFirstChild("Celebration") then "shown" else "none",
+			tip = if tip and tip.Visible then "shown" else "hidden",
+			tipText = if tipText then string.sub(tipText.Text, 1, 60) else nil,
+			tutorialDone = table.find(__sent, "TutorialDone") ~= nil,
+		}
+	end
+	-- The round levelled the player up (a new player's first win does). (Fired once the Cleanup
+	-- snapshot is taken: a snapshot in the middle of the chips popping in reads as tiny text.)
+	__fire("Celebrate", { Kind = "LevelUp", Level = 2, From = 1, Coins = 3, Items = { "Emote_Balloons" } })
+	task.wait(0.6)
+	look("cardUp")
+	task.wait(10) -- the card closes itself after 9 s
+	look("afterCard")
+end
 phase("Waiting", 0)
 task.wait(1)
 
@@ -1043,6 +1145,7 @@ return game:GetService("HttpService"):JSONEncode({
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
 	sitOutChecks = sitOutChecks,
+	tipChecks = tipChecks,
 	textReport = __textReport,
 	portals = __portals,
 })
@@ -1070,6 +1173,8 @@ def main():
     parser.add_argument("--bots", type=int, default=0, help="stand-in bots that play the round with the player")
     parser.add_argument("--sit-out", action="store_true", help="draw the screens of a player sitting out (and the "
                         "playing ones to compare) instead of every screen")
+    parser.add_argument("--shots", help="only these snapshots, comma-separated (e.g. Intermission,LevelUp,Rewards): "
+                        "a run with every screen at several sizes is over Open Cloud's result cap")
     parser.add_argument("--sizes", help="screens to lay the UI out on with the engine (ui_render.py's names or "
                         "groups; default: touch with --touch, else pc; none to skip)")
     args = parser.parse_args()
@@ -1080,6 +1185,11 @@ def main():
         f"__richMode = {'true' if args.rich else 'false'}\n"
         f"__botCount = {args.bots}\n"
         f"__sitOutMode = {'true' if args.sit_out else 'false'}\n"
+        + (
+            "__onlyShots = { " + ", ".join(f'["{name}"] = true' for name in args.shots.split(",")) + " }\n"
+            if args.shots
+            else "__onlyShots = nil\n"
+        )
         + (devices_luau(size_names(sizes)) if sizes != "none" else "")
     )
     out = [flags + gui_dump + PRELUDE + screen_guis()]
