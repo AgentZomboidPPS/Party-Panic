@@ -10,6 +10,10 @@
 -- The server times the presses itself; the meter here only shows the same clock (FILL_TIME, SWEET
 -- from "Layout"), and the PERFECT / WEAK / TOO LONG words come from the server's verdict. The
 -- arena's balloons, tanks and plungers are built by the server and moved here, locally.
+-- The meter starts filling only when the server starts counting the hold (after the spring and the
+-- server's minimum Cycle between presses), so the meter always shows the hold the server judges.
+-- The server lets a release a little past the green's top still count (what you see is a frame or
+-- two old when you let go): the meter keeps drawing the true band, so anything green is perfect.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -155,6 +159,7 @@ function PumpAndPop.Start(api)
 	local sweet: number = layout.Sweet
 	local spring: number = layout.Spring
 	local stuck: number = layout.Stuck
+	local cycle: number = layout.Cycle or 0
 
 	-- The stations, their balloons and tanks, and every plunger.
 	local stations = {} :: { [string]: Station }
@@ -650,8 +655,10 @@ function PumpAndPop.Start(api)
 
 		goLive(now)
 
-		-- Start a press once the plunger is back up (a press during the spring waits for it).
-		if live and wantDown and not holding and pump and pump:IsDown() and now >= upClock + spring + 0.03 then
+		-- Start a press once the plunger is back up and a full cycle has passed since the last one
+		-- (a press before that waits), just when the server starts counting it.
+		local ready = math.max(upClock + spring, downClock + cycle) + 0.03
+		if live and wantDown and not holding and pump and pump:IsDown() and now >= ready then
 			if not api:Shared("Popped") then
 				holding = true
 				downClock = now
