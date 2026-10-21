@@ -21,6 +21,7 @@
 local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
 
+local Arcade = require(script.Parent.Arcade)
 local Build = require(script.Parent.Build)
 local Environment = require(script.Parent.Environment)
 local MeshLibrary = require(script.Parent.MeshLibrary)
@@ -1643,6 +1644,7 @@ function LobbyBuilder.Build(): LobbyRefs
 	buildGardens(root)
 	buildSkyline(root)
 	buildScenery(root)
+	Arcade.Build(root) -- the Skee-Ball arcade (north-east lawn); clears the scenery in its way
 
 	return {
 		Root = root,

@@ -1,0 +1,41 @@
+newmtl Posts
+Kd 0.431 0.290 0.188
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl PostStripes
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 0.518 0.455 0.439
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Panel
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl BulbsA
+Kd 1.000 0.965 0.745
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl BulbsB
+Kd 1.000 0.839 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stars
+Kd 1.000 0.839 0.361
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

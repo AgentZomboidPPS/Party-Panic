@@ -30,7 +30,7 @@ SkeeBall.BALL_R = 0.36
 
 -- The machine (tools/meshgen/props/Arcade.py builds it from these).
 SkeeBall.LANE_HALF = 1.6 -- half the lane's inside width
-SkeeBall.RELEASE_Z = -5.3 -- prop z of the release point (s = 0)
+SkeeBall.RELEASE_Z = -5.8 -- prop z of the release point (s = 0)
 SkeeBall.LANE_START = -0.8 -- s where the lane floor starts, at the machine's front
 SkeeBall.LANE_Y = 2.4 -- lane floor height at s = 0
 SkeeBall.LANE_RISE = 0.07 -- the lane climbs this much per stud
@@ -45,9 +45,29 @@ SkeeBall.BOARD_COS = 0.8 -- cos and sin of that slope, exactly
 SkeeBall.BOARD_SIN = 0.6
 SkeeBall.BOARD_LEN = 3.9 -- along the slope
 SkeeBall.BOARD_HALF = 1.85 -- half the board's width (the target box is a little wider than the lane)
-SkeeBall.BACK_S = 12.6 -- the backstop's face, behind the back gutter
+SkeeBall.BACK_S = 12.4 -- the backstop's face, behind the back gutter
 SkeeBall.BACK_TROUGH_Y = 4.7 -- floor of the back gutter, between the board's top edge and the backstop
 SkeeBall.TOP_Y = 7.4 -- the cage's roof over the target box
+
+-- The rest of the cabinet, in its prop space (x across, y up, z from the front at -Z to the back).
+SkeeBall.HALF_WIDTH = 2.7 -- half its width, base included
+SkeeBall.FRONT_Z = -7.3 -- its front face (the back is as far behind: the box is centered)
+SkeeBall.STAND_Z = -9 -- where its player stands
+-- The chute along the right-hand rail where the balls wait their turn, the next one at the front.
+SkeeBall.CHUTE_X = -2.08
+SkeeBall.CHUTE_Z = -6.75 -- the next ball's center
+SkeeBall.CHUTE_STEP = 0.76 -- from one waiting ball to the next, toward the back
+SkeeBall.CHUTE_Y = 3.66 -- the next ball's center height
+SkeeBall.CHUTE_RISE = 0.06 -- the chute climbs this much per stud toward the back
+-- The score screen above the cage, and the lit sign on top (both face the player).
+SkeeBall.SCREEN_Y = 8.3
+SkeeBall.SCREEN_Z = 6.36
+SkeeBall.SCREEN_W = 4.3
+SkeeBall.SCREEN_H = 1.5
+SkeeBall.SIGN_Y = 10.05
+SkeeBall.SIGN_Z = 6.5
+SkeeBall.SIGN_W = 4.7
+SkeeBall.SIGN_H = 1.3
 
 -- The rings, round RING_W up the board from its bottom edge: each one's edge (the ball's center has
 -- to be inside it). The 10 ring is everything else on the board; its edge here is just drawn.
