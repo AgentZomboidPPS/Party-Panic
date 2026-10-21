@@ -3,7 +3,7 @@
 -- One compact, round plaza (about 150 studs across) so everything is in view from the spawn:
 --
 --                              N (-Z)
---        [parkour tower]   [ VOTE STAGE: 3 portal bays ]   [speakers]
+--        [parkour tower]   [ VOTE STAGE: 4 portal bays ]   [speakers]
 --
 --   W  [ SHOP / gallery ]       ( fountain + trophy )       [ WINNER PODIUM ]  E (+X)
 --
@@ -30,7 +30,6 @@ local LobbyBuilder = {}
 
 export type LobbyRefs = {
 	Root: Model,
-	VotePads: { BasePart },
 	DailyPrompt: ProximityPrompt,
 	ConfettiPrompt: ProximityPrompt,
 	ConfettiPosition: Vector3,
@@ -53,7 +52,8 @@ local PALETTE = {
 	Stage = rgb(92, 64, 168),
 	StageDark = rgb(52, 36, 104),
 	Bay = rgb(30, 20, 66),
-	Portal = { rgb(255, 84, 150), rgb(64, 196, 255), rgb(120, 224, 96) },
+	-- One per vote card: three games, then Random in the cards' purple.
+	Portal = { rgb(255, 84, 150), rgb(64, 196, 255), rgb(120, 224, 96), rgb(156, 108, 255) },
 	Spawn = rgb(255, 236, 140),
 	Wood = rgb(196, 140, 92),
 }
@@ -75,6 +75,8 @@ local BUNTING_LENGTH = 24 -- LobbyBunting's length at scale 1
 -- Zone anchors (ground level).
 local STAGE_Z = -53 -- center of the vote stage platform
 local STAGE_TOP = 2.4
+local PORTALS = 4 -- one portal per vote card (Config.Session.VoteChoices games and Random)
+local PORTAL_SPACING = 22
 local PODIUM = Vector3.new(54, 0, -4)
 local SHOP = Vector3.new(-54, 0, -4)
 local QUESTS = Vector3.new(-42, 0, 42)
@@ -483,7 +485,7 @@ end
 
 -- Vote stage -------------------------------------------------------------------------------------
 
-local function buildVoteStage(root: Model): { BasePart }
+local function buildVoteStage(root: Model)
 	local stage = Build.Model("VoteStage", root)
 	local backZ = STAGE_Z - 13
 
@@ -531,11 +533,14 @@ local function buildVoteStage(root: Model): { BasePart }
 			Parent = stage,
 		})
 	end
-	for index, x in { -41.5, -14, 14, 41.5 } do
-		Shapes.Capsule(21, 1.1, {
+	for index = 0, PORTALS do
+		-- In the gaps between the bays, and at both ends.
+		local x = (index - PORTALS / 2) * PORTAL_SPACING
+		x += if index == 0 then -0.5 elseif index == PORTALS then 0.5 else 0
+		Shapes.Capsule(20, 1.1, {
 			Name = "NeonTube",
-			CFrame = CFrame.new(x, STAGE_TOP + 13, backZ + 0.65) * CFrame.Angles(0, 0, math.rad(90)),
-			Color = PALETTE.Portal[(index - 1) % 3 + 1],
+			CFrame = CFrame.new(x, STAGE_TOP + 12, backZ + 0.65) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = PALETTE.Portal[index % PORTALS + 1],
 			Material = Enum.Material.Neon,
 			CanCollide = false,
 			CastShadow = false,
@@ -570,9 +575,8 @@ local function buildVoteStage(root: Model): { BasePart }
 		rgb(255, 255, 255)
 	)
 
-	-- Announcement screen (phase, timer, winner reveal) in a rounded bezel. Clients draw on Back.
-	-- It overlaps the top of the vote screens, so it sits a quarter stud in front of them: faces
-	-- sharing a plane would flicker.
+	-- Announcement screen (phase, timer, winner reveal) in a rounded bezel, just above the vote
+	-- screens. Clients draw on Back.
 	Shapes.RoundedBox(Vector3.new(46, 10, 1.2), 0.6, {
 		Name = "AnnouncementBezel",
 		CFrame = CFrame.new(0, STAGE_TOP + 39, backZ + 1.25),
@@ -588,28 +592,49 @@ local function buildVoteStage(root: Model): { BasePart }
 	})
 	tag(announcement, "AnnouncementScreen")
 
-	local pads = {}
-	for index = 1, 3 do
-		local x = (index - 2) * 28
+	-- The portals: one per vote card, in the cards' order (three games, then Random). Votes come
+	-- from the cards; each portal's opening is a screen that plays a little looping preview of its
+	-- game (owner: "the portals being how you vote is dumb. maybe we make the portal do a little
+	-- video of what the game actually is?"), drawn by clients (WorldScreensController). The screen
+	-- stands inside the arch, so the arch's solid shoulders mask its top corners into the round
+	-- opening, and the glowing film in front is hidden on clients while the screen plays.
+	local archWidth, archHeight, archThickness = 19.6, 22.6, 2.8
+	local openWidth, openHeight = archWidth - 2 * archThickness, archHeight - archThickness
+	for index = 1, PORTALS do
+		local x = (index - (PORTALS + 1) / 2) * PORTAL_SPACING
 		local color = PALETTE.Portal[index]
-		-- Dark bay behind each portal so the glowing film pops.
-		Shapes.RoundedBox(Vector3.new(21, 25, 2), 1.5, {
+		-- Dark bay behind each portal so the screen pops.
+		Shapes.RoundedBox(Vector3.new(archWidth - 1, archHeight + 0.4, 2), 1.5, {
 			Name = "PortalBay",
-			CFrame = CFrame.new(x, STAGE_TOP + 12.5, backZ + 0.6),
+			CFrame = CFrame.new(x, STAGE_TOP + (archHeight + 0.4) / 2, backZ + 0.6),
 			Color = PALETTE.Bay,
 			Parent = stage,
 		})
-		Shapes.Arch(22, 25, 3.4, 4.4, CFrame.new(x, STAGE_TOP, backZ + 3), {
+		Shapes.Arch(archWidth, archHeight, archThickness, 4.4, CFrame.new(x, STAGE_TOP, backZ + 3), {
 			Name = "PortalArch",
 			Color = color,
 			Parent = stage,
 		})
-		Shapes.Arch(23.2, 25.6, 1, 3.6, CFrame.new(x, STAGE_TOP, backZ + 3), {
+		Shapes.Arch(archWidth + 1, archHeight + 0.5, 0.9, 3.6, CFrame.new(x, STAGE_TOP, backZ + 3), {
 			Name = "PortalArchTrim",
 			Color = rgb(255, 255, 255),
 			Parent = stage,
 		})
-		local film = Shapes.ArchPanel(14.6, 21.4, 0.3, CFrame.new(x, STAGE_TOP, backZ + 3), {
+		-- The preview screen (clients draw on its Back face, toward the plaza), halfway into the
+		-- arch's depth and just behind the film. Solid, so nobody walks into the picture.
+		local screen = Build.Part({
+			Name = "PortalScreen" .. index,
+			Size = Vector3.new(openWidth, openHeight, 0.2),
+			CFrame = CFrame.new(x, STAGE_TOP + openHeight / 2, backZ + 2.5),
+			Color = PALETTE.Bay,
+			CanTouch = false,
+			CastShadow = false,
+			Parent = stage,
+		})
+		screen:SetAttribute("VoteIndex", index)
+		screen:SetAttribute("PortalColor", color)
+		tag(screen, "PortalScreen")
+		local film = Shapes.ArchPanel(openWidth - 0.6, openHeight - 0.3, 0.3, CFrame.new(x, STAGE_TOP, backZ + 3), {
 			Name = "PortalFilm",
 			Color = color,
 			Material = Enum.Material.Neon,
@@ -622,52 +647,44 @@ local function buildVoteStage(root: Model): { BasePart }
 		})
 		film:SetAttribute("VoteIndex", index)
 		tag(film, "PortalFilm")
-		sparkleEmitter(film, color, 8)
+		sparkleEmitter(film, color, 6)
 		local light = Instance.new("SpotLight")
 		light.Color = color
 		light.Brightness = 3
-		light.Range = 26
+		light.Range = 24
 		light.Angle = 80
 		light.Face = Enum.NormalId.Back
 		light.Shadows = false
 		light.Parent = film
+		-- A glowing threshold at the portal's foot (just decoration: voting is on the cards).
+		Shapes.Slab(Vector3.new(openWidth + 1, 0.3, 3), 1, {
+			Name = "PortalThreshold",
+			CFrame = CFrame.new(x, STAGE_TOP + 0.15, backZ + 6.6),
+			Color = color,
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+			Parent = stage,
+		})
 
 		-- Game card screen above the portal (rendered by clients on the Back face).
-		Shapes.RoundedBox(Vector3.new(22, 10.6, 1.2), 0.7, {
+		Shapes.RoundedBox(Vector3.new(archWidth + 0.4, 9.8, 1.2), 0.7, {
 			Name = "ScreenBezel",
-			CFrame = CFrame.new(x, STAGE_TOP + 31.5, backZ + 0.8),
+			CFrame = CFrame.new(x, STAGE_TOP + 28.6, backZ + 0.8),
 			Color = color,
 			Parent = stage,
 		})
-		local screen = Build.Part({
+		local card = Build.Part({
 			Name = "VoteScreen" .. index,
-			Size = Vector3.new(20.4, 9, 0.4),
-			CFrame = CFrame.new(x, STAGE_TOP + 31.5, backZ + 1.5),
+			Size = Vector3.new(archWidth - 1, 8.6, 0.4),
+			CFrame = CFrame.new(x, STAGE_TOP + 28.6, backZ + 1.5),
 			Color = rgb(18, 14, 36),
 			Parent = stage,
 		})
-		screen:SetAttribute("VoteIndex", index)
-		tag(screen, "VoteScreen")
-
-		-- Step-on vote pad in front of the portal.
-		local pad = Shapes.Slab(Vector3.new(17, 0.4, 11), 3, {
-			Name = "VotePad" .. index,
-			CFrame = CFrame.new(x, STAGE_TOP + 0.2, STAGE_Z + 2),
-			Color = color,
-			Material = Enum.Material.Neon,
-			Transparency = 0.2,
-			CanTouch = true,
-			Parent = stage,
-		})
-		pad:SetAttribute("VoteIndex", index)
-		tag(pad, "VotePad")
-		Build.SurfaceText(
-			pad,
-			Enum.NormalId.Top,
-			`VOTE {index}`,
-			{ PixelsPerStud = 12, Font = SIGN_FONT, TextStrokeTransparency = 0.2 }
-		)
-		table.insert(pads, pad)
+		card:SetAttribute("VoteIndex", index)
+		tag(card, "VoteScreen")
 	end
 
 	-- Speaker stacks and light towers on both sides.
@@ -733,7 +750,6 @@ local function buildVoteStage(root: Model): { BasePart }
 		spot.Parent = lamp
 		balloonCluster(stage, Vector3.new(side * 40, STAGE_TOP, STAGE_Z + 10), if side < 0 then 0 else 3)
 	end
-	return pads
 end
 
 -- Winner podium (east) ---------------------------------------------------------------------------
@@ -1616,7 +1632,7 @@ function LobbyBuilder.Build(): LobbyRefs
 	buildSpawns(root)
 	Environment.Build(PLAZA_RADIUS)
 	buildFountain(root)
-	local pads = buildVoteStage(root)
+	buildVoteStage(root)
 	buildPodium(root)
 	buildShop(root)
 	local dailyPrompt = buildQuestCorner(root)
@@ -1630,7 +1646,6 @@ function LobbyBuilder.Build(): LobbyRefs
 
 	return {
 		Root = root,
-		VotePads = pads,
 		DailyPrompt = dailyPrompt,
 		ConfettiPrompt = confettiPrompt,
 		ConfettiPosition = confettiPosition,

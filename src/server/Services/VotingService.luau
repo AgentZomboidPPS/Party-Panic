@@ -1,5 +1,7 @@
 -- Builds valid options, records one vote per player, resolves ties and broadcasts live counts
--- (design doc §6 and §14 "VotingService"). Players vote from the UI or by stepping on a portal pad.
+-- (design doc §6 and §14 "VotingService"). Players vote with the cards on screen (the CastVote
+-- remote); the stage's portals only show a preview of each option (owner: "the portals being how
+-- you vote is dumb. maybe we make the portal do a little video of what the game actually is?").
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -28,7 +30,6 @@ local active = false
 local options: { VoteOption } = {}
 local votes: { [Player]: number } = {}
 local votedThisRound: { [Player]: boolean } = {}
-local pads: { [number]: BasePart } = {}
 
 local function publishCounts()
 	local counts = VoteLogic.Tally(votes, #options)
@@ -160,37 +161,6 @@ end
 
 function VotingService.Options(): { VoteOption }
 	return options
-end
-
--- Where the portal pad for option `index` is.
-function VotingService.PadPosition(index: number): Vector3?
-	local pad = pads[index]
-	return if pad then pad.Position else nil
-end
-
--- Lets a physical portal pad cast a vote when a player steps on it.
-function VotingService.BindPad(pad: BasePart, index: number)
-	local lastTouch: { [Player]: number } = {}
-	pads[index] = pad
-	pad.Touched:Connect(function(hit)
-		if not active then
-			return
-		end
-		local character = hit.Parent
-		local player = character and Players:GetPlayerFromCharacter(character) -- bots walking over a pad don't vote
-		if not player then
-			return
-		end
-		local now = os.clock()
-		if now - (lastTouch[player] or 0) < 0.5 then
-			return
-		end
-		lastTouch[player] = now
-		VotingService.Cast(player, index)
-	end)
-	Players.PlayerRemoving:Connect(function(player)
-		lastTouch[player] = nil
-	end)
 end
 
 function VotingService.Init()

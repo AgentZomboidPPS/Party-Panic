@@ -19,6 +19,8 @@ the standings, team outlines, spectating (you get knocked out), a bot leaving an
 mid-round, the results and a bot champion on the podium. The result's "botChecks" says what the
 client did with them, and the extra snapshots ("InRound teams", "Podium") show it. The stand-in
 players are in the round either way, and the player is always knocked out ("Out", "Spectate").
+The result's "portals" says what each of the vote stage's portals shows in each phase (its game,
+"✓ YOUR VOTE", Random's spinning reel, the winner), as text.
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
@@ -276,6 +278,20 @@ do
 	token.Name = "SecretToken"
 	token.Anchored = true
 	token.Parent = workspace:FindFirstChild("Lobby") or workspace
+	-- The vote stage's preview portals, when the place's lobby is older than this client.
+	if #game:GetService("CollectionService"):GetTagged("PortalScreen") == 0 then
+		for index = 1, 4 do
+			local screen = Instance.new("Part")
+			screen.Name = "PortalScreen" .. index
+			screen.Anchored = true
+			screen.Size = Vector3.new(14, 19.8, 0.2)
+			screen.CFrame = CFrame.new((index - 2.5) * 22, 12.3, -63.5)
+			screen:SetAttribute("VoteIndex", index)
+			screen:SetAttribute("PortalColor", Color3.fromRGB(255, 84, 150))
+			screen:AddTag("PortalScreen")
+			screen.Parent = token.Parent
+		end
+	end
 end
 
 -- Server side state the client reads (real shared modules).
@@ -296,6 +312,42 @@ local MESSAGES = {
 	Cleanup = "Back to the lobby!",
 	Waiting = "Waiting for 1 more player...",
 }
+-- The vote stage's portals as they read (WorldScreensController): what each one shows, e.g.
+-- "2: 🎲 | RANDOM | ? [reel]" or "1: 🔥 | FIRE ROPE | ✓ YOUR VOTE [preview]".
+local __portals = {}
+local function portalReport()
+	local rows = {}
+	for _, gui in __playerGui:GetChildren() do
+		local index = string.match(gui.Name, "^Screen_PortalScreen(%d)$")
+		if not index or not gui:IsA("SurfaceGui") then
+			continue
+		end
+		local function shown(item)
+			while item and item ~= gui do
+				if item:IsA("GuiObject") and not item.Visible then
+					return false
+				end
+				item = item.Parent
+			end
+			return true
+		end
+		local texts, pictures, reel = {}, 0, false
+		for _, item in gui:GetDescendants() do
+			if item:IsA("TextLabel") and item.Text ~= "" and item.TextTransparency < 1 and shown(item) then
+				table.insert(texts, item.Text)
+			elseif item:IsA("ImageLabel") and item.Image ~= "" and shown(item) then
+				pictures += 1
+			elseif item:IsA("Frame") and item.ClipsDescendants and item.Parent and item.Parent:IsA("Frame") then
+				reel = reel or item.Visible
+			end
+		end
+		local extras = (if reel then " [reel]" else "") .. (if pictures > 0 then ` [{pictures} preview]` else "")
+		table.insert(rows, `{index}: {table.concat(texts, " | ")}{extras}`)
+	end
+	table.sort(rows)
+	return rows
+end
+
 local function phase(name, seconds, extra)
 	step = "phase " .. name
 	if extra then
@@ -307,6 +359,7 @@ local function phase(name, seconds, extra)
 	GameState.Set("PhaseEndsAt", if seconds > 0 then workspace:GetServerTimeNow() + seconds else 0) -- 0: no timer, like RoundManager
 	task.wait(1.2)
 	__ui[name] = __dumpGui(__playerGui, name)
+	__portals[name] = portalReport()
 end
 
 -- 1. Start every controller like init.client.luau does.
@@ -563,6 +616,8 @@ phase("Preparing", 6, function()
 		who:SetAttribute("PP_Team", "")
 	end
 end)
+task.wait(2) -- Random's reel lands on the game that won
+__portals["Preparing, 3s in"] = portalReport()
 phase("InRound", 60, function()
 	-- Stand-in players: scores spread out and three already out. Bots: scores spread around the
 	-- player's, and one bot already out.
@@ -810,6 +865,7 @@ return game:GetService("HttpService"):JSONEncode({
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
 	textReport = __textReport,
+	portals = __portals,
 })
 '''
 

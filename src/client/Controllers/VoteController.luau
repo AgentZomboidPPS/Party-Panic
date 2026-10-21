@@ -1,7 +1,8 @@
 -- Vote UI (design doc §6): four cards, three games and Random (a hidden pick, revealed if it wins;
 -- owner: "4 options always. and the 4th option should be random"), each with icon, name, category,
--- one-line objective, estimated duration and live vote counts. Tap a card or walk onto a portal pad to vote;
--- your choice is clearly marked and can be changed until the timer ends.
+-- one-line objective, estimated duration and live vote counts. Tap a card to vote (the stage's
+-- portals only play a preview of each option); your choice is clearly marked and can be changed
+-- until the timer ends.
 -- PC: a row along the bottom. Phones and tablets (owner: "Wtf is this mobile Ui lol"): a slim row
 -- of four small cards just under the top bar, centered under the "VOTE!" banner: icon, name on one
 -- line, category as just its icon, and the votes. It leaves the middle of the view free and stays

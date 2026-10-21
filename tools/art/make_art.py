@@ -414,7 +414,7 @@ def render_to(path):
 
 
 def scene_lobby(args, out):
-    """Key art: friends partying in front of the vote stage's three portals."""
+    """Key art: friends partying in front of the vote stage's portals."""
     new_scene(args.samples, args.width, args.height, sun=(0.35, -0.55, 0.75))
     data = json.loads(Path(args.lobby).read_text())
     data = data[0] if isinstance(data, list) else data
