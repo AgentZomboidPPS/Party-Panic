@@ -1,12 +1,14 @@
 """Shows which uploaded meshes and sounds players' devices couldn't load, and whether the music
 really plays for them (Services/ClientReports records them in the PP_ClientReports data store;
-this reads it on a Roblox test server).
+this reads it on a Roblox test server). Mini-games' own trouble reports are there too (keys m<UserId>),
+e.g. what held a Shark Bait player who got stuck.
 
     python3 tools/checks/client_reports.py
 """
 
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "preview"))
@@ -43,6 +45,12 @@ for key, entry in sorted(reports.items(), key=lambda item: -(item[1] or {}).get(
         print(key, entry)
         continue
     failed = entry.get("Failed") or {}
+    if entry.get("Kind") == "Mode":
+        # A mini-game's own trouble report (ClientReports.Record): e.g. what held someone who got stuck.
+        when = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(entry.get("Time") or 0))
+        print(f"{key}: {entry.get('Mode')} {entry.get('What')} at {when} (place v{entry.get('PlaceVersion')})")
+        print(f"    {entry.get('Text')}")
+        continue
     if entry.get("Kind") == "Sound":
         music = entry.get("Music") or {}
         print(f"{key}: {len(failed)} of {entry.get('Checked')} sounds failed ({entry.get('Where')}, touch={entry.get('Touch')}, place v{entry.get('PlaceVersion')})")
