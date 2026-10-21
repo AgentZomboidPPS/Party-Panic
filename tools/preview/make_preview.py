@@ -81,6 +81,8 @@ CAMERAS: dict[str, dict] = {
     # Over the cutters' shoulders: their boards with the dotted outlines half cut, the giant glass of
     # milk beyond.
     "CrazyCutters": {"yaw": 80, "pitch": 40, "distance": 38, "shift": [-12, -5, 0], "raise": 2},
+    # Across the candy factory hall at the CAKE FACTORY sign: the team belts with cakes on them.
+    "CakeFactory": {"look_at": "Sign", "yaw": 200, "pitch": 24, "distance": 42, "shift": [0, -29, -26], "raise": 6},
     # A team pumping its balloon (with a face), a rival team's balloon beside it.
     "PumpAndPop": {"yaw": 25, "pitch": 12, "distance": 40, "shift": [0, 8.5, -4], "sway": 8},
     # Two riders who just bumped, the sea and a palm island behind.
@@ -96,6 +98,7 @@ CAMERAS: dict[str, dict] = {
 # Seconds into the round to take the snapshot, where the default (8) isn't the liveliest moment.
 DUMP_AT: dict[str, float] = {
     "BobsledRun": 12,  # the sleds well down the run, a banked curve ahead
+    "CakeFactory": 14,  # cakes with a few layers on every belt
     "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
     "PumpAndPop": 16,  # the balloons are big by now
