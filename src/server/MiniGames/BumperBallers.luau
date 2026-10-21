@@ -60,6 +60,8 @@ local GRAVITY = 110 -- simulated fall (no-physics servers only)
 local MAX_LEGIT_SPEED = 110 -- studs/s: nothing in the game rolls a ball this fast
 local SEPARATE_SPEED = 6 -- studs/s that pushes two slowly overlapping balls apart (no bump)
 local BALL_GROUP = "BumperBall"
+local FLOOR_GROUP = "BumperFloor" -- the hidden floor under the sea: everything lands on it
+local FLOOR_DEPTH = 9 -- how far under the water surface it is
 local ROLL_MASS = 1.4 -- a rolling solid ball needs 7/5 of the force to speed up (it spins up too)
 
 -- Every rider gets a color, a pattern on the ball and a shape tag, so color is never the only cue.
@@ -133,6 +135,13 @@ local function registerRiderGroup()
 		PhysicsService:CollisionGroupSetCollidable(BALL_GROUP, "Default", true)
 		PhysicsService:CollisionGroupSetCollidable(BALL_GROUP, BALL_GROUP, false)
 		PhysicsService:CollisionGroupSetCollidable(BALL_GROUP, RIDER_GROUP, false)
+		-- Nothing can fall out of the world: riders (who otherwise touch nothing) land on it too.
+		if not PhysicsService:IsCollisionGroupRegistered(FLOOR_GROUP) then
+			PhysicsService:RegisterCollisionGroup(FLOOR_GROUP)
+		end
+		PhysicsService:CollisionGroupSetCollidable(FLOOR_GROUP, RIDER_GROUP, true)
+		PhysicsService:CollisionGroupSetCollidable(FLOOR_GROUP, BALL_GROUP, true)
+		PhysicsService:CollisionGroupSetCollidable(FLOOR_GROUP, "Default", true)
 	end)
 	return ok
 end
@@ -193,6 +202,21 @@ function BumperBallers:_buildArena()
 		Material = Enum.Material.Sand,
 		Parent = ctx.Arena,
 	})
+	-- A hidden floor under the water, so whoever goes in (or comes off their ball) lands on it and
+	-- is counted out, instead of falling out of the world (owner: "I fell out of the world").
+	local floor = Build.Part({
+		Name = "SafetyFloor",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(2, 2048, 2048),
+		CFrame = CFrame.new(center.X, waterY - FLOOR_DEPTH - 1, center.Z) * CFrame.Angles(0, 0, math.rad(90)),
+		Transparency = 1,
+		CanQuery = false,
+		CanTouch = false,
+		Parent = ctx.Arena,
+	})
+	if self.groupReady then
+		floor.CollisionGroup = FLOOR_GROUP
+	end
 	Build.Decor({
 		Name = "SeaBed",
 		Shape = Enum.PartType.Cylinder,
@@ -406,6 +430,9 @@ function BumperBallers:_attachRider(entry: Entry)
 
 	humanoid.PlatformStand = true
 	humanoid.AutoRotate = false
+	if physics and entry.Body.Anchored then
+		root.Anchored = true -- held on top of the ball until GO, when both are let go together
+	end
 	if self.groupReady then
 		setRiderCollision(character, RIDER_GROUP)
 	end
@@ -423,10 +450,13 @@ function BumperBallers:_detachRider(entry: Entry)
 		entry.Align:Destroy()
 		entry.Align = nil
 	end
-	local character, humanoid = self.context:GetCharacter(entry.Player)
+	local character, humanoid, root = self.context:GetCharacter(entry.Player)
 	if character and humanoid then
 		humanoid.PlatformStand = false
 		humanoid.AutoRotate = true
+		if root then
+			root.Anchored = false
+		end
 		if self.groupReady then
 			setRiderCollision(character, "Default")
 		end
@@ -564,6 +594,10 @@ function BumperBallers:Start()
 			else
 				pcall(entry.Body.SetNetworkOwner, entry.Body, nil)
 			end
+			local _, _, root = ctx:GetCharacter(player)
+			if root then
+				root.Anchored = false -- held still on top of the ball during the countdown
+			end
 		end
 	end
 
@@ -644,9 +678,11 @@ function BumperBallers:Start()
 			elseif not entry.BeyondSince then
 				entry.BeyondSince = os.clock()
 			end
+			local _, _, riderRoot = ctx:GetCharacter(entry.Player)
 			if
 				entry.Position.Y < self.waterY - OUT_DEPTH
 				or (entry.BeyondSince and os.clock() - entry.BeyondSince > 0.8)
+				or (riderRoot and riderRoot.Position.Y < self.waterY - OUT_DEPTH) -- came off the ball
 			then
 				table.insert(fallen, entry)
 			else
