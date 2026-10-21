@@ -1,0 +1,17 @@
+newmtl FloatRed
+Kd 0.922 0.235 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FloatWhite
+Kd 0.980 0.980 0.980
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rope
+Kd 0.824 0.706 0.510
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

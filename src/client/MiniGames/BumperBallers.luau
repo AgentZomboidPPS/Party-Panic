@@ -11,7 +11,8 @@
 -- own bumps squash and boing the moment the balls touch on screen, without waiting for the server.
 --
 -- Also: a strip of every rider's shape and color (dimmed with a cross when they're out), an EDGE!
--- warning near the rim, a YOU marker over this player's ball and gentle foam rings on the sea.
+-- warning near the rim, a YOU marker over this player's ball, gentle foam rings on the sea, and the
+-- buoys and pool floats bobbing on the swell.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -444,8 +445,22 @@ function BumperBallers.Start(api)
 		end
 	end
 
+	-- Buoys and pool floats bob on the swell (ambient: off with reduced effects).
+	local bobbers: { { Model: Model, Base: CFrame, Phase: number } } = {}
+	local floatsFolder = arena:FindFirstChild("Floats")
+	if floatsFolder and not State.ReducedEffects() then
+		for _, model in floatsFolder:GetChildren() do
+			if model:IsA("Model") then
+				local base = model:GetPivot()
+				local phase = (base.X * 0.07 + base.Z * 0.05) % (math.pi * 2)
+				table.insert(bobbers, { Model = model, Base = base, Phase = phase })
+			end
+		end
+	end
+
 	local wasAlive = nil
 	local nextStrip = 0
+	local nextBob = 0
 	api:RenderStep(function(dt: number)
 		local now = os.clock()
 		-- Squash-and-stretch pulses (uniform, so they look right however the ball has rolled).
@@ -488,8 +503,21 @@ function BumperBallers.Start(api)
 			local size = island.R * 2 + 6 + phase * 26
 			part.Size = Vector3.new(0.12, size, size)
 			part.Transparency = 0.55 + phase * 0.45
-			part.CFrame = CFrame.new(island.X, island.Water + 0.05 + math.sin(now * 1.3 + phase * 6) * 0.06, island.Z)
+			part.CFrame = CFrame.new(island.X, island.Water + 0.2 + math.sin(now * 1.3 + phase * 6) * 0.06, island.Z)
 				* CFrame.Angles(0, 0, math.rad(90))
+		end
+
+		-- A 0.22-stud bob reads fine at 30 Hz; skip the other frames to save phones the PivotTo calls.
+		if now >= nextBob then
+			nextBob = now + 1 / 30
+			for _, bob in bobbers do
+				local t = now * 1.4 + bob.Phase
+				bob.Model:PivotTo(
+					bob.Base
+						* CFrame.new(0, math.sin(t) * 0.22, 0)
+						* CFrame.Angles(math.sin(t * 0.8) * 0.05, 0, math.cos(t * 0.9) * 0.05)
+				)
+			end
 		end
 
 		local ball = balls[myId]

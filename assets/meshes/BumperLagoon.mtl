@@ -1,0 +1,23 @@
+newmtl Shelf
+Kd 0.667 0.922 0.843
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Reef
+Kd 0.275 0.765 0.765
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Deep
+Kd 0.118 0.431 0.627
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Coral
+Kd 1.000 0.471 0.549
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
