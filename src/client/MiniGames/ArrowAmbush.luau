@@ -510,9 +510,9 @@ function ArrowAmbush.Start(api)
 		})
 	end
 
-	-- The role intro: big for a few seconds, then it gets out of the way. (Right under the banner
-	-- for archers, whose chip is at the bottom; under the chip for runners.)
-	local introY = if isArcher or watching then y else y + 96
+	-- The role intro: big for a few seconds, then it gets out of the way. (Low enough to clear the
+	-- standings list on small phones.)
+	local introY = y + 96
 	local intro = UIKit.Label({
 		Name = "Intro",
 		Text = if isArcher then "🏹 YOU'RE AN ARCHER!" else "🏃 YOU'RE A RUNNER!",
@@ -587,6 +587,7 @@ function ArrowAmbush.Start(api)
 				stroke.Transparency = 0 -- (the intro fade may have hidden it)
 			end
 			introSub.Text = ""
+			api:Hint("") -- the "You're out" panel takes over
 			UIKit.PopIn(intro, 0.3)
 			task.delay(2.5, function()
 				if intro.Parent then
@@ -620,7 +621,7 @@ function ArrowAmbush.Start(api)
 		-- High over the front of the tower (above the parapet), looking well out over the courtyard,
 		-- so the far end sits under the round banner and the near wall at the bottom of the screen.
 		local eye = tower + Vector3.new(0, 28, 4)
-		local focus = Vector3.new(origin.X, floorY, origin.Z + 12)
+		local focus = Vector3.new(origin.X, floorY, origin.Z + 11)
 		cameraBase = CFrame.lookAt(eye, focus)
 		camera.CFrame = cameraBase :: CFrame
 		api:Track(function()
@@ -758,10 +759,7 @@ function ArrowAmbush.Start(api)
 				shoot(aim)
 			end
 		end))
-		api:Hint(if api:IsTouch() then "Tap where to shoot!" else "Click where to shoot!", introY + 104)
-		afterGo(5, function()
-			api:Hint("")
-		end)
+		-- (No hint line for archers: the chip at the bottom already says TAP / CLICK TO SHOOT.)
 	elseif not watching then
 		api:Hint("Watch for the red rings! Hide behind the boards!", introY + 104)
 		afterGo(5, function()
