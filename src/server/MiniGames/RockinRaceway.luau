@@ -133,7 +133,7 @@ function RockinRaceway:_strip(
 )
 	local origin = self.origin
 	-- (each kind sinks to its own depth, so buried bottoms never share a plane either)
-	local sink = if name == "Curb" then 0.14 elseif name == "Check" then 0.22 else 0.06
+	local sink = if name == "Curb" then 0.2 elseif name == "Check" then 0.27 else 0.06
 	local height = top + sink
 	return Build.Decor({
 		Name = name,
@@ -185,15 +185,24 @@ function RockinRaceway:_buildArena()
 		for line = 0, Track.LANES do
 			local offset = -half + line * Track.LANE
 			local edge = line == 0 or line == Track.LANES
-			self:_strip(
-				field,
-				"LaneLine",
-				0,
-				side * (R + offset),
-				Vector2.new(Track.STRAIGHT - 0.3, if edge then 0.5 else 0.3),
-				0.1,
-				white
-			)
+			local width = if edge then 0.5 else 0.3
+			if side > 0 then
+				-- (the home straight's lines stop at the checkered band under the arch)
+				local length = s - 1.6 - 0.15
+				for _, part in { -1, 1 } do
+					self:_strip(
+						field,
+						"LaneLine",
+						part * (1.6 + length / 2),
+						R + offset,
+						Vector2.new(length, width),
+						0.1,
+						white
+					)
+				end
+			else
+				self:_strip(field, "LaneLine", 0, -(R + offset), Vector2.new(Track.STRAIGHT - 0.3, width), 0.1, white)
+			end
 		end
 		-- Red and white curbs just outside both edges.
 		for _, edge in { -1, 1 } do
