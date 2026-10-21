@@ -18,36 +18,38 @@ return function(h)
 	local function cookie(spec)
 		local width, height, depth = spec.Size.X, spec.Size.Y, spec.Size.Z
 		local icing, extra = spec.Icing, spec.Extra
-		for key, value in {
-			Height = height,
-			Shadow = false,
-			Palette = {
-				Cookie = cookieColor,
-				Icing = icing,
-				Icing2 = extra or h.rgb(255, 240, 215),
-				Dots = extra or h.rgb(255, 255, 255),
-				Face = face,
-				Shine = h.rgb(255, 255, 255),
-				Cheeks = h.rgb(255, 140, 160),
-				Sprinkles = h.rgb(255, 110, 170),
-				Sprinkles2 = h.rgb(90, 200, 255),
-			},
-			Materials = {
-				Cookie = baked,
-				Icing = smooth,
-				Icing2 = smooth,
-				Dots = smooth,
-				Face = smooth,
-				Shine = Enum.Material.Neon,
-				Cheeks = smooth,
-			},
-			Fallback = function(m)
-				h.blob(m, "Cookie", Vector3.new(width, 0.75, depth), Vector3.new(0, 0.375, 0))
-				h.blob(m, "Icing", Vector3.new(width * 0.85, 0.3, depth * 0.85), Vector3.new(0, 0.8, 0))
-				h.ball(m, "Face", 0.6, Vector3.new(-0.9, height - 0.15, 0))
-				h.ball(m, "Face", 0.6, Vector3.new(0.9, height - 0.15, 0))
-			end,
-		} :: { [string]: any } do
+		for key, value in
+			{
+				Height = height,
+				Shadow = false,
+				Palette = {
+					Cookie = cookieColor,
+					Icing = icing,
+					Icing2 = extra or h.rgb(255, 240, 215),
+					Dots = extra or h.rgb(255, 255, 255),
+					Face = face,
+					Shine = h.rgb(255, 255, 255),
+					Cheeks = h.rgb(255, 140, 160),
+					Sprinkles = h.rgb(255, 110, 170),
+					Sprinkles2 = h.rgb(90, 200, 255),
+				},
+				Materials = {
+					Cookie = baked,
+					Icing = smooth,
+					Icing2 = smooth,
+					Dots = smooth,
+					Face = smooth,
+					Shine = Enum.Material.Neon,
+					Cheeks = smooth,
+				},
+				Fallback = function(m)
+					h.blob(m, "Cookie", Vector3.new(width, 0.75, depth), Vector3.new(0, 0.375, 0))
+					h.blob(m, "Icing", Vector3.new(width * 0.85, 0.3, depth * 0.85), Vector3.new(0, 0.8, 0))
+					h.ball(m, "Face", 0.6, Vector3.new(-0.9, height - 0.15, 0))
+					h.ball(m, "Face", 0.6, Vector3.new(0.9, height - 0.15, 0))
+				end,
+			} :: { [string]: any }
+		do
 			spec[key] = value
 		end
 	end

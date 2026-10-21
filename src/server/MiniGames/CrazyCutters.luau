@@ -284,7 +284,6 @@ function CrazyCutters:_finishShape()
 			ctx:SetScoreText(player, `{math.floor(total / #self.scores[player] + 0.5)}%`)
 		end
 		ctx:Fire(nil, "Scores", round.Index, results)
-		ctx:Sound("Success")
 	end)
 	ctx:Delay(SCORE_TIME, function()
 		if round.Index < #self.shapeIds then
@@ -326,7 +325,11 @@ function CrazyCutters:_onCut(player: Player, index: any, data: any)
 		end
 		-- In order, inside the cut's time (never ahead of the server's clock), on the dough, and no
 		-- further from the last position than the cutter can travel.
-		if t < track.LastT + Rules.SAMPLE_GAP * 0.5 or t < round.T0 - 0.05 or t > math.min(now + 0.1, round.T1 + 0.05) then
+		if
+			t < track.LastT + Rules.SAMPLE_GAP * 0.5
+			or t < round.T0 - 0.05
+			or t > math.min(now + 0.1, round.T1 + 0.05)
+		then
 			continue
 		end
 		if math.abs(u) > limit or math.abs(v) > limit then
@@ -441,7 +444,10 @@ function CrazyCutters:BotSamples(player: Player, skill: number, random: Random, 
 		while t < finish do
 			t += random:NextNumber(1.2, 4) / (0.25 + (1 - skill) * 1.2)
 			if t < finish then
-				table.insert(slips, { At = t, Size = random:NextNumber(0.9, 1.8) * (if random:NextNumber() < 0.5 then -1 else 1) })
+				table.insert(
+					slips,
+					{ At = t, Size = random:NextNumber(0.9, 1.8) * (if random:NextNumber() < 0.5 then -1 else 1) }
+				)
 			end
 		end
 		plan = {
