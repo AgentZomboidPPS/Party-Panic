@@ -517,7 +517,8 @@ local function buildVoteStage(root: Model): { BasePart }
 			Shape = Enum.PartType.Cylinder,
 			Size = Vector3.new(2, 9, 9),
 			-- Pink and gold scallops at alternating heights, like a carnival tent's valance.
-			CFrame = CFrame.new(index * 8.4, STAGE_TOP + 47 + (index % 2) * 0.6, backZ - 1.6)
+			-- (staggered in depth too: neighbors overlap, and shared planes would flicker)
+			CFrame = CFrame.new(index * 8.4, STAGE_TOP + 47 + (index % 2) * 0.6, backZ - 1.6 - (index % 2) * 0.25)
 				* CFrame.Angles(0, math.rad(90), 0),
 			Color = if index % 2 == 0 then rgb(255, 92, 150) else rgb(255, 204, 64),
 			Parent = stage,
@@ -563,16 +564,18 @@ local function buildVoteStage(root: Model): { BasePart }
 	)
 
 	-- Announcement screen (phase, timer, winner reveal) in a rounded bezel. Clients draw on Back.
+	-- It overlaps the top of the vote screens, so it sits a quarter stud in front of them: faces
+	-- sharing a plane would flicker.
 	Shapes.RoundedBox(Vector3.new(46, 10, 1.2), 0.6, {
 		Name = "AnnouncementBezel",
-		CFrame = CFrame.new(0, STAGE_TOP + 39, backZ + 0.8),
+		CFrame = CFrame.new(0, STAGE_TOP + 39, backZ + 1.25),
 		Color = PALETTE.Trim,
 		Parent = stage,
 	})
 	local announcement = Build.Part({
 		Name = "AnnouncementScreen",
 		Size = Vector3.new(44, 8.4, 0.4),
-		CFrame = CFrame.new(0, STAGE_TOP + 39, backZ + 1.5),
+		CFrame = CFrame.new(0, STAGE_TOP + 39, backZ + 1.95),
 		Color = rgb(18, 14, 36),
 		Parent = stage,
 	})
@@ -672,12 +675,15 @@ local function buildVoteStage(root: Model): { BasePart }
 			})
 			for _, offset in { Vector3.new(0, 1.4, 0), Vector3.new(0, -2.2, 0) } do
 				local size = if offset.Y > 0 then 5.4 else 2.6
+				-- The small cone overlaps the big one's ring, so it stands a little prouder (no
+				-- shared planes, which would flicker).
+				local depth = if offset.Y > 0 then 0 else -0.25
 				Build.Part({
 					Name = "Woofer",
 					Shape = Enum.PartType.Cylinder,
 					Size = Vector3.new(0.6, size, size),
 					CFrame = box.CFrame
-						* CFrame.new(offset + Vector3.new(0, 0, -4))
+						* CFrame.new(offset + Vector3.new(0, 0, -4 + depth))
 						* CFrame.Angles(0, math.rad(90), 0),
 					Color = rgb(20, 18, 30),
 					Parent = stage,
@@ -685,9 +691,9 @@ local function buildVoteStage(root: Model): { BasePart }
 				Build.Decor({
 					Name = "WooferRing",
 					Shape = Enum.PartType.Cylinder,
-					Size = Vector3.new(0.5, size + 0.8, size + 0.8),
+					Size = Vector3.new(0.4, size + 0.8, size + 0.8),
 					CFrame = box.CFrame
-						* CFrame.new(offset + Vector3.new(0, 0, -3.95))
+						* CFrame.new(offset + Vector3.new(0, 0, -4 + depth))
 						* CFrame.Angles(0, math.rad(90), 0),
 					Color = PALETTE.Portal[if side < 0 then 1 else 3],
 					Material = Enum.Material.Neon,
@@ -864,15 +870,19 @@ local function buildShop(root: Model)
 			Parent = shop,
 		})
 	end
-	-- Striped awning: alternating rounded strips, tilted toward the plaza.
+	-- Striped awning: alternating rounded strips, tilted toward the plaza. Neighbors overlap a
+	-- little, so every other strip is a touch longer and higher (shared planes would flicker).
 	for index = 0, 9 do
-		Shapes.RoundedBox(Vector3.new(14, 0.9, 3.1), 0.4, {
+		local raised = index % 2
+		Shapes.RoundedBox(Vector3.new(14 + raised * 0.3, 0.9, 3.1), 0.4, {
 			Name = "Awning",
-			CFrame = CFrame.new(base + Vector3.new(-5, 17.4, -13.5 + index * 3)) * CFrame.Angles(0, 0, math.rad(-12)),
+			CFrame = CFrame.new(base + Vector3.new(-5, 17.4, -13.5 + index * 3))
+				* CFrame.Angles(0, 0, math.rad(-12))
+				* CFrame.new(0, raised * 0.15, 0),
 			Color = if index % 2 == 0 then pink else white,
 			Parent = shop,
 		})
-		Shapes.Capsule(3.1, 1.7, {
+		Shapes.Capsule(2.9, 1.7, {
 			Name = "Scallop",
 			CFrame = CFrame.new(base + Vector3.new(1.7, 15.8, -13.5 + index * 3)) * CFrame.Angles(0, math.rad(90), 0),
 			Color = if index % 2 == 0 then pink else white,
@@ -884,7 +894,7 @@ local function buildShop(root: Model)
 	sign(
 		shop,
 		"SHOP",
-		Vector3.new(2, 6.5, 18),
+		Vector3.new(2, 6.5, 18.4),
 		CFrame.new(base + Vector3.new(-9, 22, 0)),
 		Enum.NormalId.Right,
 		rgb(70, 36, 110)
@@ -1197,8 +1207,8 @@ local function buildEmoteStage(root: Model): (ProximityPrompt, Vector3)
 			Parent = stage,
 		})
 	end
-	Shapes.RoundedBox(Vector3.new(30, 2, 2), 0.6, {
-		Name = "TrussBeam",
+	Shapes.RoundedBox(Vector3.new(30.6, 2, 2.3), 0.6, {
+		Name = "TrussBeam", -- a little bigger than the posts, so it shares none of their faces
 		CFrame = CFrame.new(center + Vector3.new(0, 18, 8)),
 		Color = rgb(70, 50, 120),
 		Parent = stage,
