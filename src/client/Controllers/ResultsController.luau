@@ -29,8 +29,10 @@ local MEDALS = { "🥇", "🥈", "🥉" }
 
 -- The standings rows (units: the column is about 374 wide on every screen): the result column is as
 -- wide as the widest result shown, up to RESULT_MAX (the rest stays for the place and name). A
--- result that's wider still is drawn smaller, down to RESULT_MIN_TEXT (11 pt on a phone).
-local ROW_TEXT, RESULT_MAX, RESULT_MIN_TEXT = 21, 232, 18
+-- result that's wider still is drawn smaller, down to RESULT_MIN_TEXT (11 pt on a phone). Each
+-- result keeps RESULT_SLACK spare: phones lay the scaled-down text out a little wider than it
+-- measures, and a result measured to fit exactly ended in "..." there.
+local ROW_TEXT, RESULT_MAX, RESULT_MIN_TEXT, RESULT_SLACK = 21, 232, 18, 8
 
 local modal: Modal.Modal
 local headline: TextLabel
@@ -64,7 +66,7 @@ local function show(data)
 	for _, entry in data.Standings do
 		resultWidth = math.max(resultWidth, UIKit.TextWidth(entry.ScoreText or "", ROW_TEXT, Theme.Fonts.Bold))
 	end
-	resultWidth = math.min(math.ceil(resultWidth) + 4, RESULT_MAX)
+	resultWidth = math.min(math.ceil(resultWidth) + RESULT_SLACK, RESULT_MAX)
 	for index, entry in data.Standings do
 		local isMe = entry.UserId == game:GetService("Players").LocalPlayer.UserId
 		local place = MEDALS[entry.Place] or Placement.Ordinal(entry.Place)
@@ -90,7 +92,10 @@ local function show(data)
 		nameLabel:SetAttribute("PP_TruncateOk", true) -- a long name ends in "..."
 		local result = entry.ScoreText or ""
 		local textSize = ROW_TEXT
-		while textSize > RESULT_MIN_TEXT and UIKit.TextWidth(result, textSize, Theme.Fonts.Bold) > resultWidth do
+		while
+			textSize > RESULT_MIN_TEXT
+			and UIKit.TextWidth(result, textSize, Theme.Fonts.Bold) + RESULT_SLACK > resultWidth
+		do
 			textSize -= 1
 		end
 		UIKit.Label({

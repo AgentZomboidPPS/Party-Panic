@@ -1187,8 +1187,8 @@ function CakeFactory:Stop(_reason: string?)
 end
 
 -- Team results (most points first, then perfect presses); each player's line shows the team's 🎂 and
--- ⭐ cakes and their own good layers, the figure the standings showed all round ("Yellow 12 🎂 3 ⭐ •
--- 14 layers": short enough to read whole on the results card beside a name).
+-- ⭐ cakes as its pill showed them and their own good layers, the figure the standings showed all
+-- round ("Yellow 🎂 12 ⭐ 3 • 14 layers": short enough to read whole on the results card).
 function CakeFactory:GetResults()
 	local results = self.context:TeamResults()
 	for _, entry in results.Entries do
@@ -1198,7 +1198,7 @@ function CakeFactory:GetResults()
 		end
 		local worker = self.workers[entry.Player]
 		if worker and line then
-			entry.ScoreText = `{entry.Team} {line.Done} 🎂 {line.Stars} ⭐ • {worker.Good} layers`
+			entry.ScoreText = `{entry.Team} 🎂 {line.Done} ⭐ {line.Stars} • {worker.Good} layers`
 		end
 	end
 	results.WinningTeam = self:_leader()

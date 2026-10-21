@@ -12,6 +12,10 @@
 -- Tapping the profile chip opens the Rewards screen (owner: "Also we need cool payoffs for players
 -- that keep playing the game."); RewardsController adds the next reward beside the coins and colors
 -- the level badge for the player's prestige tier.
+-- The team pill under the status line shows every team in the round with its mark and score, as
+-- wide as its line: colour teams by the shape they wear in the team modes, in their colour, versus
+-- roles by their icon. On phones it used to read Red and Blue whatever the teams were, so SHARK
+-- BAIT, SINKING SANDS and ARROW AMBUSH showed 0 — 0 all round and Green and Yellow never showed.
 
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -366,6 +370,40 @@ local function teamScoreLine(scores: { [string]: any }): (string, string)
 	return table.concat(rich, gap), table.concat(plain, gap)
 end
 
+-- Keeps a team pill on the round's team scores (both layouts): hidden outside team rounds, and as
+-- wide as its line, so four teams with 3-digit scores fit the smallest phone (re-measured every
+-- second while it shows, in case the font was still loading).
+local TEAM_TEXT, TEAM_PAD, TEAM_MIN, TEAM_MAX = 24, 22, 160, 600
+local function followTeamScores(pill: Frame, label: TextLabel)
+	local line, fittedAt = "", 0
+	local function fit()
+		fittedAt = os.clock()
+		local width = math.ceil(UIKit.TextWidth(line, TEAM_TEXT, Theme.Fonts.Display)) + 2 * TEAM_PAD
+		pill.Size = UDim2.fromOffset(math.clamp(width, TEAM_MIN, TEAM_MAX), pill.Size.Y.Offset)
+	end
+	local function refresh()
+		local scores = GameState.GetJSON("TeamScores")
+		if type(scores) ~= "table" or next(scores) == nil then
+			pill.Visible = false
+			return
+		end
+		pill.Visible = true
+		local rich, plain = teamScoreLine(scores)
+		label.Text = rich
+		if plain ~= line then
+			line = plain
+			fit()
+		end
+	end
+	GameState.Changed("TeamScores", refresh)
+	refresh()
+	RunService.Heartbeat:Connect(function()
+		if pill.Visible and os.clock() - fittedAt > 1 then
+			fit()
+		end
+	end)
+end
+
 local function followTimer(timerPill: Frame, timer: TextLabel)
 	local lastWhole = -1
 	RunService.Heartbeat:Connect(function()
@@ -441,6 +479,7 @@ local function buildPhaseBanner(parent: Instance)
 		Children = { UIKit.TextStroke(0.2) },
 	})
 	local teams = UIKit.Panel({
+		Name = "TeamScores",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 108),
 		Size = UDim2.fromOffset(360, 40),
@@ -451,11 +490,12 @@ local function buildPhaseBanner(parent: Instance)
 	local teamsLabel = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 24,
+		TextSize = TEAM_TEXT,
 		TextWrapped = false,
 		RichText = true,
 		Size = UDim2.fromScale(1, 1),
 		Parent = teams,
+		Children = { UIKit.TextStroke(0.2) },
 	})
 
 	followTimer(timerPill, timer)
@@ -464,18 +504,7 @@ local function buildPhaseBanner(parent: Instance)
 		title.Text = bannerTitle(false)
 		status.Text = statusLine(phase)
 	end)
-
-	local function refreshTeams()
-		local scores = GameState.GetJSON("TeamScores")
-		if type(scores) ~= "table" or next(scores) == nil then
-			teams.Visible = false
-			return
-		end
-		teams.Visible = true
-		teamsLabel.Text = teamScoreLine(scores)
-	end
-	GameState.Changed("TeamScores", refreshTeams)
-	refreshTeams()
+	followTeamScores(teams, teamsLabel)
 end
 
 -- Phones: the banner sits in Roblox's top bar row (its own ScreenGui inside the device's safe area,
@@ -587,10 +616,8 @@ local function buildTopBarSwitch(hud: Instance)
 	SitOutSwitch.new(holder, { Name = "SitOut", Hud = true })
 end
 
--- Phones: the round's status line ("Survivors: 7") and team scores, just under the top bar in the
--- middle. Mode HUDs go under them (Api.TopHud / HudY). The team pill shows the round's own teams
--- (teamScoreLine): it used to read "🔴 Red — Blue 🔵" whatever the teams were, so Sharks, Divers and
--- Archers rounds read 0 — 0 all round on phones and Green and Yellow never showed.
+-- Phones: the round's status line ("Survivors: 7") and team scores (teamScoreLine), just under the
+-- top bar in the middle. Mode HUDs go under them (Api.TopHud / HudY).
 local function buildTouchStatus(parent: Instance)
 	local holder = UIKit.new("Frame", {
 		Name = "RoundStatus",
@@ -612,6 +639,7 @@ local function buildTouchStatus(parent: Instance)
 		Children = { UIKit.TextStroke(0.2) },
 	})
 	local teams = UIKit.Panel({
+		Name = "TeamScores",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 40),
 		Size = UDim2.fromOffset(240, 42),
@@ -622,42 +650,17 @@ local function buildTouchStatus(parent: Instance)
 	local teamsLabel = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 24,
+		TextSize = TEAM_TEXT,
 		TextWrapped = false,
 		RichText = true,
 		Size = UDim2.fromScale(1, 1),
 		Parent = teams,
+		Children = { UIKit.TextStroke(0.2) },
 	})
-	-- The pill is as wide as its line (four teams with 3-digit scores fit the smallest phone),
-	-- re-measured now and then in case the font was still loading.
-	local teamsLine, fittedAt = "", 0
-	local function fitTeams()
-		fittedAt = os.clock()
-		local width = math.ceil(UIKit.TextWidth(teamsLine, 24, Theme.Fonts.Display)) + 44
-		teams.Size = UDim2.fromOffset(math.clamp(width, 160, 600), 42)
-	end
 	RunService.Heartbeat:Connect(function()
 		status.Text = statusLine(GameState.Get("Phase") or "Waiting")
-		if teams.Visible and os.clock() - fittedAt > 1 then
-			fitTeams()
-		end
 	end)
-	local function refreshTeams()
-		local scores = GameState.GetJSON("TeamScores")
-		if type(scores) ~= "table" or next(scores) == nil then
-			teams.Visible = false
-			return
-		end
-		teams.Visible = true
-		local rich, plain = teamScoreLine(scores)
-		teamsLabel.Text = rich
-		if plain ~= teamsLine then
-			teamsLine = plain
-			fitTeams()
-		end
-	end
-	GameState.Changed("TeamScores", refreshTeams)
-	refreshTeams()
+	followTeamScores(teams, teamsLabel)
 end
 
 local function menuButton(

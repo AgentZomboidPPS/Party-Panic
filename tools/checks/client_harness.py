@@ -20,6 +20,9 @@ the standings, team outlines, spectating (you get knocked out), a bot leaving an
 mid-round, the results and a bot champion on the podium. The result's "botChecks" says what the
 client did with them, and the extra snapshots ("InRound teams", "Podium") show it. The stand-in
 players are in the round either way, and the player is always knocked out ("Out", "Spectate").
+In the round, the team pill under the status line shows every kind of team ("teamChecks": what it
+read and how wide it was; "InRound teams": four teams, its widest), and a mode's two action buttons
+show with two toasts up ("InRound buttons": on phones the toasts sit above the buttons).
 The result's "portals" says what each of the vote stage's portals shows in each phase (its game,
 "✓ YOUR VOTE", Random's spinning reel, the winner), as text.
 After the round the player sits out (the sit-out switch by the banner): a tap with no answer from
@@ -775,15 +778,45 @@ if #bots > 0 then
 	botChecks.escape = Participants.Escape("a<b&c>")
 	botChecks.board = boardRows()
 
-	-- Team outlines go on bots too, and the team pill under the status line shows all four teams
-	-- (with 3-digit scores, its widest).
+	-- Team outlines go on bots too.
 	for index, who in everyone() do
 		who:SetAttribute("PP_Team", if index % 2 == 0 then "Red" else "Blue")
 	end
-	GameState.SetJSON("TeamScores", { Red = 100, Blue = 64, Green = 109, Yellow = 7 })
-	task.wait(0.8)
+end
+
+-- The team pill under the status line (HudController) shows every team in the round with its mark
+-- and score: the versus modes' roles and two colour teams (teamChecks: what it read and how wide it
+-- was, in its own units), then all four colour teams with 3-digit scores, its widest (the snapshot).
+step = "team scores"
+local teamChecks = {}
+do
+	local function pill()
+		local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+		local frame = hud and hud:FindFirstChild("TeamScores", true)
+		local label = frame and frame:FindFirstChildWhichIsA("TextLabel")
+		return if label and frame.Visible then `{label.Text}  [{frame.Size.X.Offset} wide]` else "hidden"
+	end
+	for _, scores in
+		{
+			{ Sharks = 3, Swimmers = 120 },
+			{ SandKings = 85, Divers = 240 },
+			{ Archers = 4, Runners = 7 },
+			{ Red = 12, Blue = 9 },
+			{ Red = 100, Blue = 64, Green = 109, Yellow = 7 },
+		}
+	do
+		GameState.SetJSON("TeamScores", scores)
+		task.wait(0.3)
+		table.insert(teamChecks, pill())
+	end
+	task.wait(0.5)
 	snap("InRound teams")
 	GameState.SetJSON("TeamScores", {})
+	task.wait(0.1)
+	table.insert(teamChecks, "after the round: " .. pill())
+end
+
+if #bots > 0 then
 	local outlined = 0
 	for _, bot in bots do
 		if bot.rig and bot.rig:FindFirstChildOfClass("Highlight") then
@@ -795,7 +828,26 @@ if #bots > 0 then
 		who:SetAttribute("PP_Team", "")
 	end
 	task.wait(0.5)
+end
 
+-- A mode's two action buttons (Kit/Api: beside the jump button on phones) with two toasts up, the
+-- first on two lines: on phones the toasts sit above the buttons' row (NotificationController).
+step = "action buttons"
+do
+	local okApi, Api = pcall(__require, "Client/MiniGames/Kit/Api")
+	if okApi then
+		local api = Api.new(ids[1])
+		api:Button({ Text = "HIT!", Key = Enum.KeyCode.E })
+		api:Button({ Text = "PULL", Key = Enum.KeyCode.Q, Color = Color3.fromRGB(255, 92, 170), Slot = 2 })
+		__fire("Notify", "🎃 GOLDEN RUSH! Every veggie counts double for the next ten seconds!", "success", 4)
+		__fire("Notify", "Quest complete: Play 3 rounds", "reward", 4)
+		task.wait(0.8)
+		snap("InRound buttons")
+		api:Destroy()
+		task.wait(0.3)
+	else
+		__note("Kit/Api failed to load: " .. tostring(Api))
+	end
 end
 
 -- The player is knocked out: the out panel, then spectating (only bots have characters to watch).
@@ -896,14 +948,14 @@ phase("Results", 8, function()
 		-- The longest results lines the modes write, beside long names: the result always reads whole
 		-- and a name gives way ("..."), like the standings board.
 		local longest = {
-			"🏊 20 coins • never chomped!",
-			"Yellow 12 🎂 3 ⭐ • 14 layers",
-			"Yellow 100% • 22 perfect",
-			"Green 97% • 6/11 leans",
-			"🦈 12 chomps • 3 dunked",
-			"Survived! • 120 jumps",
-			"🏹 12 tags • +12 boards",
-			"Divers 1200 • you 450",
+			"🏊 45 coins • never chomped!", -- SHARK BAIT
+			"Yellow 🎂 12 ⭐ 3 • 14 layers", -- CAKE FACTORY
+			"Yellow 97% • 14/15 leans", -- BOBSLED RUN
+			"Yellow 100% • 22 perfect", -- PUMP & POP
+			"Lasted 54s • 120 jumps", -- FIRE ROPE
+			"🦈 12 chomps • 3 dunked", -- SHARK BAIT
+			"🏹 12 tags • +12 boards", -- ARROW AMBUSH
+			"Divers 1200 • you 450", -- SINKING SANDS
 		}
 		for index = 1, 8 do
 			local other = __players[index]
@@ -1159,6 +1211,7 @@ return game:GetService("HttpService"):JSONEncode({
 	guiInstances = guiCount,
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
+	teamChecks = teamChecks,
 	sitOutChecks = sitOutChecks,
 	tipChecks = tipChecks,
 	textReport = __textReport,
