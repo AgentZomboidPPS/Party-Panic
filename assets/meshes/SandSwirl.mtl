@@ -1,0 +1,35 @@
+newmtl Swirl1
+Kd 0.871 0.667 0.431
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Swirl2
+Kd 0.988 0.886 0.659
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Swirl3
+Kd 0.988 0.886 0.659
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Swirl4
+Kd 0.988 0.886 0.659
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Swirl5
+Kd 0.988 0.886 0.659
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Whirl
+Kd 0.690 0.486 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
