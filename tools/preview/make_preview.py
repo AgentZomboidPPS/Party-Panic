@@ -93,6 +93,9 @@ CAMERAS: dict[str, dict] = {
     "SkateEscape": {"yaw": 12, "pitch": 15, "distance": 30, "shift": [0, 2, 0], "raise": 5, "sway": 8},
     # Divers at the rim of the swirling sinkhole, treasure on the sand around it.
     "SinkingSands": {"yaw": 30, "pitch": 30, "distance": 36, "shift": [0, 2, 6]},
+    # Low over the water: a shark's fin between the rafts, swimmers and coins on the decks, the
+    # lighthouse and the sea stacks beyond.
+    "SharkBait": {"look_at": "Gills", "yaw": 35, "pitch": 30, "distance": 27, "shift": [0, 1, 0], "raise": 7, "fov": 58},
 }
 
 # Seconds into the round to take the snapshot, where the default (8) isn't the liveliest moment.
@@ -104,6 +107,7 @@ DUMP_AT: dict[str, float] = {
     "PumpAndPop": 16,  # the balloons are big by now
     "SkateEscape": 10,
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole
+    "SharkBait": 13,  # a raft tipping, coins spilled in the water, the sharks closing in
 }
 
 R15 = {

@@ -1,0 +1,23 @@
+newmtl Wood
+Kd 0.549 0.329 0.173
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 0.518 0.455 0.439
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Gold
+Kd 1.000 0.784 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Lock
+Kd 0.353 0.353 0.392
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

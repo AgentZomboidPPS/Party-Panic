@@ -14,8 +14,21 @@
 --
 -- Every template is normalized once: anchored, piece colors applied by name, collision/query/touch
 -- flags set for its role, pivot moved to the bottom center so callers can drop it on the ground.
+--
+-- Scenery the camera can't go inside (owner: "I keep clipping into some chair on fire rope what is
+-- going on?"): Roblox's default camera only stops in front of parts that collide, and props don't
+-- (so nothing ever snags on them), so it slid right inside Fire Rope's braziers and rope towers and
+-- showed their insides. A spec with `BlocksCamera` (true, or the names of the pieces that do) puts
+-- those pieces in the CAMERA_SOLID collision group and tags them; each player's device then makes
+-- them solid for itself (client Controllers/SceneryCameraController). The group collides with
+-- Default only, which is the group the camera's ray uses; every other group (players' characters
+-- and everything else a mode sets up) passes through. Here on the server they stay non-colliding,
+-- so bots and anything else the server moves never touch them. Only for props that stay still or
+-- turn in place: a moving part would push the camera around.
 
+local CollectionService = game:GetService("CollectionService")
 local InsertService = game:GetService("InsertService")
+local PhysicsService = game:GetService("PhysicsService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Build = require(script.Parent.Build)
@@ -29,6 +42,7 @@ type Spec = {
 	AssetId: number?, -- uploaded Model asset (tools/upload_assets.py fills it in)
 	Collide: boolean?,
 	Touch: boolean?,
+	BlocksCamera: (boolean | { string })?, -- solid to the camera only (see the top): all pieces, or these
 	Shadow: boolean?,
 	Palette: { [string]: Color3 },
 	Materials: { [string]: Enum.Material }?,
@@ -484,6 +498,36 @@ end
 
 local templates: { [string]: Model } = {}
 local sources: { [string]: string } = {}
+local cameraSolid: { [string]: boolean } = {} -- templates with pieces in CAMERA_SOLID
+
+-- Collision group and tag of the pieces that block the camera (the client uses the same name).
+local CAMERA_SOLID = "PP_CameraSolid"
+
+-- Registers CAMERA_SOLID and keeps it colliding with Default only: every other group (players'
+-- characters, a mode's own groups, even ones registered since last time) passes through it. Run
+-- each time such a prop is placed. False if the groups can't be set up (the pieces then stay plain
+-- scenery).
+local function setupCameraSolid(): boolean
+	local ok = pcall(function()
+		if not PhysicsService:IsCollisionGroupRegistered(CAMERA_SOLID) then
+			PhysicsService:RegisterCollisionGroup(CAMERA_SOLID)
+		end
+		for _, group in PhysicsService:GetRegisteredCollisionGroups() do
+			if group.name ~= "Default" and PhysicsService:CollisionGroupsAreCollidable(CAMERA_SOLID, group.name) then
+				PhysicsService:CollisionGroupSetCollidable(CAMERA_SOLID, group.name, false)
+			end
+		end
+	end)
+	return ok
+end
+
+local function blocksCamera(spec: Spec, piece: string): boolean
+	local blocks = spec.BlocksCamera
+	if type(blocks) == "table" then
+		return table.find(blocks, piece) ~= nil
+	end
+	return blocks == true
+end
 
 local function wrapInModel(instance: Instance, name: string): Model
 	if instance:IsA("Model") then
@@ -555,6 +599,8 @@ local function normalize(name: string, model: Model, spec: Spec)
 		model:ScaleTo(model:GetScale() * spec.Height / size.Y)
 	end
 
+	-- (Colliding props already stop the camera.)
+	local camera = spec.BlocksCamera ~= nil and spec.Collide ~= true and setupCameraSolid()
 	local largest: BasePart? = nil
 	local largestVolume = -1
 	for _, descendant in model:GetDescendants() do
@@ -566,6 +612,11 @@ local function normalize(name: string, model: Model, spec: Spec)
 		part.CanCollide = spec.Collide == true
 		part.CanQuery = spec.Collide == true or spec.Touch == true
 		part.CanTouch = spec.Touch == true
+		if camera and blocksCamera(spec, part.Name) then
+			part.CollisionGroup = CAMERA_SOLID
+			CollectionService:AddTag(part, CAMERA_SOLID)
+			cameraSolid[name] = true
+		end
 		local volume = part.Size.X * part.Size.Y * part.Size.Z
 		part.CastShadow = spec.Shadow ~= false and volume > 8
 		local color = spec.Palette[part.Name]
@@ -625,6 +676,9 @@ export type GetOptions = {
 -- Returns a fresh copy of a prop. Options can rescale, recolor pieces, place and parent it.
 function MeshLibrary.Get(name: string, options: GetOptions?): Model
 	local model = resolve(name):Clone()
+	if cameraSolid[name] then
+		setupCameraSolid() -- keeps groups registered since the template was made out of it
+	end
 	local opts = options or {}
 	if opts.Scale and opts.Scale ~= 1 then
 		model:ScaleTo(model:GetScale() * opts.Scale)
@@ -660,6 +714,10 @@ function MeshLibrary.Assemble(model: Model, massless: boolean): BasePart
 			descendant.CanQuery = false
 			descendant.CanTouch = false
 			descendant.Massless = massless
+			if descendant:HasTag(CAMERA_SOLID) then -- carried props never block the camera
+				descendant:RemoveTag(CAMERA_SOLID)
+				descendant.CollisionGroup = "Default"
+			end
 			if descendant ~= root then
 				Build.Weld(root, descendant)
 			end

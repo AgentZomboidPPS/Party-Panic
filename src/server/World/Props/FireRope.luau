@@ -2,6 +2,13 @@
 -- lava down its stairs, basalt cliffs with lava falls, stone towers that hold the rope's sun wheels,
 -- fire braziers rising out of the lava and the arches under the bridge. Meshes come from
 -- tools/meshgen/props/FireRope.py; each has a few-part fallback.
+--
+-- All of them block the camera (owner: "I keep clipping into some chair on fire rope what is going
+-- on?"): the default camera, 12.5 studs behind a player, slid inside the back braziers' fire bowls
+-- (the bowl's rim and gold claws, seen from inside, look like the back of a chair) when a player at
+-- the back of the bridge tipped the camera up to watch the rope, and inside the rope towers and the
+-- wheels' hubs when a player at either end looked back along the bridge. They still don't collide
+-- with anyone (see MeshLibrary).
 return function(h)
 	local Lava = h.rgb(255, 110, 30)
 	local Gold = h.rgb(255, 198, 60)
@@ -14,6 +21,7 @@ return function(h)
 		DragonTemple = {
 			AssetId = 101828887502674,
 			Height = 97.5,
+			BlocksCamera = true,
 			Shadow = false,
 			Palette = {
 				Stone = Stone,
@@ -54,6 +62,7 @@ return function(h)
 		RopeTower = {
 			AssetId = 101851055954832,
 			Height = 43.3,
+			BlocksCamera = true,
 			Palette = {
 				Stone = Stone,
 				Trim = Gold,
@@ -83,6 +92,9 @@ return function(h)
 		SunWheel = {
 			AssetId = 109791260711279,
 			Height = 29.4,
+			-- It spins: only its round parts (rim, hub, axle; the same shape at every turn) stop the camera,
+			-- not the spokes and flame blades sweeping past it.
+			BlocksCamera = { "Rim", "Trim", "Eye" },
 			Shadow = false, -- no spinning spoke shadow across the players at the bridge's ends
 			Palette = {
 				Rim = Iron,
@@ -112,6 +124,7 @@ return function(h)
 		FireBrazier = {
 			AssetId = 102363003339428,
 			Height = 28.9,
+			BlocksCamera = true,
 			Palette = {
 				Stone = Stone,
 				Trim = Gold,
@@ -131,6 +144,7 @@ return function(h)
 		LavaFall = {
 			AssetId = 110344895154199,
 			Height = 53.1,
+			BlocksCamera = true,
 			Shadow = false,
 			Palette = { Rock = h.rgb(74, 54, 66), Lava = Lava, Crust = h.rgb(200, 64, 30) },
 			Materials = { Rock = Enum.Material.Basalt, Lava = Neon, Crust = Enum.Material.Basalt },
@@ -146,6 +160,7 @@ return function(h)
 		BasaltWall = {
 			AssetId = 71684404393362,
 			Height = 59.2,
+			BlocksCamera = true,
 			Shadow = false,
 			Palette = { Rock = h.rgb(74, 54, 66), Lava = Lava, Crust = h.rgb(200, 64, 30) },
 			Materials = { Rock = Enum.Material.Basalt, Lava = Neon, Crust = Enum.Material.Basalt },
@@ -162,6 +177,7 @@ return function(h)
 		TempleBridge = {
 			AssetId = 80539564743048,
 			Height = 22.6,
+			BlocksCamera = true,
 			Shadow = false,
 			Palette = {
 				Stone = h.rgb(150, 62, 58),

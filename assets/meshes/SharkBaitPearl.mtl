@@ -1,0 +1,17 @@
+newmtl Shell
+Kd 0.941 0.275 0.275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl ShellInside
+Kd 1.000 0.882 0.902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Pearl
+Kd 0.980 0.961 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
