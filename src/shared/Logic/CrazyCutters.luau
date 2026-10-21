@@ -15,7 +15,7 @@
 
 local CrazyCutters = {}
 
-CrazyCutters.FULL = 0.2 -- full credit this close to the line (studs)
+CrazyCutters.FULL = 0.15 -- full credit this close to the line (studs)
 CrazyCutters.ZERO = 1.2 -- no credit this far from it
 CrazyCutters.COVER = 0.75 -- an outline point counts as cut when the cutter passes this close
 CrazyCutters.COVER_NEEDED = 0.98 -- this share of the points counts as the whole outline

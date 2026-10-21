@@ -100,6 +100,7 @@ type Board = {
 	Pos: Vector2, -- the cutter's position now
 	Heading: number,
 	Cutter: Model?,
+	Marker: Part?,
 	TipOffset: CFrame,
 	Label: TextLabel?,
 	Scores: { number },
@@ -161,6 +162,7 @@ function CrazyCutters.Start(api)
 			Pos = Vector2.zero,
 			Heading = 0,
 			Cutter = nil,
+			Marker = nil,
 			TipOffset = CFrame.identity,
 			Label = nil,
 			Scores = {},
@@ -180,6 +182,17 @@ function CrazyCutters.Start(api)
 			end
 			cutter.Parent = api.World
 			board.Cutter = cutter
+		end
+		if board.Mine then
+			-- A bright bead where the wheel touches the dough: exactly where you're cutting.
+			board.Marker = part({
+				Name = "CutPoint",
+				Shape = Enum.PartType.Ball,
+				Size = Vector3.one * 0.42,
+				Color = Theme.Colors.Yellow,
+				Material = Enum.Material.Neon,
+				Parent = api.World,
+			})
 		end
 		-- Name and scores over the board's far edge.
 		local anchor = part({
@@ -214,8 +227,15 @@ function CrazyCutters.Start(api)
 	local function placeCutter(board: Board)
 		local cutter = board.Cutter
 		if cutter then
-			local spot = board.Top * CFrame.new(board.Pos.X, 0, -board.Pos.Y) * CFrame.Angles(0, board.Heading, 0)
+			-- Your own cutter keeps its handle leaning away from you, so it never hides the line
+			-- under the wheel; the others' swivel to follow their cut.
+			local yaw = if board.Mine then math.pi else board.Heading
+			local spot = board.Top * CFrame.new(board.Pos.X, 0, -board.Pos.Y) * CFrame.Angles(0, yaw, 0)
 			cutter:PivotTo(spot * board.TipOffset:Inverse())
+		end
+		local marker = board.Marker
+		if marker then
+			marker.CFrame = CFrame.new(at(board, board.Pos.X, board.Pos.Y, 0.25))
 		end
 	end
 
@@ -277,6 +297,9 @@ function CrazyCutters.Start(api)
 			local count = math.max(8, math.floor(current.Length / spacing))
 			for index = 1, count - 1 do
 				local u, v = Rules.PointAt(current, current.Length * index / count)
+				if (u - su) ^ 2 + (v - sv) ^ 2 < 0.6 ^ 2 then
+					continue -- under the start disc
+				end
 				local dot = part({
 					Name = "Dot",
 					Shape = Enum.PartType.Cylinder,
