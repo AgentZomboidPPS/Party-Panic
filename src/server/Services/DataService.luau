@@ -364,7 +364,7 @@ local function onPlayerAdded(player: Player)
 				)
 			end
 		end)
-		Telemetry.PlayerEvent(player, "EconomyOldServer", migration.OldServerChange)
+		Telemetry.PlayerEvent(player, "EconomyOldServer", 1, tostring(migration.OldServerChange))
 	end
 
 	if not canSave then

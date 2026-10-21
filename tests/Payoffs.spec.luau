@@ -70,6 +70,28 @@ test("shop prices, quests, gifts and the road are on the same small scale", func
 	expectTrue(token <= 5, "the secret token stays small")
 end)
 
+test("pacing: a few rounds for a cheap item, a long evening for the best one", function()
+	-- An average round for an average player in an 8-player round: everyone plays, half finish in
+	-- the top half, one wins, about one in ten beats their best. Round coins only (no gifts,
+	-- quests or road coins, which only make it quicker).
+	local perRound = REWARDS.Participation.Coins
+		+ 0.5 * REWARDS.TopHalf.Coins
+		+ (1 / 8) * REWARDS.Winner.Coins
+		+ 0.1 * REWARDS.PersonalBest.Coins
+	local prices = {}
+	for price in string.gmatch(cosmeticsSource, "Price = (%d+)") do
+		table.insert(prices, tonumber(price) :: number)
+	end
+	table.sort(prices)
+	local function rounds(price: number): number
+		return math.ceil(price / perRound)
+	end
+	local cheap, mid, top = prices[1], prices[math.ceil(#prices / 2)], prices[#prices]
+	expectTrue(rounds(cheap) <= 4, `the cheapest item takes {rounds(cheap)} rounds`)
+	expectTrue(rounds(mid) >= 4 and rounds(mid) <= 10, `a middle item takes {rounds(mid)} rounds`)
+	expectTrue(rounds(top) >= 10 and rounds(top) <= 20, `the best item takes {rounds(top)} rounds`)
+end)
+
 test("the Rewards Road pays every level once, more every 5th and 10th", function()
 	expectEqual(ProgressionLogic.LevelCoins(1, ROAD), 0)
 	expectEqual(ProgressionLogic.LevelCoins(2, ROAD), ROAD.PerLevel)
