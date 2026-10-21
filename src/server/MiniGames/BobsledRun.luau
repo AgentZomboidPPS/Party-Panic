@@ -222,11 +222,9 @@ function BobsledRun:_buildArena()
 	do
 		MeshLibrary.Get("BobsledPeak", {
 			Scale = spot[3],
-			CFrame = originCF * CFrame.new(spot[1], self:_groundAt(spot[2]) - 30, spot[2]) * CFrame.Angles(
-				0,
-				rng:NextNumber(0, math.pi * 2),
-				0
-			),
+			CFrame = originCF
+				* CFrame.new(spot[1], self:_groundAt(spot[2]) - 30, spot[2])
+				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
 			Parent = arena,
 		})
 	end

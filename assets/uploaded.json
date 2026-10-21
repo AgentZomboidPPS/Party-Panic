@@ -29,5 +29,9 @@
   "mesh:Honeycomb": 75888068398114,
   "mesh:BumperBallBands": 124794818084464,
   "mesh:BumperBallDots": 124123644253149,
-  "mesh:BumperBallGores": 101756819052049
+  "mesh:BumperBallGores": 101756819052049,
+  "mesh:BobsledCurveL": 135659421666039,
+  "mesh:BobsledCurveR": 78885544532507,
+  "mesh:BobsledKicker": 105400705129786,
+  "mesh:BobsledTrack": 140619817274803
 }

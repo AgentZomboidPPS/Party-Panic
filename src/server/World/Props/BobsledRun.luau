@@ -80,13 +80,13 @@ return function(h)
 	end
 
 	return {
-		BobsledTrack = track("S", 0),
-		BobsledKicker = track("J", 0),
-		BobsledCurveL = track("L", 0),
-		BobsledCurveR = track("R", 0),
+		BobsledTrack = track("S", 140619817274803),
+		BobsledKicker = track("J", 105400705129786),
+		BobsledCurveL = track("L", 135659421666039),
+		BobsledCurveR = track("R", 78885544532507),
 		BobsledSled = {
 			Height = 2.5,
-			AssetId = 0,
+			AssetId = 91750447706831,
 			Palette = {
 				Body = h.rgb(230, 60, 70),
 				Rim = h.rgb(250, 250, 250),
@@ -105,7 +105,7 @@ return function(h)
 		},
 		BobsledPine = {
 			Height = 14,
-			AssetId = 0,
+			AssetId = 96339533442449,
 			Palette = { Needles = h.rgb(38, 92, 66), Snow = snow, Trunk = h.rgb(96, 64, 44) },
 			Materials = { Snow = Enum.Material.Snow, Needles = Enum.Material.Grass, Trunk = Enum.Material.Wood },
 			Fallback = function(m)
@@ -118,7 +118,7 @@ return function(h)
 		},
 		BobsledPeak = {
 			Height = 100,
-			AssetId = 0,
+			AssetId = 83070320680188,
 			Shadow = false,
 			Palette = { Rock = h.rgb(104, 110, 128), Snow = snow },
 			Materials = { Rock = Enum.Material.Slate, Snow = Enum.Material.Snow },
@@ -129,7 +129,7 @@ return function(h)
 		},
 		BobsledGate = {
 			Height = 28.2,
-			AssetId = 0,
+			AssetId = 120413711639723,
 			Palette = {
 				Frame = h.rgb(130, 86, 56),
 				Banner = trim,
@@ -148,7 +148,7 @@ return function(h)
 		},
 		BobsledArch = {
 			Height = 30.6,
-			AssetId = 0,
+			AssetId = 135271869131668,
 			Palette = { Arch = h.rgb(40, 120, 220), Dark = h.rgb(30, 30, 36), Light = h.rgb(250, 250, 250) },
 			Fallback = function(m)
 				for _, x in { -25.8, 25.8 } do
@@ -161,7 +161,7 @@ return function(h)
 		},
 		BobsledFlag = {
 			Height = 9.45,
-			AssetId = 0,
+			AssetId = 105634790999210,
 			Shadow = false,
 			Palette = { Pole = h.rgb(232, 232, 238), Cloth = h.rgb(255, 90, 90) },
 			Materials = { Pole = Enum.Material.Metal, Cloth = Enum.Material.Fabric },

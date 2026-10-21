@@ -242,9 +242,7 @@ function BobsledCourse.Frame(course: Course, d: number, x: number): CFrame
 	local r = right(h)
 	local up = Vector3.yAxis
 	local away = x - pivot
-	local position = point
-		+ r * (pivot + away * math.cos(bank))
-		+ up * (away * math.sin(bank) + lift)
+	local position = point + r * (pivot + away * math.cos(bank)) + up * (away * math.sin(bank) + lift)
 	local tilted = r * math.cos(bank) + up * math.sin(bank)
 	local look = (forward(h) + up * (rise - SLOPE)).Unit
 	local upVector = tilted:Cross(look).Unit
