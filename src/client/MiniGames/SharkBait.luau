@@ -14,6 +14,14 @@
 --   * Swimmers in the water wear a swim ring; the shark sees each one ringed in red (dinner).
 -- HUD: the swimmers' haul against the goal, the role hint, big flashes (TIPPING! / SPLASH! /
 -- CHOMPED!) and, for the shark, CHOMP (E, the button or the jump button) with its cooldown.
+--
+-- Nobody stays stuck (owner: "Broke. I chomped someone and now cant move."). This device knows
+-- best when its own character is stuck: the player is pushing the stick or keys, nothing is in the
+-- way and it isn't getting anywhere. It tells the server what it sees there (the server moves the
+-- character somewhere free and keeps the report; see Server/MiniGames/SharkBait) and lets go of
+-- anything holding it here. And every part of the frame (rafts, each shark, each coin, the camera...)
+-- and every event runs on its own: one that goes wrong can't stop the others (the sharks keep
+-- following their characters), and its first error goes to the server, which logs it.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -182,6 +190,32 @@ function SharkBait.Start(api)
 	})
 	local reduced = State.ReducedEffects()
 
+	-- Every part of the client half runs on its own (owner: "Broke. I chomped someone and now cant
+	-- move."): an error in one part (the coins, say) can't stop the others (the sharks keep following
+	-- their characters), and the first error from each part goes to the server, which logs it.
+	local troubled: { [string]: boolean } = {}
+	local troubles: { string } = {}
+	local function guard(name: string, step: (...any) -> (), ...: any): boolean
+		local ok, err = pcall(step, ...)
+		if not ok and not troubled[name] then
+			troubled[name] = true
+			local text = `{name}: {err}`
+			warn(`[SharkBait] {text}`)
+			table.insert(troubles, string.sub(text, 1, 300))
+		end
+		return ok
+	end
+	local function onEvent(name: string, handler: (...any) -> ())
+		api:OnEvent(name, function(...)
+			guard(`{name} event`, handler, ...)
+		end)
+	end
+	local function onShared(key: string, handler: () -> ())
+		api:OnShared(key, function()
+			guard(`{key} update`, handler)
+		end)
+	end
+
 	-- The layout arrives during the countdown.
 	local layout = api:SharedJSON("Layout")
 	for _ = 1, 100 do
@@ -197,6 +231,8 @@ function SharkBait.Start(api)
 	local origin = Vector3.new(layout.Origin[1], layout.Origin[2], layout.Origin[3])
 	local deckY: number = layout.Deck
 	local waterY: number = layout.Water
+	local floorY: number = layout.Floor
+	local lagoon: number = layout.Lagoon
 	local sharkY: number = layout.SharkY
 	local wetY: number = layout.Wet
 	local meshRadius, meshHeight = layout.RaftMesh[1], layout.RaftMesh[2]
@@ -399,8 +435,8 @@ function SharkBait.Start(api)
 		shownHaul = haul
 		UIKit.Tween(fill, 0.25, { Size = UDim2.fromScale(math.clamp(haul / goal, 0, 1), 1) })
 	end
-	api:OnShared("Haul", refreshHaul)
-	api:OnShared("Goal", refreshHaul)
+	onShared("Haul", refreshHaul)
+	onShared("Goal", refreshHaul)
 	refreshHaul()
 	local rushStroke = UIKit.Stroke(Theme.Colors.Yellow, 4, 1)
 	rushStroke.Parent = panel
@@ -582,7 +618,7 @@ function SharkBait.Start(api)
 			end
 		end
 	end
-	api:OnShared("Rafts", refreshRafts)
+	onShared("Rafts", refreshRafts)
 	refreshRafts()
 
 	-- A raft's pose: bobbing on the swell, rocking while it wobbles, over and under while it's
@@ -616,6 +652,7 @@ function SharkBait.Start(api)
 	-- Sharks --------------------------------------------------------------------------------------
 
 	local sharks: { [number]: SharkView } = {}
+	local broken: { [number]: boolean } = {} -- sharks whose model couldn't be built
 	local sharkIds: { number } = {}
 	local function buildShark(userId: number): SharkView?
 		local model = copy("SharkBaitShark") :: Model?
@@ -701,7 +738,7 @@ function SharkBait.Start(api)
 			sharkIds = ids
 		end
 	end
-	api:OnShared("Sharks", refreshSharks)
+	onShared("Sharks", refreshSharks)
 	refreshSharks()
 
 	-- Where a shark's lunge is (0..1) `t` seconds after a chomp: out fast, back slower.
@@ -945,7 +982,7 @@ function SharkBait.Start(api)
 			end
 		end
 	end
-	api:OnShared("Coins", refreshCoins)
+	onShared("Coins", refreshCoins)
 	refreshCoins()
 
 	local function removeCoin(id: number)
@@ -1016,13 +1053,15 @@ function SharkBait.Start(api)
 			end
 		end
 	end
-	api:OnMine("Role", refreshRole)
+	api:OnMine("Role", function()
+		guard("Role update", refreshRole)
+	end)
 	refreshRole()
 
 	-- Events ---------------------------------------------------------------------------------------------
 
 	local shake = 0
-	api:OnEvent("Chomp", function(userId: number, x: number, z: number, lx: number, lz: number, raftIndex: number)
+	onEvent("Chomp", function(userId: number, x: number, z: number, lx: number, lz: number, raftIndex: number)
 		local view = sharks[userId]
 		local now = api:Now()
 		if view and not (userId == api.Player.UserId and now - view.LungeAt < 0.4) then
@@ -1064,7 +1103,7 @@ function SharkBait.Start(api)
 		end
 	end
 	api:Track(releaseGulp)
-	api:OnEvent("Eaten", function(userId: number, sharkId: number, x: number, z: number, lost: number?)
+	onEvent("Eaten", function(userId: number, sharkId: number, x: number, z: number, lost: number?)
 		gulped[userId] = true
 		local at = Vector3.new(x, waterY, z)
 		splash(at, 1.5)
@@ -1088,7 +1127,7 @@ function SharkBait.Start(api)
 		end
 		api:Sound("Splash")
 	end)
-	api:OnEvent("SpatOut", function(userId: number, x: number, z: number)
+	onEvent("SpatOut", function(userId: number, x: number, z: number)
 		gulped[userId] = nil
 		local at = Vector3.new(x, deckY, z)
 		splash(at, 1)
@@ -1099,7 +1138,7 @@ function SharkBait.Start(api)
 			api:Sound("Boing")
 		end
 	end)
-	api:OnEvent("Tossed", function(userId: number)
+	onEvent("Tossed", function(userId: number)
 		local character = api:CharacterOf(userId)
 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if root then
@@ -1109,7 +1148,7 @@ function SharkBait.Start(api)
 			showFlash("SPLASH! GET OUT!", Theme.Colors.Cyan, 1.8)
 		end
 	end)
-	api:OnEvent("Splash", function(userId: number, x: number, z: number)
+	onEvent("Splash", function(userId: number, x: number, z: number)
 		splash(Vector3.new(x, waterY, z), 0.7)
 		if userId == api.Player.UserId and not isShark then
 			api:Sound("Splash")
@@ -1118,7 +1157,7 @@ function SharkBait.Start(api)
 			end
 		end
 	end)
-	api:OnEvent("Grab", function(id: number, userId: number, value: number)
+	onEvent("Grab", function(id: number, userId: number, value: number)
 		local coin = coins[id]
 		local now = api:Now()
 		local mine = userId == api.Player.UserId
@@ -1146,7 +1185,7 @@ function SharkBait.Start(api)
 			api:Sound("Pickup")
 		end
 	end)
-	api:OnEvent("Sink", function(id: number)
+	onEvent("Sink", function(id: number)
 		local coin = coins[id]
 		if coin and not coin.Gone then
 			coin.Gone = "Sink"
@@ -1154,7 +1193,7 @@ function SharkBait.Start(api)
 			coin.GoneFrom = coin.Shown
 		end
 	end)
-	api:OnEvent("Chest", function(x: number, z: number)
+	onEvent("Chest", function(x: number, z: number)
 		splash(Vector3.new(x, waterY, z), 1.2)
 		api:Sound("VoteOpen")
 	end)
@@ -1165,9 +1204,9 @@ function SharkBait.Start(api)
 			showFlash("🌊 COIN RUSH! 🌊", Theme.Colors.Yellow, 2)
 		end
 	end
-	api:OnShared("Rush", refreshRush)
+	onShared("Rush", refreshRush)
 	refreshRush()
-	api:OnEvent("Win", function(team: string)
+	onEvent("Win", function(team: string)
 		api:Effect("Fireworks", origin + Vector3.new(0, 12, 0))
 		if team == "Swimmers" then
 			showFlash("🏊 SWIMMERS WIN!", swimmerColor, 3)
@@ -1286,15 +1325,15 @@ function SharkBait.Start(api)
 	end)
 
 	-- Every frame ------------------------------------------------------------------------------------------
+	-- Each part runs on its own (`guard`, at the top): one that goes wrong can't stop the others.
 
 	local nextBob = 0
 	local started = false
 	local lastWet = false
 	local nextWarning = 0
-	api:RenderStep(function(dt: number)
-		local now = api:Now()
-		local clock = os.clock()
+	local nextTrouble = 0
 
+	local function stepRafts(now: number, clock: number)
 		-- Rafts.
 		for _, raft in rafts do
 			if raft.Model then
@@ -1309,152 +1348,162 @@ function SharkBait.Start(api)
 				raft.Warning.Size = UDim2.fromOffset(110 * pulse, 110 * pulse)
 			end
 		end
+	end
 
-		-- Sharks: build the ones we don't have yet (once the mesh has arrived).
+	local function stepSharks(now: number, dt: number)
+		-- Sharks: build the ones we don't have yet (once the mesh has arrived), and each draws on
+		-- its own (one that goes wrong can't stop the others).
 		for _, userId in sharkIds do
-			if not sharks[userId] and templates.SharkBaitShark then
-				local view = buildShark(userId)
-				if view then
-					sharks[userId] = view
-				end
+			if not sharks[userId] and not broken[userId] and templates.SharkBaitShark then
+				local built = guard("building a shark", function()
+					local view = buildShark(userId)
+					if view then
+						sharks[userId] = view
+					end
+				end)
+				broken[userId] = not built -- (a build that went wrong isn't tried again every frame)
 			end
 		end
 		for _, view in sharks do
-			drawShark(view, now, dt)
+			guard("a shark", drawShark, view, now, dt)
 		end
+	end
 
-		-- Swim rings and gulls.
-		drawFloaties(now)
+	local function stepGulls(clock: number)
+		-- Gulls.
 		if #gulls == 0 and templates.SharkBaitGull then
 			buildGulls()
 		end
 		drawGulls(clock)
+	end
 
-		-- Coins.
-		local inRound = GameState.Get("Phase") == "InRound"
-		local _, myHumanoid, myRoot = api:Character()
-		local canGrab = inRound and not isShark and api:Alive() and myRoot ~= nil and not gulped[api.Player.UserId]
-		for id, coin in coins do
-			local kind = KINDS[coin.Kind]
-			if coin.Pending and not coin.Gone then
-				-- Predicted grab: fly to me and vanish, or come back if the server disagrees.
-				local t = now - coin.Pending
-				if t > PENDING_TIME then
-					if coin.Missing then
-						coin.Gone = "Lost"
-						coin.GoneAt = now
-						coin.GoneFrom = coin.Shown
-					end
-					coin.Pending = nil
-					coin.Model.Parent = api.World
-					coin.Model:ScaleTo(coin.BaseScale)
+	-- One coin's frame (on its own: one that goes wrong can't stop the others).
+	local function stepCoin(id: number, coin: CoinView, now: number, myRoot: BasePart?, canGrab: boolean)
+		local kind = KINDS[coin.Kind]
+		if coin.Pending and not coin.Gone then
+			-- Predicted grab: fly to me and vanish, or come back if the server disagrees.
+			local t = now - coin.Pending
+			if t > PENDING_TIME then
+				if coin.Missing then
+					coin.Gone = "Lost"
+					coin.GoneAt = now
+					coin.GoneFrom = coin.Shown
+				end
+				coin.Pending = nil
+				coin.Model.Parent = api.World
+				coin.Model:ScaleTo(coin.BaseScale)
+			else
+				local from = coin.Shown or coin.Position
+				local to = if myRoot then myRoot.Position + Vector3.new(0, 1.5, 0) else from + Vector3.new(0, 4, 0)
+				local k = math.clamp(t / 0.3, 0, 1)
+				if k >= 1 then
+					coin.Model.Parent = nil
 				else
-					local from = coin.Shown or coin.Position
-					local to = if myRoot then myRoot.Position + Vector3.new(0, 1.5, 0) else from + Vector3.new(0, 4, 0)
-					local k = math.clamp(t / 0.3, 0, 1)
-					if k >= 1 then
-						coin.Model.Parent = nil
-					else
-						coin.Model:PivotTo(
-							CFrame.new(from:Lerp(to, k) + Vector3.new(0, math.sin(k * math.pi) * 2.5, 0))
-								* CFrame.Angles(0, coin.Spin + t * 20, 0)
-						)
-						coin.Model:ScaleTo(coin.BaseScale * math.max(0.1, 1 - k * 0.8))
-					end
-					continue
-				end
-			end
-			if coin.Gone then
-				local t = now - coin.GoneAt
-				local from = coin.GoneFrom or coin.Position
-				if coin.Ring then
-					coin.Ring.Transparency = 1
-				end
-				if coin.Beam then
-					coin.Beam.Transparency = 1
-				end
-				if coin.Gone == "Grab" then
-					local character = api:CharacterOf(coin.Taker)
-					local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-					local to = if root then root.Position + Vector3.new(0, 1.5, 0) else from + Vector3.new(0, 4, 0)
-					local k = math.clamp(t / 0.3, 0, 1)
 					coin.Model:PivotTo(
 						CFrame.new(from:Lerp(to, k) + Vector3.new(0, math.sin(k * math.pi) * 2.5, 0))
 							* CFrame.Angles(0, coin.Spin + t * 20, 0)
 					)
 					coin.Model:ScaleTo(coin.BaseScale * math.max(0.1, 1 - k * 0.8))
-					if k >= 1 then
-						removeCoin(id)
-					end
-				else
-					-- Sunk (or gone): down through the water, spinning, and away.
-					local k = math.clamp(t / 0.8, 0, 1)
-					coin.Model:PivotTo(
-						CFrame.new(from - Vector3.new(0, 4 * k, 0)) * CFrame.Angles(0, coin.Spin + t * 6, k)
-					)
-					if k >= 1 then
-						removeCoin(id)
-					end
 				end
-				continue
-			end
-
-			-- Where it is: flying off a flipped raft, rising into view, bobbing, or sinking at the end.
-			local position = coin.Position
-			local water = position.Y < waterY + 1.5
-			local target: Vector3
-			local scale = 1
-			if coin.SpillAt and coin.From and now < coin.SpillAt + SPILL_TIME then
-				local k = math.clamp((now - coin.SpillAt) / SPILL_TIME, 0, 1)
-				target = coin.From:Lerp(position, k) + Vector3.new(0, 12 * k * (1 - k), 0)
-			elseif now < coin.Born and not coin.SpillAt then
-				local k = 1 - math.clamp((coin.Born - now) / POP_IN, 0, 1)
-				target = position - Vector3.new(0, (1 - k) * 1.2, 0)
-				scale = 0.3 + 0.7 * easeOut(k)
-			else
-				local bob = if water
-					then math.sin(now * 1.8 + coin.Spin) * 0.18
-					else math.sin(now * 2.4 + coin.Spin) * 0.15
-				target = position + Vector3.new(0, bob + kind.Lift, 0)
-				if coin.Expires > 0 and now > coin.Expires - SINK_TIME then
-					local k = math.clamp((now - (coin.Expires - SINK_TIME)) / SINK_TIME, 0, 1)
-					target -= Vector3.new(0, 2.2 * k * k, 0)
-				end
-			end
-			coin.Shown = target
-			local turn = CFrame.Angles(0, coin.Spin + now * kind.Spin, 0)
-			if coin.Kind == 3 then
-				turn *= CFrame.Angles(math.sin(now * 1.6 + coin.Spin) * 0.08, 0, math.cos(now * 1.3) * 0.08)
-			end
-			local want = coin.BaseScale * scale
-			if math.abs(coin.Model:GetScale() - want) > 1e-3 then
-				coin.Model:ScaleTo(want)
-			end
-			coin.Model:PivotTo(CFrame.new(target) * turn)
-			if coin.Ring then
-				local landed = not coin.SpillAt or now >= coin.SpillAt + SPILL_TIME
-				coin.Ring.Transparency = if water and landed then 0.55 + 0.15 * math.sin(now * 3 + coin.Spin) else 1
-				coin.Ring.CFrame = flatAt(Vector3.new(position.X, waterY + 0.15, position.Z))
-			end
-
-			-- Ran through it (or hopped through it): grab it now; the server confirms in a moment.
-			if canGrab and myRoot and now >= coin.Born and not coin.Predicted then
-				local p = myRoot.Position
-				local before = coin.Rel
-				if not before or (before - p).Magnitude > 24 then
-					before = p
-				end
-				coin.Rel = p
-				if swept(before, p, position, reaches[coin.Kind] or 2.8, grabBelow, grabAbove) then
-					coin.Pending = now
-					coin.Predicted = true
-					api:Sound("Pickup")
-				end
-			else
-				coin.Rel = nil
+				return
 			end
 		end
+		if coin.Gone then
+			local t = now - coin.GoneAt
+			local from = coin.GoneFrom or coin.Position
+			if coin.Ring then
+				coin.Ring.Transparency = 1
+			end
+			if coin.Beam then
+				coin.Beam.Transparency = 1
+			end
+			if coin.Gone == "Grab" then
+				local character = api:CharacterOf(coin.Taker)
+				local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+				local to = if root then root.Position + Vector3.new(0, 1.5, 0) else from + Vector3.new(0, 4, 0)
+				local k = math.clamp(t / 0.3, 0, 1)
+				coin.Model:PivotTo(
+					CFrame.new(from:Lerp(to, k) + Vector3.new(0, math.sin(k * math.pi) * 2.5, 0))
+						* CFrame.Angles(0, coin.Spin + t * 20, 0)
+				)
+				coin.Model:ScaleTo(coin.BaseScale * math.max(0.1, 1 - k * 0.8))
+				if k >= 1 then
+					removeCoin(id)
+				end
+			else
+				-- Sunk (or gone): down through the water, spinning, and away.
+				local k = math.clamp(t / 0.8, 0, 1)
+				coin.Model:PivotTo(CFrame.new(from - Vector3.new(0, 4 * k, 0)) * CFrame.Angles(0, coin.Spin + t * 6, k))
+				if k >= 1 then
+					removeCoin(id)
+				end
+			end
+			return
+		end
 
+		-- Where it is: flying off a flipped raft, rising into view, bobbing, or sinking at the end.
+		local position = coin.Position
+		local water = position.Y < waterY + 1.5
+		local target: Vector3
+		local scale = 1
+		if coin.SpillAt and coin.From and now < coin.SpillAt + SPILL_TIME then
+			local k = math.clamp((now - coin.SpillAt) / SPILL_TIME, 0, 1)
+			target = coin.From:Lerp(position, k) + Vector3.new(0, 12 * k * (1 - k), 0)
+		elseif now < coin.Born and not coin.SpillAt then
+			local k = 1 - math.clamp((coin.Born - now) / POP_IN, 0, 1)
+			target = position - Vector3.new(0, (1 - k) * 1.2, 0)
+			scale = 0.3 + 0.7 * easeOut(k)
+		else
+			local bob = if water then math.sin(now * 1.8 + coin.Spin) * 0.18 else math.sin(now * 2.4 + coin.Spin) * 0.15
+			target = position + Vector3.new(0, bob + kind.Lift, 0)
+			if coin.Expires > 0 and now > coin.Expires - SINK_TIME then
+				local k = math.clamp((now - (coin.Expires - SINK_TIME)) / SINK_TIME, 0, 1)
+				target -= Vector3.new(0, 2.2 * k * k, 0)
+			end
+		end
+		coin.Shown = target
+		local turn = CFrame.Angles(0, coin.Spin + now * kind.Spin, 0)
+		if coin.Kind == 3 then
+			turn *= CFrame.Angles(math.sin(now * 1.6 + coin.Spin) * 0.08, 0, math.cos(now * 1.3) * 0.08)
+		end
+		local want = coin.BaseScale * scale
+		if math.abs(coin.Model:GetScale() - want) > 1e-3 then
+			coin.Model:ScaleTo(want)
+		end
+		coin.Model:PivotTo(CFrame.new(target) * turn)
+		if coin.Ring then
+			local landed = not coin.SpillAt or now >= coin.SpillAt + SPILL_TIME
+			coin.Ring.Transparency = if water and landed then 0.55 + 0.15 * math.sin(now * 3 + coin.Spin) else 1
+			coin.Ring.CFrame = flatAt(Vector3.new(position.X, waterY + 0.15, position.Z))
+		end
+
+		-- Ran through it (or hopped through it): grab it now; the server confirms in a moment.
+		if canGrab and myRoot and now >= coin.Born and not coin.Predicted then
+			local p = myRoot.Position
+			local before = coin.Rel
+			if not before or (before - p).Magnitude > 24 then
+				before = p
+			end
+			coin.Rel = p
+			if swept(before, p, position, reaches[coin.Kind] or 2.8, grabBelow, grabAbove) then
+				coin.Pending = now
+				coin.Predicted = true
+				api:Sound("Pickup")
+			end
+		else
+			coin.Rel = nil
+		end
+	end
+
+	local function stepCoins(now: number, myRoot: BasePart?, canGrab: boolean)
+		for id, coin in coins do
+			if not guard("a coin", stepCoin, id, coin, now, myRoot, canGrab) then
+				pcall(removeCoin, id) -- (a coin that went wrong goes, rather than going wrong every frame)
+			end
+		end
+	end
+
+	local function stepBelly(clock: number, dt: number)
 		-- In a shark's belly: ride along behind it until spat out.
 		if gulpedBy then
 			local view = sharks[gulpedBy]
@@ -1471,7 +1520,9 @@ function SharkBait.Start(api)
 			local left = math.max(0, math.ceil(gulpUntil - 0.5 - clock))
 			bellyLabel.Text = if left > 0 then `GULP! 🦈\nSpat out in {left}…` else "GULP! 🦈"
 		end
+	end
 
+	local function stepWater(clock: number, myRoot: BasePart?)
 		-- In the water: a warning when a shark closes in.
 		local wet = api:Mine("InWater") == true and not isShark and api:Alive()
 		if wet and not lastWet then
@@ -1488,7 +1539,9 @@ function SharkBait.Start(api)
 				end
 			end
 		end
+	end
 
+	local function stepCamera(clock: number, dt: number, myHumanoid: Humanoid?)
 		-- The shark's camera, and a little shake when the jaws snap close by.
 		if isShark and myHumanoid and myHumanoid ~= cameraHumanoid then
 			cameraHumanoid = myHumanoid
@@ -1513,7 +1566,9 @@ function SharkBait.Start(api)
 			end
 			cameraHumanoid = humanoid
 		end
+	end
 
+	local function stepScenery(clock: number)
 		-- Buoys and floats bob and the water drifts (both read fine at 30 Hz).
 		if clock >= nextBob then
 			nextBob = clock + 1 / 30
@@ -1531,7 +1586,9 @@ function SharkBait.Start(api)
 				)
 			end
 		end
+	end
 
+	local function stepHud(now: number, clock: number, inRound: boolean)
 		-- The role hint stays through the countdown and 6 seconds into the round.
 		if hintUntil == math.huge and inRound then
 			hintUntil = clock + 6
@@ -1565,6 +1622,176 @@ function SharkBait.Start(api)
 			local left = math.max(0, readyAt - now)
 			chompButton:SetFill(1 - left / length)
 			chompButton:SetEnabled(left <= 0)
+		end
+	end
+
+	-- Stuck? (owner: "Broke. I chomped someone and now cant move.") This player is pushing the stick
+	-- or keys, nothing is in the way (a raft's side from the water, the float line, someone in front)
+	-- and the character hasn't got anywhere for a moment and a half: something is holding it that
+	-- shouldn't. Tell the server what this device sees (it moves the character somewhere free and
+	-- keeps the report), and let go of anything holding it here: a seat, a stun that never ended, a
+	-- fall it never got up from.
+	local STUCK_TIME = 1.5
+	local HELD = {
+		[Enum.HumanoidStateType.Seated] = true,
+		[Enum.HumanoidStateType.PlatformStanding] = true,
+		[Enum.HumanoidStateType.Physics] = true,
+		[Enum.HumanoidStateType.Ragdoll] = true,
+		[Enum.HumanoidStateType.FallingDown] = true,
+		[Enum.HumanoidStateType.Climbing] = true, -- (nothing here to climb)
+		[Enum.HumanoidStateType.Swimming] = true, -- (no terrain water here)
+	}
+	local stuckSince: number? = nil
+	local stuckAt: Vector3? = nil
+	local nextStuck = 0
+	local overlap = OverlapParams.new()
+	overlap.FilterType = Enum.RaycastFilterType.Exclude
+
+	-- Whether something solid is right in front of this player's character going `way` (flat, unit).
+	local function inTheWay(root: BasePart, feet: number, way: Vector3): boolean
+		local p = root.Position
+		if feet < deckY - 0.5 then
+			for _, raft in rafts do
+				local to = flat(raft.Center - p)
+				if
+					raft.State ~= FLIPPED
+					and to.Magnitude <= raft.Radius + 2.5
+					and (to.Magnitude < 0.1 or way:Dot(to.Unit) > 0.2)
+				then
+					return true
+				end
+			end
+		end
+		local out = flat(p - origin)
+		if out.Magnitude > lagoon - 2.5 and way:Dot(out.Unit) > 0.2 then
+			return true
+		end
+		if isShark then
+			return false -- (a shark passes through everyone)
+		end
+		for _, participant in api:Participants() do
+			if participant.IsLocal or participant.IsBot or participant:GetAttribute("MG_Role") == "Shark" then
+				continue -- (bots and sharks pass through everyone)
+			end
+			local character = participant:Character()
+			local other = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if other then
+				local to = flat(other.Position - p)
+				if
+					to.Magnitude < 3.5
+					and math.abs(other.Position.Y - p.Y) < 5
+					and (to.Magnitude < 0.1 or way:Dot(to.Unit) > 0.3)
+				then
+					return true
+				end
+			end
+		end
+		return false
+	end
+
+	-- What this device sees of its own character, for the server's report.
+	local function describe(humanoid: Humanoid, root: BasePart, legs: number): { [string]: any }
+		local p, v = root.Position, root.AssemblyLinearVelocity
+		local move = humanoid.MoveDirection
+		local subject = if camera then camera.CameraSubject else nil
+		local seen: { [string]: any } = {
+			At = string.format("%.1f,%.1f,%.1f", p.X - origin.X, p.Y - waterY, p.Z - origin.Z),
+			Feet = p.Y - legs - floorY,
+			Vel = string.format("%.1f,%.1f,%.1f", v.X, v.Y, v.Z),
+			Move = string.format("%.2f,%.2f", move.X, move.Z),
+			State = humanoid:GetState().Name,
+			Walk = humanoid.WalkSpeed,
+			Jump = humanoid.JumpHeight,
+			Hip = humanoid.HipHeight,
+			Floor = humanoid.FloorMaterial.Name,
+			Sit = humanoid.Sit,
+			Stand = humanoid.PlatformStand,
+			Anchored = root.Anchored,
+			Group = root.CollisionGroup,
+			Seat = if humanoid.SeatPart then humanoid.SeatPart:GetFullName() else "none",
+			Camera = if camera
+				then `{camera.CameraType.Name} on {if subject then subject:GetFullName() else "nothing"}`
+				else "none",
+		}
+		-- What it's inside of on this device (the arena's solid parts, or anything else).
+		local inside = {}
+		overlap.FilterDescendantsInstances = { root.Parent :: Instance, api.World }
+		local ok, parts = pcall(workspace.GetPartsInPart, workspace, root, overlap)
+		if ok then
+			for _, part in parts do
+				if #inside < 6 then
+					table.insert(inside, `{if part.Parent then part.Parent.Name else "?"}/{part.Name}`)
+				end
+			end
+		end
+		seen.Inside = table.concat(inside, " ")
+		return seen
+	end
+
+	local function stepStuck(clock: number, humanoid: Humanoid?, root: BasePart?)
+		local way = Vector3.zero
+		if
+			humanoid
+			and root
+			and humanoid.Health > 0
+			and humanoid.WalkSpeed > 1
+			and api:Alive()
+			and not gulped[api.Player.UserId]
+			and GameState.Get("Phase") == "InRound"
+		then
+			way = flat(humanoid.MoveDirection)
+		end
+		if way.Magnitude < 0.5 or not humanoid or not root then
+			stuckSince = nil
+			return
+		end
+		local p = root.Position
+		if not stuckSince or not stuckAt or (p - stuckAt).Magnitude > 1 then
+			stuckSince, stuckAt = clock, p
+			return
+		end
+		if clock - (stuckSince :: number) < STUCK_TIME or clock < nextStuck then
+			return
+		end
+		stuckSince = nil
+		local legs = if humanoid.RigType == Enum.HumanoidRigType.R6 then 3 else humanoid.HipHeight + root.Size.Y / 2
+		if inTheWay(root, p.Y - legs, way.Unit) then
+			return -- pushing against something solid: that's not stuck
+		end
+		nextStuck = clock + 4
+		api:Action("Stuck", describe(humanoid, root, legs))
+		if humanoid.Sit then
+			humanoid.Sit = false
+		end
+		if humanoid.PlatformStand then
+			humanoid.PlatformStand = false
+		end
+		if HELD[humanoid:GetState()] then
+			humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		end
+	end
+
+	api:RenderStep(function(dt: number)
+		local now = api:Now()
+		local clock = os.clock()
+		local inRound = GameState.Get("Phase") == "InRound"
+		local _, myHumanoid, myRoot = api:Character()
+		local canGrab = inRound and not isShark and api:Alive() and myRoot ~= nil and not gulped[api.Player.UserId]
+		guard("rafts", stepRafts, now, clock)
+		guard("sharks", stepSharks, now, dt)
+		guard("swim rings", drawFloaties, now)
+		guard("gulls", stepGulls, clock)
+		guard("coins", stepCoins, now, myRoot, canGrab)
+		guard("belly", stepBelly, clock, dt)
+		guard("water", stepWater, clock, myRoot)
+		guard("camera", stepCamera, clock, dt, myHumanoid)
+		guard("scenery", stepScenery, clock)
+		guard("hud", stepHud, now, clock, inRound)
+		guard("stuck check", stepStuck, clock, myHumanoid, myRoot)
+		-- The first error from each part goes to the server, one at a time (it logs them).
+		if #troubles > 0 and inRound and clock >= nextTrouble then
+			nextTrouble = clock + 2.5
+			api:Action("Trouble", table.remove(troubles, 1))
 		end
 	end)
 
