@@ -142,6 +142,15 @@ local function __engineLayout(playerGui, entries)
 					local width = 118 * scale
 					item.Position = UDim2.fromOffset(left - 12 - (slot - 1) * (width + 12), centerY - js * 0.15)
 				end
+				-- NotificationController on touch screens during a round: the toasts sit above the mode's
+				-- action buttons (their row beside the jump button, as placed just above).
+				if item:GetAttribute("PP_AboveActions") and device.touch and frames[item.Parent] then
+					local area = item.Parent :: Frame
+					local jy, js = device.jump[2], device.jump[3]
+					local centerY = jy + js / 2 - area.Position.Y.Offset
+					local top = centerY - js * 0.15 - 118 * __autoScale(device.w, device.h, 1) / 2
+					item.Position = UDim2.new(item.Position.X.Scale, item.Position.X.Offset, 0, top - 8)
+				end
 				-- RoundController's standings on PC: under the profile chip (130 tall at y 12, scaled).
 				if item:GetAttribute("PP_UnderProfile") then
 					item.Position = UDim2.fromOffset(14, 12 + 130 * __autoScale(device.w, device.h, 1) + 8)
@@ -318,6 +327,7 @@ function __dumpGui(playerGui, label)
 			e.insets = inst.ScreenInsets.Name
 			e.enabled = inst.Enabled
 			e.billboards = inst:GetAttribute("PP_Billboards") -- 3D name tags copied onto a screen to draw them
+			e.noTouch = inst:GetAttribute("PP_NoTouchControls") -- the MOVE stick and jump button are put away
 		elseif inst:IsA("GuiObject") then
 			e.vis = inst.Visible
 			e.pos = udim2(inst.Position)
@@ -332,6 +342,7 @@ function __dumpGui(playerGui, label)
 			e.clip = inst.ClipsDescendants
 			e.touchSlot = inst:GetAttribute("TouchSlot")
 			e.underProfile = inst:GetAttribute("PP_UnderProfile")
+			e.aboveActions = inst:GetAttribute("PP_AboveActions")
 			e.lines = inst:GetAttribute("PP_Lines") -- text allowed to wrap onto this many lines
 			e.truncOk = inst:GetAttribute("PP_TruncateOk") -- a name that may be shortened with "..."
 			e.popup = inst:GetAttribute("PP_Popup") -- a picker shown on request (may cover the thumbstick)

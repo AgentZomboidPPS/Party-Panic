@@ -1,0 +1,35 @@
+newmtl Enamel
+Kd 0.863 0.196 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Steel
+Kd 0.667 0.690 0.729
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Grate
+Kd 0.157 0.157 0.173
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Coals
+Kd 1.000 0.471 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Black
+Kd 0.118 0.118 0.133
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Tick
+Kd 0.980 0.980 0.980
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
