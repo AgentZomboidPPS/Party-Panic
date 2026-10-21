@@ -1,0 +1,17 @@
+newmtl Trunk
+Kd 0.588 0.392 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Frond
+Kd 0.275 0.667 0.275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Nut
+Kd 0.471 0.314 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
