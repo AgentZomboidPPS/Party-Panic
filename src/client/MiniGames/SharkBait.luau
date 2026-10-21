@@ -462,7 +462,7 @@ function SharkBait.Start(api)
 		TextScaled = true,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.62),
-		Size = UDim2.fromOffset(460, 110),
+		Size = UDim2.fromOffset(290, 110), -- two short lines: clear of the thumbstick's corner on phones
 		Parent = belly,
 		Children = { UIKit.TextStroke(0.1), UIKit.new("UITextSizeConstraint", { MaxTextSize = 44 }) },
 	})
@@ -1469,7 +1469,7 @@ function SharkBait.Start(api)
 				camera.CFrame = CFrame.lookAt(gulpCamera :: Vector3, p + Vector3.new(0, 1.5, 0))
 			end
 			local left = math.max(0, math.ceil(gulpUntil - 0.5 - clock))
-			bellyLabel.Text = if left > 0 then `GULP! 🦈  Spat out in {left}…` else "GULP! 🦈"
+			bellyLabel.Text = if left > 0 then `GULP! 🦈\nSpat out in {left}…` else "GULP! 🦈"
 		end
 
 		-- In the water: a warning when a shark closes in.
