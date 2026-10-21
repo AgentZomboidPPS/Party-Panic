@@ -44,6 +44,7 @@ local order = {
 	"EffectsController",
 	"AmbienceController",
 	"MovementController",
+	"SceneryCameraController",
 	"WorldScreensController",
 	"HudController",
 	"VoteController",
