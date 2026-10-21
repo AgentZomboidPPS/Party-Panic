@@ -12,6 +12,11 @@
 -- middle); a gap or the crumbling edge only takes you once no wheel is left on the planks; a boost
 -- pad counts whenever a wheel rolls on any part of it. A jump counts from where the skater was on
 -- their own screen when they pressed it (see the server's Jump), so ping doesn't move it.
+--
+-- Audit pass (owner: "it just has to work"): the moment the collapse reaches the finish line it
+-- used to take everyone the server still had short of the line, ignoring the lead it allows for
+-- the rest of the race, so a rider whose screen showed them crossing in the last instant (up to
+-- half their ping) fell through the goal instead of finishing. Caught now allows the lead there too.
 
 local SkateCourse = {}
 
@@ -205,10 +210,12 @@ end
 
 -- Whether the collapse front has taken a racer at `d`: once it's past their front wheels. `lead`
 -- allows for how far ahead of the server's numbers their own screen draws them. Once the front
--- reaches the finish line, everyone short of it has fallen.
+-- reaches the finish line, everyone short of it has fallen: short of it on their own screen, so a
+-- rider who crossed there just before the last plank went still finishes (here, within the lead),
+-- and a rider who has stopped (no lead) falls.
 function SkateCourse.Caught(front: number, d: number, lead: number?, length: number?): boolean
 	if front >= (length or SkateCourse.Length) then
-		return d < front
+		return d + (lead or 0) < front
 	end
 	return front > d + (lead or 0) + SkateCourse.EdgeGrace
 end
