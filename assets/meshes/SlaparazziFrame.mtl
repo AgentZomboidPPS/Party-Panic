@@ -1,0 +1,23 @@
+newmtl Gold
+Kd 1.000 0.784 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Silver
+Kd 0.824 0.863 0.922
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bronze
+Kd 0.804 0.490 0.275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bracket
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
