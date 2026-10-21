@@ -86,6 +86,9 @@ CAMERAS: dict[str, dict] = {
     "CrazyCutters": {"yaw": 80, "pitch": 40, "distance": 38, "shift": [-12, -5, 0], "raise": 2},
     # Across the candy factory hall at the CAKE FACTORY sign: the team belts with cakes on them.
     "CakeFactory": {"look_at": "Sign", "yaw": 200, "pitch": 24, "distance": 42, "shift": [0, -29, -26], "raise": 6},
+    # Over a team's shoulders at its grill: the giant knife lined up over the steak, the glowing line
+    # where it will cut, the coals under the grate.
+    "PrimeCut": {"look_at": "CutLine", "yaw": 28, "pitch": 36, "distance": 39, "shift": [-0.5, 0, 10.5], "raise": 4},
     # A team pumping its balloon (with a face), a rival team's balloon beside it.
     "PumpAndPop": {"yaw": 25, "pitch": 12, "distance": 40, "shift": [0, 8.5, -4], "sway": 8},
     # Two riders who just bumped, the sea and a palm island behind.
@@ -112,6 +115,7 @@ DUMP_AT: dict[str, float] = {
     "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
     "MechaMarathon": 12.5,  # a second after lift-off: the toys climbing away from their pads
+    "PrimeCut": 9,  # the first steak, a second before the chop: the knives lined up
     "PumpAndPop": 16,  # the balloons are big by now
     "SkateEscape": 10,
     "Spleef": 12,  # holes dug in every floor, players on all three
