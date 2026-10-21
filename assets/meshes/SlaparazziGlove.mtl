@@ -1,0 +1,17 @@
+newmtl Glove
+Kd 0.980 0.980 0.980
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cuff
+Kd 1.000 0.471 0.706
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stitch
+Kd 0.157 0.157 0.196
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
