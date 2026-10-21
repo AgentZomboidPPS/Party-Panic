@@ -1,23 +1,30 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-21 21:50 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-21 21:58 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (21:50 UTC)
+## Session B in flight (21:58 UTC)
 
-- **Live version 31** (published 19:03 UTC, see below).
-- **Version 32: not published yet.** It's `6e0029b` and passed its regression, except the whole-client harness.
-  - Passed:
+- **Live version 32** (published 21:55 UTC from `claude/upbeat-galileo-gvwq66` at `6e0029b`, on the owner's "Push right
+  now"; the owner must restart servers).
+  - **What it adds over version 31:**
+    - the Fire Rope "chair" camera fix;
+    - audits of Hex Meltdown, Rake It In, Bobsled Run, Skate Escape, Pump & Pop, Arrow Ambush, Cake Factory and Crazy
+      Cutters;
+    - Bumper Ballers phone controls and Sinking Sands bots;
+    - payoffs and low coins: Rewards Road, career milestones, celebration cards, the one-time saved-coin conversion;
+    - DataService saves that survive shutdowns and never lock for a player who left mid-load;
+    - mode client start-ups cancelled with their round, and Honey Trap's hint on one line.
+  - **Full regression on that exact commit:**
     - code checks;
-    - every mode's 12-player, bots and phone rounds (0 errors, 0 phone-UI problems);
-    - a lobby round with 8 bots.
-  - Failed: the whole-client harness (`tools/checks/client_harness.py`, touch and PC). It failed 5 times with
-    "INTERNAL_ERROR Task timed out due to an internal error". The task stays PROCESSING for 600 s with no logs, so it
-    hangs. Being diagnosed: a probe prints each harness step.
-  - The same harness on the v33 candidate finishes in 90 s, then fails on result size instead:
-    `OUTPUT_SIZE_LIMIT_EXCEEDED`, a 6 MB result against Roblox's 4 MiB cap. The client-UI helper is slimming it.
-  - If v32's hang is a real client bug fixed in v33, skip v32 and publish v33 (it contains everything in v32).
+    - every mode's 12-player, bots and phone rounds: 0 errors, 0 phone-UI problems;
+    - a lobby round with 8 bots;
+    - the whole client on phone and PC: 0 errors, empty text report, ui_render 0 problems.
+  - **The whole-client harness can't run in one task any more.** Its result (3.4 MB raw) comes back from Open Cloud at
+    about 4 MiB, where it fails as "INTERNAL_ERROR Task timed out due to an internal error" after 600 s (v33's 6 MB
+    fails as `OUTPUT_SIZE_LIMIT_EXCEEDED`). For v32 it was run as two tasks, each returning half of the snapshots (by
+    sorted name), then merged for ui_render. The client-UI helper is slimming the harness output for v33.
 - **v33 candidate: local branch `integrate-v33` in `/home/user/pp-v33`, pushed to `claude/upbeat-galileo-gvwq66`.**
   It's v32 plus:
   - the Skee-Ball arcade;
