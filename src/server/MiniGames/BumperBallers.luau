@@ -153,6 +153,8 @@ export type Entry = {
 	Socket: BallSocketConstraint,
 	Seat: Attachment?,
 	Align: AlignOrientation?,
+	Rider: Model?, -- the character seated on this ball (see :_attachRider)
+	RiderGroups: { [BasePart]: string }?, -- its parts' collision groups from before it rode
 	RiderOffset: number,
 	ClientDriven: boolean,
 	Input: Vector3,
@@ -232,14 +234,6 @@ local function registerRiderGroup()
 		PhysicsService:CollisionGroupSetCollidable(FLOOR_GROUP, "Default", true)
 	end)
 	return ok
-end
-
-local function setRiderCollision(character: Model, group: string)
-	for _, descendant in character:GetDescendants() do
-		if descendant:IsA("BasePart") then
-			descendant.CollisionGroup = group
-		end
-	end
 end
 
 -- The height of the islet mesh's sand (unscaled) this far from its middle.
@@ -645,14 +639,30 @@ function BumperBallers:_attachRider(entry: Entry)
 	if physics and entry.Body.Anchored then
 		root.Anchored = true -- held on top of the ball until GO, when both are let go together
 	end
+	-- Remember who rides it, and each part's collision group (players' are the lobby's PP_Players,
+	-- which keeps beach balls from being walls), to put back when they get off (:_detachRider).
+	local saved = if entry.Rider == character and entry.RiderGroups then entry.RiderGroups else {}
+	entry.Rider = character
+	entry.RiderGroups = saved
 	if self.groupReady then
-		setRiderCollision(character, RIDER_GROUP)
+		for _, part in character:GetDescendants() do
+			if part:IsA("BasePart") then
+				if saved[part] == nil then
+					saved[part] = part.CollisionGroup
+				end
+				part.CollisionGroup = RIDER_GROUP
+			end
+		end
 	end
 	if physics and typeof(entry.Player) ~= "Instance" then
 		pcall(root.SetNetworkOwner, root, nil) -- a bot's rider is the server's, like its ball
 	end
 end
 
+-- Gets the rider off: only ever the character that rode this ball. (A knocked-out rider is sent
+-- back to the lobby with a new character 1.2 s after going out, before their ball is removed; that
+-- one used to be looked up here and left in the Default collision group, so the plaza's beach
+-- balls were solid walls for them, and its PlatformStand, AutoRotate and anchoring were changed.)
 function BumperBallers:_detachRider(entry: Entry)
 	if entry.Seat then
 		entry.Seat:Destroy()
@@ -662,16 +672,27 @@ function BumperBallers:_detachRider(entry: Entry)
 		entry.Align:Destroy()
 		entry.Align = nil
 	end
-	local character, humanoid, root = self.context:GetCharacter(entry.Player)
-	if character and humanoid then
+	local character, saved = entry.Rider, entry.RiderGroups
+	entry.Rider, entry.RiderGroups = nil, nil
+	if not character or not character.Parent then
+		return -- gone already (a new character replaced it)
+	end
+	for part, group in saved or {} do
+		if part.Parent then
+			part.CollisionGroup = group
+		end
+	end
+	if entry.Player.Character ~= character then
+		return
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if humanoid then
 		humanoid.PlatformStand = false
 		humanoid.AutoRotate = true
-		if root then
-			root.Anchored = false
-		end
-		if self.groupReady then
-			setRiderCollision(character, "Default")
-		end
+	end
+	if root then
+		root.Anchored = false
 	end
 end
 
@@ -706,6 +727,28 @@ function BumperBallers:Prepare()
 	self.koCount = {} :: { [any]: number } -- kept after a ball is gone, for the results
 	self.bumpScale = 1
 	self.groupReady = registerRiderGroup()
+
+	-- What the clients need first (their half starts once the Balls folder exists): the drive's
+	-- numbers and where the island is, for the on-island rule and the phone camera. These used to
+	-- be set after SpawnAll, which can wait seconds for a character that's still loading; a client
+	-- that started before then never saw them, and its player steered hard past the rim, unlike bots.
+	ctx:SetSharedJSON("Tuning", {
+		MaxSpeed = TUNING.MaxSpeed,
+		SteerGain = TUNING.SteerGain,
+		SteerAccel = TUNING.SteerAccel,
+		Accel = TUNING.Accel,
+		Relief = TUNING.Relief,
+		ReliefDrag = TUNING.ReliefDrag,
+		Touch = TOUCH, -- the client boings at the same distance and closing speed the server bumps at
+		ClosingMin = CLOSING_MIN,
+	})
+	ctx:SetSharedJSON("Island", {
+		X = origin.X,
+		Y = self.top,
+		Z = origin.Z,
+		R = ISLAND_RADIUS,
+		Water = self.waterY,
+	})
 
 	self:_buildArena()
 	self.ballsFolder = Build.Folder("Balls", ctx.Arena)
@@ -769,23 +812,6 @@ function BumperBallers:Prepare()
 		end
 	end
 
-	ctx:SetSharedJSON("Tuning", {
-		MaxSpeed = TUNING.MaxSpeed,
-		SteerGain = TUNING.SteerGain,
-		SteerAccel = TUNING.SteerAccel,
-		Accel = TUNING.Accel,
-		Relief = TUNING.Relief,
-		ReliefDrag = TUNING.ReliefDrag,
-		Touch = TOUCH, -- the client boings at the same distance and closing speed the server bumps at
-		ClosingMin = CLOSING_MIN,
-	})
-	ctx:SetSharedJSON("Island", {
-		X = origin.X,
-		Y = self.top,
-		Z = origin.Z,
-		R = ISLAND_RADIUS,
-		Water = self.waterY,
-	})
 	ctx:SetStatus(`Players left: {ctx:AliveCount()}`)
 end
 

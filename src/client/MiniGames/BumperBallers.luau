@@ -110,6 +110,22 @@ function BumperBallers.Start(api)
 	if not ballsFolder then
 		return
 	end
+	-- Where the island is (the on-island rule and the phone camera need it) and the drive's numbers:
+	-- the server shares both before it builds the balls, but wait a moment in case they're still on
+	-- their way, and take them whenever they come.
+	local island = api:SharedJSON("Island")
+	local waited = 0
+	while not island and waited < 10 and ballsFolder.Parent do
+		task.wait(0.1)
+		waited += 0.1
+		island = api:SharedJSON("Island")
+	end
+	if not ballsFolder.Parent then
+		return -- the round was called off meanwhile
+	end
+	api:OnShared("Island", function()
+		island = api:SharedJSON("Island") or island
+	end)
 	local player = api.Player or Players.LocalPlayer
 	local myId = player and player.UserId
 	local tuning = api:SharedJSON("Tuning") or {}
@@ -117,7 +133,6 @@ function BumperBallers.Start(api)
 	local maxSpeed = drive.Tuning.MaxSpeed
 	local touchDistance = tuning.Touch or 8.5
 	local closingMin = tuning.ClosingMin or 4
-	local island = api:SharedJSON("Island")
 	local hud = api:TopHud()
 	local touch = api:IsTouch()
 
@@ -293,6 +308,20 @@ function BumperBallers.Start(api)
 		task.spawn(addBall, child)
 	end
 	api:Track(ballsFolder.ChildAdded:Connect(addBall))
+	-- A ball taken away before GO (its rider couldn't be placed in the round, or left): they're not
+	-- in this round, so their icon goes too, instead of showing them knocked out all round.
+	api:Track(ballsFolder.ChildRemoved:Connect(function(model)
+		local userId = model:GetAttribute("Owner")
+		if State.Phase() ~= "Preparing" or type(userId) ~= "number" then
+			return
+		end
+		local icon = icons[userId]
+		if icon then
+			icon.Frame:Destroy()
+			icons[userId] = nil
+		end
+		balls[userId] = nil
+	end))
 
 	-- "Boing": both balls squash and spring back, a ring flashes where they met.
 	local function pulse(userId: number, strength: number)
@@ -390,13 +419,16 @@ function BumperBallers.Start(api)
 	end)
 
 	-- Tilt, for phones that can tilt: a TILT switch low on the screen, between the MOVE stick's
-	-- corner and the jump button, there only while they ride. Off until they turn it on; turning it
-	-- on takes the way they hold the phone then as level. While it's on, CALIBRATE (that's level
-	-- now) and FLIP (left and right swap) sit beside it.
+	-- corner and the jump button, shown only while the player can steer (api:CanAct: not once
+	-- they're out, nor once the round is over). Off until they turn it on; turning it on takes the
+	-- way they hold the phone then as level. While it's on, CALIBRATE (that's level now) and FLIP
+	-- (left and right swap) appear to its right: the switch itself never moves, so a second tap on
+	-- the same spot turns it off again. The row sits above where phone toasts pop up (the same spot,
+	-- 62% across the bottom), so BIG BUMPS and the like never cover it.
 	local tilt = if touch then api:Tilt() else nil
 	local tiltOn = tilt ~= nil and tiltChosen
 	local hintY = underStrip
-	local hintUntil: number? = nil -- the hint stays up until 5 s after GO (a bit longer after a switch)
+	local hintUntil: number? = nil -- the hint stays up until 5 s after GO
 	local function hintText(): string
 		if not touch then
 			return "Move to roll. Bump them off!"
@@ -405,12 +437,15 @@ function BumperBallers.Start(api)
 	end
 	api:Hint(hintText(), hintY)
 	local tiltUi: { Row: Frame, Switch: TextButton, Calibrate: TextButton, Flip: TextButton }? = nil
+	local function tiltShown(): boolean
+		return api:CanAct() and balls[myId] ~= nil
+	end
 	local function refreshTilt()
 		local ui = tiltUi
 		if not ui then
 			return
 		end
-		ui.Row.Visible = api:Alive() and balls[myId] ~= nil
+		ui.Row.Visible = tiltShown()
 		ui.Switch.Text = if tiltOn then "TILT: ON" else "TILT: OFF"
 		local gradient = ui.Switch:FindFirstChildOfClass("UIGradient")
 		if gradient then
@@ -423,19 +458,22 @@ function BumperBallers.Start(api)
 	end
 	if tilt then
 		local device = tilt
+		-- The pills sit on the row's top line, left-aligned. Under them is room for two phone toasts
+		-- (NotificationController: 39 units for one line, 58 for two, 8 apart), one of each.
+		local toastRoom = 39 + 58 + 8 + 8
 		local row = UIKit.new("Frame", {
 			Name = "TiltControls",
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.62, 0, 1, -8),
-			Size = UDim2.fromOffset(446, Theme.Touch.Target),
+			Size = UDim2.fromOffset(446, Theme.Touch.Target + toastRoom),
 			BackgroundTransparency = 1,
 			Visible = false,
 			Parent = api.Gui,
 			Children = {
 				UIKit.new("UIListLayout", {
 					FillDirection = Enum.FillDirection.Horizontal,
-					HorizontalAlignment = Enum.HorizontalAlignment.Center,
-					VerticalAlignment = Enum.VerticalAlignment.Center,
+					HorizontalAlignment = Enum.HorizontalAlignment.Left,
+					VerticalAlignment = Enum.VerticalAlignment.Top,
 					Padding = UDim.new(0, 8),
 					SortOrder = Enum.SortOrder.LayoutOrder,
 				}),
@@ -463,6 +501,9 @@ function BumperBallers.Start(api)
 			}, onClick, top, bottom)
 		end
 		local switch = pill("TiltSwitch", "TILT: OFF", 160, 1, Theme.Colors.PanelLight, Theme.Colors.Panel, function()
+			if not api:CanAct() then
+				return
+			end
 			tiltOn = not tiltOn
 			tiltChosen = tiltOn
 			if tiltOn then
@@ -470,8 +511,11 @@ function BumperBallers.Start(api)
 			end
 			api:Sound("Click")
 			refreshTilt()
-			api:Hint(hintText(), hintY)
-			hintUntil = if hintUntil then math.max(hintUntil, os.clock() + 3) else nil
+			-- The start hint (up before GO and for 5 s after) says how to steer now. Once it's gone,
+			-- the switch's own ON / OFF is the answer: no hint comes back over BIG BUMPS.
+			if hintUntil == nil or hintUntil > os.clock() then
+				api:Hint(hintText(), hintY)
+			end
 		end)
 		local calibrate: TextButton
 		calibrate = pill("Calibrate", "CALIBRATE", 170, 2, Theme.Colors.Cyan, Color3.fromRGB(40, 130, 220), function()
@@ -488,6 +532,9 @@ function BumperBallers.Start(api)
 		end)
 		tiltUi = { Row = row, Switch = switch, Calibrate = calibrate, Flip = flip }
 		refreshTilt()
+		api:OnCanAct(function()
+			refreshTilt()
+		end)
 	end
 
 	-- Steady camera (touch screens) ----------------------------------------------------------------
@@ -518,11 +565,11 @@ function BumperBallers.Start(api)
 		end
 	end
 	api:Track(releaseCamera)
-	local function steadyCamera(body: BasePart, dt: number)
+	local function steadyCamera(body: BasePart, place: any, dt: number)
 		local camera = workspace.CurrentCamera
 		if not heading then
-			local toMiddle = if island then flat(Vector3.new(island.X, 0, island.Z) - body.Position) else Vector3.zero
-			heading = if toMiddle.Magnitude > 1 then toMiddle.Unit else (cameraAxes())
+			local toMiddle = flat(Vector3.new(place.X, 0, place.Z) - body.Position)
+			heading = if toMiddle.Magnitude > 1 then toMiddle.Unit else Vector3.new(0, 0, -1)
 		end
 		if not cameraTaken then
 			cameraTaken = true
@@ -535,7 +582,7 @@ function BumperBallers.Start(api)
 		-- Follow the ball across the island at its resting height: not up and down with every bump,
 		-- and not down into the sea when it goes in.
 		local position = body.Position
-		local target = Vector3.new(position.X, if island then island.Y + body.Size.Y / 2 else position.Y, position.Z)
+		local target = Vector3.new(position.X, place.Y + body.Size.Y / 2, position.Z)
 		local at = if focus then focus:Lerp(target, 1 - math.exp(-dt * CAMERA_FOLLOW)) else target
 		focus = at
 		local back = (heading :: Vector3) * (math.cos(CAMERA_PITCH) * CAMERA_DISTANCE)
@@ -626,7 +673,6 @@ function BumperBallers.Start(api)
 		end
 	end
 
-	local wasAlive = nil
 	local outAt: number? = nil
 	local nextStrip = 0
 	local nextBob = 0
@@ -654,10 +700,6 @@ function BumperBallers.Start(api)
 			api:Hint("", hintY)
 		end
 		local alive = api:Alive()
-		if alive ~= wasAlive then
-			wasAlive = alive
-			refreshTilt()
-		end
 		outAt = if alive then nil else outAt or now
 		-- Riders strip (a few times a second is plenty).
 		if now >= nextStrip then
@@ -665,8 +707,8 @@ function BumperBallers.Start(api)
 			for userId, icon in icons do
 				showOut(icon, icon.Out or not participantAlive(userId))
 			end
-			if tiltUi and tiltUi.Row.Visible ~= (alive and balls[myId] ~= nil) then
-				refreshTilt()
+			if tiltUi and tiltUi.Row.Visible ~= tiltShown() then
+				refreshTilt() -- (this player's ball turned up)
 			end
 		end
 		for _, part in foam do
@@ -694,9 +736,9 @@ function BumperBallers.Start(api)
 		local ball = balls[myId]
 		local body = ball and ball.Body
 		-- The steady camera rides with this player's ball while they're in (and on the splash for a
-		-- moment after they go in).
-		if steady and body and body.Parent and (alive or now - (outAt or now) < OUT_CAMERA) then
-			steadyCamera(body, dt)
+		-- moment after they go in), once it knows where the island is (it looks towards the middle).
+		if steady and island and body and body.Parent and (alive or now - (outAt or now) < OUT_CAMERA) then
+			steadyCamera(body, island, dt)
 		else
 			releaseCamera()
 		end
@@ -705,7 +747,7 @@ function BumperBallers.Start(api)
 			return
 		end
 		ensureMarker(body)
-		local onIsland = true
+		local onIsland = true -- (unknown only if the island never arrived: then it steers quickly everywhere)
 		if island then
 			local fromCenter = flat(body.Position - Vector3.new(island.X, 0, island.Z)).Magnitude
 			local near = alive and fromCenter > island.R - EDGE_WARNING and body.Position.Y > island.Water
