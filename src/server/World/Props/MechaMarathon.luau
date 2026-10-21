@@ -18,7 +18,7 @@ return function(h)
 	return {
 		MechaMarathonFlyer = {
 			Height = 3.09,
-			AssetId = 0, -- tools/upload_assets.py --only MechaMarathonFlyer fills this in
+			AssetId = 113474492425206, -- tools/upload_assets.py --only MechaMarathonFlyer fills this in
 			Shadow = true,
 			Palette = {
 				Body = rgb(255, 80, 90),
@@ -50,7 +50,7 @@ return function(h)
 		},
 		MechaMarathonPad = {
 			Height = 1.335,
-			AssetId = 0,
+			AssetId = 127098361425733,
 			Collide = false, -- decoration only: nothing solid where nothing is drawn
 			Palette = {
 				Base = rgb(248, 246, 240),
@@ -70,7 +70,7 @@ return function(h)
 		},
 		MechaMarathonSign = {
 			Height = 9.22,
-			AssetId = 0,
+			AssetId = 105881838993783,
 			Collide = false, -- decoration only: nothing solid where nothing is drawn
 			Palette = {
 				Post = rgb(250, 250, 250),
@@ -91,7 +91,7 @@ return function(h)
 		},
 		MechaMarathonFlag = {
 			Height = 4.62,
-			AssetId = 0,
+			AssetId = 97047190438662,
 			Palette = {
 				Base = rgb(250, 250, 250),
 				Pole = rgb(235, 238, 245),
@@ -113,7 +113,7 @@ return function(h)
 		},
 		MechaMarathonBunting = {
 			Height = 2.47,
-			AssetId = 0,
+			AssetId = 127061827373685,
 			Shadow = false,
 			Palette = {
 				String = rgb(250, 250, 250),
@@ -146,7 +146,7 @@ return function(h)
 		},
 		MechaMarathonTower = {
 			Height = 21.3,
-			AssetId = 0,
+			AssetId = 83079223821743,
 			Collide = false, -- decoration only: nothing solid where nothing is drawn
 			Palette = {
 				Base = rgb(70, 74, 92),
@@ -167,7 +167,7 @@ return function(h)
 		},
 		MechaMarathonSkyBalloon = {
 			Height = 23,
-			AssetId = 0,
+			AssetId = 70482829335433,
 			Shadow = false,
 			Palette = {
 				StripesA = rgb(255, 90, 90),
