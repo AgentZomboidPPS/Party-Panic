@@ -131,6 +131,31 @@ local __realStarterGui = game:GetService("StarterGui")
 local function __event()
 	return Instance.new("BindableEvent")
 end
+-- A signal that hands its handlers the very values it's fired with (a BindableEvent copies tables),
+-- for stand-in InputObjects: a drag is followed by comparing them.
+local function __luaSignal()
+	local handlers = {}
+	local signal = {}
+	function signal.Connect(_, callback)
+		local entry = { callback = callback }
+		table.insert(handlers, entry)
+		return {
+			Connected = true,
+			Disconnect = function()
+				entry.callback = nil
+			end,
+		}
+	end
+	function signal.Fire(_, ...)
+		for _, entry in table.clone(handlers) do
+			if entry.callback then
+				entry.callback(...)
+			end
+		end
+	end
+	return signal
+end
+local __inputBegan, __inputChanged, __inputEnded = __luaSignal(), __luaSignal(), __luaSignal()
 local __playerGui = Instance.new("Folder")
 __playerGui.Name = "PlayerGui"
 __playerGui.Parent = game:GetService("ServerStorage")
@@ -230,6 +255,10 @@ local __shims = {
 		TouchEnabled = __touchMode == true,
 		KeyboardEnabled = __touchMode ~= true,
 		MouseEnabled = __touchMode ~= true,
+		-- Stand-in fingers and mouse (the Skee-Ball drag checks fire them).
+		InputBegan = __inputBegan,
+		InputChanged = __inputChanged,
+		InputEnded = __inputEnded,
 	}),
 	RunService = __wrap(__realRun, {
 		RenderStepped = __realRun.Heartbeat,
@@ -256,7 +285,7 @@ local function __service(name)
 	return __shims[name] or game:GetService(name)
 end
 
-local __remotes, __sent, __soundReports = {}, {}, {}
+local __remotes, __sent, __soundReports, __skeeSent = {}, {}, {}, {}
 local __RemotesShim = {
 	Get = function(name)
 		if not __remotes[name] then
@@ -266,6 +295,9 @@ local __RemotesShim = {
 				OnClientEvent = bindable.Event,
 				FireServer = function(_, first, ...)
 					table.insert(__sent, name)
+					if name == "SkeeBall" then
+						table.insert(__skeeSent, { first, ... })
+					end
 					if name == "ClientReport" and type(first) == "table" and first.Kind == "Sound" then
 						table.insert(__soundReports, first)
 					end
@@ -433,7 +465,7 @@ local order = {
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
 	"RewardsController", "CelebrationController",
-	"EmoteController", "SpectateController", "OnboardingController", "AssetReportController",
+	"EmoteController", "SpectateController", "OnboardingController", "SkeeBallController", "AssetReportController",
 }
 -- The ScreenGuis, made with init.client.luau's own properties (see screen_guis() in the script).
 local context = {}
@@ -550,6 +582,260 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Rewards", "Rewards C
 		State.OpenScreen:Fire(screen) -- the emote wheel isn't a modal: its button toggles it shut
 	end
 	task.wait(0.3)
+end
+
+-- 3b. Skee-Ball in the lobby's arcade (SkeeBallController): the player takes machine 1, charges the
+-- ROLL meter, rolls a ball (its score pops), sees the vote open ("SkeeBall voting"), finishes a
+-- game (PLAY AGAIN / DONE) and leaves; then starts again and is taken into a round. A stand-in
+-- machine, board and ball when the place's lobby is older than this client.
+local skeeChecks = {}
+do
+	local CollectionService = game:GetService("CollectionService")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local machineModel = nil
+	for _, tagged in CollectionService:GetTagged("SkeeMachine") do
+		if tagged:GetAttribute("SkeeIndex") == 1 then
+			machineModel = tagged
+		end
+	end
+	if not machineModel then
+		local frame = CFrame.new(60, 0.4, -40) * CFrame.Angles(0, math.rad(-57), 0)
+		machineModel = Instance.new("Model")
+		machineModel.Name = "ArcadeSkeeMachine"
+		local function piece(name, size, offset)
+			local part = Instance.new("Part")
+			part.Name = name
+			part.Anchored = true
+			part.Size = size
+			part.CFrame = frame * CFrame.new(offset)
+			part.Parent = machineModel
+			return part
+		end
+		piece("Cabinet", Vector3.new(5, 3, 14), Vector3.new(0, 1.5, 0))
+		piece("Screen", Vector3.new(4.3, 1.5, 0.05), Vector3.new(0, 8.3, 6.375)):AddTag("SkeeScreen")
+		piece("Band50", Vector3.new(0.1, 0.8, 0.8), Vector3.new(0, 4.4, 4.2))
+		piece("BulbsA", Vector3.new(0.3, 0.3, 0.3), Vector3.new(-1, 11, 6.4))
+		piece("BulbsB", Vector3.new(0.3, 0.3, 0.3), Vector3.new(1, 11, 6.4))
+		piece("Glow", Vector3.new(0.1, 0.1, 8), Vector3.new(1.6, 3.6, -2.6))
+		local standPart = piece("Stand", Vector3.new(3, 5, 2), Vector3.new(0, 2.5, -9))
+		standPart:AddTag("SkeeStand")
+		Instance.new("ProximityPrompt").Parent = standPart
+		machineModel:SetAttribute("SkeeIndex", 1)
+		machineModel:SetAttribute("SkeeColor", Color3.fromRGB(64, 196, 255))
+		machineModel:SetAttribute("SkeeFrame", frame)
+		machineModel.Parent = workspace
+		machineModel:AddTag("SkeeMachine")
+		skeeChecks.standIn = true
+	end
+	for key, value in { SkeeUser = 0, SkeeName = "", SkeeScore = 0, SkeeBalls = 0, SkeeState = "Idle", SkeeBest = 0 } do
+		machineModel:SetAttribute(key, value)
+	end
+	if not CollectionService:GetTagged("SkeeBestBoard")[1] then
+		local part = Instance.new("Part")
+		part.Name = "BestBoard"
+		part.Anchored = true
+		part.Size = Vector3.new(23, 5.6, 0.1)
+		part.CFrame = CFrame.new(70, 16, -48)
+		part.Parent = workspace
+		part:AddTag("SkeeBestBoard")
+	end
+	CollectionService:GetTagged("SkeeBestBoard")[1]:SetAttribute(
+		"Board",
+		'[{"N":"SuperLongDisplayNm20","S":420,"U":7},{"N":"Harness","S":310,"U":1},{"N":"Pancake","S":250,"U":9}]'
+	)
+	if not ReplicatedStorage:FindFirstChild("ArcadeAssets") then
+		local assets = Instance.new("Folder")
+		assets.Name = "ArcadeAssets"
+		local ball = Instance.new("Model")
+		ball.Name = "SkeeBall"
+		local part = Instance.new("Part")
+		part.Name = "Ball"
+		part.Shape = Enum.PartType.Ball
+		part.Size = Vector3.one * 0.72
+		part.Anchored = true
+		part.CanCollide = false
+		part.CFrame = CFrame.new(0, 0.36, 0)
+		part.Parent = ball
+		ball.PrimaryPart = part
+		ball.Parent = assets
+		assets.Parent = ReplicatedStorage
+	end
+	step = "SkeeBall"
+	task.wait(1.5) -- the controller picks the machine up
+	local SkeeBallController = __require("Client/Controllers/SkeeBallController")
+	machineModel:SetAttribute("SkeeUser", 1)
+	machineModel:SetAttribute("SkeeName", __player.DisplayName)
+	machineModel:SetAttribute("SkeeBest", 240)
+	machineModel:SetAttribute("SkeeState", "Playing")
+	__fire("SkeeBall", "Start", 1, 240)
+	task.wait(1.2)
+	__ui["SkeeBall"] = __dumpGui(__playerGui, "SkeeBall")
+	-- The ROLL meter: one press stops the swinging aim, the next starts the power filling.
+	SkeeBallController.PressRoll()
+	task.wait(0.35)
+	SkeeBallController.PressRoll()
+	task.wait(0.45)
+	__ui["SkeeBall meter"] = __dumpGui(__playerGui, "SkeeBall meter")
+	skeeChecks.rolled = SkeeBallController.Roll(0.05, 0.5)
+	__fire("SkeeBall", "Rolled", 1, 1, 1050, 500, "40", 40)
+	task.wait(1.65)
+	__ui["SkeeBall pop"] = __dumpGui(__playerGui, "SkeeBall pop")
+	machineModel:SetAttribute("SkeeScore", 40)
+	machineModel:SetAttribute("SkeeBalls", 1)
+	task.wait(0.6)
+	-- The vote opens while you play: the cards keep their places, the play screen keeps clear of
+	-- them, and the tip over the score says a round is coming.
+	local phaseBefore, endsBefore = GameState.Get("Phase"), GameState.Get("PhaseEndsAt")
+	local voteOptions = {}
+	for _, def in GameDefinitions.List do
+		if #voteOptions < 3 then
+			table.insert(voteOptions, { Id = def.Id, Mystery = false })
+		end
+	end
+	table.insert(voteOptions, { Id = voteOptions[1].Id, Mystery = true })
+	GameState.SetJSON("VoteOptions", voteOptions)
+	GameState.SetJSON("VoteCounts", { 1, 0, 2, 1 })
+	GameState.Set("Phase", "Voting")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 12)
+	task.wait(1.2)
+	__ui["SkeeBall voting"] = __dumpGui(__playerGui, "SkeeBall voting")
+	local skeeHud = __playerGui:FindFirstChild("PartyPanicHUD")
+	local skeeHolder = skeeHud and skeeHud:FindFirstChild("SkeeBallControls")
+	local skeeTip = skeeHolder and skeeHolder:FindFirstChild("Hint", true)
+	skeeChecks.votingTip = if skeeTip and skeeTip.Visible then skeeTip.Text else "(hidden)"
+	GameState.Set("Phase", phaseBefore)
+	GameState.Set("PhaseEndsAt", endsBefore or 0)
+	task.wait(0.3)
+	skeeChecks.tipAfterVote = if skeeTip and skeeTip.Visible then skeeTip.Text else "(hidden)"
+	machineModel:SetAttribute("SkeeState", "Over")
+	__fire("SkeeBall", "Over", 1, 1, 310, 240, true, 2)
+	task.wait(1)
+	__ui["SkeeBall over"] = __dumpGui(__playerGui, "SkeeBall over")
+	skeeChecks.sentToServer = table.concat(__sent, ",")
+	__fire("SkeeBall", "End", 1, "Left")
+	task.wait(0.5)
+	local controls = __playerGui:FindFirstChild("PartyPanicHUD") and __playerGui.PartyPanicHUD:FindFirstChild("SkeeBallControls")
+	skeeChecks.closed = controls ~= nil and not controls.Visible
+	-- A round taking you ends the game on this device at once and hands the camera back, before
+	-- the server's word comes.
+	machineModel:SetAttribute("SkeeState", "Playing")
+	__fire("SkeeBall", "Start", 1, 310)
+	task.wait(1)
+	local skeeCamera = workspace.CurrentCamera
+	skeeChecks.cameraPlaying = skeeCamera.CameraType.Name
+	skeeChecks.reopened = controls ~= nil and controls.Visible
+	-- The machines' prompts stay off this screen while you play, even when the server turns one on.
+	local skeeStand = machineModel:FindFirstChild("Stand")
+	local skeePrompt = skeeStand and skeeStand:FindFirstChildOfClass("ProximityPrompt")
+	if skeePrompt then
+		skeePrompt.Enabled = true
+		task.wait(0.1)
+		skeeChecks.promptWhilePlaying = skeePrompt.Enabled
+	end
+	__player:SetAttribute("PP_InRound", true)
+	task.wait(0.3)
+	skeeChecks.roundClosed = controls ~= nil and not controls.Visible
+	skeeChecks.cameraAfterRound = skeeCamera.CameraType.Name
+	__player:SetAttribute("PP_InRound", nil)
+	for key, value in { SkeeUser = 0, SkeeName = "", SkeeScore = 0, SkeeBalls = 0, SkeeState = "Idle", SkeeBest = 0 } do
+		machineModel:SetAttribute(key, value)
+	end
+	if skeePrompt then
+		skeePrompt.Enabled = true -- the server frees the machine
+		task.wait(0.1)
+		skeeChecks.promptWhenFree = skeePrompt.Enabled
+	end
+
+	-- Fingers on the lane (stand-in InputObjects through the shimmed UserInputService). A drag, with
+	-- another finger touching and lifting meanwhile: only the drag's own finger ends it, and the
+	-- roll it makes is the one its own positions give (SkeeBallView.Drag).
+	machineModel:SetAttribute("SkeeUser", 1)
+	machineModel:SetAttribute("SkeeState", "Playing")
+	__fire("SkeeBall", "Start", 1, 310)
+	task.wait(1)
+	local SkeeBallView = __require("Shared/Logic/SkeeBallView")
+	local viewport = workspace.CurrentCamera.ViewportSize
+	local inputKind = if __touchMode then Enum.UserInputType.Touch else Enum.UserInputType.MouseButton1
+	local function finger(kind, x, y)
+		return {
+			UserInputType = kind,
+			UserInputState = Enum.UserInputState.Begin,
+			KeyCode = Enum.KeyCode.Unknown,
+			Position = Vector3.new(x * viewport.X, y * viewport.Y, 0),
+			Delta = Vector3.zero,
+		}
+	end
+	local function move(input, x, y)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			-- A mouse drag moves with MouseMovement inputs, and ends with the button's own.
+			__inputChanged:Fire(finger(Enum.UserInputType.MouseMovement, x, y), false)
+		else
+			input.Position = Vector3.new(x * viewport.X, y * viewport.Y, 0)
+			input.UserInputState = Enum.UserInputState.Change
+			__inputChanged:Fire(input, false)
+		end
+	end
+	local sentBefore = #__skeeSent
+	local drag = finger(inputKind, 0.5, 0.3)
+	__inputBegan:Fire(drag, false)
+	move(drag, 0.45, 0.33)
+	skeeChecks.dragFollows = SkeeBallController.Status().Dragging
+	if __touchMode then
+		-- A second thumb brushes the screen low on the left and lifts.
+		local thumb = finger(Enum.UserInputType.Touch, 0.1, 0.9)
+		__inputBegan:Fire(thumb, false)
+		thumb.UserInputState = Enum.UserInputState.End
+		__inputEnded:Fire(thumb, false)
+		skeeChecks.otherFingerIgnored = SkeeBallController.Status().Dragging and #__skeeSent == sentBefore
+	end
+	drag.UserInputState = Enum.UserInputState.End
+	__inputEnded:Fire(drag, false)
+	task.wait(0.2)
+	local rollSent = __skeeSent[#__skeeSent]
+	local wantAim, wantPower = SkeeBallView.Drag(
+		0.5 * viewport.X,
+		0.3 * viewport.Y,
+		0.45 * viewport.X,
+		0.33 * viewport.Y,
+		viewport.X,
+		viewport.Y,
+		viewport.Y
+	)
+	skeeChecks.dragRoll = if rollSent and rollSent[1] == "Roll"
+		then string.format("ball %d aim %.3f power %.3f (want %.3f %.3f)", rollSent[2], rollSent[3], rollSent[4], wantAim, wantPower)
+		else "(no roll sent)"
+	skeeChecks.dragRollMatches = rollSent ~= nil
+		and rollSent[1] == "Roll"
+		and math.abs(rollSent[3] - wantAim) < 0.002
+		and math.abs(rollSent[4] - wantPower) < 0.002
+	-- The server refuses that ball ("Sync": none count): the device puts it back.
+	local rolledBefore = SkeeBallController.Status().Rolled
+	__fire("SkeeBall", "Sync", 1, 0)
+	task.wait(0.3)
+	local skeePop = skeeHud and skeeHud:FindFirstChild("SkeeBallPop")
+	skeeChecks.syncPutBack = string.format(
+		"rolled %d -> %d, pop %q",
+		rolledBefore,
+		SkeeBallController.Status().Rolled,
+		if skeePop and skeePop.Visible then skeePop.Text else "(none)"
+	)
+	skeeChecks.syncOk = rolledBefore == 1 and SkeeBallController.Status().Rolled == 0
+	-- A round runs while you roll (sitting it out): the round's standings show on the left, the
+	-- controls keep clear of them.
+	__player:SetAttribute("PP_SitOut", true)
+	local phaseNow = GameState.Get("Phase")
+	GameState.Set("Phase", "InRound")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 60)
+	task.wait(1.2)
+	__ui["SkeeBall in a round"] = __dumpGui(__playerGui, "SkeeBall in a round")
+	GameState.Set("Phase", phaseNow)
+	GameState.Set("PhaseEndsAt", 0)
+	__player:SetAttribute("PP_SitOut", nil)
+	__fire("SkeeBall", "End", 1, "Left")
+	task.wait(0.3)
+	for key, value in { SkeeUser = 0, SkeeName = "", SkeeScore = 0, SkeeBalls = 0, SkeeState = "Idle", SkeeBest = 0 } do
+		machineModel:SetAttribute(key, value)
+	end
 end
 
 -- 4. A whole round, phase by phase, with three toasts on screen in the lobby. The vote shows the
@@ -1144,6 +1430,7 @@ return game:GetService("HttpService"):JSONEncode({
 	guiInstances = guiCount,
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
+	skeeChecks = skeeChecks,
 	sitOutChecks = sitOutChecks,
 	tipChecks = tipChecks,
 	textReport = __textReport,

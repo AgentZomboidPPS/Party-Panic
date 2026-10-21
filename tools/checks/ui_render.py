@@ -703,7 +703,10 @@ def render(nodes: list, size_name: str, out: Path):
         od.text(((x0 + x1) / 2, (y0 + y1) / 2), label, font=font("Bold", 11), fill=(30, 30, 40, 255), anchor="mm")
         core.append(dict(screen="RobloxCore", path="TopBar/" + label, box=(x0, y0, x1, y1), label=label, seq=top, popup=False))
     zone = None
-    if touch:
+    # A screen that put the MOVE stick and jump button away (the PlayerModule's controls disabled,
+    # like Skee-Ball's play screen) has none of them to draw or keep clear of.
+    controls_away = any(n.get("noTouch") and n.get("enabled", True) for n in nodes if n["c"] == "ScreenGui")
+    if touch and not controls_away:
         jx0, jy0, jump = jump_button(dev)
         od.ellipse([jx0, jy0, jx0 + jump, jy0 + jump], fill=(255, 255, 255, 70), outline=(255, 255, 255, 160), width=2)
         od.text((jx0 + jump / 2, jy0 + jump / 2), "JUMP", font=font("Bold", 12), fill=(255, 255, 255, 230), anchor="mm")
