@@ -47,6 +47,7 @@ export type Participant = {
 	ScoreText: string,
 	Team: string?,
 	EliminatedAt: number?,
+	LobbyCharacter: Model?, -- the character they got back in the lobby after going out
 	Data: { [string]: any }, -- free space for mini-game specific state
 }
 
@@ -398,7 +399,7 @@ function RoundContext.Eliminate(self: RoundContext, player: Player, reason: stri
 			return
 		end
 		local _, humanoid, currentRoot = self:GetCharacter(player)
-		if humanoid and currentRoot and currentRoot.Position.Magnitude > LOBBY_RADIUS then
+		if humanoid and currentRoot and not self:_inLobby(player, currentRoot) then
 			pcall(player.LoadCharacterAsync, player)
 		end
 	end)
@@ -858,6 +859,9 @@ function RoundContext._watchPlayer(self: RoundContext, player: Player)
 	self.Janitor:Add(player.CharacterAdded:Connect(function(character)
 		task.spawn(self._watchCharacter, self, player, character)
 		local state = self.Participants[player]
+		if state and not state.Alive then
+			state.LobbyCharacter = character -- new characters start in the lobby, and nothing moves theirs
+		end
 		if not state or not state.Alive or not self.Active or self.RespawnMode ~= "Respawn" then
 			return
 		end
@@ -878,6 +882,17 @@ function RoundContext._watchPlayer(self: RoundContext, player: Player)
 			end
 		end)
 	end))
+end
+
+-- Whether a participant is already back in the lobby: their character is the one they got there
+-- after going out. Distance alone can't tell: the Bobsled Run's finish hangs over the lobby's own
+-- field, so riders who weren't sent home dropped into it when the track went away.
+function RoundContext._inLobby(self: RoundContext, player: Player, root: BasePart): boolean
+	local state = self.Participants[player]
+	return state ~= nil
+		and state.LobbyCharacter ~= nil
+		and player.Character == state.LobbyCharacter
+		and root.Position.Magnitude <= LOBBY_RADIUS
 end
 
 function RoundContext._onLeave(self: RoundContext, player: Player)
@@ -914,7 +929,7 @@ function RoundContext.Destroy(self: RoundContext)
 		player:SetAttribute("PP_Team", "")
 		local character = player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		if not root or root.Position.Magnitude > LOBBY_RADIUS then
+		if not root or not self:_inLobby(player, root) then
 			-- A fresh character restores speed, jump, tools and anything a mode changed.
 			task.spawn(function()
 				pcall(player.LoadCharacterAsync, player)

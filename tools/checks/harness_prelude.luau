@@ -647,6 +647,30 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	local okDestroy, destroyErr = pcall(ctx.Destroy, ctx)
 	summary.destroy = if okDestroy then "ok" else tostring(destroyErr)
 	task.wait(0.2)
+	-- Everyone who played should be back in the lobby (new characters start within a few dozen
+	-- studs of its centre), not left wherever the arena was.
+	local notHome = {}
+	for _ = 1, 40 do -- respawning a character takes a moment
+		notHome = {}
+		for _, player in participants do
+			local character = player.Parent and player.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			if root then
+				local flat = Vector3.new(root.Position.X, 0, root.Position.Z).Magnitude
+				if flat > 80 or root.Position.Y > 40 then
+					table.insert(
+						notHome,
+						`{player.Name} at {math.round(flat)} studs out, y {math.round(root.Position.Y)}`
+					)
+				end
+			end
+		end
+		if #notHome == 0 then
+			break
+		end
+		task.wait(0.1)
+	end
+	summary.notHomeAfterCleanup = notHome
 	summary.arenaLeftovers = if ctx.Arena.Parent then #ctx.Arena:GetDescendants() else 0
 	if clientGuis then
 		local modeGuis = {}
