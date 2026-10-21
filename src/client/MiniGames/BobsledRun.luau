@@ -13,6 +13,11 @@
 -- shared, until then from the sled as drawn here). Each press carries its time, and the server
 -- judges it by that, so a press made while the cue showed LEAN RIGHT! counts for that curve. Before
 -- GO the cue previews the first curve, with the buttons off.
+--
+-- Audit pass (owner: "it just has to work"): the "tap the curve's way" hint now shows for the first
+-- seconds after GO. It used to start with the rules card, which hides this HUD, and was gone before
+-- the card was. The sled model waits up to 30 s for its template (it gave up after 5 s, and a slow
+-- phone that got the template later drew no sleds all round).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -142,7 +147,10 @@ function BobsledRun.Start(api)
 	local visuals: { [string]: Visual } = {}
 
 	local function makeSled(team: string): Model?
-		local template = api:Template("BobsledSled", 5)
+		-- (The server shares it after building the whole run, and a phone can take a while to get
+		-- all of that: keep waiting, or that player rides the round with no sleds drawn. This runs
+		-- off the frame loop.)
+		local template = api:Template("BobsledSled", 30)
 		if not template or not template:IsA("Model") then
 			return nil
 		end
@@ -953,11 +961,13 @@ function BobsledRun.Start(api)
 		if callout.Visible and os.clock() > calloutUntil then
 			callout.Visible = false
 		end
-		if hintUntil == 0 and myTeam then
+		-- (From GO: before it the rules card hides this whole HUD, so a hint started then was gone
+		-- before anyone could see it. Phones: two short lines, clear of the move stick's corner.)
+		if hintUntil == 0 and myTeam and State.Phase() == "InRound" then
 			hintUntil = os.clock() + 7
 			api:Hint(
 				if touch
-					then "Tap the curve's way before it, all together!"
+					then "Tap the curve's way before it,\nall together!"
 					else "Press the curve's way (A / D) before it, all together!",
 				hudY + barHeight + 180
 			)
