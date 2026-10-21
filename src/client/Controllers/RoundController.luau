@@ -446,6 +446,11 @@ function RoundController.Start(context)
 	buildRules(context.Hud)
 	buildBoard(context.Hud)
 	buildOutPanel(context.Hud)
+	-- A mode's own HUD waits while the rules card is up (Kit/Api reads this), so nothing is drawn
+	-- over the card (owner: "This looks bad", Cake Factory's team scores and meter on the rules).
+	rules:GetPropertyChangedSignal("Visible"):Connect(function()
+		player:SetAttribute("PP_RulesShowing", rules.Visible)
+	end)
 
 	local lastSecond = -1
 	GameState.Changed("Phase", function(phase)
