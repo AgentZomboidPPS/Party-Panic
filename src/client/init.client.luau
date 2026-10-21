@@ -58,6 +58,7 @@ local order = {
 	"SpectateController",
 	"OnboardingController",
 	"MiniGameController",
+	"SkeeBallController",
 	"AssetReportController",
 }
 

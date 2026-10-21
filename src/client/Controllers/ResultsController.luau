@@ -4,6 +4,14 @@
 -- The breakdown includes the first win of the day's bonus, and a round that levels you up says so
 -- in place of the "next vote" cue (owner: "Also we need cool payoffs for players that keep playing
 -- the game.").
+--
+-- The headline names the game in capitals, like every other screen, on one line: a long name with
+-- "Your team won!" draws a little smaller rather than wrapping out of its box.
+--
+-- Each standings row has the place and name on the left and the result on the right, in its own
+-- label: the result always reads whole and a long name gives way ("..."), only as far as its own
+-- row's result needs. It used to be one line ("🥇  name  ·  result") that a 15-character name cut
+-- short in every mode.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -22,6 +30,17 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 local ResultsController = {}
 
 local MEDALS = { "🥇", "🥈", "🥉" }
+
+-- The standings rows (units: the column is about 374 wide on every screen): a result takes as much
+-- of its row as it needs, up to RESULT_MAX (the rest stays for the place and name); one that's wider
+-- still is drawn smaller, down to RESULT_MIN_TEXT (11 pt on a phone).
+local ROW_TEXT, RESULT_MAX, RESULT_MIN_TEXT = 21, 232, 18
+
+-- The room a result needs at this text size: a little more than it measures, because phones draw
+-- the scaled-down text up to 4% wider than that (a result given exactly its width ended in "...").
+local function resultRoom(text: string, size: number): number
+	return UIKit.TextWidth(text, size, Theme.Fonts.Bold) * 1.06 + 4
+end
 
 local modal: Modal.Modal
 local headline: TextLabel
@@ -47,7 +66,7 @@ local function show(data)
 			else ""
 	end
 	headline.Text = if data.Place == 1
-		then `{medal} You won {definition and definition.Name or "the round"}!{teamLine}`
+		then `{medal} You won {if definition then string.upper(definition.Name) else "the round"}!{teamLine}`
 		else `{medal} {Placement.Ordinal(data.Place)} of {data.PlayerCount}{teamLine}`
 
 	clear(standings)
@@ -55,16 +74,45 @@ local function show(data)
 		local isMe = entry.UserId == game:GetService("Players").LocalPlayer.UserId
 		local place = MEDALS[entry.Place] or Placement.Ordinal(entry.Place)
 		local name = Participants.ListName(entry.Name, Participants.IsBotId(entry.UserId))
-		UIKit.Label({
-			Text = `{place}  {name}  ·  {Participants.Escape(entry.ScoreText or "")}`,
-			RichText = true,
-			TextSize = 21,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			TextColor3 = if isMe then Theme.Colors.Yellow else Theme.Colors.Text,
+		local color = if isMe then Theme.Colors.Yellow else Theme.Colors.Text
+		local result = entry.ScoreText or ""
+		local textSize = ROW_TEXT
+		local resultWidth = resultRoom(result, textSize)
+		while textSize > RESULT_MIN_TEXT and resultWidth > RESULT_MAX do
+			textSize -= 1
+			resultWidth = resultRoom(result, textSize)
+		end
+		resultWidth = math.min(math.ceil(resultWidth), RESULT_MAX)
+		local row = UIKit.new("Frame", {
 			Size = UDim2.new(1, 0, 0, 30),
+			BackgroundTransparency = 1,
 			LayoutOrder = index,
 			Parent = standings,
+		})
+		local nameLabel = UIKit.Label({
+			Text = `{place}  {name}`,
+			RichText = true,
+			TextSize = ROW_TEXT,
+			TextWrapped = false,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextColor3 = color,
+			Size = UDim2.new(1, -(resultWidth + 10), 1, 0),
+			Parent = row,
+		})
+		nameLabel:SetAttribute("PP_TruncateOk", true) -- a long name ends in "..."
+		UIKit.Label({
+			Name = "Result",
+			Text = result,
+			TextSize = textSize,
+			TextWrapped = false,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			TextTruncate = Enum.TextTruncate.AtEnd, -- (only past RESULT_MAX at the smallest size)
+			TextColor3 = color,
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.fromScale(1, 0),
+			Size = UDim2.new(0, resultWidth, 1, 0),
+			Parent = row,
 		})
 	end
 
@@ -149,10 +197,11 @@ function ResultsController.Start(context)
 	headline = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 34,
+		TextScaled = true, -- one line: a long game name with "Your team won!" shrinks a little
+		TextWrapped = false,
 		Size = UDim2.new(1, 0, 0, 44),
 		Parent = modal.Content,
-		Children = { UIKit.TextStroke(0.2) },
+		Children = { UIKit.TextStroke(0.2), UIKit.new("UITextSizeConstraint", { MaxTextSize = 34 }) },
 	})
 	standings = UIKit.new("Frame", {
 		Position = UDim2.fromOffset(0, 54),

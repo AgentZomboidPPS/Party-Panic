@@ -208,7 +208,12 @@ function UIKit.AutoScale(container: GuiObject, bias: number?): UIScale
 	local function update()
 		uiScale.Scale = UIKit.ScaleFor(camera.ViewportSize, bias)
 	end
-	camera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
+	-- Lives as long as the UIScale: a mode's HUD (destroyed with its round) mustn't leave a handler
+	-- on the camera behind every round.
+	local resized = camera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
+	uiScale.Destroying:Connect(function()
+		resized:Disconnect()
+	end)
 	update()
 	return uiScale
 end
