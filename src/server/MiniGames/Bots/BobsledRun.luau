@@ -29,9 +29,9 @@ function Brain.Step(bot, ctx, mode, _dt)
 	memory.Planned = curve.Index
 	local skill = bot.Skill
 	local roll = bot.Rng:NextNumber()
-	local miss = 0.16 * (1 - skill) + 0.04
-	local wrong = miss + 0.14 * (1 - skill) + 0.03
-	local late = wrong + 0.12 * (1 - skill) + 0.02
+	local miss = 0.18 * (1 - skill) + 0.05
+	local wrong = miss + 0.14 * (1 - skill) + 0.05
+	local late = wrong + 0.12 * (1 - skill) + 0.03
 	if roll < miss then
 		return -- didn't see it coming
 	end

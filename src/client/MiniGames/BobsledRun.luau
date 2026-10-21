@@ -548,7 +548,7 @@ function BobsledRun.Start(api)
 			api:Sound("Click")
 			shake = 0.25
 		else
-			say(`✖ BUMP! LEAN TOGETHER{counted}`, Theme.Colors.Red, 1.3)
+			say(`✖ BUMP!{counted}`, Theme.Colors.Red, 1.3)
 			api:Sound("Hit")
 			shake = 0.7
 		end
