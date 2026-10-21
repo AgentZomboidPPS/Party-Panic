@@ -82,11 +82,14 @@ function BumperBallers.Start(api)
 	local touch = api:IsTouch()
 
 	-- Riders strip ----------------------------------------------------------------------------
+	-- (Phones draw the HUD at 75%: bigger icons there keep the shapes readable. Twelve riders still
+	-- fit in the strip.)
+	local iconSize = if touch then 40 else 34
 	local strip = UIKit.new("Frame", {
 		Name = "Riders",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, api:HudY()),
-		Size = UDim2.fromOffset(600, 40),
+		Size = UDim2.fromOffset(600, iconSize + 6),
 		BackgroundTransparency = 1,
 		Parent = hud,
 		Children = {
@@ -117,7 +120,7 @@ function BumperBallers.Start(api)
 		local mine = userId == myId
 		local frame = UIKit.new("Frame", {
 			Name = "Rider" .. tostring(userId),
-			Size = UDim2.fromOffset(if mine then 40 else 34, if mine then 40 else 34),
+			Size = UDim2.fromOffset(if mine then iconSize + 6 else iconSize, if mine then iconSize + 6 else iconSize),
 			BackgroundColor3 = color,
 			LayoutOrder = if mine then -1 else model:GetAttribute("Index") or 0,
 			Parent = strip,
@@ -183,7 +186,7 @@ function BumperBallers.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 40,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, api:HudY() + 84),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + 112), -- under the hint line, which shows at the start
 		Size = UDim2.fromOffset(320, 46),
 		TextColor3 = Theme.Colors.Red,
 		Visible = false,
