@@ -60,7 +60,8 @@ return function(env)
 			elseif now >= s.Next then
 				-- Head somewhere on the paper: toward a random spot, away from the edges.
 				local x, z = position.X - paper.X, position.Z - paper.Z
-				local target = Vector3.new(env.rng:NextNumber(-48, 48), 0, env.rng:NextNumber(-48, 48))
+				local half = StampGrid.PAD / 2 - 12
+				local target = Vector3.new(env.rng:NextNumber(-half, half), 0, env.rng:NextNumber(-half, half))
 				local dir = Vector3.new(target.X - x, 0, target.Z - z)
 				dir = if dir.Magnitude > 0.1 then dir.Unit else Vector3.new(0, 0, -1)
 				if env.rng:NextNumber() < 0.45 then

@@ -5,7 +5,8 @@
 -- hop forward, hold to charge a longer jump; when time runs out the biggest share of the pad wins.
 --
 -- How it works here:
---   * The arena is a giant school desk in a kid's room: a cream paper pad (120 x 120 studs, ruled
+--   * The arena is a giant school desk in a kid's room: a cream paper pad (120 studs square, 100 for
+--     up to 6 participants so small rounds stay lively; ruled
 --     like a notebook) on a wooden desk top, giant pencils, an ink pad, rubber stamps and paper
 --     clips around it. Everything solid is drawn: the desk top, the paper, the pad's binding and the
 --     props that collide (pencils, ink pad, stamps: one MeshPart per piece, so their collision hugs
@@ -40,7 +41,6 @@ local StampGrid = require(ReplicatedStorage.Shared.Logic.StampGrid)
 
 local StampOut = MiniGame.Define("StampOut", { Results = "Score" })
 
-local PAD = StampGrid.PAD
 local PAPER_TOP = StampGrid.PAPER_TOP
 local DESK = Vector3.new(236, 4, 184) -- the desk top (its top is the arena origin's Y)
 local AIR_HEIGHT = 1.6 -- feet this far above the paper: in the air
@@ -70,6 +70,7 @@ function StampOut:Prepare()
 	ctx.EndWhenOneLeft = false
 	local origin = ctx.Origin.Position
 	self.Paper = origin + Vector3.new(0, PAPER_TOP, 0) -- the paper's top center
+	StampGrid.Configure(StampGrid.SizeFor(#ctx:GetPlayers()))
 	self.Owners = table.create(StampGrid.N * StampGrid.N, 0)
 	self.Counts = {} -- ink -> cells
 	self.InkOf = {} -- player -> ink
@@ -92,7 +93,7 @@ function StampOut:Prepare()
 		ctx:SetScoreText(player, "0%")
 	end
 	ctx:SetSharedJSON("Inks", inks)
-	ctx:SetSharedJSON("Pad", { X = self.Paper.X, Y = self.Paper.Y, Z = self.Paper.Z })
+	ctx:SetSharedJSON("Pad", { X = self.Paper.X, Y = self.Paper.Y, Z = self.Paper.Z, N = StampGrid.N })
 	ctx:SetShared("Grid", StampGrid.Encode(self.Owners))
 
 	ctx.Hooks.CharacterReady = function(player, character)
@@ -103,7 +104,8 @@ function StampOut:Prepare()
 		self.Track[player] = nil
 		self.Flying[player] = nil
 		local rng = Random.new()
-		local spot = self.Paper + Vector3.new(rng:NextNumber(-36, 36), 0, rng:NextNumber(-36, 36))
+		local spot = self.Paper
+			+ Vector3.new(rng:NextNumber(-1, 1) * StampGrid.PAD * 0.3, 0, rng:NextNumber(-1, 1) * StampGrid.PAD * 0.3)
 		return CFrame.lookAt(spot, Vector3.new(self.Paper.X, spot.Y, self.Paper.Z))
 	end
 	ctx.Hooks.PlayerLeft = function(player)
@@ -122,6 +124,7 @@ function StampOut:BuildArena()
 	local ctx = self.context
 	local origin = ctx.Origin.Position
 	local arena = ctx.Arena
+	local PAD = StampGrid.PAD
 
 	-- The desk top (solid, drawn) and its legs down to the floor far below (decoration).
 	Build.Part({

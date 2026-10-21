@@ -1,7 +1,8 @@
 -- Stamp Out shared rules (the server and every client run the same code): the paper pad's grid,
 -- which cells a stamp covers, the twelve inks and how far a hop goes.
 --
---   * The pad is PAD x PAD studs of paper split into N x N square cells (CELL studs each). A cell
+--   * The pad is PAD x PAD studs of paper split into N x N square cells (CELL studs each): 120
+--     studs for a full round, 100 for up to 6 participants (SizeFor/Configure). A cell
 --     belongs to the last ink stamped on it. Cells are numbered 1..N*N, row by row (z, then x),
 --     from the pad's -X/-Z corner. The whole pad travels as one string, one character per cell
 --     ("0" empty, then "1".."<" for inks 1..12), so a late client catches up from one value.
@@ -19,14 +20,16 @@
 
 local StampGrid = {}
 
-StampGrid.PAD = 120 -- studs, the paper's side
+StampGrid.PAD = 120 -- studs, the paper's side (Configure sets it per round)
 StampGrid.CELL = 2.5 -- studs
 StampGrid.N = 48 -- cells per side (PAD / CELL)
+StampGrid.SMALL_N = 40 -- a smaller pad (100 studs) for rounds of up to SMALL_ROUND participants
+StampGrid.SMALL_ROUND = 6
 StampGrid.PAPER_TOP = 1.2 -- the paper's top above the desk top (arena origin's Y)
 
-StampGrid.JUMP_RADIUS = 4.5 -- a plain jump's stamp
-StampGrid.HOP_RADIUS_MIN = 5 -- a tapped hop
-StampGrid.HOP_RADIUS_MAX = 7.5 -- a fully charged hop
+StampGrid.JUMP_RADIUS = 5 -- a plain jump's stamp
+StampGrid.HOP_RADIUS_MIN = 5.5 -- a tapped hop
+StampGrid.HOP_RADIUS_MAX = 8.5 -- a fully charged hop
 StampGrid.FINAL_BOOST = 1.3 -- stamps are this much bigger in the last stretch
 StampGrid.FINAL_PROGRESS = 0.75 -- ...from this share of the round on
 
@@ -53,6 +56,18 @@ StampGrid.INKS = {
 }
 
 local ZERO = string.byte("0")
+
+-- Sets the pad's size for this round (cells per side): the server picks it from the head count and
+-- shares it, each client sets the same before drawing. One round runs at a time on each machine.
+function StampGrid.Configure(n: number)
+	StampGrid.N = math.clamp(math.floor(n), 8, 64)
+	StampGrid.PAD = StampGrid.N * StampGrid.CELL
+end
+
+-- The pad size for a round of `count` participants.
+function StampGrid.SizeFor(count: number): number
+	return if count <= StampGrid.SMALL_ROUND then StampGrid.SMALL_N else 48
+end
 
 -- The cell (ix, iz, 1-based) under a pad-local point, or nil off the paper.
 function StampGrid.CellAt(x: number, z: number): (number?, number?)

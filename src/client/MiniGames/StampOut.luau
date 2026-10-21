@@ -24,7 +24,6 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local StampOut = {}
 
-local N = StampGrid.N
 local CELL = StampGrid.CELL
 local INKS = StampGrid.INKS
 local MAX_MARKS = 140
@@ -67,7 +66,17 @@ end
 function StampOut.Start(api)
 	api:Mood({ Tint = Color3.fromRGB(255, 247, 234), Saturation = 0.12, Contrast = 0.04 })
 
+	-- The pad's place and size (the server shares it in Prepare; wait a moment if it's not here yet).
 	local pad = api:SharedJSON("Pad")
+	local deadline = os.clock() + 5
+	while not pad and os.clock() < deadline do
+		task.wait(0.1)
+		pad = api:SharedJSON("Pad")
+	end
+	if pad and type(pad.N) == "number" then
+		StampGrid.Configure(pad.N)
+	end
+	local N = StampGrid.N
 	local inks = api:SharedJSON("Inks") or {}
 	local myInk = inks[tostring(api.Player.UserId)]
 	local paperY = if pad then pad.Y else 0
@@ -257,7 +266,7 @@ function StampOut.Start(api)
 		Name = "StampOutShare",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, y0),
-		Size = UDim2.fromOffset(500, 30),
+		Size = UDim2.fromOffset(500, 34),
 		BackgroundColor3 = Color3.fromRGB(252, 249, 238),
 		ClipsDescendants = true,
 		Parent = hud,
@@ -274,7 +283,7 @@ function StampOut.Start(api)
 	local chips = UIKit.new("Frame", {
 		Name = "StampOutChips",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, y0 + 38),
+		Position = UDim2.new(0.5, 0, 0, y0 + 42),
 		Size = UDim2.fromOffset(600, 40),
 		BackgroundTransparency = 1,
 		Parent = hud,
@@ -349,7 +358,7 @@ function StampOut.Start(api)
 					Name = "Symbol",
 					Text = INKS[ink].Symbol,
 					Font = Theme.Fonts.Display,
-					TextSize = 22,
+					TextSize = 28,
 					TextColor3 = if brightness(color) > 0.62 then Color3.fromRGB(40, 30, 50) else Color3.new(1, 1, 1),
 					Size = UDim2.fromScale(1, 1),
 					Parent = segment,
@@ -361,7 +370,7 @@ function StampOut.Start(api)
 			segment.Size = UDim2.fromScale(counts[ink] / total, 1)
 			local symbol = segment:FindFirstChild("Symbol") :: TextLabel?
 			if symbol then
-				symbol.Visible = counts[ink] / total > 0.035
+				symbol.Visible = counts[ink] / total > 0.06
 			end
 		end
 		-- Chips: the top three, then you if you're not among them.
@@ -399,20 +408,18 @@ function StampOut.Start(api)
 	end
 	refreshHud()
 
-	if api:CanAct() then
-		api:Hint("Every landing stamps! Hold STAMP for a big hop", y0 + 86)
-		task.delay(7, function()
-			if hud.Parent then
-				api:Hint("")
-			end
-		end)
-	end
+	api:Hint("Every landing stamps! Hold STAMP for a big hop", y0 + 90)
+	task.delay(8, function()
+		if hud.Parent then
+			api:Hint("")
+		end
+	end)
 
 	-- STAMP: charge and hop -------------------------------------------------------------------------
 	local button = api:Button({ Text = "STAMP", Key = Enum.KeyCode.E, Color = Theme.Colors.Pink })
 	local chargeStart: number? = nil
 	local queued: { Charge: number, Until: number }? = nil
-	local flight: { Dir: Vector3, Along: number, Until: number, Start: number }? = nil
+	local flight: { Dir: Vector3, Along: number, Up: number, Until: number, Start: number }? = nil
 	local aim = decor({
 		Name = "StampOutAim",
 		Shape = Enum.PartType.Cylinder,
@@ -450,9 +457,10 @@ function StampOut.Start(api)
 		local dir = hopDirection(humanoid, root)
 		api:Action("Hop", charge, dir.X, dir.Z)
 		root.CFrame = CFrame.lookAt(root.Position, root.Position + dir)
-		humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+		-- Freefall (not Jumping: a jump would replace the launch speed with the character's JumpPower).
+		humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
 		root.AssemblyLinearVelocity = dir * along + Vector3.new(0, up, 0)
-		flight = { Dir = dir, Along = along, Until = os.clock() + airtime + 0.15, Start = os.clock() }
+		flight = { Dir = dir, Along = along, Up = up, Until = os.clock() + airtime + 0.15, Start = os.clock() }
 		api:Sound("Boing")
 	end
 
@@ -478,8 +486,10 @@ function StampOut.Start(api)
 		-- Keep the hop's ground speed (the character's own air control would slow it down).
 		if flight then
 			if humanoid and root and now < flight.Until and (now - flight.Start < 0.12 or not grounded(humanoid)) then
-				local velocity = root.AssemblyLinearVelocity
-				root.AssemblyLinearVelocity = flight.Dir * flight.Along + Vector3.new(0, velocity.Y, 0)
+				local t = now - flight.Start
+				-- The first frames set the climb too (the floor's grip can eat a little of it).
+				local vertical = if t < 0.06 then flight.Up - workspace.Gravity * t else root.AssemblyLinearVelocity.Y
+				root.AssemblyLinearVelocity = flight.Dir * flight.Along + Vector3.new(0, vertical, 0)
 			else
 				flight = nil
 			end

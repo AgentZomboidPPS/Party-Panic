@@ -11,8 +11,6 @@ local StampGrid = require(game:GetService("ReplicatedStorage").Shared.Logic.Stam
 
 local Brain = {}
 
-local EDGE = StampGrid.PAD / 2 - 6 -- bots keep their spots this far inside the paper
-
 -- What a stamp at pad-local (x, z) would win for `ink`.
 local function worth(mode, ink: number, x: number, z: number): number
 	local owners = mode.Owners
@@ -30,10 +28,11 @@ end
 
 local function pickSpot(bot, mode, ink: number, x: number, z: number): Vector2
 	local samples = math.floor(3 + bot.Skill * 10)
+	local edge = StampGrid.PAD / 2 - 6 -- spots stay this far inside the paper
 	local best, bestScore = Vector2.new(x, z), -math.huge
 	for _ = 1, samples do
-		local sx = bot.Rng:NextNumber(-EDGE, EDGE)
-		local sz = bot.Rng:NextNumber(-EDGE, EDGE)
+		local sx = bot.Rng:NextNumber(-edge, edge)
+		local sz = bot.Rng:NextNumber(-edge, edge)
 		local distance = math.sqrt((sx - x) ^ 2 + (sz - z) ^ 2)
 		local score = worth(mode, ink, sx, sz) - distance * (0.35 - bot.Skill * 0.2)
 		if score > bestScore then
