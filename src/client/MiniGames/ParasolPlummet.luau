@@ -342,6 +342,9 @@ function ParasolPlummet.Start(api)
 	popAnchor.Size = Vector3.one
 	popAnchor.Parent = api.World
 	local function popup(position: Vector3, text: string, color: Color3)
+		if center and popAnchor.Position ~= center then
+			popAnchor.Position = center -- (pop-ups hang off a point in the sky, not the world's origin)
+		end
 		local gui = Instance.new("BillboardGui")
 		gui.Adornee = popAnchor
 		gui.Size = UDim2.fromOffset(120, 50)

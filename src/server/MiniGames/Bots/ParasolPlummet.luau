@@ -80,6 +80,14 @@ function Brain.Step(bot, ctx, mode, _dt)
 			if math.abs(ix - f.X) <= reachX and dy <= Sim.RISE * ahead + 6.5 and dy >= -14 * ahead - 2 then
 				local value = kind.Value * (if item.Kind == "Bag" then 1.5 else 1)
 				local score = value / (ahead + 0.5) - math.abs(ix - f.X) * 0.01
+				-- Someone nearer will likely get it first: look for a coin of its own instead.
+				local mine = math.abs(ix - f.X) + math.abs(iy - f.Y)
+				for _, other in mode.fallers do
+					if other ~= f and math.abs(ix - other.X) + math.abs(iy - other.Y) < mine - 1 then
+						score *= 0.45
+						break
+					end
+				end
 				if score > bestScore then
 					best, bestScore, bestX, bestY = item, score, ix, iy
 				end

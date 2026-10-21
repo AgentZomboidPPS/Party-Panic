@@ -511,7 +511,7 @@ function ParasolPlummet:_throw(): number?
 	end
 	self.lastThrower = thrower
 	local roll = rng:NextNumber()
-	local hammerChance = if rush then 0.14 else 0.1 + 0.14 * progress
+	local hammerChance = if rush then 0.1 else 0.08 + 0.1 * progress
 	local bagChance = if rush then 0.22 else 0.08
 	local kind = if roll < hammerChance and #targets > 0
 		then "Hammer"
