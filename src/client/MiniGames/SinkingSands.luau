@@ -6,6 +6,7 @@
 -- Grabs are predicted: a coin this player runs through pops at once and comes back if the server
 -- says someone else got it first (or nobody did, within PENDING_TIME).
 
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -123,6 +124,27 @@ function SinkingSands.Start(api)
 			part.CanQuery = false
 			part.CanTouch = false
 			part.CastShadow = false
+		end
+		if kind ~= 4 and not State.ReducedEffects() then
+			-- Treasure twinkles in its own color, so it catches the eye on the pale sand.
+			local primary = built.PrimaryPart or partsOf(built)[1]
+			if primary then
+				local twinkle = Instance.new("ParticleEmitter")
+				twinkle.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+				twinkle.Color = ColorSequence.new(Color3.new(1, 1, 1):Lerp(KINDS[kind].Mark, 0.6))
+				twinkle.Size = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 0),
+					NumberSequenceKeypoint.new(0.4, 0.45),
+					NumberSequenceKeypoint.new(1, 0),
+				})
+				twinkle.Rate = if kind == 1 then 1.5 else 3
+				twinkle.Lifetime = NumberRange.new(0.4, 0.7)
+				twinkle.Speed = NumberRange.new(0.3, 0.8)
+				twinkle.SpreadAngle = Vector2.new(180, 180)
+				twinkle.LightEmission = 1
+				twinkle.Parent = primary
+				CollectionService:AddTag(twinkle, "PP_Ambient") -- the reduced-effects setting switches it
+			end
 		end
 		if kind == 2 then
 			for _, part in partsOf(built) do

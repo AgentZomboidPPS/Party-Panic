@@ -1,0 +1,29 @@
+newmtl Curb
+Kd 0.910 0.784 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Tile
+Kd 0.965 0.871 0.690
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl TileDark
+Kd 0.839 0.471 0.298
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Inlay
+Kd 1.000 0.784 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Accent
+Kd 0.188 0.745 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
