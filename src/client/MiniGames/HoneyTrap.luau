@@ -442,7 +442,7 @@ function HoneyTrap.Start(api)
 	end
 	-- Everyone plays from their own flower (the server holds them there), so the hints say so: people
 	-- used to walk at the tree (owner: "Players think they have to go to the tree").
-	local WAIT_HINT = "🌼 Stay on your flower - the fruit comes to you!"
+	local WAIT_HINT = "🌼 Stay on your flower!"
 	local nudgeUntil = 0 -- while a "no walking" nudge is up, the turn hints wait their turn
 	local baseHint = ""
 	local function setHint(text: string)
@@ -573,11 +573,7 @@ function HoneyTrap.Start(api)
 			nudgedAt = now
 			nudgeUntil = now + 3.5
 			local mine = turn ~= nil and turn.User == me and turn.Result == nil
-			hint(
-				if mine
-					then "🌼 No need to walk - press HIT or jump!"
-					else "🌼 No walking needed - you play from your flower!"
-			)
+			hint(if mine then "🌼 No walking - press HIT or jump!" else "🌼 No walking - play from your flower!")
 		end
 	end)
 
