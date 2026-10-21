@@ -16,11 +16,18 @@
 -- judges (Sim.ItemAt). "Take" pops a caught one (+1 / +5 over you when it's yours); "Bonk" knocks a
 -- hammer off whoever it hit, with stars.
 --
+-- Review pass: a coin is drawn faded until it can be caught (Sim.Catchable: on its way down, in the
+-- middle of the sky), a faller blinks through the second after a stun when no hammer can hit, the
+-- body and umbrella lean only a little (the catch shapes stand upright), a hammer spins about the
+-- middle of its head (where it's judged), the camera keeps the whole sky below the HUD, and an
+-- unchanged Input is re-sent every RESEND seconds so a lost packet never leaves DIVE stuck.
+--
 -- Controls: steer with the MOVE stick, A/D or the arrows; hold DIVE (Space, S or the down arrow) to
 -- shut the umbrella and drop, let go to float. Only changes are sent ("Input": steer, open).
 -- The falling feel comes from cloud puffs streaming up past the sky at different depths (fewer with
 -- reduced effects).
 
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -37,9 +44,11 @@ local ParasolPlummet = {}
 local rad = math.rad
 local CAMERA_DISTANCE = 90
 local VIEW_HALF_W = 50 -- the sky and both throwers' clouds
-local VIEW_HALF_H = 24
-local VIEW_Y = 1.5 -- the middle of the view, above the sky's middle (the HUD sits over the top)
+local SKY_TOP = Sim.Y_MAX + Sim.CANOPY_Y + Sim.CANOPY_H + 1.5 -- the highest canopy, and a little air
+local SKY_BOTTOM = Sim.Y_MIN - 4.5 -- the lowest feet (and the lower throwers' clouds)
 local HOLD_OFFSET = CFrame.new(0, Sim.UMBRELLA_BASE, -0.15)
+local RESEND = 0.2 -- seconds between repeats of an unchanged Input
+local FADED = 0.6 -- a coin's transparency while it can't be caught yet (still rising, or by a wall)
 
 -- Each faller's colour, with a shape on their tag so colour is never the only cue.
 local COLORS = {
@@ -131,6 +140,8 @@ type Visual = {
 	VY: number,
 	Open: boolean,
 	StunUntil: number,
+	SafeUntil: number,
+	Fade: number?,
 	Coins: number,
 	Umbrella: Model?,
 	Shut: Model?,
@@ -151,6 +162,7 @@ type Flying = {
 	Model: Model?,
 	Spin: number,
 	Knocked: number?, -- when a hammer was knocked off someone (it tumbles away and fades)
+	Faded: boolean?,
 }
 
 function ParasolPlummet.Start(api)
@@ -190,6 +202,7 @@ function ParasolPlummet.Start(api)
 					VY = 0,
 					Open = true,
 					StunUntil = 0,
+					SafeUntil = 0,
 					Coins = 0,
 					Seen = false,
 				}
@@ -305,6 +318,7 @@ function ParasolPlummet.Start(api)
 	local mineReady = false
 	local sentKey = ""
 	local sentAt = 0
+	local disagreeSince: number? = nil
 	local myStunUntil = 0
 
 	-- Flying things -------------------------------------------------------------------------------------
@@ -399,6 +413,7 @@ function ParasolPlummet.Start(api)
 		local visual = visuals[userId]
 		if visual and type(stunUntil) == "number" then
 			visual.StunUntil = stunUntil
+			visual.SafeUntil = stunUntil + Sim.SAFE
 		end
 		if item then
 			-- The hammer bounces off and tumbles away.
@@ -598,6 +613,8 @@ function ParasolPlummet.Start(api)
 
 	local cameraTaken = false
 	local cameraX = 0
+	local viewY = (SKY_TOP + SKY_BOTTOM) / 2
+	local viewHeight = SKY_TOP - SKY_BOTTOM + 20
 	local function releaseCamera()
 		if cameraTaken then
 			cameraTaken = false
@@ -611,11 +628,18 @@ function ParasolPlummet.Start(api)
 	end
 	api:Track(function()
 		releaseCamera()
-		for character in posed do
+		for character, visual in posed do
 			local rig = rigs[character]
 			if rig then
 				for _, joint in rig do
 					joint.Motor.Transform = CFrame.identity
+				end
+			end
+			if visual.Fade and visual.Fade ~= 0 then
+				for _, part in character:GetDescendants() do
+					if part:IsA("BasePart") then
+						part.LocalTransparencyModifier = 0
+					end
 				end
 			end
 		end
@@ -674,10 +698,24 @@ function ParasolPlummet.Start(api)
 					left -= h
 					Sim.Step(mine, steer, open, now < myStunUntil, h)
 				end
+				-- Sent on every change, and again every RESEND while held (a dropped packet must never
+				-- leave DIVE or a steer stuck), and at once when the server's umbrella disagrees.
 				local key = `{steer}:{open}`
-				if key ~= sentKey and os.clock() - sentAt >= 0.035 then
+				local serverOpen = mineEntry.o == 1
+				if serverOpen == open or now < myStunUntil then
+					disagreeSince = nil
+				elseif not disagreeSince then
+					disagreeSince = os.clock()
+				end
+				local stale = disagreeSince ~= nil and os.clock() - disagreeSince > 0.3
+				local clock = os.clock()
+				if
+					(key ~= sentKey and clock - sentAt >= 0.02)
+					or clock - sentAt >= RESEND
+					or (stale and clock - sentAt >= 0.1)
+				then
 					sentKey = key
-					sentAt = os.clock()
+					sentAt = clock
 					api:Action("Input", steer, open)
 				end
 			end
@@ -716,6 +754,9 @@ function ParasolPlummet.Start(api)
 			if type(entry.st) == "number" then
 				visual.StunUntil = math.max(visual.StunUntil, entry.st)
 			end
+			if type(entry.sf) == "number" then
+				visual.SafeUntil = math.max(visual.SafeUntil, entry.sf)
+			end
 			if userId == myId and amFaller and mineReady then
 				visual.X, visual.Y, visual.VX, visual.VY = mine.X, mine.Y, mine.VX, mine.VY
 				visual.Open = not (diveButton or diveKeys > 0) and now >= myStunUntil and not over
@@ -741,7 +782,8 @@ function ParasolPlummet.Start(api)
 			local stunned = now < visual.StunUntil
 			local bob = if visual.Open then math.sin(now * 1.7 + visual.Index) * 0.25 else 0
 			local position = world(visual.X, visual.Y + bob, Sim.Depth(visual.Index))
-			local lean = math.clamp(-visual.VX * 0.012, -0.22, 0.22)
+			-- (A small lean only: the catch shapes stand upright, so the drawn umbrella must too.)
+			local lean = math.clamp(-visual.VX * 0.004, -Sim.MAX_LEAN, Sim.MAX_LEAN)
 			local spin = if stunned then (visual.StunUntil - now) / Sim.STUN * math.pi * 4 else 0
 			local frame = CFrame.lookAt(position, position + Vector3.zAxis) * CFrame.Angles(0, spin, lean)
 
@@ -766,8 +808,10 @@ function ParasolPlummet.Start(api)
 				if not visual.Open then
 					showing, hidden = visual.Shut, visual.Umbrella
 				end
+				-- Blinking through the second after a stun when no hammer can hit (Sim.SAFE).
+				local blink = not stunned and now < visual.SafeUntil and math.floor(now * 10) % 2 == 0
 				hidden.Parent = nil
-				showing.Parent = api.World
+				showing.Parent = if blink then nil else api.World
 				showing:PivotTo(held)
 			end
 
@@ -792,6 +836,15 @@ function ParasolPlummet.Start(api)
 				end
 				root.CFrame = frame
 				makeTag(visual, root)
+				local fade = if not stunned and now < visual.SafeUntil and math.floor(now * 10) % 2 == 0 then 0.6 else 0
+				if visual.Fade ~= fade then
+					visual.Fade = fade
+					for _, part in character:GetDescendants() do
+						if part:IsA("BasePart") then
+							part.LocalTransparencyModifier = fade
+						end
+					end
+				end
 			end
 			if visual.TagLabel then
 				local name = names[userId]
@@ -860,7 +913,19 @@ function ParasolPlummet.Start(api)
 			else
 				x, y = Sim.ItemAt(item, now)
 			end
-			local height = Sim.Kinds[item.Kind].Height
+			local middle = Sim.Kinds[item.Kind].Middle
+			if item.Kind ~= "Hammer" then
+				-- Faded until it can be caught, so what looks catchable is catchable.
+				local faded = not item.Knocked and not Sim.Catchable(item, now)
+				if item.Faded ~= faded then
+					item.Faded = faded
+					for _, part in item.Model:GetDescendants() do
+						if part:IsA("BasePart") then
+							part.Transparency = if faded then FADED else 0
+						end
+					end
+				end
+			end
 			local turn
 			if item.Kind == "Hammer" then
 				turn = CFrame.Angles(0, 0, item.Spin + now * (if item.Knocked then 14 else 8) * -math.sign(item.VX))
@@ -869,7 +934,7 @@ function ParasolPlummet.Start(api)
 			else
 				turn = CFrame.Angles(0, item.Spin + now * 5, 0)
 			end
-			item.Model:PivotTo(CFrame.new(world(x, y, 0)) * turn * CFrame.new(0, -height / 2, 0))
+			item.Model:PivotTo(CFrame.new(world(x, y, 0)) * turn * CFrame.new(0, -middle, 0))
 		end
 
 		-- Cloud puffs.
@@ -925,12 +990,21 @@ function ParasolPlummet.Start(api)
 			local jolt = if shake > 0
 				then Vector3.new(math.sin(now * 71), math.sin(now * 83), 0) * shake * 1.2
 				else Vector3.zero
-			local look = world(cameraX, VIEW_Y, 0)
+			-- Framed so the whole sky (canopies at the top, feet at the bottom) sits below the HUD (the
+			-- banner, status line, coin panel and the leaderboard beside them), and both throwers fit.
 			local viewport = camera.ViewportSize
 			local aspect = if viewport.Y > 0 then viewport.X / viewport.Y else 16 / 9
-			local half = math.max(VIEW_HALF_H / CAMERA_DISTANCE, VIEW_HALF_W / (CAMERA_DISTANCE * aspect))
-			camera.FieldOfView = math.deg(2 * math.atan(half))
-			camera.CFrame = CFrame.lookAt(look + Vector3.new(0, 3, CAMERA_DISTANCE) + jolt, look)
+			local hudBottom = viewport.Y * (if touch then 0.32 else 0.22)
+			if panel.Visible and panel.AbsoluteSize.Y > 0 then
+				hudBottom = panel.AbsolutePosition.Y + panel.AbsoluteSize.Y + GuiService:GetGuiInset().Y + 26
+			end
+			local p0 = math.clamp(hudBottom / math.max(viewport.Y, 1), 0.08, 0.45)
+			local height = math.max((SKY_TOP - SKY_BOTTOM) / (1 - p0), 2 * VIEW_HALF_W / aspect)
+			viewY += ((SKY_TOP - (0.5 - p0) * height) - viewY) * (1 - math.exp(-dt * 4))
+			viewHeight += (height - viewHeight) * (1 - math.exp(-dt * 4))
+			local look = world(cameraX, viewY, 0)
+			camera.FieldOfView = math.deg(2 * math.atan(viewHeight / 2 / CAMERA_DISTANCE))
+			camera.CFrame = CFrame.lookAt(look + Vector3.new(0, 0, CAMERA_DISTANCE) + jolt, look + jolt)
 		else
 			releaseCamera()
 		end

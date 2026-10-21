@@ -14,6 +14,11 @@
 -- against the same arc. Catching is a shape test against what the player sees drawn: the body (a
 -- circle round the torso), and the umbrella (an ellipse round the open canopy, or a capsule round the
 -- furled one). The numbers match the meshes in tools/meshgen/props/ParasolPlummet.py.
+--
+-- Coins and bags are lobbed high over the sky and come down on a spot away from everyone, and they
+-- can only be caught on the way down, inside the middle of the sky (Sim.Catchable): the throwers'
+-- hands are just outside the sky, so a coin still rising past a wall would otherwise hand a free
+-- catch to anyone parked there (owner's review: "parking at a side wall beats playing").
 
 local Sim = {}
 
@@ -41,13 +46,22 @@ Sim.THROWER_X = 43 -- the throwers' clouds, either side of the sky
 Sim.THROWER_BASE = { 1, -13 } -- their resting heights (upper and lower cloud on each side)
 Sim.THROWER_BOB = 2 -- how far their clouds bob up and down
 Sim.WINDUP = 0.55 -- seconds a thrower winds up before the throw leaves its hand
-Sim.LIFE = 7 -- no thrown thing lives longer than this
+Sim.LIFE = 9 -- no thrown thing lives longer than this
 
 Sim.Kinds = {
-	Coin = { Value = 1, Radius = 1.4, Height = 2.8 }, -- (Height: the drawn mesh's, for the client)
-	Bag = { Value = 5, Radius = 1.8, Height = 3.6 },
-	Hammer = { Value = 0, Radius = 1.5, Height = 4.2 },
+	-- (Height: the drawn mesh's; Middle: the point on the arc, up from the mesh's base: a hammer flies
+	-- and spins about the middle of its head.)
+	Coin = { Value = 1, Radius = 1.4, Height = 2.8, Middle = 1.4 },
+	Bag = { Value = 5, Radius = 1.8, Height = 3.6, Middle = 1.8 },
+	Hammer = { Value = 0, Radius = 1.4, Height = 4.2, Middle = 3.5 },
 }
+
+-- Where coins and bags can be caught (see the top): coming down, at most CATCH_X from the middle and
+-- no higher than CATCH_TOP. Lobs peak LOB_PEAK above the top of the sky.
+Sim.CATCH_X = Sim.HALF_W - 8
+Sim.CATCH_TOP = Sim.Y_MAX - 3
+Sim.LOB_PEAK = { 11, 13 }
+Sim.MAX_LEAN = 0.05 -- radians a faller's drawn body (and umbrella) may lean while steering
 
 -- Hit shapes, relative to the faller's root. The umbrella is held up over the head in both hands,
 -- its base (the handle's hook) UMBRELLA_BASE above the root; the mesh is 5.6 tall with the canopy's
@@ -115,6 +129,16 @@ function Sim.Gone(item: Throw, t: number): boolean
 	return (falling and y < Sim.Y_MIN - 9) or math.abs(x) > Sim.HALF_W + 14
 end
 
+-- Whether a coin or bag can be caught at time `t`: falling, and inside the catching part of the sky.
+function Sim.Catchable(item: Throw, t: number): boolean
+	local s = t - item.At
+	if s < 0 or item.VY + Sim.GRAVITY * s >= 0 then
+		return false
+	end
+	local x, y = Sim.ItemAt(item, t)
+	return math.abs(x) <= Sim.CATCH_X and y <= Sim.CATCH_TOP
+end
+
 -- A thrower's cloud at time `t` (index 1..4: 1 and 2 on the left, upper and lower; 3 and 4 right).
 function Sim.ThrowerAt(index: number, t: number): (number, number, number)
 	local side = if index <= 2 then -1 else 1
@@ -167,7 +191,7 @@ end
 -- The depth offset (studs toward the camera) of faller `index`, so fallers side by side don't
 -- draw through each other. Only for looks: catching is judged in the flat sky.
 function Sim.Depth(index: number): number
-	return ((index - 1) % 3 - 1) * 2.2
+	return ((index - 1) % 3 - 1) * 0.8
 end
 
 return Sim

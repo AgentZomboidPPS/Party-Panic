@@ -8,16 +8,27 @@
 -- shapes), seen from the side. The server simulates every faller from their inputs (the client half
 -- only sends "Input": steer -1..1 and umbrella open or shut, like Bobsled Run's server races the
 -- sleds) and shares them ("Fallers", 10 times a second). The throwers' clouds bob on a shared clock;
--- the server picks each throw (thrower, kind, arc: coins aimed at open sky, hammers at a faller) and
--- fires "Throw" a wind-up before it leaves the hand, so every client draws the same arc from one
--- event, and judges catches against that arc.
+-- the server picks each throw (thrower, kind, arc) and fires "Throw" a wind-up before it leaves the
+-- hand, so every client draws the same arc from one event, and judges catches against that arc.
+-- Coins and bags are lobbed high over the sky and land on the spot (of a few picked at random)
+-- farthest from every faller, so the coins come to whoever goes for them; hammers fly at a faller
+-- (often the leader).
+--
+-- Review pass (owner's review: "parking at a side wall beats playing"): the throwers' hands are just
+-- outside the sky, so every throw used to pass the side walls first, in reach of anyone parked there;
+-- an idle player at a wall averaged 2nd of 12. Now a coin can only be caught on its way down, inside
+-- the middle of the sky (Sim.Catchable; clients draw it faded until then), and lands away from
+-- everyone: a parked player gets next to nothing. Also from that review: inputs are re-sent while
+-- held (a dropped release left DIVE stuck), the fallers are shared before anyone spawns (players fell
+-- while SpawnAll waited), catches are judged in one short window (a laggy player used to get a longer
+-- one), and the second after a stun, when no hammer can hit, is shared so clients blink the faller.
 --
 -- Fair catches (owner: "the precision games will feel super bad if we dont"): a player's faller on
 -- the server is where their screen had it about a one-way trip ago (their inputs travel that long),
 -- so the server tests it against where the coin was on their screen then: the arc a one-way trip
--- (plus a frame) back. Coins also count against the arc now and in between, and against the umbrella
--- they shut a moment ago (generous); a hammer only counts against what their screen showed, a little
--- inside the drawn shapes, so a dodge on screen is a dodge.
+-- (plus a frame) back, give or take WINDOW. Coins also count against the umbrella they shut a moment
+-- ago and a little outside the drawn shapes (generous); a hammer counts a little inside them, so a
+-- dodge on screen is a dodge.
 --
 -- Nothing in the sky is solid (owner: "Theres invisible stuff you can jump on and hang on in several
 -- games"): fallers fly where the server puts them, so every faller's character is put in a collision
@@ -47,6 +58,7 @@ local FALLER_GROUP = "ParasolFaller"
 local SHARE_EVERY = 0.1
 local RUSH = 7 -- the last seconds are a COIN RUSH: more throws, more bags
 local STEP = 1 / 30
+local WINDOW = 0.05 -- seconds either side of what a player's screen showed that a catch is judged over
 
 local rng = Random.new()
 
@@ -285,6 +297,7 @@ function ParasolPlummet:Prepare()
 	self.nextId = 0
 	self.ghosted = {} :: { [Model]: { [BasePart]: string } }
 	self.groupReady = setupGroup()
+	self.held = {} :: { [BasePart]: boolean }
 
 	local players = ctx:GetPlayers()
 	local list = {}
@@ -331,6 +344,14 @@ function ParasolPlummet:Prepare()
 		self:_ghost(character)
 		if BotRegistry.IsBot(player) then
 			self:_placeBot(player)
+		elseif not self.startAt then
+			-- Held where they spawned until GO: SpawnAll can take seconds, and with nothing solid in
+			-- the sky an unanchored character would fall away before its client half takes it.
+			local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if root then
+				root.Anchored = true
+				self.held[root] = true
+			end
 		end
 	end
 	ctx.Hooks.Respawn = function(player)
@@ -344,6 +365,7 @@ function ParasolPlummet:Prepare()
 	for _, player in players do
 		table.insert(points, self:_frame(self.fallers[player]) - Vector3.new(0, 3, 0))
 	end
+	self:_share() -- (clients place their characters from this as soon as they spawn)
 	ctx:SpawnAll(points, true)
 	for _, player in players do
 		local character = ctx:GetCharacter(player)
@@ -363,6 +385,12 @@ function ParasolPlummet:Start()
 	self.startAt = ctx:Now()
 	self.endAt = self.startAt + self.duration
 	ctx:SetShared("Go", self.startAt) -- (clients start predicting their own faller from here)
+	for root in self.held do
+		if root.Parent then
+			root.Anchored = false
+		end
+	end
+	table.clear(self.held)
 	-- Fallers whose character never loaded aren't in the round.
 	for player in table.clone(self.fallers) do
 		if not ctx:State(player) then
@@ -380,7 +408,7 @@ function ParasolPlummet:Start()
 			f.ShutAt = ctx:Now()
 		end
 		f.Open = open
-	end, { Interval = 0.03 })
+	end, { Interval = 0.015 })
 
 	-- Small fixed steps, the same the clients predict with.
 	self.carry = 0
@@ -414,6 +442,22 @@ function ParasolPlummet:_tick(now: number)
 	for _, f in self.fallers do
 		Sim.Step(f, f.Steer, f.Open, now < f.StunUntil, STEP)
 	end
+	-- Once per step: everyone in a fresh random order (nobody always wins a coin two of them reach
+	-- together) with how far back their screen is.
+	local order = self.order or {}
+	self.order = order
+	table.clear(order)
+	for player, f in self.fallers do
+		local back = 0
+		if not BotRegistry.IsBot(player) then
+			back = oneWay(player) + 1 / 30
+		end
+		table.insert(order, { F = f, Back = back })
+	end
+	for index = #order, 2, -1 do
+		local other = rng:NextInteger(1, index)
+		order[index], order[other] = order[other], order[index]
+	end
 	for id, item in self.items do
 		if now < item.At then
 			continue
@@ -423,33 +467,28 @@ function ParasolPlummet:_tick(now: number)
 			continue
 		end
 		if item.Kind == "Hammer" then
-			self:_hammer(item, now)
+			self:_hammer(item, now, order)
 		else
-			self:_coin(item, now)
+			self:_coin(item, now, order)
 		end
 	end
 end
 
--- Fallers in a fresh random order (nobody always wins a coin two of them reach together).
-function ParasolPlummet:_shuffled(): { Faller }
-	local list = {}
-	for _, f in self.fallers do
-		table.insert(list, f)
-	end
-	for index = #list, 2, -1 do
-		local other = rng:NextInteger(1, index)
-		list[index], list[other] = list[other], list[index]
-	end
-	return list
-end
+type Seat = { F: Faller, Back: number }
 
-function ParasolPlummet:_coin(item: Item, now: number)
+-- Coins and bags: caught where the player's screen had them (a one-way trip back, give or take
+-- WINDOW), only while they're catchable there (falling, in the middle of the sky).
+function ParasolPlummet:_coin(item: Item, now: number, order: { Seat })
 	local kind = Sim.Kinds[item.Kind]
-	for _, f in self:_shuffled() do
-		local lag = oneWay(f.Player) + (if BotRegistry.IsBot(f.Player) then 0 else 1 / 30)
-		local open = f.Open or now - f.ShutAt <= lag + 0.1
-		for _, back in { lag, lag / 2, 0 } do
-			local t = math.max(item.At, now - back)
+	for _, seat in order do
+		local f = seat.F
+		local seen = now - seat.Back
+		local open = f.Open or now - f.ShutAt <= seat.Back + 0.1
+		for _, t in { seen - WINDOW, seen, seen + WINDOW } do
+			t = math.clamp(t, item.At, now)
+			if not Sim.Catchable(item, t) then
+				continue
+			end
 			local x, y = Sim.ItemAt(item, t)
 			if Sim.Touches(f.X, f.Y, open, x, y, kind.Radius, 0.35) then
 				self.items[item.Id] = nil
@@ -466,15 +505,15 @@ function ParasolPlummet:_coin(item: Item, now: number)
 	end
 end
 
-function ParasolPlummet:_hammer(item: Item, now: number)
+-- Hammers: only where the player's screen had it, a little inside the drawn shapes.
+function ParasolPlummet:_hammer(item: Item, now: number, order: { Seat })
 	local kind = Sim.Kinds.Hammer
-	for _, f in self:_shuffled() do
+	for _, seat in order do
+		local f = seat.F
 		if now < f.SafeUntil then
 			continue
 		end
-		-- Only where the hammer was on this player's screen, a little inside the drawn shapes.
-		local back = oneWay(f.Player) + (if BotRegistry.IsBot(f.Player) then 0 else 1 / 30)
-		local x, y = Sim.ItemAt(item, math.max(item.At, now - back))
+		local x, y = Sim.ItemAt(item, math.max(item.At, now - seat.Back))
 		if Sim.Touches(f.X, f.Y, f.Open, x, y, kind.Radius, -0.3) then
 			self.items[item.Id] = nil
 			f.StunUntil = now + Sim.STUN
@@ -540,21 +579,25 @@ function ParasolPlummet:_throw(): number?
 		vx, vy = Sim.Aim(x0, y0, tx, ty, math.clamp(math.abs(tx - x0) / 26, 1.0, 1.8))
 		vy = math.clamp(vy, -6, math.sqrt(2 * g * math.max(0, Sim.Y_MAX + 5 - y0)))
 	else
-		-- Arcs that peak anywhere from low to high in the sky (a coin lingers near its peak, so the
-		-- peaks are spread out: no height is the one place to wait). Most fly right across and out
-		-- the far side, at any height; some drop out of the bottom part way.
-		-- (Never right at the top: a faller parked up there mustn't be the one place every arc passes.)
-		local peak = rng:NextNumber(Sim.Y_MIN + 3, Sim.Y_MAX - 2)
-		vy = if peak > y0 then math.sqrt(2 * g * (peak - y0)) else rng:NextNumber(-3, 0)
-		local top = math.max(peak, y0)
-		local across = rng:NextNumber() < 0.7
-		local ty = if across then rng:NextNumber(Sim.Y_MIN - 2, math.max(Sim.Y_MIN - 2, top - 1)) else Sim.Y_MIN - 2
+		-- A high lob over the sky, coming down on the spot (of a few picked at random) farthest from
+		-- every faller: catchable only on the way down in the middle of the sky (Sim.Catchable), it
+		-- goes to whoever flies to it, never to someone parked by a wall.
+		local peak = rng:NextNumber(Sim.Y_MAX + Sim.LOB_PEAK[1], Sim.Y_MAX + Sim.LOB_PEAK[2])
+		vy = math.sqrt(2 * g * math.max(0, peak - y0))
+		local tx, ty, far = 0, 0, -1
+		for _ = 1, 6 do
+			local x = rng:NextNumber(-Sim.CATCH_X + 1, Sim.CATCH_X - 1)
+			local y = rng:NextNumber(Sim.Y_MIN + 1, Sim.CATCH_TOP - 1)
+			local gap = math.huge
+			for _, f in targets do
+				gap = math.min(gap, math.abs(f.X - x) + 0.5 * math.abs(f.Y - y))
+			end
+			if gap > far then
+				tx, ty, far = x, y, gap
+			end
+		end
 		local seconds = (vy + math.sqrt(vy * vy + 2 * g * math.max(0, y0 - ty))) / g
-		local tx = if across
-			then -side * (Sim.HALF_W + 13)
-			else -side * rng:NextNumber(-Sim.HALF_W * 0.6, Sim.HALF_W - 3)
-		local speed = math.clamp(math.abs(tx - x0) / math.max(seconds, 0.1), 9, 30)
-		vx = -side * speed * (if kind == "Bag" then 0.85 else 1)
+		vx = (tx - x0) / seconds
 	end
 	self.nextId += 1
 	local item: Item = {
@@ -585,6 +628,7 @@ function ParasolPlummet:_share()
 			vy = round(f.VY, 0.01),
 			o = if f.Open then 1 else 0,
 			st = if now < f.StunUntil then round(f.StunUntil, 0.001) else nil,
+			sf = if now < f.SafeUntil then round(f.SafeUntil, 0.001) else nil,
 			c = f.Coins,
 		}
 		if f.Coins > bestCoins then
@@ -628,6 +672,11 @@ function ParasolPlummet:GetResults()
 end
 
 function ParasolPlummet:Cleanup()
+	for root in self.held or {} do
+		if root.Parent then
+			root.Anchored = false
+		end
+	end
 	self:_unghostAll()
 end
 

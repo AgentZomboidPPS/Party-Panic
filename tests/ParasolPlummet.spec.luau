@@ -61,3 +61,19 @@ test("ParasolPlummetSim: catch shapes follow the drawn umbrella", function()
 	near(Sim.FURL_Y0, Sim.UMBRELLA_BASE + 1.2, 1e-9, "furl bottom on the mesh")
 	near(Sim.FURL_Y1, Sim.UMBRELLA_BASE + 5.2, 1e-9, "furl top on the mesh")
 end)
+
+test("ParasolPlummetSim: coins are catchable only coming down in the middle of the sky", function()
+	local vy = math.sqrt(2 * -Sim.GRAVITY * (Sim.Y_MAX + 12 - 8))
+	local item = { At = 0, X0 = -45, Y0 = 8, VX = 10, VY = vy }
+	expectTrue(not Sim.Catchable(item, 0.2), "rising past the wall")
+	local top = vy / -Sim.GRAVITY
+	expectTrue(not Sim.Catchable(item, top - 0.1), "still rising at the top")
+	local t = top + 0.5
+	while select(2, Sim.ItemAt(item, t)) > Sim.CATCH_TOP do
+		t += 0.05
+	end
+	local x = Sim.ItemAt(item, t + 0.05)
+	expectTrue(math.abs(x) > Sim.CATCH_X or Sim.Catchable(item, t + 0.05), "falling in the middle")
+	local wall = { At = 0, X0 = Sim.HALF_W - 2, Y0 = 0, VX = 0, VY = -1 }
+	expectTrue(not Sim.Catchable(wall, 0.5), "not by the wall")
+end)

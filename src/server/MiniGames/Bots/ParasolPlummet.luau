@@ -1,7 +1,9 @@
 -- How bots play Parasol Plummet (contract in Bots/Default.luau). A bot notices each throw a moment
 -- after it leaves the thrower's hand (its own reaction time, quicker with skill), then chases the
--- best coin it can still reach: it reads the shared arc (Sim.ItemAt) a few beats ahead, steers under
--- it and shuts its umbrella to drop onto a low one or opens it to float up into a high one. Bags are
+-- best coin it can still reach: it reads the shared arc (Sim.ItemAt) a few beats ahead, only where a
+-- coin can be caught (Sim.Catchable: falling, in the middle of the sky) and never below the sky's
+-- floor (bots used to sit on the floor chasing coins already out of reach), steers under it and shuts
+-- its umbrella to drop onto a low one or opens it to float up into a high one. Bags are
 -- worth chasing further. When a hammer it has seen is about to meet it, a bot tries to get out of
 -- the way (sideways, and down if it comes from above); skilled bots dodge most, clumsy ones get
 -- bonked now and then, and every bot drifts a little off its line, so good players can beat them.
@@ -15,7 +17,7 @@ local Sim = require(ReplicatedStorage.Shared.Logic.ParasolPlummetSim)
 
 local Brain = {}
 
-local LOOK = { 0.25, 0.5, 0.8, 1.1, 1.5, 2, 2.6 }
+local LOOK = { 0.25, 0.5, 0.8, 1.1, 1.5, 2, 2.6, 3.2, 4 }
 
 local function send(bot, ctx, memory, steer: number, open: boolean)
 	steer = math.clamp(math.floor(steer * 4 + 0.5) / 4, -1, 1)
@@ -72,14 +74,20 @@ function Brain.Step(bot, ctx, mode, _dt)
 				break
 			end
 			local ix, iy = Sim.ItemAt(item, t)
-			if math.abs(ix) > Sim.HALF_W + 2 then
-				continue
+			if iy < Sim.Y_MIN + Sim.BODY_Y - Sim.BODY_R - kind.Radius then
+				break -- below anything a faller can reach: it only gets lower from here
+			end
+			if not Sim.Catchable(item, t) then
+				continue -- (still rising, or outside the middle of the sky: nobody can catch it there)
 			end
 			local reachX = Sim.STEER_OPEN * ahead * (0.55 + 0.35 * skill) + 2
 			local dy = iy - f.Y
 			if math.abs(ix - f.X) <= reachX and dy <= Sim.RISE * ahead + 6.5 and dy >= -14 * ahead - 2 then
 				local value = kind.Value * (if item.Kind == "Bag" then 1.5 else 1)
 				local score = value / (ahead + 0.5) - math.abs(ix - f.X) * 0.01
+				if iy < Sim.Y_MIN + 1 then
+					score *= 0.6 -- (caught at the floor of the sky: possible, but that's where bots pile up)
+				end
 				-- Someone nearer will likely get it first: look for a coin of its own instead.
 				local mine = math.abs(ix - f.X) + math.abs(iy - f.Y)
 				for _, other in mode.fallers do
@@ -131,7 +139,7 @@ function Brain.Step(bot, ctx, mode, _dt)
 	if not home or bot:Chance(0.05) then
 		home = bot.Rng:NextNumber(-Sim.HALF_W * 0.7, Sim.HALF_W * 0.7)
 		memory.Home = home
-		memory.HomeY = bot.Rng:NextNumber(Sim.Y_MIN + 6, Sim.Y_MAX - 3)
+		memory.HomeY = bot.Rng:NextNumber(-4, Sim.Y_MAX - 3) -- (the middle and upper sky: lobs come down from above)
 	end
 	-- Hover around the middle of the sky (high enough to see what comes, low enough to drop on it).
 	local open = if memory.Open == nil then true else memory.Open

@@ -3,8 +3,8 @@
 -- used. Nothing here collides (fallers fly where the server puts them; see the mode's top comment).
 --
 -- The umbrellas' sizes match the catch shapes in Shared/Logic/ParasolPlummetSim (CANOPY_*, FURL_*):
--- the client half holds one with its base 1.2 studs above the faller's root. The client recolours
--- each faller's "Canopy" piece in that faller's own colour (the "Stripe" panels stay white).
+-- the client half holds one with its base Sim.UMBRELLA_BASE (2.6 studs) above the faller's root.
+-- The client recolours each faller's "Canopy" piece in that faller's own colour (the "Stripe" panels stay white).
 return function(h)
 	local gold = h.rgb(255, 200, 40)
 	local cloud = h.rgb(250, 252, 255)

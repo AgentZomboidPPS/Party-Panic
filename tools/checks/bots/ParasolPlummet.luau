@@ -26,6 +26,9 @@ return function(env)
 					end
 					local x, y = Sim.ItemAt(item, now + 0.6)
 					local d = math.abs(x - f.X) + math.abs(y - f.Y) * 0.5
+					if item.Kind ~= "Hammer" and not Sim.Catchable(item, now + 0.6) then
+						continue -- (only catchable on the way down, in the middle of the sky)
+					end
 					if item.Kind == "Hammer" then
 						if index <= 3 and d < 7 then
 							steer = if f.X >= x then 1 else -1
