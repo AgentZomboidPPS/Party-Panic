@@ -78,7 +78,11 @@ return function(env)
 				local step = Vector3.new(goal.X - position.X, 0, goal.Z - position.Z)
 				local move = if step.Magnitude > 0.8 then step.Unit * 0.8 else step
 				local nextPosition = Vector3.new(position.X + move.X, layout.Floor + 3, position.Z + move.Z)
-				env.Move(player, nextPosition, nextPosition + (if move.Magnitude > 0.01 then move else Vector3.new(0, 0, -1)))
+				env.Move(
+					player,
+					nextPosition,
+					nextPosition + (if move.Magnitude > 0.01 then move else Vector3.new(0, 0, -1))
+				)
 			end
 		end
 		if elapsed > 12 and not reported then

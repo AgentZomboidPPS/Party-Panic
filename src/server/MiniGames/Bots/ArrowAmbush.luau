@@ -92,7 +92,7 @@ local function archerStep(bot, ctx, mode)
 	local x = aim.X + math.cos(angle) * spread
 	local z = aim.Z + math.sin(angle) * spread
 	ctx:BotAction(bot, "Shoot", x, z)
-	memory.WaitUntil = now + mode.COOLDOWN + bot:Reaction() * 0.7 + bot.Rng:NextNumber(0, 0.5) * (1 - bot.Skill)
+	memory.WaitUntil = now + mode.cooldown + bot:Reaction() * 0.7 + bot.Rng:NextNumber(0, 0.5) * (1 - bot.Skill)
 	if bot:Chance(0.25) then
 		memory.Target = nil -- switch it up now and then
 	end

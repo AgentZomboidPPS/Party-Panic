@@ -34,7 +34,10 @@ local TOWER_Z = -26
 local TOWER_TOP = 16 -- the archers' deck height above the courtyard floor
 local WALL = 2.4 -- low courtyard wall height (an invisible barrier rises above it)
 
-ArrowAmbush.COOLDOWN = 0.85 -- seconds between an archer's shots
+-- Seconds between an archer's shots: quicker when each archer has more runners to chase.
+function ArrowAmbush.Cooldown(runnersPerArcher: number): number
+	return math.clamp(1 - 0.07 * (runnersPerArcher - 1), 0.68, 0.95)
+end
 ArrowAmbush.HIT_RADIUS = 2.7 -- a runner this close to where an arrow lands is tagged
 local SHOVE_RADIUS = 5.5 -- near misses get a little shove
 ArrowAmbush.BOARD_HALF = 3.6 -- half the width of a target board (what blocks arrows)
@@ -118,6 +121,7 @@ function ArrowAmbush:Prepare()
 		end
 	end
 	self.runnerCount = #runners
+	self.cooldown = ArrowAmbush.Cooldown(#runners / math.max(1, #archers))
 
 	local spawnFor = {}
 	for index, player in archers do
@@ -167,7 +171,7 @@ function ArrowAmbush:Prepare()
 		BoardsT0 = self.boardsT0,
 		BoardHalf = ArrowAmbush.BOARD_HALF,
 		Hit = ArrowAmbush.HIT_RADIUS,
-		Cooldown = ArrowAmbush.COOLDOWN,
+		Cooldown = self.cooldown,
 	})
 	ctx:SetStatus(if #archers > 1 then "2 ARCHERS vs the RUNNERS!" else "1 ARCHER vs the RUNNERS!")
 end
@@ -346,7 +350,11 @@ function ArrowAmbush:_firstBoard(from: Vector3, to: Vector3, t0: number, flight:
 			local t = t0 + flight * ((step - 1 + f) / SAMPLES)
 			local boardX = originX + ArrowAmbush.BoardX(board, self.boardsT0, t)
 			local height = hit.Y - floorY
-			if math.abs(hit.X - boardX) <= ArrowAmbush.BOARD_HALF and height <= ArrowAmbush.BOARD_HEIGHT and height > -0.5 then
+			if
+				math.abs(hit.X - boardX) <= ArrowAmbush.BOARD_HALF
+				and height <= ArrowAmbush.BOARD_HEIGHT
+				and height > -0.5
+			then
 				return index, t, hit
 			end
 		end
@@ -581,7 +589,7 @@ function ArrowAmbush:Start()
 			self.floorY,
 			math.clamp(z, origin.Z + Z_MIN - 1, origin.Z + Z_MAX + 1)
 		)
-		self.nextShot[player] = now + ArrowAmbush.COOLDOWN
+		self.nextShot[player] = now + self.cooldown
 		ctx:SetPlayerShared(player, "NextShot", self.nextShot[player])
 		self:_fire(player, target)
 	end, { Interval = 0.2 })

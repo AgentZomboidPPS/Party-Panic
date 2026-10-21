@@ -97,8 +97,20 @@ return function(h)
 			},
 			Materials = { Limbs = Enum.Material.Wood, Tips = Enum.Material.Metal },
 			Fallback = function(m)
-				h.capsule(m, "Limbs", 2.6, 0.3, CFrame.new(0, 3.4, -0.35) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(0, math.rad(20), 0))
-				h.capsule(m, "Limbs", 2.6, 0.3, CFrame.new(0, 1.4, -0.35) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(0, math.rad(-20), 0))
+				h.capsule(
+					m,
+					"Limbs",
+					2.6,
+					0.3,
+					CFrame.new(0, 3.4, -0.35) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(0, math.rad(20), 0)
+				)
+				h.capsule(
+					m,
+					"Limbs",
+					2.6,
+					0.3,
+					CFrame.new(0, 1.4, -0.35) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(0, math.rad(-20), 0)
+				)
 				h.block(m, "Grip", Vector3.new(0.38, 1.1, 0.46), Vector3.new(0, 2.42, -0.6))
 				h.block(m, "String", Vector3.new(0.06, 4.7, 0.06), Vector3.new(0, 2.42, 0.2))
 			end,
