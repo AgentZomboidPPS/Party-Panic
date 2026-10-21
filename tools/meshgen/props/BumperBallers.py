@@ -148,8 +148,10 @@ def frond(length: float, droop: float, width: float, yaw: float, pitch: float) -
         a = i * 3
         b = a + 3
         faces += [(a, b, a + 1), (a + 1, b, b + 1), (a + 1, b + 1, a + 2), (a + 2, b + 1, b + 2)]
-    top = Mesh(verts, faces)
-    bottom = Mesh(np.array(verts) - np.array([0, 0.06, 0]), np.array(faces)[:, ::-1])
+    # The upper sheet faces up and the lower one down, so each side shows its lit face (the other
+    # way round, the top's culled back would still shade the leaf from above).
+    top = Mesh(verts, np.array(faces)[:, ::-1])
+    bottom = Mesh(np.array(verts) - np.array([0, 0.06, 0]), np.array(faces))
     leaf = merge(top, bottom)
     leaf.rotate("y", yaw)
     return leaf
@@ -214,11 +216,14 @@ def face_up(mesh: Mesh) -> Mesh:
     return mesh
 
 
-def polar_field(height, radius_x: float, radius_z: float, rings: int, segments: int) -> Mesh:
-    """A height-field disc: height(r, angle) with r from 0 (middle) to 1 (rim), faces up."""
+def polar_field(height, radius_x: float, radius_z: float, rings, segments: int) -> Mesh:
+    """A height-field disc: height(r, angle) with r from 0 (middle) to 1 (rim), faces up. `rings` is a
+    ring count (evenly spaced) or the list of ring radii (0 < r <= 1, increasing)."""
+    radii = [i / rings for i in range(1, rings + 1)] if isinstance(rings, int) else list(rings)
+    rings = len(radii)
     verts = [(0.0, height(0.0, 0.0), 0.0)]
     for i in range(1, rings + 1):
-        r = i / rings
+        r = radii[i - 1]
         for s in range(segments):
             a = 2 * math.pi * s / segments
             verts.append((math.cos(a) * r * radius_x, height(r, a), math.sin(a) * r * radius_z))
@@ -263,7 +268,9 @@ def lagoon():
             return 10.7 - (10.7 - 1.2) * (3 * t * t - 2 * t * t * t)
         return 1.2 * max(0.0, 1 - (d - e - 14) / 30)
 
-    field = polar_field(height, 150, 150, 50, 160)
+    # Rings are dense across the reef slope (where the colors change), sparse under the island.
+    distances = [15, 30, 45, 55] + [60 + 1.5 * k for k in range(49)] + [136, 141, 146, 150]
+    field = polar_field(height, 150, 150, [d / 150 for d in distances], 240)
     c = face_centers(field)
     deep = c[:, 1] < 3.0
     reef = (c[:, 1] < 8.8) & ~deep

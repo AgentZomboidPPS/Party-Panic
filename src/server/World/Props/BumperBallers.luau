@@ -65,7 +65,7 @@ return function(h)
 		},
 		BumperPalm = {
 			Height = 18.35,
-			AssetId = 104364791993198,
+			AssetId = 119762767657624,
 			Palette = {
 				Trunk = h.rgb(150, 110, 72),
 				Leaves = h.rgb(66, 168, 72),
@@ -91,7 +91,7 @@ return function(h)
 		-- beyond, so the water reads shallow-to-deep. Base (y = 0) is 15.2 under the water.
 		BumperLagoon = {
 			Height = 12.19,
-			AssetId = 0,
+			AssetId = 119357834218953,
 			Shadow = false,
 			Palette = {
 				Shelf = h.rgb(186, 244, 222),
@@ -109,7 +109,7 @@ return function(h)
 		-- A ring of red and white lane-rope floats (radius 70) that marks the play area from afar.
 		BumperFloatLine = {
 			Height = 0.86,
-			AssetId = 0,
+			AssetId = 127614857456778,
 			Shadow = false,
 			Palette = { FloatRed = h.rgb(240, 60, 66), FloatWhite = h.rgb(255, 255, 255), Rope = h.rgb(245, 240, 225) },
 			Fallback = function(m)
@@ -126,7 +126,7 @@ return function(h)
 		},
 		BumperBuoy = {
 			Height = 6.15,
-			AssetId = 0,
+			AssetId = 80967593476667,
 			Palette = {
 				Red = h.rgb(240, 58, 58),
 				White = h.rgb(255, 255, 255),
@@ -144,7 +144,7 @@ return function(h)
 		-- Pool floats bobbing in the lagoon.
 		BumperFlamingo = {
 			Height = 5.1,
-			AssetId = 0,
+			AssetId = 120009284873587,
 			Palette = { Pink = h.rgb(255, 128, 182), Beak = h.rgb(40, 40, 46) },
 			Fallback = function(m)
 				h.pillar(m, "Pink", 4.9, 1.5, Vector3.new(0, 0.75, 0))
@@ -155,7 +155,7 @@ return function(h)
 		},
 		BumperDonutFloat = {
 			Height = 1.69,
-			AssetId = 0,
+			AssetId = 136782505793706,
 			Palette = { Dough = h.rgb(236, 178, 110), Frosting = h.rgb(255, 136, 204), Sprinkles = h.rgb(80, 205, 255) },
 			Fallback = function(m)
 				h.pillar(m, "Dough", 5.1, 1.0, Vector3.new(0, 0.5, 0))
@@ -164,7 +164,7 @@ return function(h)
 		},
 		BumperLifebuoy = {
 			Height = 0.9,
-			AssetId = 0,
+			AssetId = 112895079587760,
 			Palette = { Red = h.rgb(240, 58, 58), White = h.rgb(255, 255, 255), Rope = h.rgb(245, 240, 225) },
 			Fallback = function(m)
 				h.pillar(m, "Red", 4, 0.9, Vector3.new(0, 0.45, 0))
@@ -173,7 +173,7 @@ return function(h)
 		-- The beach bar on the party islet: deck on stilts, bamboo counter, thatched roof, bottles.
 		BumperTikiBar = {
 			Height = 13.9,
-			AssetId = 0,
+			AssetId = 71603764276721,
 			Palette = {
 				Wood = h.rgb(168, 108, 62),
 				Bamboo = h.rgb(222, 196, 112),
@@ -196,7 +196,7 @@ return function(h)
 		},
 		BumperTikiTotem = {
 			Height = 7.26,
-			AssetId = 0,
+			AssetId = 111668152639851,
 			Palette = {
 				Wood = h.rgb(150, 96, 58),
 				Paint = h.rgb(236, 72, 52),
@@ -213,7 +213,7 @@ return function(h)
 		},
 		BumperTikiTorch = {
 			Height = 8.55,
-			AssetId = 0,
+			AssetId = 117995362656311,
 			Shadow = false,
 			Palette = { Bamboo = h.rgb(222, 196, 112), Bowl = h.rgb(120, 80, 45), Flame = h.rgb(255, 150, 40) },
 			Materials = { Flame = Enum.Material.Neon },
@@ -225,7 +225,7 @@ return function(h)
 		},
 		BumperParasol = {
 			Height = 6.7,
-			AssetId = 0,
+			AssetId = 137963524721700,
 			Palette = { CanopyA = h.rgb(255, 92, 126), CanopyB = h.rgb(255, 248, 230), Pole = h.rgb(245, 245, 245) },
 			Fallback = function(m)
 				h.pillar(m, "Pole", 0.18, 6.7, Vector3.new(0, 3.35, 0))
@@ -235,7 +235,7 @@ return function(h)
 		-- Big jungle islands on the horizon (beach at y = 6 unscaled).
 		BumperFarIslandA = {
 			Height = 95.18,
-			AssetId = 0,
+			AssetId = 91040437822529,
 			Shadow = false,
 			Palette = { Sand = h.rgb(244, 226, 168), Jungle = h.rgb(62, 158, 78), Rock = h.rgb(120, 128, 118) },
 			Materials = { Rock = Enum.Material.Slate },
@@ -246,7 +246,7 @@ return function(h)
 		},
 		BumperFarIslandB = {
 			Height = 63.97,
-			AssetId = 0,
+			AssetId = 122168403471281,
 			Shadow = false,
 			Palette = { Sand = h.rgb(244, 226, 168), Jungle = h.rgb(74, 166, 86), Rock = h.rgb(120, 128, 118) },
 			Materials = { Rock = Enum.Material.Slate },

@@ -318,7 +318,7 @@ function BumperBallers:_buildArena()
 			Parent = ctx.Arena,
 		})
 	end
-	for index, spot in { Vector2.new(-11, 12), Vector2.new(10, 13), Vector2.new(-1, 17), Vector2.new(18, 2) } do
+	for index, spot in { Vector2.new(-15, 10), Vector2.new(13, 13), Vector2.new(1, 19), Vector2.new(19, -1) } do
 		MeshLibrary.Get("BumperPalm", {
 			Scale = 1.15 + index * 0.08,
 			CFrame = onParty(spot.X, spot.Y) * CFrame.Angles(0, index * 1.9, 0),
