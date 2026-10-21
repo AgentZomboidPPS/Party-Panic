@@ -19,6 +19,7 @@ import argparse
 import json
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -50,11 +51,15 @@ def collect() -> dict[str, int]:
 
 def status(asset_id: int) -> tuple[str, str]:
     url = f"https://apis.roblox.com/assets/v1/assets/{asset_id}?readMask=moderationResult,state,assetType"
-    try:
-        with urllib.request.urlopen(urllib.request.Request(url), timeout=30) as response:
-            data = json.loads(response.read())
-    except urllib.error.HTTPError as error:
-        return "?", f"HTTP {error.code}"
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url), timeout=30) as response:
+                data = json.loads(response.read())
+            break
+        except urllib.error.HTTPError as error:
+            if error.code != 429 and error.code < 500 or attempt == 5:
+                return "?", f"HTTP {error.code}"
+            time.sleep(2 ** attempt)  # rate limited: back off and ask again
     state = (data.get("moderationResult") or {}).get("moderationState", "?")
     return data.get("assetType", "?"), state
 
