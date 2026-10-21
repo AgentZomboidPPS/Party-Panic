@@ -1,14 +1,22 @@
 -- The big moments (owner: "Also we need cool payoffs for players that keep playing the game."):
---   * LEVEL UP! A full-screen burst: the new level pops out in a badge with its prestige colors,
+--   * LEVEL UP! A celebration card: the new level pops out in a badge with its prestige colors,
 --     rings and confetti fly, a fanfare plays, and the rewards are revealed one by one (the Rewards
---     Road's coins and any exclusive cosmetic, with an EQUIP button), then the next goal. Career
---     milestones get the same moment ("MILESTONE!").
+--     Road's coins and any exclusive cosmetic), then the next goal, with EQUIP for a new trail,
+--     title or effect and a button to the Rewards screen. Career milestones get the same moment
+--     ("MILESTONE!"), and a returning player gets the rewards their level and career had already
+--     earned when the update came out ("NEW REWARDS!").
 --   * Over the head of anyone who levels up, a "Lv 10!" pops up for everyone in the lobby to see.
 -- The server has already granted everything (Services/ProgressionService); this only shows it.
--- A celebration waits for a calm moment: never during the vote, the round or the results card
--- (it shows when everyone's back in the lobby), and several at once make one. It closes itself
--- after a few seconds, on a tap anywhere, when a window opens or when the vote starts. Reduced
--- effects: less confetti, no shimmer. Phones: 44 pt buttons, all in the middle of the screen.
+-- A celebration waits for a calm moment: never during the vote, the rules card, the round or the
+-- results (it shows when everyone's back in the lobby), and several at once make one. It closes
+-- itself after a few seconds, with its ✕, when a window opens or when the vote starts.
+--
+-- Second pass (owner: "it just has to work", phones first): it is a card, not a full-screen
+-- pop-up. Nothing dims or blocks the screen, so the MOVE stick, the jump button and the menu keep
+-- working while it shows. Phones: the card sits at the top middle (where the first-join tip goes,
+-- which steps aside meanwhile; PP_Celebrating), clear of the profile chip, the menu column, the
+-- jump button and the toasts on the smallest phone; its buttons are on its right half, outside
+-- the thumbstick's corner, and 44 pt tall. PC: the middle of the screen.
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,7 +37,7 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 local CelebrationController = {}
 
 type Celebration = {
-	Kind: string, -- "LevelUp" | "Milestone"
+	Kind: string, -- "LevelUp" | "Milestone" | "Welcome" (rewards a returning player had already earned)
 	Level: number?,
 	From: number?,
 	Coins: number,
@@ -37,9 +45,14 @@ type Celebration = {
 }
 
 local CALM = { Waiting = true, Intermission = true, Cleanup = true }
-local SHOW_FOR = 10
-local STAGE_W, STAGE_H = 900, 470
-local CHIP_H = 200
+local SHOW_FOR = 9
+-- The card, in scaled units (every phone shows it at 0.62 points a unit: 372 x 213 pt).
+local CARD_W, CARD_H = 600, 344
+local CHIP_Y, CHIP_H = 126, 128
+local COIN_CHIP_W, ITEM_CHIP_W, MORE_CHIP_W, CHIP_GAP = 116, 150, 96, 10
+local BOTTOM_Y = 262 -- the next goal (left) and the buttons (right half: clear of the thumbstick)
+local BUTTONS_LEFT = 296
+local PC_BIAS = 1.1
 local CONFETTI = {
 	Color3.fromRGB(255, 90, 140),
 	Color3.fromRGB(90, 190, 255),
@@ -48,18 +61,24 @@ local CONFETTI = {
 	Color3.fromRGB(110, 230, 140),
 }
 local GOLD = ColorSequence.new(Color3.fromRGB(255, 236, 120), Color3.fromRGB(240, 150, 30))
+local CYAN_DARK = Color3.fromRGB(50, 120, 230)
+local GREEN_DARK = Color3.fromRGB(60, 160, 90)
+local PINK_DARK = Color3.fromRGB(200, 50, 140)
 
 local touch = false
 local gui: ScreenGui
 local queue: { Celebration } = {}
 local closeCurrent: (() -> ())? = nil
+local windowOpen = false -- a window (Modal) is open: the celebration waits for it to close
 
 -- Several waiting celebrations make one: the highest level reached, every coin and every item.
 local function merge(list: { Celebration }): Celebration
 	local merged: Celebration = { Kind = "Milestone", Coins = 0, Items = {} }
 	local seen = {}
 	for _, entry in list do
-		if entry.Kind == "LevelUp" then
+		if entry.Kind == "Welcome" and merged.Kind == "Milestone" then
+			merged.Kind = "Welcome"
+		elseif entry.Kind == "LevelUp" then
 			merged.Kind = "LevelUp"
 			merged.Level = math.max(merged.Level or 0, entry.Level or 0)
 			merged.From = math.min(merged.From or math.huge, entry.From or entry.Level or 1)
@@ -78,34 +97,33 @@ end
 local function label(props: { [string]: any }): TextLabel
 	props.BackgroundTransparency = 1
 	props.ZIndex = props.ZIndex or 3
-	props.CornerRadius = nil -- a note in a button's place (labels have no corner radius)
 	return UIKit.Label(props)
 end
 
--- The reward chips: coins, then each item with its EQUIP button.
-local function coinChip(parent: Instance, coins: number, order: number)
+-- The reward chips (nothing on them takes taps: part of the row can be in the thumbstick's corner).
+local function coinChip(parent: Instance, coins: number, order: number): Frame
 	local chip = UIKit.Panel({
 		Name = "Coins",
-		Size = UDim2.fromOffset(150, CHIP_H),
+		Size = UDim2.fromOffset(COIN_CHIP_W, CHIP_H),
 		LayoutOrder = order,
-		CornerRadius = 20,
+		CornerRadius = 18,
 		ZIndex = 3,
 		Parent = parent,
 	}, Color3.fromRGB(255, 196, 60), Color3.fromRGB(230, 130, 30))
 	UIKit.Coin({
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 18),
-		Size = UDim2.fromOffset(62, 62),
+		Position = UDim2.new(0.5, 0, 0, 10),
+		Size = UDim2.fromOffset(44, 44),
 		ZIndex = 4,
 		Parent = chip,
 	})
 	label({
 		Text = `+{coins}`,
 		Font = Theme.Fonts.Display,
-		TextSize = 44,
+		TextSize = 36,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(0, 92),
-		Size = UDim2.new(1, 0, 0, 52),
+		Position = UDim2.fromOffset(0, 56),
+		Size = UDim2.new(1, 0, 0, 40),
 		ZIndex = 4,
 		Parent = chip,
 		Children = { UIKit.TextStroke(0.1) },
@@ -113,10 +131,10 @@ local function coinChip(parent: Instance, coins: number, order: number)
 	label({
 		Text = "COINS",
 		Font = Theme.Fonts.Display,
-		TextSize = 22,
+		TextSize = 20,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(0, 146),
-		Size = UDim2.new(1, 0, 0, 30),
+		Position = UDim2.fromOffset(0, 96),
+		Size = UDim2.new(1, 0, 0, 24),
 		ZIndex = 4,
 		Parent = chip,
 		Children = { UIKit.TextStroke(0.2) },
@@ -124,20 +142,20 @@ local function coinChip(parent: Instance, coins: number, order: number)
 	return chip
 end
 
-local function itemChip(parent: Instance, item: Cosmetics.Cosmetic, order: number)
+local function itemChip(parent: Instance, item: Cosmetics.Cosmetic, order: number): Frame
 	local chip = UIKit.Panel({
 		Name = item.Id,
-		Size = UDim2.fromOffset(210, CHIP_H),
+		Size = UDim2.fromOffset(ITEM_CHIP_W, CHIP_H),
 		LayoutOrder = order,
-		CornerRadius = 20,
+		CornerRadius = 18,
 		ZIndex = 3,
 		Parent = parent,
 	}, Theme.Colors.Card, Theme.Colors.PanelDark)
 	if item.Colors and #item.Colors > 1 then
 		-- Trails and the like show their colors along the top.
 		UIKit.new("Frame", {
-			Position = UDim2.fromOffset(10, 8),
-			Size = UDim2.new(1, -20, 0, 8),
+			Position = UDim2.fromOffset(12, 7),
+			Size = UDim2.new(1, -24, 0, 7),
 			BackgroundColor3 = Color3.new(1, 1, 1),
 			ZIndex = 4,
 			Parent = chip,
@@ -146,96 +164,68 @@ local function itemChip(parent: Instance, item: Cosmetics.Cosmetic, order: numbe
 	end
 	label({
 		Text = item.Icon,
-		TextSize = 40,
+		TextSize = 34,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(0, 12),
-		Size = UDim2.new(1, 0, 0, 44),
+		Position = UDim2.fromOffset(0, 14),
+		Size = UDim2.new(1, 0, 0, 38),
 		ZIndex = 4,
 		Parent = chip,
 	})
 	local name = label({
 		Text = item.Name,
 		Font = Theme.Fonts.Display,
-		TextSize = 20,
-		Position = UDim2.fromOffset(8, 56),
-		Size = UDim2.new(1, -16, 0, 44),
+		TextSize = 18,
+		Position = UDim2.fromOffset(6, 52),
+		Size = UDim2.new(1, -12, 0, 44),
 		ZIndex = 4,
 		Parent = chip,
 		Children = { UIKit.TextStroke(0.3) },
 	})
-	name:SetAttribute("PP_Lines", 2)
+	name:SetAttribute("PP_Lines", 2) -- "Rainbow Fireworks" takes two lines on a chip
 	label({
 		Text = string.upper(Cosmetics.SlotNames[item.Slot] or item.Slot),
 		TextSize = Theme.Touch.MinText,
 		TextWrapped = false,
 		TextColor3 = Theme.Colors.TextDim,
-		Position = UDim2.fromOffset(8, 100),
-		Size = UDim2.new(1, -16, 0, 22),
+		Position = UDim2.fromOffset(6, 98),
+		Size = UDim2.new(1, -12, 0, 22),
 		ZIndex = 4,
 		Parent = chip,
 	})
-	local buttonProps = {
-		Name = "Action",
-		TextSize = 22,
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -8),
-		Size = UDim2.new(1, -20, 0, if touch then Theme.Touch.Target else 60),
-		CornerRadius = 16,
-		ZIndex = 5,
-		Parent = chip,
-	}
-	if Cosmetics.IsEquipSlot(item.Slot) then
-		local equipped = State.Profile and State.Profile.Equipped[item.Slot] == item.Id
-		buttonProps.Text = if equipped then "EQUIPPED ✓" else "EQUIP"
-		local button
-		button = UIKit.Button(buttonProps, function()
-			Remotes.Get("ShopEquip"):FireServer(item.Slot, item.Id)
-			button.Text = "EQUIPPED ✓"
-			local gradient = button:FindFirstChildOfClass("UIGradient")
-			if gradient then
-				gradient.Color = ColorSequence.new(Theme.Colors.Green, Color3.fromRGB(60, 160, 90))
-			end
-		end, Theme.Colors.Cyan, Color3.fromRGB(50, 120, 230))
-	else
-		buttonProps.Text = if item.Slot == "Emote" then "✓ IN EMOTES" else "✓ UNLOCKED"
-		buttonProps.Font = Theme.Fonts.Display
-		buttonProps.TextWrapped = false
-		buttonProps.TextColor3 = Theme.Colors.Green
-		label(buttonProps)
-	end
 	return chip
 end
 
-local function moreChip(parent: Instance, count: number, order: number)
+local function moreChip(parent: Instance, count: number, order: number): Frame
 	local chip = UIKit.Panel({
 		Name = "More",
-		Size = UDim2.fromOffset(150, CHIP_H),
+		Size = UDim2.fromOffset(MORE_CHIP_W, CHIP_H),
 		LayoutOrder = order,
-		CornerRadius = 20,
+		CornerRadius = 18,
 		ZIndex = 3,
 		Parent = parent,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
-	label({
+	local text = label({
 		Text = `+{count}\nmore!`,
 		Font = Theme.Fonts.Display,
-		TextSize = 34,
+		TextSize = 26,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 4,
 		Parent = chip,
 		Children = { UIKit.TextStroke(0.2) },
 	})
+	text:SetAttribute("PP_Lines", 2)
 	return chip
 end
 
 -- What to aim for next, after this celebration.
 local function nextGoal(celebration: Celebration): string
 	local profile = State.Profile
-	if celebration.Kind == "LevelUp" then
+	if celebration.Kind ~= "Milestone" then
 		local level = celebration.Level or (profile and profile.Level) or 1
 		local nextLevel = Progression.NextItemLevel(level)
 		local item = nextLevel and Progression.ItemsAt(nextLevel)[1]
 		if item then
-			return `Next up: {item.Icon} Lv {nextLevel}: {item.Name}`
+			return `Next up: {item.Icon} {item.Name} at Lv {nextLevel}`
 		end
 		return "You've unlocked every level reward!"
 	end
@@ -250,29 +240,31 @@ local function nextGoal(celebration: Celebration): string
 	end
 	if best and profile then
 		local have, target = Progression.MilestoneProgress(best, profile.Stats)
-		return `Next milestone: {best.Icon} {best.Name} ({have}/{target})`
+		return `Next: {best.Icon} {best.Name} ({have}/{target})`
 	end
 	return "Every career milestone unlocked!"
 end
 
+-- Confetti falls over the card (clipped to it: never over the stick, the jump button or the menu).
 local function confetti(layer: Frame)
-	local count = if State.ReducedEffects() then 10 else 36
+	local count = if State.ReducedEffects() then 8 else 26
 	for index = 1, count do
 		local piece = UIKit.new("Frame", {
 			Name = "Confetti",
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(math.random(), -0.08 - math.random() * 0.25),
-			Size = UDim2.fromOffset(math.random(8, 13), math.random(14, 20)),
+			Position = UDim2.fromScale(0.04 + math.random() * 0.92, -0.04 - math.random() * 0.2),
+			Size = UDim2.fromOffset(math.random(8, 12), math.random(13, 18)),
 			Rotation = math.random(0, 360),
 			BackgroundColor3 = CONFETTI[(index % #CONFETTI) + 1],
 			BorderSizePixel = 0,
-			ZIndex = 2,
+			ZIndex = 6,
 			Parent = layer,
 		})
-		local fall = 2.2 + math.random() * 1.6
+		local fall = 1.8 + math.random() * 1.4
 		UIKit.Tween(piece, fall, {
-			Position = UDim2.fromScale(piece.Position.X.Scale + (math.random() - 0.5) * 0.25, 1.1),
+			Position = UDim2.fromScale(piece.Position.X.Scale + (math.random() - 0.5) * 0.15, 0.96),
 			Rotation = piece.Rotation + math.random(-540, 540),
+			BackgroundTransparency = 1,
 		}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 		Debris:AddItem(piece, fall + 0.2)
 	end
@@ -283,23 +275,28 @@ local function ring(parent: Instance, center: UDim2, delay: number)
 		Name = "Ring",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = center,
-		Size = UDim2.fromOffset(120, 120),
+		Size = UDim2.fromOffset(96, 96),
 		BackgroundTransparency = 1,
 		ZIndex = 2,
 		Parent = parent,
 		Children = { UIKit.Round() },
 	})
 	local stroke =
-		UIKit.new("UIStroke", { Color = Theme.Colors.Yellow, Thickness = 6, Transparency = 0, Parent = circle })
+		UIKit.new("UIStroke", { Color = Theme.Colors.Yellow, Thickness = 5, Transparency = 0, Parent = circle })
 	task.delay(delay, function()
-		UIKit.Tween(circle, 0.9, { Size = UDim2.fromOffset(460, 460) })
-		UIKit.Tween(stroke, 0.9, { Transparency = 1 })
+		UIKit.Tween(circle, 0.8, { Size = UDim2.fromOffset(220, 220) })
+		UIKit.Tween(stroke, 0.8, { Transparency = 1 })
 	end)
-	Debris:AddItem(circle, delay + 1)
+	Debris:AddItem(circle, delay + 0.9)
+end
+
+local function setCelebrating(on: boolean)
+	State.LocalPlayer:SetAttribute("PP_Celebrating", on) -- OnboardingController's phone tip steps aside
 end
 
 local function show(celebration: Celebration)
 	local isLevel = celebration.Kind == "LevelUp"
+	local welcome = celebration.Kind == "Welcome"
 	local items = {}
 	for _, id in celebration.Items do
 		local item = Cosmetics.Get(id)
@@ -311,12 +308,32 @@ local function show(celebration: Celebration)
 	local look = Progression.Look(level)
 	local newColor = isLevel and celebration.From ~= nil and look.Index > Progression.Look(celebration.From).Index
 
-	local root = UIKit.new("Frame", {
+	-- Phones: top middle, under Roblox's top bar. PC: the middle of the screen.
+	local holder = UIKit.new("Frame", {
 		Name = "Celebration",
-		Size = UDim2.fromScale(1, 1),
+		AnchorPoint = if touch then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5),
+		Position = if touch then UDim2.new(0.5, 0, 0, 4) else UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(CARD_W, CARD_H),
 		BackgroundTransparency = 1,
 		Parent = gui,
 	})
+	UIKit.AutoScale(holder, if touch then nil else PC_BIAS)
+	local card = UIKit.Panel({
+		Name = "Card",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		CornerRadius = 26,
+		ClipsDescendants = true, -- the rings and confetti stay on the card
+		ZIndex = 1,
+		Parent = holder,
+	}, Color3.fromRGB(96, 62, 190), Theme.Colors.PanelDark)
+	card:SetAttribute("PP_Popup", true) -- a few seconds in the lobby; nothing in the stick's corner takes taps
+	local rim = card:FindFirstChildOfClass("UIStroke") :: UIStroke
+	rim.Color = if isLevel then look.Gradient.Keypoints[1].Value else Theme.Colors.Yellow
+	rim.Thickness = 4
+	rim.Transparency = 0
+
 	local closed = false
 	local function close()
 		if closed then
@@ -326,52 +343,25 @@ local function show(celebration: Celebration)
 		if closeCurrent == close then
 			closeCurrent = nil
 		end
-		root:Destroy()
+		holder:Destroy()
+		setCelebrating(false)
 		task.delay(0.4, CelebrationController.Pump)
 	end
 	closeCurrent = close
+	setCelebrating(true)
 
-	-- The dim backdrop reaches past the safe area to cover the whole screen; a tap closes.
-	local backdrop = UIKit.new("TextButton", {
-		Name = "Backdrop",
-		Position = UDim2.fromOffset(-300, -300),
-		Size = UDim2.new(1, 600, 1, 600),
-		BackgroundColor3 = Color3.fromRGB(20, 10, 45),
-		BackgroundTransparency = 1,
-		AutoButtonColor = false,
-		Text = "",
-		ZIndex = 1,
-		Parent = root,
-	})
-	backdrop.Activated:Connect(close)
-	UIKit.Tween(backdrop, 0.25, { BackgroundTransparency = 0.3 })
-	confetti(root)
-
-	local stage = UIKit.new("Frame", {
-		Name = "Stage",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(STAGE_W, STAGE_H),
-		BackgroundTransparency = 1,
-		ZIndex = 2,
-		Parent = root,
-	})
-	UIKit.AutoScale(stage)
-	stage:SetAttribute("PP_Popup", true) -- shown for a moment over the middle of the screen
-
-	-- Row 1: the badge and the headline, centered together.
-	local badgeX = 170
-	local badgeCenter = UDim2.fromOffset(badgeX + 60, 60)
-	ring(stage, badgeCenter, 0.05)
-	ring(stage, badgeCenter, 0.3)
+	-- Row 1: the badge, the headline and what happened; the ✕ in the corner.
+	local badgeCenter = UDim2.fromOffset(18 + 48, 16 + 48)
+	ring(card, badgeCenter, 0.05)
+	ring(card, badgeCenter, 0.3)
 	local badge = UIKit.new("Frame", {
 		Name = "Badge",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = badgeCenter,
-		Size = UDim2.fromOffset(120, 120),
+		Size = UDim2.fromOffset(96, 96),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 3,
-		Parent = stage,
+		Parent = card,
 		Children = { UIKit.Round(), UIKit.Stroke(nil, 4, 0.1) },
 	})
 	local badgeGradient = UIKit.new("UIGradient", {
@@ -380,9 +370,9 @@ local function show(celebration: Celebration)
 		Parent = badge,
 	})
 	label({
-		Text = if isLevel then tostring(level) else (items[1] and items[1].Icon or "🏅"),
+		Text = if isLevel then tostring(level) elseif welcome then "🎁" else (items[1] and items[1].Icon or "🏅"),
 		Font = Theme.Fonts.Display,
-		TextSize = if isLevel then (if level >= 100 then 50 else 62) else 58,
+		TextSize = if isLevel then (if level >= 100 then 40 else 50) else 46,
 		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 4,
@@ -390,51 +380,70 @@ local function show(celebration: Celebration)
 		Children = { UIKit.TextStroke(0.1) },
 	})
 	local headline = label({
-		Text = if isLevel then "LEVEL UP!" else "MILESTONE!",
+		Name = "Headline",
+		Text = if isLevel then "LEVEL UP!" elseif welcome then "NEW REWARDS!" else "MILESTONE!",
 		Font = Theme.Fonts.Display,
-		TextSize = 64,
+		TextSize = if welcome then 44 else 50,
 		TextWrapped = false,
 		TextColor3 = Theme.Colors.Yellow,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(badgeX + 140, 2),
-		Size = UDim2.fromOffset(440, 72),
-		Parent = stage,
+		Position = UDim2.fromOffset(130, 12),
+		Size = UDim2.fromOffset(372, 58),
+		Parent = card,
 		Children = { UIKit.TextStroke(0) },
 	})
 	local subline
 	if isLevel then
 		subline = if newColor
-			then `Level {level} and a new color: {look.Icon} {look.Name}!`
+			then `Level {level}, and a new name tag color: {look.Icon} {look.Name}!`
 			else `You're level {level}!`
+	elseif welcome then
+		subline = "Your level and career earned these. They're yours!"
 	else
 		subline = if items[1] then `{items[1].Name} unlocked!` else "New reward unlocked!"
 	end
-	label({
+	local sub = label({
+		Name = "Subline",
 		Text = subline,
-		TextSize = 26,
-		TextWrapped = false,
+		TextSize = 22,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(badgeX + 142, 76),
-		Size = UDim2.fromOffset(500, 36),
-		Parent = stage,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Position = UDim2.fromOffset(132, 70),
+		Size = UDim2.fromOffset(370, 52),
+		Parent = card,
 		Children = { UIKit.TextStroke(0.2) },
 	})
+	sub:SetAttribute("PP_Lines", 2)
+	UIKit.Button({
+		Name = "Close",
+		Text = "✕",
+		TextSize = 30,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 12),
+		Size = UDim2.fromOffset(if touch then Theme.Touch.Target else 56, if touch then Theme.Touch.Target else 56),
+		CornerRadius = "round",
+		ZIndex = 5,
+		Parent = card,
+	}, close, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 
 	-- Row 2: the rewards, revealed one by one.
 	local row = UIKit.new("Frame", {
 		Name = "Rewards",
-		Position = UDim2.fromOffset(0, 132),
+		Position = UDim2.fromOffset(0, CHIP_Y),
 		Size = UDim2.new(1, 0, 0, CHIP_H),
 		BackgroundTransparency = 1,
 		ZIndex = 3,
-		Parent = stage,
-		Children = { UIKit.List(Enum.FillDirection.Horizontal, 14, Enum.HorizontalAlignment.Center) },
+		Parent = card,
+		Children = { UIKit.List(Enum.FillDirection.Horizontal, CHIP_GAP, Enum.HorizontalAlignment.Center) },
 	})
 	local chips = {}
-	if (celebration.Coins or 0) > 0 then
-		table.insert(chips, coinChip(row, celebration.Coins, 1))
+	local coins = celebration.Coins or 0
+	if coins > 0 then
+		table.insert(chips, coinChip(row, coins, 1))
 	end
-	local room = if #items > 3 then 2 else 3
+	-- As many item chips as fit beside the coins (2, or 3 without coins), the rest as "+2 more!"
+	-- (every one is on the Rewards screen). At most 576 of the card's 600 units.
+	local room = if coins > 0 then 2 else 3
 	for index, item in items do
 		if index > room then
 			table.insert(chips, moreChip(row, #items - room, 10))
@@ -444,7 +453,7 @@ local function show(celebration: Celebration)
 	end
 	for index, chip in chips do
 		chip.Visible = false
-		task.delay(0.45 + index * 0.18, function()
+		task.delay(0.4 + index * 0.18, function()
 			if chip.Parent then
 				chip.Visible = true
 				UIKit.PopIn(chip, 0.35)
@@ -452,54 +461,84 @@ local function show(celebration: Celebration)
 		end)
 	end
 
-	-- Row 3: the next goal. Row 4: the buttons.
-	label({
+	-- Row 3: the next goal (left), EQUIP and the Rewards screen (right half).
+	local goal = label({
+		Name = "NextGoal",
 		Text = nextGoal(celebration),
-		TextSize = 22,
-		TextWrapped = false,
+		TextSize = Theme.Touch.MinText,
 		TextColor3 = Theme.Colors.TextDim,
-		Position = UDim2.fromOffset(0, 344),
-		Size = UDim2.new(1, 0, 0, 30),
-		Parent = stage,
-		Children = { UIKit.TextStroke(0.3) },
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(20, BOTTOM_Y),
+		Size = UDim2.fromOffset(BUTTONS_LEFT - 28, if touch then Theme.Touch.Target else 60),
+		Parent = card,
 	})
+	goal:SetAttribute("PP_Lines", 2)
+	local buttonHeight = if touch then Theme.Touch.Target else 60
 	local buttons = UIKit.new("Frame", {
 		Name = "Buttons",
-		Position = UDim2.fromOffset(0, 386),
-		Size = UDim2.new(1, 0, 0, 76),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -16, 0, BOTTOM_Y),
+		Size = UDim2.fromOffset(CARD_W - 16 - BUTTONS_LEFT, buttonHeight),
 		BackgroundTransparency = 1,
 		ZIndex = 3,
-		Parent = stage,
-		Children = { UIKit.List(Enum.FillDirection.Horizontal, 20, Enum.HorizontalAlignment.Center) },
+		Parent = card,
+		Children = {
+			UIKit.List(
+				Enum.FillDirection.Horizontal,
+				10,
+				Enum.HorizontalAlignment.Right,
+				Enum.VerticalAlignment.Center
+			),
+		},
 	})
-	local buttonHeight = if touch then Theme.Touch.Target else 64
-	UIKit.Button({
-		Name = "Awesome",
-		Text = "AWESOME!",
-		TextSize = 28,
-		Size = UDim2.fromOffset(240, buttonHeight),
-		CornerRadius = 20,
-		LayoutOrder = 1,
-		ZIndex = 4,
-		Parent = buttons,
-	}, close, Theme.Colors.Green, Color3.fromRGB(60, 160, 90))
+	local equipItem = nil
+	for _, item in items do
+		if Cosmetics.IsEquipSlot(item.Slot) then
+			equipItem = item
+			break
+		end
+	end
+	if equipItem then
+		local item = equipItem
+		local equipped = State.Profile and State.Profile.Equipped[item.Slot] == item.Id
+		local button
+		button = UIKit.Button({
+			Name = "Equip",
+			Text = if equipped then "EQUIPPED" else "EQUIP",
+			TextSize = 20,
+			Size = UDim2.fromOffset(130, buttonHeight),
+			CornerRadius = 18,
+			LayoutOrder = 1,
+			ZIndex = 4,
+			Parent = buttons,
+		}, function()
+			Remotes.Get("ShopEquip"):FireServer(item.Slot, item.Id)
+			button.Text = "EQUIPPED"
+			local gradient = button:FindFirstChildOfClass("UIGradient")
+			if gradient then
+				gradient.Color = ColorSequence.new(Theme.Colors.Green, GREEN_DARK)
+			end
+		end, if equipped then Theme.Colors.Green else Theme.Colors.Cyan, if equipped then GREEN_DARK else CYAN_DARK)
+	end
 	UIKit.Button({
 		Name = "SeeMore",
-		Text = if isLevel then "⭐ SEE ROAD" else "🏅 CAREER",
-		TextSize = 24,
-		Size = UDim2.fromOffset(240, buttonHeight),
-		CornerRadius = 20,
+		Text = if isLevel or welcome then "⭐ ROAD" else "🏅 CAREER",
+		TextSize = 22,
+		Size = UDim2.fromOffset(146, buttonHeight),
+		CornerRadius = 18,
 		LayoutOrder = 2,
 		ZIndex = 4,
 		Parent = buttons,
 	}, function()
 		close()
-		State.OpenScreen:Fire("Rewards", if isLevel then "Road" else "Career")
-	end, Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
+		State.OpenScreen:Fire("Rewards", if isLevel or welcome then "Road" else "Career")
+	end, Theme.Colors.Pink, PINK_DARK)
 
-	-- Motion: the badge and headline pop, a rainbow badge shimmers.
+	-- Motion: the card and badge pop, confetti falls, a rainbow badge shimmers.
+	UIKit.PopIn(card, 0.4)
 	UIKit.PopIn(badge, 0.6)
 	UIKit.PopIn(headline, 0.45)
+	confetti(card)
 	local shimmer = if isLevel
 			and look.Rainbow
 			and not State.ReducedEffects()
@@ -507,18 +546,18 @@ local function show(celebration: Celebration)
 			badgeGradient.Rotation = (os.clock() * 90) % 360
 		end)
 		else nil
-	root.Destroying:Connect(function()
+	holder.Destroying:Connect(function()
 		if shimmer then
 			shimmer:Disconnect()
 		end
 	end)
-	AudioController.Play(if #items > 0 or not isLevel then "Victory" else "VoteOpen")
+	AudioController.Play("Victory")
 	task.delay(SHOW_FOR, close)
 end
 
 -- Shows the next celebration if it's a calm moment (several waiting make one).
 function CelebrationController.Pump()
-	if closeCurrent or #queue == 0 or not CALM[GameState.Get("Phase") or "Waiting"] then
+	if closeCurrent or windowOpen or #queue == 0 or not CALM[GameState.Get("Phase") or "Waiting"] then
 		return
 	end
 	local celebration = merge(queue)
@@ -596,14 +635,14 @@ end
 
 function CelebrationController.Start(context)
 	touch = UIKit.IsTouch()
-	-- Their own layer: above the HUD, the toasts and windows (10), so nothing covers the moment.
+	-- Their own layer: above the HUD and the toasts, under the windows (10), which close it anyway.
 	gui = UIKit.new("ScreenGui", {
 		Name = "PartyPanicCelebrate",
 		ResetOnSpawn = false,
 		IgnoreGuiInset = false,
 		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		DisplayOrder = 11,
+		DisplayOrder = 9,
 		Parent = context.Hud.Parent,
 	})
 
@@ -632,10 +671,14 @@ function CelebrationController.Start(context)
 			CelebrationController.Dismiss() -- the vote or the round: out of the way
 		end
 	end)
-	-- A window opening (shop, quests, the Rewards screen...) takes over.
+	-- A window opening (shop, quests, the Rewards screen...) takes over; once it closes, anything
+	-- still waiting shows.
 	Modal.AnyOpenChanged:Connect(function(open)
+		windowOpen = open
 		if open then
 			CelebrationController.Dismiss()
+		else
+			task.delay(0.4, CelebrationController.Pump)
 		end
 	end)
 end

@@ -2,7 +2,8 @@
 -- Cosmetics are purely visual (design doc §10 "Economy guardrails").
 -- Name tags show the level in its prestige color, which changes every 10 levels, so long-time
 -- players stand out in the lobby (owner: "Also we need cool payoffs for players that keep playing
--- the game."; colors in Shared/Progression).
+-- the game."; colors in Shared/Progression). A returning player whose level or career already
+-- earned rewards new to the game gets them in a "NEW REWARDS!" celebration when they join.
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
@@ -227,19 +228,14 @@ function CosmeticService.Init()
 		CosmeticService.Refresh(player)
 		task.spawn(checkVip, player)
 		-- A returning player whose level or career already earned rewards that are new to the game
-		-- (the Rewards Road's first day, or new items added later): tell them where to find them.
+		-- (the Rewards Road's first day, or new items added later) gets them in a celebration of
+		-- their own (CelebrationController shows it once they're in the lobby).
 		if #unlocked > 0 and profile and profile.Data.Meta.Sessions > 1 then
-			local count = #unlocked
-			task.delay(10, function()
-				if player.Parent then
-					Notifier.Send(
-						player,
-						`You've unlocked {count} new reward{if count == 1 then "" else "s"}! Tap your level to see the Rewards Road.`,
-						"reward",
-						8
-					)
-				end
-			end)
+			local ids = {}
+			for _, item in unlocked do
+				table.insert(ids, item.Id)
+			end
+			Remotes.Get("Celebrate"):FireClient(player, { Kind = "Welcome", Coins = 0, Items = ids })
 		end
 	end)
 

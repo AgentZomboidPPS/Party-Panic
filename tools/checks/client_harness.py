@@ -38,7 +38,8 @@ PlayerGui folder and attributes) and, without --bots, 11 other fake players for 
 ScreenGuis are made like init.client.luau makes them. Shared modules come from the working tree
 (except Remotes), and so does the profile snapshot (DataService and the two services it needs).
 Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", "Rewards Career")
-and shows a level-up and a career milestone celebration ("LevelUp", "Milestone").
+and shows a level-up, a career milestone and a returning player's celebration ("LevelUp",
+"LevelUp2", "Milestone", "Welcome").
 """
 
 import argparse
@@ -685,6 +686,14 @@ do
 		},
 		{ name = "LevelUp2", payload = { Kind = "LevelUp", Level = 2, From = 1, Coins = 3, Items = { "Emote_Balloons" } } },
 		{ name = "Milestone", payload = { Kind = "Milestone", Coins = 0, Items = { "Title_Veteran" } } },
+		{
+			name = "Welcome",
+			payload = {
+				Kind = "Welcome",
+				Coins = 0,
+				Items = { "Emote_Balloons", "Trail_Bubblegum", "Elim_Ghost", "Title_Regular" },
+			},
+		},
 	} do
 		step = "celebration " .. case.name
 		__fire("Celebrate", case.payload)

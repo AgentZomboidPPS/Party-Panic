@@ -8,6 +8,8 @@
 -- round and the results (the standings use that spot); the last tip waits until you're back in
 -- the lobby. Its height comes from its text (not AutomaticSize, which left one line showing on
 -- phones while the tip popped in).
+-- On phones it also steps aside while a level-up or milestone celebration uses its spot
+-- (CelebrationController sets PP_Celebrating; owner: "cool payoffs for players that keep playing").
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -44,7 +46,12 @@ local rewardTipDue = false -- the last tip, once the results are over
 
 local function refreshVisible()
 	local phase = GameState.Get("Phase") or "Waiting"
-	local visible = not finished and step > 0 and not HIDDEN_IN[phase] and not (touch and HIDDEN_ON_PHONES[phase])
+	local celebrating = touch and State.LocalPlayer:GetAttribute("PP_Celebrating") == true
+	local visible = not finished
+		and step > 0
+		and not HIDDEN_IN[phase]
+		and not (touch and HIDDEN_ON_PHONES[phase])
+		and not celebrating
 	if visible and not panel.Visible then
 		panel.Visible = true
 		UIKit.PopIn(panel, 0.35)
@@ -225,6 +232,11 @@ function OnboardingController.Start(context)
 	Remotes.Get("RoundResults").OnClientEvent:Connect(function()
 		if not finished and step > 0 then
 			rewardTipDue = true
+		end
+	end)
+	State.LocalPlayer:GetAttributeChangedSignal("PP_Celebrating"):Connect(function()
+		if not finished and step > 0 then
+			refreshVisible()
 		end
 	end)
 end
