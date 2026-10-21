@@ -41,7 +41,7 @@ return function(h)
 		-- the mode builds (it's also what the balls roll on); this mesh's top sits 0.15 above it.
 		BumperIsland = {
 			Height = 14,
-			AssetId = 113746739817048,
+			AssetId = 135104412261869,
 			Palette = {
 				Sand = h.rgb(240, 222, 165),
 				StripeRed = h.rgb(232, 62, 62),

@@ -424,6 +424,7 @@ function BumperBallers.Start(api)
 	end
 
 	local wasAlive = nil
+	local nextStrip = 0
 	api:RenderStep(function(dt: number)
 		local now = os.clock()
 		-- Squash-and-stretch pulses (uniform, so they look right however the ball has rolled).
@@ -452,11 +453,14 @@ function BumperBallers.Start(api)
 			wasAlive = alive
 			refreshTiltUi()
 		end
-		-- Riders strip.
-		for userId, icon in icons do
-			local out = icon.Out or not participantAlive(userId)
-			icon.Cross.Visible = out
-			icon.Frame.BackgroundTransparency = if out then 0.65 else 0
+		-- Riders strip (a few times a second is plenty).
+		if now >= nextStrip then
+			nextStrip = now + 0.25
+			for userId, icon in icons do
+				local out = icon.Out or not participantAlive(userId)
+				icon.Cross.Visible = out
+				icon.Frame.BackgroundTransparency = if out then 0.65 else 0
+			end
 		end
 		for _, part in foam do
 			local phase = ((now * 0.18) + part:GetAttribute("Phase")) % 1

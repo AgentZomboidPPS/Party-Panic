@@ -93,12 +93,12 @@ def island():
     c = face_centers(sand)
     radius = np.hypot(c[:, 0], c[:, 2])
     angle = np.arctan2(c[:, 2], c[:, 0])
-    lip = (radius > 40.8) & (radius < 44.2) & (c[:, 1] > GRASS_TOP + 0.1)
+    lip = (radius > 40.8) & (radius < 44.2) & (c[:, 1] > GRASS_TOP + 0.14)
     red = lip & (np.floor((angle + math.pi) / (2 * math.pi / 48)).astype(int) % 2 == 0)
     stripe_red, rest = split(sand, red)
     c = face_centers(rest)
     radius = np.hypot(c[:, 0], c[:, 2])
-    white = (radius > 40.8) & (radius < 44.2) & (c[:, 1] > GRASS_TOP + 0.1)
+    white = (radius > 40.8) & (radius < 44.2) & (c[:, 1] > GRASS_TOP + 0.14)
     stripe_white, sand = split(rest, white)
 
     # Cliff: weathered rock from the sea bed up to the sand.
