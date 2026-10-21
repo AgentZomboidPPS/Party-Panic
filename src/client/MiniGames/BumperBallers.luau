@@ -350,9 +350,9 @@ function BumperBallers.Start(api)
 			api:Sound("Click")
 		end)
 		tiltUi = { Calibrate = calibrate, Flip = flip, Switch = switch }
-		api:Hint("Hold your phone comfy, tap CALIBRATE, then tilt to roll!", hintY)
+		api:Hint("Tilt to roll! Bump them off!", hintY)
 	else
-		api:Hint(if touch then "Use the stick to roll. Bump them off!" else "Move to roll. Bump them off!", hintY)
+		api:Hint(if touch then "Stick to roll. Bump them off!" else "Move to roll. Bump them off!", hintY)
 	end
 	local hintUntil: number? = nil -- the hint stays up until 5 s after GO
 

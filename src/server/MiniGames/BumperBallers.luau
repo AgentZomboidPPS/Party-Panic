@@ -54,6 +54,7 @@ local CLOSING_MIN = 4 -- closing speed (studs/s) that counts as a bump
 local PAIR_COOLDOWN = 0.4
 local HISTORY = 8 -- velocity samples kept (about 0.25 s): the bounce often happens before we see it
 local GRAVITY = 110 -- simulated fall (no-physics servers only)
+local MAX_LEGIT_SPEED = 125 -- studs/s: nothing in the game rolls a ball this fast
 
 -- Every rider gets a color, a pattern on the ball and a shape tag, so color is never the only cue.
 BumperBallers.Riders = {
@@ -98,6 +99,8 @@ export type Entry = {
 	LastBumper: any,
 	LastBumpAt: number,
 	KOs: number,
+	BeyondSince: number?,
+	PolicedUntil: number?,
 }
 
 local function flat(v: Vector3): Vector3
@@ -560,17 +563,36 @@ function BumperBallers:Start()
 		end
 		local live = {}
 		for _, entry in self.entries do
-			if entry.Out or not entry.Model.Parent then
+			if not entry.Model.Parent then
+				continue
+			elseif entry.Out then
+				-- Knocked out: the ball sinks slowly where it splashed down.
+				if entry.Body.Anchored then
+					entry.Model:PivotTo(entry.Model:GetPivot() - Vector3.new(0, 3.5 * dt, 0))
+				end
 				continue
 			end
 			self:_step(entry, dt)
+			if entry.ClientDriven then
+				self:_police(entry)
+			end
 			if record then
 				table.insert(entry.History, 1, entry.Velocity)
 				if #entry.History > HISTORY then
 					table.remove(entry.History)
 				end
 			end
-			if entry.Position.Y < self.waterY - OUT_DEPTH or flat(entry.Position - self.center).Magnitude > 600 then
+			-- Out: under the water, or hanging past the rim for longer than a real fall takes.
+			local beyond = flat(entry.Position - self.center).Magnitude > ISLAND_RADIUS + 6
+			if not beyond then
+				entry.BeyondSince = nil
+			elseif not entry.BeyondSince then
+				entry.BeyondSince = os.clock()
+			end
+			if
+				entry.Position.Y < self.waterY - OUT_DEPTH
+				or (entry.BeyondSince and os.clock() - entry.BeyondSince > 0.8)
+			then
 				self:_ringOut(entry)
 			else
 				table.insert(live, entry)
@@ -737,10 +759,34 @@ function BumperBallers:_bumps(live: { Entry })
 	end
 end
 
+-- A player's device moves their ball, so keep it honest: a ball going far faster than any bump
+-- could make it is taken back by the server for a moment and slowed down.
+function BumperBallers:_police(entry: Entry)
+	local speed = entry.Velocity.Magnitude
+	if speed < MAX_LEGIT_SPEED or os.clock() < (entry.PolicedUntil or 0) then
+		return
+	end
+	entry.PolicedUntil = os.clock() + 1
+	local body = entry.Body
+	pcall(body.SetNetworkOwner, body, nil)
+	body.AssemblyLinearVelocity = entry.Velocity.Unit * TUNING.MaxSpeed
+	self.context:Delay(1, function()
+		if not entry.Out and body.Parent and not body.Anchored then
+			self.context:GiveOwnership(body, entry.Player)
+		end
+	end)
+end
+
 function BumperBallers:_ringOut(entry: Entry)
 	local ctx = self.context
 	entry.Out = true
 	entry.Force.Force = Vector3.zero
+	if physics and entry.Body.Parent then
+		entry.Body.Anchored = true -- the server takes it from here (it sinks; see Start)
+		entry.Model:PivotTo(
+			CFrame.new(entry.Position.X, math.max(entry.Position.Y, self.waterY - OUT_DEPTH), entry.Position.Z)
+		)
+	end
 	ctx:Fire(nil, "Splash", Vector3.new(entry.Position.X, self.waterY, entry.Position.Z), entry.Player.UserId)
 	-- Whoever bumped them in the last few seconds gets the knock-out.
 	local bumper = entry.LastBumper
