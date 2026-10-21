@@ -19,3 +19,8 @@ Units are studs, +Y is up, the base sits on y = 0 and -Z is the front. Piece nam
 names; give each piece a palette color (and material) in the matching `src/server/World/Props/<Game>.luau`.
 
     python3 tools/meshgen/generate_meshes.py --only Pump
+
+Roblox doesn't draw the back of a face, so every face must point outward: run `lathe` profiles
+bottom, outside, then top (counter-clockwise), and note that `tube()` and `sdf_mesh()` currently
+wind their faces inward (a closed piece's signed volume comes out negative). `Lobby.py` wraps them
+with flipped versions you can copy.
