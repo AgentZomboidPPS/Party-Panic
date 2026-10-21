@@ -480,9 +480,9 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
 	task.wait(0.3)
 end
 
--- 3b. Skee-Ball in the lobby's arcade (SkeeBallController): the player takes machine 1, rolls a
--- ball (its score pops), finishes a game (PLAY AGAIN / DONE) and leaves. A stand-in machine, board
--- and ball when the place's lobby is older than this client.
+-- 3b. Skee-Ball in the lobby's arcade (SkeeBallController): the player takes machine 1, charges the
+-- ROLL meter, rolls a ball (its score pops), finishes a game (PLAY AGAIN / DONE) and leaves. A
+-- stand-in machine, board and ball when the place's lobby is older than this client.
 local skeeChecks = {}
 do
 	local CollectionService = game:GetService("CollectionService")
@@ -563,7 +563,12 @@ do
 	__fire("SkeeBall", "Start", 1, 240)
 	task.wait(1.2)
 	__ui["SkeeBall"] = __dumpGui(__playerGui, "SkeeBall")
-	task.wait(0.4)
+	-- The ROLL meter: one press stops the swinging aim, the next starts the power filling.
+	SkeeBallController.PressRoll()
+	task.wait(0.35)
+	SkeeBallController.PressRoll()
+	task.wait(0.45)
+	__ui["SkeeBall meter"] = __dumpGui(__playerGui, "SkeeBall meter")
 	skeeChecks.rolled = SkeeBallController.Roll(0.05, 0.5)
 	__fire("SkeeBall", "Rolled", 1, 1, 1050, 500, "40", 40)
 	task.wait(1.65)

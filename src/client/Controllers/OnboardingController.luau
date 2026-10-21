@@ -5,9 +5,10 @@
 -- toast at the top middle, under the top bar, with a thumb-sized Skip. It steps aside while the
 -- vote cards use that spot.
 -- Either way it shows in the lobby and while the rules card is up, and steps aside during the
--- round and the results (the standings use that spot); the last tip waits until you're back in
--- the lobby. Its height comes from its text (not AutomaticSize, which left one line showing on
--- phones while the tip popped in).
+-- round and the results (the standings use that spot) and while a lobby game has the screen (the
+-- HUD's PP_TipsAside attribute: Skee-Ball); the last tip waits until you're back in the lobby.
+-- Its height comes from its text (not AutomaticSize, which left one line showing on phones while
+-- the tip popped in).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -35,6 +36,7 @@ local PC_WIDTH, PC_HEADER, PC_TEXT = 300, 36, 20
 local TOUCH_WIDTH, TOUCH_HEIGHT, TOUCH_TEXT = 620, 88, 19
 
 local touch = false
+local hud: Instance? = nil
 local panel: Frame
 local label: TextLabel
 local stepLabel: TextLabel?
@@ -44,7 +46,12 @@ local rewardTipDue = false -- the last tip, once the results are over
 
 local function refreshVisible()
 	local phase = GameState.Get("Phase") or "Waiting"
-	local visible = not finished and step > 0 and not HIDDEN_IN[phase] and not (touch and HIDDEN_ON_PHONES[phase])
+	local aside = hud ~= nil and hud:GetAttribute("PP_TipsAside") == true
+	local visible = not finished
+		and step > 0
+		and not aside
+		and not HIDDEN_IN[phase]
+		and not (touch and HIDDEN_ON_PHONES[phase])
 	if visible and not panel.Visible then
 		panel.Visible = true
 		UIKit.PopIn(panel, 0.35)
@@ -192,11 +199,13 @@ end
 
 function OnboardingController.Start(context)
 	touch = UIKit.IsTouch()
+	hud = context.Hud
 	if touch then
 		buildTouch(context)
 	else
 		buildPc(context)
 	end
+	context.Hud:GetAttributeChangedSignal("PP_TipsAside"):Connect(refreshVisible)
 
 	local function begin(snapshot)
 		if snapshot.TutorialDone then

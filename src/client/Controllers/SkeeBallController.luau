@@ -10,11 +10,13 @@
 --   Phones and PC: drag back anywhere on the lane and let go (pull further for more power, to the
 --   side to aim; the dotted line shows where it'll go). Or tap ROLL (Space / A on a controller):
 --   tap once to stop the swinging aim, again to stop the power.
---   Each ball pops its score; after the 9th, a fanfare and PLAY AGAIN / DONE. Walking away (the
---   MOVE stick) or DONE frees the machine. The ball rolls at once on your device and the server
---   checks it, so it feels instant.
--- Phones: the controls sit low between the MOVE stick's corner and the jump button, DONE beside the
--- menu column, nothing over the stick, the jump button or the menu.
+--   Each ball pops its score; after the 9th, a fanfare and PLAY AGAIN / DONE. DONE or walking
+--   away (WASD) frees the machine. The ball rolls at once on your device and the server checks it,
+--   so it feels instant.
+-- Layout: the lane in the middle of the screen; the score, ROLL and the power meter low on the left,
+-- beside the lane. Phones put the MOVE stick and jump button away while you play (like Arrow
+-- Ambush's archers), so a stray thumb can't walk you off mid-game and the whole screen is for
+-- rolling; DONE sits beside the menu column and brings them back.
 
 local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
@@ -42,10 +44,12 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local remote: RemoteEvent
 
--- The play camera, in the machine's frame: behind and above the player, looking down the lane.
-local CAMERA_EYE = Vector3.new(0, 9.6, -14.2)
-local CAMERA_LOOK = Vector3.new(0, 3.5, 0.9)
-local CAMERA_FOV = 52
+-- The play camera, in the machine's frame: behind and above the player, looking down the lane. The
+-- ball waits three quarters of the way down the screen (phone toasts pop up below it) and the
+-- 100 cups sit a quarter of the way down, under the top bar's pills.
+local CAMERA_EYE = Vector3.new(0, 10, -14.2)
+local CAMERA_LOOK = Vector3.new(0, 2.6, 0.9)
+local CAMERA_FOV = 54
 local SELF_FADE = 0.8 -- your own character fades while you play (it would hide the ball)
 local DRAG_POWER = 0.32 -- a drag this much of the screen's height is full power
 local DRAG_AIM = 0.17 -- and this much of its width sideways is full aim
@@ -53,7 +57,14 @@ local AIM_SWING = 1.5 -- seconds for the ROLL meter's aim to swing across and ba
 local POWER_SWING = 1.25 -- and for its power to fill and empty
 local CONFIRM_TIMEOUT = 2 -- a roll the server hasn't echoed by then didn't count
 local ANIMATE_RANGE = 220
-local CONTROLS_HEIGHT = 190 -- the low controls (score and ROLL), in UI units
+-- The controls column low on the left (UI units): the score card over the ROLL button, the power
+-- meter beside them, and the tip on top until the first roll.
+local COLUMN_WIDTH = 270
+local SCORE_HEIGHT = 86
+local ROLL_HEIGHT = 100
+local CONTROLS_HEIGHT = SCORE_HEIGHT + 12 + ROLL_HEIGHT
+local METER_WIDTH = 40
+local HINT_HEIGHT = 84
 
 local RING_COLORS = {
 	["10"] = Color3.fromRGB(156, 108, 255),
@@ -127,10 +138,12 @@ local play = {
 	MeterAim = 0,
 	Dragging = nil :: InputObject?,
 	DragStart = Vector2.zero,
+	DragAt = Vector2.zero,
 	Aim = 0,
 	Power = 0,
 	SavedFov = 70,
 	MovingSince = 0,
+	Controls = nil :: any, -- the PlayerModule's move controls, while they're put away (phones)
 	Connections = {} :: { RBXScriptConnection },
 }
 
@@ -329,10 +342,10 @@ local function dropped(machine: Machine, roll: Roll)
 	local pocket = path.Pocket
 	local mine = roll.Mine
 	local screen = machine.Screen
+	-- Your own ball pops big on your screen, over the machine; everyone else's over their machine.
 	if path.Points > 0 then
 		local color = RING_COLORS[pocket] or Theme.Colors.Yellow
 		flashPocket(machine, pocket)
-		popOver(machine, `+{path.Points}`, color, path.Points >= 100)
 		if path.Points >= 100 then
 			machine.Flash = os.clock() + 2.5
 		end
@@ -342,15 +355,17 @@ local function dropped(machine: Machine, roll: Roll)
 			if path.Points >= 100 then
 				sfx("Purchase", 1, 0.6)
 			end
-		elseif screen then
-			sfx("Pickup", 0.8 + path.Points / 125, 0.5, screen)
+		else
+			popOver(machine, `+{path.Points}`, color, path.Points >= 100)
+			if screen then
+				sfx("Pickup", 0.8 + path.Points / 125, 0.5, screen)
+			end
 		end
+	elseif mine then
+		popScreen(MISS_WORDS[pocket] or "MISS", Color3.fromRGB(230, 230, 245), false)
+		sfx("Countdown", 0.55, 0.6)
 	else
 		popOver(machine, MISS_WORDS[pocket] or "MISS", Color3.fromRGB(220, 220, 235), false)
-		if mine then
-			popScreen(MISS_WORDS[pocket] or "MISS", Color3.fromRGB(230, 230, 245), false)
-			sfx("Countdown", 0.55, 0.6)
-		end
 	end
 end
 
@@ -948,17 +963,30 @@ end
 
 -- Dragging back on the lane: down for power, sideways to aim (the ball goes the other way, like a
 -- slingshot), let go to roll.
-local function dragValues(position: Vector2): (number, number)
+local function dragValues(): (number, number)
 	local camera = workspace.CurrentCamera
 	local size = camera.ViewportSize
-	local delta = position - play.DragStart
+	local delta = play.DragAt - play.DragStart
 	local power = math.clamp(delta.Y / (size.Y * DRAG_POWER), 0, 1)
 	local aim = math.clamp(-delta.X / (size.X * DRAG_AIM), -1, 1)
 	return aim, power
 end
 
+-- Follows the finger or mouse. A locked mouse (shift lock) stays in the middle of the screen, so
+-- its movements add up instead.
+local function dragTo(input: InputObject)
+	local kind = input.UserInputType
+	local locked = UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default
+	if kind == Enum.UserInputType.MouseMovement and locked then
+		play.DragAt += Vector2.new(input.Delta.X, input.Delta.Y)
+	elseif kind == Enum.UserInputType.MouseMovement or kind == Enum.UserInputType.Touch then
+		play.DragAt = Vector2.new(input.Position.X, input.Position.Y)
+	end
+end
+
+-- Where a touch moves you instead (unless the move controls are put away).
 local function inThumbstickZone(position: Vector2): boolean
-	if not UIKit.IsTouch() then
+	if not UIKit.IsTouch() or play.Controls then
 		return false
 	end
 	local size = workspace.CurrentCamera.ViewportSize
@@ -980,6 +1008,7 @@ local function onInputBegan(input: InputObject, processed: boolean)
 	play.Meter = "Idle"
 	play.Dragging = input
 	play.DragStart = position
+	play.DragAt = position
 	play.Aim, play.Power = 0, 0
 	refreshControls()
 end
@@ -997,7 +1026,8 @@ local function onInputChanged(input: InputObject)
 	if not follows then
 		return
 	end
-	play.Aim, play.Power = dragValues(Vector2.new(input.Position.X, input.Position.Y))
+	dragTo(input)
+	play.Aim, play.Power = dragValues()
 	showAim(play.Aim, play.Power, true)
 	ui.MeterFill.Size = UDim2.fromScale(1, play.Power)
 end
@@ -1008,7 +1038,8 @@ local function onInputEnded(input: InputObject)
 		return
 	end
 	play.Dragging = nil
-	local aim, power = dragValues(Vector2.new(input.Position.X, input.Position.Y))
+	dragTo(input)
+	local aim, power = dragValues()
 	showAim(0, 0, false)
 	if power >= 0.06 then
 		roll(aim, power)
@@ -1019,6 +1050,32 @@ end
 local function leave()
 	if play.Active then
 		remote:FireServer("Leave")
+	end
+end
+
+-- Phones: puts the MOVE stick and jump button away while you play, and back after.
+local function putControlsAway(away: boolean)
+	local touch = UIKit.IsTouch()
+	if away and touch and not play.Controls then
+		pcall(function()
+			local scripts = player:FindFirstChild("PlayerScripts")
+			local module = scripts and scripts:FindFirstChild("PlayerModule")
+			if module then
+				local controls = (require(module :: any) :: any):GetControls()
+				controls:Disable()
+				play.Controls = controls
+			end
+		end)
+	elseif not away and play.Controls then
+		local controls = play.Controls
+		play.Controls = nil
+		pcall(function()
+			controls:Enable()
+		end)
+	end
+	if ui.Hud then
+		-- Tells the UI checks (ui_render.py) the stick and jump button aren't on screen.
+		ui.Hud:SetAttribute("PP_NoTouchControls", if away and touch then true else nil)
 	end
 end
 
@@ -1036,6 +1093,7 @@ local function exitPlay()
 	table.clear(play.Connections)
 	pcall(ContextActionService.UnbindAction, ContextActionService, "SkeeBallRoll")
 	RunService:UnbindFromRenderStep("SkeeBallCamera")
+	putControlsAway(false)
 	showAim(0, 0, false)
 	setFade(0)
 	local camera = workspace.CurrentCamera
@@ -1051,12 +1109,8 @@ local function exitPlay()
 			item.Visible = false
 		end
 	end
-	-- The first-join tips step back in.
-	local tip = ui.SteppedAside
-	if tip and tip.Parent then
-		tip.Visible = true
-	end
-	ui.SteppedAside = nil
+	-- The first-join tips step back in (OnboardingController).
+	ui.Hud:SetAttribute("PP_TipsAside", nil)
 	local machine = machines[play.Index]
 	if machine then
 		showWaiting(machine)
@@ -1085,13 +1139,9 @@ local function enterPlay(index: number, best: number)
 	if not fresh then
 		return
 	end
-	-- A first-join tip ("tap a card to vote") steps aside while you play: on phones it shares the
-	-- top of the screen with DONE.
-	local tip = ui.Hud and ui.Hud:FindFirstChild("Onboarding")
-	if tip and tip:IsA("GuiObject") and tip.Visible then
-		tip.Visible = false
-		ui.SteppedAside = tip
-	end
+	-- The first-join tips ("tap a card to vote") step aside while you play: on phones they share
+	-- the top of the screen with DONE (OnboardingController).
+	ui.Hud:SetAttribute("PP_TipsAside", true)
 	-- Step up to the machine, facing it, and frame the lane.
 	local _, _, root = character()
 	local stand = machine.Frame * CFrame.new(0, 3, SkeeBall.STAND_Z)
@@ -1135,6 +1185,7 @@ local function enterPlay(index: number, best: number)
 	table.insert(play.Connections, UserInputService.InputBegan:Connect(onInputBegan))
 	table.insert(play.Connections, UserInputService.InputChanged:Connect(onInputChanged))
 	table.insert(play.Connections, UserInputService.InputEnded:Connect(onInputEnded))
+	putControlsAway(true)
 	play.MovingSince = 0
 	sfx("VoteOpen", 1.15, 0.45)
 end
@@ -1180,46 +1231,49 @@ local function buildUi(hud: Instance)
 	local touch = UIKit.IsTouch()
 	ui.Hud = hud
 
-	-- Low in the middle: what to do (until the first roll), your score and balls, the big ROLL
-	-- button and the power meter beside it. Phones: right of the MOVE stick's corner, left of the
-	-- jump button (everything in one scaled holder, so it keeps its shape on every screen).
+	-- Low on the left, beside the lane: what to do (until the first roll), your score and balls,
+	-- the big ROLL button, and the power meter between them and the lane. One scaled holder, so it
+	-- keeps its shape on every screen. (On phones that's the MOVE stick's corner: the stick is put
+	-- away while you play.)
 	local holder = UIKit.new("Frame", {
 		Name = "SkeeBallControls",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, if touch then 70 else 0, 1, if touch then -8 else -24),
-		Size = UDim2.fromOffset(362, CONTROLS_HEIGHT + 86),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, if touch then 12 else 24, 1, if touch then -10 else -24),
+		Size = UDim2.fromOffset(COLUMN_WIDTH + 12 + METER_WIDTH, HINT_HEIGHT + CONTROLS_HEIGHT),
 		BackgroundTransparency = 1,
 		Visible = false,
 		Parent = hud,
 	})
 	UIKit.AutoScale(holder)
 	ui.SkeeBallControls = holder
-	local controls = UIKit.new("Frame", {
-		Name = "Controls",
+	local card = UIKit.Panel({
+		Name = "ScoreCard",
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.fromScale(0, 1),
-		Size = UDim2.fromOffset(300, CONTROLS_HEIGHT),
-		BackgroundTransparency = 1,
-		Parent = holder,
-	})
-	local pill = UIKit.Panel({
-		Name = "ScorePill",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromScale(0.5, 0),
-		Size = UDim2.fromOffset(300, 74),
+		Position = UDim2.new(0, 0, 1, -(ROLL_HEIGHT + 12)),
+		Size = UDim2.fromOffset(COLUMN_WIDTH, SCORE_HEIGHT),
 		CornerRadius = 22,
-		Parent = controls,
+		Parent = holder,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 	ui.Score = UIKit.Label({
 		Text = "SCORE 0",
 		Font = Theme.Fonts.Display,
-		TextSize = 26,
+		TextSize = 30,
 		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(16, 4),
-		Size = UDim2.fromOffset(170, 34),
-		Parent = pill,
+		Position = UDim2.fromOffset(16, 6),
+		Size = UDim2.fromOffset(COLUMN_WIDTH - 32, 38),
+		Parent = card,
 		Children = { UIKit.TextStroke(0.2) },
+	})
+	ui.Balls = UIKit.Label({
+		Text = "",
+		TextSize = 22,
+		TextWrapped = false,
+		TextColor3 = Theme.Colors.Yellow,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(16, 46),
+		Size = UDim2.fromOffset(130, 30),
+		Parent = card,
 	})
 	ui.BestLabel = UIKit.Label({
 		Text = "",
@@ -1227,36 +1281,27 @@ local function buildUi(hud: Instance)
 		TextWrapped = false,
 		TextColor3 = Theme.Colors.Cyan,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		Position = UDim2.fromOffset(170, 8),
-		Size = UDim2.fromOffset(114, 28),
-		Parent = pill,
-	})
-	ui.Balls = UIKit.Label({
-		Text = "",
-		TextSize = 22,
-		TextWrapped = false,
-		TextColor3 = Theme.Colors.Yellow,
-		Position = UDim2.fromOffset(12, 38),
-		Size = UDim2.fromOffset(276, 30),
-		Parent = pill,
+		Position = UDim2.fromOffset(COLUMN_WIDTH - 16 - 104, 47),
+		Size = UDim2.fromOffset(104, 28),
+		Parent = card,
 	})
 	ui.Roll = UIKit.Button({
 		Name = "Roll",
 		Text = "ROLL",
 		TextSize = 40,
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromScale(0.5, 1),
-		Size = UDim2.fromOffset(250, 100),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.fromOffset(COLUMN_WIDTH, ROLL_HEIGHT),
 		CornerRadius = 30,
-		Parent = controls,
+		Parent = holder,
 	}, pressRoll, Theme.Colors.Green, Color3.fromRGB(40, 160, 90))
 
-	-- The power meter beside the controls (while dragging or charging).
+	-- The power meter by the lane (while dragging or charging).
 	local meter = UIKit.new("Frame", {
 		Name = "Meter",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.fromScale(1, 1),
-		Size = UDim2.fromOffset(42, CONTROLS_HEIGHT),
+		Size = UDim2.fromOffset(METER_WIDTH, CONTROLS_HEIGHT),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		Visible = false,
 		Parent = holder,
@@ -1275,14 +1320,16 @@ local function buildUi(hud: Instance)
 		},
 	})
 
-	-- What to do, over the controls until the first roll.
+	-- What to do, on top of the column until the first roll.
 	local hint = UIKit.Label({
 		Name = "Hint",
-		Text = if touch then "DRAG BACK & LET GO\nor tap ROLL" else "DRAG BACK & LET GO\nor press ROLL (Space)",
+		Text = if touch then "DRAG DOWN & LET GO\nor tap ROLL" else "DRAG DOWN & LET GO\nor press SPACE",
 		Font = Theme.Fonts.Display,
 		TextSize = 26,
-		Position = UDim2.fromOffset(-15, 0),
-		Size = UDim2.fromOffset(330, 74),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Bottom,
+		Position = UDim2.fromOffset(4, 0),
+		Size = UDim2.fromOffset(COLUMN_WIDTH + 12 + METER_WIDTH - 4, HINT_HEIGHT - 10),
 		Visible = false,
 		Parent = holder,
 		Children = { UIKit.TextStroke(0.1) },
@@ -1291,11 +1338,11 @@ local function buildUi(hud: Instance)
 	ui.Hint = hint
 
 	-- DONE: on phones top right, beside the menu column (one scaled holder with room for the
-	-- column, so the gap stays the same on every screen); on PC bottom left.
+	-- column, so the gap stays the same on every screen); on PC bottom right.
 	local doneHolder = UIKit.new("Frame", {
 		Name = "SkeeBallDone",
-		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(0, 1),
-		Position = if touch then UDim2.new(1, -8, 0, 6) else UDim2.new(0, 16, 1, -24),
+		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(1, 1),
+		Position = if touch then UDim2.new(1, -8, 0, 6) else UDim2.new(1, -24, 1, -24),
 		Size = UDim2.fromOffset(
 			if touch then 150 + 12 + Theme.Touch.Target + 20 else 150,
 			if touch then Theme.Touch.Target else 64
@@ -1315,7 +1362,7 @@ local function buildUi(hud: Instance)
 	}, leave, Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
 	ui.SkeeBallDone = doneHolder
 
-	-- The score pop for each ball (clear of the MOVE stick's corner on phones).
+	-- The score pop for each ball, over the machine's rings.
 	local pop = UIKit.Label({
 		Name = "SkeeBallPop",
 		Text = "",
@@ -1323,7 +1370,7 @@ local function buildUi(hud: Instance)
 		TextSize = 70,
 		TextWrapped = false,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(if touch then 0.62 else 0.5, 0.4),
+		Position = UDim2.fromScale(0.5, 0.28),
 		Size = UDim2.fromOffset(360, 110),
 		Visible = false,
 		Parent = hud,
@@ -1336,7 +1383,7 @@ local function buildUi(hud: Instance)
 	local over = UIKit.new("Frame", {
 		Name = "SkeeBallOver",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(if touch then 0.62 else 0.5, 0.48),
+		Position = UDim2.fromScale(0.5, 0.48),
 		Size = UDim2.fromOffset(440, 260),
 		BackgroundTransparency = 1,
 		Visible = false,
@@ -1449,11 +1496,14 @@ local function onEvent(kind: any, index: any, ...: any)
 			existing.Confirmed = true
 			return
 		end
+		local path = SkeeBall.Path(aimQ, powerQ, ball)
 		if mine then
 			if play.Rolled >= ball then
 				return -- this device's roll that already finished
 			end
-			play.Rolled = ball -- the server took a roll this device had given up on: catch up
+			-- The server took a roll this device had given up on: catch up.
+			play.Rolled = ball
+			play.NextRollAt = os.clock() + path.Landed
 			showWaiting(machine)
 			refreshControls()
 		end
@@ -1461,7 +1511,7 @@ local function onEvent(kind: any, index: any, ...: any)
 		if (camera.CFrame.Position - machine.Frame.Position).Magnitude > ANIMATE_RANGE then
 			return
 		end
-		local rolled = startRoll(machine, SkeeBall.Path(aimQ, powerQ, ball), ball, false)
+		local rolled = startRoll(machine, path, ball, mine)
 		if rolled then
 			rolled.Confirmed = true
 		end
@@ -1487,8 +1537,15 @@ function SkeeBallController.Roll(aim: number, power: number): boolean
 	if not canRoll() then
 		return false
 	end
+	play.Meter = "Idle"
 	roll(aim, power)
+	showAim(0, 0, false)
 	return true
+end
+
+-- Presses ROLL, like the button or Space: starts the aim swinging, stops it, then the power.
+function SkeeBallController.PressRoll()
+	pressRoll()
 end
 
 function SkeeBallController.Start(context)
@@ -1535,7 +1592,7 @@ function SkeeBallController.Start(context)
 			if play.Meter ~= "Idle" then
 				meterValues(now)
 			end
-			-- Walking away (the MOVE stick, WASD) ends the game.
+			-- Walking away (WASD, a controller's stick) or being pushed off ends the game.
 			local _, humanoid, root = character()
 			local machine = myMachine()
 			if humanoid and root and machine then
