@@ -7,7 +7,8 @@
 -- Who plays comes from SitOutService.Lineup: people sitting out the next rounds (owner: "we do
 -- need to add somewhere super apparent a toggle where you skip next round") stay in the lobby and
 -- aren't counted; when everyone here is on a break, rounds wait in the lobby ("Everyone's taking a
--- break!") instead of running with bots only.
+-- break!") instead of running with bots only. For the same reason a round whose people all leave or
+-- can't be placed during the rules card is called off before GO (RoundContext.WaitForStart).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -163,13 +164,20 @@ local function runRound(definition, participants: { Player })
 	local prepDeadline = os.clock() + prepTime
 	setPhase("Preparing", prepTime, definition.Name)
 	local prepared = guarded("Prepare:" .. definition.Id, prepTime + 10, miniGame.Prepare, miniGame)
-	if not prepared or #context:GetPlayers() == 0 then
-		Notifier.All("That game couldn't start, so we're heading back to the lobby. Sorry!", "warning", 5)
+	-- Bots never play on their own: a round whose people all left or couldn't be placed before GO is
+	-- called off too (owner: "it just has to work"; it used to go on with only bots).
+	if not prepared or not context:WaitForStart(prepDeadline) then
+		Notifier.All(
+			if prepared
+				then "Nobody's left to play that game - back to the lobby!"
+				else "That game couldn't start, so we're heading back to the lobby. Sorry!",
+			"warning",
+			5
+		)
 		guarded("Cleanup:" .. definition.Id, 5, miniGame.Cleanup, miniGame)
 		cleanupContext()
 		return
 	end
-	waitFor(math.max(0, prepDeadline - os.clock()))
 
 	-- InRound
 	context:Begin()
