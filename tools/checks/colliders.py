@@ -1002,7 +1002,8 @@ def main():
         data = load(Path(path))
         stem = Path(path).stem
         print(f"== {stem}")
-        for key in ("prepare", "prepareSeconds", "start", "endReason", "lobby", "buildSeconds"):
+        for key in ("prepare", "prepareSeconds", "start", "endReason", "lobby", "buildSeconds", "rebuildWait",
+                    "rebuildsLeft", "rebuildHitch", "rebuildSlowest"):
             if key in data:
                 print(f"  {key}: {data[key]}")
         for snapshot in data.get("colliders", []) or []:

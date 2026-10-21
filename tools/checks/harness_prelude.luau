@@ -630,6 +630,10 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		task.wait(0.1)
 	end
 	local colliderTimes = if colliders then table.clone(colliders.times) else {}
+	if colliders then
+		summary.rebuildWait, summary.rebuildsLeft, summary.rebuildHitch = __waitForRebuilds(150)
+		summary.rebuildSlowest = __slowestRebuilds(5)
+	end
 	local function snapColliders(label)
 		local okSnap, snapshot = pcall(
 			__colliderSnapshot,

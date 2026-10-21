@@ -497,6 +497,39 @@ function __colliderLeftovers(): { any }
 end
 
 -- The lobby (round_harness.py LOBBY --colliders): built as the game builds it, with its beach balls.
+-- Waits (at most `limit` seconds) until MeshLibrary has given every prop piece its precise collision,
+-- one piece at a time in the background, so the snapshot measures what players get once it's done.
+-- Returns the seconds waited, the pieces still waiting and the longest the server was held up
+-- meanwhile (gap between Heartbeats).
+function __waitForRebuilds(limit: number): (number, number, number)
+	local MeshLibrary = __require("Server/World/MeshLibrary")
+	local start = os.clock()
+	local last, longest = os.clock(), 0
+	local beat = game:GetService("RunService").Heartbeat:Connect(function()
+		local now = os.clock()
+		longest = math.max(longest, now - last)
+		last = now
+	end)
+	while MeshLibrary.PendingRebuilds() > 0 and os.clock() - start < limit do
+		task.wait(0.25)
+	end
+	beat:Disconnect()
+	return __r2(os.clock() - start), MeshLibrary.PendingRebuilds(), __r2(longest)
+end
+
+-- The slowest collision rebuilds so far ("Prop.Piece seconds"), slowest first.
+function __slowestRebuilds(count: number): { string }
+	local log = table.clone(__require("Server/World/MeshLibrary").RebuildLog)
+	table.sort(log, function(a, b)
+		return a[2] > b[2]
+	end)
+	local out = {}
+	for index = 1, math.min(count, #log) do
+		table.insert(out, `{log[index][1]} {__r2(log[index][2])}`)
+	end
+	return out
+end
+
 function __runLobbyColliders(reach: number)
 	local GameState = __require("Shared/GameState")
 	GameState.Folder()
@@ -520,6 +553,8 @@ function __runLobbyColliders(reach: number)
 		summary.balls = if okBalls then "ok" else tostring(err)
 	end
 	task.wait(2)
+	summary.rebuildWait, summary.rebuildsLeft, summary.rebuildHitch = __waitForRebuilds(200)
+	summary.rebuildSlowest = __slowestRebuilds(5)
 	local okSnap, snapshot = pcall(__colliderSnapshot, "lobby", { center = Vector3.zero, reach = reach })
 	summary.colliders = { if okSnap then snapshot else { label = "lobby", failed = tostring(snapshot) } }
 	summary.errors = __errors
