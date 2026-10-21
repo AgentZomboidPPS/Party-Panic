@@ -97,6 +97,7 @@ LobbyBuilder.BallTraps = {
 	{ Center = Vector3.zero, Radius = 13 },
 	{ Center = EMOTE, Radius = 15 },
 	{ Center = PARKOUR, Radius = LobbyObby.Radius },
+	Arcade.BallTrap(), -- the Skee-Ball arcade (north-east): no ball parks in front of a machine
 }
 
 local function tag(instance: Instance, name: string)

@@ -53,7 +53,8 @@ return function(h)
 		ArcadeSkeeMachine = {
 			Height = 12.09,
 			AssetId = 115646710351906,
-			Collide = true,
+			-- Doesn't collide: World/Arcade puts one invisible box round it (no hopping into the
+			-- lane or climbing the cage).
 			Palette = {
 				Cabinet = rgb(255, 84, 150), -- World/Arcade gives each machine its own color
 				Base = rgb(52, 36, 104),

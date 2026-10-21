@@ -9,6 +9,13 @@
 -- step away from it or press DONE, reset or leave, when a round pulls them in (PP_InRound), or
 -- after a while without rolling.
 --
+-- Review pass (same request): any aim and power is a roll a finger could make, so the server
+-- checks a roll's range, its ball number and its timing (not after the last ball came down, never
+-- twice at once), and a ball from a game that ended scores nothing. Someone sitting out can play
+-- right through the rounds; anyone else's game ends the moment a round takes them (their device
+-- ends it too, before the round's camera starts). The "someone's playing this one" note only
+-- shows when someone else really is, and a game that ends for idling says so.
+--
 -- The "SkeeBall" remote, both ways:
 --   client -> server  ("Roll", ball, aim, power)   ("Again")   ("Leave")
 --   server -> client  ("Start", index, best)                                   the player
@@ -43,7 +50,10 @@ local BEST_KEY = "SkeeBall" -- in the profile's Stats.Best (personal bests by ga
 local LEAVE_DISTANCE = 9 -- a player further than this from their machine's stand has left it
 local IDLE_TIME = 45 -- seconds without a roll before a machine frees up
 local OVER_HOLD = 15 -- after the last ball, the machine waits this long for PLAY AGAIN
-local ROLL_SLACK = 0.25 -- a roll may come this much before the last ball landed (network lag)
+-- A roll may come this much before the last ball landed: the device rolls as soon as it saw it
+-- land, and a phone's ping can bunch two messages up (rolling early wins nothing; a refused roll
+-- would put back a ball the player already saw drop in).
+local ROLL_SLACK = 0.6
 local MIN_GAP = 0.45 -- but never closer than this to the last roll
 local BOARD_SIZE = 5
 local CHECK_EVERY = 0.25
@@ -368,6 +378,7 @@ local function check()
 			SkeeBallService.End(player, "Away")
 		elseif session.State == "Playing" and now - session.LastActive > IDLE_TIME then
 			SkeeBallService.End(player, "Idle")
+			Notifier.Send(player, "No rolls for a while, so the SKEE-BALL machine is free again.", "info", 4)
 		elseif session.State == "Over" and now - session.OverAt > OVER_HOLD then
 			SkeeBallService.End(player, "Done")
 		end
@@ -388,7 +399,8 @@ local function addMachine(machine: Instance)
 	local prompt = stand and stand:FindFirstChildOfClass("ProximityPrompt")
 	if prompt then
 		prompt.Triggered:Connect(function(player)
-			if not SkeeBallService.Join(player, index) and not sessions[player] then
+			local taken = byMachine[index]
+			if not SkeeBallService.Join(player, index) and taken and taken.Player ~= player then
 				Notifier.Send(player, "Someone's playing this one - try the next machine!", "info", 3)
 			end
 		end)

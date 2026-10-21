@@ -5,7 +5,9 @@
 -- Builds the lobby (the arcade with it), then Bot1 plays a full 9-ball game on machine 2 (some
 -- rolls good, one too soft, one too hard), checks the refusals (someone else on a taken machine,
 -- a roll before the last ball landed, a wrong ball number, out-of-range inputs), PLAY AGAIN, and
--- that walking away, a round pulling the player in and leaving free the machine. Prints the scores.
+-- that walking away, a round pulling the player in and leaving free the machine, while someone
+-- sitting out keeps playing through the next round's start. Also: each machine is one solid box
+-- (nobody hops into a lane) and beach balls don't stay in the arcade. Prints the scores.
 
 function __runSkeeBall()
 	local GameState = __require("Shared/GameState")
@@ -48,6 +50,34 @@ function __runSkeeBall()
 	check("four machines", #machines == 4, #machines)
 	local board = CollectionService:GetTagged("SkeeBestBoard")[1]
 	check("a TODAY'S BEST board", board ~= nil)
+	-- What bodies bump into: one solid box per machine round the whole cabinet (the mesh doesn't
+	-- collide), with its player's spot in front of it free.
+	for index, model in machines do
+		local blocker = model:FindFirstChild("Blocker")
+		local solidPieces = 0
+		for _, part in model:GetDescendants() do
+			if part:IsA("BasePart") and part.CanCollide and part ~= blocker then
+				solidPieces += 1
+			end
+		end
+		local box, size = model:GetBoundingBox()
+		local stand = model:FindFirstChild("Stand")
+		local standFree = blocker ~= nil
+			and stand ~= nil
+			and math.abs(blocker.CFrame:PointToObjectSpace(stand.Position).Z) > blocker.Size.Z / 2 + 0.5
+		check(
+			`machine {index} is one solid box`,
+			blocker ~= nil and blocker.CanCollide and solidPieces == 0 and standFree,
+			blocker and `{blocker.Size} vs the model's {size} at {box.Position}, other solid pieces {solidPieces}`
+		)
+	end
+	local traps = __require("Server/World/LobbyBuilder").BallTraps
+	local arcadeTrap = traps[#traps]
+	check(
+		"beach balls don't stay in the arcade",
+		arcadeTrap ~= nil and (arcadeTrap.Center - machines[2]:GetPivot().Position).Magnitude < 14,
+		arcadeTrap and `{arcadeTrap.Center} r {arcadeTrap.Radius}`
+	)
 	local machine = machines[2]
 	local function standOf(index)
 		return machines[index]:FindFirstChild("Stand").Position
@@ -164,6 +194,13 @@ function __runSkeeBall()
 	check("a round (PP_InRound) frees machine 4", Service.SessionOf(p3) == nil)
 	p3:SetAttribute("PP_InRound", false)
 	check("Bot3 back in the lobby can play", Service.Join(p3, 4))
+	-- Sitting out: the next round starts without them, and they keep rolling.
+	p3:SetAttribute("PP_SitOut", true)
+	GameState.Set("Phase", "Preparing")
+	task.wait(0.2)
+	check("sitting out, the next round leaves the game alone", Service.SessionOf(p3) ~= nil)
+	check("and its rolls still count", Service.Roll(p3, 1, 0, 0.55) ~= nil)
+	GameState.Set("Phase", "Intermission")
 	-- Leaving the game.
 	Service.End(p3, "Gone")
 	check("leaving frees machine 4", machines[4]:GetAttribute("SkeeState") == "Idle")

@@ -17,6 +17,12 @@
 --   SkeeScreen     a machine's score screen (clients draw on its Front face)
 --   SkeeStand      where its player stands; holds the "Play SKEE-BALL" prompt
 --   SkeeBestBoard  the TODAY'S BEST board (clients draw on its Front face)
+--
+-- Review pass (same request): each machine is one invisible box as tall as the cabinet, so
+-- nobody walks into one, hops into a lane (and stands in the way of someone's balls) or climbs
+-- onto the cage and the marquee; the mesh's own pieces don't collide. Beach balls that roll into
+-- the arcade go home after a while (BallTrap, in LobbyBuilder.BallTraps), so none sits in
+-- front of a machine.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -38,6 +44,7 @@ local FRONT_RADIUS = 70 -- from the plaza's middle to the machines' fronts
 local PITCH = 6 -- machine to machine
 local FLOOR_TOP = 0.4 -- the tickets' top: the machines stand on it
 local BOARD_Z = 13.6 -- the TODAY'S BEST board's posts, behind the machines' marquees
+local MACHINE_HEIGHT = 12.1 -- a machine's box, marquee bulbs included (Props/Arcade: Height)
 -- Each prop's pivot (the bottom center of its box) from its own origin (tools/meshgen/props/Arcade.py
 -- prints them): the floor's box is centered 5.5 toward the plaza and reaches 0.6 down; the board's
 -- is 0.6 behind its face; the machine's is centered.
@@ -59,6 +66,12 @@ end
 -- own axes (its player stands on its -Z side).
 function Arcade.MachineFrame(index: number): CFrame
 	return Arcade.Frame() * CFrame.new((2.5 - index) * PITCH, FLOOR_TOP, -SkeeBall.FRONT_Z)
+end
+
+-- Where beach balls may not stay (BeachBalls sends them home): round the patio, in front of the
+-- machines included.
+function Arcade.BallTrap(): { Center: Vector3, Radius: number }
+	return { Center = Arcade.Frame():PointToWorldSpace(Vector3.new(0, 0, 5.9)), Radius = 16 }
 end
 
 -- The arcade's footprint in its own frame: the patio, and the ticket path to the promenade.
@@ -228,6 +241,16 @@ local function buildMachine(parent: Instance, index: number): Model
 	machine:SetAttribute("SkeeIndex", index)
 	machine:SetAttribute("SkeeColor", color)
 	machine:SetAttribute("SkeeFrame", frame) -- the frame Shared/Logic/SkeeBall's numbers are in
+
+	-- What bodies bump into: one box round the whole cabinet (its player stands in front of it).
+	Build.Part({
+		Name = "Blocker",
+		Size = Vector3.new(SkeeBall.HALF_WIDTH * 2, MACHINE_HEIGHT, -SkeeBall.FRONT_Z * 2),
+		CFrame = frame * CFrame.new(0, MACHINE_HEIGHT / 2, 0),
+		Transparency = 1,
+		CastShadow = false,
+		Parent = machine,
+	})
 
 	-- The score screen in the bezel above the cage (clients draw on it).
 	local screen = Build.Decor({
