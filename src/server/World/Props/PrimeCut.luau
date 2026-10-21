@@ -62,15 +62,15 @@ return function(h)
 
 	local props = {
 		PrimeCutRibeye = {
-			AssetId = 136449307569510,
+			AssetId = 139041453507649,
 			Steak = "Ribeye",
 		},
 		PrimeCutStrip = {
-			AssetId = 0,
+			AssetId = 111832472356610,
 			Steak = "Strip",
 		},
 		PrimeCutTriTip = {
-			AssetId = 0,
+			AssetId = 108392883610995,
 			Steak = "TriTip",
 		},
 		PrimeCutKidney = {
@@ -82,7 +82,7 @@ return function(h)
 			Steak = "Heart",
 		},
 		PrimeCutChuck = {
-			AssetId = 117430903998715,
+			AssetId = 107127698420926,
 			Steak = "Chuck",
 		},
 		PrimeCutKnife = {
@@ -175,7 +175,7 @@ return function(h)
 		},
 		PrimeCutTable = {
 			Height = 3.28,
-			AssetId = 0,
+			AssetId = 117832438875253,
 			Palette = { Wood = h.rgb(176, 116, 70) },
 			Materials = { Wood = wood },
 			Fallback = function(m)
