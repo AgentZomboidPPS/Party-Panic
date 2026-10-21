@@ -33,19 +33,24 @@ function Brain.Step(bot, ctx, mode, _dt)
 	local now = ctx:Now()
 	local skill = bot.Skill
 
-	-- Pushing.
+	-- Pushing: the presses due before the next step are scheduled at their own moments, so a bot can
+	-- mash faster than it thinks.
 	if not memory.NextPush then
 		memory.NextPush = now + bot:Reaction() * 0.5
 	end
-	if now >= memory.NextPush and not SkateCourse.IsWiped(racer, now) then
-		ctx:BotAction(bot, "Push")
-		local rate = 2.6 + 4.2 * skill
-		memory.NextPush = now + bot.Rng:NextNumber(0.8, 1.25) / rate
-		if bot:Chance(0.05 * (1.1 - skill)) then
-			memory.NextPush += bot.Rng:NextNumber(0.3, 0.9) -- a breather
-		end
-	elseif SkateCourse.IsWiped(racer, now) then
+	if SkateCourse.IsWiped(racer, now) then
 		memory.NextPush = (racer.Wipe or now) + bot:Reaction() * 0.6
+	else
+		local rate = 2.8 + 3.6 * skill
+		while memory.NextPush < now + STEP do
+			ctx:Delay(math.max(0, memory.NextPush - now), function()
+				ctx:BotAction(bot, "Push")
+			end)
+			memory.NextPush = math.max(memory.NextPush, now) + bot.Rng:NextNumber(0.85, 1.2) / rate
+			if bot:Chance(0.04 * (1.1 - skill)) then
+				memory.NextPush += bot.Rng:NextNumber(0.3, 0.8) -- a breather
+			end
+		end
 	end
 
 	-- Jumping: plan once per obstacle.
@@ -69,10 +74,10 @@ function Brain.Step(bot, ctx, mode, _dt)
 		return -- not yet: decide closer to it
 	end
 	memory.Planned = index
-	if bot:Chance(0.03 + 0.12 * (1 - skill)) then
+	if bot:Chance(0.02 + 0.09 * (1 - skill)) then
 		return -- didn't see it coming
 	end
-	local miss = bot.Rng:NextNumber(-1, 1) * (0.05 + 0.24 * (1 - skill))
+	local miss = bot.Rng:NextNumber(-1, 1) * (0.04 + 0.18 * (1 - skill))
 	ctx:Delay(math.max(0, wait + miss), function()
 		ctx:BotAction(bot, "Jump")
 	end)

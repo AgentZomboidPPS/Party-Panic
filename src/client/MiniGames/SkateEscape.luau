@@ -430,6 +430,8 @@ function SkateEscape.Start(api)
 			me.Wipe = nil
 			me.WipeKind = nil
 			me.FallD = nil
+			me.V = mine.V or me.V
+			me.Air = mine.A
 		end
 		if SkateCourse.IsWiped(me, now) then
 			return
@@ -466,13 +468,6 @@ function SkateEscape.Start(api)
 		local at = racerPosition(key)
 		if at and (at - camera.CFrame.Position).Magnitude < 160 then
 			api:Effect("Poof", at, if kind == "Fall" then { Color3.fromRGB(255, 120, 40) } else nil)
-		end
-	end)
-	api:OnEvent("Boost", function(key)
-		if key == myKey then
-			if me.V < SkateCourse.BoostMax - 1 and not me.Done then
-				me.V = math.min(SkateCourse.BoostMax, me.V + 1) -- the local rules already added the boost
-			end
 		end
 	end)
 	api:OnEvent("Finish", function(key, place)
