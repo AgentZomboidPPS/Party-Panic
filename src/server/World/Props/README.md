@@ -24,3 +24,8 @@ end
 
 Helpers: `rgb block ball pillar roller blob rounded capsule cluster Build Shapes` (see MeshLibrary).
 The meshes themselves come from `tools/meshgen/props/<Game>.py`.
+
+Give every prop its own `Name = { ... AssetId = ..., ... }` block like the one above, even when a
+helper fills in the rest of its fields: the upload, permission and moderation tools read those
+blocks to find the game's meshes. A mesh whose id only appears inside a helper call isn't granted
+to the game, so nobody but the owner would see it.
