@@ -1,0 +1,29 @@
+newmtl Rock
+Kd 0.549 0.471 0.412
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stage
+Kd 0.980 0.965 0.941
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl StageAlt
+Kd 0.176 0.157 0.216
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 1.000 0.804 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bulbs
+Kd 1.000 0.941 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

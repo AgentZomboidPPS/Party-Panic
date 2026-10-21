@@ -8,12 +8,18 @@
 -- anyone who sinks into the lava. Bots are the exception: the server moves them, and on the server
 -- the hexes never sink, so while they're down a bot that isn't on a hex of the called color is
 -- dropped into the lava here (Bots/HexMeltdown.luau is how they play).
+--
+-- Art pass ("make every arena look really cool"): a toy volcano crater. Carved basalt hex columns
+-- with candy-colored tiles, a crater wall with lava falls and rock spires, cracked crust rafts on
+-- the lava, and a game-show referee robot on a striped stage under a light-bulb call board, between
+-- two lava torches. The meshes are in World/Props/HexMeltdown.luau; the colliders are unchanged.
 
 local ArenaKit = require(script.Parent.Kit.ArenaKit)
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Scenery = require(script.Parent.Kit.Scenery)
 local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
 local Build = require(script.Parent.Parent.World.Build)
+local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 local Shapes = require(script.Parent.Parent.World.Shapes)
 
 local HexMeltdown = MiniGame.Define("HexMeltdown")
@@ -25,6 +31,21 @@ local GRID_RADIUS = 2 -- rings around the center: 19 hexes
 local SINK_DEPTH = 26
 local LAVA_DROP = 20 -- lava surface below the hex tops
 local DROP_DEPTH = 3 -- a bot off the called color falls once the other hexes are this far down
+
+-- Art (World/Props/HexMeltdown.luau). Mesh props pivot at their bounding box's bottom center:
+local WALL_PIVOT = Vector3.new(-0.11, 0, -103.91) -- a CraterWall arc's pivot from the crater center
+local WALL_SCALE = 0.85 -- the crater's inner foot about 73 studs out, framing the grid
+local ROBOT_PIVOT = Vector3.new(7.13, 0.04, -0.05) -- the RefereeBot's pivot from its feet
+local STAND_HEIGHT = 19.3 -- RefereeStand: its top is the stage
+-- The stage sits this far back from the old rock's center, so its grid-side edge is where the rock's
+-- was (the invisible collider) and only the far side, out of reach, overhangs.
+local STAND_BACK = 5.4
+local MARQUEE_CENTER_Y = 27 -- the CallMarquee's opening, above the stage
+local STAND_SCALE, ROBOT_SCALE, MARQUEE_SCALE = 1.15, 1.35, 1.25
+local BASALT = Color3.fromRGB(84, 60, 80)
+local RIM = Color3.fromRGB(255, 244, 226)
+local GOLD = Color3.fromRGB(255, 196, 60)
+local WALL_ROCK = Color3.fromRGB(66, 50, 62)
 
 -- Every color comes with a shape so color is never the only cue (design doc §12).
 HexMeltdown.Palette = {
@@ -100,6 +121,125 @@ local function colorLayout(count: number): { number }
 	return best :: { number }
 end
 
+-- The crater around the lake: four arcs of crater wall, crust rafts drifting on the lava, lava
+-- torches either side of the referee and volcanoes on the horizon behind the wall.
+local function buildCrater(ctx, origin: Vector3, lake: Vector3)
+	for index = 0, 3 do
+		local turn = CFrame.new(lake.X, lake.Y - 3, lake.Z) * CFrame.Angles(0, math.rad(index * 90 + 45), 0)
+		MeshLibrary.Get("CraterWall", {
+			Scale = WALL_SCALE,
+			CFrame = turn * CFrame.new(WALL_PIVOT * WALL_SCALE),
+			Parent = ctx.Arena,
+		})
+	end
+	-- Rock spires along the crest break up the skyline (none behind the referee's board).
+	for index = 0, 10 do
+		local degrees = (index / 11 * 360 + rng:NextNumber(-8, 8)) % 360
+		if degrees > 240 and degrees < 300 then
+			continue
+		end
+		local angle = math.rad(degrees)
+		local distance = rng:NextNumber(87, 95)
+		local spire = MeshLibrary.Get("Spire", {
+			Scale = rng:NextNumber(1.1, 1.6),
+			Colors = { Rock = WALL_ROCK },
+			CFrame = CFrame.new(lake + Vector3.new(math.cos(angle) * distance, 6, math.sin(angle) * distance))
+				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+		})
+		-- Scenery only (out of reach): no colliders, and the same smooth toy rock as the wall.
+		for _, part in spire:GetDescendants() do
+			if part:IsA("BasePart") then
+				part.CanCollide = false
+				part.CanQuery = false
+				part.CanTouch = false
+				if part.Name == "Rock" then
+					part.Material = Enum.Material.SmoothPlastic
+				end
+			end
+		end
+		spire.Parent = ctx.Arena
+	end
+	-- Rafts sit in the open lava between the grid and the wall, never in front of the referee.
+	-- Each raft is stretched by its own amounts along X and Z, so no two share an outline.
+	for _, raft in { { 20, 48 }, { 75, 50 }, { 125, 47 }, { 170, 49 }, { 215, 48 }, { 330, 50 } } do
+		local angle = math.rad(raft[1])
+		local spot = lake + Vector3.new(math.cos(angle) * raft[2], -0.8, math.sin(angle) * raft[2])
+		local crust = MeshLibrary.Get("LavaCrust", { Scale = rng:NextNumber(1.25, 1.5) })
+		local pivot = crust:GetPivot()
+		local stretch = Vector3.new(rng:NextNumber(0.8, 1.2), 1, rng:NextNumber(0.75, 1.25))
+		for _, part in crust:GetDescendants() do
+			if part:IsA("BasePart") then
+				local offset = pivot:ToObjectSpace(part.CFrame)
+				part.Size *= stretch
+				part.CFrame = pivot * CFrame.new(offset.Position * stretch) * offset.Rotation
+			end
+		end
+		crust:PivotTo(CFrame.new(spot) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
+		crust.Parent = ctx.Arena
+	end
+	for _, side in { -1, 1 } do
+		local torch = MeshLibrary.Get("LavaTorch", {
+			CFrame = CFrame.new(Vector3.new(origin.X + side * 21, lake.Y - 2, origin.Z - 47)),
+			Parent = ctx.Arena,
+		})
+		local flame = torch:FindFirstChild("Flame", true)
+		if flame and flame:IsA("BasePart") then
+			Build.Light(flame, rgb(255, 150, 60), 26, 1.6)
+		end
+	end
+	-- The volcanoes stand off to the sides, so the call board and the flag have open sky behind them.
+	Scenery.Volcano(ctx, lake + Vector3.new(135, -2, -300), origin, 2.3)
+	Scenery.Volcano(ctx, lake + Vector3.new(-200, -2, -260), origin, 1.4)
+	Scenery.Volcano(ctx, lake + Vector3.new(-290, -2, -160), origin, 1.1)
+end
+
+-- The referee's stage north of the grid: the robot holding up the call flag, the call board in a
+-- light-bulb marquee behind it. Returns the flag (the server colors it) and the board's text.
+local function buildReferee(ctx, origin: Vector3): (BasePart, TextLabel)
+	local stageTop = origin + Vector3.new(0, -4, -52)
+	-- The old rock pillar stays as an invisible collider, so anyone who leaps that far still lands
+	-- the same way; the stage mesh around it is the look.
+	Shapes.Slab(Vector3.new(14, 26, 14), 4, {
+		Name = "RefereeRock",
+		CFrame = CFrame.new(stageTop - Vector3.new(0, 13, 0)),
+		Transparency = 1,
+		Parent = ctx.Arena,
+	})
+	local facing = CFrame.lookAt(stageTop, Vector3.new(origin.X, stageTop.Y, origin.Z))
+	MeshLibrary.Get("RefereeStand", {
+		Scale = STAND_SCALE,
+		CFrame = facing * CFrame.new(0, -STAND_HEIGHT * STAND_SCALE, STAND_BACK),
+		Parent = ctx.Arena,
+	})
+	local robot = MeshLibrary.Get("RefereeBot", {
+		Scale = ROBOT_SCALE,
+		CFrame = facing * CFrame.new(0, 0, -3.2) * CFrame.new(ROBOT_PIVOT * ROBOT_SCALE),
+		Parent = ctx.Arena,
+	})
+	local flag = robot:FindFirstChild("Flag", true) :: BasePart
+	flag:SetAttribute("Flag", true)
+	MeshLibrary.Get("CallMarquee", {
+		Scale = MARQUEE_SCALE,
+		CFrame = facing * CFrame.new(0, 0, 3.5),
+		Parent = ctx.Arena,
+	})
+	-- The board fills the marquee's opening, its edges hidden inside the frame.
+	local board = Build.Decor({
+		Name = "CallBoard",
+		Size = Vector3.new(26.6 * MARQUEE_SCALE, 9.4 * MARQUEE_SCALE, 0.6),
+		CFrame = facing * CFrame.new(0, MARQUEE_CENTER_Y * MARQUEE_SCALE, 3.5),
+		Color = rgb(28, 20, 56),
+		Parent = ctx.Arena,
+	})
+	local label = Build.SurfaceText(board, Enum.NormalId.Front, "GET READY!", {
+		PixelsPerStud = 14,
+		Font = Enum.Font.LuckiestGuy,
+		TextColor3 = Color3.new(1, 1, 1),
+		MaxDistance = 400,
+	})
+	return flag, label
+end
+
 function HexMeltdown:Prepare()
 	local ctx = self.context
 	ctx.RespawnMode = "Eliminate"
@@ -111,14 +251,12 @@ function HexMeltdown:Prepare()
 	self.falling = {} :: { [any]: { Character: Model, Speed: number } } -- bots dropping into the lava
 	local origin = ctx.Origin.Position
 
-	-- A lava lake in a volcanic crater; volcanoes behind the referee close off the view.
+	-- A lava lake in a volcanic crater, the referee's stage north of the grid.
 	local lake = origin - Vector3.new(0, LAVA_DROP, 0)
 	Scenery.LavaLake(ctx, lake, 200)
 	Scenery.Ground(ctx, lake)
-	Scenery.RockRim(ctx, lake, 96, 16, 0.9, 1.7)
-	Scenery.Volcano(ctx, lake + Vector3.new(-20, -2, -300), origin, 2.3)
-	Scenery.Volcano(ctx, lake + Vector3.new(260, -2, -220), origin, 1.4)
-	Scenery.Volcano(ctx, lake + Vector3.new(-290, -2, -160), origin, 1.1)
+	buildCrater(ctx, origin, lake)
+	self.flag, self.boardLabel = buildReferee(ctx, origin)
 
 	-- The hex grid: a white start hex in the middle, colored hexes around it.
 	local coords = {}
@@ -133,25 +271,27 @@ function HexMeltdown:Prepare()
 	local function addHex(index: number, q: number, r: number, colorIndex: number)
 		local top = origin + hexOffset(q, r)
 		local entry = HexMeltdown.Palette[colorIndex]
-		local color = if entry then entry.Color else rgb(250, 250, 255)
-		local model = Build.Model("Hex" .. index, ctx.Arena)
+		local color = if entry then entry.Color else rgb(255, 250, 240)
+		local model = Build.Model("Hex" .. index) -- parented once complete (the client reads its pivot)
+		-- The pillar, rim and cap you stand on are invisible colliders (the same shapes as ever);
+		-- the carved column mesh inside them is what you see.
 		hexPrism(HEX_HEIGHT, {
 			Name = "Pillar",
 			CFrame = CFrame.new(top - Vector3.new(0, HEX_HEIGHT / 2 + 0.5, 0)),
-			Color = color:Lerp(rgb(60, 40, 50), 0.55),
-			Material = Enum.Material.Slate,
+			Transparency = 1,
 			Parent = model,
 		})
 		hexPrism(0.7, {
 			Name = "Rim",
 			CFrame = CFrame.new(top - Vector3.new(0, 1.15, 0)),
-			Color = rgb(255, 245, 235),
+			Transparency = 1,
 			Parent = model,
 		}, HEX_SIZE + 0.45)
 		local cap = hexPrism(1, {
 			Name = "Cap",
 			CFrame = CFrame.new(top - Vector3.new(0, 0.5, 0)),
 			Color = color,
+			Transparency = 1,
 			Parent = model,
 		})
 		if entry then
@@ -162,74 +302,25 @@ function HexMeltdown:Prepare()
 				Font = Enum.Font.GothamBold,
 			})
 		end
+		MeshLibrary.Get("HexColumn", {
+			Colors = {
+				Top = color,
+				Rock = if entry then color:Lerp(BASALT, 0.72) else BASALT,
+				Rim = if entry then RIM else GOLD,
+			},
+			CFrame = CFrame.new(top - Vector3.new(0, HEX_HEIGHT + 1, 0)),
+			Parent = model,
+		})
 		model:SetAttribute("ColorIndex", colorIndex)
 		model:SetAttribute("Index", index)
 		model.PrimaryPart = cap
+		model.Parent = ctx.Arena
 		table.insert(self.hexes, { Position = top, ColorIndex = colorIndex })
 	end
 	addHex(0, 0, 0, 0)
 	for index, coord in coords do
 		addHex(index, coord[1], coord[2], colors[index])
 	end
-
-	-- The referee robot with its flag, on a rock pillar north of the grid.
-	local refereeBase = origin + Vector3.new(0, -4, -52)
-	Shapes.Slab(Vector3.new(14, 26, 14), 4, {
-		Name = "RefereeRock",
-		CFrame = CFrame.new(refereeBase - Vector3.new(0, 13, 0)),
-		Color = rgb(80, 60, 66),
-		Material = Enum.Material.Slate,
-		Parent = ctx.Arena,
-	})
-	local facing = CFrame.lookAt(refereeBase, Vector3.new(origin.X, refereeBase.Y, origin.Z))
-	local robot = Build.Model("Referee", ctx.Arena)
-	Shapes.RoundedBox(Vector3.new(6, 7, 4), 1.2, {
-		Name = "Body",
-		CFrame = facing * CFrame.new(0, 3.5, 0),
-		Color = rgb(245, 245, 255),
-		Parent = robot,
-	})
-	Shapes.RoundedBox(Vector3.new(5, 4, 4), 1.4, {
-		Name = "Head",
-		CFrame = facing * CFrame.new(0, 9.3, 0),
-		Color = rgb(245, 245, 255),
-		Parent = robot,
-	})
-	Build.Part({
-		Name = "Visor",
-		Size = Vector3.new(4, 1.4, 0.4),
-		CFrame = facing * CFrame.new(0, 9.6, -2),
-		Color = rgb(40, 220, 255),
-		Material = Enum.Material.Neon,
-		Parent = robot,
-	})
-	Shapes.Capsule(12, 0.5, {
-		Name = "FlagPole",
-		CFrame = facing * CFrame.new(4.2, 10, -1) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = rgb(230, 230, 240),
-		Parent = robot,
-	})
-	self.flag = Build.Part({
-		Name = "Flag",
-		Size = Vector3.new(0.3, 4.5, 7),
-		CFrame = facing * CFrame.new(4.2, 13.6, -4.5) * CFrame.Angles(0, math.rad(90), 0),
-		Color = rgb(255, 255, 255),
-		Parent = robot,
-	})
-	self.flag:SetAttribute("Flag", true)
-	local board = Build.Decor({
-		Name = "CallBoard",
-		Size = Vector3.new(24, 9, 0.6),
-		CFrame = facing * CFrame.new(0, 22, 0),
-		Color = rgb(30, 22, 60),
-		Parent = robot,
-	})
-	self.boardLabel = Build.SurfaceText(board, Enum.NormalId.Front, "GET READY!", {
-		PixelsPerStud = 14,
-		Font = Enum.Font.LuckiestGuy,
-		TextColor3 = Color3.new(1, 1, 1),
-		MaxDistance = 400,
-	})
 
 	-- One player per hex to start (the grid has room for 19).
 	local spawns = {}
