@@ -1,5 +1,7 @@
 -- Local character movement effects: bounce pads, knockback from gloves/spills, and the lobby
--- parkour timer. The local client simulates its own character, so these apply instantly.
+-- obby's run timer. The local client simulates its own character, so these apply instantly.
+-- The obby's checkpoints are the server's (LobbyService): it puts a player who falls into the goo
+-- back on their last checkpoint, and onto the start pad (which restarts the timer) if they had none.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -81,7 +83,7 @@ local function bindParkourFinish(pad: Instance)
 			parkourBest = time
 		end
 		local bestText = if isBest then " New best!" else string.format(" (best %.1fs)", parkourBest :: number)
-		NotificationController.Show(string.format("🧗 Parkour complete in %.1fs!%s", time, bestText), "success")
+		NotificationController.Show(string.format("🧗 Obby complete in %.1fs!%s", time, bestText), "success")
 		EffectsController.Play("Confetti", (pad :: BasePart).Position + Vector3.new(0, 3, 0))
 	end)
 end

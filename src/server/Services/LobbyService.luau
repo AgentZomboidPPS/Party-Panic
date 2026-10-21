@@ -1,6 +1,6 @@
 -- Lobby activities (design doc §5): daily reward machine, confetti cannon, the hidden daily token,
--- the arcade target range, the champion podium and beach balls to kick around. (Votes come from
--- the cards on screen; the stage's portals just preview the games.)
+-- the arcade target range, the champion podium, beach balls to kick around and the obby's
+-- checkpoints. (Votes come from the cards on screen; the stage's portals just preview the games.)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,6 +10,7 @@ local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local DailyLogic = require(Shared.Logic.DailyLogic)
 local GameState = require(Shared.GameState)
+local ParkourCourse = require(Shared.Logic.ParkourCourse)
 
 local BeachBalls = require(script.Parent.Parent.World.BeachBalls)
 local Build = require(script.Parent.Parent.World.Build)
@@ -179,6 +180,86 @@ local function setupTargetRange()
 	updateBoard()
 end
 
+-- The obby (World/LobbyObby, layout in Shared/Logic/ParkourCourse). The server remembers the last
+-- glowing pad each player reached on this run and puts anyone whose feet go down into the goo back on
+-- it (falling never costs more than the section you're on), as it does anyone who lands on an earlier
+-- section after a fall. The start pad begins a run; the view deck ends it, so jumping off the deck
+-- lands you back at the start. Run times are the client's (MovementController).
+local function setupParkour()
+	local frame = refs.ParkourFrame
+	local near = (ParkourCourse.PoolRadius + 10) ^ 2 -- squared: anyone further out is nowhere near
+	local total = #ParkourCourse.Checkpoints
+	local reached: { [Player]: number } = {}
+	local putBackAt: { [Player]: number } = {}
+
+	local function putBack(player: Player, character: Model, root: BasePart, humanoid: Humanoid)
+		local x, top, z, fx, fz = ParkourCourse.Respawn(reached[player] or 0)
+		local position = frame:PointToWorldSpace(Vector3.new(x, top + root.Size.Y / 2 + humanoid.HipHeight + 0.3, z))
+		local look = frame:VectorToWorldSpace(Vector3.new(fx, 0, fz))
+		character:PivotTo(CFrame.lookAt(position, position + look))
+		root.AssemblyLinearVelocity = Vector3.zero
+		putBackAt[player] = os.clock()
+		Notifier.Sound({ player }, "Splash")
+		Notifier.Effect("Poof", position)
+	end
+
+	RunService.Heartbeat:Connect(function()
+		local now = os.clock()
+		for _, player in Players:GetPlayers() do
+			if player:GetAttribute("PP_InRound") then
+				reached[player] = nil
+				continue
+			end
+			local character = player.Character
+			local root = rootOf(player)
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			if not character or not root or not humanoid or humanoid.Health <= 0 then
+				continue
+			end
+			local p = frame:PointToObjectSpace(root.Position)
+			if p.X * p.X + p.Z * p.Z > near or now - (putBackAt[player] or 0) < 0.75 then
+				continue
+			end
+			-- Where the feet are (an R15 root's bottom is HipHeight above the ground under it).
+			local hip = if humanoid.RigType == Enum.HumanoidRigType.R6 then 2 else humanoid.HipHeight
+			local feet = p.Y - root.Size.Y / 2 - hip
+			if ParkourCourse.InGoo(p.X, p.Z, feet) then
+				putBack(player, character, root, humanoid)
+				continue
+			end
+			local piece = ParkourCourse.PieceAt(p.X, p.Z, feet)
+			if not piece then
+				continue
+			end
+			local current = reached[player] or 0
+			if piece == ParkourCourse.Start or piece.Finish then
+				reached[player] = nil -- a new run starts here, or this one is done
+			elseif piece.Checkpoint and piece.Checkpoint > current then
+				reached[player] = piece.Checkpoint
+				Notifier.Send(player, `🚩 Checkpoint {piece.Checkpoint}/{total}!`, "success", 2)
+				Notifier.Sound({ player }, "Pickup")
+			elseif piece.Stage < current then
+				putBack(player, character, root, humanoid) -- fell back onto an earlier section
+			end
+		end
+	end)
+
+	local function forget(player: Player)
+		reached[player] = nil
+		putBackAt[player] = nil
+	end
+	Players.PlayerRemoving:Connect(forget)
+	local function watch(player: Player)
+		player.CharacterAdded:Connect(function()
+			forget(player) -- a new character (reset, or back from a round) starts from the start
+		end)
+	end
+	for _, player in Players:GetPlayers() do
+		watch(player)
+	end
+	Players.PlayerAdded:Connect(watch)
+end
+
 function LobbyService.Init()
 	refs = LobbyBuilder.Build()
 	MeshLibrary.Preload() -- resolves any props the lobby didn't use and reports mesh sources
@@ -186,6 +267,7 @@ function LobbyService.Init()
 	setupDailyMachine()
 	setupSecretToken()
 	setupTargetRange()
+	setupParkour()
 	BeachBalls.Setup(refs.Root, refs.BallSpots, {
 		PlazaRadius = LobbyBuilder.PlazaRadius,
 		StageFrontZ = LobbyBuilder.StageFrontZ,

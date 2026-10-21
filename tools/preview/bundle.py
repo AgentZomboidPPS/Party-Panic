@@ -11,7 +11,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORLD = ROOT / "src" / "server" / "World"
-MODULES = ["Build", "Shapes", "MeshAssets", "MeshLibrary", "Environment", "LobbyBuilder", "BeachBalls"]
+MODULES = ["Build", "Shapes", "MeshAssets", "MeshLibrary", "Environment", "LobbyObby", "LobbyBuilder", "BeachBalls"]
+# Shared modules the World modules require (ReplicatedStorage.Shared.<path>), served from the bundle
+# since a saved place version may not have them yet.
+SHARED = ["Logic/ParkourCourse"]
 # World/Props modules the lobby uses (the mini-games' own props are skipped).
 PROPS = ["Lobby"]
 
@@ -19,6 +22,9 @@ PROPS = ["Lobby"]
 def module_source(name: str) -> str:
     text = (WORLD / f"{name}.luau").read_text()
     text = re.sub(r"require\(script\.Parent\.(\w+)\)", r'__require("\1")', text)
+    for path in SHARED:
+        name = path.split("/")[-1]
+        text = text.replace(f"require(ReplicatedStorage.Shared.{path.replace('/', '.')})", f'__require("{name}")')
     # World/Props: only the modules in PROPS, served from the bundle.
     text = text.replace('script.Parent:FindFirstChild("Props")', "__propsFolder")
     text = text.replace("require(module :: any)(helpers)", "__props[module.Name](helpers)")
@@ -53,6 +59,10 @@ def main():
         out.append(f'__props["{name}"] = (function()')
         out.append(source)
         out.append("end)()")
+    for path in SHARED:
+        out.append(f'__modules["{path.split("/")[-1]}"] = function()')
+        out.append(re.sub(r"^export type", "type", (ROOT / "src" / "shared" / f"{path}.luau").read_text(), flags=re.M))
+        out.append("end")
     for name in MODULES:
         out.append(f'__modules["{name}"] = function()')
         out.append(module_source(name))
