@@ -41,12 +41,20 @@ local TraceRace = MiniGame.Define("TraceRace", { Results = "Score" })
 
 local PAPER_Y = 1.9 -- the paper's top above the arena origin
 local TIP = 6.37 -- the crayon prop's pivot is this far behind its tip (tools/meshgen/props/TraceRace.py)
-local SEAT = CFrame.new(0, 4.35 + 3, 7.5) -- a rider's root from the crayon's tip (feet on its back)
+local SEAT = CFrame.new(0, 5.44 + 3, 10.2) -- a rider's root from the crayon's tip (feet on its back end)
 local LATE = 0.3 -- positions may still arrive this long (plus ping, up to 0.25 s) after the ride
 local FINAL_AT = 0.7 -- the scores are final this long after the ride ends
 local END_AT = 3.2 -- the round ends this long after the ride (everyone sees their line)
 local RUN_IN = 34 -- paper before the start line
 local RUN_OUT = 34 -- paper after the finish line
+-- How far the markings stand above the paper. Rules and lane lines are centred on the paper's top
+-- (their bottoms as far down inside the sheet); the guide and the start/finish float in thin bands
+-- above them. Nothing that overlaps on the paper shares a height (no flicker); the clients' crayon
+-- lines float higher still (0.5 and up).
+local LAYER = { Rule = 0.1, Lane = 0.2 }
+local GUIDE_Y = 0.2 -- the guide's middle (0.15 to 0.25)
+local FINISH_Y = 0.35 -- the start line's and the finish squares' middle (0.3 to 0.4)
+local BAND = 0.1
 
 local rng = Random.new()
 
@@ -218,15 +226,15 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 	})
 	Shapes.Slab(Vector3.new(boardW, 1.5, boardNear - boardFar), 6, {
 		Name = "Clipboard",
-		CFrame = CFrame.new(origin.X, origin.Y + 0.77, boardMid),
+		CFrame = CFrame.new(origin.X, origin.Y + 0.65, boardMid),
 		Color = rgb(150, 100, 62),
 		Material = Enum.Material.Wood,
 		Parent = arena,
 	})
 	Build.Part({
 		Name = "Paper",
-		Size = Vector3.new(paperW, 0.38, paperL),
-		CFrame = CFrame.new(origin.X, paperY - 0.2, paperMid),
+		Size = Vector3.new(paperW, 1.2, paperL),
+		CFrame = CFrame.new(origin.X, paperY - 0.6, paperMid),
 		Color = rgb(252, 251, 246),
 		Material = Enum.Material.SmoothPlastic,
 		Parent = arena,
@@ -235,8 +243,8 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 	for z = zStart + RUN_IN - 8, zFinish - RUN_OUT + 4, -15 do
 		Build.Decor({
 			Name = "Rule",
-			Size = Vector3.new(paperW - 1, 0.04, 0.25),
-			CFrame = CFrame.new(origin.X, paperY + 0.005, z),
+			Size = Vector3.new(paperW - 1, LAYER.Rule * 2, 0.25),
+			CFrame = CFrame.new(origin.X, paperY, z),
 			Color = rgb(170, 205, 240),
 			Parent = arena,
 		})
@@ -244,8 +252,8 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 	for side = -1, 1, 2 do
 		Build.Decor({
 			Name = "Margin",
-			Size = Vector3.new(0.3, 0.05, paperL - 1),
-			CFrame = CFrame.new(origin.X + side * (width / 2 + 2.5), paperY + 0.01, paperMid),
+			Size = Vector3.new(0.3, LAYER.Lane * 2, paperL - 1),
+			CFrame = CFrame.new(origin.X + side * (width / 2 + 2.5), paperY, paperMid),
 			Color = rgb(240, 120, 130),
 			Parent = arena,
 		})
@@ -253,8 +261,8 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 	for index = 1, count - 1 do
 		Build.Decor({
 			Name = "LaneLine",
-			Size = Vector3.new(0.2, 0.05, paperL - 1),
-			CFrame = CFrame.new(origin.X + (index - count / 2) * Rules.LANE, paperY + 0.01, paperMid),
+			Size = Vector3.new(0.2, LAYER.Lane * 2, paperL - 1),
+			CFrame = CFrame.new(origin.X + (index - count / 2) * Rules.LANE, paperY, paperMid),
 			Color = rgb(200, 205, 220),
 			Parent = arena,
 		})
@@ -267,8 +275,8 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 		self:_drawGuide(lane)
 		local box = Build.Decor({
 			Name = "StartBox",
-			Size = Vector3.new(Rules.LANE - 3, 0.06, 9),
-			CFrame = lane.Frame * CFrame.new(0, 0.005, 13),
+			Size = Vector3.new(Rules.LANE - 3, LAYER.Lane * 2, 9),
+			CFrame = lane.Frame * CFrame.new(0, 0, 13),
 			Color = info.Color,
 			Transparency = 0.55,
 			Parent = arena,
@@ -291,8 +299,8 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 	-- Start line, START and the chequered finish across every lane.
 	Build.Decor({
 		Name = "StartLine",
-		Size = Vector3.new(width, 0.06, 0.5),
-		CFrame = CFrame.new(origin.X, paperY + 0.01, zStart + 0.5),
+		Size = Vector3.new(width, BAND, 0.5),
+		CFrame = CFrame.new(origin.X, paperY + FINISH_Y, zStart + 0.5),
 		Color = rgb(60, 60, 70),
 		Parent = arena,
 	})
@@ -302,10 +310,10 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 		for column = 0, squares - 1 do
 			Build.Decor({
 				Name = "Finish",
-				Size = Vector3.new(square, 0.06, square),
+				Size = Vector3.new(square, BAND, square),
 				CFrame = CFrame.new(
 					origin.X - width / 2 + (column + 0.5) * square,
-					paperY + 0.01,
+					paperY + FINISH_Y,
 					zFinish - (row + 0.5) * square
 				),
 				Color = if (row + column) % 2 == 0 then rgb(35, 35, 45) else rgb(255, 255, 255),
@@ -315,8 +323,8 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 	end
 	local finishText = Build.Decor({
 		Name = "FinishText",
-		Size = Vector3.new(math.min(width, 60), 0.05, 12),
-		CFrame = CFrame.new(origin.X, paperY + 0.01, zFinish - 2 * square - 9),
+		Size = Vector3.new(math.min(width, 60), LAYER.Lane * 2, 12),
+		CFrame = CFrame.new(origin.X, paperY, zFinish - 2 * square - 9),
 		Transparency = 1,
 		Parent = arena,
 	})
@@ -328,7 +336,7 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 	local clipScale = math.max(1.6, boardW * 0.42 / 22)
 	MeshLibrary.Get("TraceRaceClip", {
 		Scale = clipScale,
-		CFrame = CFrame.new(origin.X, origin.Y + 1.5, zFinish - RUN_OUT + 2) * CFrame.Angles(0, math.pi, 0),
+		CFrame = CFrame.new(origin.X, origin.Y + 1.4, zFinish - RUN_OUT + 2) * CFrame.Angles(0, math.pi, 0),
 		Parent = arena,
 	})
 
@@ -362,15 +370,12 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 		)
 	end
 	-- A loose sheet of drawing paper under some of it, and a few on the far side.
-	for index, spot in { { -1, 0.35, 12 }, { 1, 0.75, -9 } } do
+	for _, spot in { { -1, 0.35, 12 }, { 1, 0.75, -9 } } do
 		Build.Part({
 			Name = "LooseSheet",
-			Size = Vector3.new(90, 0.3, 120),
-			CFrame = CFrame.new(
-				origin.X + spot[1] * (half + 70),
-				origin.Y + 0.15 + index * 0.02,
-				zStart - length * spot[2]
-			) * CFrame.Angles(0, math.rad(spot[3]), 0),
+			Size = Vector3.new(90, 0.6, 120),
+			CFrame = CFrame.new(origin.X + spot[1] * (half + 70), origin.Y + 0.2, zStart - length * spot[2])
+				* CFrame.Angles(0, math.rad(spot[3]), 0),
 			Color = rgb(250, 248, 240),
 			Parent = arena,
 		})
@@ -417,8 +422,8 @@ function TraceRace:_drawGuide(lane: Lane)
 		local span = (b - a).Magnitude
 		Build.Decor({
 			Name = "Guide",
-			Size = Vector3.new(Rules.GUIDE_WIDTH, 0.08, span + Rules.GUIDE_WIDTH * 0.3),
-			CFrame = CFrame.lookAt((a + b) / 2, b) + Vector3.new(0, 0.01, 0),
+			Size = Vector3.new(Rules.GUIDE_WIDTH, BAND, span + Rules.GUIDE_WIDTH * 0.3),
+			CFrame = CFrame.lookAt((a + b) / 2, b) + Vector3.new(0, GUIDE_Y, 0),
 			Color = rgb(85, 85, 100),
 			Parent = arena,
 		})

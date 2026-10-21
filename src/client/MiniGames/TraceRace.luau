@@ -22,10 +22,10 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 local TraceRace = {}
 
 local TIP = 6.37 -- the crayon prop's pivot behind its tip (server: TIP)
-local SEAT = CFrame.new(0, 4.35 + 3, 7.5) -- a rider's root from the crayon's tip (server: SEAT)
+local SEAT = CFrame.new(0, 5.44 + 3, 10.2) -- a rider's root from the crayon's tip (server: SEAT)
 local SEND_EVERY = 0.1
 local LATE_SEND = 0.6 -- keep sending unconfirmed positions this long after the ride
-local LINE_HEIGHT = 0.08
+local LINE_THICK = 0.1
 local MERGE_ANGLE = math.cos(math.rad(0.8)) -- strokes this close to straight join into one part
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -116,19 +116,24 @@ function TraceRace.Start(api)
 		return part
 	end
 
-	-- Places a stroke from (s0, x0) to (s1, x1) on the rider's lane (a hair higher every other one, so
-	-- overlapping ends never flicker).
-	local function placeStroke(rider: Rider, part: BasePart, a: { number }, b: { number }, lift: number)
+	-- Places a stroke from (s0, x0) to (s1, x1) on the rider's lane: a strip LINE_THICK thick whose
+	-- bottom floats `bottom` above the paper, clear of every marking on it (they stand up to 0.4).
+	-- Neighbouring strokes take turns at three heights a bit apart and the live stroke to the tip
+	-- floats above them all, so overlapping ends never flicker.
+	local function placeStroke(rider: Rider, part: BasePart, a: { number }, b: { number }, bottom: number)
 		local pa = tipFrame(rider, a[1], a[2]).Position
 		local pb = tipFrame(rider, b[1], b[2]).Position
 		local span = (pb - pa).Magnitude
-		local y = 0.06 + lift
-		part.Size = Vector3.new(Rules.LINE_WIDTH, LINE_HEIGHT, span + Rules.LINE_WIDTH * 0.6)
+		local lift = Vector3.new(0, bottom + LINE_THICK / 2, 0)
+		part.Size = Vector3.new(Rules.LINE_WIDTH, LINE_THICK, span + Rules.LINE_WIDTH * 0.6)
 		if span < 1e-3 then
-			part.CFrame = CFrame.new(pa + Vector3.new(0, y, 0))
+			part.CFrame = CFrame.new(pa + lift)
 		else
-			part.CFrame = CFrame.lookAt(pa, pb) * CFrame.new(0, y, -span / 2)
+			part.CFrame = CFrame.lookAt(pa + lift, pb + lift) * CFrame.new(0, 0, -span / 2)
 		end
+	end
+	local function strokeBottom(rider: Rider): number
+		return 0.5 + (rider.StrokeCount % 3) * 0.12
 	end
 
 	-- The line goes on to (s, x): a new stroke, or the last one longer if it runs on straight.
@@ -143,14 +148,14 @@ function TraceRace.Start(api)
 			local d1 = Vector2.new(from[1] - start[1], from[2] - start[2])
 			local d2 = Vector2.new(s - from[1], x - from[2])
 			if d1.Magnitude > 1e-3 and d1.Unit:Dot(d2.Unit) >= MERGE_ANGLE and d1.Magnitude < 40 then
-				placeStroke(rider, stroke, start, point, (rider.StrokeCount % 2) * 0.004)
+				placeStroke(rider, stroke, start, point, strokeBottom(rider))
 				rider.Drawn = point
 				return
 			end
 		end
 		local part = strokePart(rider)
 		rider.StrokeCount += 1
-		placeStroke(rider, part, from, point, (rider.StrokeCount % 2) * 0.004)
+		placeStroke(rider, part, from, point, strokeBottom(rider))
 		rider.Stroke = part
 		rider.StrokeFrom = from
 		rider.Drawn = point
@@ -504,7 +509,7 @@ function TraceRace.Start(api)
 					live = strokePart(rider)
 					rider.Live = live
 				end
-				placeStroke(rider, live :: Part, drawn, { s, rider.X }, 0.002)
+				placeStroke(rider, live :: Part, drawn, { s, rider.X }, 0.86)
 			end
 			-- The rider stands on the crayon's back.
 			local character = api:CharacterOf(user)
@@ -530,8 +535,8 @@ function TraceRace.Start(api)
 			if race and now > t1 + 0.4 then
 				cameraUp += (1 - cameraUp) * (1 - math.exp(-dt * 1.2))
 			end
-			local eye = mine.Frame * Vector3.new(cameraX, 12 + cameraUp * 22, -s + 19 + cameraUp * 16)
-			local look = mine.Frame * Vector3.new(cameraX * 0.7, 0, -s - 22 + cameraUp * 6)
+			local eye = mine.Frame * Vector3.new(cameraX, 22 + cameraUp * 18, -s + 17 + cameraUp * 14)
+			local look = mine.Frame * Vector3.new(cameraX * 0.7, 0, -s - 12)
 			camera.CFrame = CFrame.lookAt(eye, look)
 		end
 

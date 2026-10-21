@@ -67,9 +67,9 @@ def crayon():
     tip = lowest + shift
     size = hi - lo
     print(f"  CRAYON_TIP_Z = {tip[2]:.3f}  height {size[1]:.3f}  length {size[2]:.3f}")
-    # Where a rider's feet go: the top of the crayon 8.6 studs up the axis from the tip.
+    # Where a rider's feet go: the top of the crayon 11.5 studs up the axis from the tip.
     a = math.radians(CRAYON_TILT)
-    d = 8.6
+    d = 11.5
     top = (0.0, d * math.sin(a) + (CRAYON_RADIUS + 0.07) * math.cos(a), d * math.cos(a) - (CRAYON_RADIUS + 0.07) * math.sin(a))
     print(f"  rider foot (from the tip): y {top[1]:.3f} z {top[2]:.3f}")
     return pieces
