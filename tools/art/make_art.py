@@ -975,10 +975,21 @@ def split_rigs(parts):
     return rest, rigs
 
 
-def build_arena(data, parts=None, drop=()):
+def build_arena(data, parts=None, drop=(), two_sided=()):
+    """Draws a snapshot. `two_sided` names props pieces ("RefereeBot:Flag") drawn from both sides:
+    a piece whose mesh is inside-out shows its intended look instead of a hole."""
     parts = data["parts"] if parts is None else parts
     R.build_parts([p for p in parts if p["n"] not in drop])
     R.build_terrain(data["terrain"])
+    for obj in bpy.context.scene.objects:
+        if obj.type == "MESH" and obj.name.split(".")[0] in two_sided and obj.material_slots:
+            source = obj.material_slots[0].material
+            color = source.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value
+            plain = bpy.data.materials.new("two_sided")
+            plain.use_nodes = True
+            plain.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = color
+            plain.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.45
+            obj.material_slots[0].material = plain
 
 
 def fetch(dumps: Path):
@@ -1290,6 +1301,59 @@ def swing_parts(parts, names, axis_y, axis_z, angle):
         cf[3:12] = rows[0] + rows[1] + rows[2]
 
 
+def screen(part, image, face="Back", strength=1.0):
+    """What a client draws on a part's face (a SurfaceGui: a portal's preview, a scoreboard), as a
+    glowing picture. `image` is a PIL image or a file."""
+    if not isinstance(image, (str, Path)):
+        path = Path(tempfile.gettempdir()) / f"pp_art_screen_{part['n']}_{id(image)}.png"
+        image.save(path)
+        image = path
+    sx, sy, sz = part["s"]
+    side = 1 if face == "Back" else -1
+    mesh = bpy.data.meshes.new("screen")
+    # Corners in the part's local Roblox axes, seen from outside that face (image left first).
+    corners = [(-sx / 2, -sy / 2), (sx / 2, -sy / 2), (sx / 2, sy / 2), (-sx / 2, sy / 2)]
+    verts = [(x * side, -(sz / 2 + 0.03) * side, y) for x, y in corners]
+    mesh.from_pydata(verts, [], [(0, 1, 2, 3)])
+    uv = mesh.uv_layers.new()
+    for i, (u, v) in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
+        uv.data[i].uv = (u, v)
+    material = bpy.data.materials.new("screen")
+    material.use_nodes = True
+    nodes, links = material.node_tree.nodes, material.node_tree.links
+    nodes.clear()
+    texture = nodes.new("ShaderNodeTexImage")
+    texture.image = bpy.data.images.load(str(Path(image).resolve()))
+    emit = nodes.new("ShaderNodeEmission")
+    emit.inputs["Strength"].default_value = strength
+    output = nodes.new("ShaderNodeOutputMaterial")
+    links.new(texture.outputs["Color"], emit.inputs["Color"])
+    links.new(emit.outputs["Emission"], output.inputs["Surface"])
+    mesh.materials.append(material)
+    obj = bpy.data.objects.new("screen", mesh)
+    obj.matrix_world = R.cframe_matrix(part["cf"])
+    return link(obj)
+
+
+def text_card(size, text, color=(255, 255, 255), background=(28, 20, 56), font_size=None, star=None):
+    """A screen's picture: bold text centered on a dark card (optionally between two stars)."""
+    w, h = size
+    card = Image.new("RGBA", size, (*background, 255))
+    draw = ImageDraw.Draw(card)
+    font = ImageFont.truetype(FONT, font_size or int(h * 0.62))
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+    x, y = (w - (right - left)) / 2 - left, (h - (bottom - top)) / 2 - top
+    draw.text((x, y), text, font=font, fill=color)
+    if star:
+        r = h * 0.2
+        for cx in (x - r * 1.5, x + (right - left) + r * 1.5):
+            cy = h / 2
+            points = [(cx + math.sin(math.pi * k / 5) * (r if k % 2 == 0 else r * 0.45),
+                       cy - math.cos(math.pi * k / 5) * (r if k % 2 == 0 else r * 0.45)) for k in range(10)]
+            draw.polygon(points, fill=star)
+    return card
+
+
 def thumb_finish(out, name, glow_strength=0.5, saturation=1.12, contrast=1.06, vignette_strength=0.28):
     image = grade(out / f"raw_{name}.png", saturation, contrast)
     glow_path = out / f"raw_{name}_glow.png"
@@ -1334,6 +1398,141 @@ def scene_firerope(args, out):
     lettering(image, "FIRE ROPE!", (args.width * 0.27, args.height * 0.235), int(args.height * 0.16), angle=-3,
               top=(255, 230, 80), bottom=(255, 90, 20), outline=(110, 10, 10))
     save_jpg(image, out / "thumb_2_firerope.jpg")
+
+
+def preview_frame(game, frame=0):
+    """One frame of a game's portal preview (assets/previews/<Id>.jpg, made by make_preview.py)."""
+    record = json.loads((ROOT / "assets" / "previews" / "previews.json").read_text())[game]
+    sheet = Image.open(ROOT / "assets" / "previews" / f"{game}.jpg").convert("RGB")
+    w, h, columns = record["width"], record["height"], record["columns"]
+    x, y = (frame % columns) * w, (frame // columns) * h
+    picture = sheet.crop((x, y, x + w, y + h)).resize((w * 3, h * 3), Image.LANCZOS)
+    return ImageEnhance.Sharpness(ImageEnhance.Color(picture).enhance(1.15)).enhance(1.6)
+
+
+def vote_card(size, name, votes, share, accent):
+    """A portal's vote screen at vote time: the game's name and its share of the votes."""
+    w, h = size
+    card = Image.new("RGBA", size, (18, 14, 36, 255))
+    draw = ImageDraw.Draw(card)
+    font = ImageFont.truetype(FONT, int(h * 0.3))
+    while draw.textlength(name, font=font) > w * 0.92:
+        font = ImageFont.truetype(FONT, int(font.size * 0.92))
+    draw.text((w / 2, h * 0.3), name, font=font, fill=(255, 255, 255), anchor="mm")
+    bar = (w * 0.05, h * 0.62, w * 0.95, h * 0.88)
+    draw.rounded_rectangle(bar, radius=h * 0.13, fill=(40, 30, 70))
+    draw.rounded_rectangle((bar[0], bar[1], bar[0] + (bar[2] - bar[0]) * max(share, 0.12), bar[3]), radius=h * 0.13,
+                           fill=(255, 214, 64))
+    small = ImageFont.truetype(FONT, int(h * 0.2))
+    draw.text(((bar[0] + bar[2]) / 2, (bar[1] + bar[3]) / 2 + h * 0.01), f"{votes} VOTES", font=small, fill=(255, 255, 255),
+              anchor="mm", stroke_width=max(2, int(h * 0.02)), stroke_fill=(40, 20, 70))
+    draw.rectangle((0, 0, w, h * 0.04), fill=accent)
+    return card
+
+
+def scene_lobby(args, out):
+    """Key art: a crowd partying on the plaza in front of the vote stage, its four portals playing
+    previews of the games up for the vote."""
+    data = load_dump(args, "lobby")
+    parts = [p for p in data["parts"] if p["n"] != "PortalFilm"]  # hidden on clients while a preview plays
+    new_scene(args.samples, args.width, args.height, top=(0.05, 0.3, 0.9), horizon=(0.55, 0.78, 1.0),
+              sun=(0.35, -0.6, 0.75), sun_energy=4.2)
+    build_arena(data, parts)
+    games = [("FireRope", "FIRE ROPE", 5), ("HexMeltdown", "HEX MELTDOWN", 3), ("BobsledRun", "BOBSLED RUN", 4),
+             ("HoneyTrap", "RANDOM", 2)]
+    total = sum(votes for _, _, votes in games)
+    accents = [(255, 84, 150), (64, 196, 255), (120, 224, 96), (156, 108, 255)]
+    for index, (game, name, votes) in enumerate(games, start=1):
+        screen(part_named(parts, f"PortalScreen{index}"), preview_frame(game, 3), "Back", 1.1)
+        card = part_named(parts, f"VoteScreen{index}")
+        screen(card, vote_card((int(card["s"][0] * 40), int(card["s"][1] * 40)), name, votes, votes / total,
+                               accents[index - 1]), "Back", 1.2)
+    board = part_named(parts, "AnnouncementScreen")
+    screen(board, text_card((int(board["s"][0] * 30), int(board["s"][1] * 30)), "VOTE NOW!", (255, 214, 64)), "Back", 1.3)
+    eye_at = B(0, 6.0, -13.5)
+    crowd = [
+        ((-8.5, 0.2, -23), "cheer", "laugh"), ((-2.5, 1.6, -27), "jump", "grin"), ((3.5, 0.2, -23.5), "point", "grin"),
+        ((9.5, 0.2, -25.5), "cheer", "happy"), ((15.5, 1.4, -26), "jump", "laugh"), ((-15, 0.2, -25), "wave", "grin"),
+        ((21, 0.2, -24), "dance", "smug"), ((-7, 0.2, -33), "wave", "happy"), ((3, 0.4, -35), "cheer", "grin"),
+        ((-22, 0.2, -30), "run", "laugh"), ((-27, 0.2, -23), "cheer", "laugh"), ((11, 2.4, -42), "jump", "grin"),
+    ]
+    rng = random.Random(3)
+    for index, ((x, y, z), pose, face) in enumerate(crowd):
+        spot = B(x, y, z)
+        yaw = face_to(spot, eye_at) + math.radians(rng.uniform(-18, 18))
+        if pose == "point":
+            yaw = face_to(spot, eye_at) - math.radians(45)  # pointing off at a portal
+        avatar(spot, yaw, pose, index, face)
+    confetti(160, B(0, 17, -34), (34, 9, 10), seed=5, size=0.6)
+    camera(eye_at, B(0, 14.2, -60), fov=60)
+    render_to(out / "raw_lobby.png")
+    render_glow(out / "raw_lobby_glow.png")
+    image = thumb_finish(out, "lobby", glow_strength=0.35)
+    lettering(image, "PARTY PANIC", (args.width / 2, args.height * 0.1), int(args.height * 0.15), angle=-2)
+    lettering(image, "VOTE THE CHAOS!", (args.width / 2, args.height * 0.9), int(args.height * 0.095), angle=-2,
+              top=(255, 255, 255), bottom=(200, 235, 255), outline=(220, 40, 120))
+    save_jpg(image, out / "thumb_1_lobby.jpg")
+
+
+def scene_hexmeltdown(args, out):
+    """The referee calls YELLOW: the yellow hexes stay up, every other one sinks into the lava with
+    players still on it, and everyone leaps for safety."""
+    data = load_dump(args, "HexMeltdown")
+    parts, rigs = split_rigs(data["parts"])
+    # Each column's pieces (top, rim, glow, rock) go with the nearest top.
+    tops = {(round(p["cf"][0], 1), round(p["cf"][2], 1)): p for p in parts if p.get("prop") == "HexColumn" and p["n"] == "Top"}
+    columns = {key: [] for key in tops}
+    for part in parts:
+        if part.get("prop") == "HexColumn":
+            key = min(tops, key=lambda k: math.dist(k, (part["cf"][0], part["cf"][2])))
+            columns[key].append(part)
+    high = max(top["cf"][1] for top in tops.values())
+    safe = [key for key, top in tops.items() if top["cf"][1] > high - 1]
+    # Mid-sink: the other hexes at different depths (the snapshot has them all the way down).
+    rng = random.Random(11)
+    surface = {}
+    for key, group in columns.items():
+        drop = 0 if key in safe else (2.5 if tops[key]["cf"][0] == 0 and tops[key]["cf"][2] == 1400 else rng.uniform(4, 11))
+        dy = high - drop - tops[key]["cf"][1]
+        for part in group:
+            part["cf"][1] += dy
+        surface[key] = tops[key]["cf"][1] + 2.25
+    new_scene(args.samples, args.width, args.height, top=(0.22, 0.12, 0.4), horizon=(1.0, 0.5, 0.35),
+              sun=(0.4, -0.5, 0.7), sun_energy=4.0, sun_color=(1.0, 0.93, 0.85))
+    build_arena(data, parts, two_sided={"RefereeBot:Flag"})
+    board = part_named(parts, "CallBoard")
+    w, h = board["s"][0], board["s"][1]
+    screen(board, text_card((int(w * 40), int(h * 40)), "YELLOW", (255, 210, 50), font_size=int(h * 40 * 0.45),
+                            star=(255, 210, 50)), "Front", 1.6)
+    eye_at = B(-17, 259.5, 1436)
+    # Nearest the camera first: the front hexes get the panicking players.
+    sinking = sorted((key for key in columns if key not in safe), key=lambda k: math.dist(k, (-14, 1437)))
+    cast = []
+    for index, key in enumerate(safe):
+        x, z = key
+        cast.append(((x - 2.2, surface[key], z + 1.5), "cheer", "laugh"))
+        cast.append(((x + 2.4, surface[key], z - 1.0), "wave", "grin"))
+    for key, (pose, face) in zip(sinking[:5], [("flail", "scream"), ("panic", "panic"), ("run", "shock"),
+                                                ("flail", "scream"), ("panic", "panic")]):
+        x, z = key
+        cast.append(((x, surface[key], z), pose, face))
+    for (x, y, z), pose, face in cast:
+        spot = B(x, y, z)
+        avatar(spot, face_to(spot, eye_at) + math.radians(rng.uniform(-15, 15)), pose, len(cast) + rng.randrange(12), face)
+    # Two leapers in mid-air, from a sinking hex toward a yellow one.
+    for (x, y, z), face in (((-4.5, 254.5, 1393), "scream"), ((16, 255, 1403), "panic")):
+        spot = B(x, y, z)
+        avatar(spot, face_to(spot, eye_at) + 0.3, "tuck", rng.randrange(12), face)
+    embers(60, B(0, 240, 1400), (40, 30, 10), seed=6, size=(0.15, 0.4))
+    camera(eye_at, B(-1, 252.5, 1384), fov=54)
+    render_to(out / "raw_hexmeltdown.png")
+    render_glow(out / "raw_hexmeltdown_glow.png")
+    image = thumb_finish(out, "hexmeltdown", glow_strength=0.4)
+    lettering(image, "FIND YOUR COLOR", (args.width * 0.75, args.height * 0.1), int(args.height * 0.075), angle=3,
+              top=(255, 255, 255), bottom=(255, 236, 200), outline=(120, 30, 20))
+    lettering(image, "DON'T MELT!", (args.width * 0.75, args.height * 0.215), int(args.height * 0.145), angle=3,
+              top=(255, 230, 80), bottom=(255, 90, 20), outline=(110, 10, 10))
+    save_jpg(image, out / "thumb_4_hexmeltdown.jpg")
 
 
 def snow_spray(origin, direction, count=60, seed=3, spread=1.0, length=6.0):
@@ -1423,7 +1622,7 @@ def scene_sheet(args, out):
     print("wrote", out / "icon_sheet.png", flush=True)
 
 
-SCENES = {"firerope": scene_firerope, "bobsled": scene_bobsled, "icon": scene_icon,
+SCENES = {"lobby": scene_lobby, "firerope": scene_firerope, "bobsled": scene_bobsled, "hexmeltdown": scene_hexmeltdown, "icon": scene_icon,
           **{f"icon_{name}": fn for name, fn in ICONS.items()}, "sheet": scene_sheet}
 
 
