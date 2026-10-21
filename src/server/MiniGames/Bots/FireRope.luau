@@ -2,7 +2,7 @@
 -- screen draws) and jumps a moment before each bottom pass, like a player timing it by eye. Skilled
 -- bots jump close to the best moment; others are less steady, and every bot now and then jumps too
 -- late: more often as the rope speeds up, rarely when skilled. The mode judges a bot's jumps
--- exactly like a player's (its height around each pass), so bots really can be beaten.
+-- exactly like a player's (the rope's arc swept against its legs), so bots really can be beaten.
 local FireRope = {}
 
 local LEAD = 0.33 -- jump this long before a pass: the middle of the time a jump clears the rope
