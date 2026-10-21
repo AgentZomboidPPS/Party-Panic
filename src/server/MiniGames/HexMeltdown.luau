@@ -164,7 +164,7 @@ local function buildCrater(ctx, origin: Vector3, lake: Vector3)
 	for _, raft in { { 20, 48 }, { 75, 50 }, { 125, 47 }, { 170, 49 }, { 215, 48 }, { 330, 50 } } do
 		local angle = math.rad(raft[1])
 		local spot = lake + Vector3.new(math.cos(angle) * raft[2], -0.8, math.sin(angle) * raft[2])
-		local crust = MeshLibrary.Get("LavaCrust", { Scale = rng:NextNumber(0.85, 1) })
+		local crust = MeshLibrary.Get("LavaCrust", { Scale = rng:NextNumber(1.25, 1.5) })
 		local pivot = crust:GetPivot()
 		local stretch = Vector3.new(rng:NextNumber(0.8, 1.2), 1, rng:NextNumber(0.75, 1.25))
 		for _, part in crust:GetDescendants() do
