@@ -1,6 +1,6 @@
 """Props for Snowball Summit: a snowy mountain-top platform above a sea of clouds.
 
-    python3 tools/meshgen/generate_meshes.py --only SnowballSummitPeak,SnowballSummitSnowball,SnowballSummitPine,SnowballSummitFlag,SnowballSummitSpire,SnowballSummitMountain
+    python3 tools/meshgen/generate_meshes.py --only SnowballSummitCloud,SnowballSummitPeak,SnowballSummitSnowball,SnowballSummitPine,SnowballSummitFlag,SnowballSummitSpire,SnowballSummitMountain
 
 Units are studs, +Y is up, the base sits on y = 0 and -Z is the front:
   * SnowballSummitPeak: the summit everyone stands on, authored for a platform of radius 32 (the game
@@ -15,6 +15,7 @@ Units are studs, +Y is up, the base sits on y = 0 and -Z is the front:
   * SnowballSummitSpire: a rock pinnacle rising out of the clouds, flat snowy top at y = SPIRE_H
     (r < 6) for pines and flags.
   * SnowballSummitMountain: a jagged snowy mountain with a shoulder peak, for the horizon.
+  * SnowballSummitCloud: a billowing cloud (puffs heaped on a flat base) for the sea of clouds.
 """
 
 import math
@@ -228,7 +229,22 @@ def mountain():
     return {"Rock": subset(whole, ~snow), "Snow": subset(whole, snow)}
 
 
+def cloud():
+    # A billowing cloud: a flat base puff with smaller puffs heaped on it (flat underneath).
+    puffs = []
+    for k, (x, y, z, r) in enumerate([(0, 0, 0, 10.0), (8, 1.5, 2, 7.5), (-8, 1.0, -1, 7.0), (2, 3.5, -4, 6.5),
+                                      (-3, 4.0, 4, 6.0), (13, 0, -3, 5.0), (-13, -0.5, 3, 5.0)]):
+        puff = icosphere(r, 2, noise=0.08, seed=30 + k)
+        puff.v[:, 1] *= 0.62
+        puffs.append(puff.translate(x, y, z))
+    mesh = merge(*puffs)
+    mesh.v[:, 1] = np.maximum(mesh.v[:, 1], -2.0)
+    mesh.translate(0, 2.0, 0)
+    return {"Cloud": mesh}
+
+
 PROPS = {
+    "SnowballSummitCloud": cloud,
     "SnowballSummitPeak": peak,
     "SnowballSummitSnowball": snowball,
     "SnowballSummitPine": pine,
@@ -237,6 +253,7 @@ PROPS = {
     "SnowballSummitMountain": mountain,
 }
 COLORS = {
+    "Cloud": (250, 252, 255),
     "Snow": (244, 249, 255),
     "Ice": (160, 214, 246),
     "Icicles": (196, 234, 255),

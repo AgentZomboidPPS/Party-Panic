@@ -9,6 +9,7 @@
 --   SnowballSummitFlag      a summit pennant on a pole.
 --   SnowballSummitSpire     a rock pinnacle rising out of the clouds, flat snowy top (60 up).
 --   SnowballSummitMountain  a jagged snowy mountain for the horizon.
+--   SnowballSummitCloud     a billowing cloud for the sea of clouds below.
 -- None of them collide: the only thing anyone stands on is the summit's snowfield part.
 
 return function(h)
@@ -81,6 +82,16 @@ return function(h)
 			Fallback = function(m)
 				h.pillar(m, "Rock", 20, 57, Vector3.new(0, 28.5, 0))
 				h.pillar(m, "Snow", 16, 3, Vector3.new(0, 58.5, 0))
+			end,
+		},
+		SnowballSummitCloud = {
+			Height = 9.8,
+			AssetId = 139981615503335,
+			Shadow = false,
+			Palette = { Cloud = rgb(250, 252, 255) },
+			Materials = { Cloud = Enum.Material.SmoothPlastic },
+			Fallback = function(m)
+				h.blob(m, "Cloud", Vector3.new(24, 9.8, 18), Vector3.new(0, 4.9, 0))
 			end,
 		},
 		SnowballSummitMountain = {

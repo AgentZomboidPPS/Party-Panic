@@ -193,31 +193,19 @@ function SnowballSummit:_buildScenery()
 		Material = Enum.Material.SmoothPlastic,
 		Parent = ctx.Arena,
 	})
-	-- Puffs in little clusters (a big flat ball and two smaller ones on it), so the sea billows.
-	for _ = 1, 24 do
+	-- Billowing clouds drifting on it.
+	for _ = 1, 30 do
 		local angle = rng:NextNumber(0, math.pi * 2)
-		local distance = rng:NextNumber(radius + 10, 300)
-		local spot = Vector3.new(
-			origin.X + math.cos(angle) * distance,
-			cloudY + rng:NextNumber(-1, 3),
-			origin.Z + math.sin(angle) * distance
-		)
-		local size = rng:NextNumber(26, 48)
-		for k, puff in { { 1, 0, 0, 0.42 }, { 0.6, 0.3, 0.12, 0.6 }, { 0.55, -0.32, 0.2, 0.55 } } do
-			local part = Build.Decor({
-				Name = "SnowballSummitPuff",
-				Size = Vector3.new(size, size * puff[4], size) * puff[1],
-				CFrame = CFrame.new(
-					spot + Vector3.new(puff[2] * size, puff[3] * size + k * 0.37, puff[2] * size * 0.4)
-				),
-				Color = Color3.fromRGB(250, 252, 255),
-				Material = Enum.Material.SmoothPlastic,
-				Parent = ctx.Arena,
-			})
-			local mesh = Instance.new("SpecialMesh")
-			mesh.MeshType = Enum.MeshType.Sphere -- a squashed ball (a Ball part stays round)
-			mesh.Parent = part
-		end
+		local distance = rng:NextNumber(radius + 12, 320)
+		MeshLibrary.Get("SnowballSummitCloud", {
+			Scale = rng:NextNumber(1, 2.2),
+			CFrame = CFrame.new(
+				origin.X + math.cos(angle) * distance,
+				cloudY - rng:NextNumber(1.5, 3),
+				origin.Z + math.sin(angle) * distance
+			) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+			Parent = ctx.Arena,
+		})
 	end
 
 	-- Rock spires round the summit, each with a pine or two and a flag on its snowy top.
