@@ -82,6 +82,16 @@ def rewrite(module: str, text: str, is_init: bool) -> str:
     return re.sub(r"^export type", "type", text, flags=re.M)
 
 
+def other_mode(module: str, game: str) -> bool:
+    """Another mini-game's rules, brain or client half (a round only needs its own)."""
+    modes = {path.stem for path in (SRC / "server" / "MiniGames").glob("*.luau")} - {"init"}
+    for prefix in ("Server/MiniGames/", "Server/MiniGames/Bots/", "Client/MiniGames/"):
+        name = module[len(prefix):] if module.startswith(prefix) else None
+        if name in modes and name != game:
+            return True
+    return False
+
+
 PRELUDE = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (Path(__file__).resolve().parent / "harness_prelude.luau").read_text()
 
 
@@ -112,6 +122,8 @@ def main():
     for module, path in paths.items():
         if module == "Shared/Remotes":
             continue  # replaced by the harness's recording stand-in
+        if args.game != "LOBBY" and other_mode(module, args.game):
+            continue  # keeps the bundle under Luau execution's 1 MB script limit
         is_init = path.name == "init.luau"
         body = rewrite(module, path.read_text(), is_init)
         # Blank comment-only lines (line numbers stay put for the map): Open Cloud caps a script at 1 MiB.
