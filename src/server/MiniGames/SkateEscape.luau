@@ -33,9 +33,23 @@ local LANES = 12
 local SEGMENT = 24 -- deck pieces are at most this long (each crumbles on its own)
 local DECK_WIDTH = 100
 local DECK_MESH_LENGTH = 24
-local LAVA_DROP = 34
+local LAVA_DROP = 34 -- where a fallen skater is out (KillY)
 local START_BACK = 36 -- the start pad behind the line
 local GOAL_DEPTH = 70
+
+-- The look (art pass, owner: "make it a dramatic, memorable run"): the bridge crosses a deep canyon
+-- of layered red rock with lava falls, a glowing lava river far below. Stone viaduct piers carry
+-- rope towers whose swag ropes stream past the racers; a striped start gate, and a giant checkered
+-- stone arch with a golden trophy at the goal, in front of a smoking volcano at the canyon's end.
+local LAVA_DEPTH = 64 -- the lava river's surface below the deck
+local FOOT = -(LAVA_DEPTH + 2) -- canyon walls and piers stand with their foot 2 studs under the lava
+local WALL_X = 92 -- the canyon walls' foot, either side of the middle
+local WALL_PIVOT = 28.92 -- a canyon wall's pivot sits this far behind its foot (unscaled)
+local CABLE_PIVOT = 2.54 -- a swag rope's pivot sits this far outside the rail
+local CABLE_SPAN = 96 -- a swag rope's authored length
+local RAIL_X = DECK_WIDTH / 2 - 0.6
+local CANYON_BACK = -320 -- the canyon runs from behind the start ...
+local CANYON_END = 1820 -- ... to past the goal, where the volcano stands
 
 local PUSH_RATE = 12 -- pushes a second the server takes on average ...
 local PUSH_BURST = 3 -- ... and how many may arrive at once
@@ -92,19 +106,6 @@ function SkateEscape:_deckPiece(index: number, d0: number, d1: number): Model
 			Parent = model,
 		})
 		stretchZ(rail, length / DECK_MESH_LENGTH)
-		-- Timber piles down into the lava.
-		if length > 10 then
-			Build.Decor({
-				Name = "Pile",
-				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(LAVA_DROP + 2, 2.2, 2.2),
-				CFrame = CFrame.new(origin + Vector3.new(side * 44, -2.4 - (LAVA_DROP + 2) / 2, -(d0 + 1.5)))
-					* CFrame.Angles(0, 0, math.rad(90)),
-				Color = rgb(78, 52, 36),
-				Material = Enum.Material.Wood,
-				Parent = model,
-			})
-		end
 	end
 	model.PrimaryPart = deck.PrimaryPart
 	model.Parent = ctx.Arena
@@ -139,34 +140,182 @@ function SkateEscape:_torch(parent: Instance, position: Vector3, light: boolean)
 	ambient(fire, flame)
 end
 
+-- The canyon the bridge crosses: a lava river far below between walls of layered rock with lava
+-- falls, closed at both ends, a red-rock plateau out to the horizon and volcanoes beyond.
+function SkateEscape:_canyon()
+	local ctx = self.context
+	local origin = self.origin
+	local arena = ctx.Arena
+	local span = CANYON_END - CANYON_BACK
+	local middleZ = origin.Z - (CANYON_BACK + CANYON_END) / 2
+
+	-- The river: cracked lava under a see-through glowing sheet, lit from above, embers and heat haze.
+	local surface = Vector3.new(origin.X, origin.Y - LAVA_DEPTH, middleZ)
+	local lava = Build.Part({
+		Name = "Lava",
+		Size = Vector3.new(2 * WALL_X + 130, 2, span + 40),
+		CFrame = CFrame.new(surface - Vector3.new(0, 1, 0)),
+		Color = rgb(255, 110, 34),
+		Material = Enum.Material.CrackedLava,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		CastShadow = false,
+		Parent = arena,
+	})
+	Build.Decor({
+		Name = "LavaGlow",
+		Size = Vector3.new(2 * WALL_X + 126, 0.4, span + 36),
+		CFrame = CFrame.new(surface + Vector3.new(0, 0.3, 0)),
+		Color = rgb(255, 150, 50),
+		Material = Enum.Material.Neon,
+		Transparency = 0.62,
+		Parent = arena,
+	})
+	for index = 0, 5 do
+		local glow = Build.Decor({
+			Name = "LavaLight",
+			Size = Vector3.one,
+			Transparency = 1,
+			CFrame = CFrame.new(surface + Vector3.new(0, 12, span / 2 - (index + 0.5) * span / 6)),
+			Parent = arena,
+		})
+		Build.Light(glow, rgb(255, 120, 40), 60, 2)
+	end
+	local embers = Instance.new("ParticleEmitter")
+	embers.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	embers.Color = ColorSequence.new(rgb(255, 190, 80), rgb(255, 110, 40))
+	embers.LightEmission = 1
+	embers.Size = NumberSequence.new(0.5, 0)
+	embers.Lifetime = NumberRange.new(4, 6)
+	embers.Speed = NumberRange.new(6, 11)
+	embers.SpreadAngle = Vector2.new(15, 15)
+	embers.EmissionDirection = Enum.NormalId.Top
+	embers.Rate = 60
+	ambient(embers, lava)
+	local haze = Instance.new("ParticleEmitter")
+	haze.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	haze.Color = ColorSequence.new(rgb(255, 150, 100), rgb(140, 90, 90))
+	haze.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.3, 0.84),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	haze.Size = NumberSequence.new(14, 30)
+	haze.Lifetime = NumberRange.new(6, 9)
+	haze.Speed = NumberRange.new(3, 6)
+	haze.EmissionDirection = Enum.NormalId.Top
+	haze.Rate = 8
+	ambient(haze, lava)
+
+	-- The walls: 200-stud stretches overlapping along both sides, each a little different in size and
+	-- set-back (so no two ledges share a height), facing the bridge.
+	for _, side in { -1, 1 } do
+		local d = CANYON_BACK + rng:NextNumber(0, 40)
+		while d < CANYON_END do
+			local scale = rng:NextNumber(0.94, 1.1)
+			local foot = WALL_X + rng:NextNumber(-5, 5)
+			local position = Vector3.new(
+				origin.X + side * (foot + WALL_PIVOT * scale),
+				origin.Y + FOOT - rng:NextNumber(0, 1.5),
+				origin.Z - d
+			)
+			MeshLibrary.Get("SkateCanyonWall", {
+				Scale = scale,
+				CFrame = CFrame.lookAt(position, position - Vector3.new(side, 0, 0)),
+				Parent = arena,
+			})
+			d += rng:NextNumber(150, 172)
+		end
+	end
+	-- Both ends closed by a wall facing down the canyon.
+	for _, ending in { { D = CANYON_BACK - 12, Turn = 0 }, { D = CANYON_END + 12, Turn = math.pi } } do
+		local back = if ending.Turn == 0 then 1 else -1 -- which way (in Z) the wall's pivot sits from its foot
+		local position = origin + Vector3.new(0, FOOT - 0.7, -ending.D + back * WALL_PIVOT * 1.15)
+		MeshLibrary.Get("SkateCanyonWall", {
+			Scale = 1.15,
+			CFrame = CFrame.new(position) * CFrame.Angles(0, ending.Turn, 0),
+			Parent = arena,
+		})
+	end
+
+	-- The plateau around the canyon's rim, out to the horizon (four slabs round the canyon).
+	local rimY = origin.Y + 8
+	local outer = 1000
+	for _, side in { -1, 1 } do
+		for _, half in { -1, 1 } do
+			local inner = WALL_X + 48
+			Build.Part({
+				Name = "Plateau",
+				Size = Vector3.new(outer - inner, 4, (span + 1400) / 2),
+				CFrame = CFrame.new(origin.X + side * (inner + outer) / 2, rimY, middleZ + half * (span + 1400) / 4),
+				Color = rgb(184, 98, 66),
+				Material = Enum.Material.Sandstone,
+				CanCollide = false,
+				CanQuery = false,
+				CanTouch = false,
+				CastShadow = false,
+				Parent = arena,
+			})
+		end
+	end
+	for _, ending in
+		{ { From = CANYON_BACK - 70, To = CANYON_BACK - 700 }, { From = CANYON_END + 70, To = CANYON_END + 700 } }
+	do
+		Build.Part({
+			Name = "Plateau",
+			Size = Vector3.new(2 * (WALL_X + 48) + 2, 4, math.abs(ending.To - ending.From)),
+			CFrame = CFrame.new(origin.X, rimY - 0.4, origin.Z - (ending.From + ending.To) / 2),
+			Color = rgb(184, 98, 66),
+			Material = Enum.Material.Sandstone,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+			Parent = arena,
+		})
+	end
+
+	-- Rock spires: some standing in the lava by the walls' feet, more along the rim against the sky.
+	local top = rimY + 2
+	for _, side in { -1, 1 } do
+		local d = CANYON_BACK + rng:NextNumber(0, 60)
+		while d < CANYON_END do
+			MeshLibrary.Get("Spire", {
+				Scale = rng:NextNumber(1.6, 2.6),
+				CFrame = CFrame.new(origin.X + side * rng:NextNumber(66, 82), origin.Y - LAVA_DEPTH - 1, origin.Z - d)
+					* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+				Parent = arena,
+			})
+			d += rng:NextNumber(150, 260)
+		end
+		d = CANYON_BACK + rng:NextNumber(0, 60)
+		while d < CANYON_END + 200 do
+			MeshLibrary.Get("Spire", {
+				Scale = rng:NextNumber(1.8, 3.6),
+				CFrame = CFrame.new(origin.X + side * rng:NextNumber(170, 260), top - 1, origin.Z - d)
+					* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+				Parent = arena,
+			})
+			d += rng:NextNumber(90, 160)
+		end
+	end
+
+	-- The big volcano at the canyon's end (the goal arch stands in front of it), two more on the plain.
+	local plain = Vector3.new(origin.X, top, origin.Z)
+	Scenery.Volcano(ctx, plain + Vector3.new(0, -2, -(CANYON_END + 300)), origin, 4.2)
+	Scenery.Volcano(ctx, plain + Vector3.new(-560, -2, -(CANYON_END - 260)), origin, 2.6)
+	Scenery.Volcano(ctx, plain + Vector3.new(620, -2, -(CANYON_END - 620)), origin, 2.2)
+	Scenery.Volcano(ctx, plain + Vector3.new(-640, -2, -200), origin, 1.8)
+end
+
 function SkateEscape:_buildArena()
 	local ctx = self.context
 	local origin = self.origin
 	local length = SkateCourse.Length
 	local arena = ctx.Arena
 
-	-- The canyon: a lava river under the whole bridge, rock spires along both sides and volcanoes ahead.
-	local lake = origin + Vector3.new(0, -LAVA_DROP, -length / 2 + 40)
-	Scenery.LavaLake(ctx, lake, 2040)
-	Scenery.Volcano(ctx, lake + Vector3.new(30, -2, -length / 2 - 380), origin, 3.2)
-	Scenery.Volcano(ctx, lake + Vector3.new(-420, -2, -length / 2 - 200), origin, 2.1)
-	Scenery.Volcano(ctx, lake + Vector3.new(400, -2, -length / 2 - 60), origin, 1.7)
-	Scenery.Volcano(ctx, lake + Vector3.new(-520, -2, 260), origin, 1.5)
-	Scenery.Volcano(ctx, lake + Vector3.new(560, -2, 420), origin, 1.9)
-	for _, side in { -1, 1 } do
-		local z = 140
-		while z > -length - 160 do
-			local near = rng:NextNumber() < 0.35
-			local x = side * (if near then rng:NextNumber(68, 90) else rng:NextNumber(105, 190))
-			MeshLibrary.Get("Spire", {
-				Scale = if near then rng:NextNumber(0.9, 1.5) else rng:NextNumber(1.6, 3.4),
-				CFrame = CFrame.new(Vector3.new(origin.X + x, lake.Y - 1, origin.Z + z))
-					* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
-				Parent = arena,
-			})
-			z -= rng:NextNumber(38, 70)
-		end
-	end
+	self:_canyon()
 
 	-- The bridge, cut into pieces that crumble one by one, with gaps where the obstacles say.
 	local cuts = {}
@@ -265,10 +414,43 @@ function SkateEscape:_buildArena()
 		end
 	end
 
-	-- Torches along both rails, lit every other one.
+	-- Stone piers under the bridge about every 96 studs, their rope towers joined by swag ropes. Each
+	-- belongs to its deck piece, so it falls with it.
+	local pylons = {}
+	local carries: { [Instance]: boolean } = {}
+	local last = -math.huge
+	for _, piece in pieces do
+		local d0, d1 = piece:GetAttribute("D0"), piece:GetAttribute("D1")
+		local middle = (d0 + d1) / 2
+		if d1 - d0 > 20 and middle - last >= 90 and middle < length - 30 then
+			last = middle
+			carries[piece] = true
+			MeshLibrary.Get(
+				"SkatePylon",
+				{ CFrame = CFrame.new(origin + Vector3.new(0, FOOT, -middle)), Parent = piece }
+			)
+			table.insert(pylons, { D = middle, Piece = piece })
+		end
+	end
+	for index = 1, #pylons - 1 do
+		local a, b = pylons[index], pylons[index + 1]
+		local gap = b.D - a.D
+		if gap <= 130 then
+			for _, side in { -1, 1 } do
+				local cable = MeshLibrary.Get("SkateCable", {
+					CFrame = CFrame.new(origin + Vector3.new(side * (RAIL_X + CABLE_PIVOT), 3.3, -(a.D + b.D) / 2))
+						* CFrame.Angles(0, if side < 0 then math.pi else 0, 0),
+					Parent = a.Piece,
+				})
+				stretchZ(cable, gap / CABLE_SPAN)
+			end
+		end
+	end
+
+	-- Torches along both rails between the piers, lit every other one.
 	local torchIndex = 0
 	for index, piece in pieces do
-		if index % 3 == 0 then
+		if index % 3 == 0 and not carries[piece] then
 			torchIndex += 1
 			local d = (piece:GetAttribute("D0") + piece:GetAttribute("D1")) / 2
 			for _, side in { -1, 1 } do
@@ -300,16 +482,35 @@ function SkateEscape:_buildArena()
 	local pad = Shapes.Slab(Vector3.new(DECK_WIDTH + 24, 5, START_BACK), 2, {
 		Name = "StartPad",
 		CFrame = CFrame.new(origin + Vector3.new(0, -2.5, START_BACK / 2)),
-		Color = rgb(96, 84, 92),
+		Color = rgb(168, 140, 122),
 		Material = Enum.Material.Slate,
 		Parent = start,
 	})
 	start.PrimaryPart = pad
 	start.Parent = arena
-	MeshLibrary.Get("SkateArch", {
-		CFrame = CFrame.new(origin + Vector3.new(0, 0, 5)),
-		Colors = { Dark = rgb(40, 170, 90), Pennant = rgb(80, 220, 120) },
+	-- The gate faces the racers' cameras behind the line; its banner says what the race is.
+	MeshLibrary.Get("SkateStartGate", {
+		CFrame = CFrame.new(origin + Vector3.new(0, 0, 5)) * CFrame.Angles(0, math.pi, 0),
 		Parent = start,
+	})
+	local sign = Build.Decor({
+		Name = "GateSign",
+		Size = Vector3.new(96, 7, 0.2),
+		CFrame = CFrame.new(origin + Vector3.new(0, 21.7, 5.6)),
+		Transparency = 1,
+		Parent = start,
+	})
+	Build.SurfaceText(sign, Enum.NormalId.Back, "🛹  SKATE ESCAPE  🌋", {
+		PixelsPerStud = 10,
+		TextColor3 = rgb(255, 255, 255),
+		TextStrokeTransparency = 0.3,
+		Font = Enum.Font.FredokaOne,
+	})
+	-- Behind the pad, the cliff the bridge sets out from (it stays when the pad falls).
+	MeshLibrary.Get("SkateCanyonWall", {
+		Scale = 0.66,
+		CFrame = CFrame.new(origin + Vector3.new(0, FOOT - 1.5, START_BACK - 10 + WALL_PIVOT * 0.66)),
+		Parent = arena,
 	})
 	Build.Decor({
 		Name = "StartLine",
@@ -339,20 +540,28 @@ function SkateEscape:_buildArena()
 	Shapes.Slab(Vector3.new(DECK_WIDTH + 24, 8, GOAL_DEPTH), 2, {
 		Name = "Goal",
 		CFrame = CFrame.new(origin + Vector3.new(0, -4, -length - GOAL_DEPTH / 2)),
-		Color = rgb(110, 98, 104),
+		Color = rgb(168, 140, 122),
 		Material = Enum.Material.Slate,
 		Parent = arena,
 	})
+	-- It stands on a rock pillar: a cliff face towards the racers, plain basalt behind it.
 	Build.Part({
 		Name = "GoalPillar",
-		Size = Vector3.new(DECK_WIDTH, LAVA_DROP, GOAL_DEPTH - 8),
-		CFrame = CFrame.new(origin + Vector3.new(0, -8 - LAVA_DROP / 2, -length - GOAL_DEPTH / 2)),
-		Color = rgb(70, 56, 62),
+		Size = Vector3.new(DECK_WIDTH, LAVA_DEPTH, GOAL_DEPTH - 8),
+		CFrame = CFrame.new(origin + Vector3.new(0, -8 - LAVA_DEPTH / 2, -length - GOAL_DEPTH / 2)),
+		Color = rgb(72, 50, 58),
 		Material = Enum.Material.Basalt,
 		Parent = arena,
 	})
-	MeshLibrary.Get("SkateArch", {
-		CFrame = CFrame.new(origin + Vector3.new(0, 0, -length - 6)),
+	MeshLibrary.Get("SkateCanyonWall", {
+		Scale = 0.66,
+		CFrame = CFrame.new(origin + Vector3.new(0, FOOT - 1.5, -length - 2 - WALL_PIVOT * 0.66))
+			* CFrame.Angles(0, math.pi, 0),
+		Parent = arena,
+	})
+	-- The finish arch, facing the racers (its pivot sits 2.27 studs in front of the arch).
+	MeshLibrary.Get("SkateFinishArch", {
+		CFrame = CFrame.new(origin + Vector3.new(0, 0, -length - 8 + 2.27)) * CFrame.Angles(0, math.pi, 0),
 		Parent = arena,
 	})
 	-- The finish line: a checkerboard of black and white tiles side by side (none overlap).

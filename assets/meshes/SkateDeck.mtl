@@ -1,5 +1,11 @@
 newmtl Planks
-Kd 0.588 0.400 0.259
+Kd 0.839 0.612 0.384
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl PlanksB
+Kd 0.737 0.502 0.306
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
@@ -10,14 +16,14 @@ Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Bolts
-Kd 0.275 0.275 0.298
+newmtl CurbRed
+Kd 0.910 0.251 0.204
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Paint
-Kd 0.961 0.941 0.882
+newmtl CurbWhite
+Kd 0.980 0.965 0.925
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
