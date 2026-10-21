@@ -7,8 +7,8 @@
 -- times the gate at full speed, so it splats cakes as the belt speeds up), how often it misses a
 -- cake it should have done, and how often it carelessly presses on a cake that isn't ready (one
 -- that already has its layer gets ruined). Even the best bot has a floor of error, runs a little
--- late as the belt speeds up and skips one cake in twenty, so a sharp human team beats a team of
--- them (a full-skill team finishes about 22-24 of the 27 plates, few of them ★). A bot that runs
+-- late as the belt speeds up and skips one cake in fifteen, so a sharp human team beats a team of
+-- them (a full-skill team finishes about 22-24 of the 27 plates, few of them ⭐). A bot that runs
 -- two machines plans each one on its own. (Bots on the winning team hop in CakeFactory:Stop.)
 -- The belt carries no hazards, so there's nothing for the server to check on them.
 
@@ -47,12 +47,12 @@ function CakeFactoryBrain.Step(bot, ctx, mode, _dt)
 		local ready = not (cake and cake.Bad) and layers == index - 1
 		local press
 		if ready then
-			press = not bot:Chance(math.max(0.05, (1 - skill) * 0.25)) -- now and then a bot just misses one
+			press = not bot:Chance(math.max(0.07, (1 - skill) * 0.25)) -- now and then a bot just misses one
 		else
 			press = bot:Chance((1 - skill) * 0.22) -- a careless press on a cake that isn't ready
 		end
 		if press then
-			local spread = 0.12 + (1 - skill) * 0.5
+			local spread = 0.18 + (1 - skill) * 0.5
 			local err = (bot.Rng:NextNumber() + bot.Rng:NextNumber() - 1) * spread
 				+ (1 - skill) * 0.03
 				+ 0.03 * mode:Speed(now) / mode.V_END -- a little late as the belt speeds up

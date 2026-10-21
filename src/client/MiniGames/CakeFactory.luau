@@ -9,7 +9,7 @@
 -- the lane grows and says TAP! while a cake that needs you is inside, so the cue is never color
 -- alone. The server judges every press; the words over your machine (and in the lane's gate) are
 -- its verdict. A press with no cake near jams the machine: ADD turns red and says ✕ JAMMED. The
--- pills show each team's 🎂 cakes and ★ cakes (every layer perfect, worth 2); the camera starts
+-- pills show each team's 🎂 cakes and ⭐ cakes (every layer perfect, worth 2); the camera starts
 -- behind you, looking at your machine.
 
 local Players = game:GetService("Players")
@@ -371,12 +371,10 @@ function CakeFactory.Start(api)
 	local y = api:HudY()
 	local touch = api:IsTouch()
 	local count = #order
-	local compact = count >= 3
-	local columns = count
-	local pillWidth = if touch
-		then math.min(200, math.floor(600 / count) - 10)
-		elseif compact then math.min(150, math.floor(470 / count) - 10)
-		else 170
+	-- (Phones: two to a row, right-aligned over the lanes, clear of the move stick's zone.)
+	local compact = count >= 3 or touch
+	local columns = if touch then math.min(count, 2) else count
+	local pillWidth = if touch then 200 elseif compact then math.min(150, math.floor(470 / count) - 10) else 210
 	local textSize = if touch then 26 else 20
 	local rowStep = 56
 	for index, team in order do
@@ -387,8 +385,10 @@ function CakeFactory.Start(api)
 		local isMine = team == myTeam
 		local pill = UIKit.new("Frame", {
 			Name = "Team_" .. team,
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, (column - (inRow + 1) / 2) * (pillWidth + 10), 0, y + row * rowStep),
+			AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(0.5, 0),
+			Position = if touch
+				then UDim2.new(1, -(inRow - column) * (pillWidth + 10), 0, y + row * rowStep)
+				else UDim2.new(0.5, (column - (inRow + 1) / 2) * (pillWidth + 10), 0, y + row * rowStep),
 			Size = UDim2.fromOffset(pillWidth, 46),
 			BackgroundColor3 = Theme.Colors.PanelDark,
 			BackgroundTransparency = 0.15,
@@ -398,7 +398,7 @@ function CakeFactory.Start(api)
 				UIKit.Stroke(if isMine then Color3.new(1, 1, 1) else line.Color, if isMine then 3 else 2, 0),
 			},
 		})
-		local nameWidth = if compact then 34 else math.floor(pillWidth * 0.36)
+		local nameWidth = if compact then 34 else math.floor(pillWidth * 0.42)
 		label(pill, if compact then line.Shape else `{line.Shape} {string.upper(team)}`, textSize, line.Color, {
 			Name = "Name",
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -406,8 +406,8 @@ function CakeFactory.Start(api)
 			Size = UDim2.new(0, nameWidth, 1, 0),
 			TextTruncate = Enum.TextTruncate.AtEnd,
 		})
-		-- Cakes and ★ cakes (shrinks to fit a narrow pill).
-		local countLabel = label(pill, "🎂 0  ★ 0", textSize, Color3.new(1, 1, 1), {
+		-- Cakes and ⭐ cakes (shrinks to fit a narrow pill).
+		local countLabel = label(pill, "🎂 0  ⭐ 0", textSize, Color3.new(1, 1, 1), {
 			Name = "Count",
 			TextXAlignment = Enum.TextXAlignment.Right,
 			AnchorPoint = Vector2.new(1, 0.5),
@@ -425,7 +425,7 @@ function CakeFactory.Start(api)
 		if not pill or not countLabel then
 			return
 		end
-		local text = if line.Gone then "— left" else `🎂 {line.Done}  ★ {line.Stars}`
+		local text = if line.Gone then "— left" else `🎂 {line.Done}  ⭐ {line.Stars}`
 		if countLabel.Text ~= text then
 			countLabel.Text = text
 		end
@@ -448,7 +448,7 @@ function CakeFactory.Start(api)
 		Kind: TextLabel,
 		Dots: { Frame },
 		Stroke: UIStroke?,
-		Verdict: TextLabel,
+		FlashText: string,
 		FlashAt: number,
 		FlashColor: Color3,
 	}
@@ -534,15 +534,6 @@ function CakeFactory.Start(api)
 				label(dot, "", if touch then 34 else 20, Color3.new(1, 1, 1), { Name = "Mark", ZIndex = 4 })
 				table.insert(dots, dot)
 			end
-			-- The server's verdict on your last press, flashed in the gate (★ / GOOD / ✕).
-			local verdict = label(track, "", if touch then 30 else 22, Color3.new(1, 1, 1), {
-				Name = "Verdict",
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(gateCenter, 0.5),
-				Size = UDim2.new(0, 120, 1, 0),
-				ZIndex = 6,
-				Visible = false,
-			})
 			table.insert(lanes, {
 				Machine = machine,
 				Frame = frame,
@@ -551,7 +542,7 @@ function CakeFactory.Start(api)
 				Kind = kind,
 				Dots = dots,
 				Stroke = stroke,
-				Verdict = verdict,
+				FlashText = "",
 				FlashAt = -math.huge,
 				FlashColor = GREEN,
 			})
@@ -637,7 +628,7 @@ function CakeFactory.Start(api)
 		end)
 	end
 
-	-- The verdict over your machine, and flashed in its lane.
+	-- The verdict over your machine, and flashed on its lane (outline and tag).
 	local streak = 0
 	local function feedback(machine: Machine, kind: string)
 		if not myLine then
@@ -646,33 +637,32 @@ function CakeFactory.Start(api)
 		local text, color, short
 		if kind == "perfect" then
 			streak += 1
-			text, color, short = if streak >= 3 then `★ PERFECT x{streak}!` else "★ PERFECT!", GREEN, "★"
+			text, color, short = if streak >= 3 then `⭐ PERFECT x{streak}!` else "⭐ PERFECT!", GREEN, "⭐ PERFECT"
 		elseif kind == "good" then
 			streak += 1
-			text, color, short = "GOOD!", Color3.fromRGB(150, 230, 255), "GOOD"
+			text, color, short = "GOOD!", Color3.fromRGB(150, 230, 255), "✓ GOOD!"
 		elseif kind == "miss" then
 			streak = 0
-			text, color, short = "✕ NO CAKE!", Theme.Colors.Yellow, "✕"
+			text, color, short = "✕ NO CAKE!", Theme.Colors.Yellow, "✕ JAMMED"
 		elseif kind == "ruined" then
-			text, color, short = "✕ ALREADY RUINED", Theme.Colors.Yellow, "✕"
+			text, color, short = "✕ ALREADY RUINED", Theme.Colors.Yellow, "✕ RUINED"
 		elseif kind == "late" then
 			streak = 0
-			text, color, short = "MISSED ONE!", Theme.Colors.Yellow, "MISSED"
+			text, color, short = "MISSED ONE!", Theme.Colors.Yellow, "✕ MISSED"
 		else
 			streak = 0
 			text = if kind == "wrong"
 				then "✕ MISSING LAYER!"
 				elseif kind == "double" then "✕ TWICE!"
 				else "✕ SPLAT!"
-			color, short = RED, "✕"
+			color, short = RED, "✕ RUINED"
 		end
 		popup(world(myLine, machine.X, top + 3, -3.4), text, color)
 		for _, lane in lanes do
 			if lane.Machine == machine then
 				lane.FlashAt = os.clock()
 				lane.FlashColor = color
-				lane.Verdict.Text = short
-				lane.Verdict.TextColor3 = color
+				lane.FlashText = short
 			end
 		end
 	end
@@ -844,7 +834,7 @@ function CakeFactory.Start(api)
 		end
 		drawPill(line)
 		if star and team == myTeam then
-			popup(world(line, belt.Box, top + 6, -2), "★ CAKE +2", Theme.Colors.Yellow)
+			popup(world(line, belt.Box, top + 6, -2), "⭐ CAKE +2", Theme.Colors.Yellow)
 		end
 		if good then
 			line.LampAt = os.clock()
@@ -1153,13 +1143,16 @@ function CakeFactory.Start(api)
 				lane.Stroke.Color = if flashing then lane.FlashColor else myColor
 				lane.Stroke.Thickness = if flashing then 4 else 2
 			end
-			lane.Verdict.Visible = clock - lane.FlashAt < 0.45
 			local scale = if ready then 1.12 else 1
 			lane.Gate.Size = UDim2.new(window * 2 / span * scale, 0, 1, if ready then 0 else -4)
-			local kindText = if ready then "👉 TAP!" else `{ICONS[machine.Kind] or ""} {string.upper(machine.Kind)}`
+			local verdict = clock - lane.FlashAt < 0.5
+			local kindText = if verdict
+				then lane.FlashText
+				elseif ready then "👉 TAP!"
+				else `{ICONS[machine.Kind] or ""} {string.upper(machine.Kind)}`
 			if lane.Kind.Text ~= kindText then
 				lane.Kind.Text = kindText
-				lane.Kind.TextColor3 = if ready then GREEN else Color3.new(1, 1, 1)
+				lane.Kind.TextColor3 = if verdict then lane.FlashColor elseif ready then GREEN else Color3.new(1, 1, 1)
 			end
 			for _, gate in machine.Gates do
 				gate.Material = if ready then Enum.Material.Neon else Enum.Material.SmoothPlastic

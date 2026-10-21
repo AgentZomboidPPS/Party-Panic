@@ -24,8 +24,8 @@
 -- in the past for the player's ping. The state of the cakes on each belt is shared as a string
 -- ("Cakes_<Team>"), and the "Add"/"Missed"/"Boxed" events animate the machines for everyone.
 -- Every team gets the same plates, so a good team could finish them all: skill shows in the score
--- through ★ cakes. A finished cake scores 1, a ★ cake (every layer a PERFECT press) scores 2, and
--- the pills show both counts (🎂 cakes, ★ cakes). A tie on points is broken by perfect presses, then
+-- through ⭐ cakes. A finished cake scores 1, a ⭐ cake (every layer a PERFECT press) scores 2, and
+-- the pills show both counts (🎂 cakes, ⭐ cakes). A tie on points is broken by perfect presses, then
 -- good layers (the results say so).
 --
 -- Bots press through ctx:BotAction with skill-based timing on the same schedule (Bots/CakeFactory);
@@ -997,7 +997,7 @@ function CakeFactory:Start()
 	end)
 end
 
--- A team's points: 1 per finished cake, 2 per ★ cake.
+-- A team's points: 1 per finished cake, 2 per ⭐ cake.
 function CakeFactory:Points(team: string): number
 	local line = self.lines[team]
 	return if line then line.Done + line.Stars else 0
@@ -1092,7 +1092,7 @@ function CakeFactory:GetResults()
 		local worker = self.workers[entry.Player]
 		if worker and line then
 			entry.ScoreText =
-				`{entry.Team} {line.Done} cakes, {line.Stars} ★ • {worker.Good} layers, {worker.Perfect} perfect`
+				`{entry.Team} {line.Done} cakes, {line.Stars} ⭐ • {worker.Good} layers, {worker.Perfect} perfect`
 		end
 	end
 	results.WinningTeam = self:_leader()
