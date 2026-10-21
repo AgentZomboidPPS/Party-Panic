@@ -112,7 +112,7 @@ return function(h)
 		-- mode's Seat is.
 		SandThrone = {
 			Height = 11.2,
-			AssetId = 131179636869596,
+			AssetId = 130607562047963,
 			Collide = true,
 			Palette = { Stone = stone, Gold = gold, Paint = paint, Cushion = h.rgb(200, 60, 60), Glow = glow },
 			Materials = {
@@ -189,7 +189,7 @@ return function(h)
 		-- A tall painted column with a royal banner down its front (-Z).
 		SandColumn = {
 			Height = 27.89,
-			AssetId = 116838347727083,
+			AssetId = 90343959477598,
 			Collide = true,
 			Palette = { Stone = stone, Paint = paint, Gold = gold, Cloth = cloth },
 			Materials = { Stone = Sandstone, Gold = Metal, Cloth = Enum.Material.Fabric },
@@ -203,7 +203,7 @@ return function(h)
 		},
 		SandColumnBroken = {
 			Height = 14.15,
-			AssetId = 84462374502012,
+			AssetId = 87376118484733,
 			Collide = true,
 			Palette = { Stone = stone, Gold = gold },
 			Materials = { Stone = Sandstone, Gold = Metal },
@@ -215,7 +215,7 @@ return function(h)
 		-- A gateway: two columns under a lintel with a turquoise cornice and a gold winged sun.
 		SandArch = {
 			Height = 32.97,
-			AssetId = 84569703748343,
+			AssetId = 127413289720150,
 			Collide = true,
 			Palette = { Stone = stone, Paint = paint, Gold = gold, Glow = glow },
 			Materials = { Stone = Sandstone, Gold = Metal, Glow = Neon },
@@ -264,7 +264,7 @@ return function(h)
 		-- A giant cat sphinx in a striped royal headdress, lying with its paws forward (-Z).
 		SandSphinx = {
 			Height = 36.2,
-			AssetId = 81162770836161,
+			AssetId = 133251799736852,
 			Shadow = false,
 			Palette = {
 				Body = h.rgb(242, 198, 122),
@@ -300,7 +300,7 @@ return function(h)
 		-- A big crescent dune (recolored per dune for depth). Its skirt sits 3 studs below its foot.
 		SandDune = {
 			Height = 26,
-			AssetId = 107954322554378,
+			AssetId = 139579354152815,
 			Shadow = false,
 			Palette = { Dune = h.rgb(236, 184, 110) },
 			Materials = { Dune = Enum.Material.Sand },
@@ -311,7 +311,7 @@ return function(h)
 		},
 		SandPalm = {
 			Height = 21.17,
-			AssetId = 96764941109646,
+			AssetId = 83952905327555,
 			Collide = true,
 			Palette = { Trunk = h.rgb(170, 112, 64), Frond = h.rgb(64, 182, 76), Nut = h.rgb(124, 80, 40) },
 			Materials = { Trunk = Enum.Material.Wood },
@@ -347,7 +347,7 @@ return function(h)
 		-- A heap of treasure: coins, an open chest and big gems.
 		SandHoard = {
 			Height = 4.77,
-			AssetId = 119732771823772,
+			AssetId = 132200581160288,
 			Shadow = false,
 			Palette = { Gold = gold, Wood = h.rgb(150, 88, 46), Gem = h.rgb(230, 60, 90) },
 			Materials = { Gold = Metal, Wood = Enum.Material.Wood, Gem = Neon },
