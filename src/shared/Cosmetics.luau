@@ -297,7 +297,7 @@ local list: { Cosmetic } = {
 		Id = "Title_SpeedDemon",
 		Slot = "Title",
 		Name = "Speed Demon",
-		Description = "Make the podium in 5 races.",
+		Description = "Top 3 in 5 races: SKATE ESCAPE or BOBSLED RUN.",
 		Icon = "🏎️",
 		UnlockStat = { Stat = "RacePodiums", Value = 5, Label = "Race podiums" },
 		Colors = { rgb(90, 200, 255) },

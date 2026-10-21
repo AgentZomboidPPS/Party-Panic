@@ -95,6 +95,14 @@ function ProgressionLogic.NextTier(level: number): Tier?
 	return TIERS[ProgressionLogic.TierIndex(level) + 1]
 end
 
+-- The races, for the Speed Demon title: the Race category, and Bobsled Run (a team race: the
+-- winning team's riders make the podium).
+ProgressionLogic.RaceGames = { BobsledRun = true } :: { [string]: boolean }
+
+function ProgressionLogic.IsRace(gameId: string, category: string): boolean
+	return category == "Race" or ProgressionLogic.RaceGames[gameId] == true
+end
+
 -- Career: what one finished round adds to the lifetime stats.
 export type RoundRecord = {
 	GameId: string,
@@ -135,7 +143,7 @@ function ProgressionLogic.RecordRound(stats: { [string]: any }, record: RoundRec
 	end
 	if podium then
 		add("Podiums")
-		if record.Category == "Race" then
+		if ProgressionLogic.IsRace(record.GameId, record.Category) then
 			add("RacePodiums")
 		end
 	end

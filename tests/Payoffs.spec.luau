@@ -200,6 +200,32 @@ test("RecordRound keeps the career stats", function()
 	expectEqual(stats.CategoryPlays, { Race = 1, Survival = 2 })
 end)
 
+test("race podiums: SKATE ESCAPE (the Race category) and BOBSLED RUN (a team race) count", function()
+	local stats: { [string]: any } = {}
+	ProgressionLogic.RecordRound(
+		stats,
+		{ GameId = "BobsledRun", Category = "Team", Place = 1, TopHalf = true, Today = 1 }
+	)
+	ProgressionLogic.RecordRound(
+		stats,
+		{ GameId = "SkateEscape", Category = "Race", Place = 3, TopHalf = true, Today = 1 }
+	)
+	ProgressionLogic.RecordRound(
+		stats,
+		{ GameId = "BobsledRun", Category = "Team", Place = 7, TopHalf = false, Today = 1 }
+	)
+	ProgressionLogic.RecordRound(
+		stats,
+		{ GameId = "CakeFactory", Category = "Team", Place = 1, TopHalf = true, Today = 1 }
+	)
+	expectEqual(stats.RacePodiums, 2, "the losing sled and a non-race win don't count")
+	expectEqual(stats.Podiums, 3)
+	local games = fs.readFile("src/shared/GameDefinitions.luau")
+	for id in ProgressionLogic.RaceGames do
+		expectTrue(string.find(games, `Id = "{id}"`, 1, true) ~= nil, `{id} is a game`)
+	end
+end)
+
 test("every career milestone is a stat the server keeps", function()
 	local stats: { [string]: any } = {}
 	local kept = {}

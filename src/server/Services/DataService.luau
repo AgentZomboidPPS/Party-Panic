@@ -310,6 +310,7 @@ function DataService.BuildSnapshot(profile: Profile)
 			NextStreak = nextStreak,
 			NextReward = Config.DailyRewards[math.min(nextStreak, #Config.DailyRewards)],
 			SecretFound = data.Daily.SecretDay >= today,
+			SecretDay = data.Daily.SecretDay, -- the day they last found it (the token's Day says today's)
 			FirstWinReady = (data.Daily.FirstWinDay or 0) < today, -- today's first-win bonus is still to win
 		},
 		TutorialDone = data.Tutorial.Done,
