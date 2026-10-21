@@ -13,6 +13,8 @@ import numpy as np
 from generate_meshes import (
     Mesh,
     capsule,
+    extrude,
+    star,
     cylinder,
     icosphere,
     lathe,
@@ -154,7 +156,8 @@ def lobby_pavers():
 
 def lobby_court():
     """The round court around the fountain: a sunburst of 16 rays in two colors, a ring of accent
-    tiles hugging the fountain and a gold border. Flat, 0.1 thick."""
+    tiles hugging the fountain and a gold border. Flat, 0.1 thick. (Loose accent diamonds between the
+    ray tips were tried and read as litter.)"""
     h = 0.1
     pieces = {"RayA": [], "RayB": [], "Accent": [], "Ring": []}
     for i in range(24):
@@ -178,11 +181,6 @@ def lobby_court():
             r = lerp(23.0, 24.9, math.sin(t * math.pi / 2))
             outline.append((math.cos(a) * r, math.sin(a) * r))
         pieces["RayA" if i % 2 == 0 else "RayB"].append(slab(outline, h))
-        # The notch between two ray tips holds a small accent diamond.
-        mid = a1
-        diamond = [(math.cos(mid) * 23.6, math.sin(mid) * 23.6), (math.cos(mid + 0.035) * 24.35, math.sin(mid + 0.035) * 24.35),
-                   (math.cos(mid) * 25.0, math.sin(mid) * 25.0), (math.cos(mid - 0.035) * 24.35, math.sin(mid - 0.035) * 24.35)]
-        pieces["Accent"].append(slab(diamond, h))
     pieces["Ring"].append(flat_ring(25.4, 27.5, 0.0, h, 128))
     return {name: merge(*meshes) for name, meshes in pieces.items()}
 
@@ -237,7 +235,7 @@ def lobby_duck():
         d = smin(d, sd_ellipsoid(p, (0, 1.45, -0.45), (0.48, 0.46, 0.46)), 0.28)  # head
         return d
 
-    body = sdf_mesh(body_sdf, (-1.0, 0.0, -1.1), (1.0, 2.05, 1.35), 0.09)
+    body = sdf_mesh(body_sdf, (-1.0, 0.0, -1.1), (1.0, 2.05, 1.35), 0.19)
     beak = merge(ellipsoid(0.26, 0.09, 0.3).translate(0, 1.38, -0.88), ellipsoid(0.22, 0.06, 0.24).translate(0, 1.27, -0.84))
     eyes = [icosphere(0.085, 1).translate(side * 0.22, 1.58, -0.83) for side in (-1, 1)]
     return {"Body": body, "Beak": beak, "Eyes": merge(*eyes)}
@@ -299,16 +297,16 @@ def lobby_ferris_cabin():
     """A gondola that hangs from the wheel: the hang point is the top center (its pivot is the
     bottom center, 7.4 below). Faces -Z."""
     body = merge(
-        rounded_box(4.4, 2.4, 3.4, 0.7).translate(0, 1.2, 0),
+        rounded_box(4.4, 2.4, 3.4, 0.7, 5).translate(0, 1.2, 0),
         lathe([(0.0, 0.0), (1.2, 0.0), (1.5, 0.15), (0.0, 0.35)], 24).scale(1.5, 1, 1.1).translate(0, -0.05, 0),
     )
-    rim = rounded_box(4.6, 0.32, 3.6, 0.14).translate(0, 2.42, 0)
+    rim = rounded_box(4.6, 0.32, 3.6, 0.14, 3).translate(0, 2.42, 0)
     posts = [tube([(x, 2.5, zz), (x * 0.92, 5.2, zz * 0.92)], 0.11, 6) for x in (-2.0, 2.0) for zz in (-1.5, 1.5)]
     # Profiles run counter-clockwise (bottom, outside, top) so faces point outward: Roblox culls back faces.
     roof = lathe([(0.0, 5.35), (2.6, 5.15), (2.8, 5.3), (2.65, 5.6), (2.0, 5.95), (0.0, 6.0)], 32).scale(1.0, 1.0, 0.8)
     roof_top = icosphere(0.32, 1).translate(0, 6.15, 0)
     hanger = merge(tube([(0, 6.2, 0), (0, 7.1, 0)], 0.16, 8), torus(0.28, 0.09, 16, 6).rotate("x", 90).translate(0, 7.15, 0))
-    seat = rounded_box(3.6, 0.5, 1.1, 0.2).translate(0, 1.95, 0.9)
+    seat = rounded_box(3.6, 0.5, 1.1, 0.2, 3).translate(0, 1.95, 0.9)
     return {"Body": merge(body, seat), "Roof": merge(roof, roof_top), "Frame": merge(rim, *posts, hanger)}
 
 
@@ -382,7 +380,7 @@ def lobby_flower_bed():
         x = lerp(-0.78, 0.78, t_) * rx
         z = rng.uniform(-0.25, 0.25) * rz
         r = rng.uniform(1.05, 1.35)
-        leaves.append(icosphere(r, 2, noise=0.08, seed=k).scale(1.0, 0.62, 1.0).translate(x, 0.75, z))
+        leaves.append(icosphere(r, 1, noise=0.08, seed=k).scale(1.0, 0.62, 1.0).translate(x, 0.75, z))
     flowers = {"FlowerA": [], "FlowerB": [], "FlowerC": []}
     hearts = []
     keys = list(flowers)
@@ -394,7 +392,7 @@ def lobby_flower_bed():
         px, pz = x * rx * 0.95, z * rz * 0.95
         y = 1.2 + 0.45 * (1 - (x * x + z * z) / 0.62) + rng.uniform(0, 0.15)
         size = rng.uniform(0.3, 0.42)
-        petals = icosphere(size, 1).scale(1.0, 0.42, 1.0).translate(px, y, pz)
+        petals = ellipsoid(size, size * 0.42, size, 3, 7).translate(px, y, pz)
         flowers[keys[count % 3]].append(petals)
         hearts.append(icosphere(size * 0.42, 0).translate(px, y + size * 0.3, pz))
         count += 1
@@ -438,20 +436,21 @@ def striped_lathe(profile, segments: int, stripes: int, twist: float):
 def lobby_tower():
     """A carnival turret about 36 tall: a candy-striped body on a round plinth, a gold balcony with
     a ring of bulbs, a tall flared roof and a pennant on top."""
-    profile = [(3.3, 1.2 + k * 0.25) for k in range(75)]  # y 1.2 .. 19.7
-    body, stripes = striped_lathe(profile, 56, 3, 0.06)
+    # Rows 1 / (twist * segments) apart, so each stripe steps one segment per row (clean diagonals).
+    profile = [(3.3, 1.2 + k * 18.5 / 44) for k in range(45)]  # y 1.2 .. 19.7
+    body, stripes = striped_lathe(profile, 40, 3, 0.06)
     plinth = lathe([(0.0, 0.0), (4.4, 0.0), (4.5, 0.3), (4.4, 0.9), (3.9, 1.3), (0.0, 1.3)], 40)
     windows = []
     for k in range(4):
         a = (k + 0.5) / 4 * TAU
-        window = rounded_box(1.3, 2.6, 0.5, 0.5, 4).translate(0, 0, -3.3)
+        window = rounded_box(1.3, 2.6, 0.5, 0.5, 3).translate(0, 0, -3.3)
         windows.append(window.rotate("y", -math.degrees(a)).translate(0, 13.5, 0))
     balcony = merge(
         lathe([(3.2, 19.6), (4.6, 19.9), (4.9, 20.4), (4.8, 20.9), (3.2, 20.9)], 48),
         torus(4.75, 0.18, 48, 6).translate(0, 21.8, 0),
         *[cylinder(0.12, 1.0, 6).translate(math.cos(k / 16 * TAU) * 4.75, 20.9, math.sin(k / 16 * TAU) * 4.75) for k in range(16)],
     )
-    lights = [icosphere(0.32, 1).translate(math.cos((k + 0.5) / 20 * TAU) * 4.9, 20.15, math.sin((k + 0.5) / 20 * TAU) * 4.9) for k in range(20)]
+    lights = [icosphere(0.32, 0).translate(math.cos((k + 0.5) / 20 * TAU) * 4.9, 20.15, math.sin((k + 0.5) / 20 * TAU) * 4.9) for k in range(20)]
     roof_profile = [(4.9, 21.6), (4.6, 22.4), (3.6, 24.6), (2.4, 27.6), (1.3, 30.6), (0.45, 33.0), (0.0, 33.8)]
     roof, roof_b = striped_lathe(roof_profile, 32, 4, 0.0)
     eave = lathe([(3.2, 21.0), (5.2, 21.3), (5.3, 21.6), (4.9, 21.8), (3.2, 21.8)], 48)
@@ -535,6 +534,346 @@ def lobby_beach_ball():
     return pieces
 
 
+# ====================================================================== zone set pieces: shared bits
+
+def plate(corners, thickness: float) -> Mesh:
+    """A thin closed plate from four coplanar corners (in order), thickened along its normal."""
+    c = np.array(corners, dtype=float)
+    normal = np.cross(c[1] - c[0], c[3] - c[0])
+    normal = normal / np.linalg.norm(normal) * thickness / 2
+    verts = list(c - normal) + list(c + normal)
+    faces = [(0, 1, 2), (0, 2, 3), (4, 6, 5), (4, 7, 6)]
+    for i in range(4):
+        j = (i + 1) % 4
+        faces += [(i, j, 4 + j), (i, 4 + j, 4 + i)]
+    return orient(Mesh(verts, faces, smooth=False), c.mean(axis=0))
+
+
+def extrude_star(polygon, depth: float) -> Mesh:
+    """A plate from a star-shaped polygon in the XY plane (fanned from its centroid), centered on z = 0."""
+    mesh = extrude(polygon, depth)
+    pts = np.array(polygon, dtype=float)
+    return orient(mesh, (pts[:, 0].mean(), pts[:, 1].mean(), 0.0))
+
+
+def star_plate(radius: float, depth: float, x: float, y: float, z: float) -> Mesh:
+    return extrude_star(star(radius, radius * 0.45), depth).translate(x, y, z)
+
+
+def bulb(x: float, y: float, z: float, radius: float = 0.3) -> Mesh:
+    return icosphere(radius, 1).translate(x, y, z)
+
+
+def half_disc(cx: float, cy: float, radius: float, depth: float, z: float, down: bool = True, steps: int = 8) -> Mesh:
+    """A scallop: a half disc in the XY plane hanging below (or standing above) y = cy."""
+    sign = -1 if down else 1
+    pts = [(cx + math.cos(math.pi * k / steps) * radius, cy + sign * math.sin(math.pi * k / steps) * radius) for k in range(steps + 1)]
+    return extrude_xy(pts if not down else pts[::-1], depth).translate(0, 0, z)
+
+
+def rounded_rect(w: float, d: float, r: float, seg: int = 5):
+    """A rounded rectangle outline in the XZ plane, centered on the origin."""
+    pts = []
+    for cx, cz, a0 in ((w / 2 - r, d / 2 - r, 0), (-w / 2 + r, d / 2 - r, 90), (-w / 2 + r, -d / 2 + r, 180), (w / 2 - r, -d / 2 + r, 270)):
+        for k in range(seg + 1):
+            a = math.radians(a0 + 90 * k / seg)
+            pts.append((cx + math.cos(a) * r, cz + math.sin(a) * r))
+    return pts
+
+
+def candy_column(radius: float, y0: float, y1: float, segments: int = 24, twist: float = 0.08):
+    """A candy-striped round column from y0 to y1 (two meshes: base color, stripes). The row height
+    matches the twist so each stripe steps exactly one segment per row (clean diagonals)."""
+    step = 1 / (twist * segments)
+    rows = max(2, round((y1 - y0) / step))
+    profile = [(radius, lerp(y0, y1, k / rows)) for k in range(rows + 1)]
+    return striped_lathe(profile, segments, 2, twist)
+
+
+def ellipse_arc(half_width: float, rise: float, base_y: float, z: float, count: int):
+    return [(-math.cos(math.pi * k / count) * half_width, base_y + math.sin(math.pi * k / count) * rise, z) for k in range(count + 1)]
+
+
+def recenter(pieces: dict, name: str) -> dict:
+    """Prints how far the bounding box center sits from the local origin (LobbyBuilder places the
+    prop's pivot, the bottom center of its box, with that offset)."""
+    allv = np.vstack([m.v for m in pieces.values()])
+    lo, hi = allv.min(axis=0), allv.max(axis=0)
+    print(f"  {name}: box center x {(lo[0] + hi[0]) / 2:+.3f} z {(lo[2] + hi[2]) / 2:+.3f}, y {lo[1]:.3f}..{hi[1]:.3f}")
+    return pieces
+
+
+# ====================================================================== zone floors
+
+def lobby_patio():
+    """A paved pad (32 x 24) for a zone on the lawn: a white edge, a blue band, cream grout and
+    chamfered tiles in the promenade's two warm tones. Stepped 0.1 per layer, 0.4 tall."""
+    stripe = slab(rounded_rect(32, 24, 3.0), 0.1)
+    band = slab(rounded_rect(31, 23, 2.6), 0.1).translate(0, 0.1, 0)
+    grout = slab(rounded_rect(28.4, 20.4, 1.2), 0.1).translate(0, 0.2, 0)
+    tiles = {"TileA": [], "TileB": []}
+    nx, nz, gap = 10, 7, 0.3
+    tw, td = (27.6 - (nx - 1) * gap) / nx, (19.6 - (nz - 1) * gap) / nz
+    c = 0.22
+    for i in range(nx):
+        for j in range(nz):
+            x0 = -13.8 + i * (tw + gap)
+            z0 = -9.8 + j * (td + gap)
+            x1, z1 = x0 + tw, z0 + td
+            outline = [(x0 + c, z0), (x1 - c, z0), (x1, z0 + c), (x1, z1 - c), (x1 - c, z1), (x0 + c, z1), (x0, z1 - c), (x0, z0 + c)]
+            tiles["TileA" if (i + j) % 2 == 0 else "TileB"].append(slab(outline, 0.1).translate(0, 0.3, 0))
+    pieces = {"Stripe": stripe, "Band": band, "Grout": grout}
+    pieces.update({name: merge(*meshes) for name, meshes in tiles.items()})
+    return pieces
+
+
+# ====================================================================== arcade: shooting gallery
+
+def lobby_gallery_booth():
+    """A carnival shooting-gallery booth around the arcade's target wall. Local origin: the ground
+    under the target wall's center line; the open front faces -Z. The back panel (32 x 17) is
+    where the game's six clickable targets sit (in front of z = -0.85); tin ducks march along its
+    top; a striped, scalloped awning with bulbs covers it and a counter stands at z = -7.5."""
+    back = rounded_box(32, 17, 2.5, 0.6, 5).translate(0, 8.5, 0.4)
+    frame = [tube([(-16.1, 0.4, -0.95), (16.1, 0.4, -0.95)], 0.22, 6), tube([(-16.1, 16.6, -0.95), (16.1, 16.6, -0.95)], 0.22, 6)]
+    frame += [tube([(x, 0.4, -0.95), (x, 16.6, -0.95)], 0.22, 6) for x in (-16.1, 16.1)]
+    stars = [star_plate(1.15 * k, 0.24, x, y, -0.92) for x, y, k in
+             ((-4.75, 8.5, 1), (4.75, 8.5, 1), (-14.1, 4, 0.9), (14.1, 4, 0.9), (-14.1, 13, 0.9), (14.1, 13, 0.9))]
+
+    # Tin ducks on a rail along the top of the back panel.
+    ducks, beaks = [], []
+    for k in range(8):
+        x = -12.25 + k * 3.5
+        body = extrude_xy([(x + math.cos(a) * 0.8, 17.55 + math.sin(a) * 0.45) for a in np.linspace(0, TAU, 14, endpoint=False)], 0.18)
+        head = extrude_xy([(x + 0.5 + math.cos(a) * 0.34, 18.2 + math.sin(a) * 0.34) for a in np.linspace(0, TAU, 12, endpoint=False)], 0.18)
+        ducks += [body.translate(0, 0, 0.4), head.translate(0, 0, 0.4)]
+        beaks.append(extrude_xy([(x + 0.78, 18.27), (x + 1.25, 18.15), (x + 0.78, 18.03)], 0.14).translate(0, 0, 0.4))
+    rail = tube([(-16, 17.1, 0.4), (16, 17.1, 0.4)], 0.12, 6)
+
+    # Posts: candy-striped at the front, plain at the back, gold balls on top.
+    post, post_stripes = candy_column(0.9, 0.0, 19.3)
+    posts = [post.copy().translate(x, 0, -9) for x in (-17.2, 17.2)]
+    stripes = [post_stripes.copy().translate(x, 0, -9) for x in (-17.2, 17.2)]
+    back_posts = [cylinder(0.7, 21.1, 16).translate(x, 0, 0.4) for x in (-17.2, 17.2)]
+    plinths = [lathe([(0.0, 0.0), (1.35, 0.0), (1.4, 0.35), (1.15, 0.7), (0.0, 0.7)], 20).translate(x, 0, -9) for x in (-17.2, 17.2)]
+    finials = [icosphere(0.6, 2).translate(x, 20.25, -9) for x in (-17.2, 17.2)]
+
+    # Awning: twelve stripes from the back (y 21.2) down to the front edge (y 19.0), scalloped.
+    zb, yb, zf, yf = 1.9, 21.2, -10.0, 19.0
+    awn = {"AwningA": [], "AwningB": []}
+    lights = []
+    for k in range(12):
+        x0, x1 = -18 + k * 3, -15 + k * 3
+        key = "AwningA" if k % 2 == 0 else "AwningB"
+        awn[key].append(plate([(x0, yb, zb), (x1, yb, zb), (x1, yf, zf), (x0, yf, zf)], 0.2))
+        awn[key].append(half_disc((x0 + x1) / 2, yf + 0.05, 1.5, 0.16, zf - 0.02))
+        lights.append(bulb((x0 + x1) / 2, yf - 1.45, zf - 0.2))
+    edge = tube([(-18.1, yf + 0.05, zf - 0.12), (18.1, yf + 0.05, zf - 0.12)], 0.22, 8)
+    for x in (-17.2, 17.2):
+        lights += [bulb(x, 2.4 + 1.5 * k, -9 - 1.1) for k in range(11)]
+
+    # The counter.
+    counter = rounded_box(32.6, 3.4, 2.0, 0.3, 4).translate(0, 1.7, -7.5)
+    top = rounded_box(33.4, 0.4, 2.6, 0.15, 3).translate(0, 3.6, -7.5)
+    panels = [rounded_box(1.3, 2.4, 0.24, 0.1, 2).translate(-14.85 + k * 3.3, 1.75, -8.56) for k in range(10)]
+    counter_stars = [star_plate(0.55, 0.16, -13.2 + k * 3.3, 1.75, -8.56) for k in range(9)]
+
+    pieces = {
+        "Back": back,
+        "Frame": merge(*posts, *back_posts),
+        "Stripes": merge(*stripes),
+        "Trim": merge(*frame, rail, *finials, edge, top, *plinths),
+        "Stars": merge(*stars, *counter_stars),
+        "Ducks": merge(*ducks),
+        "Beaks": merge(*beaks),
+        "Counter": counter,
+        "Panels": merge(*panels),
+        "Bulbs": merge(*lights),
+    }
+    pieces.update({name: merge(*meshes) for name, meshes in awn.items()})
+    return recenter(pieces, "LobbyGalleryBooth")
+
+
+# ====================================================================== podium: tiers under a bulb arch
+
+PODIUM_STEPS = ((0.0, 6.5, "Gold"), (9.5, 4.6, "Silver"), (-9.5, 3.0, "Bronze"))  # local x, height, trim
+
+
+def lobby_podium():
+    """The winners' podium, facing -Z: a stage (36 x 24, centered at z = 2), three rounded tiers
+    with gold, silver and bronze bands and stars (1st at x 0, 2nd at x 9.5, 3rd at x -9.5), and a
+    candy-striped arch with bulbs and a star on top, standing around the champion board (z 9.6)."""
+    base = rounded_box(36, 0.8, 24, 0.35, 4).translate(0, 0.4, 2)
+    lip = rounded_box(36.6, 0.3, 24.6, 0.14, 3).translate(0, 0.5, 2)
+    bodies = []
+    metal = {"Gold": [], "Silver": [], "Bronze": []}
+    for x, h, trim in PODIUM_STEPS:
+        bodies.append(rounded_box(9, h, 9, 0.9, 5).translate(x, 0.8 + h / 2, 0))
+        metal[trim].append(rounded_box(9.4, 0.7, 9.4, 0.3, 3).translate(x, 0.8 + h - 0.6, 0))
+        metal[trim].append(rounded_box(9.3, 0.4, 9.3, 0.18, 3).translate(x, 1.0, 0))
+        metal[trim].append(star_plate(min(1.7, h * 0.3), 0.3, x, 0.8 + h * 0.48, -4.58))
+
+    arch_z, half, spring, rise = 9.6, 18.5, 19.5, 10.5
+    column, column_stripes = candy_column(1.0, 0.8, spring)
+    columns = [column.copy().translate(x, 0, arch_z) for x in (-half, half)]
+    stripes = [column_stripes.copy().translate(x, 0, arch_z) for x in (-half, half)]
+    plinths = [lathe([(0.0, 0.8), (1.6, 0.8), (1.65, 1.2), (1.3, 1.6), (0.0, 1.6)], 20).translate(x, 0, arch_z) for x in (-half, half)]
+    arch = tube(ellipse_arc(half, rise, spring, arch_z, 40), 0.9, 10)
+    gold_arc = tube(ellipse_arc(half, rise, spring, arch_z - 0.75, 40), 0.3, 6)
+    lights = [bulb(x, y, arch_z - 1.15) for x, y, _ in ellipse_arc(half, rise, spring, 0, 18)[1:-1]]
+    for x in (-half, half):
+        lights += [bulb(x, 2.6 + 1.6 * k, arch_z - 1.2) for k in range(11)]
+    crown = star_plate(2.3, 0.6, 0, spring + rise + 2.6, arch_z)
+    return recenter({
+        "Base": base,
+        "Trim": merge(lip, gold_arc, *plinths),
+        "Body": merge(*bodies),
+        "Gold": merge(*metal["Gold"], crown),
+        "Silver": merge(*metal["Silver"]),
+        "Bronze": merge(*metal["Bronze"]),
+        "Frame": merge(*columns, arch),
+        "Stripes": merge(*stripes),
+        "Bulbs": merge(*lights),
+    }, "LobbyPodium")
+
+
+# ====================================================================== emote stage: arch, fan, speakers
+
+def speaker_stack(x: float, z: float):
+    boxes = [rounded_box(3.6, 4.2, 3.0, 0.4, 4).translate(x, 2.1, z), rounded_box(3.0, 3.2, 2.6, 0.35, 4).translate(x, 5.8, z)]
+    cones, trims = [], []
+    for y, r, front in ((2.3, 1.25, z - 1.5), (5.8, 0.8, z - 1.3)):
+        cones.append(cylinder(r, 0.2, 20).rotate("x", -90).translate(x, y, front + 0.05))
+        trims.append(icosphere(r * 0.34, 1).scale(1, 1, 0.5).translate(x, y, front - 0.15))
+        trims.append(torus(r + 0.05, 0.1, 24, 6).rotate("x", 90).translate(x, y, front - 0.12))
+    return boxes, cones, trims
+
+
+def lobby_emote_arch():
+    """The emote stage's back arch, facing -Z, local origin under its center line: candy columns at
+    x +-14, a header beam (y 17.5 to 19.7), a scalloped fan crown behind the sign (radius 12.5),
+    bulbs everywhere and a speaker stack on each side (x +-18.5)."""
+    column, column_stripes = candy_column(1.1, 0.0, 17.6)
+    columns = [column.copy().translate(x, 0, 0) for x in (-14, 14)]
+    stripes = [column_stripes.copy().translate(x, 0, 0) for x in (-14, 14)]
+    plinths = [lathe([(0.0, 0.0), (1.8, 0.0), (1.85, 0.4), (1.45, 1.0), (0.0, 1.0)], 20).translate(x, 0, 0) for x in (-14, 14)]
+    beam = rounded_box(31, 2.2, 2.4, 0.5, 4).translate(0, 18.6, 0)
+
+    fan = {"FanA": [], "FanB": []}
+    center_y, radius, slices = 19.7, 12.5, 9
+    for k in range(slices):
+        a0, a1 = math.pi * k / slices, math.pi * (k + 1) / slices
+        arc = [(math.cos(a) * radius, center_y + math.sin(a) * radius) for a in np.linspace(a0, a1, 5)]
+        wedge = extrude_xy([(0.0, center_y)] + arc, 0.6).translate(0, 0, 1.2)
+        fan["FanA" if k % 2 == 0 else "FanB"].append(wedge)
+        mid = (a0 + a1) / 2
+        # A scallop bulge on each slice's outer edge.
+        bump = extrude_xy([(math.cos(a) * radius, center_y + math.sin(a) * radius) for a in np.linspace(a0, a1, 5)]
+                          + [(math.cos(mid) * (radius + 1.3), center_y + math.sin(mid) * (radius + 1.3))], 0.6)
+        fan["FanB" if k % 2 == 0 else "FanA"].append(bump.translate(0, 0, 1.2))
+    rim = tube([(math.cos(a) * (radius + 0.05), center_y + math.sin(a) * (radius + 0.05), 0.85) for a in np.linspace(0, math.pi, 37)], 0.3, 6)
+    lights = [bulb(math.cos(a) * (radius + 1.3), center_y + math.sin(a) * (radius + 1.3), 0.7) for a in np.linspace(0, math.pi, slices * 2 + 1)[1::2]]
+    lights += [bulb(x, 18.6, -1.4) for x in np.linspace(-14, 14, 15)]
+    for x in (-14, 14):
+        lights += [bulb(x, 2.0 + 1.6 * k, -1.35) for k in range(10)]
+    caps = [icosphere(0.75, 2).translate(x, 20.4, 0) for x in (-14.8, 14.8)]
+
+    boxes, cones, trims = [], [], []
+    for x in (-18.5, 18.5):
+        b, c, t = speaker_stack(x, -0.4)
+        boxes += b
+        cones += c
+        trims += t
+    pieces = {
+        "Frame": merge(*columns, beam),
+        "Stripes": merge(*stripes),
+        "Trim": merge(*plinths, rim, *caps, *trims),
+        "Bulbs": merge(*lights),
+        "Speakers": merge(*boxes),
+        "Cones": merge(*cones),
+    }
+    pieces.update({name: merge(*meshes) for name, meshes in fan.items()})
+    return recenter(pieces, "LobbyEmoteArch")
+
+
+# ====================================================================== quest kiosk
+
+def lobby_quest_kiosk():
+    """A little wooden kiosk around the quest board, facing -Z. Local origin: the ground under the
+    board's center (the board, 16 x 11, centered at y 8, is a game part; this is its frame). Turned
+    posts, a gabled roof with a scalloped front edge and bulbs, flower boxes at the feet."""
+    back = rounded_box(17.4, 12.4, 0.6, 0.2, 3).translate(0, 8, 0.65)
+    bars = [rounded_box(18.4, 1.2, 1.6, 0.35, 3).translate(0, y, 0.3) for y in (14.1, 1.9)]
+    bars += [rounded_box(1.2, 13.2, 1.6, 0.35, 3).translate(x, 8, 0.3) for x in (-8.6, 8.6)]
+    brackets = [rounded_box(1.4, 0.6, 0.6, 0.2, 2).translate(x * 9.6, y, 0.3) for x in (-1, 1) for y in (4, 12)]
+    post_profile = [(0.85, 0.0), (0.85, 0.6), (0.6, 0.8), (0.5, 1.0), (0.5, 7.4), (0.68, 7.7), (0.5, 8.0), (0.5, 15.0),
+                    (0.72, 15.4), (0.72, 16.4), (0.0, 16.4)]
+    posts = [lathe(post_profile, 16, cap_bottom=True).translate(x, 0, 0.3) for x in (-10.3, 10.3)]
+
+    ridge_y, eave_y, z0, depth, half = 20.0, 16.4, 0.3, 5.0, 12.4
+    roof = {"Roof": [], "RoofB": []}
+    for side in (-1, 1):
+        for band in range(3):
+            t0, t1 = band / 3, (band + 1) / 3
+            ya, yb = lerp(ridge_y, eave_y, t0), lerp(ridge_y, eave_y, t1)
+            za, zb = z0 + side * depth * t0, z0 + side * depth * t1
+            roof["Roof" if band % 2 == 0 else "RoofB"].append(plate([(-half, ya, za), (half, ya, za), (half, yb, zb), (-half, yb, zb)], 0.3))
+    flaps, lights = [], []
+    for k in range(10):
+        x = -11.25 + k * 2.5
+        flaps.append(half_disc(x, eave_y - 0.1, 1.25, 0.16, z0 - depth - 0.05))
+        lights.append(bulb(x, eave_y - 1.45, z0 - depth - 0.25, 0.26))
+    gables = [extrude_xy([(z0 - depth, eave_y), (z0 + depth, eave_y), (z0, ridge_y)], 0.3).rotate("y", -90).translate(x, 0, 0) for x in (-11.0, 11.0)]
+    ridge = tube([(-half - 0.2, ridge_y + 0.2, z0), (half + 0.2, ridge_y + 0.2, z0)], 0.35, 8)
+    ends = [icosphere(0.55, 2).translate(x, ridge_y + 0.3, z0) for x in (-half - 0.4, half + 0.4)]
+
+    planters, leaves, flowers = [], [], []
+    rng = np.random.default_rng(4)
+    for x in (-10.3, 10.3):
+        planters.append(rounded_box(2.8, 1.3, 2.8, 0.3, 3).translate(x, 0.65, 0.3))
+        leaves.append(icosphere(1.0, 1, noise=0.1, seed=int(abs(x)) + (x > 0)).scale(1.25, 0.55, 1.25).translate(x, 1.5, 0.3))
+        for k in range(6):
+            a = k / 6 * TAU + rng.uniform(-0.3, 0.3)
+            flowers.append(icosphere(0.32, 1).scale(1, 0.6, 1).translate(x + math.cos(a) * 0.95, 1.85 + rng.uniform(0, 0.25), 0.3 + math.sin(a) * 0.95))
+    return recenter({
+        "Wood": merge(back, *bars, *brackets, *posts),
+        "Roof": merge(*roof["Roof"], *flaps),
+        "RoofB": merge(*roof["RoofB"]),
+        "Trim": merge(*gables, ridge, *ends),
+        "Bulbs": merge(*lights),
+        "Planter": merge(*planters),
+        "Leaves": merge(*leaves),
+        "Flowers": merge(*flowers),
+    }, "LobbyQuestKiosk")
+
+
+# ====================================================================== confetti cannon
+
+def lobby_confetti_cannon():
+    """A circus cannon on a wheeled cart, its striped barrel aimed up and forward (-Z)."""
+    cart = rounded_box(3.2, 1.4, 4.4, 0.4, 4).translate(0, 1.9, 0.2)
+    wheels, spokes = [], []
+    for x in (-2.0, 2.0):
+        wheels.append(torus(1.25, 0.24, 28, 8).rotate("z", 90).translate(x, 1.5, 0.2))
+        for k in range(6):
+            a = k / 6 * TAU
+            spokes.append(tube([(x, 1.5, 0.2), (x, 1.5 + math.sin(a) * 1.15, 0.2 + math.cos(a) * 1.15)], 0.1, 5))
+        spokes.append(cylinder(0.32, 0.5, 12).rotate("z", 90).translate(x + 0.25, 1.5, 0.2))
+    profile = [(0.0, -0.9), (0.75, -0.75), (1.05, -0.3), (1.1, 0.4), (0.98, 1.0), (0.9, 3.6), (1.0, 4.0), (1.12, 4.3), (1.12, 4.6), (0.75, 4.6), (0.75, 4.5)]
+    barrel, barrel_stripes = striped_lathe(profile, 28, 4, 0.0)
+    muzzle = torus(1.1, 0.18, 28, 6).translate(0, 4.15, 0)
+    band = torus(1.06, 0.14, 28, 6).translate(0, 1.0, 0)
+    tilt = lambda m: m.rotate("x", -40).translate(0, 3.1, 0.6)  # noqa: E731
+    stars = [star_plate(0.6, 0.12, 0, 1.9, -2.06), star_plate(0.6, 0.12, 0, 1.9, 2.46).rotate("y", 180).translate(0, 0, 0.4)]
+    return recenter({
+        "Cart": cart,
+        "Wheels": merge(*wheels),
+        "Trim": merge(*spokes, tilt(muzzle), tilt(band), *stars),
+        "Barrel": tilt(barrel),
+        "BarrelStripes": tilt(barrel_stripes),
+    }, "LobbyConfettiCannon")
+
+
 PROPS = {
     "LobbyPavers": lobby_pavers,
     "LobbyCourt": lobby_court,
@@ -548,6 +887,12 @@ PROPS = {
     "LobbyTower": lobby_tower,
     "LobbyBunting": lobby_bunting,
     "LobbyBeachBall": lobby_beach_ball,
+    "LobbyPatio": lobby_patio,
+    "LobbyGalleryBooth": lobby_gallery_booth,
+    "LobbyPodium": lobby_podium,
+    "LobbyEmoteArch": lobby_emote_arch,
+    "LobbyQuestKiosk": lobby_quest_kiosk,
+    "LobbyConfettiCannon": lobby_confetti_cannon,
 }
 
 # Preview colors only; the game colors pieces by name (Props/Lobby.luau).
@@ -563,4 +908,11 @@ COLORS = {
     "Windows": (60, 40, 110), "Flag": (255, 204, 64), "Rope": (250, 250, 250),
     "FlagA": (255, 84, 150), "FlagB": (64, 196, 255), "FlagC": (255, 204, 64),
     "White": (255, 255, 255), "GoreA": (255, 70, 80), "GoreB": (60, 150, 255), "GoreC": (255, 210, 50), "Cap": (255, 70, 80),
+    "Grout": (250, 240, 225), "Back": (45, 65, 130), "Frame": (120, 84, 230), "Stars": (255, 214, 92), "Ducks": (255, 214, 60),
+    "Beaks": (255, 140, 40), "Counter": (220, 60, 90), "Panels": (255, 255, 255), "Bulbs": (255, 240, 170),
+    "AwningA": (255, 70, 110), "AwningB": (255, 255, 255), "Base": (60, 40, 110), "Gold": (255, 200, 50),
+    "Silver": (200, 210, 230), "Bronze": (220, 140, 80), "FanA": (255, 204, 64), "FanB": (255, 92, 150),
+    "Speakers": (50, 40, 80), "Cones": (30, 30, 40), "Wood": (180, 120, 80), "RoofB": (255, 255, 255),
+    "Planter": (230, 110, 150), "Flowers": (255, 240, 120), "Cart": (90, 150, 255), "Wheels": (255, 70, 100),
+    "Barrel": (255, 92, 150), "BarrelStripes": (255, 255, 255),
 }

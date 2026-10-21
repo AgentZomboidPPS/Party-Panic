@@ -1,0 +1,47 @@
+newmtl Frame
+Kd 0.471 0.329 0.902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stripes
+Kd 1.000 0.329 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 1.000 0.800 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bulbs
+Kd 1.000 0.941 0.667
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Speakers
+Kd 0.196 0.157 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cones
+Kd 0.118 0.118 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FanA
+Kd 1.000 0.800 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FanB
+Kd 1.000 0.361 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

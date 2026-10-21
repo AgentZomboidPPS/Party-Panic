@@ -1,0 +1,53 @@
+newmtl Base
+Kd 0.235 0.157 0.431
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 1.000 0.800 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Body
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Gold
+Kd 1.000 0.784 0.196
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Silver
+Kd 0.784 0.824 0.902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bronze
+Kd 0.863 0.549 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Frame
+Kd 0.471 0.329 0.902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stripes
+Kd 1.000 0.329 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bulbs
+Kd 1.000 0.941 0.667
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

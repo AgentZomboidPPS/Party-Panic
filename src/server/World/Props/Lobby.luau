@@ -1,5 +1,7 @@
 -- Props for the lobby plaza: the paving, the fountain and its ducks, the theme-park skyline (Ferris
--- wheel, hot-air balloons, carnival turrets), flower beds and bunting.
+-- wheel, hot-air balloons, carnival turrets), flower beds and bunting, and the set pieces of the
+-- zones players walk to (shooting-gallery booth, podium arch, emote-stage arch, quest kiosk,
+-- confetti cannon, paved patios).
 -- Meshes: tools/meshgen/props/Lobby.py. Names start with "Lobby" so they never clash with a
 -- mini-game's props. LobbyBuilder places them; AmbienceController animates the moving ones.
 return function(h)
@@ -23,7 +25,7 @@ return function(h)
 		-- The sunburst court around the fountain (radius 27.5).
 		LobbyCourt = {
 			Height = 0.1,
-			AssetId = 103368218308832,
+			AssetId = 117846000426134,
 			Shadow = false,
 			Palette = {
 				RayA = rgb(255, 238, 200),
@@ -56,7 +58,7 @@ return function(h)
 		},
 		LobbyDuck = {
 			Height = 1.84,
-			AssetId = 126905865176551,
+			AssetId = 115106276723268,
 			Palette = { Body = rgb(255, 220, 60), Beak = rgb(255, 140, 40), Eyes = rgb(30, 30, 40) },
 			Fallback = function(m)
 				h.blob(m, "Body", Vector3.new(1.5, 1.1, 1.9), Vector3.new(0, 0.6, 0.1))
@@ -89,7 +91,7 @@ return function(h)
 		-- A gondola; its hang point is the top center.
 		LobbyFerrisCabin = {
 			Height = 7.57,
-			AssetId = 123860185649714,
+			AssetId = 101788580276212,
 			Palette = { Body = rgb(64, 196, 255), Roof = rgb(255, 255, 255), Frame = rgb(255, 204, 64) },
 			Fallback = function(m)
 				h.rounded(m, "Body", Vector3.new(4.4, 2.6, 3.4), 0.7, Vector3.new(0, 1.3, 0))
@@ -137,7 +139,7 @@ return function(h)
 		-- An oval raised bed, 10 x 5, long axis along X.
 		LobbyFlowerBed = {
 			Height = 2.05,
-			AssetId = 123118473829279,
+			AssetId = 116539640556409,
 			Collide = true,
 			Palette = {
 				Curb = rgb(250, 246, 240),
@@ -157,7 +159,7 @@ return function(h)
 		-- A candy-striped carnival turret with a balcony of bulbs and a pennant (37 tall).
 		LobbyTower = {
 			Height = 37.15,
-			AssetId = 135960815310824,
+			AssetId = 139016732387318,
 			Collide = true,
 			Palette = {
 				Body = rgb(255, 255, 255),
@@ -213,6 +215,156 @@ return function(h)
 			},
 			Fallback = function(m)
 				h.ball(m, "GoreA", 5, Vector3.new(0, 2.5, 0))
+			end,
+		},
+		-- A paved pad (32 x 24, 0.4 tall in four 0.1 steps) for a zone on the lawn.
+		LobbyPatio = {
+			Height = 0.4,
+			AssetId = 77633316569760,
+			Shadow = false,
+			Palette = {
+				Stripe = rgb(255, 255, 255),
+				Band = rgb(84, 190, 238),
+				Grout = rgb(250, 240, 225),
+				TileA = rgb(255, 208, 150),
+				TileB = rgb(238, 138, 104),
+			},
+			Fallback = function(m)
+				h.block(m, "TileA", Vector3.new(32, 0.4, 24), Vector3.new(0, 0.2, 0))
+			end,
+		},
+		-- The arcade's shooting-gallery booth, open toward -Z. Its back panel (32 x 17) stands on the
+		-- local origin's line; the game's targets sit in front of it. The box center is 4.29 in front.
+		LobbyGalleryBooth = {
+			Height = 21.3,
+			AssetId = 93121744943221,
+			Collide = true,
+			Palette = {
+				Back = rgb(45, 65, 130),
+				Frame = rgb(255, 255, 255),
+				Stripes = rgb(255, 70, 110),
+				Trim = rgb(255, 204, 64),
+				Stars = rgb(255, 214, 92),
+				Ducks = rgb(255, 214, 60),
+				Beaks = rgb(255, 140, 40),
+				Counter = rgb(225, 60, 95),
+				Panels = rgb(255, 255, 255),
+				Bulbs = rgb(255, 240, 170),
+				AwningA = rgb(255, 70, 110),
+				AwningB = rgb(255, 255, 255),
+			},
+			Materials = { Trim = Enum.Material.Metal, Bulbs = Enum.Material.Neon },
+			Fallback = function(m)
+				h.rounded(m, "Back", Vector3.new(32, 17, 2.5), 0.6, Vector3.new(0, 8.5, 4.69))
+				h.rounded(m, "Counter", Vector3.new(32.6, 3.6, 2.4), 0.3, Vector3.new(0, 1.8, -3.21))
+				for _, x in { -17.2, 17.2 } do
+					h.pillar(m, "Stripes", 1.8, 19.3, Vector3.new(x, 9.65, -4.71))
+				end
+				h.block(m, "AwningA", Vector3.new(36, 0.4, 12), Vector3.new(0, 20.6, -0.6))
+			end,
+		},
+		-- The winners' podium, front -Z: a stage, three tiers (1st at x 0, 2nd at x 9.5, 3rd at
+		-- x -9.5) and a bulb arch around the champion board (z 9.6). The box center is at z 2.
+		LobbyPodium = {
+			Height = 34.9,
+			AssetId = 94884052453718,
+			Collide = true,
+			Palette = {
+				Base = rgb(52, 36, 104),
+				Trim = rgb(255, 204, 64),
+				Body = rgb(255, 250, 242),
+				Gold = rgb(255, 200, 50),
+				Silver = rgb(205, 215, 235),
+				Bronze = rgb(226, 142, 84),
+				Frame = rgb(255, 255, 255),
+				Stripes = rgb(156, 108, 255),
+				Bulbs = rgb(255, 240, 170),
+			},
+			Materials = {
+				Trim = Enum.Material.Metal,
+				Gold = Enum.Material.Metal,
+				Silver = Enum.Material.Metal,
+				Bronze = Enum.Material.Metal,
+				Bulbs = Enum.Material.Neon,
+			},
+			Fallback = function(m)
+				h.rounded(m, "Base", Vector3.new(36, 0.8, 24), 0.35, Vector3.new(0, 0.4, 0))
+				for _, step in { { 0, 6.5, "Gold" }, { 9.5, 4.6, "Silver" }, { -9.5, 3, "Bronze" } } do
+					h.rounded(m, step[3], Vector3.new(9, step[2], 9), 0.9, Vector3.new(step[1], 0.8 + step[2] / 2, -2))
+				end
+				for _, x in { -18.5, 18.5 } do
+					h.pillar(m, "Stripes", 2, 19, Vector3.new(x, 10, 7.6))
+				end
+			end,
+		},
+		-- The emote stage's back arch, front -Z: candy columns at x +-14, a header beam, a fan crown
+		-- with bulbs and a speaker stack each side. The box center is 0.21 in front of the columns.
+		LobbyEmoteArch = {
+			Height = 33.8,
+			AssetId = 86541767455946,
+			Collide = true,
+			Palette = {
+				Frame = rgb(120, 84, 230),
+				Stripes = rgb(255, 255, 255),
+				Trim = rgb(255, 204, 64),
+				Bulbs = rgb(255, 240, 170),
+				Speakers = rgb(50, 40, 80),
+				Cones = rgb(28, 28, 40),
+				FanA = rgb(255, 204, 64),
+				FanB = rgb(255, 92, 150),
+			},
+			Materials = { Trim = Enum.Material.Metal, Bulbs = Enum.Material.Neon },
+			Fallback = function(m)
+				for _, x in { -14, 14 } do
+					h.pillar(m, "Frame", 2.2, 17.6, Vector3.new(x, 8.8, 0.21))
+				end
+				h.rounded(m, "Frame", Vector3.new(31, 2.2, 2.4), 0.5, Vector3.new(0, 18.6, 0.21))
+				for _, x in { -18.5, 18.5 } do
+					h.rounded(m, "Speakers", Vector3.new(3.6, 7.4, 3), 0.4, Vector3.new(x, 3.7, -0.19))
+				end
+			end,
+		},
+		-- A wooden kiosk with a gabled roof that frames the quest board (16 x 11, centered 8 up),
+		-- front -Z. The box center is 0.09 behind the board.
+		LobbyQuestKiosk = {
+			Height = 20.85,
+			AssetId = 127544750099005,
+			Collide = true,
+			Palette = {
+				Wood = rgb(196, 140, 92),
+				Roof = rgb(170, 110, 240),
+				RoofB = rgb(255, 255, 255),
+				Trim = rgb(255, 204, 64),
+				Bulbs = rgb(255, 240, 170),
+				Planter = rgb(255, 110, 160),
+				Leaves = rgb(70, 176, 84),
+				Flowers = rgb(255, 236, 120),
+			},
+			Materials = { Wood = Enum.Material.Wood, Bulbs = Enum.Material.Neon, Leaves = Enum.Material.Grass },
+			Fallback = function(m)
+				h.rounded(m, "Wood", Vector3.new(18.4, 13.4, 1.6), 0.4, Vector3.new(0, 8, 0.21))
+				for _, x in { -10.3, 10.3 } do
+					h.pillar(m, "Wood", 1.2, 16.4, Vector3.new(x, 8.2, 0.21))
+				end
+				h.rounded(m, "Roof", Vector3.new(25, 1, 10.6), 0.4, Vector3.new(0, 18.2, 0.21))
+			end,
+		},
+		-- A circus cannon on a wheeled cart, its barrel aimed up and forward (-Z).
+		LobbyConfettiCannon = {
+			Height = 7.33,
+			AssetId = 127774107283999,
+			Collide = true,
+			Palette = {
+				Cart = rgb(64, 150, 255),
+				Wheels = rgb(255, 70, 100),
+				Trim = rgb(255, 204, 64),
+				Barrel = rgb(255, 92, 150),
+				BarrelStripes = rgb(255, 255, 255),
+			},
+			Materials = { Trim = Enum.Material.Metal },
+			Fallback = function(m)
+				h.rounded(m, "Cart", Vector3.new(3.2, 1.4, 4.4), 0.4, Vector3.new(0, 1.9, 0.6))
+				h.capsule(m, "Barrel", 5, 2.2, CFrame.new(0, 4.4, -0.6) * CFrame.Angles(math.rad(-40), 0, 0))
 			end,
 		},
 	}
