@@ -125,6 +125,18 @@ local list: { GameDefinition } = {
 		MinPlayers = 2,
 		IsTeam = true,
 	},
+	{
+		Id = "BobsledRun",
+		Name = "Bobsled Run",
+		Category = "Team",
+		Icon = "🛷",
+		Color = Color3.fromRGB(110, 200, 255),
+		Objective = "Race your crew's bobsled down the ice. Lean together into every curve - first sled home wins!",
+		Controls = "When the arrow shows, press LEAN LEFT or LEAN RIGHT (A / D) with your crew. Wrong or late hits the wall!",
+		Duration = 50,
+		MinPlayers = 2,
+		IsTeam = true,
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 

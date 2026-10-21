@@ -1,0 +1,23 @@
+newmtl Snow
+Kd 0.961 0.973 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 0.314 0.251 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Ice
+Kd 0.784 0.910 0.980
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Kicker
+Kd 0.667 0.843 0.961
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
