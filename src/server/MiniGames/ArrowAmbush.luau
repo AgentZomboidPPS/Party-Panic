@@ -465,8 +465,7 @@ function ArrowAmbush:_buildArena()
 			MeshLibrary.Get("ArrowAmbushTurret", {
 				Scale = tower[3],
 				Colors = { Flag = if side < 0 then red else gold },
-				CFrame = CFrame.new(at(side * tower[1], tower[2], grass - 0.15))
-					* CFrame.Angles(0, math.pi, 0),
+				CFrame = CFrame.new(at(side * tower[1], tower[2], grass - 0.15)) * CFrame.Angles(0, math.pi, 0),
 				Parent = ctx.Arena,
 			})
 		end
