@@ -64,6 +64,31 @@ local FLOOR_GROUP = "BumperFloor" -- the hidden floor under the sea: everything 
 local FLOOR_DEPTH = 9 -- how far under the water surface it is
 local ROLL_MASS = 1.4 -- a rolling solid ball needs 7/5 of the force to speed up (it spins up too)
 
+-- The look (art pass, owner: "make it look really cool"): a sunny tropical party. Turquoise
+-- shallows around the island, a ring of floats and buoys marking the edge, pool floats drifting in
+-- the lagoon, a party islet with a tiki beach bar, palm islets and big jungle islands on the horizon.
+local LAGOON_DEPTH = 15.2 -- the lagoon mesh's base under the water (its shelf is 4.5 under)
+local PARTY_ANGLE = math.rad(-90) -- where the party islet sits around the island
+local PARTY_SCALE = 2.4
+local ISLET_PROFILE = { { 0, 3.25 }, { 2.4, 3.2 }, { 5, 2.9 }, { 7.6, 2.1 }, { 9.5, 0.9 }, { 10.5, 0 } }
+local PARASOL_COLORS = {
+	Color3.fromRGB(255, 92, 126),
+	Color3.fromRGB(70, 190, 255),
+	Color3.fromRGB(255, 196, 50),
+}
+local FROSTING_COLORS = {
+	Color3.fromRGB(255, 136, 204),
+	Color3.fromRGB(120, 232, 196),
+	Color3.fromRGB(255, 220, 90),
+	Color3.fromRGB(150, 160, 255),
+}
+local FLOAT_KINDS = {
+	{ Prop = "BumperFlamingo", Scale = 1.5, Sink = 0.6 },
+	{ Prop = "BumperDonutFloat", Scale = 1.4, Sink = 0.55 },
+	{ Prop = "BumperLifebuoy", Scale = 1.25, Sink = 0.3 },
+	{ Prop = "BumperDonutFloat", Scale = 1.4, Sink = 0.55 },
+}
+
 -- Every rider gets a color, a pattern on the ball and a shape tag, so color is never the only cue.
 -- All 12 shapes differ, and riders with similar colors (Red/Orange/Pink, Blue/Navy/Cyan,
 -- Green/Lime) never share a pattern.
@@ -85,6 +110,7 @@ BumperBallers.Patterns = { "BumperBallGores", "BumperBallBands", "BumperBallDots
 
 local physics = RunService:IsRunning()
 local rng = Random.new()
+local decor = Random.new(2610) -- the arena's dressing is laid out the same every round
 
 export type Entry = {
 	Player: any,
@@ -154,6 +180,17 @@ local function setRiderCollision(character: Model, group: string)
 	end
 end
 
+-- The height of the islet mesh's sand (unscaled) this far from its middle.
+local function isletHeight(distance: number): number
+	for index = 2, #ISLET_PROFILE do
+		local a, b = ISLET_PROFILE[index - 1], ISLET_PROFILE[index]
+		if distance <= b[1] then
+			return a[2] + (b[2] - a[2]) * (distance - a[1]) / (b[1] - a[1])
+		end
+	end
+	return 0
+end
+
 -- Arena -------------------------------------------------------------------------------------------
 
 function BumperBallers:_buildArena()
@@ -181,7 +218,8 @@ function BumperBallers:_buildArena()
 		Parent = ctx.Arena,
 	})
 
-	-- Tropical sea: glassy turquoise over light sand near the island, deeper blue further out.
+	-- Tropical sea: glassy turquoise water over a sea floor that goes from a pale sand shelf by the
+	-- island to a turquoise reef slope and deep blue, so the drop off the island reads at a glance.
 	Build.Decor({
 		Name = "Sea",
 		Shape = Enum.PartType.Cylinder,
@@ -193,13 +231,8 @@ function BumperBallers:_buildArena()
 		Reflectance = 0.08,
 		Parent = ctx.Arena,
 	})
-	Build.Decor({
-		Name = "Shallows",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(2, 170, 170),
-		CFrame = CFrame.new(center.X, waterY - 5, center.Z) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = Color3.fromRGB(150, 225, 205),
-		Material = Enum.Material.Sand,
+	MeshLibrary.Get("BumperLagoon", {
+		CFrame = CFrame.new(center.X, waterY - LAGOON_DEPTH, center.Z),
 		Parent = ctx.Arena,
 	})
 	-- A hidden floor under the water, so whoever goes in (or comes off their ball) lands on it and
@@ -217,44 +250,148 @@ function BumperBallers:_buildArena()
 	if self.groupReady then
 		floor.CollisionGroup = FLOOR_GROUP
 	end
+	-- The deep sea floor out to the horizon (a little under the lagoon mesh's rim).
 	Build.Decor({
 		Name = "SeaBed",
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(2, 2048, 2048),
-		CFrame = CFrame.new(center.X, waterY - 16, center.Z) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = Color3.fromRGB(20, 85, 130),
+		CFrame = CFrame.new(center.X, waterY - LAGOON_DEPTH - 1.8, center.Z) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = Color3.fromRGB(22, 106, 168),
 		Material = Enum.Material.Sand,
 		Parent = ctx.Arena,
 	})
 
-	-- Little palm islets around the arena, rocks in the surf.
-	local islets = 7
-	for index = 0, islets - 1 do
-		local angle = (index + rng:NextNumber(-0.25, 0.25)) / islets * math.pi * 2
-		local distance = rng:NextNumber(92, 150)
-		local scale = rng:NextNumber(0.9, 1.5)
-		local spot = center + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance)
-		MeshLibrary.Get("BumperIslet", {
-			Scale = scale,
-			CFrame = CFrame.new(spot.X, waterY - 1.2, spot.Z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+	-- The arena's edge from afar: a ring of red and white floats, channel buoys just outside it.
+	MeshLibrary.Get("BumperFloatLine", {
+		CFrame = CFrame.new(center.X, waterY - 0.43, center.Z),
+		Parent = ctx.Arena,
+	})
+	local floats = Build.Folder("Floats", ctx.Arena) -- buoys and pool floats bob on the client
+	local taken: { { Spot: Vector3, Radius: number } } = {}
+	local function free(spot: Vector3, radius: number): boolean
+		for _, other in taken do
+			if (other.Spot - spot).Magnitude < other.Radius + radius then
+				return false
+			end
+		end
+		return true
+	end
+	local function around(angle: number, distance: number): Vector3
+		return center + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance)
+	end
+	for index = 0, 7 do
+		local spot = around((index + 0.5) / 8 * math.pi * 2, 80)
+		MeshLibrary.Get("BumperBuoy", {
+			CFrame = CFrame.new(spot.X, waterY - 1.4, spot.Z),
+			Parent = floats,
+		})
+		table.insert(taken, { Spot = spot, Radius = 4 })
+	end
+
+	-- The party islet: a beach bar under a thatched roof facing the island, tiki torches and
+	-- totems, parasols on the beach and palms behind.
+	local partySpot = around(PARTY_ANGLE, 112)
+	local partyBase = waterY - 4
+	local party =
+		CFrame.lookAt(Vector3.new(partySpot.X, partyBase, partySpot.Z), Vector3.new(center.X, partyBase, center.Z))
+	MeshLibrary.Get("BumperIslet", { Scale = PARTY_SCALE, CFrame = party, Parent = ctx.Arena })
+	table.insert(taken, { Spot = partySpot, Radius = 27 })
+	local function onParty(x: number, z: number): CFrame
+		-- A spot on the party islet's sand (x right, -z toward the island), a little sunk in.
+		return party * CFrame.new(x, isletHeight(Vector2.new(x, z).Magnitude / PARTY_SCALE) * PARTY_SCALE - 0.3, z)
+	end
+	MeshLibrary.Get("BumperTikiBar", {
+		Scale = 1.25,
+		CFrame = party * CFrame.new(0, 7, 2),
+		Parent = ctx.Arena,
+	})
+	for _, spot in { Vector2.new(-10.5, -7), Vector2.new(10.5, -7), Vector2.new(-12.5, 4), Vector2.new(12.5, 4) } do
+		MeshLibrary.Get("BumperTikiTorch", { CFrame = onParty(spot.X, spot.Y), Parent = ctx.Arena })
+	end
+	for _, x in { -6.5, 6.5 } do
+		MeshLibrary.Get("BumperTikiTotem", { Scale = 1.15, CFrame = onParty(x, -12.5), Parent = ctx.Arena })
+	end
+	for index, spot in { Vector2.new(-16, -8), Vector2.new(15.5, -10) } do
+		MeshLibrary.Get("BumperParasol", {
+			Colors = if index == 2 then { CanopyA = Color3.fromRGB(70, 190, 255) } else nil,
+			CFrame = onParty(spot.X, spot.Y) * CFrame.Angles(0, index * 2.1, 0),
 			Parent = ctx.Arena,
 		})
-		local palms = rng:NextInteger(1, 2)
+	end
+	for index, spot in { Vector2.new(-11, 12), Vector2.new(10, 13), Vector2.new(-1, 17), Vector2.new(18, 2) } do
+		MeshLibrary.Get("BumperPalm", {
+			Scale = 1.15 + index * 0.08,
+			CFrame = onParty(spot.X, spot.Y) * CFrame.Angles(0, index * 1.9, 0),
+			Parent = ctx.Arena,
+		})
+	end
+
+	-- Little palm islets around the arena, some with a parasol or a tiki totem.
+	local islets = 7
+	for index = 1, islets - 1 do
+		local angle = PARTY_ANGLE + (index + decor:NextNumber(-0.2, 0.2)) / islets * math.pi * 2
+		local distance = decor:NextNumber(96, 150)
+		local scale = decor:NextNumber(0.9, 1.5)
+		local spot = around(angle, distance)
+		local islet = CFrame.new(spot.X, waterY - 1.2, spot.Z) * CFrame.Angles(0, decor:NextNumber(0, math.pi * 2), 0)
+		MeshLibrary.Get("BumperIslet", { Scale = scale, CFrame = islet, Parent = ctx.Arena })
+		table.insert(taken, { Spot = spot, Radius = 11 * scale })
+		local function onIslet(x: number, z: number): CFrame
+			return islet * CFrame.new(x * scale, isletHeight(Vector2.new(x, z).Magnitude) * scale - 0.3, z * scale)
+		end
+		local palms = decor:NextInteger(1, 2)
 		for palm = 1, palms do
-			local offset = Vector3.new(rng:NextNumber(-3, 3), 0, rng:NextNumber(-3, 3)) * scale
 			MeshLibrary.Get("BumperPalm", {
-				Scale = rng:NextNumber(0.85, 1.25) * (if palm == 1 then 1 else 0.8),
-				CFrame = CFrame.new(spot.X + offset.X, waterY - 1.2 + 2.7 * scale, spot.Z + offset.Z)
-					* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+				Scale = decor:NextNumber(0.85, 1.25) * (if palm == 1 then 1 else 0.8),
+				CFrame = onIslet(decor:NextNumber(-3, 3), decor:NextNumber(-3, 3))
+					* CFrame.Angles(0, decor:NextNumber(0, math.pi * 2), 0),
+				Parent = ctx.Arena,
+			})
+		end
+		if index % 2 == 1 then
+			MeshLibrary.Get("BumperParasol", {
+				Colors = { CanopyA = PARASOL_COLORS[(index // 2) % #PARASOL_COLORS + 1] },
+				CFrame = onIslet(5, 1) * CFrame.Angles(0, decor:NextNumber(0, math.pi * 2), 0),
+				Parent = ctx.Arena,
+			})
+		elseif index == 2 or index == 6 then
+			MeshLibrary.Get("BumperTikiTotem", {
+				CFrame = CFrame.lookAt(onIslet(-4, 2).Position, Vector3.new(center.X, waterY, center.Z)),
 				Parent = ctx.Arena,
 			})
 		end
 	end
+
+	-- Pool floats drifting in the lagoon between the buoys and the islets.
+	local placed = 0
+	for _ = 1, 80 do
+		if placed >= 14 then
+			break
+		end
+		local spot = around(decor:NextNumber(0, math.pi * 2), decor:NextNumber(76, 128))
+		if not free(spot, 5) then
+			continue
+		end
+		local kind = FLOAT_KINDS[placed % #FLOAT_KINDS + 1]
+		MeshLibrary.Get(kind.Prop, {
+			Scale = kind.Scale,
+			Colors = if kind.Prop == "BumperDonutFloat"
+				then { Frosting = FROSTING_COLORS[placed % #FROSTING_COLORS + 1] }
+				else nil,
+			CFrame = CFrame.new(spot.X, waterY - kind.Sink * kind.Scale, spot.Z)
+				* CFrame.Angles(0, decor:NextNumber(0, math.pi * 2), 0),
+			Parent = floats,
+		})
+		table.insert(taken, { Spot = spot, Radius = 4 })
+		placed += 1
+	end
+
+	-- Rocks in the surf at the foot of the cliff.
 	for index = 0, 9 do
-		local angle = rng:NextNumber(0, math.pi * 2)
-		local distance = rng:NextNumber(62, 84)
+		local angle = decor:NextNumber(0, math.pi * 2)
+		local distance = decor:NextNumber(52, 64)
 		MeshLibrary.Get("Boulder", {
-			Scale = rng:NextNumber(0.5, 1.1),
+			Scale = decor:NextNumber(0.5, 1.1),
 			Colors = { Rock = Color3.fromRGB(125, 118, 112) },
 			CFrame = CFrame.new(
 				center.X + math.cos(angle) * distance,
@@ -264,26 +401,20 @@ function BumperBallers:_buildArena()
 			Parent = ctx.Arena,
 		})
 	end
-	-- Hazy green islands on the horizon close off the view.
-	for index = 0, 9 do
-		local angle = (index + rng:NextNumber(-0.3, 0.3)) / 10 * math.pi * 2
-		local distance = rng:NextNumber(560, 760)
-		local size = Vector3.new(rng:NextNumber(160, 260), rng:NextNumber(60, 120), rng:NextNumber(110, 170))
-		local hill = Build.Decor({
-			Name = "FarIsland",
-			Size = size,
-			CFrame = CFrame.new(
-				center.X + math.cos(angle) * distance,
-				waterY - size.Y * 0.18,
-				center.Z + math.sin(angle) * distance
-			) * CFrame.Angles(0, -angle + math.pi / 2, 0),
-			Color = Color3.fromRGB(80, 160, 95):Lerp(Color3.fromRGB(110, 170, 150), rng:NextNumber(0, 1)),
-			Material = Enum.Material.Grass,
+
+	-- Big jungle islands on the horizon close off the view, with gaps of open sea between them.
+	local far = 7
+	for index = 0, far - 1 do
+		local angle = PARTY_ANGLE + (index + 0.5 + decor:NextNumber(-0.18, 0.18)) / far * math.pi * 2
+		local distance = decor:NextNumber(500, 680)
+		local scale = decor:NextNumber(1.0, 1.5)
+		local spot = around(angle, distance)
+		MeshLibrary.Get(if index % 2 == 0 then "BumperFarIslandA" else "BumperFarIslandB", {
+			Scale = scale,
+			CFrame = CFrame.new(spot.X, waterY - 6 * scale, spot.Z)
+				* CFrame.Angles(0, -angle + math.pi / 2 + decor:NextNumber(-0.4, 0.4), 0),
 			Parent = ctx.Arena,
 		})
-		local mesh = Instance.new("SpecialMesh")
-		mesh.MeshType = Enum.MeshType.Sphere
-		mesh.Parent = hill
 	end
 end
 
