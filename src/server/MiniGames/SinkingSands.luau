@@ -391,8 +391,8 @@ function SinkingSands:_buildArena(kingCount: number)
 			end
 		end
 	end
-	scatter("SandRuin", 4, SandSwirl.RIM + 20, PLAZA - 8, 0, { 0.9, 1.25 })
-	scatter("Cactus", 6, SandSwirl.RIM + 16, PLAZA - 6, 0, { 0.7, 1.05 })
+	scatter("SandRuin", 6, SandSwirl.RIM + 18, PLAZA - 8, 0, { 0.9, 1.3 })
+	scatter("Cactus", 9, SandSwirl.RIM + 14, PLAZA - 6, 0, { 0.7, 1.1 })
 	scatter("Cactus", 10, PLAZA + 25, 190, -MESA, { 1.2, 2 })
 	scatter("SandRuin", 5, PLAZA + 30, 170, -MESA, { 1.6, 2.6 })
 end

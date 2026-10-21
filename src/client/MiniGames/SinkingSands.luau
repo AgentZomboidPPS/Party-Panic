@@ -7,6 +7,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local GameState = require(ReplicatedStorage.Shared.GameState)
 local SandSwirl = require(ReplicatedStorage.Shared.Logic.SandSwirl)
 
 local State = require(script.Parent.Parent.State)
@@ -284,6 +285,21 @@ function SinkingSands.Start(api)
 	api:Track(api.Player:GetAttributeChangedSignal("PP_Score"):Connect(refreshHaul))
 	refreshHaul()
 
+	-- The role hint: narrower than api:Hint so it clears the standings on small phones.
+	local hint = UIKit.Label({
+		Name = "RoleHint",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = 26,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + 66),
+		Size = UDim2.fromOffset(400, 66),
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Visible = false,
+		Parent = hud,
+		Children = { UIKit.TextStroke(0.2) },
+	})
+
 	-- Big flashes in the middle of the screen: "SWIRL!", "PULL!", "GULP!".
 	local flash = UIKit.Label({
 		Name = "Flash",
@@ -291,8 +307,8 @@ function SinkingSands.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 54,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, api:HudY() + 140),
-		Size = UDim2.fromOffset(520, 64),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + 66),
+		Size = UDim2.fromOffset(400, 64),
 		Visible = false,
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.05) },
@@ -303,6 +319,7 @@ function SinkingSands.Start(api)
 		flash.TextColor3 = color
 		flash.Visible = true
 		flashUntil = os.clock() + seconds
+		hint.Visible = false -- same spot: the flash takes over
 		UIKit.PopIn(flash, 0.25)
 	end
 
@@ -316,11 +333,12 @@ function SinkingSands.Start(api)
 		isKing = role == "King"
 		refreshHaul()
 		if isKing then
-			api:Hint("👑 SAND KING: SWIRL and PULL to sink the treasure!", api:HudY() + 70)
+			hint.Text = "👑 SAND KING: SWIRL and PULL to sink the treasure!"
 		else
-			api:Hint("🪙 DIVER: grab the treasure! Stay out of the hole!", api:HudY() + 70)
+			hint.Text = "🪙 DIVER: grab the treasure! Stay out of the hole!"
 		end
-		hintUntil = os.clock() + 12
+		hint.Visible = true
+		hintUntil = math.huge -- counted from GO (below)
 		if isKing and not swirlButton then
 			local swirl = api:Button({ Text = "SWIRL", Key = Enum.KeyCode.E, Color = Theme.Colors.Orange })
 			local pull = api:Button({ Text = "PULL", Key = Enum.KeyCode.Q, Color = Theme.Colors.Pink, Slot = 2 })
@@ -554,9 +572,13 @@ function SinkingSands.Start(api)
 			stateLabel.TextColor3 = Theme.Colors.Text
 		end
 
+		-- The role hint stays through the countdown and 6 seconds into the round.
+		if hintUntil == math.huge and GameState.Get("Phase") == "InRound" then
+			hintUntil = os.clock() + 6
+		end
 		if hintUntil > 0 and os.clock() > hintUntil then
 			hintUntil = 0
-			api:Hint("")
+			hint.Visible = false
 		end
 		if flash.Visible and os.clock() > flashUntil then
 			flash.Visible = false
