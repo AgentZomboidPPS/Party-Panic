@@ -107,7 +107,8 @@ function EatsaPizza.Start(api)
 	})
 	type Card = { Frame: Frame, Fill: Frame, Percent: TextLabel }
 	local cards: { [string]: Card } = {}
-	for index, team in if touch then {} else order do
+	local cardTeams: { string } = if touch then {} else order
+	for index, team in cardTeams do
 		local color = Teams.Colors[team] or Color3.new(1, 1, 1)
 		local frame = UIKit.new("Frame", {
 			Name = `Team_{team}`,
