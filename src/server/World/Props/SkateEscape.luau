@@ -71,6 +71,10 @@ return function(h)
 			Height = 2.26,
 			AssetId = 130808942087961,
 			Collide = true,
+			-- Keeps Roblox's rough hull (MeshLibrary: preciseCollision): it's one smooth floor at the
+			-- planks' top, where precise collision would have every 0.12-stud seam and the boards'
+			-- 0.04-stud steps under the skaters' wheels.
+			Precise = false,
 			Palette = {
 				Planks = h.rgb(158, 104, 68),
 				PlanksB = h.rgb(124, 82, 56),

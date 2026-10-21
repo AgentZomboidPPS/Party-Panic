@@ -1,24 +1,32 @@
 """Finds what characters can stand on, land on or cling to without seeing it, from the collider
-snapshots of tools/checks/colliders.luau (round_harness.py --colliders-at, or LOBBY --colliders).
+snapshots of tools/checks/colliders.luau (round_harness.py --colliders-at, or LOBBY --colliders-at 0).
 
 Owner: "Theres invisible stuff you can jump on and hang on in several games."
 
-    python3 tools/checks/round_harness.py HoneyTrap --client --colliders-at 0,5,120 > run.luau
+    python3 tools/checks/round_harness.py HoneyTrap --client --seconds 14 --colliders-at 0,10 > run.luau
+    python3 tools/checks/round_harness.py LOBBY --colliders-at 0 --colliders-reach 135 > lobby.luau
+    (add --no-csg to build as if CSG had failed on that server: Shapes from plain parts)
     python3 tools/preview/luau_task.py run.luau - run.json
-    python3 tools/checks/colliders.py run.json --out report_dir
+    python3 tools/checks/colliders.py run.json --out report_dir [--verbose]
 
 For each snapshot it:
-  1. rebuilds the collision-top map (layered downward raycasts from the server) and floods it from
-     where the characters stand: walking, stepping and jumping (7.2 studs up, about 9 across), never
-     through spots too low to stand in;
+  1. rebuilds the collision-top map (layered downward raycasts from the server, in the characters'
+     collision group) and floods it from where the characters stand (the lobby: its spawns):
+     walking, stepping and jumping (7.2 studs up, up to 11 across), only where the body fits through
+     every cell in between and never below the mode's KillY;
   2. redraws everything visible (primitives, unions from their recorded pieces, mesh props from
      assets/meshes) into the same map;
-  3. flags every reachable spot whose solid top has nothing drawn near it ("standing on air"),
-     every invisible collider whose top a character can jump onto, and every collidable mesh or
-     union whose collision (measured by raycasts in its own frame) sticks out of its drawn shape.
-Prints a report and writes a top-down PNG per snapshot (green: reachable and drawn, red: reachable
-and invisible, orange: reachable mesh or union collision above its drawing, blue: invisible
-colliders, grey: unreachable).
+  3. flags every reachable spot whose solid top has nothing drawn near it (INVISIBLE when the part
+     is see-through, UNDRAWN-TOP when a drawn part's collision sits over its drawing), every
+     invisible collider whose top a character can jump onto (JUMPABLE-INVISIBLE), and every
+     collidable mesh or union whose collision (measured by raycasts in its own frame) sticks out of
+     its drawn shape near where people can go (HULL-BIGGER).
+Prints one line per kind of part (every instance with --verbose) and writes a top-down PNG per
+snapshot (green: reachable and drawn, red: reachable and invisible, orange: reachable collision
+over a drawing, blue: invisible colliders' footprints, grey: unreachable). Reads the map only:
+it doesn't know a mode's rules (Honey Trap's frozen players, say), so "reachable" is generous.
+--trace x,y,z prints how characters get to a spot instead (the part each move lands on), e.g. a
+flagged one's "e.g." position.
 """
 
 from __future__ import annotations
@@ -897,12 +905,57 @@ def load(path: Path):
     return data
 
 
+def trace(snapshot, target, kill_y=None):
+    """How the flood reaches the spot nearest `target` (x, y, z): the parts each move stands on."""
+    from scipy.sparse.csgraph import breadth_first_order
+
+    grid = snapshot["grid"]
+    parts = {p["i"]: p for p in snapshot["parts"]}
+    Y, P, H = decode_grid(grid)
+    L, N = Y.shape
+    nx, step = grid["nx"], grid["step"]
+    reach, graph, starts = flood(grid, Y, H, snapshot.get("seeds", []), kill_y or snapshot.get("killY"), want_graph=True)
+    col = int(round((target[2] - grid["z0"]) / step)) * nx + int(round((target[0] - grid["x0"]) / step))
+    if not (0 <= col < N) or np.isnan(Y[:, col]).all():
+        return [f"  trace: nothing solid at {target}"]
+    layer = int(np.nanargmin(np.abs(Y[:, col] - target[1])))
+    node = layer * N + col
+
+    def describe(index):
+        layer, col = divmod(int(index), N)
+        owner = int(P[layer, col])
+        part = parts.get(owner)
+        name = "terrain" if owner == 65535 else (part["p"] if part else f"#{owner}")
+        x, z = grid["x0"] + (col % nx) * step, grid["z0"] + (col // nx) * step
+        return f"({x:.1f}, {Y[layer, col]:.1f}, {z:.1f}) on {name}" + (f" t={part['t']}" if part else "")
+
+    if not reach[layer, col] or graph is None:
+        return [f"  trace: {describe(node)} can't be reached"]
+    for start in starts:
+        _, pred = breadth_first_order(graph, start, directed=True, return_predecessors=True)
+        if node != start and pred[node] < 0:
+            continue
+        chain = [node]
+        while chain[-1] != start:
+            chain.append(pred[chain[-1]])
+        lines = [f"  trace to {describe(node)}, {len(chain) - 1} moves:"]
+        last = None
+        for index in reversed(chain):
+            text = describe(index)
+            if text.split(" on ")[1] != last or index == node:
+                lines.append(f"    {text}")
+            last = text.split(" on ")[1]
+        return lines
+    return [f"  trace: no path to {describe(node)}"]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("results", nargs="+", help="luau_task.py result files")
     parser.add_argument("--out", help="folder for map images and flags.json")
     parser.add_argument("--kill-y", type=float, default=None, help="spots below this height are deadly")
-    parser.add_argument("--verbose", action="store_true", help="list every collidable mesh/union comparison")
+    parser.add_argument("--verbose", action="store_true", help="list every flagged part and every collidable mesh/union comparison")
+    parser.add_argument("--trace", help="x,y,z: also print how characters get to that spot (the part each move lands on)")
     args = parser.parse_args()
     out_dir = Path(args.out) if args.out else None
     everything = {}
@@ -910,7 +963,7 @@ def main():
         data = load(Path(path))
         stem = Path(path).stem
         print(f"== {stem}")
-        for key in ("prepare", "start", "endReason", "lobby"):
+        for key in ("prepare", "prepareSeconds", "start", "endReason", "lobby", "buildSeconds"):
             if key in data:
                 print(f"  {key}: {data[key]}")
         for snapshot in data.get("colliders", []) or []:
@@ -919,6 +972,9 @@ def main():
                 print(f"  -- {label}: FAILED {snapshot['failed']}")
                 continue
             print(f"  -- {label}: {len(snapshot['parts'])} parts, groups people {snapshot.get('people')} bots {snapshot.get('bots')}")
+            if args.trace and snapshot.get("grid"):
+                print("\n".join(trace(snapshot, [float(v) for v in args.trace.split(",")], args.kill_y)))
+                continue
             lines, flags = analyse(snapshot, out_dir, f"{stem}_{label}", args.kill_y, args.verbose)
             print("\n".join(lines))
             everything[f"{stem}:{label}"] = flags

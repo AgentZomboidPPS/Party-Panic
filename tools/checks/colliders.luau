@@ -507,7 +507,9 @@ function __runLobbyColliders(reach: number)
 	local LobbyBuilder = __require("Server/World/LobbyBuilder")
 	local BeachBalls = __require("Server/World/BeachBalls")
 	local summary = {}
+	local buildStart = os.clock()
 	local okLobby, refs = pcall(LobbyBuilder.Build)
+	summary.buildSeconds = os.clock() - buildStart
 	summary.lobby = if okLobby then "ok" else tostring(refs)
 	if okLobby then
 		local okBalls, err = pcall(BeachBalls.Setup, refs.Root, refs.BallSpots, {

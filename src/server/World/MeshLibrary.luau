@@ -52,7 +52,9 @@ type Spec = {
 	Collide: boolean?,
 	Touch: boolean?,
 	BlocksCamera: (boolean | { string })?, -- solid to the camera only (see the top): all pieces, or these
-	Precise: boolean?, -- collision that follows the drawing even though it doesn't collide here (a client makes it solid)
+	-- Collision that follows the drawing (see preciseCollision): nil = for the pieces that collide or stop
+	-- the camera, true = every piece (a client makes it solid itself), false = none (the rough hull is better)
+	Precise: boolean?,
 	Shadow: boolean?,
 	Palette: { [string]: Color3 },
 	Materials: { [string]: Enum.Material }?,
@@ -595,16 +597,41 @@ local function setPivot(model: Model, pivot: CFrame)
 end
 
 -- Rebuilds these mesh pieces' collision to follow their drawn shape: AssetService makes a MeshPart
--- from the same mesh with PreciseConvexDecomposition and ApplyMesh copies its collision over, all
--- pieces at once (a second or so each). A piece whose rebuild fails twice keeps its rough Default
--- collision, and the output says so.
+-- from the same mesh with PreciseConvexDecomposition and ApplyMesh copies its collision over (about
+-- a second each, a prop's pieces side by side, at most REBUILDS_AT_ONCE across the server). Measured
+-- on a test server, a palm's, a column's, an arch's and a tree's collision then sits within half a
+-- stud of the drawing. A piece whose rebuild fails twice keeps its rough Default collision, and the
+-- output says so. Once per template: every copy of a prop shares it.
 local PRECISE = { CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition }
+local REBUILDS_AT_ONCE = 12 -- across all props (Preload asks for every prop at once)
+local rebuilding = 0
+local KEPT = {
+	"Size",
+	"CFrame",
+	"Anchored",
+	"CanCollide",
+	"CanQuery",
+	"CanTouch",
+	"CollisionGroup",
+	"CastShadow",
+	"Color",
+	"Material",
+	"Transparency",
+}
 
 local function preciseCollision(name: string, pieces: { MeshPart })
 	local remaining = #pieces
 	for _, part in pieces do
 		task.spawn(function()
-			local size, cframe = part.Size, part.CFrame
+			while rebuilding >= REBUILDS_AT_ONCE do
+				task.wait()
+			end
+			rebuilding += 1
+			-- (Everything normalize set stays as it was: only the collision shape changes.)
+			local kept = {}
+			for _, property in KEPT do
+				kept[property] = (part :: any)[property]
+			end
 			local ok, err = false, nil
 			for attempt = 1, 2 do
 				ok, err = pcall(function()
@@ -617,11 +644,13 @@ local function preciseCollision(name: string, pieces: { MeshPart })
 				end
 				task.wait(1)
 			end
-			part.Size = size
-			part.CFrame = cframe
+			for property, value in kept do
+				(part :: any)[property] = value
+			end
 			if not ok then
 				warn(`[MeshLibrary] {name}.{part.Name} keeps its rough collision: {err}`)
 			end
+			rebuilding -= 1
 			remaining -= 1
 		end)
 	end
@@ -664,7 +693,8 @@ local function normalize(name: string, model: Model, spec: Spec)
 			CollectionService:AddTag(part, CAMERA_SOLID)
 			cameraSolid[name] = true
 		end
-		if part:IsA("MeshPart") and (part.CanCollide or part.CollisionGroup == CAMERA_SOLID or spec.Precise) then
+		local solid = part.CanCollide or part.CollisionGroup == CAMERA_SOLID
+		if part:IsA("MeshPart") and spec.Precise ~= false and (solid or spec.Precise) then
 			table.insert(solidMeshes, part)
 		end
 		local volume = part.Size.X * part.Size.Y * part.Size.Z
