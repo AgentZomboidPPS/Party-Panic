@@ -1,5 +1,7 @@
 -- Test bot for Cake Factory (tools/checks/round_harness.py): every stand-in player watches the
--- cakes coming to its machines (from the mode's own schedule) and presses Add like the client does.
+-- cakes coming to its machines (from the mode's own schedule) and presses Add like the client does
+-- (with its clock at the press; it taps SEEN after the moment it aims for, like a finger reacting
+-- to a screen).
 -- Most press on time, some are sloppy (a wide timing error), and one in eight mashes the button to
 -- check that mashing ruins cakes instead of making them. With 4 or more, one player leaves at 9 s
 -- (their machines go to their teammates).
@@ -31,7 +33,7 @@ return function(env)
 			if s.Style == "mash" then
 				if now >= s.NextMash then
 					s.NextMash = now + env.rng:NextNumber(0.15, 0.4)
-					env.Action(player, "Add")
+					env.Action(player, "Add", ctx:Now())
 					presses += 1
 				end
 				continue
@@ -50,7 +52,7 @@ return function(env)
 								local err = if s.Style == "good"
 									then env.rng:NextNumber(-0.06, 0.06)
 									else env.rng:NextNumber(-0.3, 0.3)
-								table.insert(s.Queue, at + err)
+								table.insert(s.Queue, at + err + mode.SEEN)
 							end
 						end
 					end
@@ -59,7 +61,7 @@ return function(env)
 			for position = #s.Queue, 1, -1 do
 				if now >= s.Queue[position] then
 					table.remove(s.Queue, position)
-					env.Action(player, "Add")
+					env.Action(player, "Add", ctx:Now())
 					presses += 1
 				end
 			end

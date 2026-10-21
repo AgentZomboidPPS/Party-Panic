@@ -15,6 +15,14 @@
 -- spiral the server judges grabs on, without streaming positions. Players' devices drag their own
 -- characters with the sand (smooth); the server drags bots the same way (hazard parity) and checks
 -- everyone against the sinkhole by position.
+--
+-- Fair judging (hitbox pass, after "We need to fine tune some of the hitboxes. the precision games
+-- will feel super bad if we dont."): what looks like a grab on a Diver's own screen counts. Treasure
+-- can whip past at up to ~50 studs/s in a SWIRL + PULL, so a grab is a swept test over the Diver's
+-- path since the last check against the treasure's path as their device drew it (up to their ping
+-- plus the client's easing earlier), and treasure that touched a Diver before it slid into the hole
+-- is theirs, not the Kings'. The hole only takes a Diver whose whole body is over it (or who fell
+-- in): a Diver visibly standing on the lip is still on the sand.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -55,6 +63,15 @@ local MAX_ITEMS = 24
 local SWIRL_COOLDOWN, PULL_COOLDOWN = 3, 5 -- with three Kings; fewer Kings recharge faster
 local FLIP_GAP = 1.4 -- the spin never reverses twice within this long
 local HIP = 3 -- a character's root above the ground
+local HALF_WIDTH = 1 -- half a character's width: the hole takes a Diver whose middle is this far inside it
+-- Grabs. The client draws each treasure easing after its true spot (1/18 s behind), and a Diver's
+-- position reaches the server up to a ping late, so a grab compares the Diver's path with the
+-- treasure's path from 0 to (ping + EASE) seconds earlier. SWEEP_STEPS slices the time since the
+-- last check; MAX_SPEED (studs/s, a coin in a full SWIRL + PULL is ~52) only skips pairs that
+-- can't possibly meet.
+local EASE = 0.06
+local SWEEP_STEPS = 4
+local MAX_SPEED = 55
 
 local rng = Random.new()
 
@@ -75,6 +92,20 @@ local function isBot(player: any): boolean
 	return BotRegistry.IsBot(player)
 end
 
+-- Flat distance from the origin to the segment between two flat offsets (x, z).
+local function segmentReach(ax: number, az: number, bx: number, bz: number): number
+	local dx, dz = bx - ax, bz - az
+	local length = dx * dx + dz * dz
+	local t = if length > 1e-9 then math.clamp(-(ax * dx + az * dz) / length, 0, 1) else 0
+	local x, z = ax + dx * t, az + dz * t
+	return math.sqrt(x * x + z * z)
+end
+
+-- A Diver's middle vs a treasure lying on the sand: high enough to reach it, not hovering over it.
+local function inHeight(dy: number): boolean
+	return dy > -2 and dy < 7.5
+end
+
 function SinkingSands:Prepare()
 	local ctx = self.context
 	ctx.RespawnMode = "Respawn"
@@ -91,6 +122,8 @@ function SinkingSands:Prepare()
 	self.lastFlip = -math.huge
 	self.dirty = true
 	self.lastPublish = 0
+	self.lastJudge = nil :: number?
+	self.spots = {} :: { [any]: { Position: Vector3, Time: number } } -- each Diver at the last check
 	self.idols = 0
 
 	-- Teams: about one Sand King per four players (none when playing alone).
@@ -954,10 +987,51 @@ function SinkingSands:_dragBots(dt: number, now: number, physics: boolean)
 	end
 end
 
+-- How close a Diver came to a treasure since the last check, as their own device showed it: their
+-- path since then (sliced into SWEEP_STEPS) against the treasure's path `lag` seconds earlier for
+-- lags 0, half and all of (ping + EASE), with every neighbouring pair of samples swept, so a fast
+-- pass between two checks still counts. `at(t)` is the treasure on the sand at `t` (nil while it is
+-- still falling or once it has gone down the hole).
+function SinkingSands:_closest(diver: any, at: (number) -> Vector3?, now: number, span: number): number
+	local best = math.huge
+	local rows = {}
+	for j = 0, SWEEP_STEPS do
+		local u = j / SWEEP_STEPS
+		local s = now - span * (1 - u)
+		local p = diver.From:Lerp(diver.Position, u)
+		local row = {}
+		for k = 0, 2 do
+			local spot = at(s - diver.Lag * k / 2)
+			if spot then
+				row[k] = { p.X - spot.X, p.Z - spot.Z, inHeight(p.Y - spot.Y) }
+			end
+		end
+		rows[j] = row
+	end
+	local function sweep(a, b)
+		if a and b and (a[3] or b[3]) then
+			best = math.min(best, segmentReach(a[1], a[2], b[1], b[2]))
+		elseif a and a[3] then
+			best = math.min(best, math.sqrt(a[1] * a[1] + a[2] * a[2]))
+		end
+	end
+	for j = 0, SWEEP_STEPS do
+		for k = 0, 2 do
+			local here = rows[j][k]
+			sweep(here, rows[j][k + 1])
+			sweep(here, if j < SWEEP_STEPS then rows[j + 1][k] else nil)
+		end
+	end
+	return best
+end
+
 function SinkingSands:_judge(now: number)
 	local ctx = self.context
 	local center = self.center
-	-- Divers who are on the sand (and where).
+	local last = self.lastJudge
+	self.lastJudge = now
+	local span = if last then math.clamp(now - last, 0, 0.25) else 0
+	-- Divers who are on the sand (and where, now and at the last check).
 	local divers = {}
 	for _, player in ctx:GetAlivePlayers() do
 		if self:IsKing(player) or self.gulped[player] then
@@ -969,50 +1043,73 @@ function SinkingSands:_judge(now: number)
 		end
 		local position = root.Position
 		local r = Vector2.new(position.X - center.X, position.Z - center.Z).Magnitude
-		-- In the hole: over it and low, or anywhere in the throat below the lip.
+		-- In the hole: fallen below the lip, or low with the whole body over the hole. Someone whose
+		-- feet are still on the lip (middle within HALF_WIDTH of the edge) is standing on the sand,
+		-- whatever the sand is doing to them.
 		local belowLip = position.Y < center.Y - SandSwirl.DEPTH - 1 and r < SandSwirl.HOLE + 1.5
-		if belowLip or r < SandSwirl.HOLE - 0.4 and position.Y < center.Y - SandSwirl.DEPTH + 4 then
+		if belowLip or r < SandSwirl.HOLE - HALF_WIDTH and position.Y < center.Y - SandSwirl.DEPTH + 4 then
+			self.spots[player] = nil
 			self:_gulp(player)
 		elseif r < SandSwirl.RIM + 4 then
+			-- Where they were at the last check (not across a respawn or a teleport).
+			local previous = self.spots[player]
+			local from = position
+			if previous and previous.Time == last and (previous.Position - position).Magnitude < span * 40 + 2 then
+				from = previous.Position
+			end
+			self.spots[player] = { Position = position, Time = now }
 			local ping = math.clamp(player:GetNetworkPing(), 0, 0.3)
-			table.insert(divers, { Player = player, Position = position, Ping = ping })
+			table.insert(divers, { Player = player, Position = position, From = from, Lag = ping + EASE })
+		else
+			self.spots[player] = nil
 		end
 	end
 
 	for id, item in self.items do
 		local _, _, sunk = self:ItemPolar(item, now)
+		local kind = SinkingSands.Kinds[item.Kind]
+		if now >= item.T or sunk then
+			-- The treasure's spots on the sand, shared by every Diver's test this check.
+			local cache = {}
+			local function at(t: number): Vector3?
+				if t < item.T or sunk and t > sunk then
+					return nil
+				end
+				local key = math.floor(t * 80 + 0.5)
+				local spot = cache[key]
+				if not spot then
+					spot = self:ItemPosition(item, key / 80)
+					cache[key] = spot
+				end
+				return spot
+			end
+			local here = self:ItemPosition(item, if sunk then math.min(now, sunk) else now)
+			local best, bestDistance = nil, math.huge
+			for _, diver in divers do
+				local far = kind.Reach + (diver.From - diver.Position).Magnitude + MAX_SPEED * (span + diver.Lag)
+				if Vector2.new(diver.Position.X - here.X, diver.Position.Z - here.Z).Magnitude > far then
+					continue
+				end
+				local d = self:_closest(diver, at, now, span)
+				if d < kind.Reach and d < bestDistance then
+					best, bestDistance = diver.Player, d
+				end
+			end
+			if best then
+				-- Touched on the Diver's screen before it went down: theirs, even if it sank since.
+				self.items[id] = nil
+				self.dirty = true
+				ctx:AddScore(best, kind.Value)
+				ctx:AddTeamScore(DIVERS, kind.Value)
+				ctx:Fire(nil, "Grab", id, best.UserId, kind.Value)
+				continue
+			end
+		end
 		if sunk and sunk <= now then
 			self.items[id] = nil
 			self.dirty = true
-			local kind = SinkingSands.Kinds[item.Kind]
 			self:_scoreKings(kind.Value)
 			ctx:Fire(nil, "Sink", id, kind.Value)
-			continue
-		end
-		if now < item.T then
-			continue
-		end
-		local kind = SinkingSands.Kinds[item.Kind]
-		local here = self:ItemPosition(item, now)
-		local best, bestDistance = nil, math.huge
-		for _, diver in divers do
-			-- Lag leeway: also check where the treasure was when this player's view was taken.
-			local before = self:ItemPosition(item, now - diver.Ping)
-			local d = math.min(
-				Vector2.new(diver.Position.X - here.X, diver.Position.Z - here.Z).Magnitude,
-				Vector2.new(diver.Position.X - before.X, diver.Position.Z - before.Z).Magnitude
-			)
-			local dy = diver.Position.Y - here.Y
-			if d < kind.Reach and dy > -2 and dy < 7.5 and d < bestDistance then
-				best, bestDistance = diver.Player, d
-			end
-		end
-		if best then
-			self.items[id] = nil
-			self.dirty = true
-			ctx:AddScore(best, kind.Value)
-			ctx:AddTeamScore(DIVERS, kind.Value)
-			ctx:Fire(nil, "Grab", id, best.UserId, kind.Value)
 		end
 	end
 end

@@ -1,5 +1,8 @@
 # 🎉 Party Panic
 
+> Two Claudes are working on this project: read [docs/HANDOFF.md](docs/HANDOFF.md) first (who works on what, how to
+> test without Studio, what's open). The next games are in [docs/MINIGAME_BACKLOG.md](docs/MINIGAME_BACKLOG.md).
+
 A Roblox multiplayer party game: hang out in a lively lobby, vote on the next mini-game, compete in
 short chaotic rounds, earn rewards, and do it all again. Built from the *Party Panic Game Design
 Outline*.

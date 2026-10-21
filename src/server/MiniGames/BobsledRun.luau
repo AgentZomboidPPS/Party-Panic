@@ -6,10 +6,19 @@
 --
 -- The players split into 2-4 sleds (Teams.CountFor, 1-4 riders each) racing side by side in their own
 -- lanes down one wide ice channel with banked curves, kickers that throw the sleds into the air and a
--- finish arch. As soon as a curve is judged, the next one's cue shows (LEAN RIGHT!) and its window
--- opens: each rider's last lean from then until the sled enters the curve (plus the riders' ping)
--- counts, once. The crew takes it clean when no more riders missed than the round allows (the same
--- number for every sled, so a 3 v 2 split is fair: BobsledCourse.Judge), else scrapes or bumps.
+-- finish arch. Each curve's cue (LEAN RIGHT!) shows while its window is open: from just after the
+-- sled entered the curve before until just after it enters this one. Each rider's last lean in the
+-- window counts, once. The crew takes it clean when no more riders missed than the round allows (the
+-- same number for every sled, so a 3 v 2 split is fair: BobsledCourse.Judge), else scrapes or bumps.
+--
+-- Timing is judged by when each rider pressed on their own screen (owner: "We need to fine tune some
+-- of the hitboxes. the precision games will feel super bad if we dont."): a press counts for the
+-- curve whose cue was showing when the thumb hit the button, not for when it reached the server.
+-- The press carries the rider's clock (kept to their ping: it can't reach back further), a lean up
+-- to GRACE after the sled visibly enters the curve still counts, and the server waits out the
+-- crew's ping before judging. The next curve's window opens exactly where this one closed (in press
+-- time), and the client switches its cue at that same moment, so a late press for one curve never
+-- turns into a wrong lean on the next while its cue still said the old way.
 -- The first sled home starts an 8 s finish clock; the round ends when it runs out or every sled is
 -- home (finish order first, then distance).
 --
@@ -42,10 +51,23 @@ BobsledRun.Shapes = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
 local SEAT_Y = 1.9 -- a seated rider's root above the sled's pivot (runner bottoms)
 local PRE_UNITS = 3 -- straights behind the start line (the start house)
 local FINISH_CLOCK = 8 -- seconds the finish stays open after the first sled is home
+-- A lean pressed up to this long after the sled entered the curve still counts: the timing bar is
+-- full at the entry, and the drawn sled can trail the server's by a few hundredths. (Clients use
+-- the same number: BobsledCourse.GRACE.)
+local GRACE = BobsledCourse.GRACE
 
 local rng = Random.new()
 
-type Rider = { Player: any, Team: string, Lean: number, LeanAt: number, Good: number, Seen: number }
+type Lean = { Dir: number, At: number }
+type Rider = {
+	Player: any,
+	Team: string,
+	Lean: number,
+	LeanAt: number, -- when the last lean was pressed (on the rider's screen, server clock)
+	Leans: { Lean }, -- the last few, oldest first (one can be for the next curve before this is judged)
+	Good: number,
+	Seen: number,
+}
 type Sled = {
 	Team: string,
 	X: number,
@@ -53,9 +75,10 @@ type Sled = {
 	D: number,
 	V: number,
 	Next: number, -- the next curve to judge
-	OpenAt: number?, -- when the next curve's window opened (leans after it count)
-	EnterAt: number?,
-	JudgeAt: number?,
+	OpenAt: number?, -- when the next curve's window opened (leans pressed after it count)
+	EnterAt: number?, -- when the sled entered it
+	CloseAt: number?, -- when its window closed (leans pressed up to then count; the next one opens)
+	JudgeAt: number?, -- when it's judged (the close plus the crew's ping, so presses can arrive)
 	Place: number?,
 	Time: number?,
 	Gone: boolean?,
@@ -72,6 +95,7 @@ local function round(x: number, step: number): number
 	return math.floor(x / step + 0.5) * step
 end
 
+-- A rider's round trip (GetNetworkPing); a press only travels one way, half of it.
 local function ping(player: any): number
 	if BotRegistry.IsBot(player) then
 		return 0
@@ -79,7 +103,7 @@ local function ping(player: any): number
 	local ok, value = pcall(function()
 		return player:GetNetworkPing()
 	end)
-	return if ok and type(value) == "number" then math.clamp(value, 0, 0.25) else 0.1
+	return if ok and type(value) == "number" then math.clamp(value, 0, 0.35) else 0.15
 end
 
 -- Arena -------------------------------------------------------------------------------------------
@@ -409,7 +433,15 @@ function BobsledRun:Prepare()
 		self.sleds[team] = sled
 		local ids = {}
 		for _, player in sled.Riders do
-			self.riders[player] = { Player = player, Team = team, Lean = 0, LeanAt = -math.huge, Good = 0, Seen = 0 }
+			self.riders[player] = {
+				Player = player,
+				Team = team,
+				Lean = 0,
+				LeanAt = -math.huge,
+				Leans = {},
+				Good = 0,
+				Seen = 0,
+			}
 			table.insert(ids, player.UserId)
 		end
 		table.insert(shared, { T = team, X = sled.X, R = ids })
@@ -497,14 +529,27 @@ function BobsledRun:Start()
 		ctx:SetWalkSpeed(player, 0)
 	end
 
-	ctx:OnAction("Lean", function(player, dir)
+	ctx:OnAction("Lean", function(player, dir, pressedAt)
 		local rider = self.riders[player]
 		if not rider or (dir ~= -1 and dir ~= 1) then
 			return
 		end
+		-- When it was pressed: the client's clock, kept within the press's one-way trip (plus a
+		-- little jitter) so nobody can lean back in time; without it, half the round trip back.
+		local now = ctx:Now()
+		local oneWay = ping(player) / 2
+		local at = now - oneWay
+		if type(pressedAt) == "number" and pressedAt == pressedAt then
+			at = math.clamp(pressedAt, now - oneWay - 0.1, now)
+		end
+		at = math.max(at, rider.LeanAt) -- (presses stay in order)
 		rider.Lean = dir
-		rider.LeanAt = ctx:Now()
-		ctx:Fire(nil, "Lean", player.UserId, dir)
+		rider.LeanAt = at
+		table.insert(rider.Leans, { Dir = dir, At = at })
+		if #rider.Leans > 6 then
+			table.remove(rider.Leans, 1)
+		end
+		ctx:Fire(nil, "Lean", player.UserId, dir, round(at, 0.001))
 	end, { Interval = 0.08 })
 
 	-- Small steps, so a server hitch doesn't skip a curve's judging.
@@ -528,11 +573,32 @@ function BobsledRun:Start()
 	end)
 end
 
+-- The curve whose window is open at `t` (press time) and when it opened: the next one to judge,
+-- or the one after once the sled is GRACE into it (its judging waits for in-flight presses). The
+-- bots use this too, so they read the same cue a player sees.
+function BobsledRun:_openCurve(sled: Sled, t: number): (number, number?)
+	if sled.CloseAt and t > sled.CloseAt then
+		return sled.Next + 1, sled.CloseAt
+	end
+	return sled.Next, sled.OpenAt
+end
+
+-- A rider's lean for a window: the last one pressed in it (or 0).
+local function leanIn(rider: Rider, from: number, to: number): number
+	for index = #rider.Leans, 1, -1 do
+		local lean = rider.Leans[index]
+		if lean.At > from and lean.At <= to then
+			return lean.Dir
+		end
+	end
+	return 0
+end
+
 -- The crew's leans for a curve: right ones, wrong ones, and the riders counted.
 function BobsledRun:_crewScore(sled: Sled, curve: BobsledCourse.Curve): (number, number, number)
 	local right, wrong, count = 0, 0, 0
 	local from = sled.OpenAt or math.huge
-	local to = sled.JudgeAt or math.huge
+	local to = sled.CloseAt or -math.huge
 	for _, player in sled.Riders do
 		local rider = self.riders[player]
 		if not rider or not self.context:State(player) then
@@ -540,13 +606,12 @@ function BobsledRun:_crewScore(sled: Sled, curve: BobsledCourse.Curve): (number,
 		end
 		count += 1
 		rider.Seen += 1
-		if rider.LeanAt > from and rider.LeanAt <= to then
-			if rider.Lean == curve.Dir then
-				right += 1
-				rider.Good += 1
-			else
-				wrong += 1
-			end
+		local dir = leanIn(rider, from, to)
+		if dir == curve.Dir then
+			right += 1
+			rider.Good += 1
+		elseif dir ~= 0 then
+			wrong += 1
 		end
 	end
 	return right, wrong, count
@@ -566,8 +631,8 @@ function BobsledRun:_judge(sled: Sled, curve: BobsledCourse.Curve)
 	ctx:Fire(nil, "Curve", sled.Team, curve.Index, kind, right, count)
 	sled.Next += 1
 	-- The next curve's window opens right where this one's closed: every lean counts exactly once.
-	sled.OpenAt = sled.JudgeAt
-	sled.EnterAt, sled.JudgeAt = nil, nil
+	sled.OpenAt = sled.CloseAt
+	sled.EnterAt, sled.CloseAt, sled.JudgeAt = nil, nil, nil
 end
 
 function BobsledRun:_tick(dt: number, now: number)
@@ -595,14 +660,16 @@ function BobsledRun:_tick(dt: number, now: number)
 		local curve = course.Curves[sled.Next]
 		if curve then
 			if sled.D >= curve.D0 and not sled.EnterAt then
-				-- In the curve: wait out the crew's ping before judging, so a press made in time on a
-				-- laggy phone still counts.
-				local leeway = 0.06
+				-- In the curve (at the exact moment it crossed in, within this step): the window
+				-- closes GRACE later, and the judging waits out the crew's ping after that, so a press
+				-- made in time on a laggy phone has arrived.
+				local wait = 0.08
 				for _, player in sled.Riders do
-					leeway = math.max(leeway, 0.06 + ping(player))
+					wait = math.max(wait, 0.08 + ping(player) / 2)
 				end
-				sled.EnterAt = now
-				sled.JudgeAt = now + leeway
+				sled.EnterAt = now - (sled.D - curve.D0) / math.max(sled.V, 1)
+				sled.CloseAt = sled.EnterAt + GRACE
+				sled.JudgeAt = sled.CloseAt + wait
 			end
 			if sled.JudgeAt and now >= sled.JudgeAt then
 				self:_judge(sled, curve)
@@ -675,6 +742,7 @@ function BobsledRun:_share()
 			N = sled.Next,
 			F = sled.Place,
 			O = sled.OpenAt and round(sled.OpenAt, 0.001),
+			C = sled.CloseAt and round(sled.CloseAt, 0.001),
 			Tm = sled.Time and round(sled.Time, 0.01),
 			G = if sled.Gone then 1 else nil,
 			L = leans,
