@@ -1,7 +1,7 @@
 # Handoff: Party Panic (for the Claude joining the project)
 
 Written for a second Claude that joins while the first one keeps working. Last updated: **2026-10-21 16:40 UTC
-(12:40 PM Eastern)**. Live: **version 25**. Session A keeps updating this file as its lanes land.
+(12:40 PM Eastern)**. Live: **version 26**. Session A keeps updating this file as its lanes land.
 
 **At a glance (12:40 PM ET):** all 11 precision games have fair hitboxes (live). Six Session A agents are still working
 (payoffs + low currency, sit-out toggle, lobby obby, Skee-Ball, Sinking Sands bots, Skate Escape start float); Session A
@@ -46,7 +46,7 @@ per-game music (section 2).
 | --- | --- | --- |
 | Hitbox pass for all 11 precision games | **done, live in version 24** (each game's commit message says what changed) | the mini-game files are free again, except the two rows below |
 | Sinking Sands diver bots (owner: "Bots are terrible at this game") (agent; worktree `.claude/worktrees/bots-SinkingSands`, branch `bots/SinkingSands`) | started (investigating why divers score 0-4) | `src/server/MiniGames/Bots/SinkingSands.luau` and the other Sinking Sands files |
-| Skate Escape start float (owner: the character floats onto the bridge "on the countdown and go") (agent; branch `fix/skate-start`) | investigating | the Skate Escape files, maybe `RoundContext.luau` |
+| Skate Escape start float (owner: the character floats onto the bridge "on the countdown and go") | **fixed, live in version 26** (skaters are held on their boards on the start line until GO, then handed back to their device) | free again |
 | Lobby obby rebuild + scenery not climbable (agent; branch `lobby/obby`) | first WIP committed: a goo-pool course with checkpoints, foliage that never collides | `src/server/World/LobbyBuilder.luau` (buildParkour, scenery placement), `src/client/Controllers/MovementController.luau` |
 | Skee-Ball arcade in the lobby (agent; branch `lobby/skeeball`) | WIP: the shared ball path (roll, hop, flight, rings) is in; machine, props and UI in progress | a new arcade module + props, a one-line hook in LobbyBuilder, a new SkeeBallController |
 | "Sit out next round" toggle (agent; branch `feature/sitout`) | built ("a big switch right by the phase banner"), finishing tests | `src/server/Services/RoundManager.luau`, `VotingService.luau`, `src/client/Controllers/HudController.luau`, `VoteController.luau`, settings UI |
