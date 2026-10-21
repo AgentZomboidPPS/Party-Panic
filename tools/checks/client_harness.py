@@ -971,11 +971,11 @@ phase("Results", 8, function()
 		-- and a name gives way ("..."), like the standings board.
 		local longest = {
 			"🏊 45 coins • never chomped!", -- SHARK BAIT
-			"Yellow 🎂 12 ⭐ 3 • 14 layers", -- CAKE FACTORY
+			"Yellow 🎂 33 ⭐ 30 • 71 layers", -- CAKE FACTORY
 			"Yellow 97% • 14/15 leans", -- BOBSLED RUN
 			"Yellow 100% • 22 perfect", -- PUMP & POP
 			"Lasted 54s • 120 jumps", -- FIRE ROPE
-			"🦈 12 chomps • 3 dunked", -- SHARK BAIT
+			"🦈 11 chomps • 22 dunked", -- SHARK BAIT
 			"🏹 12 tags • +12 boards", -- ARROW AMBUSH
 			"Divers 1200 • you 450", -- SINKING SANDS
 		}

@@ -6,8 +6,9 @@
 -- the game.").
 --
 -- Each standings row has the place and name on the left and the result on the right, in its own
--- column like the standings board: a long name ends in "..." and the result always reads whole. It
--- used to be one line ("🥇  name  ·  result") that a 15-character name cut short in every mode.
+-- label: the result always reads whole and a long name gives way ("..."), only as far as its own
+-- row's result needs. It used to be one line ("🥇  name  ·  result") that a 15-character name cut
+-- short in every mode.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -27,12 +28,16 @@ local ResultsController = {}
 
 local MEDALS = { "🥇", "🥈", "🥉" }
 
--- The standings rows (units: the column is about 374 wide on every screen): the result column is as
--- wide as the widest result shown, up to RESULT_MAX (the rest stays for the place and name). A
--- result that's wider still is drawn smaller, down to RESULT_MIN_TEXT (11 pt on a phone). Each
--- result keeps RESULT_SLACK spare: phones lay the scaled-down text out a little wider than it
--- measures, and a result measured to fit exactly ended in "..." there.
-local ROW_TEXT, RESULT_MAX, RESULT_MIN_TEXT, RESULT_SLACK = 21, 232, 18, 8
+-- The standings rows (units: the column is about 374 wide on every screen): a result takes as much
+-- of its row as it needs, up to RESULT_MAX (the rest stays for the place and name); one that's wider
+-- still is drawn smaller, down to RESULT_MIN_TEXT (11 pt on a phone).
+local ROW_TEXT, RESULT_MAX, RESULT_MIN_TEXT = 21, 232, 18
+
+-- The room a result needs at this text size: a little more than it measures, because phones draw
+-- the scaled-down text up to 4% wider than that (a result given exactly its width ended in "...").
+local function resultRoom(text: string, size: number): number
+	return UIKit.TextWidth(text, size, Theme.Fonts.Bold) * 1.06 + 4
+end
 
 local modal: Modal.Modal
 local headline: TextLabel
@@ -62,16 +67,19 @@ local function show(data)
 		else `{medal} {Placement.Ordinal(data.Place)} of {data.PlayerCount}{teamLine}`
 
 	clear(standings)
-	local resultWidth = 0
-	for _, entry in data.Standings do
-		resultWidth = math.max(resultWidth, UIKit.TextWidth(entry.ScoreText or "", ROW_TEXT, Theme.Fonts.Bold))
-	end
-	resultWidth = math.min(math.ceil(resultWidth) + RESULT_SLACK, RESULT_MAX)
 	for index, entry in data.Standings do
 		local isMe = entry.UserId == game:GetService("Players").LocalPlayer.UserId
 		local place = MEDALS[entry.Place] or Placement.Ordinal(entry.Place)
 		local name = Participants.ListName(entry.Name, Participants.IsBotId(entry.UserId))
 		local color = if isMe then Theme.Colors.Yellow else Theme.Colors.Text
+		local result = entry.ScoreText or ""
+		local textSize = ROW_TEXT
+		local resultWidth = resultRoom(result, textSize)
+		while textSize > RESULT_MIN_TEXT and resultWidth > RESULT_MAX do
+			textSize -= 1
+			resultWidth = resultRoom(result, textSize)
+		end
+		resultWidth = math.min(math.ceil(resultWidth), RESULT_MAX)
 		local row = UIKit.new("Frame", {
 			Size = UDim2.new(1, 0, 0, 30),
 			BackgroundTransparency = 1,
@@ -90,14 +98,6 @@ local function show(data)
 			Parent = row,
 		})
 		nameLabel:SetAttribute("PP_TruncateOk", true) -- a long name ends in "..."
-		local result = entry.ScoreText or ""
-		local textSize = ROW_TEXT
-		while
-			textSize > RESULT_MIN_TEXT
-			and UIKit.TextWidth(result, textSize, Theme.Fonts.Bold) + RESULT_SLACK > resultWidth
-		do
-			textSize -= 1
-		end
 		UIKit.Label({
 			Name = "Result",
 			Text = result,
