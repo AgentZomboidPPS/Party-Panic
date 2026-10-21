@@ -1,0 +1,23 @@
+newmtl Legs
+Kd 0.275 0.275 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Red
+Kd 0.922 0.235 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl White
+Kd 0.980 0.980 0.980
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Lamp
+Kd 1.000 0.667 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

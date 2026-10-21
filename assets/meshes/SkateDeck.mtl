@@ -1,0 +1,23 @@
+newmtl Planks
+Kd 0.588 0.400 0.259
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Beams
+Kd 0.376 0.251 0.173
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bolts
+Kd 0.275 0.275 0.298
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Paint
+Kd 0.961 0.941 0.882
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
