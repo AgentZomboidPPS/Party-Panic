@@ -601,7 +601,9 @@ end
 -- a second each, a prop's pieces side by side, at most REBUILDS_AT_ONCE across the server). Measured
 -- on a test server, a palm's, a column's, an arch's and a tree's collision then sits within half a
 -- stud of the drawing. A piece whose rebuild fails twice keeps its rough Default collision, and the
--- output says so. Once per template: every copy of a prop shares it.
+-- output says so. Once per template, in the background (the lobby's 40-odd props would otherwise
+-- hold up the server's start by 20 s): copies made meanwhile are patched as each piece is done, and
+-- later copies share the template's.
 local PRECISE = { CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition }
 local REBUILDS_AT_ONCE = 12 -- across all props (Preload asks for every prop at once)
 local rebuilding = 0
@@ -619,43 +621,73 @@ local KEPT = {
 	"Transparency",
 }
 
-local function preciseCollision(name: string, pieces: { MeshPart })
+-- Templates still being rebuilt: where the pieces are among the template's descendants (a copy's
+-- descendants come in the same order), and those pieces of every copy made meanwhile.
+type Rebuild = { Indices: { number }, Copies: { { MeshPart } } }
+local rebuilds: { [Model]: Rebuild } = {}
+
+-- Gives `part` the collision of `fresh`; everything else on it (size, place, flags, looks) stays.
+local function applyCollision(part: MeshPart, fresh: MeshPart): boolean
+	local kept = {}
+	for _, property in KEPT do
+		kept[property] = (part :: any)[property]
+	end
+	local ok = pcall(part.ApplyMesh, part, fresh)
+	pcall(function()
+		for property, value in kept do
+			(part :: any)[property] = value
+		end
+	end)
+	return ok
+end
+
+local function preciseCollision(name: string, model: Model, pieces: { MeshPart })
+	if #pieces == 0 then
+		return
+	end
+	local descendants = model:GetDescendants()
+	local rebuild: Rebuild = { Indices = {}, Copies = {} }
+	for index, part in pieces do
+		rebuild.Indices[index] = table.find(descendants, part) :: number
+	end
+	rebuilds[model] = rebuild
 	local remaining = #pieces
-	for _, part in pieces do
+	for index, part in pieces do
 		task.spawn(function()
 			while rebuilding >= REBUILDS_AT_ONCE do
 				task.wait()
 			end
 			rebuilding += 1
-			-- (Everything normalize set stays as it was: only the collision shape changes.)
-			local kept = {}
-			for _, property in KEPT do
-				kept[property] = (part :: any)[property]
-			end
-			local ok, err = false, nil
+			local fresh: MeshPart? = nil
+			local err: any = "ApplyMesh failed"
 			for attempt = 1, 2 do
-				ok, err = pcall(function()
-					local fresh = AssetService:CreateMeshPartAsync(Content.fromUri(part.MeshId), PRECISE)
-					part:ApplyMesh(fresh)
-					fresh:Destroy()
-				end)
-				if ok or attempt == 2 then
+				local ok, result =
+					pcall(AssetService.CreateMeshPartAsync, AssetService, Content.fromUri(part.MeshId), PRECISE)
+				if ok then
+					fresh = result
 					break
 				end
-				task.wait(1)
+				err = result
+				if attempt == 1 then
+					task.wait(1)
+				end
 			end
-			for property, value in kept do
-				(part :: any)[property] = value
-			end
-			if not ok then
+			if fresh and applyCollision(part, fresh) then
+				for _, copy in rebuild.Copies do
+					applyCollision(copy[index], fresh)
+				end
+			else
 				warn(`[MeshLibrary] {name}.{part.Name} keeps its rough collision: {err}`)
+			end
+			if fresh then
+				fresh:Destroy()
 			end
 			rebuilding -= 1
 			remaining -= 1
+			if remaining == 0 then
+				rebuilds[model] = nil
+			end
 		end)
-	end
-	while remaining > 0 do
-		task.wait()
 	end
 end
 
@@ -711,7 +743,6 @@ local function normalize(name: string, model: Model, spec: Spec)
 			largest, largestVolume = part, volume
 		end
 	end
-	preciseCollision(name, solidMeshes)
 
 	-- Pivot at the bottom center so `PivotTo(CFrame.new(groundPoint))` sits the prop on the ground.
 	model.PrimaryPart = largest
@@ -719,6 +750,7 @@ local function normalize(name: string, model: Model, spec: Spec)
 	if spec.PostProcess then
 		spec.PostProcess(model)
 	end
+	preciseCollision(name, model, solidMeshes)
 end
 
 local function build(name: string, spec: Spec): Model
@@ -774,7 +806,17 @@ export type GetOptions = {
 
 -- Returns a fresh copy of a prop. Options can rescale, recolor pieces, place and parent it.
 function MeshLibrary.Get(name: string, options: GetOptions?): Model
-	local model = resolve(name):Clone()
+	local template = resolve(name)
+	local model = template:Clone()
+	local rebuild = rebuilds[template]
+	if rebuild then -- its collision is still being made precise: this copy gets it too
+		local descendants = model:GetDescendants()
+		local copy = {}
+		for index, at in rebuild.Indices do
+			copy[index] = descendants[at] :: MeshPart
+		end
+		table.insert(rebuild.Copies, copy)
+	end
 	if cameraSolid[name] then
 		setupCameraSolid() -- keeps groups registered since the template was made out of it
 	end
