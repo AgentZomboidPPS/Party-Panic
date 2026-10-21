@@ -379,6 +379,14 @@ def target_board():
     dx, dy = BOARD_W - 1.4, batten_y[1] - batten_y[0]
     diagonal = rounded_box(math.hypot(dx, dy), 0.5, 0.2, 0.08, 2).rotate("z", math.degrees(math.atan2(dy, dx)))
     braces_back.append(diagonal.translate(0, (batten_y[0] + batten_y[1]) / 2, 0.34))
+    # A gold crest with crossed iron arrows in each of the Z-brace's two empty triangles (at their
+    # incenters, which the brace is point-symmetric about), so the runners' side isn't a bare panel.
+    # The crest stands just out from the paint (0.31) and the arrows just out from the crest.
+    crests, crest_arrows = [], []
+    for sx in (-1, 1):
+        cx, cy_crest = -sx * 2.02, (batten_y[0] + batten_y[1]) / 2 + sx * 0.5
+        crests.append(heater_shield(1.5, 1.8, 0.05).translate(cx, cy_crest - 0.9, 0.345))
+        crest_arrows.append(crossed_arrows(0.52, 0.04).translate(cx, cy_crest + 0.05, 0.385))
     caps = [rounded_box(0.7, 0.7, 0.66, 0.12, 2).translate(sx * BOARD_W / 2, y, 0.05)
             for sx in (-1, 1) for y in (BOARD_BOTTOM + 0.1, BOARD_TOP - 0.1)]
     studs = [sphere(0.1, 5, 8).translate(sx * BOARD_W / 2, y, -0.28) for sx in (-1, 1) for y in (BOARD_BOTTOM + 0.1, BOARD_TOP - 0.1)]
@@ -397,11 +405,11 @@ def target_board():
     return {
         "Wood": merge(cart, *posts, *braces, *planks),
         "Frame": merge(*frame, *braces_back),
-        "Iron": merge(*caps, *studs, *hubs, *axles),
+        "Iron": merge(*caps, *studs, *hubs, *axles, *crest_arrows),
         "Wheels": merge(*wheels),
-        "Shield": shield,
+        "Paint": merge(shield, paint),  # the client paints both in the board's color
         "ShieldRim": merge(rim, target_rim),
-        "Paint": paint,
+        "Crest": merge(*crests),
         "Face": face,
         "Rings": ring_red,
         "Bull": bull,
@@ -776,6 +784,7 @@ COLORS = {
     "Wheels": (90, 64, 44),
     "Shield": (60, 130, 230),
     "ShieldRim": (255, 205, 80),
+    "Crest": (255, 205, 80),
     "Paint": (60, 130, 230),
     "Face": (250, 246, 236),
     "Rings": (230, 60, 60),

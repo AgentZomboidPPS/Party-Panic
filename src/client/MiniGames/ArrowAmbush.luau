@@ -28,7 +28,7 @@ local RUNNER_COLOR = Color3.fromRGB(80, 200, 255)
 local RING_COLOR = Color3.fromRGB(255, 70, 60)
 local READY_COLOR = Color3.fromRGB(255, 240, 120)
 local BADGE_COLORS = { Color3.fromRGB(120, 220, 120), Color3.fromRGB(80, 190, 255), Color3.fromRGB(255, 200, 60) }
--- Each board's painted shield (front) and back, in its badge's color: +1 green, +2 blue, +3 orange-gold.
+-- Each board's paint (the shield on the front and the back), in its badge's color: +1 green, +2 blue, +3 orange-gold.
 local BOARD_PAINT = { Color3.fromRGB(76, 186, 96), Color3.fromRGB(62, 132, 236), Color3.fromRGB(246, 158, 40) }
 local BEADS = 16
 
@@ -130,6 +130,9 @@ function ArrowAmbush.Start(api)
 				and descendant.Name ~= "Face"
 				and descendant.Name ~= "Rings"
 				and descendant.Name ~= "Bull"
+				and descendant.Name ~= "Paint"
+				and descendant.Name ~= "ShieldRim"
+				and descendant.Name ~= "Crest"
 			then
 				descendant.CanCollide = true -- runners bump into the boards they hide behind
 			end
@@ -150,7 +153,7 @@ function ArrowAmbush.Start(api)
 		badge.Parent = anchor
 		local value = math.clamp(data.V or 1, 1, 3)
 		for _, descendant in model:GetDescendants() do
-			if descendant:IsA("BasePart") and (descendant.Name == "Shield" or descendant.Name == "Paint") then
+			if descendant:IsA("BasePart") and descendant.Name == "Paint" then
 				descendant.Color = BOARD_PAINT[value]
 			end
 		end

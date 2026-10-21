@@ -274,7 +274,9 @@ function ArrowAmbush:_buildArena()
 	local castleX = 56 -- ... and its side walls
 	meadow(ctx, origin - Vector3.new(0, 0.6, 0), 300, function(point: Vector3): boolean
 		local x, z = point.X - origin.X, point.Z - origin.Z
-		return not (math.abs(x) < castleX + 8 and z < -2) and not (math.abs(x) < 48 and z > 24 and z < 60)
+		-- (Only the castle's own depth is kept clear: the forest rises behind its battlements.)
+		return not (math.abs(x) < castleX + 8 and z < -2 and z > castleZ - 12)
+			and not (math.abs(x) < 48 and z > 24 and z < 60)
 	end)
 	-- The tournament field: trampled sand round the courtyard, the meadow beyond.
 	Shapes.Slab(Vector3.new(90, 0.4, 86), 10, {
@@ -411,6 +413,8 @@ function ArrowAmbush:_buildArena()
 		Color = rgb(198, 186, 170),
 		Material = Enum.Material.Slate,
 		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
 		Parent = ctx.Arena,
 	})
 	Build.Part({

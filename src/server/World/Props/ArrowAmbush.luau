@@ -7,7 +7,7 @@
 return function(h)
 	local stone = h.rgb(232, 220, 200)
 	local mortar = h.rgb(176, 164, 152)
-	local trim = h.rgb(240, 218, 176) -- warm sandstone coping, so the merlons read against the stone
+	local trim = h.rgb(224, 192, 142) -- warm sandstone coping, so the merlons read against the stone
 	local gold = h.rgb(255, 200, 70)
 	local roof = h.rgb(72, 118, 222)
 	local red = h.rgb(226, 62, 74)
@@ -103,16 +103,16 @@ return function(h)
 		},
 		TargetBoard = {
 			Height = 7.79,
-			AssetId = 82765037973533,
+			AssetId = 99739879214802,
 			Collide = false, -- the client moves boards; arrows are blocked by the server's own check
 			Palette = {
 				Wood = h.rgb(206, 156, 102),
 				Frame = h.rgb(122, 82, 52),
 				Iron = h.rgb(64, 64, 74),
 				Wheels = h.rgb(96, 66, 44),
-				Shield = h.rgb(64, 132, 232), -- the client paints the Shield and Paint in the board's color
 				ShieldRim = gold,
-				Paint = h.rgb(64, 132, 232),
+				Paint = h.rgb(64, 132, 232), -- the front shield and the back: the client paints it in the board's color
+				Crest = gold,
 				Face = h.rgb(252, 248, 238),
 				Rings = h.rgb(232, 58, 58),
 				Bull = h.rgb(255, 205, 60),
@@ -122,6 +122,8 @@ return function(h)
 				Frame = Enum.Material.Wood,
 				Iron = Enum.Material.Metal,
 				ShieldRim = Enum.Material.Metal,
+				Paint = Enum.Material.WoodPlanks, -- painted planks: the grain shows through the board's color
+				Crest = Enum.Material.Metal,
 			},
 			Fallback = function(m)
 				h.rounded(m, "Wood", Vector3.new(6.2, 0.45, 2.5), 0.12, Vector3.new(0, 0.95, 0))
@@ -134,7 +136,7 @@ return function(h)
 					end
 				end
 				h.rounded(m, "Wood", Vector3.new(7.2, 6.2, 0.5), 0.15, Vector3.new(0, 4.5, 0.05))
-				h.block(m, "Shield", Vector3.new(5.6, 4.6, 0.09), Vector3.new(0, 4.6, -0.245))
+				h.block(m, "Paint", Vector3.new(5.6, 4.6, 0.09), Vector3.new(0, 4.6, -0.245))
 				h.block(m, "Paint", Vector3.new(6.6, 5.6, 0.06), Vector3.new(0, 4.5, 0.36))
 				-- The target's discs: each sticks out further in front and reaches further back.
 				disc(m, "Face", 4.2, 0.44, Vector3.new(0, 4.7, -0.16))
