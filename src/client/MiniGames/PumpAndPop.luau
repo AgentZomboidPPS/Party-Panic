@@ -3,6 +3,10 @@
 -- and bots', from the "Push" and "Pump" events) and gives this player the PUMP button with its
 -- timing meter: hold, let go in the green band (✓) for a full pump, not in the red (✕).
 --
+-- The carnival's light bulbs (every prop's BulbsA / BulbsB pieces) chase each other round the
+-- stage, faster in the last stretch, and flash in the winners' color when a balloon pops (with
+-- reduced effects they just stay lit).
+--
 -- The server times the presses itself; the meter here only shows the same clock (FILL_TIME, SWEET
 -- from "Layout"), and the PERFECT / WEAK / TOO LONG words come from the server's verdict. The
 -- arena's balloons, tanks and plungers are built by the server and moved here, locally.
@@ -24,6 +28,8 @@ local PumpAndPop = {}
 local TRAVEL = 0.8 -- how far a plunger's handle goes down (studs)
 local METER_TOP = 1.25 -- the meter shows holds up to this much of FILL_TIME (the red band above 1)
 local DIAL_HUB = CFrame.new(0, 2.15, -2.8) -- the gauge needle's hub in the tank's space
+local BULB_LIT = Color3.fromRGB(255, 238, 170)
+local BULB_DIM = Color3.fromRGB(196, 150, 92)
 local GREEN = Color3.fromRGB(90, 225, 120)
 local RED = Color3.fromRGB(255, 80, 80)
 
@@ -124,6 +130,25 @@ function PumpAndPop.Start(api)
 		return
 	end
 	local effects = not State.ReducedEffects()
+	-- The chasing bulbs: two sets that take turns being lit.
+	local bulbs = { {}, {} } :: { { BasePart } }
+	for _, part in arena:GetDescendants() do
+		if part:IsA("BasePart") and (part.Name == "BulbsA" or part.Name == "BulbsB") then
+			table.insert(bulbs[if part.Name == "BulbsA" then 1 else 2], part)
+		end
+	end
+	local bulbColor = BULB_LIT
+	local bulbTurn = 0
+	local bulbClock = 0
+	local function lightBulbs(lit: number)
+		for set = 1, 2 do
+			local on = lit == 0 or set == lit
+			for _, part in bulbs[set] do
+				part.Color = if on then bulbColor else BULB_DIM
+				part.Material = if on then Enum.Material.Neon else Enum.Material.SmoothPlastic
+			end
+		end
+	end
 	local rng = Random.new()
 	local me = Players.LocalPlayer.UserId
 	local fill: number = layout.Fill
@@ -562,6 +587,10 @@ function PumpAndPop.Start(api)
 			return
 		end
 		station.Popped = true
+		bulbColor = station.Color:Lerp(Color3.new(1, 1, 1), 0.25) -- the lights flash the winners' color
+		if not effects then
+			lightBulbs(0)
+		end
 		local balloon = station.Balloon
 		local center = station.BaseCFrame.Position + Vector3.new(0, 15 * station.Scale * 0.55, 0)
 		if balloon then
@@ -718,6 +747,24 @@ function PumpAndPop.Start(api)
 				show(station.Ooh, shown >= 0.62)
 				show(station.Smile, shown < 0.62)
 				show(station.Sweat, shown >= 0.8)
+			end
+		end
+
+		-- The bulbs chase: steady while the round warms up, quicker as any balloon nears popping
+		-- and quickest once one has popped.
+		if effects then
+			local fullest = 0
+			local popped = false
+			for _, team in order do
+				fullest = math.max(fullest, stations[team].Shown)
+				popped = popped or stations[team].Popped
+			end
+			bulbClock += dt
+			local period = if popped then 0.12 elseif fullest > 0.75 then 0.25 else 0.5
+			if bulbClock >= period then
+				bulbClock = 0
+				bulbTurn = bulbTurn % 2 + 1
+				lightBulbs(bulbTurn)
 			end
 		end
 

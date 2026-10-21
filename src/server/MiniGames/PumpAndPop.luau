@@ -17,13 +17,17 @@
 --
 -- Bots press Down and Up through ctx:BotAction with skill-based timing (Bots/PumpAndPop.luau);
 -- there are no hazards here, so nothing needs a separate server check for them.
+--
+-- Art pass ("make every arena look really cool": a bright carnival stage, the balloons the stars):
+-- the stations stand on a round sunburst stage in front of a striped bandshell, ringed by
+-- candy-striped light poles strung with bunting, team-colored grandstands full of fans, and a
+-- fairground beyond: big tops, game booths and a Ferris wheel. Looks only; the gameplay is as was.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Teams = require(ReplicatedStorage.Shared.Teams)
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
-local Scenery = require(script.Parent.Kit.Scenery)
 local Build = require(script.Parent.Parent.World.Build)
 local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 
@@ -96,6 +100,175 @@ local function centerOn(model: Model, name: string, spot: Vector3)
 	end
 end
 
+-- The fairground around the stage (looks only, nothing here touches the game): grass to the
+-- horizon, the bandshell behind the stations, light poles strung with bunting round the stage,
+-- the teams' grandstands on both sides and big tops, booths, a Ferris wheel and trees beyond.
+-- `deck` is the stage deck's middle and `radius` its radius; `names` are the teams, left to right.
+local function buildFairground(ctx, origin: Vector3, deck: Vector3, radius: number, names: { string })
+	local arena = ctx.Arena
+	local rng = Random.new(7)
+	-- A spot on the ground around the deck: `angle` (degrees) from the front (+Z), `distance` out.
+	local function around(angle: number, distance: number): Vector3
+		local a = math.rad(angle)
+		return Vector3.new(deck.X + math.sin(a) * distance, origin.Y, deck.Z + math.cos(a) * distance)
+	end
+	-- A prop's front (-Z) turned to look at `target` (on the ground).
+	local function facing(at: Vector3, target: Vector3): CFrame
+		return CFrame.lookAt(at, Vector3.new(target.X, at.Y, target.Z))
+	end
+
+	Build.Part({
+		Name = "Grass",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(4, 600, 600),
+		CFrame = upright(origin - Vector3.new(0, 2, 0)),
+		Color = rgb(112, 196, 84),
+		Material = Enum.Material.Grass,
+		Parent = arena,
+	})
+	-- The midway: a sandy ring round the stage that the booths and stands stand on.
+	Build.Decor({
+		Name = "Midway",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.4, (radius + 40) * 2, (radius + 40) * 2),
+		CFrame = upright(deck),
+		Color = rgb(246, 222, 170),
+		Material = Enum.Material.Sand,
+		Parent = arena,
+	})
+
+	-- The bandshell: its arch frames the balloons from behind, open side towards the players.
+	local shellAt = Vector3.new(origin.X, origin.Y - 0.05, origin.Z - 18.9)
+	MeshLibrary.Get("PumpBandshell", {
+		Scale = 0.85,
+		CFrame = CFrame.lookAt(shellAt, shellAt + Vector3.zAxis),
+		Parent = arena,
+	})
+
+	-- Light poles round the sides of the stage, bunting strung between neighbors.
+	local poleRadius = radius + 3
+	for _, side in { -1, 1 } do
+		local previous: Vector3? = nil
+		for _, angle in { 40, 70, 100 } do
+			local at = around(side * angle, poleRadius)
+			MeshLibrary.Get("PumpLightPole", { CFrame = CFrame.new(at), Parent = arena })
+			if previous then
+				local span = at - previous
+				local scale = span.Magnitude / 24
+				local middle = (at + previous) / 2
+				MeshLibrary.Get("PumpBunting", {
+					Scale = scale,
+					CFrame = CFrame.fromMatrix(
+						Vector3.new(middle.X, origin.Y + 13.6 - 4.96 * scale, middle.Z),
+						span.Unit,
+						Vector3.yAxis
+					),
+					Parent = arena,
+				})
+			end
+			previous = at
+		end
+	end
+
+	-- Four grandstands, two a side, each in the color of the team nearest it.
+	local stands = { { -114, 20 }, { -72, 19 }, { 72, 19 }, { 114, 20 } }
+	for slot, stand in stands do
+		local team = names[math.clamp(math.ceil(slot * #names / 4), 1, #names)]
+		local color = Teams.Colors[team]
+		local at = around(stand[1], radius + stand[2])
+		MeshLibrary.Get("PumpGrandstand", {
+			Scale = 1.3,
+			Colors = { Seats = color, CanopyA = color, Flags = color },
+			CFrame = facing(at, deck),
+			Parent = arena,
+		})
+	end
+
+	-- The fairground beyond: booths on the midway, big tops and a Ferris wheel on the skyline.
+	local booths = { { -136, 30 }, { 136, 30 }, { -46, 30 }, { 46, 30 }, { -16, 32 }, { 16, 32 } }
+	local boothColors = {
+		rgb(64, 172, 234),
+		rgb(96, 204, 124),
+		rgb(255, 150, 60),
+		rgb(236, 64, 140),
+		rgb(150, 100, 230),
+		rgb(255, 196, 56),
+	}
+	for index, booth in booths do
+		local at = around(booth[1], radius + booth[2])
+		MeshLibrary.Get("PumpGameBooth", {
+			Colors = { BoothA = boothColors[index] },
+			CFrame = facing(at, deck),
+			Parent = arena,
+		})
+	end
+	local wheelAt = origin + Vector3.new(-82, 0, -78)
+	MeshLibrary.Get("PumpFerrisWheel", {
+		CFrame = facing(wheelAt, origin + Vector3.new(0, 0, 40)),
+		Parent = arena,
+	})
+	local tops = { { 88, -70, 1.15 }, { 128, -22, 0.8 }, { -128, -18, 0.75 } }
+	for _, top in tops do
+		local at = origin + Vector3.new(top[1], 0, top[2])
+		MeshLibrary.Get("PumpBigTop", {
+			Scale = top[3],
+			CFrame = facing(at, origin + Vector3.new(0, 0, 30))
+				* CFrame.Angles(0, math.rad(rng:NextNumber(-25, 25)), 0),
+			Parent = arena,
+		})
+	end
+	-- Bunches of party balloons tied by the booths and the stands, in the teams' colors.
+	for index = 1, 8 do
+		local angle = (if index <= 4 then -1 else 1) * (52 + ((index - 1) % 4) * 22)
+		local spot = around(angle, radius + 30)
+		for bunch = 1, 3 do
+			local team = names[rng:NextInteger(1, #names)]
+			MeshLibrary.Get("Balloon", {
+				Scale = rng:NextNumber(1.1, 1.5),
+				Colors = { Balloon = Teams.Colors[team] },
+				CFrame = CFrame.new(spot + Vector3.new(rng:NextNumber(-1.5, 1.5), 0, rng:NextNumber(-1.5, 1.5)))
+					* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), (bunch - 2) * 0.14),
+				Parent = arena,
+			})
+		end
+	end
+	-- A ring of trees and soft hills on the horizon.
+	local leafColors = { rgb(80, 190, 90), rgb(110, 200, 80), rgb(70, 165, 95), rgb(140, 205, 85) }
+	for index = 0, 27 do
+		local angle = (index + rng:NextNumber(-0.35, 0.35)) / 28 * math.pi * 2
+		local distance = rng:NextNumber(150, 190)
+		MeshLibrary.Get("Tree", {
+			Scale = rng:NextNumber(2.2, 3.2),
+			Colors = { Leaves = leafColors[rng:NextInteger(1, #leafColors)] },
+			CFrame = CFrame.new(origin + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance))
+				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+			Parent = arena,
+		})
+	end
+	for index = 0, 11 do
+		local angle = (index + rng:NextNumber(-0.3, 0.3)) / 12 * math.pi * 2
+		local distance = 300 * rng:NextNumber(0.72, 0.85)
+		local size = Vector3.new(rng:NextNumber(150, 230), rng:NextNumber(50, 90), rng:NextNumber(110, 160))
+		local hill = Build.Part({
+			Name = "Hill",
+			Size = size,
+			CFrame = CFrame.new(
+				origin + Vector3.new(math.cos(angle) * distance, -size.Y * 0.2, math.sin(angle) * distance)
+			) * CFrame.Angles(0, -angle + math.pi / 2, 0),
+			Color = rgb(100, 182, 88):Lerp(rgb(72, 146, 92), rng:NextNumber(0, 1)),
+			Material = Enum.Material.Grass,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+			Parent = arena,
+		})
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = hill
+	end
+end
+
 -- How much air a press held for `held` seconds is worth, with `leeway` seconds of slack on both
 -- edges of the green band. Returns the air (0..1) and its kind: "perfect", "weak" or "over".
 function PumpAndPop.Judge(held: number, leeway: number): (number, string)
@@ -148,24 +321,24 @@ function PumpAndPop:Prepare()
 	local span = math.sin(((#names - 1) / 2) * step) * ARC_RADIUS -- the outer stations' distance from the middle
 	local stageRadius = math.sqrt(span * span + 16) + PAD_RADIUS + 6
 
-	-- A sunny fairground: meadow, a round stage and bunches of party balloons around the back.
-	Scenery.Meadow(ctx, origin, 300)
+	-- The stage: an invisible floor to stand on (as before) under the sunburst stage deck, which
+	-- is never smaller than the bandshell needs and keeps its front edge where the floor's is.
 	local stageCenter = origin + Vector3.new(0, 0, 3)
 	Build.Part({
 		Name = "Stage",
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(0.75, stageRadius * 2, stageRadius * 2),
 		CFrame = upright(stageCenter + Vector3.new(0, 0.075, 0)),
-		Color = rgb(250, 240, 222),
-		Material = Enum.Material.SmoothPlastic,
+		Transparency = 1,
+		CastShadow = false,
 		Parent = ctx.Arena,
 	})
-	Build.Decor({
-		Name = "StageTrim",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.75, stageRadius * 2 + 2, stageRadius * 2 + 2),
-		CFrame = upright(stageCenter + Vector3.new(0, -0.125, 0)),
-		Color = rgb(255, 196, 80),
+	local deckRadius = math.max(stageRadius, 40)
+	local deckScale = deckRadius / 40
+	local deckCenter = stageCenter + Vector3.new(0, 0, stageRadius - deckRadius)
+	MeshLibrary.Get("PumpStageDeck", {
+		Scale = deckScale,
+		CFrame = CFrame.new(deckCenter + Vector3.new(0, 0.45 - 1.2 * deckScale, 0)),
 		Parent = ctx.Arena,
 	})
 
@@ -282,22 +455,7 @@ function PumpAndPop:Prepare()
 		ctx:SetShared("Air_" .. team, 0)
 	end
 
-	-- Party balloons tied in bunches behind the stations, in the teams' colors.
-	local decor = Random.new()
-	for index = 0, 8 do
-		local angle = (index - 4) * 0.21
-		local spot = focus + Vector3.new(math.sin(angle) * 70, 0, -math.cos(angle) * 70)
-		for bunch = 1, 3 do
-			local team = names[decor:NextInteger(1, #names)]
-			MeshLibrary.Get("Balloon", {
-				Scale = decor:NextNumber(0.9, 1.25),
-				Colors = { Balloon = Teams.Colors[team] },
-				CFrame = CFrame.new(spot + Vector3.new(decor:NextNumber(-2, 2), 0, decor:NextNumber(-2, 2)))
-					* CFrame.Angles(0, decor:NextNumber(0, math.pi * 2), (bunch - 2) * 0.12),
-				Parent = ctx.Arena,
-			})
-		end
-	end
+	buildFairground(ctx, origin, deckCenter, deckRadius, names)
 
 	ctx:SetSharedJSON("Layout", {
 		Stations = layout,
