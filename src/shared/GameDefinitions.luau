@@ -190,6 +190,19 @@ local list: { GameDefinition } = {
 		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "MechaMarathon",
+		Name = "Mecha-Marathon",
+		Category = "Reaction",
+		Icon = "🚁",
+		Color = Color3.fromRGB(255, 170, 60),
+		Objective = "Mash WIND for 10 seconds to wind up your toy. The farthest flight wins!",
+		Controls = "PC: alternate Q and E, fast. Phone: tap WIND as fast as you can (two thumbs work)!",
+		Duration = 30,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
