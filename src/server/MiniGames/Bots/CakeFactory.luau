@@ -52,12 +52,12 @@ function CakeFactoryBrain.Step(bot, ctx, mode, _dt)
 		local ready = not (cake and cake.Bad) and layers == index - 1
 		local press
 		if ready then
-			press = not bot:Chance((1 - skill) * 0.18) -- now and then a bot just misses one
+			press = not bot:Chance((1 - skill) * 0.25) -- now and then a bot just misses one
 		else
 			press = bot:Chance((1 - skill) * 0.22) -- a careless press on a cake that isn't ready
 		end
 		if press then
-			local spread = (1 - skill) * 0.42
+			local spread = (1 - skill) * 0.6
 			local err = (bot.Rng:NextNumber() + bot.Rng:NextNumber() - 1) * spread + (1 - skill) * 0.03
 			ctx:Delay(math.max(at - now + err, 0.02), function()
 				ctx:BotAction(bot, "Add")

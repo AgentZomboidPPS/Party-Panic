@@ -20,7 +20,8 @@
 -- cakes along it every frame and the server judges each press against the same schedule, a little
 -- in the past for the player's ping. The state of the cakes on each belt is shared as a string
 -- ("Cakes_<Team>"), and the "Add"/"Missed"/"Boxed" events animate the machines for everyone.
--- Team scores are finished cakes; a tie is broken by the good layers each team placed.
+-- Team scores are finished cakes; a tie is broken by the good layers each team placed, then by
+-- their perfect presses.
 --
 -- Bots press through ctx:BotAction with skill-based timing on the same schedule (Bots/CakeFactory).
 -- There are no moving hazards: the belt only carries cakes, so nothing needs a separate bot check.
@@ -74,6 +75,7 @@ type Line = {
 	Done: number,
 	Ruined: number,
 	Layers: number,
+	Perfect: number,
 }
 type Worker = { Team: string, Spot: CFrame, JamUntil: number, Good: number, Perfect: number, Bad: number }
 
@@ -329,6 +331,7 @@ function CakeFactory:Prepare()
 			Done = 0,
 			Ruined = 0,
 			Layers = 0,
+			Perfect = 0,
 		}
 		self.lines[team] = line
 		table.insert(self.order, team)
@@ -515,6 +518,45 @@ function CakeFactory:_buildHall(origin: Vector3, lineCount: number)
 				Parent = ctx.Arena,
 			})
 		end
+	end
+
+	-- Giant lollipops along the sides of the hall, and giant cupcakes at its front corners.
+	local swirls = { rgb(255, 90, 150), rgb(120, 200, 255), rgb(255, 200, 70), rgb(140, 220, 140) }
+	for side = -1, 1, 2 do
+		for index, z in { -18, 2, 22 } do
+			local base = floorCenter + Vector3.new(side * (floorWidth / 2 - 4), 0, z)
+			local height = 13 + (index % 2) * 3
+			Build.Part({
+				Name = "LollipopStick",
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(height, 0.9, 0.9),
+				CFrame = upright(base + Vector3.new(0, height / 2, 0)),
+				Color = rgb(255, 255, 255),
+				Material = Enum.Material.SmoothPlastic,
+				Parent = ctx.Arena,
+			})
+			local center = base + Vector3.new(0, height + 3, 0)
+			local facing = CFrame.new(center) * CFrame.Angles(0, math.rad(90), 0) -- the candy faces the players
+			local color = swirls[(index + (if side > 0 then 1 else 0)) % #swirls + 1]
+			for ring, size in { 7.4, 5.2, 3.0, 1.0 } do
+				Build.Part({
+					Name = "Lollipop",
+					Shape = Enum.PartType.Cylinder,
+					Size = Vector3.new(1.2 + ring * 0.12, size, size),
+					CFrame = facing,
+					Color = if ring % 2 == 1 then color else rgb(255, 250, 245),
+					Material = Enum.Material.SmoothPlastic,
+					Parent = ctx.Arena,
+				})
+			end
+		end
+		MeshLibrary.Get("CakeCupcake", {
+			Scale = 2.3,
+			Colors = { Wrapper = rgb(255, 160, 200), Frosting = rgb(255, 245, 235) },
+			CFrame = CFrame.new(floorCenter + Vector3.new(side * (floorWidth / 2 - 6), 0, -floorDepth / 2 + 6))
+				* CFrame.Angles(0, decor:NextNumber(0, 6), 0),
+			Parent = ctx.Arena,
+		})
 	end
 
 	-- Soft hills far away, and a few lollipop-pink ones.
@@ -763,6 +805,7 @@ function CakeFactory:_add(player: Player)
 			line.Layers += 1
 			if kind == "perfect" then
 				worker.Perfect += 1
+				line.Perfect += 1
 			end
 			ctx:AddScore(player, if kind == "perfect" then 2 else 1)
 			ctx:SetScoreText(player, `{worker.Good} layers`)
@@ -864,7 +907,8 @@ function CakeFactory:Start()
 	end)
 end
 
--- The team with the most cakes (ties broken by good layers) among teams with players, or nil.
+-- The team with the most cakes (ties broken by good layers, then perfect presses) among teams
+-- with players, or nil on a dead heat.
 function CakeFactory:_leader(): string?
 	local best, bestRank, tie = nil, -1, false
 	for _, team in self.order do
@@ -884,7 +928,10 @@ end
 
 function CakeFactory:_rank(team: string): number
 	local line = self.lines[team]
-	return if line then line.Done + math.min(line.Layers, 9999) / 10000 else 0
+	if not line then
+		return 0
+	end
+	return line.Done + math.min(line.Layers, 9999) / 1e4 + math.min(line.Perfect, 9999) / 1e8
 end
 
 function CakeFactory:Stop(_reason: string?)
