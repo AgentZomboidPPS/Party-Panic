@@ -53,7 +53,7 @@ return function(h)
 					)
 				end
 				h.pillar(m, "Pole", 0.3, 9.2, Vector3.new(-4.4, 20.6, 4.4))
-				h.block(m, "Flag", Vector3.new(0.2, 2.2, 3.2), Vector3.new(-4.4, 24.2, 6))
+				h.block(m, "Flag", Vector3.new(0.2, 2.2, 3.2), Vector3.new(-4.4, 24.2, 6.25))
 				h.ball(m, "Pole", 0.64, Vector3.new(-4.4, 25.3, 4.4))
 			end,
 		},
@@ -77,13 +77,16 @@ return function(h)
 				for _, x in { -2.3, 2.3 } do
 					h.roller(m, "Wheels", 1, 2.2, Vector3.new(x, 0.55, 0)).CFrame = CFrame.new(x, 0.55, 0)
 						* CFrame.Angles(0, math.rad(90), 0)
-					h.block(m, "Wood", Vector3.new(0.42, 2, 0.42), Vector3.new(x, 1.8, 0.45))
+					h.block(m, "Wood", Vector3.new(0.42, 1, 0.42), Vector3.new(x, 1.45, 0.45))
+					for _, y in { 1.4, 7.6 } do
+						h.ball(m, "Iron", 0.7, Vector3.new(x * 1.56, y, 0.05))
+					end
 				end
 				h.rounded(m, "Wood", Vector3.new(7.2, 6.2, 0.5), 0.15, Vector3.new(0, 4.5, 0.05))
-				disc(m, "Face", 5.7, 0.1, Vector3.new(0, 4.5, -0.22))
-				disc(m, "Rings", 3.5, 0.12, Vector3.new(0, 4.5, -0.25))
-				disc(m, "Bull", 1.24, 0.14, Vector3.new(0, 4.5, -0.28))
-				h.block(m, "Iron", Vector3.new(0.5, 0.5, 0.5), Vector3.new(0, 7.55, 0.05))
+				-- The target's discs: each sticks out further in front and reaches further back.
+				disc(m, "Face", 5.7, 0.32, Vector3.new(0, 4.5, -0.16))
+				disc(m, "Rings", 3.5, 0.52, Vector3.new(0, 4.5, -0.16))
+				disc(m, "Bull", 1.24, 0.72, Vector3.new(0, 4.5, -0.16))
 			end,
 		},
 		AmbushBow = {
@@ -97,22 +100,9 @@ return function(h)
 			},
 			Materials = { Limbs = Enum.Material.Wood, Tips = Enum.Material.Metal },
 			Fallback = function(m)
-				h.capsule(
-					m,
-					"Limbs",
-					2.6,
-					0.3,
-					CFrame.new(0, 3.4, -0.35) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(0, math.rad(20), 0)
-				)
-				h.capsule(
-					m,
-					"Limbs",
-					2.6,
-					0.3,
-					CFrame.new(0, 1.4, -0.35) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(0, math.rad(-20), 0)
-				)
-				h.block(m, "Grip", Vector3.new(0.38, 1.1, 0.46), Vector3.new(0, 2.42, -0.6))
-				h.block(m, "String", Vector3.new(0.06, 4.7, 0.06), Vector3.new(0, 2.42, 0.2))
+				h.capsule(m, "Limbs", 4.7, 0.3, CFrame.new(0, 2.42, -0.3) * CFrame.Angles(0, 0, math.rad(90)))
+				h.block(m, "Grip", Vector3.new(0.5, 1.1, 0.6), Vector3.new(0, 2.42, -0.3))
+				h.block(m, "String", Vector3.new(0.06, 4.6, 0.06), Vector3.new(0, 2.42, 0.25))
 			end,
 		},
 		AmbushArrow = {
@@ -127,9 +117,9 @@ return function(h)
 			},
 			Materials = { Head = Enum.Material.Metal },
 			Fallback = function(m)
-				h.capsule(m, "Shaft", 3.8, 0.15, CFrame.new(0, 0.32, 0.2) * CFrame.Angles(0, math.rad(90), 0))
-				h.block(m, "Head", Vector3.new(0.4, 0.2, 0.7), Vector3.new(0, 0.32, -1.95))
-				h.block(m, "Fletching", Vector3.new(0.06, 0.63, 1), Vector3.new(0, 0.315, 1.45))
+				h.capsule(m, "Shaft", 3.8, 0.15, CFrame.new(0, 0.315, 0.2) * CFrame.Angles(0, math.rad(90), 0))
+				h.block(m, "Head", Vector3.new(0.36, 0.42, 0.7), Vector3.new(0, 0.315, -1.95))
+				h.block(m, "Fletching", Vector3.new(0.36, 0.63, 1), Vector3.new(0, 0.315, 1.45))
 			end,
 		},
 	}

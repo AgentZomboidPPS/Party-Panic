@@ -55,19 +55,6 @@ local function part(props: { [string]: any }): Part
 	return p
 end
 
--- A flat disc lying on the ground (cylinders run along X; stand them on Y).
-local function flatDisc(diameter: number, color: Color3, transparency: number, parent: Instance): Part
-	return part({
-		Name = "Disc",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.06, diameter, diameter),
-		Color = color,
-		Material = Enum.Material.Neon,
-		Transparency = transparency,
-		Parent = parent,
-	})
-end
-
 local function quiet(model: Instance)
 	for _, descendant in model:GetDescendants() do
 		if descendant:IsA("BasePart") then
@@ -108,6 +95,7 @@ function ArrowAmbush.Start(api)
 	local cooldown: number = layout.Cooldown
 	local boardHalf: number = layout.BoardHalf
 	local boardsT0: number = layout.BoardsT0
+	local railTop: number = layout.RailTop or 0
 	local me = Players.LocalPlayer
 
 	local role = api:Mine("Role")
@@ -180,7 +168,7 @@ function ArrowAmbush.Start(api)
 		return origin.X + data.C + data.A * math.sin(data.W * (t - boardsT0) + data.P)
 	end
 	local function boardFrame(board, t: number): CFrame
-		local frame = CFrame.new(boardX(board.Data, t), floorY, origin.Z + board.Data.Z)
+		local frame = CFrame.new(boardX(board.Data, t), floorY + railTop, origin.Z + board.Data.Z)
 		local since = t - board.WobbleAt
 		if since >= 0 and since < 0.8 then
 			frame *= CFrame.Angles(math.sin(since * 30) * 0.12 * (1 - since / 0.8), 0, 0)
@@ -265,32 +253,69 @@ function ArrowAmbush.Start(api)
 
 	-- Arrows -----------------------------------------------------------------------------------
 	local arrows = {} -- id -> flight
-	local function addRing(position: Vector3)
-		local ring = Instance.new("Model")
-		ring.Name = "LandingRing"
-		local outer = flatDisc(hitRadius * 2, RING_COLOR, 0.35, ring)
-		outer.CFrame = CFrame.new(position + Vector3.new(0, 0.1, 0)) * CFrame.Angles(0, 0, math.rad(90))
-		local inner = flatDisc(hitRadius * 2 - 0.5, Color3.fromRGB(255, 255, 255), 0.55, ring)
-		inner.Material = Enum.Material.SmoothPlastic
-		inner.CFrame = outer.CFrame + Vector3.new(0, 0.01, 0)
-		local fill = flatDisc(0.4, RING_COLOR, 0.15, ring)
-		fill.CFrame = outer.CFrame + Vector3.new(0, 0.02, 0)
-		-- A cross through the ring, so the warning is a shape and not only a color.
-		local bars = {}
-		for k = 0, 1 do
-			local bar = part({
-				Name = "Cross",
-				Size = Vector3.new(hitRadius * 2.3, 0.07, 0.32),
-				Color = RING_COLOR,
-				Material = Enum.Material.Neon,
-				Transparency = 0.2,
-				Parent = ring,
-			})
-			bar.CFrame = CFrame.new(position + Vector3.new(0, 0.14, 0)) * CFrame.Angles(0, math.rad(45 + 90 * k), 0)
-			table.insert(bars, bar)
+	-- Ground markings are drawn on a SurfaceGui over one invisible part (a single flat layer,
+	-- so nothing flickers against the flagstones, rails or boards).
+	local function marking(size: number, parent: Instance): (Part, Frame)
+		local holder = part({
+			Name = "Marking",
+			Size = Vector3.new(size, 0.05, size),
+			Transparency = 1,
+			Parent = parent,
+		})
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Top
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 40
+		gui.LightInfluence = 0
+		gui.Parent = holder
+		local canvas = UIKit.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = gui })
+		return holder, canvas
+	end
+	local function circle(parent: Instance, scale: number, color: Color3, transparency: number, stroke: number?): Frame
+		local frame = UIKit.new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(scale, scale),
+			BackgroundColor3 = color,
+			BackgroundTransparency = transparency,
+			Parent = parent,
+			Children = { UIKit.Round() },
+		})
+		if stroke then
+			UIKit.new("UIStroke", { Color = color, Thickness = stroke, Parent = frame })
 		end
-		ring.Parent = api.World
-		return { Model = ring, Fill = fill, Bars = bars, Position = position }
+		return frame
+	end
+
+	local RING_SIZE = hitRadius * 2 + 1.4
+	local function addRing(position: Vector3)
+		local holder, canvas = marking(RING_SIZE, api.World)
+		holder.Name = "LandingRing"
+		holder.CFrame = CFrame.new(position + Vector3.new(0, 0.3, 0))
+		local inside = hitRadius * 2 / RING_SIZE
+		circle(canvas, inside, RING_COLOR, 0.7, 7)
+		local fill = circle(canvas, 0.1, RING_COLOR, 0.25)
+		-- A cross through the ring, so the warning is a shape and not only a color.
+		local cross = UIKit.new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Parent = canvas,
+		})
+		for k = 0, 1 do
+			UIKit.new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(0.98, 0.07),
+				Rotation = 45 + 90 * k,
+				BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+				BackgroundTransparency = 0.1,
+				Parent = cross,
+				Children = { UIKit.Round(), UIKit.Stroke(RING_COLOR, 3, 0) },
+			})
+		end
+		return { Model = holder, Fill = fill, Cross = cross, Inside = inside }
 	end
 
 	api:OnEvent("Arrow", function(data)
@@ -509,7 +534,7 @@ function ArrowAmbush.Start(api)
 	-- Archer controls ----------------------------------------------------------------------------
 	local aim: Vector3? = nil
 	local aimingTouch: InputObject? = nil
-	local reticle, beads, reticleRing
+	local reticle: Part?, beads, reticleRing: Frame?, reticleSpin: Frame?
 	if isArcher then
 		local camera = workspace.CurrentCamera
 		local savedType, savedFov = camera.CameraType, camera.FieldOfView
@@ -545,23 +570,30 @@ function ArrowAmbush.Start(api)
 			end
 		end)
 
-		reticle = Instance.new("Model")
-		reticle.Name = "Reticle"
-		reticleRing = flatDisc(hitRadius * 2, READY_COLOR, 0.3, reticle)
-		local hole = flatDisc(hitRadius * 2 - 0.6, Color3.new(1, 1, 1), 0.85, reticle)
-		hole.Material = Enum.Material.SmoothPlastic
-		hole.Name = "Hole"
+		local reticlePart, reticleCanvas = marking(RING_SIZE + 1, api.World)
+		reticlePart.Name = "Reticle"
+		reticle = reticlePart
+		reticleRing = circle(reticleCanvas, hitRadius * 2 / (RING_SIZE + 1), READY_COLOR, 0.8, 6)
+		reticleSpin = UIKit.new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Parent = reticleCanvas,
+		})
 		for k = 0, 3 do
-			local tick = part({
-				Name = "Tick",
-				Size = Vector3.new(1.2, 0.08, 0.3),
-				Color = READY_COLOR,
-				Material = Enum.Material.Neon,
-				Parent = reticle,
+			local angle = math.rad(k * 90)
+			UIKit.new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5 + math.cos(angle) * 0.44, 0.5 + math.sin(angle) * 0.44),
+				Size = UDim2.fromScale(0.16, 0.05),
+				Rotation = k * 90,
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				Parent = reticleSpin,
+				Children = { UIKit.Round() },
 			})
-			tick:SetAttribute("Angle", k * 90)
 		end
-		reticle.Parent = api.World
+		reticlePart.Parent = nil
 		beads = {}
 		for index = 1, BEADS do
 			table.insert(
@@ -658,12 +690,9 @@ function ArrowAmbush.Start(api)
 				entry.Model:PivotTo(arrowFrame(tip, direction))
 				if entry.Ring then
 					local progress = math.clamp((now - data.T0) / math.max(0.05, data.T1 - data.T0), 0, 1)
-					local size = 0.4 + (hitRadius * 2 - 0.5) * progress
-					entry.Ring.Fill.Size = Vector3.new(0.06, size, size)
-					for k, bar in entry.Ring.Bars do
-						bar.CFrame = CFrame.new(entry.Ring.Position + Vector3.new(0, 0.14, 0))
-							* CFrame.Angles(0, math.rad(45 + 90 * k) + progress * 1.5, 0)
-					end
+					local size = entry.Ring.Inside * (0.1 + 0.9 * progress)
+					entry.Ring.Fill.Size = UDim2.fromScale(size, size)
+					entry.Ring.Cross.Rotation = progress * 90
 				end
 				if reached then
 					finish(entry, tip, direction)
@@ -714,11 +743,7 @@ function ArrowAmbush.Start(api)
 			end
 			local _, humanoid, root = api:Character()
 			local showAim = aim ~= nil and (not api:IsTouch() or aimingTouch ~= nil)
-			for _, piece in reticle:GetDescendants() do
-				if piece:IsA("BasePart") then
-					piece.LocalTransparencyModifier = if showAim then 0 else 1
-				end
-			end
+			reticle.Parent = if showAim then api.World else nil
 			if aim and root then
 				local flat = Vector3.new(aim.X, root.Position.Y, aim.Z)
 				if (flat - root.Position).Magnitude > 1 then
@@ -731,19 +756,18 @@ function ArrowAmbush.Start(api)
 			if aim and showAim then
 				local spin = clock * (if ready then 1.2 else 4)
 				local color = if ready then READY_COLOR else Color3.fromRGB(170, 160, 190)
-				reticleRing.Color = color
-				reticleRing.CFrame = CFrame.new(aim + Vector3.new(0, 0.12, 0)) * CFrame.Angles(0, 0, math.rad(90))
-				local hole = reticle:FindFirstChild("Hole") :: BasePart?
-				if hole then
-					hole.CFrame = reticleRing.CFrame + Vector3.new(0, 0.01, 0)
+				reticleRing.BackgroundColor3 = color
+				local stroke = reticleRing:FindFirstChildOfClass("UIStroke")
+				if stroke then
+					stroke.Color = color
 				end
-				for _, tick in reticle:GetChildren() do
-					if tick.Name == "Tick" and tick:IsA("BasePart") then
-						local angle = math.rad(tick:GetAttribute("Angle") :: number) + spin
-						local out = Vector3.new(math.cos(angle), 0, math.sin(angle)) * (hitRadius + 0.6)
-						tick.Color = color
-						tick.CFrame = CFrame.lookAt(aim + out + Vector3.new(0, 0.14, 0), aim + Vector3.new(0, 0.14, 0))
-							* CFrame.Angles(0, math.rad(90), 0)
+				reticle.CFrame = CFrame.new(aim + Vector3.new(0, 0.3, 0))
+				if reticleSpin then
+					reticleSpin.Rotation = math.deg(spin)
+					for _, tick in reticleSpin:GetChildren() do
+						if tick:IsA("Frame") then
+							tick.BackgroundColor3 = color
+						end
 					end
 				end
 				-- The path: beads from the bow to the spot, stopping at the first board in the way.

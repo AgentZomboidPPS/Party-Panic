@@ -33,6 +33,7 @@ local Z_MAX = 25
 local TOWER_Z = -26
 local TOWER_TOP = 16 -- the archers' deck height above the courtyard floor
 local WALL = 2.4 -- low courtyard wall height (an invisible barrier rises above it)
+ArrowAmbush.RAIL_TOP = 0.42 -- the boards' wheels run on rails this high above the floor
 
 -- Seconds between an archer's shots: quicker when each archer has more runners to chase.
 function ArrowAmbush.Cooldown(runnersPerArcher: number): number
@@ -170,6 +171,7 @@ function ArrowAmbush:Prepare()
 		Boards = boards,
 		BoardsT0 = self.boardsT0,
 		BoardHalf = ArrowAmbush.BOARD_HALF,
+		RailTop = ArrowAmbush.RAIL_TOP + 0.04, -- where the boards' wheels sit
 		Hit = ArrowAmbush.HIT_RADIUS,
 		Cooldown = self.cooldown,
 	})
@@ -182,7 +184,7 @@ function ArrowAmbush:_buildArena()
 	Scenery.Meadow(ctx, origin - Vector3.new(0, 0.6, 0), 300)
 
 	-- The courtyard: a flagstone floor inside a low stone wall.
-	local floorSize = Vector3.new(X_HALF * 2 + 6, 1.6, Z_MAX - Z_MIN + 6)
+	local floorSize = Vector3.new(X_HALF * 2 + 7.2, 1.6, Z_MAX - Z_MIN + 7.2)
 	local floorCenter = origin + Vector3.new(0, -0.8, (Z_MIN + Z_MAX) / 2)
 	Shapes.Slab(floorSize, 1, {
 		Name = "Courtyard",
@@ -197,8 +199,8 @@ function ArrowAmbush:_buildArena()
 			if (gx + gz) % 2 == 0 then
 				Build.Decor({
 					Name = "Flag",
-					Size = Vector3.new(5.4, 0.06, 5.4),
-					CFrame = CFrame.new(origin + Vector3.new(gx * 5.8, 0.03, Z_MIN + 2.6 + gz * 5.8)),
+					Size = Vector3.new(5.4, 0.3, 5.4),
+					CFrame = CFrame.new(origin + Vector3.new(gx * 5.8, -0.05, Z_MIN + 2.6 + gz * 5.8)),
 					Color = rgb(232, 222, 202),
 					Material = Enum.Material.Slate,
 					Parent = ctx.Arena,
@@ -208,15 +210,16 @@ function ArrowAmbush:_buildArena()
 	end
 	local wallColor = rgb(176, 164, 150)
 	local capColor = rgb(226, 214, 196)
-	local function wall(center: Vector3, size: Vector3)
-		Shapes.RoundedBox(size, 0.5, {
+	-- A wall from post to post (its ends tucked into the posts), sunk a little into the floor.
+	local function wall(center: Vector3, size: Vector3, barrierLength: number, capHeight: number)
+		Shapes.RoundedBox(size + Vector3.new(0, 0.2, 0), 0.5, {
 			Name = "Wall",
-			CFrame = CFrame.new(center + Vector3.new(0, size.Y / 2, 0)),
+			CFrame = CFrame.new(center + Vector3.new(0, size.Y / 2 - 0.1, 0)),
 			Color = wallColor,
 			Material = Enum.Material.Slate,
 			Parent = ctx.Arena,
 		})
-		Shapes.RoundedBox(Vector3.new(size.X + 0.5, 0.5, size.Z + 0.5), 0.2, {
+		Shapes.RoundedBox(Vector3.new(size.X + 0.5, capHeight, size.Z + 0.5), 0.2, {
 			Name = "WallCap",
 			CFrame = CFrame.new(center + Vector3.new(0, size.Y + 0.25, 0)),
 			Color = capColor,
@@ -225,23 +228,26 @@ function ArrowAmbush:_buildArena()
 		})
 		Build.Barrier({
 			Name = "Barrier",
-			Size = Vector3.new(size.X, 16, size.Z),
+			Size = if size.X > size.Z
+				then Vector3.new(barrierLength, 16, size.Z)
+				else Vector3.new(size.X, 16, barrierLength),
 			CFrame = CFrame.new(center + Vector3.new(0, size.Y + 8, 0)),
 			Parent = ctx.Arena,
 		})
 	end
 	local wx, z0, z1 = X_HALF + 2.2, Z_MIN - 2.2, Z_MAX + 2.2
-	wall(origin + Vector3.new(0, 0, z1), Vector3.new(wx * 2 + 1.6, WALL, 1.6))
-	wall(origin + Vector3.new(0, 0, z0), Vector3.new(wx * 2 + 1.6, WALL, 1.6))
-	wall(origin + Vector3.new(-wx, 0, (z0 + z1) / 2), Vector3.new(1.6, WALL, z1 - z0))
-	wall(origin + Vector3.new(wx, 0, (z0 + z1) / 2), Vector3.new(1.6, WALL, z1 - z0))
+	-- (The side walls' caps are a little taller, so caps meeting inside a post never share a face.)
+	wall(origin + Vector3.new(0, 0, z1), Vector3.new(wx * 2 - 1.6, WALL, 1.6), wx * 2 + 2.6, 0.5)
+	wall(origin + Vector3.new(0, 0, z0), Vector3.new(wx * 2 - 1.6, WALL, 1.6), wx * 2 + 2.6, 0.5)
+	wall(origin + Vector3.new(-wx, 0, (z0 + z1) / 2), Vector3.new(1.6, WALL, z1 - z0 - 1.6), z1 - z0 + 2.6, 0.74)
+	wall(origin + Vector3.new(wx, 0, (z0 + z1) / 2), Vector3.new(1.6, WALL, z1 - z0 - 1.6), z1 - z0 + 2.6, 0.74)
 	-- Corner posts with banners.
 	for _, cx in { -1, 1 } do
 		for _, cz in { z0, z1 } do
 			local post = origin + Vector3.new(cx * wx, 0, cz)
-			Shapes.RoundedBox(Vector3.new(2.6, WALL + 2.4, 2.6), 0.5, {
+			Shapes.RoundedBox(Vector3.new(2.6, WALL + 2.8, 2.6), 0.5, {
 				Name = "Post",
-				CFrame = CFrame.new(post + Vector3.new(0, (WALL + 2.4) / 2, 0)),
+				CFrame = CFrame.new(post + Vector3.new(0, (WALL + 2.8) / 2 - 0.4, 0)),
 				Color = wallColor,
 				Material = Enum.Material.Slate,
 				Parent = ctx.Arena,
@@ -277,18 +283,24 @@ function ArrowAmbush:_buildArena()
 		Parent = ctx.Arena,
 	})
 
+	-- Whether an x is within a hair of a flagstone's edge (faces that close would flicker).
+	local function nearFlagEdge(x: number): boolean
+		local offset = (x - origin.X + 2.9) % 5.8 -- flagstone edges sit 0.2 either side of these lines
+		return math.abs(offset - 0.2) < 0.12 or math.abs(offset - 5.6) < 0.12
+	end
+
 	-- Target boards on rails: two rows of boards with 4 runners or fewer, three rows otherwise.
 	local runners = math.max(1, #ctx:GetPlayers() - (if #ctx:GetPlayers() >= 6 then 2 else 1))
-	local rows = if runners <= 4 then { -3, 11 } else { -6, 4, 14 }
+	local rows = if runners <= 4 then { -2, 11 } else { -6, 4, 14 }
 	self.boards = {} :: { Board }
 	local values = {}
 	for index, z in rows do
 		for _, side in { -1, 1 } do
-			local center = side * 12.5 + (if index % 2 == 0 then side * -1.5 else 0)
+			-- Each board keeps to its own half, so the two in a row never meet.
 			table.insert(self.boards, {
-				C = center,
+				C = side * 12.5 + (if index % 2 == 0 then side * 0.8 else 0),
 				Z = z,
-				A = rng:NextNumber(6.5, 8.5),
+				A = rng:NextNumber(6, 7.2),
 				W = 2 * math.pi / rng:NextNumber(6.5, 10),
 				P = rng:NextNumber(0, math.pi * 2),
 				V = 0,
@@ -302,13 +314,17 @@ function ArrowAmbush:_buildArena()
 	end
 	for index, board in self.boards do
 		board.V = values[index]
-		-- Its rail: two metal strips with wooden sleepers, a hair above the floor.
-		local length = board.A * 2 + 7.5
-		for _, offset in { -0.9, 0.9 } do
+		-- Its rail: two metal strips the board's wheels run on, over wooden sleepers. Every layer's
+		-- top and bottom are at their own heights (never coplanar with the flagstones).
+		local length = board.A * 2 + 6.6
+		if nearFlagEdge(origin.X + board.C + length / 2) or nearFlagEdge(origin.X + board.C - length / 2) then
+			length += 0.3
+		end
+		for _, offset in { -0.78, 0.78 } do
 			Build.Decor({
 				Name = "Rail",
-				Size = Vector3.new(length, 0.14, 0.3),
-				CFrame = CFrame.new(origin + Vector3.new(board.C, 0.12, board.Z + offset)),
+				Size = Vector3.new(length, ArrowAmbush.RAIL_TOP + 0.4, 0.3),
+				CFrame = CFrame.new(origin + Vector3.new(board.C, (ArrowAmbush.RAIL_TOP - 0.4) / 2, board.Z + offset)),
 				Color = rgb(120, 120, 135),
 				Material = Enum.Material.Metal,
 				Parent = ctx.Arena,
@@ -316,12 +332,14 @@ function ArrowAmbush:_buildArena()
 		end
 		local sleepers = math.floor(length / 2.2)
 		for step = 0, sleepers do
+			local x = origin.X + board.C - length / 2 + 0.7 + step * (length - 1.4) / sleepers
+			if nearFlagEdge(x - 0.3) or nearFlagEdge(x + 0.3) then
+				x += 0.2
+			end
 			Build.Decor({
 				Name = "Sleeper",
-				Size = Vector3.new(0.6, 0.1, 2.6),
-				CFrame = CFrame.new(
-					origin + Vector3.new(board.C - length / 2 + step * length / sleepers, 0.07, board.Z)
-				),
+				Size = Vector3.new(0.6, 0.5, 2.6),
+				CFrame = CFrame.new(x, origin.Y - 0.05, origin.Z + board.Z),
 				Color = rgb(140, 100, 70),
 				Material = Enum.Material.Wood,
 				Parent = ctx.Arena,
