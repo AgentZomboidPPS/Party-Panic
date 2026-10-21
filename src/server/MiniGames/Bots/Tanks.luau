@@ -22,7 +22,7 @@ local TankField = require(ReplicatedStorage.Shared.Logic.TankField)
 local Brain = {}
 
 local SPEED = TankField.SHELL_SPEED
-local HORIZON = 1.2 -- seconds of shell flight a bot looks ahead
+local HORIZON = 1.5 -- seconds of shell flight a bot looks ahead
 local wrap = TankField.Wrap
 
 local function heading(dx: number, dz: number): number
@@ -191,7 +191,7 @@ function Brain.Step(bot, ctx, mode, dt)
 	m.Seq = (m.Seq or 0) + 1
 	m.Aim = m.Aim or tank.Aim
 	m.Seen = m.Seen or {}
-	m.NextShot = m.NextShot or now + bot:Reaction() * 1.5 -- nobody fires the instant it's GO
+	m.NextShot = m.NextShot or now + 1 + rng:NextNumber(0.4, 1.6) * (1.3 - skill) -- nobody fires the instant it's GO
 
 	local enemies = {}
 	for _, other in mode.list do
@@ -432,7 +432,7 @@ function Brain.Step(bot, ctx, mode, dt)
 		and now >= (m.NextShot or 0)
 	then
 		ctx:BotAction(bot, "Fire", m.Aim, now)
-		m.NextShot = now + rng:NextNumber(0.35, 1.1) * (1.4 - skill)
+		m.NextShot = now + rng:NextNumber(0.6, 1.5) * (1.5 - skill)
 		m.Bank = nil
 	end
 

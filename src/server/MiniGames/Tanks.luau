@@ -29,6 +29,8 @@
 --     1.5 s (its layer must have driven off it first), goes off when a hull drives onto it or after
 --     7 s, and its blast takes every tank, shell and mine within 10 studs (mines chain a moment
 --     later). Everyone one blast catches is knocked out in the same server step.
+--   * For the first 3 s after GO every tank is shielded (a shell that touches it just pops, a blast
+--     passes it by), so nobody is out before they've had a chance to move.
 --   * Each tank can have 2 shells in flight and 2 mines down. A hit scores for the shooter or the
 --     mine's layer (never for yourself).
 
@@ -688,8 +690,12 @@ function Tanks:_stepShells(prev: number, now: number)
 			end
 		end
 		if bestTank then
-			self:_popShell(shell, bestS, "tank")
-			self:_knockOut(bestTank, shell.Owner, "shelled")
+			if now < self.startAt + TankField.SHIELD then
+				self:_popShell(shell, bestS, "shield")
+			else
+				self:_popShell(shell, bestS, "tank")
+				self:_knockOut(bestTank, shell.Owner, "shelled")
+			end
 			continue
 		end
 		local s0 = math.max((shell.Prev - shell.T0) * SPEED, 0)
@@ -799,7 +805,7 @@ function Tanks:_blast(mine: Mine, now: number)
 	ctx:Fire(nil, "Boom", mine.Id, round(mine.X, 0.01), round(mine.Z, 0.01))
 	local blast = TankField.MINE_BLAST
 	for _, tank in self.list do
-		if not tank.Out and TankField.Near(tank, mine.X, mine.Z, blast) then
+		if not tank.Out and now >= self.startAt + TankField.SHIELD and TankField.Near(tank, mine.X, mine.Z, blast) then
 			self:_knockOut(tank, mine.Owner, "mined")
 		end
 	end

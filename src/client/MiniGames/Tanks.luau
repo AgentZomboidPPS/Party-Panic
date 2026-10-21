@@ -98,6 +98,7 @@ type Visual = {
 	PopFrom: CFrame?,
 	Debris: { { any } }?,
 	Plate: BillboardGui?,
+	Bubble: BasePart?,
 }
 
 type ShellVisual = {
@@ -270,6 +271,17 @@ function Tanks.Start(api)
 				table.insert(visual.HullOff, base:ToObjectSpace(part.CFrame))
 			end
 		end
+		-- The spawn shield: a bubble round the tank until it wears off (TankField.SHIELD after GO).
+		visual.Bubble = decor({
+			Name = "Bubble",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * 10.5,
+			Color = Color3.fromRGB(150, 220, 255),
+			Material = Enum.Material.ForceField,
+			Transparency = 0.2,
+			CFrame = HIDDEN,
+			Parent = model,
+		})
 		model.Parent = api.World
 		-- Whose tank: the driver's name over it in the tank's colour ("YOU" for your own).
 		local anchor = turretPart or model.PrimaryPart
@@ -302,6 +314,10 @@ function Tanks.Start(api)
 			part.CFrame = hull * visual.HullOff[index]
 		end
 		local axis = CFrame.new((hull * visual.Axis).Position) * CFrame.Angles(0, visual.Aim, 0)
+		local bubble = visual.Bubble
+		if bubble then
+			bubble.CFrame = if api:Now() < goAt + TankField.SHIELD then hull + Vector3.new(0, 2.6, 0) else HIDDEN
+		end
 		local kick = if visual.Recoil > 0 then CFrame.new(0, 0, visual.Recoil * 0.5) else CFrame.identity
 		for index, part in visual.Turret do
 			local offset = visual.TurretOff[index]
@@ -676,7 +692,9 @@ function Tanks.Start(api)
 		end
 		if at and kind ~= "quiet" then
 			sparks(at, colorOf(entry.Owner))
-			if kind == "shell" and near(at, 90) then
+			if kind == "shield" and near(at, 90) then
+				api:Sound("Boing")
+			elseif kind == "shell" and near(at, 90) then
 				api:Sound("Click")
 			end
 		end
