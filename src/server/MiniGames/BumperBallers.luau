@@ -18,7 +18,19 @@
 --     A player's push is sent to their client (MiniGameEvent "Bump") and checked a moment later
 --     (if it didn't happen, the server takes the ball back and pushes it itself); a bot's is applied
 --     directly. Players and bots bump each other both ways under the same rules.
---   * Ring-outs are position checks: a ball whose center drops below the water line is out.
+--     A bump counts when the balls touch (shells within 0.5 studs, the same rule the client boings
+--     at) on the screen of a player riding one of them: there the other ball is drawn a round trip
+--     plus about 0.1 s late, so the server looks that far back in its track, and a round trip ahead
+--     (when the push gets back to them). It used to judge the server's own view with up to 3 studs
+--     of leeway, so a rider crossing in front of you that you visibly hit could slip by, and a fast
+--     side-swipe 3 studs clear could knock you flying. Two bots are judged as the server sees them.
+--     Owner: "We need to fine tune some of the hitboxes. the precision games will feel super bad if
+--     we dont."
+--   * Ring-outs are position checks: a ball whose center drops below the water line is out. The ball
+--     rolls off where the sand lip visibly ends (44.6 studs out, an invisible collider), not at the
+--     grass's edge (44), so a ball visibly still on the sand doesn't drop. When the last two go in
+--     within 0.3 s of each other (too close to call: each screen draws the other ball late), it's a
+--     draw.
 --   * Luau test servers have no physics, so there the server moves every ball itself with the same
 --     drive model (see :_simulate), which is also how the round harness tests bots and bumps.
 
@@ -33,7 +45,10 @@ local BumperBallers = MiniGame.Define("BumperBallers")
 
 local BALL_SIZE = 8
 local RADIUS = BALL_SIZE / 2
-local ISLAND_RADIUS = 44 -- the flat top; a ball whose center rolls past it drops off the edge
+-- Where a ball rolls off: its center past the sand lip's visible edge (the sand around the 44-stud
+-- grass top stays level out to 44.2-45.1 studs, 44.7 on average: assets/meshes/BumperIsland.glb).
+local ISLAND_RADIUS = 44.6
+local GRASS_RADIUS = 44 -- the green top drawn inside the sand ring
 local WATER_DROP = 5 -- water surface below the island top
 local OUT_DEPTH = 1.5 -- a ball is out once its center is this far under the water surface
 local BIG_BUMPS_AT = 45 -- seconds into the round
@@ -58,6 +73,11 @@ local BUMP_MAX = 42
 local BUMP_LIFT = 5
 local BIG_BUMPS = 1.4
 local CLOSING_MIN = 4 -- closing speed (studs/s) that counts as a bump
+local TOUCH = BALL_SIZE + 0.5 -- centers this close: the balls touch (the client boings at the same)
+local MAX_LEAD = 0.2 -- seconds at most a player's screen is looked ahead (their round trip)
+local VIEW_LAG = 0.1 -- seconds a device draws other balls behind, on top of the network round trip
+local TRACK_SECONDS = 0.8 -- how much of each ball's path is kept, for judging what a screen showed
+local DRAW_WINDOW = 0.3 -- the last two going in this close together is a draw
 local PAIR_COOLDOWN = 0.4
 local HISTORY = 8 -- velocity samples kept (about 0.25 s): the bounce often happens before we see it
 local GRAVITY = 110 -- simulated fall (no-physics servers only)
@@ -132,6 +152,7 @@ export type Entry = {
 	Position: Vector3,
 	Velocity: Vector3,
 	History: { Vector3 },
+	Track: { { T: number, P: Vector3, V: Vector3 } },
 	ReliefUntil: number,
 	Yaw: number,
 	Spin: CFrame,
@@ -148,6 +169,34 @@ export type Entry = {
 
 local function flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
+end
+
+-- The gap between two balls' centers where they come closest from `from` to `to` seconds after
+-- now, moving apart at `relative` (a straight path: over a fraction of a second, steering bends it
+-- by a third of a stud at most).
+local function closestGap(gap: Vector3, relative: Vector3, from: number, to: number): Vector3
+	local speed2 = relative:Dot(relative)
+	local t = if speed2 > 1e-6 then math.clamp(-gap:Dot(relative) / speed2, from, to) else 0
+	return gap + relative * t
+end
+
+-- Where a ball was at os.clock() time `t` (from its track, newest first), and how fast it went.
+local function trackAt(entry, t: number): (Vector3, Vector3)
+	local newer = nil
+	for _, sample in entry.Track do
+		if sample.T <= t then
+			if not newer then
+				return sample.P, sample.V
+			end
+			local f = (t - sample.T) / math.max(newer.T - sample.T, 1e-4)
+			return sample.P:Lerp(newer.P, f), sample.V:Lerp(newer.V, f)
+		end
+		newer = sample
+	end
+	if newer then
+		return newer.P, newer.V
+	end
+	return entry.Position, entry.Velocity
 end
 
 local function registerRiderGroup()
@@ -203,19 +252,29 @@ function BumperBallers:_buildArena()
 	local center = self.center
 	local waterY = self.waterY
 
-	-- The island top: a real grass cylinder the balls roll on (Roblox cylinders run along X).
-	Build.Part({
-		Name = "IslandTop",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(5.5, ISLAND_RADIUS * 2, ISLAND_RADIUS * 2),
-		CFrame = CFrame.new(center.X, top - 2.75, center.Z) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = Color3.fromRGB(96, 190, 80),
-		Material = Enum.Material.Grass,
-		CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.6, 0.4, 1, 1),
-		CanQuery = false,
-		CanTouch = false,
-		Parent = ctx.Arena,
-	})
+	-- The island top: a real grass cylinder the balls roll on (Roblox cylinders run along X), and
+	-- an invisible one as high that carries them out to where the sand lip visibly ends, so a ball
+	-- rolls off where it's seen to.
+	for _, part in
+		{
+			{ Name = "IslandTop", Radius = GRASS_RADIUS, Transparency = 0 },
+			{ Name = "IslandEdge", Radius = ISLAND_RADIUS, Transparency = 1 },
+		}
+	do
+		Build.Part({
+			Name = part.Name,
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(5.5, part.Radius * 2, part.Radius * 2),
+			CFrame = CFrame.new(center.X, top - 2.75, center.Z) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = Color3.fromRGB(96, 190, 80),
+			Material = Enum.Material.Grass,
+			Transparency = part.Transparency,
+			CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.6, 0.4, 1, 1),
+			CanQuery = false,
+			CanTouch = false,
+			Parent = ctx.Arena,
+		})
+	end
 	-- Sand beach ring, striped warning lip, cliffs, foam and rocks (one mesh, no collisions).
 	MeshLibrary.Get("BumperIsland", {
 		CFrame = CFrame.new(center.X, top - self.islandHeight + self.islandAbove, center.Z),
@@ -529,6 +588,7 @@ function BumperBallers:_makeBall(player, index: number, spot: Vector3): Entry
 		Position = spot,
 		Velocity = Vector3.zero,
 		History = {},
+		Track = {},
 		ReliefUntil = 0,
 		Yaw = math.atan2(-toCenter.X, -toCenter.Z),
 		Spin = CFrame.identity,
@@ -631,6 +691,8 @@ function BumperBallers:Prepare()
 	self.islandAbove = 0.15 -- how far its sand rises over the grass top
 	self.entries = {} :: { [any]: Entry }
 	self.pairCooldown = {} :: { [string]: number }
+	self.pairBumpAt = {} :: { [string]: number }
+	self.held = nil :: { Entries: { Entry }, At: number }? -- went in moments ago (see :_ringOuts)
 	self.koCount = {} :: { [any]: number } -- kept after a ball is gone, for the results
 	self.bumpScale = 1
 	self.groupReady = registerRiderGroup()
@@ -702,6 +764,8 @@ function BumperBallers:Prepare()
 		MaxSpeed = TUNING.MaxSpeed,
 		Relief = TUNING.Relief,
 		ReliefDrag = TUNING.ReliefDrag,
+		Touch = TOUCH, -- the client boings at the same distance and closing speed the server bumps at
+		ClosingMin = CLOSING_MIN,
 	})
 	ctx:SetSharedJSON("Island", {
 		X = origin.X,
@@ -794,6 +858,7 @@ function BumperBallers:Start()
 		end
 		local live = {}
 		local fallen = {}
+		local now = os.clock()
 		for _, entry in self.entries do
 			if not entry.Model.Parent then
 				continue
@@ -808,6 +873,11 @@ function BumperBallers:Start()
 			if entry.ClientDriven then
 				self:_checkBump(entry)
 				self:_police(entry, dt)
+			end
+			local track = entry.Track
+			table.insert(track, 1, { T = now, P = entry.Position, V = entry.Velocity })
+			while #track > 2 and track[#track].T < now - TRACK_SECONDS do
+				table.remove(track)
 			end
 			if record then
 				table.insert(entry.History, 1, entry.Velocity)
@@ -836,7 +906,7 @@ function BumperBallers:Start()
 		if #fallen > 0 then
 			self:_ringOuts(fallen)
 		end
-		self:_bumps(live)
+		self:_bumps(live, dt)
 		local status = `Players left: {ctx:AliveCount()}`
 		if self.bumpScale > 1 then
 			status ..= "  •  💥 BIG BUMPS!"
@@ -1018,53 +1088,108 @@ function BumperBallers:_takeBack(entry: Entry, seconds: number): boolean
 	return true
 end
 
+-- How late a player's screen draws the other balls: a network round trip, plus the time the engine
+-- holds replicated parts back to move them smoothly. Nil for a ball no screen of its own drives.
+function BumperBallers:_viewDelay(entry: Entry): number?
+	if not entry.ClientDriven then
+		return nil
+	end
+	return self:_ping(entry) + VIEW_LAG
+end
+
+-- The strongest closing speed of `a` into `b` along `normal`: now (`va`, `vb`) or in the last few
+-- samples (the server sees a player's ball a bit late). Also each ball's own speed into the other.
+local function closingAlong(a: Entry, b: Entry, normal: Vector3, va: Vector3, vb: Vector3): (number, number, number)
+	local speedA, speedB, closing = 0, 0, 0
+	local function try(ua: Vector3, ub: Vector3)
+		local into = flat(ua):Dot(normal) - flat(ub):Dot(normal)
+		if into > closing then
+			closing = into
+			speedA = math.max(0, flat(ua):Dot(normal))
+			speedB = math.max(0, -flat(ub):Dot(normal))
+		end
+	end
+	try(va, vb)
+	for k = 1, math.min(#a.History, #b.History) do
+		try(a.History[k], b.History[k])
+	end
+	return closing, speedA, speedB
+end
+
 -- Finds balls that just met and bumps them apart: the faster ball into the other wins.
-function BumperBallers:_bumps(live: { Entry })
+-- They've met when their shells touch (TOUCH) on the screen of a player riding one of them (the
+-- other ball where that screen drew it, a round trip and VIEW_LAG back; on either screen when both
+-- are players), or for two bots, as the server sees them.
+function BumperBallers:_bumps(live: { Entry }, dt: number)
 	local now = os.clock()
+	local sweep = math.max(dt, 1 / 30) -- also look back over the last step: nothing slips through
 	self.separateCooldown = self.separateCooldown or {}
 	for i = 1, #live do
 		local a = live[i]
 		for j = i + 1, #live do
 			local b = live[j]
 			local gap = b.Position - a.Position
-			local distance = flat(gap).Magnitude
-			if distance > BALL_SIZE + 3 or math.abs(gap.Y) > BALL_SIZE or distance < 0.01 then
-				continue
+			if gap.Magnitude > TOUCH + 30 then
+				continue -- too far apart even for a screen a long round trip behind
 			end
 			local key = if a.Index < b.Index then `{a.Index}:{b.Index}` else `{b.Index}:{a.Index}`
 			if now < (self.pairCooldown[key] or 0) then
 				continue
 			end
-			local normal = flat(gap).Unit -- from a to b
-			-- The strongest closing moment in the last few samples (the server sees it a bit late).
-			local speedA, speedB, closing = 0, 0, 0
-			local samples = math.min(#a.History, #b.History)
-			for k = 1, math.max(samples, 1) do
-				local va = a.History[k] or a.Velocity
-				local vb = b.History[k] or b.Velocity
-				local into = flat(va):Dot(normal) - flat(vb):Dot(normal)
-				if into > closing then
-					closing = into
-					speedA = math.max(0, flat(va):Dot(normal))
-					speedB = math.max(0, -flat(vb):Dot(normal))
+			-- Each view: the gap from a to b, how fast it closes, and the window to look over.
+			local normal, closing, speedA, speedB, screen = nil, 0, 0, 0, false
+			local function try(at: Vector3, va: Vector3, vb: Vector3, from: number, to: number, isScreen: boolean)
+				local touch = closestGap(at, vb - va, from, to)
+				if touch.Magnitude > TOUCH then
+					return
+				end
+				local direction = if flat(touch).Magnitude > 0.01 then flat(touch) else flat(at)
+				if direction.Magnitude < 0.01 then
+					return
+				end
+				local n = direction.Unit
+				local c, sa, sb = closingAlong(a, b, n, va, vb)
+				if not normal or (closing < CLOSING_MIN and c > closing) then
+					normal, closing, speedA, speedB, screen = n, c, sa, sb, isScreen
 				end
 			end
-			-- Players' balls are seen a moment late, more so the faster they close: more leeway.
-			local lagging = a.ClientDriven or b.ClientDriven
-			local contact = BALL_SIZE + (if lagging then math.clamp(closing * 0.12, 0.5, 3) else 0.5)
-			if distance > contact then
+			local delayA, delayB = self:_viewDelay(a), self:_viewDelay(b)
+			if not delayA and not delayB then
+				-- Two bots: everyone sees them alike (a moment late), so the server's view is the one.
+				try(gap, a.Velocity, b.Velocity, -sweep, 0, false)
+			else
+				-- What each player's screen shows: their own ball where it is, the other where it was
+				-- drawn, looking a round trip ahead (when the push gets back to them), and only once
+				-- their last bump has played out there.
+				local lastBump = self.pairBumpAt[key] or -math.huge
+				if delayA and now - delayA > lastBump + 0.05 then
+					local position, velocity = trackAt(b, now - delayA)
+					try(position - a.Position, a.Velocity, velocity, -sweep, math.min(self:_ping(a), MAX_LEAD), true)
+				end
+				if (not normal or closing < CLOSING_MIN) and delayB and now - delayB > lastBump + 0.05 then
+					local position, velocity = trackAt(a, now - delayB)
+					try(b.Position - position, velocity, b.Velocity, -sweep, math.min(self:_ping(b), MAX_LEAD), true)
+				end
+			end
+			if not normal then
 				continue
 			end
 			if closing < CLOSING_MIN then
 				-- Balls pass through each other physically, so two slow ones overlapping get eased apart.
-				if distance < BALL_SIZE - 0.3 and now >= (self.separateCooldown[key] or 0) then
+				local apart = flat(gap)
+				if
+					gap.Magnitude < BALL_SIZE - 0.3
+					and apart.Magnitude > 0.01
+					and now >= (self.separateCooldown[key] or 0)
+				then
 					self.separateCooldown[key] = now + 0.2
-					self:_push(b, normal * SEPARATE_SPEED)
-					self:_push(a, -normal * SEPARATE_SPEED)
+					self:_push(b, apart.Unit * SEPARATE_SPEED)
+					self:_push(a, -apart.Unit * SEPARATE_SPEED)
 				end
 				continue
 			end
 			self.pairCooldown[key] = now + PAIR_COOLDOWN
+			self.pairBumpAt[key] = now
 			local scale = self.bumpScale
 			local base = BUMP_BASE * math.clamp(closing / 12, 0.3, 1) -- a gentle touch is a gentle bump
 			local toB = math.min(BUMP_MAX, (base + BUMP_GAIN * speedA + BUMP_SELF * speedB) * scale)
@@ -1076,6 +1201,9 @@ function BumperBallers:_bumps(live: { Entry })
 			local point = a.Position + normal * RADIUS
 			self.context:Fire(nil, "Boing", point, strength, a.Player.UserId, b.Player.UserId)
 			self.bumpCount = (self.bumpCount or 0) + 1
+			if screen then
+				self.screenBumps = (self.screenBumps or 0) + 1
+			end
 		end
 	end
 end
@@ -1133,6 +1261,8 @@ end
 
 -- Everyone who fell in this frame. If that's all the riders left (often: both go over after a
 -- bump), nobody beat anybody, so they share the win; otherwise the first one in goes out first.
+-- When all but one are in, the result waits DRAW_WINDOW: each screen draws the other ball a moment
+-- late, so if the last one follows within it, it's a draw too (it used to take the same frame).
 function BumperBallers:_ringOuts(fallen: { Entry })
 	local ctx = self.context
 	local riding = 0
@@ -1141,10 +1271,20 @@ function BumperBallers:_ringOuts(fallen: { Entry })
 			riding += 1
 		end
 	end
-	if riding >= 2 and riding >= ctx:AliveCount() then
+	local held = self.held
+	local holding = 0
+	if held then
+		for _, entry in held.Entries do
+			if ctx:IsAlive(entry.Player) then
+				holding += 1
+			end
+		end
+	end
+	if riding >= 1 and riding + holding >= 2 and riding + holding >= ctx:AliveCount() then
 		for _, entry in fallen do
 			self:_splash(entry)
 		end
+		self.held = nil
 		self.draws = (self.draws or 0) + 1
 		ctx:End("Draw")
 		return
@@ -1152,14 +1292,39 @@ function BumperBallers:_ringOuts(fallen: { Entry })
 	table.sort(fallen, function(a, b)
 		return a.Position.Y < b.Position.Y
 	end)
+	if riding >= 1 and ctx:AliveCount() - holding - riding == 1 then
+		-- One rider left on the island: hold the result a moment in case they follow.
+		local hold = held or { Entries = {}, At = ctx:Elapsed() }
+		self.held = hold
+		for _, entry in fallen do
+			if ctx:IsAlive(entry.Player) then
+				self:_splash(entry)
+				table.insert(hold.Entries, entry)
+			else
+				self:_ringOut(entry)
+			end
+		end
+		ctx:Delay(DRAW_WINDOW, function()
+			if self.held ~= hold or not ctx:IsRunning() then
+				return -- a draw, or the round's over (GetResults counts them as fallen)
+			end
+			self.held = nil
+			for _, entry in hold.Entries do
+				self:_ringOut(entry, true)
+			end
+		end)
+		return
+	end
 	for _, entry in fallen do
 		self:_ringOut(entry)
 	end
 end
 
-function BumperBallers:_ringOut(entry: Entry)
+function BumperBallers:_ringOut(entry: Entry, splashed: boolean?)
 	local ctx = self.context
-	self:_splash(entry)
+	if not splashed then
+		self:_splash(entry)
+	end
 	if ctx:State(entry.Player) == nil then
 		self:_removeBall(entry) -- not in the round any more: nothing to eliminate, no KO
 		return
@@ -1181,6 +1346,20 @@ end
 -- ties between riders who fell at the same moment.
 function BumperBallers:GetResults()
 	local results = self.context:SurvivalResults()
+	-- Riders who went in just before the round ended, still waiting on a draw: they fell.
+	local held = self.held
+	if held then
+		for _, result in results.Entries do
+			for _, entry in held.Entries do
+				if entry.Player == result.Player then
+					result.Rank = math.floor(held.At * 10) / 10
+					result.ScoreText = string.format("Lasted %ds", math.floor(held.At))
+					result.BestScore = math.floor(held.At)
+					result.Survived = held.At
+				end
+			end
+		end
+	end
 	for _, result in results.Entries do
 		local kos = if self.koCount then self.koCount[result.Player] or 0 else 0
 		if kos > 0 then
