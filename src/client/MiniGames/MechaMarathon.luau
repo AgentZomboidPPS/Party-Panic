@@ -262,7 +262,7 @@ function MechaMarathon.Start(api)
 		Name = "WindPanel",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, y),
-		Size = UDim2.fromOffset(if touch then 330 else 300, if touch then 92 else 80),
+		Size = UDim2.fromOffset(if touch then 340 else 300, if touch then 100 else 80),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		BackgroundTransparency = 0.2,
 		Parent = hud,
@@ -283,7 +283,7 @@ function MechaMarathon.Start(api)
 		Name = "Tension",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.new(1, -28, 0, if touch then 20 else 18),
+		Size = UDim2.new(1, -28, 0, if touch then 28 else 18),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.82,
 		Parent = panel,
@@ -300,14 +300,14 @@ function MechaMarathon.Start(api)
 		Name = "Detail",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = if touch then 18 else 16,
+		TextSize = if touch then 24 else 16,
 		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 2,
 		Parent = track,
 		Children = { UIKit.TextStroke(0.15) },
 	})
-	local panelBottom = y + (if touch then 92 else 80)
+	local panelBottom = y + (if touch then 100 else 80)
 	local shout = UIKit.Label({
 		Name = "Shout",
 		Text = "",
