@@ -161,7 +161,31 @@ end
 
 local __byCharacter = {}
 local __playerAdded = Instance.new("BindableEvent")
-local __playerRemoving = Instance.new("BindableEvent")
+-- Not a BindableEvent: it would copy the stand-in player tables, so nobody could tell who left.
+local __playerRemoving = (function()
+	local handlers = {}
+	local signal = {
+		Event = {
+			Connect = function(_, fn)
+				table.insert(handlers, fn)
+				return {
+					Disconnect = function()
+						local index = table.find(handlers, fn)
+						if index then
+							table.remove(handlers, index)
+						end
+					end,
+				}
+			end,
+		},
+	}
+	function signal.Fire(_, ...)
+		for _, fn in table.clone(handlers) do
+			task.spawn(fn, ...)
+		end
+	end
+	return signal
+end)()
 local __playersShim
 
 local function __makeRig(name)
@@ -518,8 +542,8 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		end
 		player.Parent = nil
 		__playerRemoving:Fire(player)
-		-- A BindableEvent copies a stand-in (table) player, so the round never finds the copy: tell it
-		-- directly (a no-op when the event already did).
+		-- The signal above already tells the round (RoundContext._onLeave ignores a second call);
+		-- calling it directly too keeps leaves working if the stand-in signal ever changes.
 		if type(player) == "table" then
 			ctx:_onLeave(player)
 		end

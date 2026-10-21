@@ -1,0 +1,53 @@
+newmtl Body
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Frame
+Kd 0.549 0.361 0.204
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Window
+Kd 0.706 0.882 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 0.314 0.251 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Hat
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stripe
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Eyes
+Kd 0.235 0.902 0.627
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Pupils
+Kd 0.137 0.098 0.176
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stamp
+Kd 0.784 0.804 0.863
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

@@ -164,6 +164,19 @@ local list: { GameDefinition } = {
 		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "CakeFactory",
+		Name = "Cake Factory",
+		Category = "Team",
+		Icon = "🎂",
+		Color = Color3.fromRGB(255, 130, 175),
+		Objective = "Build cakes on your team's belt: sponge, cream, strawberry. Most finished cakes wins!",
+		Controls = "Tap ADD (E) when a cake is in your machine's gate. Skip cakes missing a layer!",
+		Duration = 45,
+		MinPlayers = 2,
+		IsTeam = true,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 

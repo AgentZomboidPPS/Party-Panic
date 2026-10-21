@@ -1,0 +1,17 @@
+newmtl Berry
+Kd 0.910 0.157 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Seeds
+Kd 1.000 0.886 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl BerryLeaves
+Kd 0.314 0.745 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
