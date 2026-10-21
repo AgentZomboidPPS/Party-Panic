@@ -92,6 +92,11 @@ def other_mode(module: str, game: str) -> bool:
     return False
 
 
+# The lobby run only needs a few modes for its vote (three games and Random); bundling all of them
+# would go over Luau execution's 1 MB script limit as the game list grows.
+LOBBY_MODES = {"FireRope", "HexMeltdown", "HoneyTrap", "BumperBallers"}
+
+
 PRELUDE = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (Path(__file__).resolve().parent / "harness_prelude.luau").read_text()
 
 
@@ -124,6 +129,8 @@ def main():
             continue  # replaced by the harness's recording stand-in
         if args.game != "LOBBY" and other_mode(module, args.game):
             continue  # keeps the bundle under Luau execution's 1 MB script limit
+        if args.game == "LOBBY" and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES):
+            continue  # the lobby keeps LOBBY_MODES only
         is_init = path.name == "init.luau"
         body = rewrite(module, path.read_text(), is_init)
         # Blank comment-only lines (line numbers stay put for the map): Open Cloud caps a script at 1 MiB.

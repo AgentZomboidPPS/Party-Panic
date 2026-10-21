@@ -42,6 +42,13 @@ CLIENT = ROOT / "src" / "client"
 SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService")
 
 
+def played_game() -> str:
+    """The mode the run plays: the one with the longest objective (as the Luau side picks it)."""
+    text = (ROOT / "src" / "shared" / "GameDefinitions.luau").read_text()
+    entries = re.findall(r'Id = "(\w+)",.*?Objective = "((?:[^"\\]|\\.)*)"', text, re.S)
+    return max(entries, key=lambda entry: len(entry[1].encode()))[0]
+
+
 def module_paths():
     paths = {}
     # The working tree's shared modules, so client code runs against the code it ships with.
@@ -49,10 +56,13 @@ def module_paths():
         rel = path.relative_to(ROOT / "src" / "shared").with_suffix("")
         if rel.parts != ("Remotes",):  # replaced by the harness's stand-in
             paths["Shared/" + "/".join(rel.parts)] = path
+    played = played_game()
     for path in sorted(CLIENT.rglob("*.luau")):
         if path.name == "init.client.luau":
             continue
         rel = path.relative_to(CLIENT).with_suffix("")
+        if rel.parts[:1] == ("MiniGames",) and len(rel.parts) == 2 and rel.parts[1] not in ("init", played):
+            continue  # only the played mode's client half (Luau execution's 1 MB script limit)
         paths["Client/" + "/".join(rel.parts)] = path
     return paths
 
@@ -902,8 +912,11 @@ def main():
     )
     out = [flags + gui_dump + PRELUDE + screen_guis()]
     for module, path in module_paths().items():
+        body = rewrite(module, path.read_text())
+        # Blank comment-only lines (line numbers stay put): Open Cloud caps a script at 1 MiB.
+        body = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", body)
         out.append(f'__modules["{module}"] = function()')
-        out.append(rewrite(module, path.read_text()))
+        out.append(body)
         out.append("end")
     out.append(shared_requires(MAIN))
     sys.stdout.write("\n".join(out))
