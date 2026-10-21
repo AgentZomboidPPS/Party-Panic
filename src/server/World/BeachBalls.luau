@@ -56,7 +56,8 @@ end
 
 -- Whether a ball at `position` is in one of the bounds' trap zones.
 function BeachBalls.InTrap(position: Vector3, bounds: Bounds): boolean
-	for _, trap in bounds.Traps or {} do
+	local traps: { { Center: Vector3, Radius: number } } = bounds.Traps or {}
+	for _, trap in traps do
 		if ((position - trap.Center) * Vector3.new(1, 0, 1)).Magnitude < trap.Radius then
 			return true
 		end

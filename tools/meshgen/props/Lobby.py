@@ -864,7 +864,7 @@ def lobby_confetti_cannon():
     muzzle = torus(1.1, 0.18, 28, 6).translate(0, 4.15, 0)
     band = torus(1.06, 0.14, 28, 6).translate(0, 1.0, 0)
     tilt = lambda m: m.rotate("x", -40).translate(0, 3.1, 0.6)  # noqa: E731
-    stars = [star_plate(0.6, 0.12, 0, 1.9, -2.06), star_plate(0.6, 0.12, 0, 1.9, 2.46).rotate("y", 180).translate(0, 0, 0.4)]
+    stars = [star_plate(0.6, 0.12, 0, 1.9, -2.06), star_plate(0.6, 0.12, 0, 1.9, -2.06).rotate("y", 180).translate(0, 0, 0.42)]
     return recenter({
         "Cart": cart,
         "Wheels": merge(*wheels),

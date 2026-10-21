@@ -352,7 +352,7 @@ return function(h)
 		-- A circus cannon on a wheeled cart, its barrel aimed up and forward (-Z).
 		LobbyConfettiCannon = {
 			Height = 7.33,
-			AssetId = 127774107283999,
+			AssetId = 130260503026635,
 			Collide = true,
 			Palette = {
 				Cart = rgb(64, 150, 255),

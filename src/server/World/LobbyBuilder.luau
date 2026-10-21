@@ -741,35 +741,31 @@ end
 local function buildPodium(root: Model)
 	local podium = Build.Model("WinnerPodium", root)
 	local base = PODIUM
-	Shapes.Slab(Vector3.new(24, 0.8, 36), 6, {
-		Name = "PodiumBase",
-		CFrame = CFrame.new(base + Vector3.new(2, 0.4, 0)),
-		Color = PALETTE.StageDark,
-		Parent = podium,
-	})
-	Shapes.Slab(Vector3.new(24.6, 0.3, 36.6), 6.2, {
-		Name = "PodiumBaseTrim", -- top sits under the base top, so only the gold lip shows
-		CFrame = CFrame.new(base + Vector3.new(2, 0.5, 0)),
-		Color = PALETTE.Trim,
-		Parent = podium,
-	})
+	-- The stage, three tiers and the bulb arch are one mesh prop facing the plaza (-X). In its own
+	-- frame the tiers run along X (2nd place at +9.5, which is world -Z) and its box center is 2
+	-- behind the tiers.
+	local frame = CFrame.new(base) * CFrame.Angles(0, math.rad(90), 0)
+	MeshLibrary.Get("LobbyPodium", { CFrame = frame * CFrame.new(0, 0, 2), Parent = podium })
 	local steps = {
-		{ place = 1, height = 6.5, z = 0, color = rgb(255, 205, 60) },
-		{ place = 2, height = 4.6, z = -9.5, color = rgb(215, 222, 240) },
-		{ place = 3, height = 3, z = 9.5, color = rgb(240, 160, 100) },
+		{ place = 1, height = 6.5, z = 0, color = rgb(150, 100, 20) },
+		{ place = 2, height = 4.6, z = -9.5, color = rgb(80, 90, 120) },
+		{ place = 3, height = 3, z = 9.5, color = rgb(120, 60, 30) },
 	}
 	for _, step in steps do
-		local block = Shapes.RoundedBox(Vector3.new(9, step.height, 9), 1, {
-			Name = "Step" .. step.place,
-			CFrame = CFrame.new(base + Vector3.new(0, step.height / 2 + 0.8, step.z)),
-			Color = step.color,
+		-- The place number sits on the tier's star (a see-through part carries the text).
+		local size = math.min(1.7, step.height * 0.3) * 1.5
+		local plate = Build.Decor({
+			Name = "Number" .. step.place,
+			Size = Vector3.new(0.2, size, size),
+			CFrame = CFrame.new(base + Vector3.new(-4.95, 0.8 + step.height * 0.48, step.z)),
+			Transparency = 1,
 			Parent = podium,
 		})
 		Build.SurfaceText(
-			block,
+			plate,
 			Enum.NormalId.Left,
 			tostring(step.place),
-			{ PixelsPerStud = 14, Font = SIGN_FONT, TextColor3 = rgb(70, 45, 110), TextStrokeTransparency = 1 }
+			{ PixelsPerStud = 24, Font = SIGN_FONT, TextColor3 = step.color, TextStrokeTransparency = 1 }
 		)
 		local spot = Build.Decor({
 			Name = "PodiumSpot" .. step.place,
@@ -966,22 +962,17 @@ local function buildQuestCorner(root: Model): ProximityPrompt
 	local base = QUESTS
 	local toCenter = (Vector3.zero - base).Unit
 	local side = Vector3.new(-toCenter.Z, 0, toCenter.X)
-	Shapes.Slab(Vector3.new(30, 0.4, 22), 7, {
-		Name = "CornerFloor",
-		CFrame = facing(base + Vector3.new(0, 0.2, 0), Vector3.zero),
-		Color = rgb(238, 228, 255),
+	MeshLibrary.Get("LobbyPatio", {
+		Scale = 30 / 32,
+		CFrame = facing(base + Vector3.new(0, 0.02, 0), Vector3.zero),
 		Parent = corner,
 	})
 
-	-- Quest board under a little roof; clients draw the quests on its Front face.
+	-- Quest board in a little wooden kiosk (a mesh prop that frames it, 8 above its foot); clients
+	-- draw the quests on the board's Front face.
 	local boardPosition = base - toCenter * 6 + side * 6 + Vector3.new(0, 8, 0)
 	local boardCFrame = facing(boardPosition, Vector3.zero)
-	Shapes.RoundedBox(Vector3.new(18, 13, 1.4), 0.7, {
-		Name = "QuestBezel",
-		CFrame = boardCFrame * CFrame.new(0, 0, 0.6),
-		Color = PALETTE.Wood,
-		Parent = corner,
-	})
+	MeshLibrary.Get("LobbyQuestKiosk", { CFrame = boardCFrame * CFrame.new(0, -8, 0.09), Parent = corner })
 	local board = Build.Part({
 		Name = "QuestBoard",
 		Size = Vector3.new(16, 11, 0.6),
@@ -991,32 +982,18 @@ local function buildQuestCorner(root: Model): ProximityPrompt
 	})
 	tag(board, "QuestBoard")
 	prompt(board, "View Quests", "Quest Board", "OpenQuests")
-	for _, x in { -8, 8 } do
-		Shapes.RoundedBox(Vector3.new(1.4, 16, 1.4), 0.5, {
-			Name = "Post",
-			CFrame = boardCFrame * CFrame.new(x, -0.5, 0.8),
-			Color = PALETTE.Wood,
-			Parent = corner,
-		})
-	end
-	Shapes.RoundedBox(Vector3.new(21, 1, 4.5), 0.45, {
-		Name = "Roof",
-		CFrame = boardCFrame * CFrame.new(0, 7.8, 0) * CFrame.Angles(math.rad(-14), 0, 0),
-		Color = rgb(170, 110, 240),
-		Parent = corner,
-	})
 	sign(
 		corner,
 		"QUESTS",
 		Vector3.new(12, 3.6, 1),
-		boardCFrame * CFrame.new(0, 9.6, -0.6),
+		boardCFrame * CFrame.new(0, 14.1, 0.3), -- standing on the kiosk's ridge
 		Enum.NormalId.Front,
 		rgb(255, 84, 150),
 		rgb(255, 255, 255)
 	)
 
 	-- Daily gift machine: a giant gumball machine full of prizes.
-	local machine = base - toCenter * 2 - side * 9
+	local machine = base - toCenter * 2 - side * 11
 	local machineBase = Shapes.RoundedBox(Vector3.new(7, 5, 7), 1, {
 		Name = "MachineBase",
 		CFrame = facing(machine + Vector3.new(0, 2.5, 0), Vector3.zero),
@@ -1083,29 +1060,27 @@ local function buildArcade(root: Model): ({ BasePart }, TextLabel)
 	local arcade = Build.Model("ArcadeCorner", root)
 	local base = ARCADE
 	local toCenter = (Vector3.zero - base).Unit
-	local wallCFrame = facing(base - toCenter * 8 + Vector3.new(0, 8.5, 0), Vector3.zero)
-	Shapes.Slab(Vector3.new(32, 0.4, 24), 7, {
-		Name = "CornerFloor",
-		CFrame = facing(base + Vector3.new(0, 0.2, 0), Vector3.zero),
-		Color = rgb(225, 250, 232),
-		Parent = arcade,
-	})
-	Shapes.RoundedBox(Vector3.new(32, 17, 2.5), 1, {
-		Name = "TargetWall",
-		CFrame = wallCFrame * CFrame.new(0, 0, 0.4),
-		Color = rgb(45, 65, 130),
-		Parent = arcade,
-	})
-	Shapes.RoundedBox(Vector3.new(33, 1.2, 3), 0.5, {
-		Name = "WallTrim",
-		CFrame = wallCFrame * CFrame.new(0, 8.6, 0.4),
-		Color = rgb(110, 226, 140),
-		Parent = arcade,
-	})
+	local side = Vector3.new(-toCenter.Z, 0, toCenter.X)
+	MeshLibrary.Get("LobbyPatio", { CFrame = facing(base + Vector3.new(0, 0.02, 0), Vector3.zero), Parent = arcade })
+
+	-- A carnival shooting gallery: the booth (striped awning, bulbs, counter, tin ducks) is a mesh
+	-- prop whose back panel stands on the wall line; its box center is 4.29 in front of that line.
+	local ground = facing(base - toCenter * 8, Vector3.zero)
+	local wallCFrame = ground * CFrame.new(0, 8.5, 0)
+	MeshLibrary.Get("LobbyGalleryBooth", { CFrame = ground * CFrame.new(0, 0, -4.29), Parent = arcade })
 	local targets = {}
 	for row = 0, 1 do
 		for column = 0, 2 do
 			local offset = Vector3.new((column - 1) * 9.5, (row - 0.5) * 7, -1.3)
+			-- A red ring behind each target makes it a bullseye (the server lights the white face).
+			Build.Decor({
+				Name = "TargetRing",
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(0.2, 6, 6),
+				CFrame = wallCFrame * CFrame.new(offset.X, offset.Y, -0.95) * CFrame.Angles(0, math.rad(90), 0),
+				Color = rgb(235, 60, 80),
+				Parent = arcade,
+			})
 			local target = Build.Part({
 				Name = "Target",
 				Shape = Enum.PartType.Cylinder,
@@ -1121,16 +1096,18 @@ local function buildArcade(root: Model): ({ BasePart }, TextLabel)
 			table.insert(targets, target)
 		end
 	end
+	-- The score board stands on the awning's front edge like a marquee, above the bulbs.
+	local boardCFrame = wallCFrame * CFrame.new(0, 15.1, -11)
 	Shapes.RoundedBox(Vector3.new(15.4, 9.4, 1.4), 0.6, {
 		Name = "ScoreBezel",
-		CFrame = wallCFrame * CFrame.new(0, 13.6, 0.7),
+		CFrame = boardCFrame * CFrame.new(0, 0, 0.7),
 		Color = PALETTE.Trim,
 		Parent = arcade,
 	})
 	local boardPart = Build.Part({
 		Name = "TargetScores",
 		Size = Vector3.new(14, 8, 0.6),
-		CFrame = wallCFrame * CFrame.new(0, 13.6, 0),
+		CFrame = boardCFrame,
 		Color = rgb(25, 25, 50),
 		Parent = arcade,
 	})
@@ -1144,7 +1121,7 @@ local function buildArcade(root: Model): ({ BasePart }, TextLabel)
 		arcade,
 		"ARCADE",
 		Vector3.new(14, 4, 1),
-		wallCFrame * CFrame.new(0, 19.6, 0.2),
+		boardCFrame * CFrame.new(0, 7.1, 0.5),
 		Enum.NormalId.Front,
 		rgb(45, 65, 130)
 	)
@@ -1159,15 +1136,7 @@ local function buildArcade(root: Model): ({ BasePart }, TextLabel)
 			Parent = arcade,
 		})
 	)
-	-- Toys: cones and a few bouncy balls nearby.
-	local side = Vector3.new(-toCenter.Z, 0, toCenter.X)
-	for index = -1, 1, 2 do
-		MeshLibrary.Get(
-			"Cone",
-			{ Scale = 1.2, CFrame = CFrame.new(base + side * index * 15 + toCenter * 4), Parent = arcade }
-		)
-	end
-	balloonCluster(arcade, base + side * 15 - toCenter * 6, 0)
+	balloonCluster(arcade, base + side * 21 + toCenter * 2, 0)
 	return targets, label
 end
 
@@ -1205,26 +1174,14 @@ local function buildEmoteStage(root: Model): (ProximityPrompt, Vector3)
 			)
 		end
 	end
-	-- Truss arch over the back of the stage with the sign and disco lights.
-	for _, x in { -14, 14 } do
-		Shapes.RoundedBox(Vector3.new(2, 18, 2), 0.6, {
-			Name = "TrussPost",
-			CFrame = CFrame.new(center + Vector3.new(x, 9, 8)),
-			Color = rgb(70, 50, 120),
-			Parent = stage,
-		})
-	end
-	Shapes.RoundedBox(Vector3.new(30.6, 2, 2.3), 0.6, {
-		Name = "TrussBeam", -- a little bigger than the posts, so it shares none of their faces
-		CFrame = CFrame.new(center + Vector3.new(0, 18, 8)),
-		Color = rgb(70, 50, 120),
-		Parent = stage,
-	})
+	-- The arch over the back of the stage (candy columns, a bulb-lit fan crown, speakers) is a mesh
+	-- prop; its box center is 0.21 in front of its columns. The sign stands in front of the fan.
+	MeshLibrary.Get("LobbyEmoteArch", { CFrame = CFrame.new(center + Vector3.new(0, 0, 8 - 0.21)), Parent = stage })
 	local stageSign = sign(
 		stage,
 		"EMOTE STAGE",
 		Vector3.new(22, 4.4, 1),
-		CFrame.new(center + Vector3.new(0, 21.4, 8)),
+		CFrame.new(center + Vector3.new(0, 22.2, 8)),
 		Enum.NormalId.Front,
 		rgb(255, 84, 150),
 		rgb(255, 255, 255)
@@ -1253,17 +1210,18 @@ local function buildEmoteStage(root: Model): (ProximityPrompt, Vector3)
 		light.Shadows = false
 		light.Parent = lamp
 	end
-	-- Confetti cannon beside the stage.
-	local cannonBase = Shapes.RoundedBox(Vector3.new(4.5, 2.2, 4.5), 0.6, {
+	-- Confetti cannon beside the stage: a circus cannon prop (box center 0.34 in front of its
+	-- axle); the prompt lives on an invisible part around it.
+	local cannonSpot = center + Vector3.new(19, 0, -4)
+	MeshLibrary.Get(
+		"LobbyConfettiCannon",
+		{ CFrame = CFrame.new(cannonSpot + Vector3.new(0, 0, -0.34)), Parent = stage }
+	)
+	local cannonBase = Build.Decor({
 		Name = "CannonBase",
-		CFrame = CFrame.new(center + Vector3.new(19, 1.1, -4)),
-		Color = rgb(80, 80, 100),
-		Parent = stage,
-	})
-	Shapes.Capsule(6, 2.6, {
-		Name = "CannonBarrel",
-		CFrame = CFrame.new(center + Vector3.new(19, 3.8, -4)) * CFrame.Angles(0, 0, math.rad(60)),
-		Color = rgb(255, 90, 140),
+		Size = Vector3.new(4.6, 4, 5.6),
+		CFrame = CFrame.new(cannonSpot + Vector3.new(0, 2, 0)),
+		Transparency = 1,
 		Parent = stage,
 	})
 	balloonCluster(stage, center + Vector3.new(-18, 0, -3), 2)
@@ -1461,7 +1419,7 @@ local function buildSkyline(root: Model)
 	local balloons = {
 		-- Two big ones close in: left of the vote stage from the spawn, and over the emote stage.
 		{ Vector3.new(-48, 34, -86), rgb(255, 92, 150), rgb(255, 236, 120), 1.7 },
-		{ Vector3.new(52, 30, 84), rgb(255, 204, 64), rgb(255, 92, 150), 1.6 },
+		{ Vector3.new(-22, 36, 100), rgb(255, 204, 64), rgb(255, 92, 150), 1.6 },
 		{ Vector3.new(128, 70, 6), rgb(64, 196, 255), rgb(255, 255, 255), 1.2 },
 		{ Vector3.new(-126, 64, 46), rgb(156, 108, 255), rgb(255, 204, 64), 1 },
 		{ Vector3.new(42, 88, 132), rgb(255, 140, 70), rgb(255, 255, 255), 1.3 },
@@ -1682,7 +1640,7 @@ function LobbyBuilder.Build(): LobbyRefs
 			Vector3.new(0, 2.5, STAGE_Z - 18), -- behind the vote stage
 			SHOP + Vector3.new(-5, 20.5, 8), -- on the shop awning
 			PODIUM + Vector3.new(9.6, 21, 14), -- on top of the champion board
-			EMOTE + Vector3.new(0, 20.5, 8), -- on the emote stage truss
+			EMOTE + Vector3.new(18.5, 8.6, 7.6), -- on top of the emote stage's right speaker
 			QUESTS + Vector3.new(-14, 2, 14), -- behind the quest corner, by the hedge
 			ARCADE + Vector3.new(14, 2, 14), -- behind the arcade wall
 		},
