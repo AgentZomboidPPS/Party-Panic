@@ -23,6 +23,11 @@
 -- plus the client's easing earlier), and treasure that touched a Diver before it slid into the hole
 -- is theirs, not the Kings'. The hole only takes a Diver whose whole body is over it (or who fell
 -- in): a Diver visibly standing on the lip is still on the sand.
+--
+-- Bot pass (owner, after a round the Kings won 145 to 52 with the diver bots on 3, 2, 0, 4 and 0:
+-- "Bots are terrible at this game. can we make them a little better."): the sand drags bots and
+-- then they steer like a player's stick, every frame (_dragBots), so a real server's physics can't
+-- stop their walk; how they play is in Bots/SinkingSands.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -810,12 +815,19 @@ function SinkingSands:IsGulped(player: any): boolean
 end
 
 -- At the buzzer, anyone still down the hole comes back up for the podium.
+-- Bots let go of the stick _dragBots pushed for them.
 function SinkingSands:Stop()
 	local ctx = self.context
 	for player in self.gulped do
 		self.gulped[player] = nil
 		ctx:Respawn(player)
 		ctx:Freeze(player, false)
+	end
+	for _, player in ctx:GetPlayers() do
+		local _, humanoid = ctx:GetCharacter(player)
+		if humanoid and isBot(player) then
+			humanoid:Move(Vector3.zero)
+		end
 	end
 end
 
@@ -943,10 +955,20 @@ function SinkingSands:Start()
 end
 
 -- Bots are moved by the server, so the sand drags them here exactly as each player's device drags
--- its own character (same flow, same numbers).
+-- its own character (same flow, same numbers, same cap on a long frame).
+--
+-- And then they steer, as a player's device does every frame: in a real game the diver bots
+-- scored 0-4 and slid into the hole again and again, while on the test servers (where bots walk
+-- without physics) the same brain scored 20 on average. A bot walks with Humanoid:MoveTo, renewed
+-- only about 7 times a second, and moving its root from a script in between evidently ends that
+-- walk, so the sand won (a simulated round where it does looks just like the owner's: bots on 0-6
+-- who fall in five or six times each). Humanoid:Move is the stick a player's device pushes every
+-- frame: pushed towards where the brain wants to go after every drag, the walk goes on whatever
+-- the sand does.
 function SinkingSands:_dragBots(dt: number, now: number, physics: boolean)
 	local ctx = self.context
 	local center = self.center
+	dt = math.min(dt, 0.1)
 	for _, player in ctx:GetAlivePlayers() do
 		if not isBot(player) or self.gulped[player] or self:IsKing(player) then
 			continue
@@ -961,17 +983,24 @@ function SinkingSands:_dragBots(dt: number, now: number, physics: boolean)
 		local airborne = if physics
 			then humanoid.FloorMaterial == Enum.Material.Air
 			else (player :: any).JumpStart ~= nil
-		if r < 0.01 then
-			continue
+		local move = Vector3.zero
+		if r > 0.01 then
+			local inward, spin = SandSwirl.WalkerFlow(self.segments, r, now)
+			local k = if airborne then SandSwirl.AIR_DRAG else 1
+			local u = offset / r
+			move = (-u * inward + Vector3.new(-u.Z, 0, u.X) * spin) * dt * k
 		end
-		local inward, spin = SandSwirl.WalkerFlow(self.segments, r, now)
-		local k = if airborne then SandSwirl.AIR_DRAG else 1
-		local u = offset / r
-		local move = (-u * inward + Vector3.new(-u.Z, 0, u.X) * spin) * dt * k
 		if physics then
 			if move.Magnitude > 0 then
 				root.CFrame += move
 			end
+			local goal: Vector3? = (player :: any).Goal
+			local toward = if goal
+				then Vector3.new(goal.X - position.X - move.X, 0, goal.Z - position.Z - move.Z)
+				else Vector3.zero
+			humanoid:Move(if toward.Magnitude > 0.5 then toward.Unit else Vector3.zero)
+		elseif r < 0.01 then
+			continue
 		elseif airborne then
 			-- Mid-hop on the test servers: the bot service owns the height, the sand still drags.
 			root.CFrame += Vector3.new(move.X, 0, move.Z)

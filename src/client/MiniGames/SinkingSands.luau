@@ -7,6 +7,10 @@
 -- says someone else got it first (or nobody did, within PENDING_TIME). The prediction is the
 -- server's grab rule seen from here: within reach of the treasure as drawn or of its true spot,
 -- swept between frames (the server sweeps the same paths, allowing for ping and the easing).
+--
+-- Phone pass (handoff: "Sinking Sands' Sand King hint wraps to two lines"): the role hints are
+-- short enough for one line on the smallest phone, "👑 SAND KING: SWIRL & PULL!" and "💎 DIVER: grab
+-- the treasure!" (the status line above them says the rest).
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -395,10 +399,12 @@ function SinkingSands.Start(api)
 		end
 		isKing = role == "King"
 		refreshHaul()
+		-- (short enough for one line in the hint's 400 points: the longer ones wrapped onto two on
+		-- phones; the status line above says the rest, "Divers: grab the treasure! Sand Kings: sink it!")
 		if isKing then
-			hint.Text = "👑 SAND KING: SWIRL and PULL to sink the treasure!"
+			hint.Text = "👑 SAND KING: SWIRL & PULL!"
 		else
-			hint.Text = "💎 DIVER: grab the treasure! Stay out of the hole!"
+			hint.Text = "💎 DIVER: grab the treasure!"
 		end
 		hint.Visible = true
 		hintUntil = math.huge -- counted from GO (below)
