@@ -276,6 +276,20 @@ do
 	token.Name = "SecretToken"
 	token.Anchored = true
 	token.Parent = workspace:FindFirstChild("Lobby") or workspace
+	-- The vote stage's preview portals, when the place's lobby is older than this client.
+	if #game:GetService("CollectionService"):GetTagged("PortalScreen") == 0 then
+		for index = 1, 4 do
+			local screen = Instance.new("Part")
+			screen.Name = "PortalScreen" .. index
+			screen.Anchored = true
+			screen.Size = Vector3.new(14, 19.8, 0.2)
+			screen.CFrame = CFrame.new((index - 2.5) * 22, 12.3, -63.5)
+			screen:SetAttribute("VoteIndex", index)
+			screen:SetAttribute("PortalColor", Color3.fromRGB(255, 84, 150))
+			screen:AddTag("PortalScreen")
+			screen.Parent = token.Parent
+		end
+	end
 end
 
 -- Server side state the client reads (real shared modules).

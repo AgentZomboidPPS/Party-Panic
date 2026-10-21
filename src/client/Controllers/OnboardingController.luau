@@ -22,7 +22,7 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 local OnboardingController = {}
 
 local STEPS = {
-	{ Icon = "🗳️", Text = "When voting opens, tap a card or step on a glowing pad to pick the next game." },
+	{ Icon = "🗳️", Text = "When voting opens, tap a card to pick the next game. Portals show a preview!" },
 	{ Icon = "🎮", Text = "Read the rules card, then go for it! Everyone earns coins just for playing." },
 	{ Icon = "🎁", Text = "Nice! Spend coins in the 🛍️ Shop and check 📜 Quests for bonus rewards." },
 }

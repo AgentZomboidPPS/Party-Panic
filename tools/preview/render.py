@@ -73,6 +73,10 @@ def material(color, mat_name, transparency):
     if mat_name == "Neon":
         bsdf.inputs["Emission Color"].default_value = (*rgb, 1)
         bsdf.inputs["Emission Strength"].default_value = 4.0
+    if mat_name == "CrackedLava":
+        # Lava glows in the engine; unlit it reads as orange sand.
+        bsdf.inputs["Emission Color"].default_value = (*rgb, 1)
+        bsdf.inputs["Emission Strength"].default_value = 0.5
     if mat_name == "Glass":
         bsdf.inputs["Transmission Weight"].default_value = 0.8
     if transparency > 0.01:

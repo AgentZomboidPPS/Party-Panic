@@ -53,17 +53,40 @@ USER_ID = os.environ.get("PP_OWNER_USER_ID", "11690979745")  # the game owner's 
 FRAME_W, FRAME_H = 170, 240
 COLUMNS = 6
 FRAMES = 24
-FPS = 10
+FPS = 8
 
-# Camera per game, around the players' middle (the focus): yaw is where the camera stands, in
-# degrees around the focus (0 = on the +Z side looking toward -Z, 90 = on the +X side), pitch is
-# how steeply it looks down, distance is from the focus, fov is the vertical view angle, sway is
-# how far the camera swings to each side during the loop, and shift moves the focus (studs, x y z).
-DEFAULT_CAMERA = {"yaw": 0, "pitch": 32, "distance": 60, "fov": 50, "sway": 12, "shift": [0, 0, 0]}
-CAMERAS: dict[str, dict] = {}
+# Camera per game, around the focus: the middle of the biggest bunch of players ("subject":
+# "bunch"), the highest player ("highest": someone mid-jump), or the first part named "look_at"
+# (e.g. a bump's ring). yaw is where the camera stands, in degrees around the focus (0 = on the +Z
+# side looking toward -Z, 90 = on the +X side), pitch is how steeply it looks down, distance is
+# from the focus, fov is the vertical view angle, sway is how far the camera swings to each side
+# during the loop, and shift moves the focus (studs, x y z). raise tilts the view up so the focus
+# sits below the middle of the frame: the portal covers the top with the game's icon and name.
+DEFAULT_CAMERA = {"yaw": 0, "pitch": 30, "distance": 40, "fov": 50, "sway": 10, "raise": 8, "shift": [0, 0, 0]}
+CAMERAS: dict[str, dict] = {
+    # Down the line of jumpers to the fire wheel, the rope sweeping along the bridge.
+    "FireRope": {"yaw": 62, "pitch": 15, "distance": 34, "shift": [0, 1, 0]},
+    # Over the hexes, the called color still up and the rest sunk into the lava.
+    "HexMeltdown": {"yaw": 20, "pitch": 42, "distance": 46, "shift": [0, -4, 0]},
+    # The honey tree's vine of fruit and honeycombs, the players around it on their pads.
+    "HoneyTrap": {"yaw": 10, "pitch": 18, "distance": 36, "shift": [0, 6, -8]},
+    # A team pumping its balloon (with a face), the other teams' balloons beside it.
+    "PumpAndPop": {"yaw": 0, "pitch": 12, "distance": 34, "shift": [0, 6, 0], "sway": 12},
+    # Two riders bumping on the island, the sea all around.
+    "BumperBallers": {"look_at": "BoingRing", "yaw": 30, "pitch": 30, "distance": 34},
+    # Over the archers' shoulders on the tower, out over the target boards and the runners.
+    "ArrowAmbush": {"yaw": 180, "pitch": 28, "distance": 38, "shift": [0, -4, 10]},
+    # Chasing a bunch of skaters down the bridge, toward the crates and the finish.
+    "SkateEscape": {"yaw": 0, "pitch": 13, "distance": 24, "shift": [0, 0, -8]},
+}
 
 # Seconds into the round to take the snapshot, where the default (8) isn't the liveliest moment.
-DUMP_AT: dict[str, float] = {}
+DUMP_AT: dict[str, float] = {
+    "HexMeltdown": 15.2,  # the second call: the other colors are down in the lava
+    "HoneyTrap": 12,
+    "PumpAndPop": 16,  # the balloons are big by now
+    "SkateEscape": 10,
+}
 
 R15 = {
     "Head", "UpperTorso", "LowerTorso", "LeftUpperArm", "LeftLowerArm", "LeftHand", "RightUpperArm",
@@ -135,9 +158,35 @@ def dress_players(parts: list[dict]) -> list[list[float]]:
     return heads
 
 
-def camera_path(game: str, focus: list[float], frames: int) -> dict[str, list]:
-    cam = dict(DEFAULT_CAMERA)
-    cam.update(CAMERAS.get(game, {}))
+def player_focus(heads: list[list[float]]) -> list[float]:
+    """The middle of the biggest bunch of players (knocked-out ones are back in the lobby, and a
+    race spreads out)."""
+    best = max(heads, key=lambda head: sum(1 for other in heads if math.dist(head, other) < 25))
+    near = [head for head in heads if math.dist(head, best) < 25]
+    return [sum(h[i] for h in near) / len(near) for i in range(3)]
+
+
+def find_focus(camera: dict, parts: list[dict], heads: list[list[float]]) -> list[float]:
+    name = camera.get("look_at")
+    for part in parts if name else []:
+        if part["n"] == name:
+            return part["cf"][:3]
+    if camera.get("subject") == "highest":
+        bunch = player_focus(heads)
+        return max((h for h in heads if math.dist(h, bunch) < 80), key=lambda h: h[1])
+    return player_focus(heads)
+
+
+def camera_settings(game: str, overrides: dict | None = None) -> dict:
+    camera = dict(DEFAULT_CAMERA)
+    camera.update(CAMERAS.get(game, {}))
+    camera.update(overrides or {})
+    return camera
+
+
+def camera_path(cam: dict, focus: list[float], frames: int) -> dict[str, list]:
+    """A loop: the camera sways side to side around the focus (and bobs and dollies a little),
+    ending where it started."""
     fx, fy, fz = (focus[i] + cam["shift"][i] for i in range(3))
     views = {}
     for frame in range(frames):
@@ -147,7 +196,8 @@ def camera_path(game: str, focus: list[float], frames: int) -> dict[str, list]:
         distance = cam["distance"] * (1 + cam.get("dolly", 0.06) * math.cos(phase))
         flat = distance * math.cos(pitch)
         eye = [fx + flat * math.sin(yaw), fy + distance * math.sin(pitch), fz + flat * math.cos(yaw)]
-        views[f"f{frame:02d}"] = [eye, [fx, fy, fz], cam["fov"]]
+        lift = distance * math.tan(math.radians(cam["raise"])) / max(0.2, math.cos(pitch))
+        views[f"f{frame:02d}"] = [eye, [fx, fy + lift, fz], cam["fov"]]
     return views
 
 
@@ -157,13 +207,14 @@ def render_frames(game: str, dump: Path, frames: int, samples: int, python: str)
     heads = dress_players(data["parts"])
     if not heads:
         raise SystemExit("No players in the snapshot - is the round over already? Try an earlier --dump-at.")
-    focus = [sum(h[i] for h in heads) / len(heads) for i in range(3)]
+    camera = camera_settings(game)
+    focus = find_focus(camera, data["parts"], heads)
     out_dir = Path(f"/tmp/pv_{game}_frames")
     out_dir.mkdir(exist_ok=True)
     dressed = out_dir / "scene.json"
     dressed.write_text(json.dumps(data))
     cameras = out_dir / "cameras.json"
-    views = camera_path(game, focus, frames)
+    views = camera_path(camera, focus, frames)
     cameras.write_text(json.dumps(views))
     nobody = out_dir / "dummies.json"
     nobody.write_text("[]")  # the snapshot has the players; no extra stand-ins
@@ -177,12 +228,16 @@ def render_frames(game: str, dump: Path, frames: int, samples: int, python: str)
 
 
 def pack_sheet(game: str, paths: list[Path]) -> Path:
-    from PIL import Image
+    from PIL import Image, ImageEnhance
 
     rows = math.ceil(len(paths) / COLUMNS)
     sheet = Image.new("RGB", (FRAME_W * COLUMNS, FRAME_H * rows), (20, 14, 40))
     for index, path in enumerate(paths):
         frame = Image.open(path).convert("RGB")
+        # Roblox colors are bold: a little more color and snap than the renderer's soft look.
+        frame = ImageEnhance.Color(frame).enhance(1.25)
+        frame = ImageEnhance.Contrast(frame).enhance(1.08)
+        frame = ImageEnhance.Sharpness(frame).enhance(1.3)
         sheet.paste(frame, ((index % COLUMNS) * FRAME_W, (index // COLUMNS) * FRAME_H))
     assert sheet.width <= 1024 and sheet.height <= 1024, "Roblox caps images at 1024x1024"
     PREVIEWS.mkdir(parents=True, exist_ok=True)
@@ -230,7 +285,7 @@ def write_luau(record: dict):
         "\tFps: number,",
         "}",
         "",
-        "local previews: { [string]: Preview } = {",
+        "local previews: { [string]: Preview } = {" + ("" if record else "}"),
     ]
     for game in sorted(record):
         entry = record[game]
@@ -243,7 +298,7 @@ def write_luau(record: dict):
             f"\t\tFps = {entry['fps']},",
             "\t},",
         ]
-    lines += ["}", "", "return previews", ""]
+    lines += (["}"] if record else []) + ["", "return previews", ""]
     LUAU.write_text("\n".join(lines))
     log(f"Wrote {LUAU.relative_to(ROOT)} ({len(record)} previews)")
 
