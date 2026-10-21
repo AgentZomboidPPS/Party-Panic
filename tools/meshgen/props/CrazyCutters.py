@@ -19,6 +19,7 @@ that is x = u, z = -v (a prop's front is -Z, and the board's far side is its fro
 from __future__ import annotations
 
 import math
+import subprocess
 import re
 from pathlib import Path
 
@@ -606,6 +607,8 @@ def write_luau_shapes():
     updated = pattern.sub(lambda m: m.group(1) + block + m.group(2), text)
     if updated != text:
         LUAU_MODULE.write_text(updated)
+        # Keep the module in the repo's format (the block is written one shape per line).
+        subprocess.run(["stylua", str(LUAU_MODULE)], check=False)
 
 
 # ====================================================================== station props
