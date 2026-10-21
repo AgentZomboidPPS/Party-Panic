@@ -308,6 +308,12 @@ function SkateCourse.StanceCFrame(origin: Vector3, laneX: number, d: number, lif
 	return CFrame.new(position) * facing
 end
 
+-- How high a character's root sits above the track while skating (feet on the board, knees bent).
+function SkateCourse.RootHeight(humanoid: Humanoid, root: BasePart): number
+	local legs = if humanoid.RigType == Enum.HumanoidRigType.R6 then 2 else humanoid.HipHeight
+	return legs + root.Size.Y / 2 + SkateCourse.BoardHeight - SkateCourse.Crouch
+end
+
 -- Lane colors, always shown with the lane number so color is never the only cue.
 SkateCourse.LaneColors = {
 	Color3.fromRGB(255, 92, 92),

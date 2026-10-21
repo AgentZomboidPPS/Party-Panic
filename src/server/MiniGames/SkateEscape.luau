@@ -69,11 +69,6 @@ local function stretchZ(model: Model, factor: number)
 	end
 end
 
--- How high a character's root sits above the track while skating.
-local function rootHeight(humanoid: Humanoid, root: BasePart): number
-	return humanoid.HipHeight + root.Size.Y / 2 + SkateCourse.BoardHeight - SkateCourse.Crouch
-end
-
 -- Arena ------------------------------------------------------------------------------------------
 
 function SkateEscape:_deckPiece(index: number, d0: number, d1: number): Model
@@ -370,7 +365,7 @@ function SkateEscape:_attachBoard(player: any, character: Model)
 	weld.Name = "BoardWeld"
 	weld.Part0 = root
 	weld.Part1 = boardRoot
-	weld.C0 = CFrame.new(0, -rootHeight(humanoid, root), 0) * CFrame.Angles(0, math.rad(90), 0)
+	weld.C0 = CFrame.new(0, -SkateCourse.RootHeight(humanoid, root), 0) * CFrame.Angles(0, math.rad(90), 0)
 	weld.C1 = boardRoot.CFrame:ToObjectSpace(board:GetPivot())
 	weld.Parent = boardRoot
 	board.Parent = character
@@ -432,6 +427,16 @@ function SkateEscape:Prepare()
 		self.racers[tostring(player.UserId)] = nil
 	end
 	ctx:SpawnAll(points, true)
+	-- Bots wait on their boards in the skating stance (held still until GO).
+	for _, racer in self.racers do
+		if racer.IsBot then
+			local _, _, root = ctx:GetCharacter(racer.Player)
+			if root then
+				root.Anchored = true
+				self:_moveBot(racer, ctx:Now())
+			end
+		end
+	end
 	ctx:SetStatus("Get ready to PUSH!")
 end
 
@@ -461,9 +466,9 @@ function SkateEscape:Start()
 	ctx:SetSharedJSON("Collapse", self.collapse)
 	for _, racer in self.racers do
 		if racer.IsBot then
-			local _, humanoid = ctx:GetCharacter(racer.Player)
-			if humanoid then
-				humanoid.PlatformStand = true
+			local _, _, root = ctx:GetCharacter(racer.Player)
+			if root then
+				root.Anchored = false
 			end
 		end
 	end
@@ -524,8 +529,12 @@ function SkateEscape:_moveBot(racer, now: number)
 		drop = math.min(60, 0.5 * 70 * t * t)
 		tumble = t * 1.5
 	end
+	if not humanoid.PlatformStand then
+		humanoid.PlatformStand = true -- the server moves this skater; the humanoid mustn't try to stand
+	end
 	local x = SkateCourse.LaneX(racer.Lane, LANES)
-	root.CFrame = SkateCourse.StanceCFrame(self.origin, x, d, rootHeight(humanoid, root) + lift - drop, tumble)
+	root.CFrame =
+		SkateCourse.StanceCFrame(self.origin, x, d, SkateCourse.RootHeight(humanoid, root) + lift - drop, tumble)
 	root.AssemblyLinearVelocity = Vector3.new(0, 0, -racer.V)
 end
 
@@ -642,8 +651,16 @@ function SkateEscape:_share()
 			entry.O = 1
 		else
 			skating += 1
-			if not racer.Place then
-				ctx:SetScoreText(racer.Player, `{math.floor(math.clamp(racer.D / SkateCourse.Length, 0, 1) * 100)}%`)
+			ctx:SetScoreText(racer.Player, `{math.floor(math.clamp(racer.D / SkateCourse.Length, 0, 1) * 100)}%`)
+		end
+		-- The live standings sort by score: progress in percent, finishers above everyone by place.
+		local state = ctx:State(racer.Player)
+		if state then
+			local score = if racer.Place
+				then 200 - racer.Place
+				else math.floor(math.clamp(racer.D / SkateCourse.Length, 0, 1) * 100)
+			if score ~= state.Score then
+				ctx:AddScore(racer.Player, score - state.Score)
 			end
 		end
 		list[key] = entry

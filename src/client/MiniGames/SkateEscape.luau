@@ -672,7 +672,7 @@ function SkateEscape.Start(api)
 			local humanoid = character:FindFirstChildOfClass("Humanoid")
 			local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if weld and weld:IsA("Weld") and humanoid and root then
-				local height = humanoid.HipHeight + root.Size.Y / 2 + SkateCourse.BoardHeight - SkateCourse.Crouch
+				local height = SkateCourse.RootHeight(humanoid, root)
 				weld.C0 = CFrame.new(0, -height, 0)
 					* CFrame.Angles(0, 0, rad(-boardPitch(key, now)))
 					* CFrame.Angles(0, rad(90), 0)
@@ -714,6 +714,7 @@ function SkateEscape.Start(api)
 	end)
 
 	local dangerShown = false
+	local pushEnabled = nil :: boolean?
 	local hintUntil = 0
 	local lastPlace = ""
 
@@ -741,7 +742,7 @@ function SkateEscape.Start(api)
 				if collapse and not me.Done then
 					if hintUntil == 0 then
 						hintUntil = os.clock() + 6
-						api:Hint("Mash PUSH to skate • JUMP the crates, barriers & gaps!", hudY + 140)
+						api:Hint("Mash PUSH • JUMP over everything!", hudY + 140)
 					end
 					local event = SkateCourse.Step(me, obstacles, now, dt)
 					if event then
@@ -773,7 +774,7 @@ function SkateEscape.Start(api)
 					drop = 0.5 * 70 * t * t
 					tumble = t * 1.5
 				end
-				local height = humanoid.HipHeight + root.Size.Y / 2 + SkateCourse.BoardHeight - SkateCourse.Crouch
+				local height = SkateCourse.RootHeight(humanoid, root)
 				if not humanoid.PlatformStand then
 					humanoid.PlatformStand = true
 				end
@@ -893,7 +894,11 @@ function SkateEscape.Start(api)
 			placeLabel.Text = place
 		end
 		push:SetFill(math.clamp(me.V / SkateCourse.Max, 0, 1))
-		push:SetEnabled(racing())
+		local canPush = racing()
+		if canPush ~= pushEnabled then
+			pushEnabled = canPush
+			push:SetEnabled(canPush)
+		end
 	end)
 end
 
