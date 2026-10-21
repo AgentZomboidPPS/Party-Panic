@@ -209,7 +209,15 @@ function BobsledRun.Start(api)
 		if not visual then
 			visual = { D = 0, V = 0, BumpAt = -math.huge, BumpDir = 1, BoostAt = -math.huge }
 			visuals[team] = visual
-			visual.Model = makeSled(team)
+			-- The template may still be on its way: wait for it off the frame loop.
+			task.spawn(function()
+				local model = makeSled(team)
+				if visuals[team] == visual then
+					visual.Model = model
+				elseif model then
+					model:Destroy()
+				end
+			end)
 		end
 		return visual :: Visual
 	end
@@ -232,32 +240,40 @@ function BobsledRun.Start(api)
 
 	local hud = api:TopHud()
 	local hudY = api:HudY()
-	local barWidth = 560
+	-- Phones: the HUD sits a little right of the middle, clear of the move stick's corner.
+	local shift = if touch then 24 else 0
+	local barWidth = if touch then 330 else 560
+	local barHeight = if touch then 66 else 54
 	local bar = UIKit.Panel({
 		Name = "RunBar",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, hudY + 4),
-		Size = UDim2.fromOffset(barWidth, if touch then 42 else 32),
+		Position = UDim2.new(0.5, shift, 0, hudY + 4),
+		Size = UDim2.fromOffset(barWidth, barHeight),
 		CornerRadius = 16,
 		Parent = hud,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
-	local track = UIKit.new("Frame", {
-		Name = "Track",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, -14, 0.5, 0),
-		Size = UDim2.new(1, -76, 0, 8),
-		BackgroundColor3 = Color3.fromRGB(200, 230, 250),
-		Parent = bar,
-		Children = { UIKit.Round() },
-	})
+	-- Two rows, so sleds side by side never cover each other (1st and 3rd sled up, 2nd and 4th down).
+	local trackWidth = barWidth - 70
+	local rows = {}
+	for row = 1, 2 do
+		rows[row] = UIKit.new("Frame", {
+			Name = "Track" .. row,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 18, if row == 1 then 0.26 else 0.74, 0),
+			Size = UDim2.fromOffset(trackWidth, 6),
+			BackgroundColor3 = Color3.fromRGB(200, 230, 250),
+			Parent = bar,
+			Children = { UIKit.Round() },
+		})
+	end
 	UIKit.Label({
 		Name = "Goal",
 		Text = "🏁",
-		TextSize = if touch then 26 else 22,
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(1, 6, 0.5, 0),
-		Size = if touch then UDim2.fromOffset(30, 30) else UDim2.fromOffset(26, 26),
-		Parent = track,
+		TextSize = if touch then 28 else 24,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -8, 0.5, 0),
+		Size = UDim2.fromOffset(32, 32),
+		Parent = bar,
 	})
 	local ticksMade = false
 	local function makeTicks()
@@ -266,25 +282,31 @@ function BobsledRun.Start(api)
 		end
 		ticksMade = true
 		for _, curve in course.Curves do
-			UIKit.new("Frame", {
-				Name = "Curve",
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(math.clamp(curve.D0 / course.Length, 0, 1), 0.5),
-				Size = UDim2.fromOffset(3, 14),
-				BackgroundColor3 = Theme.Colors.PanelDark,
-				BackgroundTransparency = 0.3,
-				Parent = track,
-			})
+			for _, row in rows do
+				UIKit.new("Frame", {
+					Name = "Curve",
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(math.clamp(curve.D0 / course.Length, 0, 1), 0.5),
+					Size = UDim2.fromOffset(3, 12),
+					BackgroundColor3 = Theme.Colors.PanelDark,
+					BackgroundTransparency = 0.3,
+					Parent = row,
+				})
+			end
 		end
 	end
 	local markers: { [string]: Frame } = {}
-	local function marker(team: string): Frame
+	local function markerSize(team: string): number
+		local mine = team == myTeam
+		return if touch then (if mine then 30 else 28) else (if mine then 24 else 22)
+	end
+	local function marker(team: string, row: number): Frame
 		local existing = markers[team]
 		if existing then
 			return existing
 		end
 		local mine = team == myTeam
-		local size = if touch then (if mine then 38 else 32) else (if mine then 28 else 22)
+		local size = markerSize(team)
 		local dot = UIKit.new("Frame", {
 			Name = "Sled" .. team,
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -292,7 +314,7 @@ function BobsledRun.Start(api)
 			Size = UDim2.fromOffset(size, size),
 			BackgroundColor3 = Teams.Colors[team] or Theme.Colors.Text,
 			ZIndex = if mine then 4 else 3,
-			Parent = track,
+			Parent = rows[row] or rows[1],
 			Children = {
 				UIKit.Round(),
 				UIKit.Stroke(if mine then Theme.Colors.Text else Theme.Colors.PanelDark, if mine then 3 else 2),
@@ -300,7 +322,7 @@ function BobsledRun.Start(api)
 		})
 		UIKit.Label({
 			Text = SHAPES[team] or "?",
-			TextSize = if touch then (if mine then 26 else 22) else (if mine then 18 else 14),
+			TextSize = if touch then (if mine then 26 else 24) else (if mine then 18 else 15),
 			Font = Theme.Fonts.Bold,
 			TextColor3 = Color3.fromRGB(30, 24, 40),
 			Size = UDim2.fromScale(1, 1),
@@ -315,7 +337,7 @@ function BobsledRun.Start(api)
 	local cue = UIKit.Panel({
 		Name = "CurveCue",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, hudY + (if touch then 54 else 44)),
+		Position = UDim2.new(0.5, shift, 0, hudY + barHeight + 10),
 		Size = UDim2.fromOffset(if touch then 300 else 330, 74),
 		CornerRadius = 18,
 		Visible = false,
@@ -325,10 +347,10 @@ function BobsledRun.Start(api)
 		Name = "Arrow",
 		Text = "◀",
 		Font = Theme.Fonts.Bold,
-		TextSize = 52,
+		TextSize = 46,
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 8, 0.5, -3),
-		Size = UDim2.fromOffset(62, 62),
+		Position = UDim2.new(0, 6, 0.5, -3),
+		Size = UDim2.fromOffset(48, 56),
 		Parent = cue,
 		Children = { UIKit.TextStroke(0.2) },
 	})
@@ -336,11 +358,11 @@ function BobsledRun.Start(api)
 		Name = "Say",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 30,
+		TextSize = 28,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		AnchorPoint = Vector2.new(0, 0),
-		Position = UDim2.new(0, 70, 0, 8),
-		Size = UDim2.new(1, -140, 0, 36),
+		Position = UDim2.new(0, 56, 0, 8),
+		Size = UDim2.new(1, -112, 0, 36),
 		Parent = cue,
 		Children = { UIKit.TextStroke(0.2) },
 	})
@@ -348,10 +370,10 @@ function BobsledRun.Start(api)
 		Name = "Arrow2",
 		Text = "◀",
 		Font = Theme.Fonts.Bold,
-		TextSize = 52,
+		TextSize = 46,
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -8, 0.5, -3),
-		Size = UDim2.fromOffset(62, 62),
+		Position = UDim2.new(1, -6, 0.5, -3),
+		Size = UDim2.fromOffset(48, 56),
 		Parent = cue,
 		Children = { UIKit.TextStroke(0.2) },
 	})
@@ -359,7 +381,7 @@ function BobsledRun.Start(api)
 		Name = "Timing",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.new(1, -150, 0, 12),
+		Size = UDim2.new(1, -124, 0, 12),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		Parent = cue,
 		Children = { UIKit.Round() },
@@ -376,7 +398,7 @@ function BobsledRun.Start(api)
 	local crewRow = UIKit.new("Frame", {
 		Name = "Crew",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, hudY + (if touch then 132 else 122)),
+		Position = UDim2.new(0.5, shift, 0, hudY + barHeight + 90),
 		Size = UDim2.fromOffset(240, 34),
 		BackgroundTransparency = 1,
 		Visible = false,
@@ -398,7 +420,7 @@ function BobsledRun.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 40,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, hudY + (if touch then 172 else 164)),
+		Position = UDim2.new(0.5, shift, 0, hudY + barHeight + 130),
 		Size = UDim2.fromOffset(420, 48),
 		TextWrapped = false,
 		Visible = false,
@@ -425,7 +447,7 @@ function BobsledRun.Start(api)
 		TextSize = 30,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(0.5, barWidth / 2, 0, hudY + (if touch then 52 else 42)),
+		Position = UDim2.new(0.5, barWidth / 2, 0, hudY + barHeight + 12),
 		Size = UDim2.fromOffset(110, 36),
 		Visible = not touch, -- phones: the run bar's markers already show the order
 		Parent = hud,
@@ -643,6 +665,7 @@ function BobsledRun.Start(api)
 	local cueMode = ""
 	local leanEnabled = nil :: boolean?
 	local spraySet: { [string]: number } = {}
+	local rowMarkers: { { any } } = { {}, {} }
 
 	api:RenderStep(function(dt)
 		local run = course
@@ -655,7 +678,7 @@ function BobsledRun.Start(api)
 
 		-- Sleds and riders.
 		local order = {}
-		for _, info in sledInfo do
+		for sledIndex, info in sledInfo do
 			local team = info.T
 			local visual = visualOf(team)
 			local entry = snapshot[team]
@@ -739,13 +762,37 @@ function BobsledRun.Start(api)
 			end
 
 			local entryD = visual.D
-			local dot = marker(team)
+			local row = (sledIndex - 1) % 2 + 1
+			local dot = marker(team, row)
 			dot.Visible = true
-			dot.Position = UDim2.fromScale(math.clamp(entryD / run.Length, 0, 1), 0.5)
+			local list = rowMarkers[row]
+			table.insert(
+				list,
+				{ Dot = dot, X = math.clamp(entryD / run.Length, 0, 1) * trackWidth, Size = markerSize(team) }
+			)
 			table.insert(order, {
 				Team = team,
 				Score = if entry and entry.F then 1e6 - entry.F else entryD,
 			})
+		end
+		-- Two sleds level in one row sit side by side instead of on top of each other.
+		for _, list in rowMarkers do
+			table.sort(list, function(a, b)
+				return a.X < b.X
+			end)
+			for index = 2, #list do
+				local a, b = list[index - 1], list[index]
+				local gap = (a.Size + b.Size) / 2 + 2
+				if b.X - a.X < gap then
+					local middle = (a.X + b.X) / 2
+					a.X = middle - gap / 2
+					b.X = middle + gap / 2
+				end
+			end
+			for _, item in list do
+				item.Dot.Position = UDim2.new(0, item.X, 0.5, 0)
+			end
+			table.clear(list)
 		end
 		-- Leans from the snapshot (catches any event that arrived before the riders were known).
 		for _, entry in snapshot do
@@ -879,7 +926,7 @@ function BobsledRun.Start(api)
 				if touch
 					then "Lean with your crew on each ◀ ▶"
 					else "Lean with your crew: ◀ A / D ▶ when the arrow says",
-				hudY + (if touch then 216 else 214)
+				hudY + barHeight + 180
 			)
 		elseif hintUntil > 0 and os.clock() > hintUntil then
 			hintUntil = -1
