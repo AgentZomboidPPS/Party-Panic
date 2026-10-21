@@ -6,6 +6,9 @@
 -- Roblox volume (owner: "Music isn't working for my friend"): once in the lobby, once in a round.
 
 local ContentProvider = game:GetService("ContentProvider")
+local LogService = game:GetService("LogService")
+local PolicyService = game:GetService("PolicyService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
@@ -57,13 +60,59 @@ local function check(where: string)
 	})
 end
 
+-- Roblox's own words for why this device couldn't load a sound (its console lines about our sound
+-- ids, or about loading sounds at all), so the report says why, not just that it failed.
+local function soundMessages(ids: { string }): { string }
+	local found = {}
+	local ok, history = pcall(function()
+		return LogService:GetLogHistory()
+	end)
+	for _, entry in (if ok and type(history) == "table" then history else {}) do
+		local text = tostring(entry.message or "")
+		local lower = string.lower(text)
+		local ours = false
+		for _, id in ids do
+			if string.find(text, (string.gsub(id, "%D", "")), 1, true) then
+				ours = true
+				break
+			end
+		end
+		if ours or string.find(lower, "sound", 1, true) or string.find(lower, "audio", 1, true) then
+			table.insert(found, string.sub(text, 1, 200))
+			if #found >= 6 then
+				break
+			end
+		end
+	end
+	return found
+end
+
+-- The account's content policy flags (some audio rules depend on the player's age and region).
+local function policyFlags(): string
+	local ok, info = pcall(function()
+		return PolicyService:GetPolicyInfoForPlayerAsync(Players.LocalPlayer)
+	end)
+	if not ok or type(info) ~= "table" then
+		return "?"
+	end
+	local flags = {}
+	for key, value in info do
+		if type(value) == "boolean" then
+			table.insert(flags, `{key}={if value then 1 else 0}`)
+		end
+	end
+	table.sort(flags)
+	return table.concat(flags, " ")
+end
+
 local function checkSounds(where: string)
-	local sounds, seen = {}, {}
+	local sounds, seen, ids = {}, {}, {}
 	for _, sound in SoundService:GetChildren() do
 		local id = sound:IsA("Sound") and sound.SoundId
 		if id and string.find(id, "rbxassetid://", 1, true) and not seen[id] then
 			seen[id] = true
 			table.insert(sounds, sound)
+			table.insert(ids, id)
 		end
 	end
 	local failed = {}
@@ -94,6 +143,8 @@ local function checkSounds(where: string)
 		Touch = UserInputService.TouchEnabled,
 		Music = music,
 		Master = master,
+		Messages = if next(failed) then soundMessages(ids) else nil,
+		Policy = if next(failed) then policyFlags() else nil,
 	})
 end
 
