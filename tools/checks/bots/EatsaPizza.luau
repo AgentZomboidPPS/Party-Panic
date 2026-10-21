@@ -7,7 +7,7 @@ return function(env)
 	local ctx = env.ctx
 	local mode = env.game
 	local Logic = mode.Logic -- (this file is bundled as is: it reaches the shared rules through the mode)
-	local targets = {}
+	local targets, stages = {}, {}
 	local bites = 0
 	local reported = {}
 	return function(elapsed)
@@ -46,7 +46,12 @@ return function(env)
 						end
 					end
 					targets[player] = target
-					if target then
+				end
+				-- (Steps in as the slice is bitten back towards its tip.)
+				local stage = target and mode.slices[target].Stage
+				if target and stages[player] ~= `{target}:{stage}` then
+					stages[player] = `{target}:{stage}`
+					do
 						local slice = mode.slices[target]
 						local spot = mode.center
 							+ Logic.StandSpot(target, slice.Stage, mode.radius, (index % 3) - 1)

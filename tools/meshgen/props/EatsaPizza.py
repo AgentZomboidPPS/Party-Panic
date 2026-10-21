@@ -321,11 +321,15 @@ def boxes():
         parts.append(box)
         y += 0.64
     angle = float(rng.uniform(-9, 9))
-    tri = [(0.0, 1.5), (-1.25, -1.2), (1.25, -1.2)]
-    slice_mark = extrude(tri, 0.06).rotate("x", 90).rotate("y", angle).translate(0, y + 0.0, 0)
-    ring = torus(2.2, 0.08, 40, 6).rotate("y", angle).translate(0, y + 0.01, 0)
-    dots = [cylinder(0.25, 0.06, 12).translate(dx, y - 0.02, dz) for dx, dz in ((-0.3, 0.2), (0.35, -0.3), (0.0, -0.75))]
-    return {"Box": merge(*parts), "Print": merge(slice_mark, ring), "Dots": merge(*dots)}
+    # The print: a round pizza with its cuts and pepperoni dots.
+    ring = torus(2.0, 0.1, 40, 6).rotate("y", angle).translate(0, y + 0.01, 0)
+    cuts = [rounded_box(3.7, 0.05, 0.12, 0.02, 2).rotate("y", angle + a).translate(0, y + 0.0, 0) for a in (0, 60, 120)]
+    dots = []
+    for k in range(6):
+        a = math.radians(angle + 30 + 60 * k)
+        r = 1.15 if k % 2 == 0 else 0.7
+        dots.append(cylinder(0.28, 0.06, 12).translate(math.cos(a) * r, y - 0.02, math.sin(a) * r))
+    return {"Box": merge(*parts), "Print": merge(ring, *cuts), "Dots": merge(*dots)}
 
 
 def sign():

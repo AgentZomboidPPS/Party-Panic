@@ -144,7 +144,7 @@ return function(h)
 		},
 		EatsaPizzaBoxes = {
 			Height = 3.28,
-			AssetId = 138877878586759,
+			AssetId = 92008186134295,
 			Palette = { Box = h.rgb(214, 176, 120), Print = h.rgb(210, 40, 40), Dots = h.rgb(210, 40, 40) },
 			Materials = { Box = Enum.Material.Cardboard, Print = smooth, Dots = smooth },
 			Fallback = function(m)

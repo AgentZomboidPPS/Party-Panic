@@ -113,7 +113,7 @@ function EatsaPizza:_buildArena()
 	local R = self.radius
 	local scale = self.scale
 	local floorY = c.Y - 0.6
-	local H = math.max(R + 42, 72) -- half the roof's width
+	local H = math.max(R + 32, 60) -- half the roof's width
 
 	-- The pan (the floor everyone stands on: a plain, visible part), its rolled rim, the roof.
 	local panRadius = PAN_RIM * scale
@@ -144,7 +144,7 @@ function EatsaPizza:_buildArena()
 		Build.Decor({
 			Name = "Seam",
 			Size = Vector3.new(H * 2 - 4, 0.06, 0.5),
-			CFrame = CFrame.new(c.X, floorY + 0.03, c.Z + k * (H / 3.5)),
+			CFrame = CFrame.new(c.X, floorY + 0.08, c.Z + k * (H / 3.5)),
 			Color = rgb(150, 140, 130),
 			Material = Enum.Material.Concrete,
 			Parent = arena,
@@ -161,7 +161,7 @@ function EatsaPizza:_buildArena()
 	-- The parapet round the roof.
 	for _, side in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
 		local x, z = side[1], side[2]
-		local size = if x ~= 0 then Vector3.new(2, 4, H * 2 + 2) else Vector3.new(H * 2 + 2, 4, 2)
+		local size = if x ~= 0 then Vector3.new(2, 4, H * 2 - 3.4) else Vector3.new(H * 2 + 2, 4, 2)
 		local position = Vector3.new(c.X + x * H, floorY + 2, c.Z + z * H)
 		Build.Part({
 			Name = "Parapet",
@@ -289,7 +289,7 @@ function EatsaPizza:_buildArena()
 			Build.Decor({
 				Name = "TeamArc",
 				Size = Vector3.new((t1 - t0) * r, 0.1, 1.1),
-				CFrame = CFrame.lookAt(Vector3.new(p.X, floorY + 0.06, p.Z), Vector3.new(c.X, floorY + 0.06, c.Z)),
+				CFrame = CFrame.lookAt(Vector3.new(p.X, floorY + 0.15, p.Z), Vector3.new(c.X, floorY + 0.15, c.Z)),
 				Color = color,
 				Material = Enum.Material.Neon,
 				Parent = arena,
