@@ -82,6 +82,13 @@ function Api.new(id: string)
 		Parent = playerGui,
 	})
 	self.Janitor:Add(self.Gui)
+	-- Hidden while the round's rules card is up (RoundController sets PP_RulesShowing), so the mode's
+	-- scores and meters never cover the rules; they appear with the 3-2-1.
+	local function syncWithRules()
+		self.Gui.Enabled = self.Player:GetAttribute("PP_RulesShowing") ~= true
+	end
+	syncWithRules()
+	self.Janitor:Add(self.Player:GetAttributeChangedSignal("PP_RulesShowing"):Connect(syncWithRules))
 	-- Parts the client half creates go here (removed with the round).
 	local world = Instance.new("Folder")
 	world.Name = "MiniGameClient"
