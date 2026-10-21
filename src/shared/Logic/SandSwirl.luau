@@ -30,7 +30,7 @@ SandSwirl.EDGE = 1.5 -- a walker's drift fades out over this distance either sid
 SandSwirl.LIP = 6 -- width of the extra suction ring round the hole (walkers only)
 SandSwirl.LIP_PULL = 3.5 -- extra inward speed at the very edge of the hole
 SandSwirl.WALK_SPIN = 0.4 -- walkers slide round with this much of the sand's spin (treasure rides all of it)
-SandSwirl.TREASURE_DRAIN = 2.4 -- treasure slides down this much faster than the sand drags a walker
+SandSwirl.TREASURE_DRAIN = 3 -- treasure slides down this much faster than the sand drags a walker
 SandSwirl.AIR_DRAG = 0.6 -- how much of the drag still reaches someone in the air (hopping isn't a free pass)
 SandSwirl.MIN_V = 0.4
 

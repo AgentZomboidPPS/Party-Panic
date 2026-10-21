@@ -491,7 +491,7 @@ function SinkingSands:_spawnItem(kind: number, radius: number?)
 	local item = {
 		Id = self.nextId,
 		Kind = kind,
-		R = round(radius or rng:NextNumber(13, SandSwirl.RIM - 3), 3),
+		R = round(radius or rng:NextNumber(11, SandSwirl.RIM - 4), 3),
 		A = round(rng:NextNumber(-math.pi, math.pi), 4),
 		T = round(now + FALL_TIME, 3),
 	}
