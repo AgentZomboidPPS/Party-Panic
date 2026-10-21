@@ -4,6 +4,8 @@
 -- Phones (owner: "Wtf is this mobile Ui lol"): the rules card sits in the upper middle under the
 -- tip, sized for a phone; the standings take the profile pill's corner (top three, or you); the
 -- "you're out" pill sits low between the thumbstick's corner and the jump button.
+-- The rules card and the 3-2-1 are for the round's players only: someone sitting it out (or who
+-- arrived mid-round) watches from the lobby, with a line under the banner (HudController).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -449,13 +451,19 @@ function RoundController.Start(context)
 	GameState.Changed("Phase", function(phase)
 		rules.Visible = false
 		outPanel.Visible = false
-		if phase == "Preparing" then
+		if phase == "Preparing" and State.InRound() then
 			showRules()
-		elseif phase == "InRound" then
+		elseif phase == "InRound" and State.InRound() then
 			flashCountdown("GO!", Theme.Colors.Green)
 		end
 		board.Visible = phase == "InRound"
 		refreshHighlights()
+	end)
+	-- The round's players get PP_InRound as it's set up; it can land just after the phase does.
+	player:GetAttributeChangedSignal("PP_InRound"):Connect(function()
+		if GameState.Get("Phase") == "Preparing" and State.InRound() and not rules.Visible then
+			showRules()
+		end
 	end)
 
 	player:GetAttributeChangedSignal("PP_Alive"):Connect(function()
@@ -476,7 +484,7 @@ function RoundController.Start(context)
 		local phase = GameState.Get("Phase")
 		if phase == "Preparing" then
 			local second = math.ceil(GameState.TimeLeft())
-			if second ~= lastSecond and second <= 3 and second >= 1 then
+			if second ~= lastSecond and second <= 3 and second >= 1 and State.InRound() then
 				rules.Visible = false
 				flashCountdown(tostring(second), Theme.Colors.Yellow)
 			end

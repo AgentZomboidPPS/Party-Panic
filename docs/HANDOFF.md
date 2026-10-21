@@ -1,7 +1,13 @@
 # Handoff: Party Panic (for the Claude joining the project)
 
-Written for a second Claude that joins while the first one keeps working. Last updated: **2026-10-21 13:20 UTC
-(9:20 AM Eastern)**; the final update lands by **12:55 PM Eastern (16:55 UTC)**.
+Written for a second Claude that joins while the first one keeps working. Last updated: **2026-10-21 16:40 UTC
+(12:40 PM Eastern)**. Live: **version 27**. Session A keeps updating this file as its lanes land.
+
+**At a glance (12:40 PM ET):** all 11 precision games have fair hitboxes (live). Six Session A agents are still working
+(payoffs + low currency, sit-out toggle, lobby obby, Skee-Ball, Sinking Sands bots, Skate Escape start float); Session A
+merges, tests and publishes each as it lands. Open with the owner: friends' audio (waiting on a device report), the store
+description (owner pastes it, or adds a key scope), icon/thumbnails (owner uploads). Free for Session B: games 13-25 and
+per-game music (section 2).
 
 - **Session A** is the Claude that wrote this. It keeps its current lanes until they are finished (owner: "you can finish
   all work in here. I just want to make the other claude work on other things").
@@ -38,14 +44,18 @@ Written for a second Claude that joins while the first one keeps working. Last u
 
 | Lane | Status | Files |
 | --- | --- | --- |
-| Hitbox pass for 10 games (agents in worktrees, branches `hit/<Id>`) | running; merging as they land | `src/server/MiniGames/<Id>.luau`, `src/client/MiniGames/<Id>.luau`, `src/server/MiniGames/Bots/<Id>.luau`, `tools/checks/bots/<Id>.luau` for FireRope, ArrowAmbush, SkateEscape, BumperBallers, HexMeltdown, SinkingSands, CrazyCutters, PumpAndPop, CakeFactory, BobsledRun (RakeItIn is done) |
-| Sinking Sands diver bots (owner: "Bots are terrible at this game") and the Skate Escape start float (owner: the character floats onto the bridge during the countdown and at GO) | after their hitbox merges | same mode files |
-| Lobby obby rebuild + scenery not climbable (agent, branch `lobby/obby`) | running | `src/server/World/LobbyBuilder.luau` (buildParkour, scenery placement), `src/client/Controllers/MovementController.luau` |
-| Skee-Ball arcade in the lobby (agent, branch `lobby/skeeball`) | running | a new arcade module + props, a one-line hook in LobbyBuilder, a new SkeeBallController |
-| "Sit out next round" toggle (agent, branch `feature/sitout`) | running | `src/server/Services/RoundManager.luau`, `VotingService.luau`, `src/client/Controllers/HudController.luau`, `VoteController.luau`, settings UI |
-| Long-term payoffs + low currency (agent, branch `feature/payoffs`) | running | `src/shared/Config.luau` (rewards), `Cosmetics.luau`, `QuestDefinitions.luau`, `src/shared/Logic/{RewardLogic,LevelCurve,DailyLogic,QuestLogic}.luau`, `src/server/Services/{DataService,Economy,RewardService,ShopService,CosmeticService,QuestService}.luau`, `CommerceConfig`, Shop/Quest/Results controllers, level-up UI |
-| Friends can't hear our music (see section 6) | waiting for the friend's device report | `src/client/Controllers/AudioController.luau`, `AssetReportController.luau`, `src/server/Services/ClientReports.luau`, `src/shared/AudioAssets.luau`, `Sounds.luau` |
-| Store description (blocked by Roblox's firewall, see section 6) and publishing the place | ongoing | `tools/publish_place.py`, `docs/STORE_DESCRIPTION.txt` |
+| Hitbox pass for all 11 precision games | **done, live in version 24** (each game's commit message says what changed) | the mini-game files are free again, except the two rows below |
+| Sinking Sands diver bots (owner: "Bots are terrible at this game") (agent; worktree `.claude/worktrees/bots-SinkingSands`, branch `bots/SinkingSands`) | started (investigating why divers score 0-4) | `src/server/MiniGames/Bots/SinkingSands.luau` and the other Sinking Sands files |
+| Skate Escape start float (owner: the character floats onto the bridge "on the countdown and go") | **fixed, live in version 26** (skaters are held on their boards on the start line until GO, then handed back to their device) | free again |
+| Lobby obby rebuild + scenery not climbable (agent; branch `lobby/obby`) | first WIP committed: a goo-pool course with checkpoints, foliage that never collides | `src/server/World/LobbyBuilder.luau` (buildParkour, scenery placement), `src/client/Controllers/MovementController.luau` |
+| Skee-Ball arcade in the lobby (agent; branch `lobby/skeeball`) | WIP: the shared ball path (roll, hop, flight, rings) is in; machine, props and UI in progress | a new arcade module + props, a one-line hook in LobbyBuilder, a new SkeeBallController |
+| "Sit out next round" toggle | **done, live in version 27**: a PLAYING / SITTING OUT switch by the phase banner and in Settings (`SitOutService`, `Logic/Roster`, `PP_SitOut`); sitting-out players don't vote or play, and rounds pause if everyone sits out | free again |
+| Long-term payoffs + low currency (agent; branch `feature/payoffs`) | WIP: low coin scale, Rewards Road, career milestones, celebrations | `src/shared/Config.luau` (rewards), `Cosmetics.luau`, `QuestDefinitions.luau`, `src/shared/Logic/{RewardLogic,LevelCurve,DailyLogic,QuestLogic}.luau`, `src/server/Services/{DataService,Economy,RewardService,ShopService,CosmeticService,QuestService}.luau`, `CommerceConfig`, Shop/Quest/Results controllers, level-up UI |
+| Friends can't hear our music (section 6) | waiting for the friend's report from version 25 | `src/client/Controllers/AudioController.luau`, `AssetReportController.luau`, `src/server/Services/ClientReports.luau`, `src/shared/AudioAssets.luau`, `Sounds.luau` |
+| Publishing the place | Session A publishes after each merge | `tools/publish_place.py` |
+
+The agents' branches and worktrees exist only in Session A's container (they're merged into
+`claude/quirky-hopper-5yk8zk` and pushed as they finish), so you won't see them on GitHub until then.
 
 **What's free for you:**
 
@@ -129,19 +139,27 @@ grants asset permissions; prints the version; the settings PATCH warning at the 
 - **Friends can't hear our music.** The friend's phone (version 22) failed to load all 4 uploaded sounds (both lobby
   tracks, the round track, the effects sprite) while all 146 meshes loaded; the owner's devices play them. Checked: all 4
   are Approved and Active, owned by the game's owner; the game's Use grant succeeds (re-granted today); audio can't be made
-  Open Use (the API answers InvalidRequest). Version 23 reports Roblox's exact console reason from the failing device;
-  next step is to read `client_reports.py` after the friend joins, then fix accordingly.
-- **Store description:** the new text is ready in `docs/STORE_DESCRIPTION.txt`. The place-settings PATCH has no scope;
-  the universe PATCH works for other fields but returns "WAF Blocked Request" for this text (tried with `1 or 2` spelled
-  out; still blocked). If it can't be found, the owner pastes it (Creator Hub > Configure > Basic Settings), and removes
-  the trailing space in the name "Party Panic ".
+  Open Use (the API answers InvalidRequest). Since version 23 a failing device reports Roblox's own console lines and its
+  account policy flags; version 25 also loads a public Roblox library track (APM "Bossa Nova Party", 1845764031) as a
+  control. Next: the friend joins version 25 in a fresh server (old servers keep their version; the owner restarts them in
+  the Creator Hub) and waits ~40 s in the lobby; then `python3 tools/checks/client_reports.py` shows the reason. If the
+  library track plays and ours don't, Roblox refuses our uploads for that player; if neither plays, it's their device or
+  account. Asked the owner whether the friend hears music in other games and is under 13 or parental controls.
+- **Store description:** the new text is ready in `docs/STORE_DESCRIPTION.txt`, but our key can't set it. Roblox only
+  saves a description through the place (`PATCH cloud/v2/universes/{u}/places/{p}`), which answers 403 "Scope not
+  authorized" for this key. The universe PATCH answers 200 for a description but stores nothing (the live text is still
+  the old one), and its firewall rejects long multi-line texts anyway. So: the owner pastes it (Creator Hub > Configure >
+  Basic Settings) and removes the trailing space in the name "Party Panic ", or adds **universe.place (write)** for this
+  experience to the API key, after which every `publish_place.py` sets the name and description.
 - **Icon and thumbnails:** done (`assets/store/`, sent to the owner); the owner uploads them by hand.
 
 ## 7. Recent history (what's live)
 
-Version **23** (published 13:05 UTC today) has the 12 games below, the carnival Pump & Pop arena, Rake It In's fair rakes,
-rounds 5-10 s longer, players always sent back to the lobby after Bobsled Run, every prop facing outward (the black Hex
-Meltdown flag fixed), sound reports. Games: Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking
+Version **24** (published 16:15 UTC today) has the 12 games below, fair hitboxes in all 11 precision games (Honey Trap is
+turn-based), the carnival Pump & Pop arena, rounds 5-10 s longer, players always sent back to the lobby after Bobsled Run,
+every prop facing outward (the black Hex Meltdown flag fixed), and sound reports. Known phone-HUD nits from the last test
+rounds: Skate Escape's progress-bar racer numbers overlap when riders are side by side, Bumper Ballers' "X" sits over the
+rider icon of a knocked-out rider, and the Sinking Sands Sand King hint wraps to two lines (being fixed with the bots). Games: Fire Rope, Hex Meltdown, Honey Trap, Bumper Ballers, Skate Escape, Sinking
 Sands, Arrow Ambush, Pump & Pop, Rake It In, Crazy Cutters, Cake Factory, Bobsled Run. All hold 12 players (each has a
 clean 12-player test round).
 

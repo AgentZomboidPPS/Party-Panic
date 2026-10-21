@@ -79,6 +79,7 @@ local function clean(report: any): { [string]: any }?
 		Master = number(report.Master),
 		Messages = messages(report.Messages),
 		Policy = if type(report.Policy) == "string" then string.sub(report.Policy, 1, 400) else nil,
+		Control = if type(report.Control) == "string" then string.sub(report.Control, 1, 24) else nil,
 		Time = os.time(),
 		Version = Config.Version,
 		PlaceVersion = game.PlaceVersion,

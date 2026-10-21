@@ -2,6 +2,8 @@
 -- (design doc §6 and §14 "VotingService"). Players vote with the cards on screen (the CastVote
 -- remote); the stage's portals only show a preview of each option (owner: "the portals being how
 -- you vote is dumb. maybe we make the portal do a little video of what the game actually is?").
+-- Only people who'll play the next round vote: someone sitting out (SitOutService) can't, and the
+-- vote they had goes when they sit out; the vote cards say why (VoteController).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,6 +21,7 @@ local DataService = require(script.Parent.DataService)
 local Notifier = require(script.Parent.Notifier)
 local QuestService = require(script.Parent.QuestService)
 local RateLimiter = require(script.Parent.RateLimiter)
+local SitOutService = require(script.Parent.SitOutService)
 local Telemetry = require(script.Parent.Telemetry)
 
 local VotingService = {}
@@ -112,6 +115,9 @@ function VotingService.Cast(player: Player, index: any): boolean
 	if BotRegistry.IsBot(player) then
 		return false -- only people pick the next game (owner: "remove the option for bots voting"); bots play whatever wins
 	end
+	if SitOutService.IsSittingOut(player) then
+		return false -- taking a break: only the people who'll play pick the game
+	end
 	if not DataService.Get(player) then
 		return false -- profile still loading
 	end
@@ -171,16 +177,28 @@ function VotingService.Init()
 			VotingService.Cast(player, index)
 		end
 	end)
-	local function forget(player: any)
+	local function dropVote(player: any)
 		if votes[player] then
 			votes[player] = nil
 			if active then
 				publishCounts()
 			end
 		end
-		votedThisRound[player] = nil
 	end
-	Players.PlayerRemoving:Connect(forget)
+	Players.PlayerRemoving:Connect(function(player)
+		dropVote(player)
+		votedThisRound[player] = nil
+	end)
+	-- Sitting out mid-vote takes the vote back. It still counted for their quest and stats, so
+	-- coming back and voting again in the same vote doesn't count twice.
+	SitOutService.Changed:Connect(function(player, sitOut)
+		if sitOut then
+			dropVote(player)
+			if player.Parent then
+				player:SetAttribute("PP_Vote", 0)
+			end
+		end
+	end)
 end
 
 return VotingService

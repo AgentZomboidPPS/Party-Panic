@@ -22,6 +22,10 @@ local AudioController = require(script.Parent.AudioController)
 local AssetReportController = {}
 
 local MAX_CHECKED = 300
+-- A free public track from Roblox's own music library (APM, "Bossa Nova Party"): if this loads on a
+-- device where ours don't, Roblox is refusing our uploads there; if it fails too, that device or
+-- account can't load game audio at all.
+local CONTROL_SOUND = "rbxassetid://1845764031"
 
 local reported: { [string]: boolean } = {} -- content ids already checked on this device
 
@@ -115,14 +119,23 @@ local function checkSounds(where: string)
 			table.insert(ids, id)
 		end
 	end
+	local control = Instance.new("Sound")
+	control.SoundId = CONTROL_SOUND
+	local controlStatus = "?"
 	local failed = {}
 	pcall(function()
-		ContentProvider:PreloadAsync(sounds, function(id: string, status: Enum.AssetFetchStatus)
-			if status ~= Enum.AssetFetchStatus.Success and id ~= "" then
-				failed[id] = status.Name
+		ContentProvider:PreloadAsync(
+			{ control, table.unpack(sounds) },
+			function(id: string, status: Enum.AssetFetchStatus)
+				if id == CONTROL_SOUND then
+					controlStatus = status.Name
+				elseif status ~= Enum.AssetFetchStatus.Success and id ~= "" then
+					failed[id] = status.Name
+				end
 			end
-		end)
+		)
 	end)
+	control:Destroy()
 	-- Loudness rises and falls with the beat, so keep the loudest of a few samples.
 	local music = AudioController.Status()
 	for _ = 1, 8 do
@@ -143,6 +156,7 @@ local function checkSounds(where: string)
 		Touch = UserInputService.TouchEnabled,
 		Music = music,
 		Master = master,
+		Control = controlStatus,
 		Messages = if next(failed) then soundMessages(ids) else nil,
 		Policy = if next(failed) then policyFlags() else nil,
 	})

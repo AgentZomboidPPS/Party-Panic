@@ -3,8 +3,9 @@
 --
 -- While anyone is here, the server keeps Config.Bots.FillTo participants: when a player joins, a
 -- bot fades out to make room (right away from the lobby, or after its round if it's playing one);
--- when a player leaves, a bot fades in. Bots are clearly labelled (🤖 name and a BOT tag), never
--- earn rewards and never save data.
+-- when a player leaves, a bot fades in. Someone sitting out (SitOutService) leaves their spot to
+-- a bot the same way. Bots are clearly labelled (🤖 name and a BOT tag), never earn rewards and
+-- never save data.
 --
 -- A bot is a table that looks like a Player to the round code (Name, DisplayName, UserId < 0,
 -- Character, Parent, attributes, CharacterAdded, LoadCharacterAsync), so RoundContext and every
@@ -28,6 +29,7 @@ local Signal = require(Shared.Signal)
 
 local BotRegistry = require(script.Parent.BotRegistry)
 local Notifier = require(script.Parent.Notifier)
+local SitOutService = require(script.Parent.SitOutService)
 
 local BotService = {}
 
@@ -519,11 +521,20 @@ local function enabled(): boolean
 end
 
 function BotService.Desired(): number
-	local real = #Players:GetPlayers()
-	if not enabled() or real == 0 then
+	local players = Players:GetPlayers()
+	if not enabled() or #players == 0 then
 		return 0
 	end
-	return math.clamp(Config.Bots.FillTo - real, 0, Config.Bots.MaxBots)
+	-- People sitting out leave their spot to a bot. While everyone's on a break there's no round
+	-- to fill, so the lobby keeps its usual crowd.
+	local playing = 0
+	for _, player in players do
+		if not SitOutService.IsSittingOut(player) then
+			playing += 1
+		end
+	end
+	local people = if playing > 0 then playing else #players
+	return math.clamp(Config.Bots.FillTo - people, 0, Config.Bots.MaxBots)
 end
 
 local lastArrival = 0

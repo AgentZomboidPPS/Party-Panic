@@ -20,6 +20,15 @@
 -- only once no wheel is left on the planks, boost pads wherever a wheel touches (Shared/Logic/
 -- SkateCourse). A jump counts from the spot the player pressed it on their own screen, and the
 -- collapse allows for how far ahead their screen draws them, so ping never decides a wipeout or a fall.
+--
+-- The start (owner: "it spawns you when the game starts not on the bridge and you kinda just float to
+-- the bridge", on the countdown and at GO): every skater is put exactly where their own screen draws
+-- them (their lane, the start line, on the board at their avatar's riding height) and held there by
+-- the server until GO: anchored, so neither gravity, nor a late position report from a phone still
+-- loading the arena, nor the order things arrive in can move them on anyone's screen. At GO each is
+-- let go from that same spot: a player's character goes back to their own device, a bot's stays the
+-- server's (anchoring drops the owner a part was given, and Roblox would hand the bot to the nearest
+-- player's device, which then fights the server over where it is).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
@@ -706,6 +715,55 @@ function SkateEscape:_attachBoard(player: any, character: Model)
 	board.Parent = character
 end
 
+-- Where a skater's root goes at distance `d`, standing on their board: the same spot their own
+-- screen holds them at (client: StanceCFrame with RootHeight), so placing them here never moves them.
+function SkateEscape:_spot(racer, humanoid: Humanoid, root: BasePart, d: number): CFrame
+	local x = SkateCourse.LaneX(racer.Lane, LANES)
+	return SkateCourse.StanceCFrame(self.origin, x, d, SkateCourse.RootHeight(humanoid, root), 0)
+end
+
+-- Puts a skater on their board at their lane's start (or where they are on the course, if they only
+-- got a character after GO). Before GO they're held there: anchored, so the server decides where
+-- everyone sees them until the race starts, and nothing (gravity, a late position report from their
+-- device, a slow phone) can move them in the meantime. PlatformStand: the humanoid mustn't try to
+-- stand up on its own either, here or on their device.
+function SkateEscape:_seat(player: any, character: Model)
+	local racer = self.racers[tostring(player.UserId)]
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not racer or not humanoid or not root then
+		return
+	end
+	character:PivotTo(self:_spot(racer, humanoid, root, if self.startAt then racer.D else 0))
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+	humanoid.PlatformStand = true
+	if not self.startAt then
+		root.Anchored = true
+	end
+	racer.Character = character
+	self:_attachBoard(player, character)
+end
+
+-- GO: lets a skater's character go from the spot it was held at. A player's goes back to their own
+-- device (which skates it from there: nothing moves until they push); a bot's stays the server's,
+-- which moves it: anchoring dropped the owner it was given, and Roblox would otherwise give it to the
+-- nearest player's device.
+function SkateEscape:_release(racer)
+	local ctx = self.context
+	local _, _, root = ctx:GetCharacter(racer.Player)
+	if not root then
+		return
+	end
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.Anchored = false
+	if racer.IsBot then
+		pcall(root.SetNetworkOwner, root, nil)
+	else
+		ctx:GiveOwnership(root, racer.Player)
+	end
+end
+
 function SkateEscape:Prepare()
 	local ctx = self.context
 	ctx.RespawnMode = "Eliminate"
@@ -739,8 +797,12 @@ function SkateEscape:Prepare()
 		racer.Leeway = 0
 		self.racers[tostring(player.UserId)] = racer
 		lanes[tostring(player.UserId)] = lane
-		local x = SkateCourse.LaneX(lane, LANES)
-		points[index] = SkateCourse.StanceCFrame(self.origin, x, 0, 0, 0)
+		-- Straight onto their board (SpawnPlayer lifts the point 3 studs); a character that loads
+		-- meanwhile is put right by CharacterReady.
+		local _, humanoid, root = ctx:GetCharacter(player)
+		points[index] = if humanoid and root
+			then self:_spot(racer, humanoid, root, 0) - Vector3.new(0, 3, 0)
+			else SkateCourse.StanceCFrame(self.origin, SkateCourse.LaneX(lane, LANES), 0, 0, 0)
 	end
 
 	local obstacles = {}
@@ -756,7 +818,7 @@ function SkateEscape:Prepare()
 	})
 
 	ctx.Hooks.CharacterReady = function(player, character)
-		self:_attachBoard(player, character)
+		self:_seat(player, character)
 	end
 	ctx.Hooks.PlayerLeft = function(player)
 		self.racers[tostring(player.UserId)] = nil
@@ -771,17 +833,7 @@ function SkateEscape:Prepare()
 			racer.Pending = nil
 		end
 	end
-	ctx:SpawnAll(points, true)
-	-- Bots wait on their boards in the skating stance (held still until GO).
-	for _, racer in self.racers do
-		if racer.IsBot then
-			local _, _, root = ctx:GetCharacter(racer.Player)
-			if root then
-				root.Anchored = true
-				self:_moveBot(racer, ctx:Now())
-			end
-		end
-	end
+	ctx:SpawnAll(points, true) -- everyone waits on their board, held still until GO (CharacterReady)
 	self:_share() -- the progress bar shows every lane during the countdown
 	self.status = nil
 	ctx:SetStatus("Get ready to PUSH!")
@@ -819,17 +871,21 @@ end
 function SkateEscape:Start()
 	local ctx = self.context
 	local now = ctx:Now()
+	-- Everyone is let go from their start spot before the race's schedule goes out, so a client
+	-- that can push (it knows the collapse) already holds its own skater.
+	for _, racer in self.racers do
+		if not ctx:State(racer.Player) then
+			continue -- never placed (their character didn't load): not in this round
+		end
+		local character = ctx:GetCharacter(racer.Player)
+		if character and character ~= racer.Character then
+			self:_seat(racer.Player, character) -- reset during the countdown: back on the start line
+		end
+		self:_release(racer)
+	end
 	self.startAt = now
 	self.collapse = SkateCourse.NewCollapse(now)
 	ctx:SetSharedJSON("Collapse", self.collapse)
-	for _, racer in self.racers do
-		if racer.IsBot then
-			local _, _, root = ctx:GetCharacter(racer.Player)
-			if root then
-				root.Anchored = false
-			end
-		end
-	end
 
 	-- Pushes are capped by a small bucket (PUSH_RATE a second on average, a few at once) rather than
 	-- a fixed gap, so taps the network bunched together aren't dropped.
@@ -905,6 +961,11 @@ end
 function SkateEscape:_moveBot(racer, now: number)
 	local character, humanoid, root = self.context:GetCharacter(racer.Player)
 	if not character or not humanoid or not root then
+		return
+	end
+	if racer.Character and character ~= racer.Character then
+		-- A new character: a fallen bot is sent back to the lobby 1.2 s after it went in, while its
+		-- fall is still drawn here, and this used to drag that lobby character back over the canyon.
 		return
 	end
 	local d, lift, tumble, drop = SkateCourse.Pose(racer, now)
