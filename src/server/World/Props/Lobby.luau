@@ -56,7 +56,7 @@ return function(h)
 		},
 		LobbyDuck = {
 			Height = 1.84,
-			AssetId = 74470210815224,
+			AssetId = 126905865176551,
 			Palette = { Body = rgb(255, 220, 60), Beak = rgb(255, 140, 40), Eyes = rgb(30, 30, 40) },
 			Fallback = function(m)
 				h.blob(m, "Body", Vector3.new(1.5, 1.1, 1.9), Vector3.new(0, 0.6, 0.1))
@@ -68,7 +68,7 @@ return function(h)
 		-- center). Cabins are separate props that hang from it.
 		LobbyFerrisWheel = {
 			Height = 65.6,
-			AssetId = 88182193623483,
+			AssetId = 117553986418264,
 			Palette = { Frame = rgb(255, 92, 150), Hub = rgb(255, 204, 64), Lights = rgb(255, 240, 170) },
 			Materials = { Lights = Enum.Material.Neon, Hub = Enum.Material.Metal },
 			Fallback = function(m)
@@ -89,7 +89,7 @@ return function(h)
 		-- A gondola; its hang point is the top center.
 		LobbyFerrisCabin = {
 			Height = 7.57,
-			AssetId = 111211960745502,
+			AssetId = 123860185649714,
 			Palette = { Body = rgb(64, 196, 255), Roof = rgb(255, 255, 255), Frame = rgb(255, 204, 64) },
 			Fallback = function(m)
 				h.rounded(m, "Body", Vector3.new(4.4, 2.6, 3.4), 0.7, Vector3.new(0, 1.3, 0))
@@ -100,7 +100,7 @@ return function(h)
 		-- Two A-frames on a boarding deck; the axle is 43 above the base.
 		LobbyFerrisStand = {
 			Height = 44.7,
-			AssetId = 117892845639225,
+			AssetId = 80815460183700,
 			Palette = { Legs = rgb(156, 108, 255), Base = rgb(255, 255, 255), Trim = rgb(255, 204, 64) },
 			Fallback = function(m)
 				h.rounded(m, "Base", Vector3.new(40, 1.2, 20), 0.5, Vector3.new(0, 0.6, 0.625))
@@ -119,7 +119,7 @@ return function(h)
 		},
 		LobbyHotAirBalloon = {
 			Height = 26.7,
-			AssetId = 94475873613483,
+			AssetId = 132548190259649,
 			Shadow = false,
 			Palette = {
 				Envelope = rgb(255, 92, 150),
@@ -180,7 +180,7 @@ return function(h)
 		-- A string of pennants 24 long along X; the ends are at the top.
 		LobbyBunting = {
 			Height = 4.05,
-			AssetId = 119208941276430,
+			AssetId = 126353407929177,
 			Shadow = false,
 			Palette = {
 				Rope = rgb(250, 250, 250),
@@ -198,6 +198,21 @@ return function(h)
 						Vector3.new(index * 4.5, 3.0, 0)
 					)
 				end
+			end,
+		},
+		-- A beach ball 5 across, for kicking around the plaza (LobbyService keeps them in play).
+		LobbyBeachBall = {
+			Height = 5,
+			AssetId = 89021070042620,
+			Palette = {
+				White = rgb(255, 255, 255),
+				GoreA = rgb(255, 70, 90),
+				GoreB = rgb(60, 160, 255),
+				GoreC = rgb(255, 210, 50),
+				Cap = rgb(255, 70, 90),
+			},
+			Fallback = function(m)
+				h.ball(m, "GoreA", 5, Vector3.new(0, 2.5, 0))
 			end,
 		},
 	}

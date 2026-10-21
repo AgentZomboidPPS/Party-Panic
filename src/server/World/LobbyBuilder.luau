@@ -37,6 +37,7 @@ export type LobbyRefs = {
 	TokenSpots: { Vector3 },
 	Targets: { BasePart },
 	TargetBoard: TextLabel,
+	BallSpots: { Vector3 },
 }
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -48,6 +49,7 @@ local PALETTE = {
 	Grout = rgb(238, 226, 212),
 	Curb = rgb(250, 242, 228),
 	Trim = rgb(255, 204, 64),
+	Backdrop = rgb(80, 50, 164),
 	Stage = rgb(92, 64, 168),
 	StageDark = rgb(52, 36, 104),
 	Bay = rgb(30, 20, 66),
@@ -79,6 +81,9 @@ local QUESTS = Vector3.new(-42, 0, 42)
 local ARCADE = Vector3.new(42, 0, 42)
 local EMOTE = Vector3.new(0, 0, 54)
 local PARKOUR = Vector3.new(-58, 0, -50)
+
+LobbyBuilder.PlazaRadius = PLAZA_RADIUS
+LobbyBuilder.StageFrontZ = STAGE_Z + 13 -- the vote stage's front edge (its steps are in front)
 
 local function tag(instance: Instance, name: string)
 	CollectionService:AddTag(instance, name)
@@ -501,13 +506,35 @@ local function buildVoteStage(root: Model): { BasePart }
 		})
 	end
 
-	-- Backdrop: a big rounded wall that holds the screens, with marquee bulbs on top.
+	-- Backdrop: a big rounded wall that holds the screens, with marquee bulbs on top, a scalloped
+	-- carnival crown behind them and glowing neon tubes between the portal bays.
 	Shapes.RoundedBox(Vector3.new(92, 46, 3), 2, {
 		Name = "Backdrop",
 		CFrame = CFrame.new(0, STAGE_TOP + 23, backZ - 1),
-		Color = PALETTE.StageDark,
+		Color = PALETTE.Backdrop,
 		Parent = stage,
 	})
+	for index = -5, 5 do
+		Build.Part({
+			Name = "Crown",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(2, 9, 9),
+			CFrame = CFrame.new(index * 8.4, STAGE_TOP + 47, backZ - 1.6) * CFrame.Angles(0, math.rad(90), 0),
+			Color = if index % 2 == 0 then rgb(255, 92, 150) else rgb(255, 204, 64),
+			Parent = stage,
+		})
+	end
+	for index, x in { -41.5, -14, 14, 41.5 } do
+		Shapes.Capsule(21, 1.1, {
+			Name = "NeonTube",
+			CFrame = CFrame.new(x, STAGE_TOP + 13, backZ + 0.65) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = PALETTE.Portal[(index - 1) % 3 + 1],
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+			CastShadow = false,
+			Parent = stage,
+		})
+	end
 	Shapes.RoundedBox(Vector3.new(94, 1.6, 3.4), 0.7, {
 		Name = "BackdropTrim",
 		CFrame = CFrame.new(0, STAGE_TOP + 46, backZ - 1),
@@ -1642,6 +1669,13 @@ function LobbyBuilder.Build(): LobbyRefs
 		},
 		Targets = targets,
 		TargetBoard = targetBoard,
+		-- Beach balls rest on the promenade, clear of the benches, bounce pads and walkways.
+		BallSpots = {
+			Vector3.new(math.cos(math.rad(25)) * 37, 0.2, math.sin(math.rad(25)) * 37),
+			Vector3.new(math.cos(math.rad(155)) * 37, 0.2, math.sin(math.rad(155)) * 37),
+			Vector3.new(math.cos(math.rad(215)) * 37, 0.2, math.sin(math.rad(215)) * 37),
+			Vector3.new(math.cos(math.rad(325)) * 37, 0.2, math.sin(math.rad(325)) * 37),
+		},
 	}
 end
 

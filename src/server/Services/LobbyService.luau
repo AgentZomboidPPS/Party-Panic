@@ -178,6 +178,85 @@ local function setupTargetRange()
 	updateBoard()
 end
 
+-- Beach balls to kick around the plaza. Walking into one punts it (the server sets its velocity,
+-- so every player sees the same ball); balls that leave the plaza, land on the vote stage or sit
+-- far from home for a minute roll back to their spot.
+local BALL_KICK_SPEED = 28
+local BALL_KICK_LIFT = 22
+local BALL_IDLE_RESET = 60
+
+local function setupBeachBalls()
+	local folder = Build.Model("BeachBalls", refs.Root)
+	for index, spot in refs.BallSpots do
+		local home = CFrame.new(spot + Vector3.new(0, 2.5, 0))
+		local ball = Build.Part({
+			Name = "BeachBall" .. index,
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * 5,
+			CFrame = home,
+			Transparency = 1,
+			CustomPhysicalProperties = PhysicalProperties.new(0.12, 0.4, 0.6, 1, 1),
+		})
+		ball.Anchored = false
+		-- The look comes from the mesh prop, welded on and weightless; the ball part is the physics.
+		local look = MeshLibrary.Get("LobbyBeachBall", { CFrame = home * CFrame.new(0, -2.5, 0), Parent = ball })
+		for _, descendant in look:GetDescendants() do
+			if descendant:IsA("BasePart") then
+				descendant.Anchored = false
+				descendant.CanCollide = false
+				descendant.CanQuery = false
+				descendant.CanTouch = false
+				descendant.Massless = true
+				Build.Weld(ball, descendant)
+			end
+		end
+		ball.Parent = folder
+		ball:SetNetworkOwner(nil)
+
+		local lastKick, lastMoved = 0, os.clock()
+		ball.Touched:Connect(function(hit)
+			local character = hit.Parent
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if not humanoid or not root or humanoid.Health <= 0 then
+				return
+			end
+			local now = os.clock()
+			if now - lastKick < 0.35 then
+				return
+			end
+			lastKick = now
+			local away = (ball.Position - root.Position) * Vector3.new(1, 0, 1)
+			if away.Magnitude < 0.1 then
+				away = root.CFrame.LookVector * Vector3.new(1, 0, 1)
+			end
+			local run = (root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)).Magnitude
+			ball.AssemblyLinearVelocity = away.Unit * (BALL_KICK_SPEED + run * 0.5) + Vector3.new(0, BALL_KICK_LIFT, 0)
+			ball.AssemblyAngularVelocity = away.Unit:Cross(Vector3.yAxis) * -6
+		end)
+
+		task.spawn(function()
+			while ball.Parent do
+				task.wait(2)
+				local position = ball.Position
+				local flat = Vector3.new(position.X, 0, position.Z)
+				if ball.AssemblyLinearVelocity.Magnitude > 1 then
+					lastMoved = os.clock()
+				end
+				local outside = position.Y < -10 or flat.Magnitude > LobbyBuilder.PlazaRadius - 2
+				local onStage = position.Z < LobbyBuilder.StageFrontZ and math.abs(position.X) < 50
+				local idleAway = os.clock() - lastMoved > BALL_IDLE_RESET and (position - home.Position).Magnitude > 20
+				if outside or onStage or idleAway then
+					ball.AssemblyLinearVelocity = Vector3.zero
+					ball.AssemblyAngularVelocity = Vector3.zero
+					ball:PivotTo(home)
+					lastMoved = os.clock()
+				end
+			end
+		end)
+	end
+end
+
 function LobbyService.Init()
 	refs = LobbyBuilder.Build()
 	MeshLibrary.Preload() -- resolves any props the lobby didn't use and reports mesh sources
@@ -188,6 +267,7 @@ function LobbyService.Init()
 	setupDailyMachine()
 	setupSecretToken()
 	setupTargetRange()
+	setupBeachBalls()
 	LobbyService.SetChampions({})
 end
 

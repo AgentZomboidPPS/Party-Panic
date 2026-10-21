@@ -21,18 +21,34 @@ from generate_meshes import (
     rounded_box,
     sd_capsule,
     sd_ellipsoid,
-    sdf_mesh,
     smin,
     sphere,
     torus,
-    tube,
     weld,
 )
+from generate_meshes import sdf_mesh as _sdf_mesh
+from generate_meshes import tube as _tube
 
 TAU = 2 * math.pi
 
 
 # ====================================================================== helpers
+
+# Roblox culls back faces, so every face must point outward. The shared tube() and sdf_mesh() wind
+# their faces inward (their signed volume is negative), so the lobby's props flip them.
+
+
+def tube(points, radius: float, sides: int = 8) -> Mesh:
+    mesh = _tube(points, radius, sides)
+    mesh.f = mesh.f[:, ::-1].copy()
+    return mesh
+
+
+def sdf_mesh(sdf, lo, hi, step) -> Mesh:
+    mesh = _sdf_mesh(sdf, lo, hi, step)
+    mesh.f = mesh.f[:, ::-1].copy()
+    return mesh
+
 
 def orient(mesh: Mesh, center) -> Mesh:
     """Flips every face whose normal points toward `center` (for convex-ish closed shapes)."""
@@ -288,7 +304,8 @@ def lobby_ferris_cabin():
     )
     rim = rounded_box(4.6, 0.32, 3.6, 0.14).translate(0, 2.42, 0)
     posts = [tube([(x, 2.5, zz), (x * 0.92, 5.2, zz * 0.92)], 0.11, 6) for x in (-2.0, 2.0) for zz in (-1.5, 1.5)]
-    roof = lathe([(0.0, 6.0), (2.0, 5.95), (2.65, 5.6), (2.8, 5.3), (2.6, 5.15), (0.0, 5.35)], 32).scale(1.0, 1.0, 0.8)
+    # Profiles run counter-clockwise (bottom, outside, top) so faces point outward: Roblox culls back faces.
+    roof = lathe([(0.0, 5.35), (2.6, 5.15), (2.8, 5.3), (2.65, 5.6), (2.0, 5.95), (0.0, 6.0)], 32).scale(1.0, 1.0, 0.8)
     roof_top = icosphere(0.32, 1).translate(0, 6.15, 0)
     hanger = merge(tube([(0, 6.2, 0), (0, 7.1, 0)], 0.16, 8), torus(0.28, 0.09, 16, 6).rotate("x", 90).translate(0, 7.15, 0))
     seat = rounded_box(3.6, 0.5, 1.1, 0.2).translate(0, 1.95, 0.9)
@@ -500,6 +517,24 @@ def extrude_xy(polygon, depth: float) -> Mesh:
     return orient(mesh, (cx, cy, 0.0))
 
 
+# ====================================================================== beach ball
+
+def lobby_beach_ball():
+    """A beach ball 5 across: six gores (three colors between white ones) and white caps."""
+    radius = 2.5
+    rings = 16
+    profile = [(math.sin(k / rings * math.pi) * radius, radius - math.cos(k / rings * math.pi) * radius) for k in range(rings + 1)]
+    gores = {"White": [], "GoreA": [], "GoreB": [], "GoreC": []}
+    colors = ["GoreA", "White", "GoreB", "White", "GoreC", "White"]
+    for g in range(6):
+        gores[colors[g]].append(partial_lathe(profile[1:-1], g / 6 * TAU, (g + 1) / 6 * TAU, 8))
+    caps = [lathe([(0.6, radius * 2 - 0.12), (0.55, radius * 2 - 0.04), (0.0, radius * 2 + 0.02)], 16),
+            lathe([(0.0, -0.02), (0.55, 0.04), (0.6, 0.12)], 16)]
+    pieces = {name: merge(*meshes) for name, meshes in gores.items()}
+    pieces["Cap"] = merge(*caps)
+    return pieces
+
+
 PROPS = {
     "LobbyPavers": lobby_pavers,
     "LobbyCourt": lobby_court,
@@ -512,6 +547,7 @@ PROPS = {
     "LobbyFlowerBed": lobby_flower_bed,
     "LobbyTower": lobby_tower,
     "LobbyBunting": lobby_bunting,
+    "LobbyBeachBall": lobby_beach_ball,
 }
 
 # Preview colors only; the game colors pieces by name (Props/Lobby.luau).
@@ -526,4 +562,5 @@ COLORS = {
     "Body": (255, 255, 255), "Stripes": (255, 84, 150), "Trim": (255, 204, 64), "RoofStripes": (255, 255, 255),
     "Windows": (60, 40, 110), "Flag": (255, 204, 64), "Rope": (250, 250, 250),
     "FlagA": (255, 84, 150), "FlagB": (64, 196, 255), "FlagC": (255, 204, 64),
+    "White": (255, 255, 255), "GoreA": (255, 70, 80), "GoreB": (60, 150, 255), "GoreC": (255, 210, 50), "Cap": (255, 70, 80),
 }

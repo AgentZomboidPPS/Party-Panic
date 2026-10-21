@@ -1,0 +1,29 @@
+newmtl White
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl GoreA
+Kd 1.000 0.275 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl GoreB
+Kd 0.235 0.588 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl GoreC
+Kd 1.000 0.824 0.196
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cap
+Kd 1.000 0.275 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
