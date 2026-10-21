@@ -255,6 +255,19 @@ local list: { GameDefinition } = {
 		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "MessyMemory",
+		Name = "Messy Memory",
+		Category = "Reaction",
+		Icon = "🧸",
+		Color = Color3.fromRGB(255, 150, 200),
+		Objective = "Study your toy shelf, then put every toy back on its spot after the mischief! Most toys right wins.",
+		Controls = "Tap a toy, then tap its spot. CLOSE (E) hides your shelf from rivals; PEEK (Q) spies on theirs.",
+		Duration = 52,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
