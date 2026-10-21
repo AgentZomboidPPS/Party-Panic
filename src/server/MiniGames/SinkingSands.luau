@@ -239,12 +239,16 @@ function SinkingSands:_buildArena(kingCount: number)
 	local floor = Build.Folder("Floor", arena)
 	local sectors = 28
 	local edges = { SandSwirl.HOLE, 6.5, 8.5, 11, 14, 17.5, 21.5, 26, 30, SandSwirl.RIM }
-	local function slab(cframe: CFrame, size: Vector3)
+	-- The suction ring round the hole (HOLE to HOLE + LIP) is darker, wetter sand: "the danger starts
+	-- here" in one look, getting darker towards the hole.
+	local wetColor = Color3.fromRGB(170, 94, 58) -- the SandPit mesh's Lip colour
+	local bandColors = { wetColor, sandColor:Lerp(wetColor, 0.62), sandColor:Lerp(wetColor, 0.3) }
+	local function slab(cframe: CFrame, size: Vector3, color: Color3?)
 		Build.Part({
 			Name = "Sand",
 			Size = size,
 			CFrame = cframe,
-			Color = sandColor,
+			Color = color or sandColor,
 			Material = Enum.Material.Sand,
 			Transparency = if showFloor then 0 else 1,
 			CastShadow = false,
@@ -266,7 +270,7 @@ function SinkingSands:_buildArena(kingCount: number)
 			local mid = center + outward * (r0 + r1) / 2 + Vector3.new(0, (h0 + h1) / 2, 0)
 			local tilt = math.atan2(rise, run)
 			local cframe = CFrame.new(mid) * look.Rotation * CFrame.Angles(tilt, 0, 0) * CFrame.new(0, -0.5, 0)
-			slab(cframe, Vector3.new(width, 1, length))
+			slab(cframe, Vector3.new(width, 1, length), bandColors[band])
 		end
 		-- The mesa top, from the rim to the cliffs.
 		local width = 2 * PLAZA * math.sin(math.pi / sectors) + 0.6
