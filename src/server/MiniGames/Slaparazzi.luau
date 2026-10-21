@@ -505,18 +505,25 @@ function Slaparazzi:_snap(shotAt: number)
 	ctx:SetStatus(if best then `👑 {best.DisplayName} · {bestPoints} pts` else "Get in the photo frame!")
 end
 
--- Whether a slap pressed now (as the server hears it) hit: the slapper's positions over half their
--- ping against the target's over their whole ping plus the drawing delay (see the top).
-function Slaparazzi:_judge(player: any, target: any, now: number, lag: number): boolean
-	local froms = self:SamplesSince(player, now - lag / 2 - 0.1)
-	local tos = self:SamplesSince(target, now - lag - SEEN_LAG - 0.05)
+-- Whether a slap the server heard at `heard` hit: the slapper's positions and facing from half their
+-- ping before it until now (the client turns them to their target as it sends the slap, and that
+-- turn can arrive a moment after the slap), against the target's positions over the slapper's whole
+-- ping plus the drawing delay, up to when the slap was heard (see the top).
+function Slaparazzi:_judge(player: any, target: any, heard: number, lag: number): boolean
+	local froms = self:SamplesSince(player, heard - lag / 2 - 0.1)
+	local tos = {}
+	for _, sample in self:SamplesSince(target, heard - lag - SEEN_LAG - 0.05) do
+		if sample.T <= heard + 0.02 then
+			table.insert(tos, sample)
+		end
+	end
 	local _, _, root = self.context:GetCharacter(player)
 	local _, _, targetRoot = self.context:GetCharacter(target)
 	if root then
-		table.insert(froms, { T = now, P = root.Position, L = root.CFrame.LookVector })
+		table.insert(froms, { T = heard, P = root.Position, L = root.CFrame.LookVector })
 	end
-	if targetRoot then
-		table.insert(tos, { T = now, P = targetRoot.Position, L = targetRoot.CFrame.LookVector })
+	if targetRoot and #tos == 0 then
+		table.insert(tos, { T = heard, P = targetRoot.Position, L = targetRoot.CFrame.LookVector })
 	end
 	for _, from in froms do
 		for _, to in tos do
@@ -544,22 +551,40 @@ function Slaparazzi:_slap(player: any, targetId: any)
 	self.readyAt[player] = ready
 	ctx:SetPlayerShared(player, "Ready", ready)
 	local target = if type(targetId) == "number" and targetId == targetId then self:_participant(targetId) else nil
-	local hit = target ~= nil and target ~= player and self:_judge(player, target, now, lag)
-	if hit then
-		local _, _, targetRoot = ctx:GetCharacter(target)
-		local away = if targetRoot then targetRoot.Position - root.Position else root.CFrame.LookVector
-		local flat = Vector3.new(away.X, 0, away.Z)
-		if flat.Magnitude < 0.1 then
-			flat = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z)
-		end
-		if flat.Magnitude < 0.1 then
-			flat = Vector3.new(0, 0, 1)
-		end
-		ctx:Knockback(target, flat.Unit * Rules.KNOCK + Vector3.new(0, Rules.LIFT, 0), Rules.STUN)
-		self.stunnedUntil[target] = now + Rules.STUN
-		self.slaps[player] = (self.slaps[player] or 0) + 1
+	if target == nil or target == player then
+		ctx:Fire(nil, "Slap", player.UserId, 0, false)
+		return
 	end
-	ctx:Fire(nil, "Slap", player.UserId, if target then target.UserId else 0, hit)
+	-- People's slaps are judged a moment later (their turn to face the target may still be on its
+	-- way); bots' at once.
+	local function judge()
+		if not ctx:IsAlive(target) or not ctx:IsAlive(player) then
+			return
+		end
+		local hit = self:_judge(player, target, now, lag)
+		if hit then
+			local _, _, slapperRoot = ctx:GetCharacter(player)
+			local _, _, targetRoot = ctx:GetCharacter(target)
+			local from = slapperRoot or root
+			local away = if targetRoot then targetRoot.Position - from.Position else from.CFrame.LookVector
+			local flat = Vector3.new(away.X, 0, away.Z)
+			if flat.Magnitude < 0.1 then
+				flat = Vector3.new(from.CFrame.LookVector.X, 0, from.CFrame.LookVector.Z)
+			end
+			if flat.Magnitude < 0.1 then
+				flat = Vector3.new(0, 0, 1)
+			end
+			ctx:Knockback(target, flat.Unit * Rules.KNOCK + Vector3.new(0, Rules.LIFT, 0), Rules.STUN)
+			self.stunnedUntil[target] = ctx:Now() + Rules.STUN
+			self.slaps[player] = (self.slaps[player] or 0) + 1
+		end
+		ctx:Fire(nil, "Slap", player.UserId, target.UserId, hit)
+	end
+	if lag > 0 then
+		ctx:Delay(math.min(lag / 2 + 0.05, 0.25), judge)
+	else
+		judge()
+	end
 end
 
 -- A safety net under the bots: nothing shoves one faster than a slap throws it.
