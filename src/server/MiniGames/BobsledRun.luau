@@ -8,7 +8,7 @@
 -- lanes down one wide ice channel with banked curves, kickers that throw the sleds into the air and a
 -- finish arch. A curve counts the crew's leans from OPEN seconds before it until the sled enters
 -- it (plus the riders' ping): score = (right - wrong) / riders, so a short crew's leans count for
--- more and uneven teams are fair. Score >= CLEAN takes it clean, above 0 scrapes, else it's a bump.
+-- more and uneven teams are fair. Score >= CLEAN takes it clean, >= HALF scrapes, else it's a bump.
 -- Ends when every sled is home (or time runs out: finish order first, then distance).
 --
 -- How it works: the course is a string of fixed track pieces (Shared/Logic/BobsledCourse) that the

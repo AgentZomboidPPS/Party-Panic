@@ -283,6 +283,7 @@ BobsledCourse.LAUNCH = 16 -- studs/s^2 off the start
 BobsledCourse.OPEN = 1.25 -- seconds before a curve that leans start to count
 BobsledCourse.WARN = 3 -- seconds before a curve that its arrow shows
 BobsledCourse.CLEAN = 0.6 -- the crew's (right - wrong) / riders needed for a clean curve
+BobsledCourse.HALF = 0.4 -- ... and for a scrape (less is a bump: 1 of 3 riders isn't enough)
 BobsledCourse.BOOST = 14 -- studs/s a perfectly clean curve adds
 BobsledCourse.BUMP = 0.5 -- speed kept after slamming the wall
 BobsledCourse.SCRAPE = 0.82 -- speed kept after a half-right curve
@@ -291,7 +292,7 @@ BobsledCourse.SCRAPE = 0.82 -- speed kept after a half-right curve
 function BobsledCourse.Judge(score: number, speed: number): (string, number)
 	if score >= BobsledCourse.CLEAN then
 		return "Clean", math.min(BobsledCourse.MAX, speed + BobsledCourse.BOOST * score)
-	elseif score > 0 then
+	elseif score >= BobsledCourse.HALF then
 		return "Scrape", speed * BobsledCourse.SCRAPE
 	end
 	return "Bump", speed * BobsledCourse.BUMP
