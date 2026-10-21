@@ -189,27 +189,35 @@ function SnowballSummit:_buildScenery()
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(2, 1800, 1800),
 		CFrame = CFrame.new(origin.X, cloudY - 1, origin.Z) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = Color3.fromRGB(236, 242, 252),
+		Color = Color3.fromRGB(222, 234, 250),
 		Material = Enum.Material.SmoothPlastic,
 		Parent = ctx.Arena,
 	})
-	for index = 1, 46 do
+	-- Puffs in little clusters (a big flat ball and two smaller ones on it), so the sea billows.
+	for _ = 1, 24 do
 		local angle = rng:NextNumber(0, math.pi * 2)
-		local distance = rng:NextNumber(radius * 0.4, 260)
-		local size = rng:NextNumber(14, 34)
-		Build.Decor({
-			Name = "SnowballSummitPuff",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(size, size * 0.55, size) * (if index % 2 == 0 then 1.4 else 1),
-			CFrame = CFrame.new(
-				origin.X + math.cos(angle) * distance,
-				cloudY + rng:NextNumber(-2, 6),
-				origin.Z + math.sin(angle) * distance
-			),
-			Color = Color3.fromRGB(248, 250, 255),
-			Material = Enum.Material.SmoothPlastic,
-			Parent = ctx.Arena,
-		})
+		local distance = rng:NextNumber(radius + 10, 300)
+		local spot = Vector3.new(
+			origin.X + math.cos(angle) * distance,
+			cloudY + rng:NextNumber(-1, 3),
+			origin.Z + math.sin(angle) * distance
+		)
+		local size = rng:NextNumber(26, 48)
+		for k, puff in { { 1, 0, 0, 0.42 }, { 0.6, 0.3, 0.12, 0.6 }, { 0.55, -0.32, 0.2, 0.55 } } do
+			local part = Build.Decor({
+				Name = "SnowballSummitPuff",
+				Size = Vector3.new(size, size * puff[4], size) * puff[1],
+				CFrame = CFrame.new(
+					spot + Vector3.new(puff[2] * size, puff[3] * size + k * 0.37, puff[2] * size * 0.4)
+				),
+				Color = Color3.fromRGB(250, 252, 255),
+				Material = Enum.Material.SmoothPlastic,
+				Parent = ctx.Arena,
+			})
+			local mesh = Instance.new("SpecialMesh")
+			mesh.MeshType = Enum.MeshType.Sphere -- a squashed ball (a Ball part stays round)
+			mesh.Parent = part
+		end
 	end
 
 	-- Rock spires round the summit, each with a pine or two and a flag on its snowy top.
