@@ -19,6 +19,7 @@ local order = {
 	"SitOutService",
 	"VotingService",
 	"LobbyService",
+	"SkeeBallService", -- after the lobby exists (its arcade)
 	"BotService", -- after the lobby exists (spawns, vote pads)
 	"RoundManager",
 }

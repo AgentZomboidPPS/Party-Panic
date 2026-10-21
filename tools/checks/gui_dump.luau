@@ -318,6 +318,7 @@ function __dumpGui(playerGui, label)
 			e.insets = inst.ScreenInsets.Name
 			e.enabled = inst.Enabled
 			e.billboards = inst:GetAttribute("PP_Billboards") -- 3D name tags copied onto a screen to draw them
+			e.noTouch = inst:GetAttribute("PP_NoTouchControls") -- the MOVE stick and jump button are put away
 		elseif inst:IsA("GuiObject") then
 			e.vis = inst.Visible
 			e.pos = udim2(inst.Position)
