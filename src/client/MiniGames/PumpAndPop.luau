@@ -517,9 +517,6 @@ function PumpAndPop.Start(api)
 		end
 		if userId == me and type(kind) == "string" then
 			feedback(kind)
-			if kind == "over" then
-				holding, wantDown = false, false -- the plunger slipped: press again
-			end
 		end
 	end)
 
@@ -530,7 +527,7 @@ function PumpAndPop.Start(api)
 		end
 		station.Popped = true
 		local balloon = station.Balloon
-		local center = station.BaseCFrame.Position + Vector3.new(0, 15 * station.Scale * station.BaseScale * 0.55, 0)
+		local center = station.BaseCFrame.Position + Vector3.new(0, 15 * station.Scale * 0.55, 0)
 		if balloon then
 			for _, part in balloon:GetDescendants() do
 				if part:IsA("BasePart") then
