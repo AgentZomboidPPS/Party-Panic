@@ -367,12 +367,39 @@ def lava_fall():
               for s, (x, z, r) in enumerate(((-9.5, -15.0, 2.6), (10.0, -16.0, 2.9), (-15.0, -13.0, 2.2), (15.5, -12.5, 2.0)))]
     rock = merge(*columns, *rubble)
     rock.smooth = False
+    # Three streams (a wide one down the middle, two thin ones off the lip) that wobble as they fall,
+    # with darker crust ribbons riding on their fronts so they read as flowing lava.
     path = [(0, 44.5, 10.0), (0, 43.0, 4.0), (0, 42.6, 0.5), (0, 41.6, -1.8), (0, 38.0, -3.6), (0, 28.0, -4.6),
             (0, 16.0, -5.4), (0, 6.0, -6.6), (0, 2.0, -9.0), (0, 1.5, -13.0)]
-    widths = [4.6, 5.2, 5.8, 6.6, 7.6, 8.6, 9.6, 10.6, 11.4, 12.0]
-    fall = flat_tube(path, widths, 1.0, 12)
-    pool = icosphere(1.0, 2).scale(10.0, 0.6, 7.0).translate(0, 1.2, -14.0)
-    return {"Rock": rock, "Lava": merge(fall, pool)}
+    streams = (  # x, widths along the path, first path point, wobble phase
+        (0.0, [3.6, 3.8, 4.0, 4.4, 4.8, 5.2, 5.5, 5.8, 6.0, 6.0], 0, 0.0),
+        (-5.0, [2.4, 2.5, 2.6, 2.8, 3.0, 3.2, 3.4, 3.4], 2, 1.7),
+        (5.0, [2.4, 2.5, 2.6, 2.8, 3.0, 3.2, 3.4, 3.4], 2, 3.1),
+    )
+    thickness = 1.0
+    falls, crust = [], []
+    for x0, widths, first, phase in streams:
+        pts = []
+        for i, (_, y, z) in enumerate(path[first:]):
+            wobble = 0.0 if i == 0 else 0.45 * math.sin(i * 1.3 + phase)
+            pts.append((x0 + wobble, y, z))
+        falls.append(flat_tube(pts, widths, thickness, 12))
+        # Crust ribbons a hair in front of the stream's face (never touching it, so no z-fighting).
+        offsets = (-0.2, 0.18) if x0 == 0.0 else (0.04,)  # fractions of the stream's width
+        for k, dx in enumerate(offsets):
+            ribbon = []
+            for i in range(2, len(pts) - 1):
+                a, b = np.array(pts[i - 1]), np.array(pts[i + 1])
+                tangent = (b - a) / (np.linalg.norm(b - a) + 1e-9)
+                normal = np.cross(np.array([1.0, 0, 0]), tangent)
+                normal /= np.linalg.norm(normal) + 1e-9
+                across = (dx + 0.06 * math.sin(i * 0.9 + phase + k * 2.0)) * widths[i]
+                face = thickness / 2 * math.sqrt(max(0.0, 1 - (2 * across / widths[i]) ** 2))  # follow the curved front
+                ribbon.append(np.array(pts[i]) + np.array([across, 0, 0]) + normal * (face + 0.08))
+            n = len(ribbon)
+            crust.append(flat_tube(ribbon, [0.4 + 0.5 * math.sin(math.pi * (i + 0.5) / n) for i in range(n)], 0.16, 6))
+    pool = icosphere(1.0, 2).scale(11.0, 0.6, 7.5).translate(0, 1.2, -14.0)
+    return {"Rock": rock, "Lava": merge(*falls, pool), "Crust": merge(*crust)}
 
 
 def temple_bridge():
@@ -472,4 +499,5 @@ COLORS = {
     "Eye": (255, 230, 90),
     "Rim": (60, 48, 56),
     "Rock": (70, 52, 60),
+    "Crust": (200, 64, 30),
 }

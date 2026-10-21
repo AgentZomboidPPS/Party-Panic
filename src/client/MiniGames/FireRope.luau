@@ -148,9 +148,9 @@ function FireRope.Start(api)
 	local halo = visualPart({
 		Name = "Halo",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(rope.Length - 1, 2.6, 2.6),
-		Color = COLD,
-		Transparency = 0.8,
+		Size = Vector3.new(rope.Length - 1, 1.8, 1.8), -- top at 1.8 at the pass: a cleared jump looks cleared
+		Color = WARM, -- one step hotter than the fireballs: an orange-red outline against the cream deck
+		Transparency = 0.65,
 		CFrame = low,
 	})
 	halo.Parent = model
@@ -186,7 +186,7 @@ function FireRope.Start(api)
 			trail.Parent = ball
 		end
 	end
-	-- Flames licking off the whole length of the rope (one emitter over the core's volume).
+	-- Flames licking off the whole length of the rope (one emitter over the core's volume, locked to it).
 	local flames: ParticleEmitter? = nil
 	if effects then
 		local emitter = Instance.new("ParticleEmitter")
@@ -208,10 +208,11 @@ function FireRope.Start(api)
 		emitter.Lifetime = NumberRange.new(0.18, 0.32)
 		emitter.Speed = NumberRange.new(0.5, 2)
 		emitter.SpreadAngle = Vector2.new(180, 180)
-		emitter.Acceleration = Vector3.new(0, 10, 0)
+		emitter.Acceleration = Vector3.new(0, 4, 0) -- turns with the rope (locked), so kept small
 		emitter.RotSpeed = NumberRange.new(-180, 180)
 		emitter.Rotation = NumberRange.new(0, 360)
-		emitter.Rate = 60
+		emitter.Rate = 160
+		emitter.LockedToPart = true -- the flames ride with the rope instead of smearing behind it
 		emitter.Parent = core
 		flames = emitter
 	end
@@ -289,12 +290,12 @@ function FireRope.Start(api)
 			for _, ball in balls do
 				ball.Color = color
 			end
-			halo.Color = color
+			halo.Color = heatColor(math.min(1, rope.Heat + 0.5))
 			core.Color = WHITE_HOT:Lerp(color, 0.25)
 			light.Color = color
 			if flames then
 				flames.Color = ColorSequence.new(WHITE_HOT:Lerp(color, 0.4), color)
-				flames.Rate = 60 + 60 * rope.Heat -- angrier as it speeds up
+				flames.Rate = 160 + 120 * rope.Heat -- angrier as it speeds up
 			end
 		end
 	end)

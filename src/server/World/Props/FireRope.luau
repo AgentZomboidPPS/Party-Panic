@@ -5,7 +5,7 @@
 return function(h)
 	local Lava = h.rgb(255, 110, 30)
 	local Gold = h.rgb(255, 198, 60)
-	local Stone = h.rgb(214, 130, 98)
+	local Stone = h.rgb(176, 78, 64) -- deep red-brown: stands out against the yellow-orange lava
 	local Iron = h.rgb(64, 48, 60)
 	local Neon = Enum.Material.Neon
 
@@ -80,6 +80,7 @@ return function(h)
 		SunWheel = {
 			AssetId = 100642555372110,
 			Height = 29.4,
+			Shadow = false, -- no spinning spoke shadow across the players at the bridge's ends
 			Palette = {
 				Rim = Iron,
 				Trim = Gold,
@@ -123,13 +124,13 @@ return function(h)
 				h.ball(m, "Trim", 0.6, Vector3.new(0, 28.6, 0))
 			end,
 		},
-		-- Basalt-column cliff with lava pouring over its middle; faces -Z.
+		-- Basalt-column cliff with three crusted lava streams pouring over its middle; faces -Z.
 		LavaFall = {
-			AssetId = 118674273149395,
+			AssetId = 89195661359667,
 			Height = 53.1,
 			Shadow = false,
-			Palette = { Rock = h.rgb(74, 54, 66), Lava = Lava },
-			Materials = { Rock = Enum.Material.Basalt, Lava = Neon },
+			Palette = { Rock = h.rgb(74, 54, 66), Lava = Lava, Crust = h.rgb(200, 64, 30) },
+			Materials = { Rock = Enum.Material.Basalt, Lava = Neon, Crust = Enum.Material.Basalt },
 			Fallback = function(m)
 				h.block(m, "Rock", Vector3.new(30, 50, 8), Vector3.new(0, 25, 9))
 				h.block(m, "Rock", Vector3.new(24, 40, 7), Vector3.new(0, 20, 2.5))
@@ -144,7 +145,7 @@ return function(h)
 			Height = 22.6,
 			Shadow = false,
 			Palette = {
-				Stone = h.rgb(196, 116, 92),
+				Stone = h.rgb(150, 62, 58),
 				Trim = Gold,
 				Glow = h.rgb(255, 176, 60),
 				Dark = h.rgb(110, 66, 80),

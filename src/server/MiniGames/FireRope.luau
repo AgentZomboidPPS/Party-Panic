@@ -30,7 +30,8 @@ local FIRST_PERIOD = 3.0
 local FASTEST_PERIOD = 1.05 -- a Roblox jump is ~0.5s in the air; this leaves time to land and go again
 local LAVA_DROP = 24
 local TEMPLE_DISTANCE = 175 -- how far ahead of the bridge the Dragon Temple stands
-local TEMPLE_SCALE = 1.35 -- its dragon head sits ~16 degrees above a player's eye line, in view with the default camera
+local TEMPLE_SCALE = 1.35
+local TEMPLE_SINK = 10 -- (unscaled) how deep the temple's bottom tier sits in the lava: keeps the dragon head below the HUD
 
 local rng = Random.new()
 
@@ -109,9 +110,12 @@ function FireRope:Prepare()
 	Scenery.LavaLake(ctx, lake, 300)
 	Scenery.Ground(ctx, lake)
 	rockRim(ctx, lake, 150, 22)
-	local temple = facingBridge(base + Vector3.new(0, 0, -TEMPLE_DISTANCE))
+	-- The temple rises out of the lava (its bottom tier mostly under it), which keeps the dragon head
+	-- low enough on screen to stay clear of the round banner.
+	local temple = facingBridge(base + Vector3.new(0, -TEMPLE_SINK * TEMPLE_SCALE, -TEMPLE_DISTANCE))
 	MeshLibrary.Get("DragonTemple", { Scale = TEMPLE_SCALE, CFrame = temple, Parent = ctx.Arena })
-	steamSpot(ctx, (temple * CFrame.new(0, 2, -42 * TEMPLE_SCALE)).Position, 3) -- where its lava meets the lake
+	-- Steam where its lava cascade meets the lake.
+	steamSpot(ctx, (temple * CFrame.new(0, TEMPLE_SINK * TEMPLE_SCALE + 2, -36.5 * TEMPLE_SCALE)).Position, 3)
 	for _, spot in
 		{ Vector3.new(-102, 0, -112), Vector3.new(102, 0, -112), Vector3.new(-104, 0, 112), Vector3.new(104, 0, 112) }
 	do
@@ -161,13 +165,15 @@ function FireRope:Prepare()
 		flameSpot(ctx, tower + Vector3.new(0, 43, 0), 7)
 	end
 
-	-- Fire braziers rising out of the lava either side of the bridge, clear of the rope.
-	for _, x in { -22, 22 } do
-		for _, z in { -17, 17 } do
-			local position = base + Vector3.new(x, 0, z)
-			MeshLibrary.Get("FireBrazier", { CFrame = CFrame.new(position), Parent = ctx.Arena })
-			flameSpot(ctx, position + Vector3.new(0, 27.6, 0), 6)
-		end
+	-- Fire braziers rising out of the lava either side of the bridge, clear of the rope. The pair in
+	-- front (where the rope comes down) stands wider, further out and lower, so their fires sit below
+	-- the deck on screen and never behind the descending rope.
+	for _, spot in
+		{ Vector3.new(-30, -6, -28), Vector3.new(30, -6, -28), Vector3.new(-22, 0, 17), Vector3.new(22, 0, 17) }
+	do
+		local position = base + spot
+		MeshLibrary.Get("FireBrazier", { CFrame = CFrame.new(position), Parent = ctx.Arena })
+		flameSpot(ctx, position + Vector3.new(0, 27.6, 0), 6)
 	end
 
 	-- Everyone lines up across the bridge, facing the side the rope comes down on.
