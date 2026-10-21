@@ -1,0 +1,23 @@
+newmtl Cream
+Kd 1.000 0.965 0.941
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl SprinklesA
+Kd 1.000 0.471 0.667
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl SprinklesB
+Kd 0.471 0.784 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl SprinklesC
+Kd 1.000 0.843 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

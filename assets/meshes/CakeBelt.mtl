@@ -1,0 +1,23 @@
+newmtl Belt
+Kd 0.275 0.251 0.337
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stripe
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Frame
+Kd 0.549 0.361 0.204
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cleats
+Kd 0.204 0.188 0.259
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

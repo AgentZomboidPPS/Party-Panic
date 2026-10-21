@@ -15,18 +15,18 @@ from generate_meshes import (
     Mesh,
     capsule,
     cylinder,
-    extrude,
     icosphere,
     lathe,
     merge,
     rounded_box,
     sphere,
     star,
-    taper,
     torus,
-    tube,
     weld,
 )
+from generate_meshes import extrude as _extrude
+from generate_meshes import taper as _taper
+from generate_meshes import tube as _tube
 
 # ------------------------------------------------------------------ shared measurements
 # The client stacks layers with these, so keep them in step with Props/CakeFactory.luau.
@@ -34,10 +34,34 @@ PLATE_TOP = 0.2  # where a sponge sits on the plate
 SPONGE_HEIGHT = 1.25
 CREAM_SINK = 0.25  # the cream's rim hangs this far down the sponge's side
 CREAM_SEAT = 0.55  # height of the cream's top in the middle (where a strawberry sits)
-LEG_Z = 3.1  # station machine legs, either side of the belt
+LEG_Z = 3.6  # the station machines' back column, behind the belt (the front stays open to watch)
 
 
 # ------------------------------------------------------------------ helpers
+
+def signed_volume(mesh):
+    tri = mesh.v[mesh.f]
+    return float(np.einsum("ij,ij->i", tri[:, 0], np.cross(tri[:, 1], tri[:, 2])).sum() / 6)
+
+
+def outward(mesh):
+    """Roblox culls back faces: flips a closed piece whose faces wind inward (negative volume)."""
+    if signed_volume(mesh) < 0:
+        mesh.f = mesh.f[:, ::-1].copy()
+    return mesh
+
+
+def tube(points, radius, sides=8):
+    return outward(_tube(points, radius, sides))
+
+
+def taper(points, r0, r1, sides=8):
+    return outward(_taper(points, r0, r1, sides))
+
+
+def extrude(polygon, depth):
+    return outward(_extrude(polygon, depth))
+
 
 def wavy_lathe(profile, segments, waves, amount, start=0.0):
     """A lathe whose rings bulge in and out `waves` times around (scalloped plates, doilies, wrappers).
@@ -71,7 +95,7 @@ def rosette(radius, height, points=8, turns=0.9, rings=18, segments=40, depth=0.
     center = len(verts)
     verts.append((0.0, 0.0, 0.0))
     faces += [(center, j, (j + 1) % segments) for j in range(segments)]
-    return weld(Mesh(verts, faces))
+    return outward(weld(Mesh(verts, faces)))
 
 
 def coil(radius, height, turns, thickness, points=140, sides=12):
@@ -107,12 +131,13 @@ def eyes(center_x, y, z, spread, size, look=(0.0, -0.05)):
     return merge(*whites), merge(*pupils)
 
 
-def legs(height, width=1.0, depth=1.5):
-    """The two legs every station machine stands on, either side of the belt, with feet."""
-    parts = []
-    for side in (-1, 1):
-        parts.append(rounded_box(width, height, depth, 0.35).translate(0, height / 2, side * LEG_Z))
-        parts.append(rounded_box(width + 0.9, 0.45, depth + 0.7, 0.2).translate(0, 0.225, side * LEG_Z))
+def legs(height, width=1.7, depth=1.6):
+    """The column every station machine stands on, behind the belt (so nothing hides the cakes from
+    the players in front), with a foot and a ribbed collar."""
+    parts = [rounded_box(width, height, depth, 0.5).translate(0, height / 2, LEG_Z),
+             rounded_box(width + 1.4, 0.5, depth + 1.2, 0.22).translate(0, 0.25, LEG_Z + 0.2),
+             rounded_box(width + 0.5, 0.4, depth + 0.4, 0.18).translate(0, height * 0.3, LEG_Z),
+             rounded_box(width + 0.5, 0.4, depth + 0.4, 0.18).translate(0, height * 0.3 + 0.7, LEG_Z)]
     return merge(*parts)
 
 
@@ -196,7 +221,7 @@ def cake_cream():
         drips.append(capsule(length + 0.22, 0.11, 10).translate(math.cos(a) * 1.71, 0.12 - length / 2,
                                                                  math.sin(a) * 1.71))
     shift = 0.24  # the longest drip hangs down to about -0.2: lift everything onto y = 0
-    rosettes = [rosette(0.3, 0.42, 7, 0.8).rotate("y", k * 31).translate(math.cos(a) * 1.2, CREAM_SEAT - 0.04,
+    rosettes = [rosette(0.3, 0.42, 7, 0.8, 9, 21).rotate("y", k * 31).translate(math.cos(a) * 1.2, CREAM_SEAT - 0.04,
                                                                            math.sin(a) * 1.2)
                 for k, a in enumerate(np.linspace(0, 2 * math.pi, 9, endpoint=False))]
     cream = merge(cap, *drips, *rosettes).translate(0, shift, 0)
@@ -260,7 +285,7 @@ def cake_belt():
     rails on legs. "Cleats" (ribs on the belt, one spare rib-spacing long) slide to show it moving."""
     length, width, top = 44.0, 4.6, 3.2
     belt = rounded_box(length, 0.32, width - 0.2, 0.15, 4).translate(length / 2, top - 0.16, 0)
-    drums = [cylinder(0.34, width - 0.3, 20).rotate("x", 90).translate(x, top - 0.3, (width - 0.3) / 2)
+    drums = [cylinder(0.34, width - 0.3, 20).rotate("x", 90).translate(x, top - 0.3, -(width - 0.3) / 2)
              for x in (0.25, length - 0.25)]
     rails = []
     for side in (-1, 1):
@@ -276,7 +301,7 @@ def cake_belt():
     frame.append(rounded_box(length - 3.0, 0.35, 0.35, 0.12, 3).translate(length / 2, 1.0, 0))
     under = rounded_box(length - 0.8, 0.5, width - 0.6, 0.2, 3).translate(length / 2, top - 0.75, 0)
     cleats = [rounded_box(0.28, 0.1, width - 0.6, 0.04, 2).translate(0.6 + k * 2.0, top + 0.03, 0)
-              for k in range(22)]
+              for k in range(21)]
     return {"Belt": merge(belt, *drums), "Stripe": merge(*rails), "Frame": merge(*frame, under),
             "Cleats": merge(*cleats)}
 
@@ -291,11 +316,11 @@ def cake_press():
     bottom, height, depth = 7.6, 4.3, 7.6
     body = machine_body(6.2, height, depth, bottom)
     front = -depth / 2
-    window = cylinder(1.2, 0.2, 40).rotate("x", 90).translate(0, 9.55, front + 0.05)
+    window = cylinder(1.2, 0.3, 40).rotate("x", -90).translate(0, 9.55, front + 0.12)
     window_ring = torus(1.28, 0.2, 40, 10).rotate("x", 90).translate(0, 9.55, front - 0.02)
     dials = []
     for x in (-2.2, 2.2):
-        dials.append(cylinder(0.38, 0.25, 20, 0.08).rotate("x", 90).translate(x, 8.45, front + 0.02))
+        dials.append(cylinder(0.38, 0.3, 20, 0.08).rotate("x", -90).translate(x, 8.45, front + 0.08))
         dials.append(rounded_box(0.1, 0.42, 0.1, 0.04, 2).translate(x, 8.55, front - 0.25))
     chimney = merge(cylinder(0.5, 2.0, 20).translate(2.0, bottom + height - 0.3, 1.6),
                     torus(0.55, 0.14, 20, 8).translate(2.0, bottom + height + 1.7, 1.6))
@@ -362,7 +387,7 @@ def cake_hopper():
         leaves.append(l)
     whites, pupils = eyes(0, beam_y + 2.6, -1.95, 0.6, 0.42)
     stripe = rounded_box(2.32, 0.42, 2 * LEG_Z + 1.72, 0.18, 4).translate(0, beam_y + 0.3, 0)
-    return {"Frame": merge(legs(beam_y + 0.2), beam, chute), "Hopper": funnel, "Rim": merge(rim, *bands),
+    return {"Frame": merge(legs(beam_y + 0.2), beam), "Chute": chute, "Hopper": funnel, "Rim": merge(rim, *bands),
             "Berries": merge(*berries), "BerryLeaves": merge(*leaves), "Eyes": whites, "Pupils": pupils,
             "Stripe": stripe}
 
@@ -380,7 +405,7 @@ def cake_stacker():
                    cylinder(2.7, 0.6, 48, 0.2).translate(0, base_y + 6.0, 0))
     dome = lathe([(0.0, 0.0), (2.2, 0.0), (2.0, 0.6), (1.4, 1.2), (0.6, 1.5), (0.0, 1.55)], 40).translate(0, base_y + 6.6, 0)
     beacon = merge(sphere(0.55, 12, 16).translate(0, base_y + 8.4, 0))
-    arms = [rounded_box(1.0, 1.0, 2 * LEG_Z + 1.4, 0.35, 4).translate(0, base_y - 0.7, 0)]
+    arms = [rounded_box(1.2, 1.0, 2.4, 0.35, 4).translate(0, base_y + 0.6, LEG_Z - 1.4)]
     whites, pupils = eyes(0, base_y + 7.3, -1.95, 0.6, 0.38)
     stripe = merge(torus(2.42, 0.14, 48, 8).translate(0, base_y + 3.1, 0))
     return {"Frame": merge(legs(base_y - 0.2), *arms, collar), "Glass": tube_mesh, "Plates": merge(*plates),
@@ -407,13 +432,34 @@ def cake_boxer():
             "Eyes": whites, "Pupils": pupils, "Stripe": stripe}
 
 
+def cake_shelf():
+    """The finished-cake shelf beside the end of each line: three shelves (four boxes each, at half
+    size) between two rounded uprights, a team-colored trim and a cake sign on top."""
+    width, depth = 10.6, 3.4
+    levels = [0.0, 3.0, 6.0, 9.0]
+    uprights = [rounded_box(0.7, 10.2, depth, 0.3, 4).translate(side * (width / 2 + 0.35), 5.1, 0) for side in (-1, 1)]
+    caps = [sphere(0.6, 10, 14).translate(side * (width / 2 + 0.35), 10.4, 0) for side in (-1, 1)]
+    boards = [rounded_box(width + 0.2, 0.4, depth, 0.15, 3).translate(0, y + 0.3, 0) for y in levels]
+    back = rounded_box(width, 9.4, 0.25, 0.1, 2).translate(0, 4.9, depth / 2 - 0.15)
+    trims = [rounded_box(width + 0.3, 0.22, 0.2, 0.08, 2).translate(0, y + 0.42, -depth / 2 - 0.05) for y in levels]
+    sign = rounded_box(4.2, 1.6, 0.35, 0.3, 4).translate(0, 11.0, 0.6)
+    post = rounded_box(0.3, 1.0, 0.3, 0.1, 2).translate(0, 9.9, 0.6)
+    cake = merge(cylinder(0.6, 0.45, 20, 0.08).translate(-1.3, 10.75, 0.38),
+                 cylinder(0.62, 0.15, 20, 0.05).translate(-1.3, 11.18, 0.38))
+    berry = sphere(0.22, 8, 10).translate(-1.3, 11.45, 0.38)
+    feet = [rounded_box(1.4, 0.3, depth + 0.6, 0.12, 2).translate(side * (width / 2 + 0.35), 0.15, 0)
+            for side in (-1, 1)]
+    return {"Frame": merge(*uprights, *boards, *feet), "Back": back, "Caps": merge(*caps), "Stripe": merge(*trims),
+            "Sign": merge(sign, post), "Icon": cake, "Berry": berry}
+
+
 # ------------------------------------------------------------------ decorations
 
 def cake_tiered():
     """A giant three-tier party cake with dripping icing, rosettes, strawberries and candles."""
     tiers = [(7.5, 4.6), (5.6, 4.0), (3.8, 3.6)]
     y = 0.0
-    sponge, cream, berries, leaves, candles, flames = [], [], [], [], [], []
+    sponge, cream, piping, drips, berries, leaves, candles, flames = [], [], [], [], [], [], [], []
     rng = np.random.default_rng(7)
     board = cylinder(8.6, 0.6, 64, 0.2)
     y = 0.6
@@ -427,12 +473,12 @@ def cake_tiered():
         for k in range(count):
             a = 2 * math.pi * k / count + rng.uniform(-0.1, 0.1)
             length = rng.uniform(0.6, 1.9)
-            cream.append(capsule(length + 0.6, 0.3, 10).translate(math.cos(a) * (radius + 0.12), top - 0.45 - length / 2,
+            drips.append(capsule(length + 0.6, 0.3, 10).translate(math.cos(a) * (radius + 0.12), top - 0.45 - length / 2,
                                                                      math.sin(a) * (radius + 0.12)))
         ring = int(radius * 2.0)
         for k in range(ring):
             a = 2 * math.pi * k / ring
-            cream.append(rosette(0.55, 0.75, 7, 0.8, 14, 28).translate(math.cos(a) * (radius - 0.6), top + 0.2,
+            piping.append(rosette(0.55, 0.75, 7, 0.8, 9, 21).translate(math.cos(a) * (radius - 0.6), top + 0.2,
                                                                          math.sin(a) * (radius - 0.6)))
         cream.append(torus(radius + 0.05, 0.32, 64, 8).translate(0, y + 0.3, 0))
         y = top + 0.3
@@ -452,7 +498,7 @@ def cake_tiered():
         candles.append(cylinder(0.22, 1.9, 12).translate(x, y - 0.1, z))
         flames.append(sphere(0.3, 8, 10).scale(1, 1.6, 1).translate(x, y + 2.15, z))
     stripes = [torus(0.235, 0.05, 12, 6).translate(c, 0, 0) for c in ()]
-    return {"Board": board, "Sponge": merge(*sponge), "Cream": merge(*cream), "Berries": merge(*berries),
+    return {"Board": board, "Sponge": merge(*sponge), "Cream": merge(*cream), "Piping": merge(*piping), "Drips": merge(*drips), "Berries": merge(*berries),
             "BerryLeaves": merge(*leaves), "Candles": merge(*candles, *stripes), "Flames": merge(*flames)}
 
 
@@ -508,6 +554,7 @@ PROPS = {
     "CakeHopper": cake_hopper,
     "CakeStacker": cake_stacker,
     "CakeBoxer": cake_boxer,
+    "CakeShelf": cake_shelf,
     "CakeTiered": cake_tiered,
     "CakeMixer": cake_mixer,
     "CakeCupcake": cake_cupcake,
@@ -516,7 +563,7 @@ PROPS = {
 # Preview colors (the game colors pieces by name from Props/CakeFactory.luau).
 COLORS = {
     "Plate": (250, 250, 252), "Doily": (255, 214, 228), "Sponge": (246, 196, 112), "Filling": (255, 244, 232),
-    "Cream": (255, 246, 240), "SprinklesA": (255, 120, 170), "SprinklesB": (120, 200, 255), "SprinklesC": (255, 215, 80),
+    "Cream": (255, 246, 240), "Piping": (255, 246, 240), "Drips": (255, 246, 240), "SprinklesA": (255, 120, 170), "SprinklesB": (120, 200, 255), "SprinklesC": (255, 215, 80),
     "Berry": (232, 40, 60), "Seeds": (255, 226, 120), "BerryLeaves": (80, 190, 80), "Window": (180, 225, 255),
     "Stripe": (255, 80, 90), "Bin": (120, 210, 200), "Lid": (120, 210, 200), "Belt": (70, 64, 86),
     "Frame": (236, 236, 246), "Cleats": (52, 48, 66), "Body": (255, 196, 160), "Trim": (255, 205, 80),
@@ -526,5 +573,6 @@ COLORS = {
     "Beacon": (255, 230, 120), "Lamp": (140, 255, 160), "Icon": (255, 255, 255), "Board": (255, 225, 140),
     "Candles": (150, 210, 255), "Flames": (255, 200, 80), "Bowl": (215, 220, 232), "Batter": (255, 190, 210),
     "Whisk": (215, 220, 232), "Wrapper": (140, 200, 255), "Frosting": (255, 170, 210), "Cherry": (225, 30, 60),
-    "Stem": (110, 160, 60),
+    "Stem": (110, 160, 60), "Chute": (205, 210, 225), "Back": (255, 236, 244), "Caps": (255, 205, 80),
+    "Sign": (255, 255, 255),
 }
