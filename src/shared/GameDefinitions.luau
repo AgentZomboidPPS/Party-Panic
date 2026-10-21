@@ -203,6 +203,19 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "Spleef",
+		Name = "Spleef",
+		Category = "Survival",
+		Icon = "❄️",
+		Color = Color3.fromRGB(120, 200, 255),
+		Objective = "Break the snow under your rivals! Fall through all 3 floors into the water and you're out. Last one standing wins!",
+		Controls = "Click or tap a block near you to break it. DIG (E) breaks the block under the nearest rival.",
+		Duration = 75,
+		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
