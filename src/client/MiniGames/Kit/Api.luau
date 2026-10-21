@@ -410,29 +410,61 @@ function Api.Mood(self: Api, mood: Mood)
 	end
 end
 
+-- Phones: mode HUDs are drawn at this share of the PC size, so a mode's banner and counters stay
+-- compact there (owner: "Wtf is this mobile Ui lol").
+local TOUCH_HUD_SCALE = 0.75
+
 -- The space under the round banner (title, timer, status line and team scores) for a mode's own
--- HUD. It's laid out like the banner and scales with it, so anything placed at y >= api:HudY()
--- never covers the banner on any screen.
+-- HUD, 620 units wide. It's laid out like the banner and scales with it, so anything placed at
+-- y >= api:HudY() never covers the banner on any screen. On phones the banner is up in Roblox's
+-- top bar row and this space starts under the status line, drawn a little smaller.
 function Api.TopHud(self: Api): Frame
-	local hud = self.Gui:FindFirstChild("TopHud") :: Frame?
+	local hud = self.Gui:FindFirstChild("TopHud", true) :: Frame?
 	if not hud then
-		hud = UIKit.new("Frame", {
-			Name = "TopHud",
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 10),
-			Size = UDim2.fromOffset(620, 420),
-			BackgroundTransparency = 1,
-			Parent = self.Gui,
-		})
-		UIKit.AutoScale(hud :: Frame)
+		if self:IsTouch() then
+			local holder = UIKit.new("Frame", {
+				Name = "TopHudHolder",
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.fromScale(0.5, 0),
+				Size = UDim2.fromOffset(620, 420),
+				BackgroundTransparency = 1,
+				Parent = self.Gui,
+			})
+			UIKit.AutoScale(holder)
+			hud = UIKit.new("Frame", {
+				Name = "TopHud",
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.fromScale(0.5, 0),
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				Parent = holder,
+				Children = { UIKit.new("UIScale", { Scale = TOUCH_HUD_SCALE }) },
+			})
+		else
+			hud = UIKit.new("Frame", {
+				Name = "TopHud",
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, 10),
+				Size = UDim2.fromOffset(620, 420),
+				BackgroundTransparency = 1,
+				Parent = self.Gui,
+			})
+			UIKit.AutoScale(hud :: Frame)
+		end
 	end
 	return hud :: Frame
 end
 
 -- First free line in the TopHud: under the status line, or under the team scores in team modes.
+-- (Phones: HudController's status line ends 36 units down and the team scores 82, in the HUD's
+-- units; the TopHud's units are TOUCH_HUD_SCALE of those.)
 function Api.HudY(self: Api): number
 	local definition = GameDefinitions.Get(self.Id)
-	return if definition and definition.IsTeam then 156 else 112
+	local team = definition and definition.IsTeam
+	if self:IsTouch() then
+		return if team then 116 else 56
+	end
+	return if team then 156 else 112
 end
 
 -- A line of instructions under the banner (pass "" to hide it). `y` is a TopHud offset (default

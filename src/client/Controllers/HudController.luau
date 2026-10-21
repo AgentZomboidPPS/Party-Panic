@@ -1,6 +1,11 @@
 -- Lobby / in-round HUD (design doc §12 "Primary UI surfaces"):
 -- profile chip (level, XP, coins), phase banner with timer, side menu, settings window.
 -- Kept to the screen edges so chat and the middle of the screen stay clear.
+-- Phones (owner: "Wtf is this mobile Ui lol"): a compact HUD. The phase banner is one short line
+-- with the timer ("VOTE! 0:08") up in Roblox's top bar row, beside its buttons; a small profile
+-- pill (level, name, XP) with the coins tucked under it at the top left, which makes way for the
+-- standings during a round; the round's status line under the top bar; the menu down the right
+-- edge, with 44 pt buttons. Nothing goes in the thumbstick's corner or near the jump button.
 
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -30,6 +35,12 @@ local PHASE_ICONS = {
 	Results = "🏆",
 	Cleanup = "🏠",
 }
+-- Phones: the banner's short words for the phases that have a timer.
+local SHORT_TITLES = {
+	Intermission = "NEXT VOTE",
+	Voting = "VOTE!",
+	Results = "RESULTS",
+}
 
 local player = Players.LocalPlayer
 local badges: { [string]: TextLabel } = {}
@@ -39,9 +50,45 @@ local function isTouch(): boolean
 	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 end
 
+-- Level, XP bar and coins follow the profile (both layouts).
+local function followProfile(
+	levelLabel: TextLabel,
+	barFill: Frame,
+	xpText: TextLabel,
+	badge: GuiObject,
+	coins: GuiObject,
+	setCoins: (number) -> ()
+)
+	local shown = 0
+	local coinValue = Instance.new("NumberValue")
+	coinValue.Changed:Connect(setCoins)
+	setCoins(0)
+	State.ProfileChanged:Connect(function(profile, previous)
+		levelLabel.Text = tostring(profile.Level)
+		local ratio = if profile.LevelNeed > 0 then profile.LevelXP / profile.LevelNeed else 1
+		UIKit.Tween(barFill, 0.4, { Size = UDim2.fromScale(ratio, 1) })
+		if profile.LevelNeed <= 0 then
+			xpText.Text = "MAX LEVEL"
+		elseif isTouch() then
+			xpText.Text = `{profile.LevelXP}/{profile.LevelNeed} XP`
+		else
+			xpText.Text = `{profile.LevelXP} / {profile.LevelNeed} XP`
+		end
+		if profile.Coins ~= shown then
+			shown = profile.Coins
+			UIKit.Tween(coinValue, 0.6, { Value = profile.Coins })
+			if previous and profile.Coins > previous.Coins then
+				UIKit.PopIn(coins, 0.3)
+			end
+		end
+		if previous and profile.Level > previous.Level then
+			UIKit.PopIn(badge, 0.5)
+		end
+	end)
+end
+
 local function buildProfileChip(parent: Instance)
-	-- A little narrower on phones, so it never runs under the round banner on small screens.
-	local width = if isTouch() then 290 else 310
+	local width = 310
 	local holder = UIKit.new("Frame", {
 		Name = "ProfileChip",
 		Position = UDim2.fromOffset(16, 12),
@@ -67,22 +114,25 @@ local function buildProfileChip(parent: Instance)
 		Text = "1",
 		Font = Theme.Fonts.Display,
 		TextSize = 30,
+		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		Parent = badge,
 		Children = { UIKit.TextStroke(0.2) },
 	})
-	UIKit.Label({
+	local name = UIKit.Label({
 		Text = player.DisplayName,
 		TextSize = 20,
+		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(80, 8),
 		Size = UDim2.new(1, -96, 0, 24),
 		Parent = chip,
 	})
-	-- Phones: a taller bar so its numbers stay readable.
+	name:SetAttribute("PP_TruncateOk", true) -- a long name ends in "..."
 	local barBack = UIKit.new("Frame", {
-		Position = UDim2.fromOffset(80, if isTouch() then 38 else 40),
-		Size = UDim2.new(1, -100, 0, if isTouch() then 24 else 18),
+		Position = UDim2.fromOffset(80, 40),
+		Size = UDim2.new(1, -100, 0, 18),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		Parent = chip,
 		Children = { UIKit.Round() },
@@ -95,52 +145,173 @@ local function buildProfileChip(parent: Instance)
 	})
 	local xpText = UIKit.Label({
 		Text = "",
-		TextSize = if isTouch() then 18 else 14,
+		TextSize = 14,
+		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		Parent = barBack,
 		Children = { UIKit.TextStroke(0.3) },
 	})
 
 	local coins = UIKit.Panel(
-		{ Position = UDim2.fromOffset(0, 82), Size = UDim2.fromOffset(190, 46), CornerRadius = 23, Parent = holder },
+		{ Position = UDim2.fromOffset(0, 82), Size = UDim2.fromOffset(200, 46), CornerRadius = 23, Parent = holder },
 		Color3.fromRGB(255, 196, 60),
 		Color3.fromRGB(230, 130, 30)
 	)
+	UIKit.Coin({ Position = UDim2.fromOffset(12, 8), Size = UDim2.fromOffset(30, 30), Parent = coins })
 	local coinLabel = UIKit.Label({
-		Text = "🪙 0",
+		Text = "0",
 		Font = Theme.Fonts.Display,
 		TextSize = 28,
-		Size = UDim2.fromScale(1, 1),
+		TextWrapped = false,
+		Position = UDim2.fromOffset(46, 0),
+		Size = UDim2.new(1, -56, 1, 0),
 		Parent = coins,
 		Children = { UIKit.TextStroke(0.15) },
 	})
-
-	local shown = 0
-	local coinValue = Instance.new("NumberValue")
-	coinValue.Changed:Connect(function(value)
-		coinLabel.Text = "🪙 " .. UIKit.FormatNumber(value)
+	followProfile(levelLabel, barFill, xpText, badge, coins, function(value)
+		coinLabel.Text = UIKit.FormatNumber(value)
 	end)
+end
 
-	State.ProfileChanged:Connect(function(profile, previous)
-		levelLabel.Text = tostring(profile.Level)
-		local ratio = if profile.LevelNeed > 0 then profile.LevelXP / profile.LevelNeed else 1
-		UIKit.Tween(barFill, 0.4, { Size = UDim2.fromScale(ratio, 1) })
-		xpText.Text = if profile.LevelNeed > 0 then `{profile.LevelXP} / {profile.LevelNeed} XP` else "MAX LEVEL"
-		if profile.Coins ~= shown then
-			shown = profile.Coins
-			UIKit.Tween(coinValue, 0.6, { Value = profile.Coins })
-			if previous and profile.Coins > previous.Coins then
-				UIKit.PopIn(coins, 0.3)
-			end
+-- Phones: a small pill (level badge, name, XP bar) with the coins tucked under it, in the top left
+-- corner under Roblox's buttons. During a round the standings take its place (RoundController).
+local function buildTouchProfile(parent: Instance)
+	local holder = UIKit.new("Frame", {
+		Name = "ProfileChip",
+		Position = UDim2.fromOffset(8, 6),
+		Size = UDim2.fromOffset(196, 96),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+	UIKit.AutoScale(holder)
+
+	local chip = UIKit.Panel({ Size = UDim2.fromOffset(192, 62), CornerRadius = 31, ZIndex = 2, Parent = holder })
+	local badge = UIKit.new("Frame", {
+		Size = UDim2.fromOffset(52, 52),
+		Position = UDim2.fromOffset(5, 5),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Parent = chip,
+		Children = {
+			UIKit.Round(),
+			UIKit.Gradient(Theme.Colors.Yellow, Theme.Colors.Orange),
+			UIKit.Stroke(nil, 2, 0.3),
+		},
+	})
+	local levelLabel = UIKit.Label({
+		Text = "1",
+		Font = Theme.Fonts.Display,
+		TextSize = 26,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		Parent = badge,
+		Children = { UIKit.TextStroke(0.2) },
+	})
+	local name = UIKit.Label({
+		Text = player.DisplayName,
+		TextSize = 20,
+		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(64, 6),
+		Size = UDim2.fromOffset(118, 24),
+		Parent = chip,
+	})
+	name:SetAttribute("PP_TruncateOk", true)
+	local barBack = UIKit.new("Frame", {
+		Position = UDim2.fromOffset(64, 33),
+		Size = UDim2.fromOffset(118, 22),
+		BackgroundColor3 = Theme.Colors.PanelDark,
+		Parent = chip,
+		Children = { UIKit.Round() },
+	})
+	local barFill = UIKit.new("Frame", {
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Parent = barBack,
+		Children = { UIKit.Round(), UIKit.Gradient(Theme.Colors.Cyan, Theme.Colors.Green, 0) },
+	})
+	local xpText = UIKit.Label({
+		Text = "",
+		TextSize = Theme.Touch.MinText,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		Parent = barBack,
+		Children = { UIKit.TextStroke(0.3) },
+	})
+
+	-- The coins: a gold tab under the pill, as wide as the number.
+	local coins = UIKit.Panel({
+		Position = UDim2.fromOffset(12, 52),
+		Size = UDim2.fromOffset(110, 42),
+		CornerRadius = 18,
+		ZIndex = 1,
+		Parent = holder,
+	}, Color3.fromRGB(255, 196, 60), Color3.fromRGB(230, 130, 30))
+	UIKit.Coin({ Position = UDim2.fromOffset(10, 14), Size = UDim2.fromOffset(24, 24), Parent = coins })
+	local coinLabel = UIKit.Label({
+		Text = "0",
+		Font = Theme.Fonts.Display,
+		TextSize = 24,
+		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(40, 10),
+		Size = UDim2.new(1, -46, 0, 32),
+		Parent = coins,
+		Children = { UIKit.TextStroke(0.15) },
+	})
+	local function fitCoins()
+		local width = UIKit.TextWidth(coinLabel.Text, 24, Theme.Fonts.Display)
+		coins.Size = UDim2.fromOffset(math.max(84, math.ceil(width) + 56), 42)
+	end
+	followProfile(levelLabel, barFill, xpText, badge, coins, function(value)
+		coinLabel.Text = UIKit.FormatNumber(value)
+		fitCoins()
+	end)
+	task.delay(3, fitCoins) -- again once the font has surely loaded
+
+	-- The standings use this corner during a round.
+	local function refresh()
+		holder.Visible = GameState.Get("Phase") ~= "InRound"
+	end
+	GameState.Changed("Phase", refresh)
+	refresh()
+end
+
+-- The words, timer and urgency both banners show.
+local function bannerTitle(touch: boolean): string
+	local phase = GameState.Get("Phase") or "Waiting"
+	local gameId = GameState.Get("GameId")
+	local definition = gameId ~= "" and GameDefinitions.Get(gameId)
+	local message = GameState.Get("Message") or ""
+	local icon = PHASE_ICONS[phase] or "🎉"
+	if touch and SHORT_TITLES[phase] then
+		return `{icon} {SHORT_TITLES[phase]}`
+	elseif (phase == "InRound" or phase == "Preparing" or phase == "Results") and definition then
+		return `{definition.Icon} {definition.Name}`
+	end
+	return `{icon} {if message ~= "" then message else phase}`
+end
+
+local function followTimer(timerPill: Frame, timer: TextLabel)
+	local lastWhole = -1
+	RunService.Heartbeat:Connect(function()
+		local phase = GameState.Get("Phase") or "Waiting"
+		local left = GameState.TimeLeft()
+		timerPill.Visible = GameState.Get("PhaseEndsAt") > 0
+		timer.Text = UIKit.FormatTime(left)
+		local whole = math.ceil(left)
+		-- Urgency: the timer turns red and pulses in the last 10 seconds of a round or vote.
+		local urgent = (phase == "InRound" or phase == "Voting") and left > 0 and left <= 10
+		timer.TextColor3 = if urgent then Theme.Colors.Red else Theme.Colors.Yellow
+		if urgent and whole ~= lastWhole then
+			UIKit.PopIn(timerPill, 0.25)
 		end
-		if previous and profile.Level > previous.Level then
-			UIKit.PopIn(badge, 0.5)
-		end
+		lastWhole = whole
 	end)
 end
 
 local function buildPhaseBanner(parent: Instance)
-	local width = if isTouch() then 420 else 520 -- room for the profile chip on small phones
+	local width = 520
 	local holder = UIKit.new("Frame", {
 		Name = "PhaseBanner",
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -161,6 +332,7 @@ local function buildPhaseBanner(parent: Instance)
 		Text = "",
 		Font = Theme.Fonts.Display,
 		TextSize = 28,
+		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(28, 0),
 		Size = UDim2.new(1, -170, 1, 0),
@@ -180,6 +352,7 @@ local function buildPhaseBanner(parent: Instance)
 		Text = "",
 		Font = Theme.Fonts.Display,
 		TextSize = 34,
+		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		TextColor3 = Theme.Colors.Yellow,
 		Parent = timerPill,
@@ -205,33 +378,15 @@ local function buildPhaseBanner(parent: Instance)
 		Text = "",
 		Font = Theme.Fonts.Display,
 		TextSize = 24,
+		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		Parent = teams,
 	})
 
-	local lastWhole = -1
+	followTimer(timerPill, timer)
 	RunService.Heartbeat:Connect(function()
 		local phase = GameState.Get("Phase") or "Waiting"
-		local gameId = GameState.Get("GameId")
-		local definition = gameId ~= "" and GameDefinitions.Get(gameId)
-		local message = GameState.Get("Message") or ""
-		local icon = PHASE_ICONS[phase] or "🎉"
-		if (phase == "InRound" or phase == "Preparing" or phase == "Results") and definition then
-			title.Text = `{definition.Icon} {definition.Name}`
-		else
-			title.Text = `{icon} {if message ~= "" then message else phase}`
-		end
-		local left = GameState.TimeLeft()
-		timerPill.Visible = GameState.Get("PhaseEndsAt") > 0
-		timer.Text = UIKit.FormatTime(left)
-		local whole = math.ceil(left)
-		-- Urgency: the timer turns red and pulses in the last 10 seconds of a round or vote.
-		local urgent = (phase == "InRound" or phase == "Voting") and left > 0 and left <= 10
-		timer.TextColor3 = if urgent then Theme.Colors.Red else Theme.Colors.Yellow
-		if urgent and whole ~= lastWhole then
-			UIKit.PopIn(timerPill, 0.25)
-		end
-		lastWhole = whole
+		title.Text = bannerTitle(false)
 		status.Text = if phase == "InRound" then GameState.Get("Status") or "" else ""
 	end)
 
@@ -248,6 +403,139 @@ local function buildPhaseBanner(parent: Instance)
 	refreshTeams()
 end
 
+-- Phones: the banner sits in Roblox's top bar row (its own ScreenGui inside the device's safe area,
+-- level with Roblox's 44 pt buttons), centered, one short line as wide as its words.
+local TOUCH_BANNER_HEIGHT = 66
+local function buildTopBarBanner(hud: Instance)
+	local gui = UIKit.new("ScreenGui", {
+		Name = "PartyPanicTopBar",
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		DisplayOrder = 5,
+	})
+	-- Clear of the notch and home bar but not of the top bar (set in this order: either property
+	-- alone would do it, and the last one set wins).
+	gui.IgnoreGuiInset = true
+	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	gui.Parent = hud.Parent
+	local holder = UIKit.new("Frame", {
+		Name = "PhaseBanner",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0, 34), -- Roblox's buttons run from 12 to 55 pt
+		Size = UDim2.fromOffset(700, TOUCH_BANNER_HEIGHT),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	UIKit.AutoScale(holder, 0.8) -- phone size on tablets too, like Roblox's own buttons
+	local banner = UIKit.Panel({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(300, TOUCH_BANNER_HEIGHT),
+		CornerRadius = TOUCH_BANNER_HEIGHT / 2,
+		Parent = holder,
+	})
+	local title = UIKit.Label({
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = 26,
+		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(20, 0),
+		Size = UDim2.fromOffset(200, TOUCH_BANNER_HEIGHT),
+		Parent = banner,
+		Children = { UIKit.TextStroke(0.3) },
+	})
+	local timerPill = UIKit.new("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -7, 0.5, 0),
+		Size = UDim2.fromOffset(88, 52),
+		BackgroundColor3 = Theme.Colors.PanelDark,
+		Parent = banner,
+		Children = { UIKit.Round() },
+	})
+	local timer = UIKit.Label({
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = 28,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		TextColor3 = Theme.Colors.Yellow,
+		Parent = timerPill,
+	})
+	followTimer(timerPill, timer)
+
+	-- As wide as the words (re-measured every second too, in case the font was still loading).
+	local measuredFor, measuredAt = "", 0
+	RunService.Heartbeat:Connect(function()
+		local text = bannerTitle(true)
+		title.Text = text
+		local key = text .. tostring(timerPill.Visible)
+		if key == measuredFor and os.clock() - measuredAt < 1 then
+			return
+		end
+		measuredFor, measuredAt = key, os.clock()
+		local width = math.ceil(UIKit.TextWidth(text, 26, Theme.Fonts.Display)) + 4
+		title.Size = UDim2.fromOffset(width, TOUCH_BANNER_HEIGHT)
+		banner.Size =
+			UDim2.fromOffset(20 + width + (if timerPill.Visible then 12 + 88 + 7 else 20), TOUCH_BANNER_HEIGHT)
+	end)
+end
+
+-- Phones: the round's status line ("Survivors: 7") and team scores, just under the top bar in the
+-- middle. Mode HUDs go under them (Api.TopHud / HudY).
+local function buildTouchStatus(parent: Instance)
+	local holder = UIKit.new("Frame", {
+		Name = "RoundStatus",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
+		Size = UDim2.fromOffset(620, 90),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+	UIKit.AutoScale(holder)
+	local status = UIKit.Label({
+		Text = "",
+		TextSize = 22,
+		TextWrapped = false,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 6),
+		Size = UDim2.fromOffset(600, 30),
+		Parent = holder,
+		Children = { UIKit.TextStroke(0.2) },
+	})
+	local teams = UIKit.Panel({
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 40),
+		Size = UDim2.fromOffset(240, 42),
+		CornerRadius = 21,
+		Visible = false,
+		Parent = holder,
+	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+	local teamsLabel = UIKit.Label({
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = 24,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		Parent = teams,
+	})
+	RunService.Heartbeat:Connect(function()
+		local phase = GameState.Get("Phase") or "Waiting"
+		status.Text = if phase == "InRound" then GameState.Get("Status") or "" else ""
+	end)
+	local function refreshTeams()
+		local scores = GameState.GetJSON("TeamScores")
+		if type(scores) ~= "table" or next(scores) == nil then
+			teams.Visible = false
+			return
+		end
+		teams.Visible = true
+		teamsLabel.Text = `🔴 {scores.Red or 0}  —  {scores.Blue or 0} 🔵`
+	end
+	GameState.Changed("TeamScores", refreshTeams)
+	refreshTeams()
+end
+
 local function menuButton(
 	parent: Instance,
 	name: string,
@@ -257,13 +545,14 @@ local function menuButton(
 	top: Color3,
 	bottom: Color3
 ): TextButton
-	local size = if isTouch() then 64 else 74
+	local touch = isTouch()
+	local size = if touch then Theme.Touch.Target else 74
 	local button = UIKit.Button({
 		Name = name,
 		Text = icon,
-		TextSize = if isTouch() then 32 else 36,
+		TextSize = if touch then 34 else 36,
 		Size = UDim2.fromOffset(size, size),
-		CornerRadius = 24,
+		CornerRadius = if touch then 22 else 24,
 		LayoutOrder = order,
 		Parent = parent,
 	}, function()
@@ -271,10 +560,11 @@ local function menuButton(
 	end, top, bottom)
 	UIKit.Label({
 		Text = caption,
-		TextSize = if isTouch() then 17 else 15,
+		TextSize = if touch then Theme.Touch.MinText else 15,
+		TextWrapped = false,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, 2),
-		Size = UDim2.new(1, 10, 0, 18),
+		Position = UDim2.new(0.5, 0, 1, if touch then 4 else 2),
+		Size = UDim2.new(1, if touch then 20 else 10, 0, if touch then 20 else 18),
 		Parent = button,
 		Children = { UIKit.TextStroke(0.1) },
 	})
@@ -283,11 +573,12 @@ local function menuButton(
 		Text = "!",
 		Font = Theme.Fonts.Display,
 		TextSize = 20,
+		TextWrapped = false,
 		BackgroundTransparency = 0,
 		BackgroundColor3 = Theme.Colors.Red,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(1, -6, 0, 6),
-		Size = UDim2.fromOffset(26, 26),
+		Size = UDim2.fromOffset(if touch then 30 else 26, if touch then 30 else 26),
 		Visible = false,
 		Parent = button,
 		Children = { UIKit.Round() },
@@ -297,20 +588,23 @@ local function menuButton(
 end
 
 local function buildMenu(parent: Instance)
-	-- PC: the middle of the right edge. Touch: the top right corner, where it can't be hit by
-	-- mistake when reaching for the jump button.
+	-- PC: the middle of the right edge. Touch: down from the top right corner, where it can't be
+	-- hit by mistake when reaching for the jump button.
 	local touch = isTouch()
+	local gap = if touch then 12 else 14
 	local menu = UIKit.new("Frame", {
 		Name = "Menu",
 		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(1, 0.5),
-		Position = if touch then UDim2.new(1, -10, 0, 6) else UDim2.new(1, -14, 0.5, 0),
-		Size = if touch then UDim2.fromOffset(70, 4 * 64 + 3 * 18 + 20) else UDim2.fromOffset(80, 360),
+		Position = if touch then UDim2.new(1, -8, 0, 6) else UDim2.new(1, -14, 0.5, 0),
+		Size = if touch
+			then UDim2.fromOffset(Theme.Touch.Target + 20, 4 * Theme.Touch.Target + 3 * gap + 6)
+			else UDim2.fromOffset(80, 360),
 		BackgroundTransparency = 1,
 		Parent = parent,
 		Children = {
 			UIKit.List(
 				Enum.FillDirection.Vertical,
-				if touch then 18 else 14,
+				gap,
 				Enum.HorizontalAlignment.Center,
 				if touch then Enum.VerticalAlignment.Top else Enum.VerticalAlignment.Center
 			),
@@ -335,10 +629,13 @@ local function toggleRow(
 	getter: () -> boolean,
 	onToggle: (boolean) -> ()
 )
-	local row = UIKit.new(
-		"Frame",
-		{ Size = UDim2.new(1, 0, 0, 64), BackgroundTransparency = 1, LayoutOrder = order, Parent = parent }
-	)
+	local touch = isTouch()
+	local row = UIKit.new("Frame", {
+		Size = UDim2.new(1, 0, 0, if touch then 76 else 64),
+		BackgroundTransparency = 1,
+		LayoutOrder = order,
+		Parent = parent,
+	})
 	UIKit.Label({
 		Text = label,
 		TextSize = 24,
@@ -352,7 +649,7 @@ local function toggleRow(
 		TextSize = 22,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.fromOffset(130, 50),
+		Size = UDim2.fromOffset(130, if touch then Theme.Touch.Target else 50),
 		CornerRadius = 25,
 		Parent = row,
 	}, function()
@@ -373,10 +670,13 @@ local MUSIC_LEVELS = {
 }
 
 local function musicRow(parent: Instance, order: number, setSetting: RemoteEvent)
-	local row = UIKit.new(
-		"Frame",
-		{ Size = UDim2.new(1, 0, 0, 64), BackgroundTransparency = 1, LayoutOrder = order, Parent = parent }
-	)
+	local touch = isTouch()
+	local row = UIKit.new("Frame", {
+		Size = UDim2.new(1, 0, 0, if touch then 76 else 64),
+		BackgroundTransparency = 1,
+		LayoutOrder = order,
+		Parent = parent,
+	})
 	UIKit.Label({
 		Text = "🎵 Music volume",
 		TextSize = 24,
@@ -404,7 +704,7 @@ local function musicRow(parent: Instance, order: number, setSetting: RemoteEvent
 		TextSize = 22,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.fromOffset(170, 50),
+		Size = UDim2.fromOffset(170, if touch then Theme.Touch.Target else 50),
 		CornerRadius = 25,
 		Parent = row,
 	}, function()
@@ -419,7 +719,8 @@ local function musicRow(parent: Instance, order: number, setSetting: RemoteEvent
 end
 
 local function buildSettings(overlay: Instance)
-	local modal = Modal.new(overlay, "Settings", "⚙️", Vector2.new(560, 420))
+	local touch = isTouch()
+	local modal = Modal.new(overlay, "Settings", "⚙️", Vector2.new(560, if touch then 440 else 420))
 	local list = UIKit.new("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
@@ -437,21 +738,27 @@ local function buildSettings(overlay: Instance)
 		Text = "Reduced effects tones down particles, flashes and motion.",
 		TextSize = 18,
 		TextColor3 = Theme.Colors.TextDim,
+		Size = UDim2.new(1, 0, 0, 44),
 		LayoutOrder = 3,
 		Parent = list,
 	})
 	if Config.Monetization.VipGamePassId ~= 0 then
-		UIKit.Button(
-			{ Text = "💎 Get VIP (cosmetics only)", Size = UDim2.new(1, 0, 0, 56), LayoutOrder = 4, Parent = list },
-			function()
-				Remotes.Get("PromptVip"):FireServer()
-			end,
-			Theme.Colors.Yellow,
-			Theme.Colors.Orange
-		)
+		UIKit.Button({
+			Text = "💎 Get VIP (cosmetics only)",
+			Size = UDim2.new(1, 0, 0, if touch then Theme.Touch.Target else 56),
+			LayoutOrder = 4,
+			Parent = list,
+		}, function()
+			Remotes.Get("PromptVip"):FireServer()
+		end, Theme.Colors.Yellow, Theme.Colors.Orange)
 	end
-	local saveNote =
-		UIKit.Label({ Text = "", TextSize = 17, TextColor3 = Theme.Colors.TextDim, LayoutOrder = 5, Parent = list })
+	local saveNote = UIKit.Label({
+		Text = "",
+		TextSize = 18,
+		TextColor3 = Theme.Colors.TextDim,
+		LayoutOrder = 5,
+		Parent = list,
+	})
 	State.ProfileChanged:Connect(function(profile)
 		saveNote.Text = if profile.CanSave
 			then "Your progress saves automatically."
@@ -461,8 +768,14 @@ local function buildSettings(overlay: Instance)
 end
 
 function HudController.Start(context)
-	buildProfileChip(context.Hud)
-	buildPhaseBanner(context.Hud)
+	if isTouch() then
+		buildTouchProfile(context.Hud)
+		buildTopBarBanner(context.Hud)
+		buildTouchStatus(context.Hud)
+	else
+		buildProfileChip(context.Hud)
+		buildPhaseBanner(context.Hud)
+	end
 	buildMenu(context.Hud)
 	local settings = buildSettings(context.Overlay)
 

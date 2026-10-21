@@ -1,9 +1,10 @@
 -- Toast notifications: short, icon-led messages that slide in and fade out (design doc §12).
 -- They draw above the HUD and mode HUDs (but under pop-ups) in a spot nothing else uses: the top
--- right corner on PC (above the side menu), and on phones the bottom middle like Android toasts,
--- between the thumbstick and the jump button, lifted above the "you're out" and spectate panels
--- (and only the newest while the rules card is up).
+-- right corner on PC (above the side menu), and on phones low down between the thumbstick's corner
+-- and the jump button (62% across: the middle of that gap), lifted above the "you're out" and
+-- spectate panels (and only the newest while the rules card is up).
 -- Two at a time (a new one pushes the oldest out), so they never reach the menu or the vote.
+-- A toast is as tall as its lines (measured, not AutomaticSize, which cut text short on phones).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -21,11 +22,16 @@ local KINDS = {
 	reward = { Icon = "🎁", Color = Theme.Colors.Yellow },
 }
 
--- Bottom-middle HUD panels (RoundController, SpectateController) the phone toasts stay above:
--- name -> their height plus a gap, in the same scaled units.
-local BOTTOM_PANELS = { OutPanel = 120 + 24, Spectate = 76 + 24, SpectateButton = 56 + 24 }
+-- Low HUD panels (RoundController, SpectateController) the phone toasts stay above: name -> their
+-- height plus a gap, in the same scaled units.
+local BOTTOM_PANELS = { OutPanel = 86 + 12, Spectate = 86 + 12, SpectateButton = 72 + 12 }
+
+-- Toast width and text (scaled units): PC, then phones.
+local WIDTH, TEXT, PAD_X, PAD_Y = 360, 21, 18, 10
+local TOUCH_WIDTH, TOUCH_TEXT, TOUCH_PAD_X, TOUCH_PAD_Y = 440, 19, 16, 8
 
 local MAX_TOASTS = 2
+local touch = false
 local newestLast = false -- phones: the newest toast sits at the bottom of the stack
 local stack: Frame
 local active: { Frame } = {}
@@ -35,10 +41,16 @@ function NotificationController.Show(text: string, kind: string?, duration: numb
 	local style = KINDS[kind or "info"] or KINDS.info
 	order += 1
 
+	local message = `{style.Icon}  {text}`
+	local width = if touch then TOUCH_WIDTH else WIDTH
+	local size = if touch then TOUCH_TEXT else TEXT
+	local padX = if touch then TOUCH_PAD_X else PAD_X
+	local padY = if touch then TOUCH_PAD_Y else PAD_Y
+	local lines = UIKit.TextLines(message, size, Theme.Fonts.Bold, width - 2 * padX)
+	local height = lines * size + 2 * padY + 4
 	local toast = UIKit.Panel({
 		Name = "Toast",
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 0, height),
 		LayoutOrder = if newestLast then order else -order,
 		BackgroundTransparency = 0.05,
 		CornerRadius = 14,
@@ -53,13 +65,12 @@ function NotificationController.Show(text: string, kind: string?, duration: numb
 		Children = { UIKit.Corner(6) },
 	})
 	UIKit.Label({
-		Text = `{style.Icon}  {text}`,
-		TextSize = 21,
+		Text = message,
+		TextSize = size,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(1, 0, 0, 0),
+		Size = UDim2.fromScale(1, 1),
 		Parent = toast,
-		Children = { UIKit.Padding(10, 18) },
+		Children = { UIKit.Padding(padY, padX) },
 	})
 	table.insert(active, toast)
 	while #active > MAX_TOASTS do
@@ -94,7 +105,7 @@ function NotificationController.Show(text: string, kind: string?, duration: numb
 end
 
 function NotificationController.Start(context)
-	local touch = UIKit.IsTouch()
+	touch = UIKit.IsTouch()
 	-- Their own layer: above the HUD (5) and mode HUDs (6), under pop-ups (10).
 	local gui = UIKit.new("ScreenGui", {
 		Name = "PartyPanicToasts",
@@ -110,8 +121,8 @@ function NotificationController.Start(context)
 		local holder = UIKit.new("Frame", {
 			Name = "ToastArea",
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -16),
-			Size = UDim2.fromOffset(440, 400),
+			Position = UDim2.new(0.62, 0, 1, -8),
+			Size = UDim2.fromOffset(TOUCH_WIDTH, 300),
 			BackgroundTransparency = 1,
 			Parent = gui,
 		})
@@ -120,8 +131,7 @@ function NotificationController.Start(context)
 			Name = "Toasts",
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.fromScale(0.5, 1),
-			Size = UDim2.new(1, 0, 0, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.fromScale(1, 1),
 			BackgroundTransparency = 1,
 			Parent = holder,
 			Children = {
@@ -163,8 +173,7 @@ function NotificationController.Start(context)
 			Name = "Toasts",
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -12, 0, 8),
-			Size = UDim2.fromOffset(360, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.fromOffset(WIDTH, 400),
 			BackgroundTransparency = 1,
 			Parent = gui,
 			Children = { UIKit.List(Enum.FillDirection.Vertical, 8, Enum.HorizontalAlignment.Right) },

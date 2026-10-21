@@ -4,6 +4,7 @@
 -- The picker pops up in the middle of the screen, clear of the thumbstick, the jump button and the
 -- vote cards; two rows show at a time (the rest scroll), and it closes when the game moves on to
 -- the next phase or a window opens, so it's never left covering the vote.
+-- Phones: 68 pt cells with 11 pt names and a 44 pt close button.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -78,17 +79,16 @@ local function cell(order: number, icon: string, name: string, onClick: () -> ()
 	}, onClick, top, bottom)
 	UIKit.Label({
 		Text = name,
-		TextSize = if touch then 17 else 15,
-		TextScaled = true,
+		TextSize = if touch then Theme.Touch.MinText else 15,
+		TextScaled = not touch,
 		TextWrapped = false,
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -3),
-		Size = UDim2.new(1, -8, 0, 18),
+		Size = UDim2.new(1, -6, 0, if touch then 22 else 18),
 		Parent = button,
-		Children = {
-			UIKit.TextStroke(0.2),
-			UIKit.new("UITextSizeConstraint", { MaxTextSize = if touch then 17 else 15 }),
-		},
+		Children = if touch
+			then { UIKit.TextStroke(0.2) }
+			else { UIKit.TextStroke(0.2), UIKit.new("UITextSizeConstraint", { MaxTextSize = 15 }) },
 	})
 end
 
@@ -133,7 +133,7 @@ end
 
 function EmoteController.Start(context)
 	touch = UIKit.IsTouch()
-	cellSize = if touch then 90 else 84
+	cellSize = if touch then 110 else 84
 	panel = UIKit.Panel({
 		Name = "Emotes",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -145,9 +145,10 @@ function EmoteController.Start(context)
 		Parent = context.Hud,
 	})
 	UIKit.AutoScale(panel)
+	panel:SetAttribute("PP_Popup", true) -- opened on request, over the middle of the screen
 	-- Phones: a taller title row, so the close button is big enough for a thumb.
-	local header = if touch then 56 else 44
-	local closeSize = if touch then 46 else 34
+	local header = if touch then 84 else 44
+	local closeSize = if touch then Theme.Touch.Target else 34
 	UIKit.Label({
 		Text = if touch then "🕺 Emotes" else "🕺 Emotes  (G)",
 		Font = Theme.Fonts.Display,

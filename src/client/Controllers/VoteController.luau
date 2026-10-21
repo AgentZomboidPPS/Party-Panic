@@ -2,9 +2,11 @@
 -- owner: "4 options always. and the 4th option should be random"), each with icon, name, category,
 -- one-line objective, estimated duration and live vote counts. Tap a card or walk onto a portal pad to vote;
 -- your choice is clearly marked and can be changed until the timer ends.
--- PC: a row along the bottom. Phones and tablets: compact upright cards under the round banner,
--- beside the menu, where the right thumb reaches them and they stay clear of the thumbstick and
--- the jump button (the objective is left to the rules card there).
+-- PC: a row along the bottom. Phones and tablets (owner: "Wtf is this mobile Ui lol"): a slim row
+-- of four small cards just under the top bar, centered under the "VOTE!" banner: icon, name on one
+-- line, category as just its icon, and the votes. It leaves the middle of the view free and stays
+-- above the thumbstick's corner and away from the jump button (the objective and length are on the
+-- rules card).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,6 +28,7 @@ type Card = {
 	icon: TextLabel,
 	name: TextLabel,
 	category: TextLabel,
+	categoryIcon: TextLabel,
 	objective: TextLabel,
 	count: TextLabel,
 	check: TextLabel,
@@ -40,7 +43,8 @@ local touch = false
 
 local CARDS = 4
 local CARD_W = 228 -- PC
-local TOUCH_W = 150
+local TOUCH_W, TOUCH_H, TOUCH_GAP = 150, 92, 10
+local TOUCH_TOP = 14 -- room above the row for the "YOUR VOTE" tag on a card's top edge
 
 local function darker(color: Color3): Color3
 	local h, s, v = color:ToHSV()
@@ -56,8 +60,8 @@ local function buildCard(index: number): Card
 	local button = UIKit.Button({
 		Name = "Card" .. index,
 		Text = "",
-		Size = if touch then UDim2.fromOffset(TOUCH_W, 220) else UDim2.fromOffset(CARD_W, 214),
-		CornerRadius = 22,
+		Size = if touch then UDim2.fromOffset(TOUCH_W, TOUCH_H) else UDim2.fromOffset(CARD_W, 214),
+		CornerRadius = if touch then 18 else 22,
 		LayoutOrder = index,
 		Parent = row,
 	}, function()
@@ -66,34 +70,51 @@ local function buildCard(index: number): Card
 	local gradient = button:FindFirstChildOfClass("UIGradient") :: UIGradient
 	local stroke = button:FindFirstChildOfClass("UIStroke") :: UIStroke
 
-	-- PC: icon at the top left with the name beside it. Touch: icon, name and category stacked.
+	-- PC: icon at the top left with the name beside it. Touch: icon over the name, the category's
+	-- icon in the corner.
 	local icon = UIKit.Label({
 		Text = "",
-		TextSize = if touch then 46 else 54,
+		TextSize = if touch then 34 else 54,
+		TextWrapped = false,
 		AnchorPoint = if touch then Vector2.new(0.5, 0) else Vector2.zero,
-		Position = if touch then UDim2.new(0.5, 0, 0, 10) else UDim2.fromOffset(12, 8),
-		Size = if touch then UDim2.fromOffset(60, 52) else UDim2.fromOffset(70, 70),
+		Position = if touch then UDim2.new(0.5, 0, 0, 3) else UDim2.fromOffset(12, 8),
+		Size = if touch then UDim2.fromOffset(60, 36) else UDim2.fromOffset(70, 70),
 		Parent = button,
 	})
 	local name = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = if touch then 23 else 26,
-		TextScaled = true,
+		TextSize = if touch then 20 else 26,
+		TextScaled = not touch,
+		TextWrapped = not touch,
 		TextXAlignment = if touch then Enum.TextXAlignment.Center else Enum.TextXAlignment.Left,
-		Position = if touch then UDim2.fromOffset(8, 64) else UDim2.fromOffset(86, 12),
-		Size = if touch then UDim2.new(1, -16, 0, 52) else UDim2.new(1, -96, 0, 60),
+		AnchorPoint = if touch then Vector2.new(0.5, 0) else Vector2.zero,
+		Position = if touch then UDim2.new(0.5, 0, 0, 37) else UDim2.fromOffset(86, 12),
+		Size = if touch then UDim2.new(1, -10, 0, 24) else UDim2.new(1, -96, 0, 60),
 		Parent = button,
-		Children = { UIKit.TextStroke(0.3), fitted(if touch then 23 else 26) },
+		Children = if touch then { UIKit.TextStroke(0.3) } else { UIKit.TextStroke(0.3), fitted(26) },
+	})
+	if not touch then
+		name:SetAttribute("PP_Lines", 2) -- PC: a long name may take two lines beside the icon
+	end
+	local categoryIcon = UIKit.Label({
+		Text = "",
+		TextSize = 20,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(6, 4),
+		Size = UDim2.fromOffset(28, 28),
+		Visible = touch,
+		Parent = button,
 	})
 	local category = UIKit.Label({
 		Text = "",
 		TextSize = 17,
 		TextScaled = true,
 		TextColor3 = Theme.Colors.TextDim,
-		TextXAlignment = if touch then Enum.TextXAlignment.Center else Enum.TextXAlignment.Left,
-		Position = if touch then UDim2.fromOffset(8, 118) else UDim2.fromOffset(16, 80),
-		Size = if touch then UDim2.new(1, -16, 0, 22) else UDim2.new(1, -32, 0, 22),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(16, 80),
+		Size = UDim2.new(1, -32, 0, 22),
+		Visible = not touch,
 		Parent = button,
 		Children = { fitted(17) },
 	})
@@ -111,8 +132,8 @@ local function buildCard(index: number): Card
 	})
 	local countPill = UIKit.new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.new(1, -24, 0, if touch then 38 else 34),
+		Position = UDim2.new(0.5, 0, 1, if touch then -4 else -10),
+		Size = UDim2.new(1, if touch then -16 else -24, 0, if touch then 26 else 34),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		BackgroundTransparency = 0.2,
 		Parent = button,
@@ -121,19 +142,21 @@ local function buildCard(index: number): Card
 	local count = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 22,
+		TextSize = if touch then Theme.Touch.MinText else 22,
+		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		Parent = countPill,
 	})
 	local check = UIKit.Label({
 		Text = "✓ YOUR VOTE",
 		Font = Theme.Fonts.Display,
-		TextSize = if touch then 17 else 18,
+		TextSize = 18,
+		TextWrapped = false,
 		BackgroundTransparency = 0,
 		BackgroundColor3 = Theme.Colors.Green,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0, 0),
-		Size = if touch then UDim2.fromOffset(136, 28) else UDim2.fromOffset(150, 30),
+		Size = if touch then UDim2.fromOffset(124, 28) else UDim2.fromOffset(150, 30),
 		Visible = false,
 		Parent = button,
 		Children = { UIKit.Round(), UIKit.TextStroke(0.3) },
@@ -143,6 +166,7 @@ local function buildCard(index: number): Card
 		icon = icon,
 		name = name,
 		category = category,
+		categoryIcon = categoryIcon,
 		objective = objective,
 		count = count,
 		check = check,
@@ -172,12 +196,14 @@ local function refresh()
 			card.name.Text = definition.Name
 			local info = GameDefinitions.Categories[definition.Category]
 			card.category.Text = `{info and info.Icon or ""} {definition.Category}  •  ⏱ ~{definition.Duration}s`
+			card.categoryIcon.Text = info and info.Icon or ""
 			card.objective.Text = definition.Objective
 			card.gradient.Color = ColorSequence.new(definition.Color, darker(definition.Color))
 		else
 			card.icon.Text = "🎲"
 			card.name.Text = "Random"
-			card.category.Text = if touch then "Any game!" else "Any game • revealed if it wins"
+			card.category.Text = "Any game • revealed if it wins"
+			card.categoryIcon.Text = "❔"
 			card.objective.Text = "Could be any game. Feeling lucky?"
 			card.gradient.Color = ColorSequence.new(Color3.fromRGB(150, 110, 255), Color3.fromRGB(70, 40, 140))
 		end
@@ -186,7 +212,7 @@ local function refresh()
 		local selected = myVote == index
 		card.check.Visible = selected
 		card.stroke.Color = if selected then Theme.Colors.Yellow else Color3.new(1, 1, 1)
-		card.stroke.Thickness = if selected then 5 else 2
+		card.stroke.Thickness = if selected then (if touch then 4 else 5) else 2
 		card.stroke.Transparency = if selected then 0 else 0.55
 	end
 end
@@ -195,20 +221,18 @@ function VoteController.Start(context)
 	touch = UIKit.IsTouch()
 	local list = UIKit.List(
 		Enum.FillDirection.Horizontal,
-		if touch then 10 else 16,
+		if touch then TOUCH_GAP else 16,
 		Enum.HorizontalAlignment.Center,
 		if touch then Enum.VerticalAlignment.Top else Enum.VerticalAlignment.Bottom
 	)
 	if touch then
-		-- Anchored like the menu (top right) and scaled the same way, so the cards sit just under
-		-- the round banner (80 down, with room for the "YOUR VOTE" tag on a card's top edge) and
-		-- just left of the menu column (70 wide) on every screen.
-		local top = 80 + 16
+		-- Centered just under the top bar (the "VOTE!" banner sits above it, in the top bar row).
+		local width = CARDS * TOUCH_W + (CARDS - 1) * TOUCH_GAP
 		holder = UIKit.new("Frame", {
 			Name = "Vote",
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -10, 0, 10),
-			Size = UDim2.fromOffset(78 + CARDS * TOUCH_W + (CARDS - 1) * 10, top + 220),
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 4),
+			Size = UDim2.fromOffset(width, TOUCH_TOP + TOUCH_H + 4),
 			BackgroundTransparency = 1,
 			Visible = false,
 			Parent = context.Hud,
@@ -216,9 +240,8 @@ function VoteController.Start(context)
 		UIKit.AutoScale(holder)
 		row = UIKit.new("Frame", {
 			Name = "Cards",
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -78, 0, top),
-			Size = UDim2.fromOffset(CARDS * TOUCH_W + (CARDS - 1) * 10, 220),
+			Position = UDim2.fromOffset(0, TOUCH_TOP),
+			Size = UDim2.fromOffset(width, TOUCH_H),
 			BackgroundTransparency = 1,
 			Parent = holder,
 			Children = { list },
