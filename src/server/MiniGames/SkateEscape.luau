@@ -309,33 +309,21 @@ function SkateEscape:_buildArena()
 		CFrame = CFrame.new(origin + Vector3.new(0, 0, -length - 6)),
 		Parent = arena,
 	})
-	Build.Decor({
-		Name = "FinishLine",
-		Size = Vector3.new(DECK_WIDTH - 4, 0.16, 4),
-		CFrame = CFrame.new(origin + Vector3.new(0, 0.12, -length - 2)),
-		Color = rgb(250, 250, 250),
-		Parent = arena,
-	})
+	-- The finish line: a checkerboard of black and white tiles side by side (none overlap).
 	local squares = 24
+	local tile = (DECK_WIDTH - 4) / squares
 	for index = 0, squares * 2 - 1 do
 		local column = index % squares
 		local row = index // squares
-		if (column + row) % 2 == 0 then
-			Build.Decor({
-				Name = "Checker",
-				Size = Vector3.new((DECK_WIDTH - 4) / squares, 0.12, 2),
-				CFrame = CFrame.new(
-					origin
-						+ Vector3.new(
-							-(DECK_WIDTH - 4) / 2 + (column + 0.5) * (DECK_WIDTH - 4) / squares,
-							0.2,
-							-length - 1 - row * 2
-						)
-				),
-				Color = rgb(28, 28, 34),
-				Parent = arena,
-			})
-		end
+		Build.Decor({
+			Name = "Checker",
+			Size = Vector3.new(tile, 0.12, 2),
+			CFrame = CFrame.new(
+				origin + Vector3.new(-(DECK_WIDTH - 4) / 2 + (column + 0.5) * tile, 0.08, -length - 1 - row * 2)
+			),
+			Color = if (column + row) % 2 == 0 then rgb(28, 28, 34) else rgb(250, 250, 250),
+			Parent = arena,
+		})
 	end
 	for _, side in { -1, 1 } do
 		for _, z in { 20, 45 } do
