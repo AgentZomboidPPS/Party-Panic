@@ -1,13 +1,13 @@
 -- Test bot for Struggle (tools/checks/round_harness.py): every stand-in player walks (env.Move, the
 -- test server has no physics) toward loose orbs nearby or else its nearest rival, faces it, and
 -- swings through the same actions a client sends ("Charge" with the press time, "Swing" with the
--- release time; some held long enough to charge). One press comes during the 3-2-1 countdown (it
--- must not cost a later swing). With 3 or more players one leaves mid-round (their orbs spill).
+-- release time; some held long enough to charge). The very first is a release with no press before
+-- it (as when the press came during the 3-2-1 and was refused): it must still swing. With 3 or more players one leaves mid-round (their orbs spill).
 -- First thing, it lists anything in the arena that is solid but not drawn.
 return function(env)
 	local ctx = env.ctx
 	local mode = env.game
-	local holdUntil, nextSwing, positions = {}, {}, {}
+	local holdUntil, nextSwing = {}, {}
 	local presses, early = 0, false
 	local reported = {}
 	local left = false
@@ -37,8 +37,8 @@ return function(env)
 			)
 		end
 		if not early and env.players[1] then
-			early = true -- pressed before GO: refused, and must not block the first real swing
-			env.Action(env.players[1], "Charge", now)
+			early = true -- a release whose press never arrived: still a swing (a tap)
+			env.Action(env.players[1], "Swing", now)
 		end
 		if not mode.held or not mode.center then
 			return
@@ -53,7 +53,7 @@ return function(env)
 			if not root then
 				continue
 			end
-			local pos = positions[player] or root.Position
+			local pos = root
 			-- Goal: an orb within 12 studs, else the nearest rival.
 			local goal, rival, rivalDistance = nil, nil, math.huge
 			for _, orb in mode.orbs do
@@ -67,9 +67,9 @@ return function(env)
 				if other ~= player and env.Alive(other) and mode.held[other] ~= nil then
 					local otherRoot = env.Root(other)
 					if otherRoot then
-						local d = (otherRoot.Position - pos).Magnitude
+						local d = (otherRoot - pos).Magnitude
 						if d < rivalDistance then
-							rival, rivalDistance = otherRoot.Position, d
+							rival, rivalDistance = otherRoot, d
 						end
 					end
 				end
@@ -84,7 +84,7 @@ return function(env)
 				if (lookAt - nextPos).Magnitude < 0.1 then
 					lookAt = nextPos + Vector3.new(0, 0, -1)
 				end
-				positions[player] = nextPos
+
 				env.Move(player, nextPos, lookAt)
 			end
 			-- Swing at a rival in reach.

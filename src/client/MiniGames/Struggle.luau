@@ -23,6 +23,7 @@ local Struggle = {}
 
 local REST_BACK = 0.3 -- seconds the bat takes back to rest after a strike
 local FLY = 0.25 -- seconds a picked-up orb takes to fly to its taker
+local ORB_SCALE = 1.25 -- orbs are drawn a little bigger than their meshes (easy to spot on phones)
 
 -- Bat poses in the holder's root space (the bat's pivot is the knob; it points along its +Y).
 local REST = CFrame.new(1.05, -0.1, -0.35) * CFrame.Angles(math.rad(55), 0, math.rad(-12))
@@ -448,6 +449,7 @@ function Struggle.Start(api)
 			model = source:Clone() :: Model
 			quiet(model :: Model)
 		end
+		(model :: Model):ScaleTo(ORB_SCALE)
 		local parts = partsOf(model :: Model)
 		for _, part in parts do
 			part.Color = color
@@ -809,7 +811,7 @@ function Struggle.Start(api)
 					local position = (orb.From :: Vector3):Lerp(target, k)
 						+ Vector3.new(0, math.sin(k * math.pi) * 1.5, 0)
 					model:PivotTo(CFrame.new(position) * CFrame.Angles(0, clock * 6, 0))
-					model:ScaleTo(math.max(0.2, 1 - k * 0.7))
+					model:ScaleTo(ORB_SCALE * math.max(0.2, 1 - k * 0.7))
 				end
 				continue
 			end

@@ -213,14 +213,14 @@ function Struggle:_buildArena()
 	local origin = self.center
 	local arena = ctx.Arena
 	local chalk = Color3.fromRGB(250, 246, 235)
-	-- Packed dirt out to the horizon, a little below the sand's top.
+	-- Dry grass out to the horizon, a little below the sand's top.
 	Build.Part({
 		Name = "Ground",
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(4, 700, 700),
 		CFrame = CFrame.new(origin - Vector3.new(0, 2.3, 0)) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = Color3.fromRGB(150, 118, 88),
-		Material = Enum.Material.Ground,
+		Color = Color3.fromRGB(150, 150, 84),
+		Material = Enum.Material.Grass,
 		Parent = arena,
 	})
 	Build.Part({
@@ -235,7 +235,7 @@ function Struggle:_buildArena()
 	Build.Decor({
 		Name = "Chalk",
 		Size = Vector3.new(0.4, 0.04, FENCE_Z * 2 - 3),
-		CFrame = CFrame.new(origin + Vector3.new(0, 0.02, 0)),
+		CFrame = CFrame.new(origin + Vector3.new(0, 0.07, 0)),
 		Color = chalk,
 		Transparency = 0.2,
 		Parent = arena,
@@ -245,7 +245,7 @@ function Struggle:_buildArena()
 		Build.Decor({
 			Name = "Chalk",
 			Size = Vector3.new(0.4, 0.04, 1.4),
-			CFrame = CFrame.new(origin + Vector3.new(math.cos(angle) * 9, 0.02, math.sin(angle) * 9))
+			CFrame = CFrame.new(origin + Vector3.new(math.cos(angle) * 9, 0.07, math.sin(angle) * 9))
 				* CFrame.Angles(0, -angle, 0),
 			Color = chalk,
 			Transparency = 0.2,
@@ -287,22 +287,31 @@ function Struggle:_buildArena()
 		})
 	end
 
-	-- South: the tram yard, two tracks with a tram on each.
-	for _, z in { FENCE_Z + 12, FENCE_Z + 22 } do
-		for x = -120, 120, 40 do
+	-- South: the tram yard up on a brick embankment, so its trams show over the fence.
+	local deck = 8
+	Build.Part({
+		Name = "Embankment",
+		Size = Vector3.new(320, deck + 0.3, 26),
+		CFrame = CFrame.new(origin + Vector3.new(0, (deck - 0.3) / 2, FENCE_Z + 20)),
+		Color = Color3.fromRGB(150, 92, 72),
+		Material = Enum.Material.Brick,
+		Parent = arena,
+	})
+	for _, z in { FENCE_Z + 15, FENCE_Z + 25 } do
+		for x = -140, 140, 40 do
 			MeshLibrary.Get("StruggleTrack", {
-				CFrame = CFrame.new(origin + Vector3.new(x, -0.3, z)) * CFrame.Angles(0, math.rad(90), 0),
+				CFrame = CFrame.new(origin + Vector3.new(x, deck, z)) * CFrame.Angles(0, math.rad(90), 0),
 				Parent = arena,
 			})
 		end
 	end
 	MeshLibrary.Get("StruggleTram", {
-		CFrame = CFrame.new(origin + Vector3.new(-14, -0.3, FENCE_Z + 12)) * CFrame.Angles(0, math.rad(90), 0),
+		CFrame = CFrame.new(origin + Vector3.new(-14, deck + 0.25, FENCE_Z + 15)) * CFrame.Angles(0, math.rad(90), 0),
 		Parent = arena,
 	})
 	MeshLibrary.Get("StruggleTram", {
 		Colors = { Body = Color3.fromRGB(80, 150, 120) },
-		CFrame = CFrame.new(origin + Vector3.new(32, -0.3, FENCE_Z + 22)) * CFrame.Angles(0, math.rad(-90), 0),
+		CFrame = CFrame.new(origin + Vector3.new(32, deck + 0.25, FENCE_Z + 25)) * CFrame.Angles(0, math.rad(-90), 0),
 		Parent = arena,
 	})
 
@@ -329,6 +338,9 @@ function Struggle:_buildArena()
 	for index = 0, 21 do
 		local angle = (index + rng:NextNumber(-0.3, 0.3)) / 22 * math.pi * 2
 		local distance = rng:NextNumber(85, 125)
+		if math.sin(angle) * distance > FENCE_Z + 2 and math.sin(angle) * distance < FENCE_Z + 40 then
+			continue -- not in the embankment
+		end
 		MeshLibrary.Get("Tree", {
 			Scale = rng:NextNumber(1.6, 2.6),
 			Colors = { Leaves = Color3.fromRGB(110, 140, 70):Lerp(Color3.fromRGB(160, 120, 60), rng:NextNumber()) },
