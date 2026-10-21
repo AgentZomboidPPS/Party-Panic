@@ -696,7 +696,10 @@ def look_of(look):
 
 
 def avatar(location, yaw=0.0, pose="stand", look=0, face="happy", tilt=(0, 0), scale=1.0, hat="default", pose_extra=None,
-           head_scale=1.0):
+           head_scale=1.0, shoulders="r6"):
+    """A blocky avatar standing on `location`. shoulders="r6" turns the arms where Roblox's R6 rig
+    does (half a stud below the top of the torso); "top" turns them about the torso's top corners,
+    so arms raised high hug the head instead of poking out of the shoulders (close-ups)."""
     lk = look_of(look)
     skin = SKINS[lk["skin"]] if isinstance(lk["skin"], int) else lk["skin"]
     p = dict(POSES[pose]) if isinstance(pose, str) else dict(pose)
@@ -711,10 +714,11 @@ def avatar(location, yaw=0.0, pose="stand", look=0, face="happy", tilt=(0, 0), s
         rounded_box("shoe", (1.05, 1.08, 0.42), lk["shoes"], (0, -0.03, -1.8), parent=hip, bevel=0.1)
     for side, key in ((1, "arm_l"), (-1, "arm_r")):
         swing, spread = p.get(key, (0, 4))
-        shoulder = empty("shoulder", (side * 1.0, 0, 3.5), (math.radians(-swing), math.radians(-side * spread), 0), root)
+        joint = 4.0 if shoulders == "top" else 3.5
+        shoulder = empty("shoulder", (side * 1.0, 0, joint), (math.radians(-swing), math.radians(-side * spread), 0), root)
         sleeve = two_tone(lk["shirt"], skin, lk.get("sleeve", 0.25))
         # A hair thinner than the torso, so a raised arm's top hides inside it instead of flickering.
-        rounded_box("arm", (1, 0.97, 2), skin, (side * 0.5, 0, -0.5), parent=shoulder, bevel=0.1, material=sleeve)
+        rounded_box("arm", (1, 0.97, 2), skin, (side * 0.5, 0, 3.0 - joint), parent=shoulder, bevel=0.1, material=sleeve)
     nod, roll, turn = p.get("head", (0, 0, 0))
     neck = empty("neck", (0, 0, 4.0), (math.radians(nod), math.radians(roll), math.radians(turn)), root)
     neck.scale = (head_scale, head_scale, head_scale)
@@ -1178,11 +1182,11 @@ def icon_scream(args, out):
     """A big screaming face, hands up beside it, party hat flying off, the fire rope sweeping in at
     the bottom and confetti everywhere."""
     icon_scene(args, sun=(0.45, -0.8, 0.5))
-    look = {"skin": 0, "shirt": (90, 215, 70), "pants": (40, 52, 110), "shoes": (250, 250, 250), "hat": None, "sleeve": 0.45}
-    avatar((0, 0, 0), math.radians(-10), "panic", look, "scream", head_scale=1.5,
-           pose_extra={"arm_l": (-6, 150), "arm_r": (-6, 152), "head": (-5, 5, -4)})
+    look = {"skin": 0, "shirt": (40, 120, 255), "pants": (40, 52, 110), "shoes": (250, 250, 250), "hat": None, "sleeve": -0.55}
+    avatar((0, 0, 0), math.radians(-10), "panic", look, "scream", head_scale=1.5, shoulders="top",
+           pose_extra={"arm_l": (-4, 146), "arm_r": (-4, 148), "head": (-5, 5, -4)})
     # The party hat, knocked off and flying.
-    holder = empty("hat", (1.45, -0.9, 5.3), (math.radians(18), math.radians(52), 0))
+    holder = empty("hat", (-1.5, -1.0, 5.75), (math.radians(14), math.radians(-48), 0))
     cone("hat", 0.48, 1.25, striped((110, 226, 140), (255, 230, 90), frequency=9, twist=1.0), (0, 0, 0), parent=holder)
     ball("pompom", 0.36, (255, 84, 150), (0, 0, 1.3), holder)
     # The fire rope sweeping in across the bottom.
@@ -1204,7 +1208,7 @@ def icon_scream(args, out):
     render_glow(out / "raw_icon_scream_glow.png")
     background = sunburst((ICON_SIZE, ICON_SIZE), (ICON_SIZE * 0.5, ICON_SIZE * 0.45), (255, 120, 210), (88, 26, 160),
                           rays=18, ray_light=40)
-    image = icon_compose(out, "scream", background)
+    image = icon_compose(out, "scream", background, glow_strength=0.6)
     return save_icon(image, out, "scream")
 
 
@@ -1212,9 +1216,10 @@ def icon_leap(args, out):
     """Mid-jump over the fire rope, lava glowing below."""
     icon_scene(args, sun=(0.3, -0.7, 0.65), sun_energy=3.6)
     look = {"skin": 0, "shirt": (255, 84, 150), "pants": (40, 52, 110), "shoes": (250, 250, 250), "hat": "party",
-            "hat_colors": ((64, 196, 255), (255, 230, 90))}
+            "hat_colors": ((64, 196, 255), (255, 230, 90)), "sleeve": -0.55}
     avatar((0, 0, 2.0), math.radians(-14), "jump", look, "panic", head_scale=1.35, tilt=(math.radians(-4), math.radians(4)),
-           pose_extra={"leg_l": (14, 24), "leg_r": (-6, 24), "arm_l": (15, 140), "arm_r": (15, 146), "head": (6, -4, 0)})
+           shoulders="top",
+           pose_extra={"leg_l": (14, 24), "leg_r": (-6, 24), "arm_l": (15, 140), "arm_r": (15, 146), "head": (-4, -4, 0)})
     rope = [V((-8 + 16 * t, 0.3 - 0.9 * math.sin(math.pi * t), 0.9 + 0.2 * math.sin(math.pi * t))) for t in
             (i / 16 for i in range(17))]
     fire_rope(rope, radius=0.14, seed=8, trail=(0, 0.6, 1), flames=1.2)
@@ -1224,7 +1229,7 @@ def icon_leap(args, out):
     lamp((0, -0.6, 0.6), 90, (1.0, 0.5, 0.15), 1.5)
     lamp((-3, -6, 8), 60, (0.75, 0.85, 1.0), 2.0)
     confetti(36, (0, 0, 6.5), (5.5, 3, 2.2), seed=4, size=0.3, avoid=[((0, -1, 6.3), 1.8)])
-    camera((1.4, -9.6, 4.6), (0, 0, 4.3), fov=44)
+    camera((1.6, -9.8, 2.2), (0, 0, 4.4), fov=44)
     render_to(out / "raw_icon_leap.png")
     render_glow(out / "raw_icon_leap_glow.png")
     background = sunburst((ICON_SIZE, ICON_SIZE), (ICON_SIZE * 0.5, ICON_SIZE * 0.42), (255, 200, 90), (200, 40, 110),
@@ -1238,10 +1243,10 @@ def icon_duo(args, out):
     icon_scene(args, sun=(0.3, -0.8, 0.55))
     party = {"skin": 3, "shirt": (255, 84, 150), "pants": (60, 60, 70), "shoes": (250, 250, 250), "hat": "party",
              "hat_colors": ((255, 214, 64), (64, 196, 255))}
-    panic = {"skin": 0, "shirt": (255, 140, 40), "pants": (40, 52, 110), "shoes": (250, 250, 250), "hat": None}
-    avatar((-1.45, 0.7, 0), math.radians(22), "cheer", party, "laugh", head_scale=1.4,
+    panic = {"skin": 0, "shirt": (255, 140, 40), "pants": (40, 52, 110), "shoes": (250, 250, 250), "hat": None, "sleeve": -0.55}
+    avatar((-1.45, 0.7, 0), math.radians(22), "cheer", party, "laugh", head_scale=1.4, shoulders="top",
            pose_extra={"arm_l": (10, 130), "arm_r": (10, 140), "head": (-6, -8, 0)})
-    avatar((1.45, -0.5, 0), math.radians(-22), "panic", panic, "scream", head_scale=1.4,
+    avatar((1.45, -0.5, 0), math.radians(-22), "panic", panic, "scream", head_scale=1.4, shoulders="top",
            pose_extra={"arm_l": (-5, 150), "arm_r": (-5, 150), "head": (-4, 8, 0)})
     faces = [((-1.45, 0.0, 4.9), 1.3), ((1.45, -1.2, 4.9), 1.3), ((0, -3, 4.9), 2.0)]
     confetti(90, (0, -0.5, 5.2), (5, 2.5, 2.8), seed=13, size=0.28, emission=0.5, avoid=faces)
@@ -1348,6 +1353,31 @@ def text_card(size, text, color=(255, 255, 255), background=(28, 20, 56), font_s
     return card
 
 
+def dim_neon(strengths):
+    """Turns down the glow of the snapshot's neon parts named in `strengths` ({name: strength})."""
+    for obj in bpy.context.scene.objects:
+        name = obj.name.split(".")[0]
+        if name not in strengths or not obj.material_slots or not obj.material_slots[0].material:
+            continue
+        bsdf = obj.material_slots[0].material.node_tree.nodes.get("Principled BSDF")
+        if bsdf is None:
+            continue
+        light = bpy.data.materials.new("dim_neon")
+        light.use_nodes = True
+        nodes, links = light.node_tree.nodes, light.node_tree.links
+        nodes.remove(nodes["Principled BSDF"])
+        emit = nodes.new("ShaderNodeEmission")
+        emit.inputs["Color"].default_value = bsdf.inputs["Emission Color"].default_value
+        emit.inputs["Strength"].default_value = strengths[name]
+        clear = nodes.new("ShaderNodeBsdfTransparent")
+        mix = nodes.new("ShaderNodeMixShader")
+        mix.inputs[0].default_value = bsdf.inputs["Alpha"].default_value
+        links.new(clear.outputs[0], mix.inputs[1])
+        links.new(emit.outputs[0], mix.inputs[2])
+        links.new(mix.outputs[0], nodes["Material Output"].inputs["Surface"])
+        obj.material_slots[0].material = light
+
+
 def thumb_finish(out, name, glow_strength=0.5, saturation=1.12, contrast=1.06, vignette_strength=0.28):
     image = grade(out / f"raw_{name}.png", saturation, contrast)
     glow_path = out / f"raw_{name}_glow.png"
@@ -1439,6 +1469,9 @@ def scene_firerope(args, out):
     new_scene(args.samples, args.width, args.height, top=(0.16, 0.22, 0.62), horizon=(1.0, 0.62, 0.36),
               sun=(0.55, -0.35, 0.55), sun_energy=3.6, sun_color=(1.0, 0.9, 0.75))
     build_arena(data, parts)
+    # The rope's neon is so close to the camera here that it burns out to white: a little less
+    # light, so the fireballs keep their gold.
+    dim_neon({"Fireball": 1.7, "Core": 2.4, "Halo": 1.6})
     rope = [p for p in parts if p["n"] == "Fireball"]
     rng = random.Random(7)
     hot = fire_material(strength=2.2)
