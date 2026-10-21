@@ -32,6 +32,15 @@ Teams.Icons = {
 	Swimmers = "🏊",
 } :: { [string]: string }
 
+-- The shape each colour team wears, so a team never goes by its colour alone (the team modes draw the
+-- same ones on their pills, stations and sleds: Pump & Pop, Cake Factory, Bobsled Run).
+Teams.Shapes = {
+	Red = "★",
+	Blue = "●",
+	Green = "▲",
+	Yellow = "◆",
+} :: { [string]: string }
+
 function Teams.Color(name: string?): Color3?
 	return if name then Teams.Colors[name] else nil
 end
