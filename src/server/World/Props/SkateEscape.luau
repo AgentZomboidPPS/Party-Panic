@@ -112,7 +112,7 @@ return function(h)
 		-- rock bands stepping back as they rise, with two lava falls.
 		SkateCanyonWall = {
 			Height = 99.34,
-			AssetId = 123918182497538,
+			AssetId = 88097771332453,
 			Shadow = false,
 			Palette = {
 				Basalt = h.rgb(72, 50, 58),

@@ -491,7 +491,7 @@ def canyon_wall():
     """A 200-stud stretch of the canyon's side: layered toy rock bands (dark basalt at the lava, red,
     orange, a cream stripe, terracotta on top) stepping back as they rise, boulders on the ledges and
     two lava falls pouring down the face. Faces -Z; its foot (z = 0) stands in the lava."""
-    xs = list(np.linspace(-WALL_LENGTH / 2, WALL_LENGTH / 2, 50))
+    xs = list(np.linspace(-WALL_LENGTH / 2, WALL_LENGTH / 2, 40))
     pieces = {}
     for band, (name, _, _, _, _) in enumerate(WALL_BANDS):
         sections = []
@@ -522,7 +522,7 @@ def canyon_wall():
     # Boulders resting on the ledges.
     rng = np.random.default_rng(23)
     boulders = []
-    for k in range(14):
+    for k in range(9):
         band = int(rng.integers(0, 4))
         x = float(rng.uniform(-WALL_LENGTH / 2 + 18, WALL_LENGTH / 2 - 18))
         y1 = band_y(band, True, x)

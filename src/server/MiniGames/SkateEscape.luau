@@ -187,8 +187,8 @@ function SkateEscape:_canyon()
 	embers.Color = ColorSequence.new(rgb(255, 190, 80), rgb(255, 110, 40))
 	embers.LightEmission = 1
 	embers.Size = NumberSequence.new(0.5, 0)
-	embers.Lifetime = NumberRange.new(4, 6)
-	embers.Speed = NumberRange.new(6, 11)
+	embers.Lifetime = NumberRange.new(5, 7)
+	embers.Speed = NumberRange.new(10, 16)
 	embers.SpreadAngle = Vector2.new(15, 15)
 	embers.EmissionDirection = Enum.NormalId.Top
 	embers.Rate = 60
@@ -249,7 +249,7 @@ function SkateEscape:_canyon()
 				Name = "Plateau",
 				Size = Vector3.new(outer - inner, 4, (span + 1400) / 2),
 				CFrame = CFrame.new(origin.X + side * (inner + outer) / 2, rimY, middleZ + half * (span + 1400) / 4),
-				Color = rgb(160, 86, 58),
+				Color = rgb(170, 102, 66),
 				Material = Enum.Material.Sandstone,
 				CanCollide = false,
 				CanQuery = false,
@@ -266,7 +266,7 @@ function SkateEscape:_canyon()
 			Name = "Plateau",
 			Size = Vector3.new(2 * (WALL_X + 48) + 2, 4, math.abs(ending.To - ending.From)),
 			CFrame = CFrame.new(origin.X, rimY - 0.4, origin.Z - (ending.From + ending.To) / 2),
-			Color = rgb(160, 86, 58),
+			Color = rgb(170, 102, 66),
 			Material = Enum.Material.Sandstone,
 			CanCollide = false,
 			CanQuery = false,
@@ -301,22 +301,24 @@ function SkateEscape:_canyon()
 		end
 	end
 
-	-- Layered buttes out on the plateau, facing the canyon, for a rugged horizon.
+	-- Layered buttes out on the plateau for a rugged horizon: two wall stretches back to back (each
+	-- one's flat back hidden inside the other).
 	for _, side in { -1, 1 } do
 		local d = CANYON_BACK + rng:NextNumber(-100, 100)
 		while d < CANYON_END do
-			local scale = rng:NextNumber(0.55, 0.85)
-			local position = Vector3.new(
-				origin.X + side * (rng:NextNumber(330, 520) + WALL_PIVOT * scale),
-				top - rng:NextNumber(8, 30),
-				origin.Z - d
-			)
-			MeshLibrary.Get("SkateCanyonWall", {
-				Scale = scale,
-				CFrame = CFrame.lookAt(position, position - Vector3.new(side, 0, 0)),
-				Parent = arena,
-			})
-			d += rng:NextNumber(330, 480)
+			local scale = rng:NextNumber(0.5, 0.75)
+			local foot = rng:NextNumber(330, 520)
+			local y = top - rng:NextNumber(10, 30)
+			for _, facing in { -1, 1 } do
+				local x = if facing < 0 then foot + WALL_PIVOT * scale else foot + (84 - WALL_PIVOT) * scale
+				local position = Vector3.new(origin.X + side * x, y, origin.Z - d)
+				MeshLibrary.Get("SkateCanyonWall", {
+					Scale = scale,
+					CFrame = CFrame.lookAt(position, position + Vector3.new(side * facing, 0, 0)),
+					Parent = arena,
+				})
+			end
+			d += rng:NextNumber(560, 760)
 		end
 	end
 
@@ -441,7 +443,7 @@ function SkateEscape:_buildArena()
 	for _, piece in pieces do
 		local d0, d1 = piece:GetAttribute("D0"), piece:GetAttribute("D1")
 		local middle = (d0 + d1) / 2
-		if d1 - d0 > 20 and middle - last >= 90 and middle < length - 30 then
+		if d1 - d0 > 20 and middle > 30 and middle - last >= 90 and middle < length - 30 then
 			last = middle
 			carries[piece] = true
 			MeshLibrary.Get(
