@@ -313,7 +313,11 @@ local function popScreen(text: string, color: Color3, big: boolean)
 	ui.PopStamp = stamp
 	task.delay(0.9, function()
 		if ui.PopStamp == stamp then
-			UIKit.Tween(label, 0.4, { TextTransparency = 1 })
+			UIKit.Tween(label, 0.4, { TextTransparency = 1 }).Completed:Once(function()
+				if ui.PopStamp == stamp then
+					label.Visible = false
+				end
+			end)
 		end
 	end)
 end
@@ -389,15 +393,21 @@ local function stepRolls(machine: Machine, now: number)
 		local path = roll.Path
 		local t = now - roll.Start
 		if roll.Mine and not roll.Confirmed and t > CONFIRM_TIMEOUT then
-			-- The server never took it (a hiccup): this ball doesn't count, roll it again.
-			roll.Model:Destroy()
-			table.remove(machine.Rolls, index)
-			if play.Active and play.Index == machine.Index and play.Rolled >= roll.Number then
-				play.Rolled = roll.Number - 1
-				play.NextRollAt = 0
-				showWaiting(machine)
+			local counted = machine.Model:GetAttribute("SkeeBalls") or 0
+			if counted >= roll.Number then
+				roll.Confirmed = true -- the server took it; its word is on the way
+			else
+				-- The server never took it (a hiccup): this ball doesn't count, roll it again.
+				roll.Model:Destroy()
+				table.remove(machine.Rolls, index)
+				if play.Active and play.Index == machine.Index then
+					play.Rolled = counted
+					play.NextRollAt = 0
+					showWaiting(machine)
+					refreshControls()
+				end
+				continue
 			end
-			continue
 		end
 		if t >= path.Done + 0.05 then
 			roll.Model:Destroy()
@@ -417,7 +427,6 @@ local function stepRolls(machine: Machine, now: number)
 			end
 		end
 		roll.Last = position
-		-- The ball shrinks a little as it sinks into its hole.
 		placeBall(machine, roll.Model, position, roll.Spin)
 		local phase = path.Phases[#path.Phases]
 		if t >= phase.T0 and not roll.Dropped then
@@ -839,12 +848,14 @@ local function showAim(aim: number, power: number, visible: boolean)
 	end
 end
 
+-- Whether you can aim your next ball (you can start while the last one is still in the air).
+local function canAim(): boolean
+	return play.Active and not play.Over and play.Rolled < SkeeBall.BALLS and (myMachine() ~= nil)
+end
+
+-- Whether it can roll right now (the last ball has come down).
 local function canRoll(): boolean
-	return play.Active
-		and not play.Over
-		and play.Rolled < SkeeBall.BALLS
-		and os.clock() >= play.NextRollAt
-		and (myMachine() ~= nil)
+	return canAim() and os.clock() >= play.NextRollAt
 end
 
 function refreshControls()
@@ -852,7 +863,7 @@ function refreshControls()
 	if not button then
 		return
 	end
-	local ready = canRoll()
+	local ready = canAim()
 	button.Text = if play.Meter == "Aim" then "AIM!" elseif play.Meter == "Power" then "POWER!" else "ROLL"
 	button.AutoButtonColor = false
 	button.TextTransparency = if ready or play.Meter ~= "Idle" then 0 else 0.45
@@ -868,7 +879,18 @@ end
 
 local function roll(aim: number, power: number)
 	local machine = myMachine()
-	if not machine or not canRoll() then
+	if not machine or not canAim() then
+		return
+	end
+	local wait = play.NextRollAt - os.clock()
+	if wait > 0 then
+		-- Let go while the last ball's still in the air: this one goes as soon as it lands.
+		local number = play.Rolled
+		task.delay(wait, function()
+			if play.Rolled == number and canRoll() then
+				roll(aim, power)
+			end
+		end)
 		return
 	end
 	local number = play.Rolled + 1
@@ -892,7 +914,7 @@ local function pressRoll()
 		return
 	end
 	if play.Meter == "Idle" then
-		if not canRoll() then
+		if not canAim() then
 			return
 		end
 		play.Meter = "Aim"
@@ -952,7 +974,7 @@ local function onInputBegan(input: InputObject, processed: boolean)
 		return
 	end
 	local position = Vector2.new(input.Position.X, input.Position.Y)
-	if inThumbstickZone(position) or not canRoll() then
+	if inThumbstickZone(position) or not canAim() then
 		return
 	end
 	play.Meter = "Idle"
@@ -1023,12 +1045,18 @@ local function exitPlay()
 	if humanoid then
 		camera.CameraSubject = humanoid
 	end
-	for _, name in { "SkeeBallControls", "SkeeBallDone", "SkeeBallOver" } do
+	for _, name in { "SkeeBallControls", "SkeeBallDone", "SkeeBallOver", "Pop" } do
 		local item = ui[name]
 		if item then
 			item.Visible = false
 		end
 	end
+	-- The first-join tips step back in.
+	local tip = ui.SteppedAside
+	if tip and tip.Parent then
+		tip.Visible = true
+	end
+	ui.SteppedAside = nil
 	local machine = machines[play.Index]
 	if machine then
 		showWaiting(machine)
@@ -1056,6 +1084,13 @@ local function enterPlay(index: number, best: number)
 	showWaiting(machine)
 	if not fresh then
 		return
+	end
+	-- A first-join tip ("tap a card to vote") steps aside while you play: on phones it shares the
+	-- top of the screen with DONE.
+	local tip = ui.Hud and ui.Hud:FindFirstChild("Onboarding")
+	if tip and tip:IsA("GuiObject") and tip.Visible then
+		tip.Visible = false
+		ui.SteppedAside = tip
 	end
 	-- Step up to the machine, facing it, and frame the lane.
 	local _, _, root = character()
@@ -1109,8 +1144,10 @@ local function showOver(score: number, previous: number, newBest: boolean, place
 	play.Over = true
 	play.Meter = "Idle"
 	ui.SkeeBallControls.Visible = false
+	ui.SkeeBallDone.Visible = false -- the panel has its own DONE
 	ui.Hint.Visible = false
 	ui.Meter.Visible = false
+	ui.Pop.Visible = false
 	ui.OverScore.Text = tostring(score)
 	if newBest then
 		ui.OverTitle.Text = if previous > 0 then "NEW BEST!" else "FIRST SCORE!"
@@ -1141,6 +1178,7 @@ end
 
 local function buildUi(hud: Instance)
 	local touch = UIKit.IsTouch()
+	ui.Hud = hud
 
 	-- Low in the middle: what to do (until the first roll), your score and balls, the big ROLL
 	-- button and the power meter beside it. Phones: right of the MOVE stick's corner, left of the
@@ -1411,8 +1449,13 @@ local function onEvent(kind: any, index: any, ...: any)
 			existing.Confirmed = true
 			return
 		end
-		if mine and play.Rolled >= ball then
-			return -- this device's roll that already finished
+		if mine then
+			if play.Rolled >= ball then
+				return -- this device's roll that already finished
+			end
+			play.Rolled = ball -- the server took a roll this device had given up on: catch up
+			showWaiting(machine)
+			refreshControls()
 		end
 		local camera = workspace.CurrentCamera
 		if (camera.CFrame.Position - machine.Frame.Position).Magnitude > ANIMATE_RANGE then
