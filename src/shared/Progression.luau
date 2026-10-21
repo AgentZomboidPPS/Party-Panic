@@ -54,11 +54,14 @@ function Progression.NextItemLevel(level: number): number?
 	return nil
 end
 
--- The levels the Rewards screen shows: every level to 30, then every 5th, and any with a reward.
-function Progression.RoadLevels(): { number }
+-- The levels the Rewards screen shows a player at `current`: every level near them (2 back, 12
+-- ahead), every level with an exclusive reward (the ones they have and the goals) and every 10th
+-- (a new name tag color). The levels in between pay coins too; the screen says so.
+function Progression.RoadLevels(current: number): { number }
 	local levels = {}
 	for level = 2, LevelCurve.MaxLevel do
-		if level <= 30 or level % 5 == 0 or byLevel[level] then
+		local near = level >= current - 2 and level <= current + 12
+		if near or byLevel[level] or level % 10 == 0 then
 			table.insert(levels, level)
 		end
 	end

@@ -78,6 +78,7 @@ end
 local function label(props: { [string]: any }): TextLabel
 	props.BackgroundTransparency = 1
 	props.ZIndex = props.ZIndex or 3
+	props.CornerRadius = nil -- a note in a button's place (labels have no corner radius)
 	return UIKit.Label(props)
 end
 

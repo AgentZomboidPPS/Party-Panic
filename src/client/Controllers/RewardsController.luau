@@ -34,6 +34,9 @@ local body: Frame
 local tabButtons: { [string]: TextButton } = {}
 local currentTab = "Road"
 
+-- Phones: how far right of the profile chip's left edge the next-reward tab may reach (scaled
+-- units): the top-middle vote cards and tip start about 215 units in on the narrowest phone.
+local TOUCH_TAB_REACH = 208
 local CARD_W, CARD_GAP = 180, 12
 local CARD_H = 282 -- phones: fits the road on the shortest phone window (800x360)
 local PC_CARD_H = 330
@@ -76,6 +79,12 @@ local function slotName(item: Cosmetics.Cosmetic): string
 	return string.upper(Cosmetics.SlotNames[item.Slot] or item.Slot)
 end
 
+-- A note where a button would be (same place and size; labels have no corner radius).
+local function statusLabel(props: { [string]: any }): TextLabel
+	props.CornerRadius = nil
+	return UIKit.Label(props)
+end
+
 -- The button (or note) for an unlocked item: equip it, take it off, or where it went.
 local function ownedAction(parent: Instance, item: Cosmetics.Cosmetic, props: { [string]: any }): GuiObject
 	local profile = State.Profile
@@ -92,7 +101,7 @@ local function ownedAction(parent: Instance, item: Cosmetics.Cosmetic, props: { 
 	props.TextColor3 = Theme.Colors.Green
 	props.TextWrapped = false
 	props.Parent = parent
-	return UIKit.Label(props)
+	return statusLabel(props)
 end
 
 -- HUD: the next reward beside the coins, and the badge's colors ------------------------------------
@@ -115,11 +124,12 @@ local function buildNextTab(context)
 	}, Theme.Colors.Pink, PINK_DARK)
 	local stroke = tab:FindFirstChildOfClass("UIStroke") :: UIStroke
 	-- Phones: the coins tab's top is tucked under the pill, so the text sits in its visible part.
+	local textSize = if touch then 18 else 20
 	local label = UIKit.Label({
 		Text = "",
 		RichText = not touch,
 		Font = Theme.Fonts.Display,
-		TextSize = 20,
+		TextSize = textSize,
 		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(if touch then 10 else 16, if touch then 10 else 0),
@@ -127,8 +137,6 @@ local function buildNextTab(context)
 		Parent = tab,
 		Children = { UIKit.TextStroke(0.2) },
 	})
-	local holderWidth = holder.Size.X.Offset
-
 	local function refresh()
 		local profile = State.Profile
 		if not profile then
@@ -149,8 +157,8 @@ local function buildNextTab(context)
 			label.Text = plain
 		end
 		local left = coins.Position.X.Offset + coins.Size.X.Offset + (if touch then 6 else 8)
-		local width = math.ceil(UIKit.TextWidth(plain, 20, Theme.Fonts.Display)) + (if touch then 22 else 34)
-		if touch and left + width > holderWidth + 2 then
+		local width = math.ceil(UIKit.TextWidth(plain, textSize, Theme.Fonts.Display)) + (if touch then 22 else 34)
+		if touch and left + width > TOUCH_TAB_REACH then
 			-- A long coin number: just the reward's icon, or nothing if even that doesn't fit.
 			plain = if item then item.Icon else "👑"
 			label.Text = plain
@@ -164,7 +172,7 @@ local function buildNextTab(context)
 		stroke.Thickness = if close then 3 else 2
 		stroke.Transparency = if close then 0 else 0.75
 		local phase = GameState.Get("Phase") or "Waiting"
-		tab.Visible = phase ~= "InRound" and not (touch and left + width > holderWidth + 2)
+		tab.Visible = phase ~= "InRound" and not (touch and left + width > TOUCH_TAB_REACH)
 	end
 	State.ProfileChanged:Connect(function(profile, previous)
 		refresh()
@@ -358,23 +366,14 @@ local function levelCard(
 	local iconTop = if touch then 46 else 48
 	local iconHeight = if touch then 56 else 64
 	local nameTop = iconTop + iconHeight + 2
-	if item then
-		UIKit.Label({
-			Text = item.Icon,
-			TextSize = if touch then 46 else 52,
-			TextWrapped = false,
-			Position = UDim2.fromOffset(0, iconTop),
-			Size = UDim2.new(1, 0, 0, iconHeight),
-			Parent = card,
-		})
-	else
-		UIKit.Coin({
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 0, 0, iconTop + iconHeight / 2),
-			Size = UDim2.fromOffset(46, 46),
-			Parent = card,
-		})
-	end
+	UIKit.Label({
+		Text = if item then item.Icon else Theme.CoinIcon,
+		TextSize = if item then (if touch then 46 else 52) else (if touch then 40 else 46),
+		TextWrapped = false,
+		Position = UDim2.fromOffset(0, iconTop),
+		Size = UDim2.new(1, 0, 0, iconHeight),
+		Parent = card,
+	})
 	local name = UIKit.Label({
 		Text = if item then item.Name else `+{coins} coins`,
 		Font = Theme.Fonts.Display,
@@ -382,7 +381,6 @@ local function levelCard(
 		Position = UDim2.fromOffset(8, nameTop),
 		Size = UDim2.new(1, -16, 0, 44),
 		Parent = card,
-		Children = { UIKit.TextStroke(0.3) },
 	})
 	name:SetAttribute("PP_Lines", 2) -- "Rainbow Fireworks" takes two lines on a card
 	local lines = {}
@@ -444,7 +442,7 @@ local function levelCard(
 			elseif isNext then Theme.Colors.Yellow
 			else Theme.Colors.TextDim
 		props.Parent = card
-		UIKit.Label(props)
+		statusLabel(props)
 	end
 end
 
@@ -480,9 +478,12 @@ local function renderRoad(keep: Vector2?)
 	introCard(road, height)
 	local current = level()
 	local order, focus = 0, 0
-	for _, cardLevel in Progression.RoadLevels() do
+	for _, cardLevel in Progression.RoadLevels(current) do
 		local items = Progression.ItemsAt(cardLevel)
 		local coins = Progression.Coins(cardLevel)
+		if focus == 0 and cardLevel > current then
+			focus = order + 1 -- this level's first card
+		end
 		if #items == 0 then
 			order += 1
 			levelCard(road, order, cardLevel, nil, coins, height)
@@ -491,9 +492,6 @@ local function renderRoad(keep: Vector2?)
 				order += 1
 				levelCard(road, order, cardLevel, item, if index == 1 then coins else 0, height)
 			end
-		end
-		if focus == 0 and cardLevel > current then
-			focus = order
 		end
 	end
 	-- Open on the next level: it's the second card in view (the one before it shows where you are).
@@ -585,7 +583,7 @@ local function milestoneRow(parent: Instance, order: number, item: Cosmetics.Cos
 		props.TextWrapped = false
 		props.TextColor3 = Theme.Colors.TextDim
 		props.Parent = row
-		UIKit.Label(props)
+		statusLabel(props)
 	end
 end
 
@@ -721,6 +719,10 @@ function RewardsController.Start(context)
 	end)
 	modal.Opened:Connect(function()
 		render()
+	end)
+	-- Built fresh on every open; nothing is kept around while the screen is closed.
+	modal.Closed:Connect(function()
+		clear(body)
 	end)
 	State.ProfileChanged:Connect(function()
 		if modal.IsOpen then
