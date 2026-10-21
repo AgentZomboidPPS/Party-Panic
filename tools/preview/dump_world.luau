@@ -29,6 +29,23 @@ local started = os.clock()
 local ok, err = pcall(LobbyBuilder.Build)
 local buildTime = os.clock() - started
 
+-- LobbyService adds the beach balls after the build; add them here too (anchored, so they hold
+-- still for the picture) when the bundle provides the module.
+local okBalls, BeachBalls = pcall(load, "BeachBalls")
+if ok and okBalls and BeachBalls then
+	local refs = err :: any
+	local okSetup, balls = pcall(BeachBalls.Setup, refs.Root, refs.BallSpots, {
+		PlazaRadius = LobbyBuilder.PlazaRadius,
+		StageFrontZ = LobbyBuilder.StageFrontZ,
+		Traps = LobbyBuilder.BallTraps,
+	})
+	if okSetup then
+		for _, ball in balls do
+			ball.Anchored = true
+		end
+	end
+end
+
 local propNames = {}
 for _, name in MeshLibrary.Names() do
 	propNames[name] = true
@@ -61,7 +78,11 @@ for _, item in workspace:GetDescendants() do
 		n = part.Name,
 		s = { r(part.Size.X), r(part.Size.Y), r(part.Size.Z) },
 		cf = { cf:GetComponents() },
-		col = { math.floor(part.Color.R * 255 + 0.5), math.floor(part.Color.G * 255 + 0.5), math.floor(part.Color.B * 255 + 0.5) },
+		col = {
+			math.floor(part.Color.R * 255 + 0.5),
+			math.floor(part.Color.G * 255 + 0.5),
+			math.floor(part.Color.B * 255 + 0.5),
+		},
 		m = part.Material.Name,
 		t = r(part.Transparency),
 		sh = part.CastShadow,
@@ -82,7 +103,12 @@ for _, item in workspace:GetDescendants() do
 	end
 	local light = part:FindFirstChildWhichIsA("Light")
 	if light then
-		entry.light = { light.ClassName, r(light.Brightness), r((light :: any).Range), { light.Color.R, light.Color.G, light.Color.B } }
+		entry.light = {
+			light.ClassName,
+			r(light.Brightness),
+			r((light :: any).Range),
+			{ light.Color.R, light.Color.G, light.Color.B },
+		}
 	end
 	table.insert(parts, entry)
 end
@@ -152,7 +178,8 @@ if atmosphere then
 end
 local correction = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
 if correction then
-	lighting.correction = { saturation = correction.Saturation, contrast = correction.Contrast, brightness = correction.Brightness }
+	lighting.correction =
+		{ saturation = correction.Saturation, contrast = correction.Contrast, brightness = correction.Brightness }
 end
 
 local sources = {}
@@ -166,7 +193,15 @@ return HttpService:JSONEncode({
 	buildTime = buildTime,
 	logs = logs,
 	parts = parts,
-	terrain = { half = half, step = step, heights = heights, mats = mats, water = water, materials = materials, colors = materialColors },
+	terrain = {
+		half = half,
+		step = step,
+		heights = heights,
+		mats = mats,
+		water = water,
+		materials = materials,
+		colors = materialColors,
+	},
 	lighting = lighting,
 	sources = sources,
 })

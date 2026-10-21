@@ -192,6 +192,7 @@ function LobbyService.Init()
 	BeachBalls.Setup(refs.Root, refs.BallSpots, {
 		PlazaRadius = LobbyBuilder.PlazaRadius,
 		StageFrontZ = LobbyBuilder.StageFrontZ,
+		Traps = LobbyBuilder.BallTraps,
 	})
 	LobbyService.SetChampions({})
 end

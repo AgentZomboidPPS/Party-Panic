@@ -84,6 +84,11 @@ local PARKOUR = Vector3.new(-58, 0, -50)
 
 LobbyBuilder.PlazaRadius = PLAZA_RADIUS
 LobbyBuilder.StageFrontZ = STAGE_Z + 13 -- the vote stage's front edge (its steps are in front)
+-- Places a beach ball may not sit in for long (the fountain pool, the emote stage).
+LobbyBuilder.BallTraps = {
+	{ Center = Vector3.zero, Radius = 13 },
+	{ Center = EMOTE, Radius = 15 },
+}
 
 local function tag(instance: Instance, name: string)
 	CollectionService:AddTag(instance, name)
@@ -123,9 +128,10 @@ local function setupLighting()
 	correction.Parent = Lighting
 
 	local bloom = Instance.new("BloomEffect")
-	bloom.Intensity = 0.6
+	-- The threshold stays above sunlit white, so only neon glows and pale stone never washes out.
+	bloom.Intensity = 0.5
 	bloom.Size = 28
-	bloom.Threshold = 1.05
+	bloom.Threshold = 1.25
 	bloom.Parent = Lighting
 end
 
@@ -394,7 +400,8 @@ local function buildFountain(root: Model)
 		end
 	end
 	local waterDisc = disc("Water", 22.4, 0.2, Vector3.new(0, 2.05, 0), flat({ Parent = center }))
-	local upperWater = disc("UpperWater", 9.4, 0.2, Vector3.new(0, 8.3, 0), flat({ Parent = center }))
+	-- The top bowl's water floats 0.14 above the mesh's pool floor (8.2), so the two never flicker.
+	local upperWater = disc("UpperWater", 9.8, 0.2, Vector3.new(0, 8.44, 0), flat({ Parent = center }))
 	for key, value in water do
 		(waterDisc :: any)[key] = value;
 		(upperWater :: any)[key] = value
@@ -412,7 +419,7 @@ local function buildFountain(root: Model)
 		})
 	end
 
-	-- Rubber ducks bob in the pool; one rides the top bowl.
+	-- Rubber ducks float in the pool (clients rock them gently: tag PP_Duck).
 	local rng = Random.new(5)
 	for index = 1, 6 do
 		local angle = (index + rng:NextNumber(-0.25, 0.25)) / 6 * math.pi * 2
@@ -423,7 +430,7 @@ local function buildFountain(root: Model)
 			CFrame = CFrame.new(position) * CFrame.Angles(0, angle + math.rad(rng:NextNumber(60, 120)), 0),
 			Parent = center,
 		})
-		tag(duck, "PP_Bob")
+		tag(duck, "PP_Duck")
 	end
 
 	-- The landmark: a giant golden trophy that slowly turns (clients animate it).
@@ -1425,6 +1432,7 @@ local function buildFerrisWheel(parent: Instance)
 		cabin:PivotTo(standCFrame.Rotation + (hang - Vector3.new(0, size.Y, 0)))
 		cabin:SetAttribute("Hang", Vector3.new(0, size.Y, 0)) -- from its pivot to where it hangs
 	end
+	ferris:SetAttribute("Cabins", 12) -- clients wait for all of them before turning the wheel
 	ferris:SetAttribute("Hub", hub)
 	ferris:SetAttribute("Axis", standCFrame.LookVector)
 	tag(ferris, "PP_Wheel")
@@ -1451,7 +1459,9 @@ local function buildSkyline(root: Model)
 	end
 	-- Hot-air balloons drifting over the park (clients bob them slowly: tag PP_Float).
 	local balloons = {
-		{ Vector3.new(-78, 58, -112), rgb(255, 92, 150), rgb(255, 236, 120), 1.1 },
+		-- Two big ones close in: left of the vote stage from the spawn, and over the emote stage.
+		{ Vector3.new(-48, 34, -86), rgb(255, 92, 150), rgb(255, 236, 120), 1.7 },
+		{ Vector3.new(52, 30, 84), rgb(255, 204, 64), rgb(255, 92, 150), 1.6 },
 		{ Vector3.new(128, 70, 6), rgb(64, 196, 255), rgb(255, 255, 255), 1.2 },
 		{ Vector3.new(-126, 64, 46), rgb(156, 108, 255), rgb(255, 204, 64), 1 },
 		{ Vector3.new(42, 88, 132), rgb(255, 140, 70), rgb(255, 255, 255), 1.3 },
@@ -1628,7 +1638,7 @@ local function buildScenery(root: Model)
 		NumberSequenceKeypoint.new(0.85, 0.2),
 		NumberSequenceKeypoint.new(1, 1),
 	})
-	confetti.Lifetime = NumberRange.new(12, 16)
+	confetti.Lifetime = NumberRange.new(7, 9) -- about how long the 42-stud fall takes
 	confetti.Speed = NumberRange.new(2, 3.5)
 	confetti.Acceleration = Vector3.new(0, -0.6, 0)
 	confetti.Rotation = NumberRange.new(0, 360)
