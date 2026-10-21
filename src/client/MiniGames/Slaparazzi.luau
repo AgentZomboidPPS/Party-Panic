@@ -12,6 +12,12 @@
 -- Phones first: the photo counter and the "in the shot" pill sit under the banner, the snapshot card
 -- under them and only while it's up, the SLAP button beside the jump button. Points always come as a
 -- number with the ring (+3 / +2 / +1), never color alone.
+--
+-- Review pass: SLAP and its target hand only work once the photos start (the server ignores slaps in
+-- the 3-2-1); someone still down from a slap is never offered as a target (the server won't count
+-- it); "SNAP!" stays up a second after each flash; a faint NEXT disc shows where the frame goes from
+-- the moment it's known, so people see the next spot as early as the bots head for it; the snapshot
+-- card is laid out as the camera sees the stage.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -264,6 +270,40 @@ function Slaparazzi.Start(api)
 		Children = { UIKit.TextStroke(0) },
 	})
 
+	-- Where the frame goes next: a faint disc as big as the frame's outer ring, shown from the photo
+	-- until the frame arrives (bots head there too, so everyone knows it at the same time).
+	local nextSpot = Instance.new("Part")
+	nextSpot.Name = "NextSpot"
+	nextSpot.Shape = Enum.PartType.Cylinder
+	nextSpot.Anchored = true
+	nextSpot.CanCollide = false
+	nextSpot.CanQuery = false
+	nextSpot.CanTouch = false
+	nextSpot.CastShadow = false
+	nextSpot.Material = Enum.Material.Neon
+	nextSpot.Color = GOLD
+	nextSpot.Transparency = 1
+	nextSpot.Size = Vector3.new(0.05, Rules.RINGS[3] * 2, Rules.RINGS[3] * 2)
+	nextSpot.Parent = api.World
+	local nextLabel = UIKit.new("BillboardGui", {
+		Name = "NextLabel",
+		Size = UDim2.fromOffset(140, 44),
+		StudsOffset = Vector3.new(0, 2.5, 0),
+		LightInfluence = 0,
+		MaxDistance = 300,
+		Enabled = false,
+		Parent = nextSpot,
+	})
+	UIKit.Label({
+		Text = "NEXT 📸",
+		Font = Theme.Fonts.Display,
+		TextScaled = true,
+		TextColor3 = GOLD,
+		Size = UDim2.fromScale(1, 1),
+		Parent = nextLabel,
+		Children = { UIKit.TextStroke(0.1) },
+	})
+
 	-- The hand over whoever a slap would hit now.
 	local marker = UIKit.new("BillboardGui", {
 		Name = "SlapTarget",
@@ -288,6 +328,11 @@ function Slaparazzi.Start(api)
 		frame = api:SharedJSON("Frame")
 	end)
 
+	-- Whether the photos have started (slaps count from GO: the server ignores them during the 3-2-1).
+	local function started(): boolean
+		return frame ~= nil and frame.Shot - api:Now() < 1e5
+	end
+
 	-- Who a slap from here would hit right now: the nearest in reach, in front first.
 	local function pickTarget(): (any, Model?)
 		local _, _, root = api:Character()
@@ -299,6 +344,10 @@ function Slaparazzi.Start(api)
 		for _, participant in api:Participants() do
 			if participant.UserId == localPlayer.UserId then
 				continue
+			end
+			local downUntil = participant:GetAttribute("MG_DownUntil")
+			if type(downUntil) == "number" and downUntil > api:Now() then
+				continue -- still down from a slap: the server won't let it count
 			end
 			local model = participant:Character()
 			local other = model and model:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -415,7 +464,7 @@ function Slaparazzi.Start(api)
 	api:OnMine("Ready", refreshReady)
 	slap.Pressed:Connect(function()
 		local now = api:Now()
-		if now < readyAt - 0.05 then
+		if now < readyAt - 0.05 or not started() then
 			return
 		end
 		local _, humanoid, root = api:Character()
@@ -467,6 +516,7 @@ function Slaparazzi.Start(api)
 	end)
 
 	-- The flash.
+	local snapUntil = 0
 	api:OnEvent("Flash", function(number)
 		pop(cameraModel, true)
 		api:Sound("Click")
@@ -478,6 +528,7 @@ function Slaparazzi.Start(api)
 		end)
 		if type(number) == "number" then
 			counterText.Text = `📸 SNAP! {number}/{if frame then frame.Of else 7}`
+			snapUntil = os.clock() + 1.1
 		end
 	end)
 
@@ -508,7 +559,7 @@ function Slaparazzi.Start(api)
 			local size = if isMe then 16 else 11
 			UIKit.new("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.new(0.5, -shot.X * scale, 0.5, shot.Z * scale), -- as the camera (looking -Z) sees it
+				Position = UDim2.new(0.5, shot.X * scale, 0.5, shot.Z * scale), -- as the camera sees it: it looks -Z, +X on its right, nearer lower
 				Size = UDim2.fromOffset(size, size),
 				BackgroundColor3 = if isMe then Theme.Colors.Pink else ringColor(shot.P),
 				ZIndex = if isMe then 5 else 4,
@@ -566,10 +617,20 @@ function Slaparazzi.Start(api)
 			beam.CFrame = CFrame.lookAt(beam.Position, center)
 		end
 		overFrame.CFrame = CFrame.new(center)
+		local moving = not current.Done and now < current.T1 and (current.X1 ~= current.X0 or current.Z1 ~= current.Z0)
+		if moving then
+			nextSpot.CFrame = CFrame.new(current.X1, current.Y + 0.3, current.Z1) * CFrame.Angles(0, 0, math.rad(90))
+			nextSpot.Transparency = 0.72 + 0.12 * math.sin(now * 8)
+		else
+			nextSpot.Transparency = 1
+		end
+		nextLabel.Enabled = moving
 
 		-- The counter and the countdown.
 		local left = current.Shot - now
-		if current.Done then
+		if os.clock() < snapUntil then
+			countdown.Enabled = false -- "SNAP!" stays up a moment
+		elseif current.Done then
 			counterText.Text = "📸 THAT'S A WRAP!"
 			countdown.Enabled = false
 		elseif left > 1e5 then
@@ -604,11 +665,11 @@ function Slaparazzi.Start(api)
 		-- The slap button's cooldown and target marker.
 		local cooling = math.clamp((readyAt - now) / Rules.COOLDOWN, 0, 1)
 		slap:SetFill(cooling)
-		slap:SetEnabled(cooling <= 0.03)
+		slap:SetEnabled(cooling <= 0.03 and started())
 		local _, model = pickTarget()
 		local head = model and model:FindFirstChild("Head") :: BasePart?
 		marker.Adornee = head
-		marker.Enabled = head ~= nil and cooling <= 0.03 and api:CanAct()
+		marker.Enabled = head ~= nil and cooling <= 0.03 and api:CanAct() and started()
 
 		if card.Visible and os.clock() - cardShownAt > CARD_TIME then
 			card.Visible = false

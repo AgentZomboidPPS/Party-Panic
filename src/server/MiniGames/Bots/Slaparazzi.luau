@@ -1,6 +1,7 @@
 -- How bots play Slaparazzi (contract in Bots/Default.luau): they push into the photo frame, aiming
 -- for the gold middle (good bots get closer and go for the frame's next spot sooner), and SLAP
--- rivals in reach, mostly the ones nearer the middle than they are and mostly just before the flash.
+-- rivals in reach now and then, more often the ones nearer the middle than they are and just before
+-- the flash, after a reaction and with a breather between slaps, so they stay beatable.
 -- They slap through ctx:BotAction like a player's client (the same range, facing and cooldown
 -- checks), turning to face their target first; a slapped bot is thrown by ctx:Knockback like a
 -- player and lies still until it gets up.
@@ -54,16 +55,18 @@ function Brain.Step(bot, ctx, mode, _dt)
 		bot:Stop()
 	end
 
-	-- Slap someone in reach: prefer rivals nearer the middle; more eager just before the flash.
-	if now < (mode.readyAt[bot] or 0) or frame.Done then
+	-- Slap someone in reach, like a person would: not the moment they arrive (a reaction first), not
+	-- every time (more often for better bots and just before the flash), not always the leader, and
+	-- with a little breather after each slap. Never anyone still down from a slap.
+	if now < (mode.readyAt[bot] or 0) or now < (memory.RestUntil or 0) or frame.Done then
 		return
 	end
 	local fx, fz = Rules.FrameAt(frame, now)
 	local middle = Vector3.new(fx, 0, fz)
 	local mine = flat(root.Position - middle).Magnitude
-	local best, bestScore = nil, -math.huge
+	local options, total = {}, 0
 	for _, other in ctx:GetAlivePlayers() do
-		if other == bot or (mode.stunnedUntil[other] or 0) > now then
+		if other == bot or (mode.stunnedUntil[other] or 0) + 0.45 > now then
 			continue
 		end
 		local _, _, otherRoot = ctx:GetCharacter(other)
@@ -74,34 +77,44 @@ function Brain.Step(bot, ctx, mode, _dt)
 		if distance > Rules.CLIENT_REACH - 0.5 or math.abs(otherRoot.Position.Y - root.Position.Y) > 4 then
 			continue
 		end
-		local theirs = flat(otherRoot.Position - middle).Magnitude
-		local score = (mine - theirs) - distance * 0.3
-		if score > bestScore then
-			best, bestScore = other, score
-		end
+		-- Worth more when they're nearer the middle than me; anyone in reach is worth a little.
+		local weight = math.clamp(1 + (mine - flat(otherRoot.Position - middle).Magnitude) * 0.4, 0.3, 3)
+		table.insert(options, { Player = other, Root = otherRoot, Weight = weight })
+		total += weight
 	end
-	if not best then
+	if #options == 0 then
+		memory.SeenAt = nil
 		return
 	end
-	local untilShot = frame.Shot - now
-	local eager = 0.08 + bot.Skill * 0.22
-	if untilShot < 2 then
-		eager *= 2
+	if not memory.SeenAt then
+		memory.SeenAt = now + bot:Reaction() * 2.5 -- someone came into reach: take it in first
 	end
-	if bestScore < 0 then
-		eager *= 0.4 -- a rival further out than me: not worth much
+	if now < memory.SeenAt then
+		return
+	end
+	local eager = 0.03 + bot.Skill * 0.07
+	if frame.Shot - now < 2 then
+		eager *= 1.6
 	end
 	if not bot:Chance(eager) then
 		return
 	end
-	local _, _, targetRoot = ctx:GetCharacter(best)
-	if targetRoot then
-		local look = Vector3.new(targetRoot.Position.X, root.Position.Y, targetRoot.Position.Z)
-		if flat(look - root.Position).Magnitude > 0.1 then
-			root.CFrame = CFrame.lookAt(root.Position, look)
+	local roll = bot.Rng:NextNumber(0, total)
+	local pick = options[#options]
+	for _, option in options do
+		roll -= option.Weight
+		if roll <= 0 then
+			pick = option
+			break
 		end
 	end
-	ctx:BotAction(bot, "Slap", best.UserId)
+	local look = Vector3.new(pick.Root.Position.X, root.Position.Y, pick.Root.Position.Z)
+	if flat(look - root.Position).Magnitude > 0.1 then
+		root.CFrame = CFrame.lookAt(root.Position, look)
+	end
+	ctx:BotAction(bot, "Slap", pick.Player.UserId)
+	memory.RestUntil = now + bot.Rng:NextNumber(0.6, 2.2) * (1.3 - bot.Skill)
+	memory.SeenAt = nil
 end
 
 return Brain

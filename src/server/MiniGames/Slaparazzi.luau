@@ -16,16 +16,19 @@
 --
 -- Slaps (fair hits, owner: "the precision games will feel super bad if we dont"): the client picks
 -- the target it sees within reach and turns to it; the server checks range and facing against
--- where the target was on the slapper's screen (the target's positions over the slapper's ping
--- plus the drawing delay) and where the slapper was, so a slap that looks like a hit counts. The
--- cooldown runs from the press itself. A hit throws the target with ctx:Knockback, which works the
--- same for players and bots; bots slap through ctx:BotAction exactly like a client.
+-- where the target was on the slapper's screen: each of the slapper's positions as the slap arrived
+-- is matched with the target's position the slapper's round trip plus the drawing delay before it,
+-- so a slap that looks like a hit counts and one from out of reach never does. The cooldown runs
+-- from the press itself. A hit throws the target with ctx:Knockback, which works the same for
+-- players and bots; bots slap through ctx:BotAction exactly like a client. Someone just thrown can't
+-- be slapped again until a moment after they get up, so nobody gets kept on the floor.
 --
 -- Nothing solid where nothing is drawn (owner: "Theres invisible stuff you can jump on and hang on
 -- in several games"): only the drawn grass, plaza, stage tiers and backdrop wall collide; every
 -- mesh prop (cameras, tripods, spotlights, crowd, ropes) is non-colliding, and the spotlights' light
--- holders are invisible but neither solid nor hit by rays. Bots and players don't bump into each
--- other here (slaps go by position), so a crowd of people can't shove a server-moved bot into the sky.
+-- holders are invisible but neither solid nor hit by rays. Characters don't bump into each other
+-- here, people and bots alike (slaps go by position): nobody blocks or shoves anybody, so a crowd of
+-- people can't shove a server-moved bot into the sky either. Jostling happens through slaps.
 
 local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -59,12 +62,15 @@ local STAGE_Z = -2 -- the stage's middle
 local STAGE = Vector3.new(60, 0.9, 40) -- the upper tier (the lower one is 4 studs bigger)
 local FRAME_LIFT = 0.11 -- the frame sits this far above the stage floor (just over the carpet)
 local FRAME_X = 17 -- how far from the stage's middle the frame's middle can go
-local FRAME_Z0, FRAME_Z1 = -12, 7
+local FRAME_Z0, FRAME_Z1 = -6.5, 7 -- (the frame's back corner stays a stud clear of the backdrop)
+local FRAME_HALF = 12.2 -- the frame's corners (brackets) reach this far from its middle
+local STAGE_ROUND = 5 -- the stage's corner radius
 local FRAME_MOVE = 11 -- each new spot is at least this far from the last one
 local CAMERA_Z = 31
 
--- Bots and players don't touch in this mode (see the top). People use the lobby's PP_Players group.
-local BOT_GROUP, PEOPLE_GROUP = "PP_SlapBots", "PP_Players"
+-- Nobody touches anybody in this mode (see the top): every character is in this group for the round.
+local CAST_GROUP = "PP_SlapCast"
+local DOWN_GRACE = 0.4 -- someone just thrown can't be slapped again until this long after they get up
 local BOT_MAX_UP, BOT_MAX_FLAT = 60, Rules.KNOCK + 10
 
 local rng = Random.new()
@@ -78,32 +84,40 @@ local function pingOf(player: any): number
 	return if ok and type(ping) == "number" and ping == ping then math.clamp(ping, 0, PING_MAX) else 0.15
 end
 
--- Puts every character in the round in the bots' or the people's collision group (parts that load
--- later too). Returns the function that does one character, or nil if the groups can't be set up.
-local function separateBotsFromPeople(ctx): ((any, Model) -> ())?
+-- Puts every character in the round in one group that doesn't collide with itself (parts that load
+-- later too), the same for people and bots; each part gets its old group back when the round ends.
+-- Returns the function that does one character, or nil if the group can't be set up.
+local function castWithoutContact(ctx): ((any, Model) -> ())?
 	local ok = pcall(function()
-		for _, group in { BOT_GROUP, PEOPLE_GROUP } do
-			if not PhysicsService:IsCollisionGroupRegistered(group) then
-				PhysicsService:RegisterCollisionGroup(group)
-			end
+		if not PhysicsService:IsCollisionGroupRegistered(CAST_GROUP) then
+			PhysicsService:RegisterCollisionGroup(CAST_GROUP)
 		end
-		PhysicsService:CollisionGroupSetCollidable(BOT_GROUP, PEOPLE_GROUP, false)
+		PhysicsService:CollisionGroupSetCollidable(CAST_GROUP, CAST_GROUP, false)
 	end)
 	if not ok then
 		return nil
 	end
-	local function put(player: any, character: Model)
-		local group = if BotRegistry.IsBot(player) then BOT_GROUP else PEOPLE_GROUP
-		for _, item in character:GetDescendants() do
-			if item:IsA("BasePart") then
-				item.CollisionGroup = group
+	local before: { [BasePart]: string } = {}
+	ctx:Track(function()
+		for part, group in before do
+			if part.Parent and part.CollisionGroup == CAST_GROUP then
+				part.CollisionGroup = group
 			end
 		end
-		ctx:Track(character.DescendantAdded:Connect(function(item)
-			if item:IsA("BasePart") then
-				item.CollisionGroup = group
+	end)
+	local function join(item: Instance)
+		if item:IsA("BasePart") then
+			if before[item] == nil then
+				before[item] = item.CollisionGroup
 			end
-		end))
+			item.CollisionGroup = CAST_GROUP
+		end
+	end
+	local function put(_player: any, character: Model)
+		for _, item in character:GetDescendants() do
+			join(item)
+		end
+		ctx:Track(character.DescendantAdded:Connect(join))
 	end
 	for _, player in ctx:GetPlayers() do
 		local character = ctx:GetCharacter(player)
@@ -226,7 +240,7 @@ function Slaparazzi:Prepare()
 		ctx:SetPlayerShared(player, "Ready", 0)
 	end
 
-	local put = separateBotsFromPeople(ctx)
+	local put = castWithoutContact(ctx)
 	ctx.Hooks.CharacterReady = function(player, character)
 		if put then
 			put(player, character)
@@ -446,14 +460,39 @@ function Slaparazzi:_publishFrame()
 	self.context:SetSharedJSON("Frame", self.frame)
 end
 
--- Picks the frame's next spot: on the stage, well away from the last one.
+-- Whether all of the frame (its corner brackets, with a little margin) lies on the stage's rounded
+-- top, for a frame whose middle is (x, z) from the stage's middle.
+local function frameFits(x: number, z: number): boolean
+	local margin = 0.4
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			local px, pz = math.abs(x + sx * FRAME_HALF), math.abs(z + sz * FRAME_HALF)
+			local hx, hz = STAGE.X / 2 - margin, STAGE.Z / 2 - margin
+			if px > hx or pz > hz then
+				return false
+			end
+			local dx = math.max(px - (STAGE.X / 2 - STAGE_ROUND), 0)
+			local dz = math.max(pz - (STAGE.Z / 2 - STAGE_ROUND), 0)
+			if dx * dx + dz * dz > (STAGE_ROUND - margin) ^ 2 then
+				return false
+			end
+		end
+	end
+	return true
+end
+
+-- Picks the frame's next spot: all of it on the stage, well away from the last one.
 function Slaparazzi:_nextSpot(): (number, number)
 	local center = self.origin + Vector3.new(0, 0, STAGE_Z)
 	local x0, z0 = self.frame.X1, self.frame.Z1
-	local bestX, bestZ, bestD = x0, z0, -1
-	for _ = 1, 16 do
-		local x = center.X + rng:NextNumber(-FRAME_X, FRAME_X)
-		local z = center.Z + rng:NextNumber(FRAME_Z0, FRAME_Z1)
+	local bestX, bestZ, bestD = center.X, center.Z, -1
+	for _ = 1, 40 do
+		local dx = rng:NextNumber(-FRAME_X, FRAME_X)
+		local dz = rng:NextNumber(FRAME_Z0, FRAME_Z1)
+		if not frameFits(dx, dz) then
+			continue
+		end
+		local x, z = center.X + dx, center.Z + dz
 		local d = Vector2.new(x - x0, z - z0).Magnitude
 		if d >= FRAME_MOVE then
 			return x, z
@@ -505,30 +544,38 @@ function Slaparazzi:_snap(shotAt: number)
 	ctx:SetStatus(if best then `👑 {best.DisplayName} · {bestPoints} pts` else "Get in the photo frame!")
 end
 
--- Whether a slap the server heard at `heard` hit: the slapper's positions and facing from half their
--- ping before it until now (the client turns them to their target as it sends the slap, and that
--- turn can arrive a moment after the slap), against the target's positions over the slapper's whole
--- ping plus the drawing delay, up to when the slap was heard (see the top).
-function Slaparazzi:_judge(player: any, target: any, heard: number, lag: number): boolean
-	local froms = self:SamplesSince(player, heard - lag / 2 - 0.1)
-	local tos = {}
-	for _, sample in self:SamplesSince(target, heard - lag - SEEN_LAG - 0.05) do
-		if sample.T <= heard + 0.02 then
-			table.insert(tos, sample)
+-- Whether a slap the server heard at server time `heard` hit. The slapper's own position reaches the
+-- server along with the slap, so their positions around `heard` are where they were on their screen;
+-- the target was drawn there as the server had them the slapper's round trip plus the drawing delay
+-- earlier, so each slapper position is matched with the target's position that much before it. The
+-- facing may also come from just after `heard` (the client turns the slapper to the target as it
+-- sends the slap, and the turn can arrive a moment later), but never the position (see the top).
+function Slaparazzi:_judge(player: any, target: any, heard: number, lag: number, bot: boolean): boolean
+	local seenLag = if bot then 0 else lag + SEEN_LAG
+	local froms: { Sample } = {}
+	local looks: { Vector3 } = {}
+	for _, sample in self:SamplesSince(player, heard - 0.1) do
+		if sample.T <= heard + 0.05 then
+			table.insert(froms, sample)
 		end
+		table.insert(looks, sample.L)
 	end
 	local _, _, root = self.context:GetCharacter(player)
-	local _, _, targetRoot = self.context:GetCharacter(target)
 	if root then
-		table.insert(froms, { T = heard, P = root.Position, L = root.CFrame.LookVector })
-	end
-	if targetRoot and #tos == 0 then
-		table.insert(tos, { T = heard, P = targetRoot.Position, L = targetRoot.CFrame.LookVector })
+		table.insert(looks, root.CFrame.LookVector)
+		if bot or #froms == 0 then
+			table.insert(froms, { T = heard, P = root.Position, L = root.CFrame.LookVector })
+		end
 	end
 	for _, from in froms do
-		for _, to in tos do
-			if Rules.Reaches(from.P, from.L, to.P, Rules.REACH) then
-				return true
+		for _, shift in { -0.05, 0, 0.05 } do
+			local at = self:PositionAt(target, from.T - seenLag + shift)
+			if at then
+				for _, look in looks do
+					if Rules.Reaches(from.P, look, at, Rules.REACH) then
+						return true
+					end
+				end
 			end
 		end
 	end
@@ -561,7 +608,9 @@ function Slaparazzi:_slap(player: any, targetId: any)
 		if not ctx:IsAlive(target) or not ctx:IsAlive(player) then
 			return
 		end
-		local hit = self:_judge(player, target, now, lag)
+		-- Someone just thrown stays down a moment: two slappers can't keep them on the floor.
+		local down = (self.stunnedUntil[target] or 0) + DOWN_GRACE > ctx:Now()
+		local hit = not down and self:_judge(player, target, now, lag, BotRegistry.IsBot(player))
 		if hit then
 			local _, _, slapperRoot = ctx:GetCharacter(player)
 			local _, _, targetRoot = ctx:GetCharacter(target)
@@ -576,6 +625,7 @@ function Slaparazzi:_slap(player: any, targetId: any)
 			end
 			ctx:Knockback(target, flat.Unit * Rules.KNOCK + Vector3.new(0, Rules.LIFT, 0), Rules.STUN)
 			self.stunnedUntil[target] = ctx:Now() + Rules.STUN
+			ctx:SetPlayerShared(target, "DownUntil", ctx:Now() + Rules.STUN + DOWN_GRACE)
 			self.slaps[player] = (self.slaps[player] or 0) + 1
 		end
 		ctx:Fire(nil, "Slap", player.UserId, target.UserId, hit)
