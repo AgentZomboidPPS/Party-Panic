@@ -280,28 +280,52 @@ def union_local(part, info):
             hit |= inside_unit(kind, local)
         return hit
 
-    all_v, all_f, base = [], [], 0
+    def solid(points):
+        return inside(points, False) & ~inside(points, True)
+
+    # A face is on the union's surface where the solid (positives minus cutters) is on one side of it
+    # and not the other. A piece's big triangles (a cylinder's cap fan, a box's side) often cross that
+    # boundary, so a triangle whose middle and corners disagree is split in four, down to a few
+    # hundredths of its size; each kept face is turned to look out of the solid.
+    kept = []
     for kind, psize, pos, rot, cutter in pieces:
         v, f = PRIMS[kind]
         world = (v * psize) @ rot.T + pos
-        # Keep a piece's triangles whose middles are on the union's surface.
-        mids = world[f].mean(1)
-        normals = np.cross(world[f[:, 1]] - world[f[:, 0]], world[f[:, 2]] - world[f[:, 0]])
-        length = np.linalg.norm(normals, axis=1, keepdims=True)
-        normals = normals / np.maximum(length, 1e-9)
-        # A face is on the union's surface when the solid (positives minus cutters) is on one side of
-        # it and not the other; a cutter's face shows where it bites into the solid.
-        side_a = inside(mids + normals * 0.02, False) & ~inside(mids + normals * 0.02, True)
-        side_b = inside(mids - normals * 0.02, False) & ~inside(mids - normals * 0.02, True)
-        keep = side_a != side_b
-        if cutter:
-            f = f[:, ::-1]  # its faces look into the hole, out of the solid
-        all_v.append(world)
-        all_f.append(f[keep] + base)
-        base += len(world)
-    if not all_v:
+        current = world[f]
+        # Round pieces are drawn as 24-sided: their flat faces sit inside the true circle by its sag,
+        # so the samples step out further than that.
+        sag = psize[1:].max() / 2 * (1 - math.cos(math.pi / 24)) if kind in ("Cylinder", "Ball") else 0
+        eps = 0.02 + 2 * sag
+        for depth in range(6):
+            if len(current) == 0:
+                break
+            normals = np.cross(current[:, 1] - current[:, 0], current[:, 2] - current[:, 0])
+            normals = normals / np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-9)
+            middle = current.mean(1)
+            samples = np.concatenate([middle[:, None, :], current * 0.9 + middle[:, None, :] * 0.1], 1)
+            offset = normals[:, None, :] * eps
+            outer = solid((samples + offset).reshape(-1, 3)).reshape(-1, 4)
+            inner = solid((samples - offset).reshape(-1, 3)).reshape(-1, 4)
+            on = outer != inner
+            whole = on.all(1) | (on[:, 0] & (depth == 5))
+            flip = outer[:, 0]
+            done = current[whole]
+            kept.append(np.where(flip[whole][:, None, None], done[:, ::-1], done))
+            mixed = on.any(1) & ~on.all(1)
+            if depth == 5:
+                break
+            tris = current[mixed]
+            a, b, c = tris[:, 0], tris[:, 1], tris[:, 2]
+            ab, bc, ca = (a + b) / 2, (b + c) / 2, (c + a) / 2
+            current = np.concatenate(
+                [np.stack(t, 1) for t in ((a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca))]
+            )
+    if not kept:
         return None
-    return np.concatenate(all_v), np.concatenate(all_f)
+    tris = np.concatenate(kept)
+    if len(tris) == 0:
+        return None
+    return tris.reshape(-1, 3), np.arange(len(tris) * 3).reshape(-1, 3)
 
 
 def world_tris(part, local):
@@ -527,6 +551,16 @@ def visible_layers(parts, grid, skip=lambda p: False):
     return cols[order], ys[order], owners[order], unknown
 
 
+def drawn_between(vcols, vys, query_cols, low, high):
+    """Whether each query column has a drawn surface between heights `low` and `high`."""
+    if len(vcols) == 0:
+        return np.zeros(len(query_cols), bool)
+    key = vcols.astype(np.float64) * 1e5 + (vys + 5000)
+    lo = np.searchsorted(key, query_cols.astype(np.float64) * 1e5 + (low + 5000))
+    hi = np.searchsorted(key, query_cols.astype(np.float64) * 1e5 + (high + 5000), side="right")
+    return hi > lo
+
+
 def nearest_visible(vcols, vys, query_cols, query_ys):
     """For each query (column, height): the smallest |drawn height - height| in that column (inf if none),
     and the signed gap to the nearest drawn surface at or below (height - drawn)."""
@@ -660,7 +694,9 @@ def analyse(snapshot, out_dir: Path | None, name: str, kill_y=None, verbose=Fals
         b2, _ = nearest_visible(vcols, vys, nb, ys)
         # (a drawn surface a little higher next door: the rounded edge of what you stand on)
         best = np.minimum(best, np.where(ok, np.maximum(b2 - 0.25 * step, 0), np.inf))
-    unseen = best > TOLERANCE
+    # (A drawn surface just over the spot: standing there you're sunk into something drawn, which looks
+    # odd but isn't standing on nothing.)
+    unseen = (best > TOLERANCE) & ~drawn_between(vcols, vys, col_idx, ys, ys + 2.5)
     by_part = defaultdict(list)
     for k in np.nonzero(unseen)[0]:
         if owner[k] != 65535:  # terrain: drawn by the engine, as it collides
@@ -762,6 +798,9 @@ def analyse(snapshot, out_dir: Path | None, name: str, kill_y=None, verbose=Fals
         # standing there: not invisible.
         drawn, _ = nearest_visible(vcols, vys, gcol, ty)
         covered |= drawn <= TOLERANCE
+        # ... or one a little above it: standing there is standing inside something drawn (sunk in
+        # it), not on nothing.
+        covered |= drawn_between(vcols, vys, gcol, ty, ty + 2.5)
         hit = ~covered & (ty <= jump_to[gcol] + 0.2)
         if not hit.any():
             continue
