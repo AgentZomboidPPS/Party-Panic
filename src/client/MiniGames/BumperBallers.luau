@@ -192,12 +192,22 @@ function BumperBallers.Start(api)
 	-- Balls --------------------------------------------------------------------------------------
 	type Ball = { Model: Model, Body: BasePart?, Pieces: { { Part: BasePart, Size: Vector3 } }, Pulse: number }
 	local balls: { [number]: Ball } = {}
-	local function addBall(model: Instance)
+	local addBall
+	function addBall(model: Instance)
 		if not model:IsA("Model") then
 			return
 		end
 		local userId = model:GetAttribute("Owner")
-		if type(userId) ~= "number" or balls[userId] then
+		if type(userId) ~= "number" then
+			local connection
+			connection = model:GetAttributeChangedSignal("Owner"):Connect(function()
+				connection:Disconnect()
+				addBall(model)
+			end)
+			api:Track(connection)
+			return
+		end
+		if balls[userId] then
 			return
 		end
 		local body = model:WaitForChild("Body", 5) :: BasePart?
@@ -297,23 +307,35 @@ function BumperBallers.Start(api)
 		body:ApplyImpulse(dv * mass)
 	end)
 
+	-- Tilt controls (phones with an accelerometer): CALIBRATE, FLIP and a TILT/STICK switch.
+	local hintY = api:HudY() + 46
+	local tiltUi: { Calibrate: any, Flip: any, Switch: TextButton }? = nil
+	local function refreshTiltUi()
+		if not tiltUi then
+			return
+		end
+		local alive = api:Alive()
+		tiltUi.Switch.Visible = alive
+		tiltUi.Switch.Text = if tiltOn then "📱 TILT: ON" else "🕹 STICK"
+		tiltUi.Calibrate:SetVisible(alive and tiltOn)
+		tiltUi.Flip:SetVisible(alive and tiltOn)
+	end
 	if tilt then
 		local calibrate = api:Button({ Text = "CALIBRATE", Key = Enum.KeyCode.C, Color = Theme.Colors.Cyan })
 		calibrate.Pressed:Connect(function()
 			tilt:Calibrate()
 			api:Sound("Click")
-			api:Hint("Tilt set! Lean your phone to roll.")
-			task.delay(2, function()
-				api:Hint("")
+			calibrate:SetText("✓ SET!")
+			task.delay(1, function()
+				calibrate:SetText("CALIBRATE")
 			end)
 		end)
-		local flip = api:Button({ Text = "FLIP ⇄", Key = Enum.KeyCode.F, Color = Theme.Colors.Yellow, Slot = 2 })
+		local flip = api:Button({ Text = "FLIP", Key = Enum.KeyCode.F, Color = Theme.Colors.Yellow, Slot = 2 })
 		flip.Pressed:Connect(function()
 			tilt:Flip()
 			api:Sound("Click")
 		end)
-		local switch
-		switch = UIKit.Button({
+		local switch = UIKit.Button({
 			Name = "TiltSwitch",
 			Text = "📱 TILT: ON",
 			Font = Theme.Fonts.Display,
@@ -324,21 +346,15 @@ function BumperBallers.Start(api)
 			Parent = hud,
 		}, function()
 			tiltOn = not tiltOn
-			switch.Text = if tiltOn then "📱 TILT: ON" else "🕹 STICK"
-			calibrate:SetVisible(tiltOn)
-			flip:SetVisible(tiltOn)
+			refreshTiltUi()
 			api:Sound("Click")
 		end)
-		api:Hint("Hold your phone comfy, tap CALIBRATE, then tilt to roll!")
-		task.delay(5, function()
-			api:Hint("")
-		end)
+		tiltUi = { Calibrate = calibrate, Flip = flip, Switch = switch }
+		api:Hint("Hold your phone comfy, tap CALIBRATE, then tilt to roll!", hintY)
 	else
-		api:Hint(if touch then "Use the stick to roll. Bump them off!" else "Move to roll. Bump them off!")
-		task.delay(4, function()
-			api:Hint("")
-		end)
+		api:Hint(if touch then "Use the stick to roll. Bump them off!" else "Move to roll. Bump them off!", hintY)
 	end
+	local hintUntil: number? = nil -- the hint stays up until 5 s after GO
 
 	-- A YOU marker over this player's ball, so they find themselves in a crowd.
 	local marker: BillboardGui? = nil
@@ -407,6 +423,7 @@ function BumperBallers.Start(api)
 		end
 	end
 
+	local wasAlive = nil
 	api:RenderStep(function(dt: number)
 		local now = os.clock()
 		-- Squash-and-stretch pulses (uniform, so they look right however the ball has rolled).
@@ -420,6 +437,20 @@ function BumperBallers.Start(api)
 					end
 				end
 			end
+		end
+		if not hintUntil and State.Phase() == "InRound" then
+			hintUntil = now + 5
+			if tilt then
+				tilt:Calibrate() -- calibrate on GO, however they hold the phone by then
+			end
+		elseif hintUntil and now > hintUntil and hintUntil > 0 then
+			hintUntil = 0
+			api:Hint("", hintY)
+		end
+		local alive = api:Alive()
+		if alive ~= wasAlive then
+			wasAlive = alive
+			refreshTiltUi()
 		end
 		-- Riders strip.
 		for userId, icon in icons do

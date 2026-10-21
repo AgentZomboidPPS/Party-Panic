@@ -247,7 +247,7 @@ end
 function BumperBallers:_makeBall(player, index: number, spot: Vector3): Entry
 	local rider = BumperBallers.Riders[(index - 1) % #BumperBallers.Riders + 1]
 	local patternName = BumperBallers.Patterns[(index - 1) % #BumperBallers.Patterns + 1]
-	local model = Build.Model(`Ball_{player.UserId}`, self.ballsFolder)
+	local model = Build.Model(`Ball_{player.UserId}`)
 
 	local body = Instance.new("Part")
 	body.Name = "Body"
@@ -320,6 +320,7 @@ function BumperBallers:_makeBall(player, index: number, spot: Vector3): Entry
 	model:SetAttribute("Color", rider.Color)
 	model:SetAttribute("ClientDriven", false)
 	model:SetAttribute("Index", index)
+	model.Parent = self.ballsFolder -- last, so clients see it complete
 
 	local toCenter = flat(self.center - spot)
 	local entry: Entry = {
