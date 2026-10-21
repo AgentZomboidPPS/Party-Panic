@@ -1,0 +1,23 @@
+newmtl Post
+Kd 0.980 0.980 0.980
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Dark
+Kd 0.118 0.118 0.141
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Board
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Frame
+Kd 0.871 0.243 0.196
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

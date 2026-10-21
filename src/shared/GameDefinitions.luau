@@ -191,6 +191,32 @@ local list: { GameDefinition } = {
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
+		Id = "MechaMarathon",
+		Name = "Mecha-Marathon",
+		Category = "Reaction",
+		Icon = "🚁",
+		Color = Color3.fromRGB(255, 170, 60),
+		Objective = "Mash WIND for 10 seconds to wind up your toy. The farthest flight wins!",
+		Controls = "PC: alternate Q and E, fast. Phone: tap WIND as fast as you can (two thumbs work)!",
+		Duration = 30,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "Spleef",
+		Name = "Spleef",
+		Category = "Survival",
+		Icon = "❄️",
+		Color = Color3.fromRGB(120, 200, 255),
+		Objective = "Break the snow under your rivals! Fall through all 3 floors into the water and you're out. Last one standing wins!",
+		Controls = "Click or tap a block near you to break it. DIG (E) breaks the block under the nearest rival.",
+		Duration = 75,
+		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
 		Id = "PrimeCut",
 		Name = "Prime Cut",
 		Category = "Team",
@@ -198,7 +224,7 @@ local list: { GameDefinition } = {
 		Color = Color3.fromRGB(214, 96, 72),
 		Objective = "Line up your team's giant knife and cut the steak exactly 50 : 50. Closest split wins - 3 steaks!",
 		Controls = "Tap or hold ◀ ▶ (A / D) to nudge the knife. Teammates push it too: agree on the middle!",
-		Duration = 52,
+		Duration = 56,
 		MinPlayers = 2,
 		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later

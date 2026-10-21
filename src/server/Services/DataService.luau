@@ -130,6 +130,11 @@ local function loadRecord(player: Player): (any, boolean)
 	end
 	local key = keyFor(player)
 	for attempt = 1, Config.Data.LoadRetries do
+		-- Gone while we waited between attempts: never lock (or take over another server's lock) for
+		-- someone who has left, or a session they've since started elsewhere could lose its lock.
+		if not player.Parent then
+			return nil, false
+		end
 		local blockedByLock = false
 		local ok, result = pcall(function()
 			return dataStore:UpdateAsync(key, function(stored)
