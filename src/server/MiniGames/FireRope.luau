@@ -510,8 +510,9 @@ function FireRope:Start()
 				table.remove(samples, 1)
 			end
 			-- Off the bridge and not falling out (on scenery, or anything else they can stand or hang
-			-- on): out after a moment, like a fall.
-			if now - (self.onDeckAt[player] or now) > OFF_DECK_TIME then
+			-- on): out after a moment, like a fall (if that moment came before the buzzer).
+			local offSince = self.onDeckAt[player] or now
+			if now - offSince > OFF_DECK_TIME and ctx:InTime(offSince + OFF_DECK_TIME) then
 				ctx:Eliminate(player, "fell")
 			end
 		end
@@ -528,7 +529,7 @@ function FireRope:Start()
 		end
 		self.passes += 1
 		local before = self.segments[#self.segments - 1] or upcoming
-		if not ctx:TimeIsUp() then
+		if ctx:InTime(upcoming.T0) then -- (a pass after the buzzer doesn't count)
 			local pass: Pass = { T = upcoming.T0, Before = before.W, After = upcoming.W, Verdicts = {}, Sweeps = {} }
 			table.insert(self.pending, pass)
 			-- If time runs out now, the round's end waits until the slowest sweep can be in.

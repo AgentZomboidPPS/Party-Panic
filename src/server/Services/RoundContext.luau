@@ -20,7 +20,8 @@
 --     person in a round left or couldn't be placed before GO, so it calls the round off.
 --   * At the buzzer, something already on its way to be judged (a rope pass, a landed arrow, a hit
 --     pressed just before) gets a moment (HoldEnd, half a second at most) instead of being dropped
---     because the round had just ended.
+--     because the round had just ended. Only what happened before the buzzer counts in that moment
+--     (InTime, Logic/Buzzer): nobody is put out for a fall or a reset after it.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -28,6 +29,7 @@ local RunService = game:GetService("RunService")
 local StarterPlayer = game:GetService("StarterPlayer")
 
 local Shared = ReplicatedStorage.Shared
+local Buzzer = require(Shared.Logic.Buzzer)
 local Config = require(Shared.Config)
 local GameState = require(Shared.GameState)
 local Janitor = require(Shared.Janitor)
@@ -40,7 +42,6 @@ local Telemetry = require(script.Parent.Telemetry)
 
 local LOBBY_RADIUS = 600
 local PEOPLE_OUT_DELAY = 2 -- once every person is out, the round wraps up after this long
-local MAX_HOLD = 0.5 -- the longest a round's end waits at time-up for something in flight (HoldEnd)
 
 local actionRemote = Remotes.Get("MiniGameAction")
 local eventRemote = Remotes.Get("MiniGameEvent")
@@ -151,7 +152,8 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 
 	-- Fall / out-of-bounds check (server side so clients can't skip it). Everyone below KillY in one
 	-- check goes out together (see Eliminate); a new character still on its way back to its spot is
-	-- left alone (it starts in the lobby, far below).
+	-- left alone (it starts in the lobby, far below). Once time is up (the end held a moment for
+	-- something in flight: HoldEnd) a fall no longer puts anyone out.
 	local accumulator = 0
 	self.Janitor:Add(RunService.Heartbeat:Connect(function(dt)
 		accumulator += dt
@@ -168,10 +170,10 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 			end
 			local _, _, root = self:GetCharacter(player)
 			if root and root.Position.Y < self.KillY then
-				if self.RespawnMode == "Eliminate" then
-					self:Eliminate(player, "fell")
-				else
+				if self.RespawnMode ~= "Eliminate" then
 					self:Respawn(player)
+				elseif not self.TimeUpAt then
+					self:Eliminate(player, "fell")
 				end
 			end
 		end
@@ -223,8 +225,8 @@ end
 -- Asks for a moment before the round ends at time-up, for something already on its way to be judged:
 -- an arrow that has just landed, a rope pass whose last positions are still coming in, a hit pressed
 -- just before the buzzer. If time runs out within the next `seconds`, the round goes on until then,
--- but never more than MAX_HOLD past the buzzer; meanwhile nothing new should start (TimeIsUp), and an
--- action should count only if it was made before TimeUpAt.
+-- but never more than Buzzer.MAX_HOLD (half a second) past the buzzer; meanwhile nothing new should
+-- start (TimeIsUp), and something should count only if it happened before the buzzer (InTime).
 function RoundContext.HoldEnd(self: RoundContext, seconds: number)
 	self.HoldUntil = math.max(self.HoldUntil, self:Now() + math.max(0, seconds))
 end
@@ -234,12 +236,19 @@ function RoundContext.TimeIsUp(self: RoundContext): boolean
 	return self.TimeUpAt ~= nil or self.EndReason ~= nil
 end
 
+-- Whether something that happened at server time `at` (a press, by when it was made: Buzzer.PressTime;
+-- a pass; a landing) counts: everything until time runs out, then only what happened by the buzzer.
+function RoundContext.InTime(self: RoundContext, at: number): boolean
+	return Buzzer.InTime(at, self.TimeUpAt)
+end
+
 -- The round manager calls this, again and again, once the round's time has run out: it ends the round
--- straight away, or as soon as what HoldEnd asked for is over (MAX_HOLD at most).
+-- straight away, or as soon as what HoldEnd asked for is over (Buzzer.MAX_HOLD at most).
 function RoundContext.TimeRanOut(self: RoundContext, reason: string)
 	local now = self:Now()
-	self.TimeUpAt = self.TimeUpAt or now
-	if now >= self.HoldUntil or now >= (self.TimeUpAt :: number) + MAX_HOLD then
+	local timeUpAt = self.TimeUpAt or now
+	self.TimeUpAt = timeUpAt
+	if Buzzer.Ends(now, timeUpAt, self.HoldUntil) then
 		self:End(reason)
 	end
 end
@@ -973,7 +982,8 @@ function RoundContext._watchCharacter(self: RoundContext, player: Player, charac
 			end
 			return
 		end
-		if self:IsRunning() and self.RespawnMode == "Eliminate" then
+		-- (A reset once time is up, while the end waits a moment for something in flight, doesn't.)
+		if self:IsRunning() and self.RespawnMode == "Eliminate" and not self.TimeUpAt then
 			self:Eliminate(player, "died")
 		end
 	end))

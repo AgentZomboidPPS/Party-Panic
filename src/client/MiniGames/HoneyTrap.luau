@@ -7,7 +7,8 @@
 --
 -- Timing pass (owner: "the precision games will feel super bad if we dont"): the block follows the
 -- server's own rule (Logic/HoneyBlock), so it stops on the deadline's face like the server does
--- instead of flipping on until the result arrives.
+-- instead of flipping on until the result arrives. A HIT says which face showed and when it was
+-- pressed, so one made just before the buzzer still counts when it gets there after it.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -481,7 +482,7 @@ function HoneyTrap.Start(api)
 		end
 		pending = turn.Id
 		predicted = faceAt(turn, t)
-		api:Action("Hit", predicted)
+		api:Action("Hit", predicted, t) -- the face on screen, and when (a hit just before the buzzer counts)
 		api:Sound("Hit")
 	end
 	hit.Pressed:Connect(tryHit)

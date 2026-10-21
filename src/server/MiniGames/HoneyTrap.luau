@@ -14,7 +14,8 @@
 -- reached the server after the deadline used to find the block already stopped by the server, on
 -- the next face; the server now waits a moment past the deadline (LATE_HIT) and judges it on the
 -- faces up to the deadline, and the round's end waits the same moment at the buzzer for a hit pressed
--- just before it (RoundContext.HoldEnd). And someone who takes a honeycomb is out from that moment: their
+-- just before it (RoundContext.HoldEnd; the HIT carries when it was pressed, which counts within the
+-- player's ping: Logic/Buzzer). And someone who takes a honeycomb is out from that moment: their
 -- elimination used to wait for the bees (2.1 s), so a time-up, or the last other player leaving,
 -- in that window counted them as a survivor, and they could win. The bees still play out first.
 --
@@ -25,6 +26,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Buzzer = require(ReplicatedStorage.Shared.Logic.Buzzer)
 local HoneyBlock = require(ReplicatedStorage.Shared.Logic.HoneyBlock)
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Scenery = require(script.Parent.Kit.Scenery)
@@ -428,7 +430,9 @@ function HoneyTrap:Start()
 		ctx:SetWalkSpeed(player, 0)
 	end
 
-	ctx:OnAction("Hit", function(player, claimed)
+	-- `claimed` is the face the player's screen showed when they pressed, `sentAt` when that was (their
+	-- clock, synced to the server's); bots send the face only.
+	ctx:OnAction("Hit", function(player, claimed, sentAt)
 		local turn = self.current
 		if not turn or turn.Done or turn.Player ~= player then
 			return
@@ -440,7 +444,7 @@ function HoneyTrap:Start()
 		-- Past the buzzer (the round's end waits a moment for this), only a hit pressed before it, on
 		-- a face shown before it.
 		local timeUp = ctx.TimeUpAt
-		if timeUp and now - lagOf(player) / 2 - 0.05 > timeUp then
+		if not ctx:InTime(Buzzer.PressTime(sentAt, now, lagOf(player))) then
 			return
 		end
 		local judged = turn
@@ -461,14 +465,13 @@ function HoneyTrap:Start()
 	ctx:Loop(function(): number?
 		local turn = self.current
 		if turn and not turn.Done then
-			local timeUp = ctx.TimeUpAt
 			if not turn.Player.Parent or not ctx:IsAlive(turn.Player) then
 				turn.Done = true
 				self:_startTurn(turn.Player)
-			elseif ctx:Now() >= turn.Deadline + HoneyBlock.LATE_HIT and (not timeUp or turn.Deadline <= timeUp) then
+			elseif ctx:Now() >= turn.Deadline + HoneyBlock.LATE_HIT and ctx:InTime(turn.Deadline) then
 				self:_resolve(turn, HoneyTrap.FaceAt(turn, turn.Deadline))
 			end
-			if not timeUp then
+			if not ctx:TimeIsUp() then
 				ctx:HoldEnd(HoneyBlock.LATE_HIT + 0.05)
 			end
 		end
