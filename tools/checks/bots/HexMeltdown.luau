@@ -1,8 +1,10 @@
 -- Bot for Hex Meltdown: on each call most bots hop to a hex of the called color; the rest stay
--- put. Luau execution has no physics, so a bot left on a sinking hex is moved into the lava.
+-- put. Luau execution has no physics, so a bot left on a sinking hex is moved into the lava. Safe
+-- means the mode's own footprint test (StandsOn) on a hex of the called color, as for real bots.
 return function(env)
 	local ctx = env.ctx
 	local hexes = env.game.hexes
+	local standsOn = env.game.StandsOn
 	local plans = {}
 	local lastCall = nil
 	local calls, falls = 0, 0
@@ -73,7 +75,13 @@ return function(env)
 				local position = env.Root(player)
 				if position and position.Y > ctx.KillY then
 					local hex, distance = hexUnder(position)
-					if hex and distance < 7 and hex.ColorIndex ~= call.Color then
+					local safe = false
+					for _, other in hexes do
+						if other.ColorIndex == call.Color and standsOn(other.Position, position) then
+							safe = true
+						end
+					end
+					if hex and distance < 7 and not safe then
 						falls += 1
 						env.Move(player, position - Vector3.new(0, 30, 0))
 						env.note(
