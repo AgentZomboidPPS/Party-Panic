@@ -1,0 +1,41 @@
+newmtl Rim
+Kd 0.353 0.314 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Spokes
+Kd 0.863 0.863 0.902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Legs
+Kd 0.275 0.275 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl GondolaA
+Kd 1.000 0.353 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl GondolaB
+Kd 0.314 0.745 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Gold
+Kd 1.000 0.784 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Lights
+Kd 1.000 0.941 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
