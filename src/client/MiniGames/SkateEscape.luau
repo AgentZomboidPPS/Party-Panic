@@ -24,7 +24,7 @@ local SkateEscape = {}
 local KICK_TIME = 0.32
 local CAMERA_BACK = 15
 local CAMERA_UP = 7
-local LAVA_DEPTH = 64 -- the lava river's surface below the deck (as the server builds it)
+local LAVA_DEPTH = 46 -- the lava river's surface below the deck (as the server builds it)
 local DECK_WIDTH = 100
 local START_BACK = 36 -- the start pad behind the line
 local rad = math.rad
@@ -541,10 +541,23 @@ function SkateEscape.Start(api)
 			api:Effect("Fireworks", origin + Vector3.new(0, 26, -length - 6))
 		end
 	end)
+	-- A fallen skater ends in the lava with a splash (they respawn 1.2 s after falling, about when
+	-- they reach it).
+	local splashes: { { At: number, Position: Vector3 } } = {}
 	api:OnEvent("Out", function(key)
-		if key == myKey and not outAt then
-			outAt = api:Now()
-			me.Done = true
+		local fellAt = api:Now()
+		if key == myKey then
+			if not outAt then
+				outAt = fellAt
+				me.Done = true
+			end
+			fellAt = outAt :: number
+		end
+		local at = if key == myKey and myLane
+			then origin + Vector3.new(SkateCourse.LaneX(myLane, lanes), 0, -me.D)
+			else racerPosition(key)
+		if at then
+			table.insert(splashes, { At = fellAt + 1.1, Position = Vector3.new(at.X, origin.Y - LAVA_DEPTH, at.Z) })
 		end
 	end)
 
@@ -666,7 +679,57 @@ function SkateEscape.Start(api)
 		frontPart:Destroy()
 	end)
 
+	-- Sparks drifting up from the lava past both rails, wherever I am (full effects only).
+	local sparkParts: { { Part: BasePart, Side: number } } = {}
+	if not reduced then
+		for _, side in { -1, 1 } do
+			local part = Instance.new("Part")
+			part.Name = "LavaSparks"
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.CastShadow = false
+			part.Transparency = 1
+			part.Size = Vector3.new(70, 1, 140)
+			part.CFrame = CFrame.new(0, -1e4, 0)
+			local sparks = Instance.new("ParticleEmitter")
+			sparks.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+			sparks.Color = ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(255, 100, 40))
+			sparks.LightEmission = 1
+			sparks.Size = NumberSequence.new(0.6, 0)
+			sparks.Lifetime = NumberRange.new(4, 6)
+			sparks.Speed = NumberRange.new(9, 15)
+			sparks.SpreadAngle = Vector2.new(15, 15)
+			sparks.EmissionDirection = Enum.NormalId.Top
+			sparks.Rate = 10
+			sparks.Parent = part
+			part.Parent = api.World
+			table.insert(sparkParts, { Part = part, Side = side })
+		end
+	end
+	api:Track(function()
+		for _, spark in sparkParts do
+			spark.Part:Destroy()
+		end
+	end)
+
 	local function updateBridge(now: number)
+		for index = #splashes, 1, -1 do
+			local splash = splashes[index]
+			if now >= splash.At then
+				table.remove(splashes, index)
+				if (splash.Position - camera.CFrame.Position).Magnitude < 260 then
+					api:Effect("Poof", splash.Position, { Color3.fromRGB(255, 120, 40), Color3.fromRGB(255, 200, 80) })
+				end
+			end
+		end
+		if #sparkParts > 0 then
+			local z = camera.CFrame.Position.Z - 40
+			for _, spark in sparkParts do
+				spark.Part.CFrame = CFrame.new(origin.X + spark.Side * 90, origin.Y - 30, z)
+			end
+		end
 		if not collapse then
 			setLamps(false)
 			return
