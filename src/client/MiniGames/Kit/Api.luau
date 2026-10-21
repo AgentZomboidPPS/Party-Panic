@@ -490,9 +490,11 @@ function Api.Hint(self: Api, text: string, y: number?)
 	hint.Text = text
 	hint.Visible = text ~= ""
 	if self:IsTouch() then
-		-- Phones: only as wide as the words, so the line stays clear of the thumbstick's corner.
+		-- Phones: only as wide (and as tall) as the words, so the line stays clear of the thumbstick's
+		-- corner and of anything a mode shows under it.
 		local width = UIKit.TextWidth(text, 26, Theme.Fonts.Display) + 24
-		hint.Size = UDim2.fromOffset(math.min(620, math.ceil(width)), 64)
+		local oneLine = width <= 620 and not string.find(text, "\n", 1, true)
+		hint.Size = UDim2.fromOffset(math.min(620, math.ceil(width)), if oneLine then 36 else 64)
 	end
 end
 

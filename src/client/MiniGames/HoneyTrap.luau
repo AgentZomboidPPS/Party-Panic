@@ -427,15 +427,17 @@ function HoneyTrap.Start(api)
 	local function hint(text: string)
 		api:Hint(text, y + 74)
 		local label = hud:FindFirstChild("Hint") :: TextLabel?
-		if label and not hintFitted then
-			hintFitted = true
-			label.Size = UDim2.fromOffset(420, 64)
-			label.TextWrapped = true
-			label.TextScaled = true
-			local limit = Instance.new("UITextSizeConstraint")
-			limit.MaxTextSize = 26
-			limit.MinTextSize = 14
-			limit.Parent = label
+		if label then
+			label.Size = UDim2.fromOffset(420, 64) -- api:Hint sizes it to the words each time
+			if not hintFitted then
+				hintFitted = true
+				label.TextWrapped = true
+				label.TextScaled = true
+				local limit = Instance.new("UITextSizeConstraint")
+				limit.MaxTextSize = 26
+				limit.MinTextSize = 14
+				limit.Parent = label
+			end
 		end
 	end
 	hint("Take 1 or 2 each turn - don't take the 🍯 honeycomb!")
