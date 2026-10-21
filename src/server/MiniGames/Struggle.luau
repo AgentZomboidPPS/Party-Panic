@@ -814,22 +814,19 @@ function Struggle:Start()
 		return 0.1
 	end)
 
-	-- The status line names the leader.
+	-- The status line says what's lying around (the HUD shows the leader).
 	ctx:Loop(function(): number?
-		local best, bestHeld, tie = nil, -1, false
-		for player, held in self.held do
-			if held > bestHeld then
-				best, bestHeld, tie = player, held, false
-			elseif held == bestHeld then
-				tie = true
-			end
+		local loose = 0
+		for _ in self.orbs do
+			loose += 1
 		end
-		if best and not tie then
-			ctx:SetStatus(`Leader: {best.DisplayName} - {bestHeld} orbs`)
-		else
-			ctx:SetStatus("Knock their orbs loose - grab them!")
-		end
-		return 1
+		ctx:SetStatus(
+			if loose == 0
+				then "Knock their orbs loose!"
+				elseif loose == 1 then "1 orb on the ground - grab it!"
+				else `{loose} orbs on the ground - grab them!`
+		)
+		return 0.5
 	end)
 end
 

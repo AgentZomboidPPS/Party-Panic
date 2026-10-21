@@ -87,6 +87,7 @@ function Brain.Step(bot, ctx, mode, _dt)
 			ctx:BotAction(bot, "Charge", now)
 			memory.ReleaseAt = clock + 0.05
 			memory.Target = other
+			memory.WantCharge = false
 			return
 		end
 		local side = Vector3.new(-offset.Z, 0, offset.X).Unit * (if bot.Rng:NextNumber() < 0.5 then -1 else 1)
