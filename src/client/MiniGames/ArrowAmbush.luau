@@ -437,8 +437,10 @@ function ArrowAmbush.Start(api)
 	-- HUD --------------------------------------------------------------------------------------
 	local hud = api:TopHud()
 	local y = api:HudY()
+	local touch = api:IsTouch()
 	-- Archers have no move stick or jump button, so their role chip and reload bar sit at the bottom
-	-- of the screen, leaving the top (the far end of the courtyard) clear to aim at.
+	-- of the screen, leaving the top (the far end of the courtyard) clear to aim at. (Phones: the
+	-- chip is narrower, so it stays clear of the stick's corner all the same.)
 	local bottom = nil
 	if isArcher then
 		bottom = UIKit.new("Frame", {
@@ -457,7 +459,10 @@ function ArrowAmbush.Start(api)
 			Name = "Role",
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = if bottom then UDim2.new(0.5, 0, 0, 0) else UDim2.new(0.5, 0, 0, y),
-			Size = if watching then UDim2.fromOffset(220, 44) else UDim2.fromOffset(380, 48),
+			Size = if watching
+				then UDim2.fromOffset(220, 44)
+				elseif bottom and touch then UDim2.fromOffset(300, 48)
+				else UDim2.fromOffset(380, 48),
 			Parent = bottom or hud,
 		},
 		chipColor,
@@ -468,7 +473,7 @@ function ArrowAmbush.Start(api)
 	)
 	UIKit.Label({
 		Text = if isArcher
-			then (if api:IsTouch() then "🏹 ARCHER • TAP TO SHOOT" else "🏹 ARCHER • CLICK TO SHOOT")
+			then (if touch then "🏹 ARCHER • TAP TO SHOOT" else "🏹 ARCHER • CLICK TO SHOOT")
 			elseif watching then "👀 WATCHING"
 			else "🏃 RUNNER • DODGE & HIDE",
 		Font = Theme.Fonts.Display,
@@ -511,17 +516,19 @@ function ArrowAmbush.Start(api)
 	end
 
 	-- The role intro: big for a few seconds, then it gets out of the way. (Low enough to clear the
-	-- standings list on small phones.)
+	-- standings list on small phones. Phones: a little smaller and only as wide as the words, so it
+	-- stays clear of the move stick's corner.)
 	local introY = y + 96
 	local intro = UIKit.Label({
 		Name = "Intro",
 		Text = if isArcher then "🏹 YOU'RE AN ARCHER!" else "🏃 YOU'RE A RUNNER!",
 		Font = Theme.Fonts.Display,
-		TextSize = 52,
+		TextSize = if touch then 36 else 52,
+		TextWrapped = false, -- one line, even if a phone measured the words a little narrow
 		TextColor3 = if isArcher then ARCHER_COLOR else RUNNER_COLOR,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, introY),
-		Size = UDim2.fromOffset(600, 60),
+		Size = UDim2.fromOffset(600, if touch then 44 else 60),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0) },
 	})
@@ -530,12 +537,21 @@ function ArrowAmbush.Start(api)
 		Text = if isArcher then "Tag every runner!" else "Survive the arrows!",
 		Font = Theme.Fonts.Display,
 		TextSize = 30,
+		TextWrapped = false,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, introY + 60),
+		Position = UDim2.new(0.5, 0, 0, introY + if touch then 46 else 60),
 		Size = UDim2.fromOffset(600, 40),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.1) },
 	})
+	local function fitToWords(label: TextLabel)
+		if touch then
+			local width = UIKit.TextWidth(label.Text, label.TextSize, label.Font) + 24
+			label.Size = UDim2.fromOffset(math.ceil(width), label.Size.Y.Offset)
+		end
+	end
+	fitToWords(intro)
+	fitToWords(introSub)
 	if watching then
 		intro.Visible = false -- spectators get no role intro
 		introSub.Visible = false
@@ -567,6 +583,13 @@ function ArrowAmbush.Start(api)
 			if s2 then
 				UIKit.Tween(s2, 0.4, { Transparency = 1 })
 			end
+			task.delay(0.45, function()
+				-- Faded out: hide them too (unless TAGGED! took the line over meanwhile).
+				if intro.Text ~= "🎯 TAGGED!" then
+					intro.Visible = false
+				end
+				introSub.Visible = false
+			end)
 		end
 	end)
 
@@ -579,6 +602,7 @@ function ArrowAmbush.Start(api)
 		api:Sound("Hit")
 		if userId == me.UserId then
 			intro.Text = "🎯 TAGGED!"
+			fitToWords(intro)
 			intro.TextColor3 = RING_COLOR
 			intro.TextTransparency = 0
 			intro.Visible = true
@@ -595,6 +619,9 @@ function ArrowAmbush.Start(api)
 					if stroke then
 						UIKit.Tween(stroke, 0.5, { Transparency = 1 })
 					end
+					task.delay(0.55, function()
+						intro.Visible = false
+					end)
 				end
 			end)
 		end
@@ -761,7 +788,12 @@ function ArrowAmbush.Start(api)
 		end))
 		-- (No hint line for archers: the chip at the bottom already says TAP / CLICK TO SHOOT.)
 	elseif not watching then
-		api:Hint("Watch for the red rings! Hide behind the boards!", introY + 104)
+		if touch then
+			-- Phones: two short lines under the smaller intro, clear of the move stick's corner.
+			api:Hint("Watch for the red rings!\nHide behind the boards!", introY + 90)
+		else
+			api:Hint("Watch for the red rings! Hide behind the boards!", introY + 104)
+		end
 		afterGo(5, function()
 			api:Hint("")
 		end)
