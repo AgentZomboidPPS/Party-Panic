@@ -11,7 +11,7 @@ return function(h)
 	return {
 		ParasolPlummetUmbrella = {
 			Height = 5.6,
-			AssetId = 0,
+			AssetId = 105144261230779,
 			Palette = {
 				Canopy = h.rgb(235, 70, 80),
 				Stripe = h.rgb(255, 250, 245),
@@ -29,7 +29,7 @@ return function(h)
 		},
 		ParasolPlummetUmbrellaShut = {
 			Height = 5.6,
-			AssetId = 0,
+			AssetId = 81534965010793,
 			Palette = {
 				Canopy = h.rgb(235, 70, 80),
 				Stripe = h.rgb(255, 250, 245),
@@ -47,7 +47,7 @@ return function(h)
 		},
 		ParasolPlummetCoin = {
 			Height = 2.2,
-			AssetId = 0,
+			AssetId = 100830698162882,
 			Shadow = false,
 			Palette = { Coin = gold, Emblem = h.rgb(255, 238, 140) },
 			Materials = { Coin = Enum.Material.Metal, Emblem = Enum.Material.Metal },
@@ -64,7 +64,7 @@ return function(h)
 		},
 		ParasolPlummetBag = {
 			Height = 3,
-			AssetId = 0,
+			AssetId = 99372427279332,
 			Shadow = false,
 			Palette = { Sack = h.rgb(196, 140, 84), Tie = h.rgb(120, 70, 40), Emblem = gold },
 			Materials = { Sack = Enum.Material.Fabric, Emblem = Enum.Material.Metal },
@@ -76,7 +76,7 @@ return function(h)
 		},
 		ParasolPlummetHammer = {
 			Height = 3.6,
-			AssetId = 0,
+			AssetId = 117076517085122,
 			Shadow = false,
 			Palette = { Head = h.rgb(120, 126, 140), Handle = h.rgb(150, 98, 58), Band = gold },
 			Materials = { Head = Enum.Material.Metal, Handle = Enum.Material.Wood, Band = Enum.Material.Metal },
@@ -87,7 +87,7 @@ return function(h)
 		},
 		ParasolPlummetCloud = {
 			Height = 5,
-			AssetId = 0,
+			AssetId = 132771041638249,
 			Shadow = false,
 			Palette = { Cloud = cloud, Shade = h.rgb(214, 228, 248) },
 			Fallback = function(m)
@@ -99,7 +99,7 @@ return function(h)
 		},
 		ParasolPlummetThrower = {
 			Height = 5.4,
-			AssetId = 0,
+			AssetId = 82701868422805,
 			Palette = {
 				Body = h.rgb(120, 200, 110),
 				Belly = h.rgb(255, 238, 200),
@@ -120,7 +120,7 @@ return function(h)
 		},
 		ParasolPlummetSun = {
 			Height = 59,
-			AssetId = 0,
+			AssetId = 92749096219059,
 			Shadow = false,
 			Palette = { Sun = h.rgb(255, 236, 140), Rays = h.rgb(255, 205, 90) },
 			Materials = { Sun = Enum.Material.Neon, Rays = Enum.Material.Neon },
@@ -138,7 +138,7 @@ return function(h)
 		},
 		ParasolPlummetBalloon = {
 			Height = 21.6,
-			AssetId = 0,
+			AssetId = 89049309041996,
 			Shadow = false,
 			Palette = {
 				Envelope = h.rgb(255, 120, 90),
