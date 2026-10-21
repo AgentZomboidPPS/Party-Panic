@@ -955,25 +955,16 @@ function SharkBait:_spitOut(swimmer: any)
 	ctx:Fire(nil, "SpatOut", swimmer.UserId, round(spot.X, 2), round(spot.Z, 2))
 end
 
+-- The standings' line (short: it has to fit the phone leaderboard; the results say more).
 function SharkBait:_swimmerText(swimmer: any)
 	local state = self.context:State(swimmer)
 	local coins = if state then state.Score else 0
-	local text = if coins == 1 then "1 coin" else `{coins} coins`
-	local times = self.chomped[swimmer] or 0
-	if times > 0 then
-		text ..= if times == 1 then " • chomped once" else ` • chomped {times}x`
-	end
-	self.context:SetScoreText(swimmer, text)
+	self.context:SetScoreText(swimmer, if coins == 1 then "1 coin" else `{coins} coins`)
 end
 
 function SharkBait:_sharkText(shark: any)
 	local chomps = self.chomps[shark] or 0
-	local dunks = self.dunks[shark] or 0
-	local text = if chomps == 1 then "1 chomp" else `{chomps} chomps`
-	if dunks > 0 then
-		text ..= ` • {dunks} dunked`
-	end
-	self.context:SetScoreText(shark, text)
+	self.context:SetScoreText(shark, if chomps == 1 then "1 chomp" else `{chomps} chomps`)
 end
 
 -- Rafts: wobble, flip, come back up ----------------------------------------------------------------
@@ -1562,10 +1553,18 @@ function SharkBait:GetResults()
 			continue
 		end
 		local team = if role == "Shark" then SharkBait.SHARKS else SharkBait.SWIMMERS
-		local text = if role == "Shark"
-			then `🦈 {state.ScoreText}`
-			elseif (self.chomped[player] or 0) > 0 then `🏊 {state.ScoreText}`
-			else `🏊 {state.Score} {if state.Score == 1 then "coin" else "coins"} • never chomped!`
+		local text
+		if role == "Shark" then
+			local chomps, dunks = self.chomps[player] or 0, self.dunks[player] or 0
+			text = `🦈 {chomps} {if chomps == 1 then "chomp" else "chomps"}`
+			if dunks > 0 then
+				text ..= ` • {dunks} dunked`
+			end
+		else
+			local times = self.chomped[player] or 0
+			text = `🏊 {state.Score} {if state.Score == 1 then "coin" else "coins"} • `
+				.. if times == 0 then "never chomped!" elseif times == 1 then "chomped once" else `chomped {times}x`
+		end
 		table.insert(entries, {
 			Player = player,
 			Rank = if team == winner then 1e6 else state.Score,
