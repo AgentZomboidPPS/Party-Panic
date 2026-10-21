@@ -127,7 +127,7 @@ def booth():
         wall.append(box(x0, x1, 0.0, 14.4, -3.5, 4.3, 0.08))
     wall.append(box(-6.8, 6.8, 0.0, 14.4, 3.9, 4.3, 0.08))
     roof = merge(
-        box(-7.0, 7.0, 14.4, 14.75, -4.3, 4.3, 0.12),
+        box(-6.75, 6.75, 14.4, 14.75, -4.3, 4.3, 0.12),
         box(-6.6, 6.6, 14.75, 14.9, -3.9, 3.9, 0.06),
     )
     # The awning: 12 stripes across the front, alternating colors, scalloped bottoms.

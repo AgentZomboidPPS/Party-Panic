@@ -155,8 +155,8 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 	Build.Decor({
 		Name = "Rug",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.1, 30, 30),
-		CFrame = upright(center + Vector3.new(0, 0.05, 0)),
+		Size = Vector3.new(0.06, 30, 30),
+		CFrame = upright(center + Vector3.new(0, 0.08, 0)),
 		Color = rgb(120, 200, 235),
 		Material = Enum.Material.Fabric,
 		Parent = arena,
@@ -164,19 +164,19 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 	Build.Decor({
 		Name = "RugRim",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.06, 33, 33),
-		CFrame = upright(center + Vector3.new(0, 0.03, 0)),
+		Size = Vector3.new(0.04, 33, 33),
+		CFrame = upright(center + Vector3.new(0, 0.04, 0)),
 		Color = rgb(255, 255, 255),
 		Material = Enum.Material.Fabric,
 		Parent = arena,
 	})
 	for index = 0, 15 do
 		local angle = index / 16 * math.pi * 2
-		local at = center + Vector3.new(math.cos(angle) * 10.5, 0.13, math.sin(angle) * 10.5)
+		local at = center + Vector3.new(math.cos(angle) * 12.5, 0.135, math.sin(angle) * 12.5)
 		Build.Decor({
 			Name = "RugStar",
 			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.04, 1.6, 1.6),
+			Size = Vector3.new(0.03, 1.6, 1.6),
 			CFrame = upright(at),
 			Color = if index % 2 == 0 then rgb(255, 220, 90) else rgb(255, 140, 190),
 			Material = Enum.Material.Fabric,
@@ -222,7 +222,10 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 	for index = 0, panels - 1 do
 		local angle = (index + 0.5) / panels * math.pi * 2
 		local outward = Vector3.new(math.sin(angle), 0, math.cos(angle))
-		local base = center + outward * WALL_RADIUS
+		-- Neighbouring panels overlap a little, so every other one sits a hair further out (no
+		-- two faces in one plane: no flicker).
+		local nudge = (index % 2) * 0.06
+		local base = center + outward * (WALL_RADIUS + nudge)
 		local frame = CFrame.lookAt(base, base - outward)
 		Build.Decor({
 			Name = "Wallpaper",
@@ -234,16 +237,16 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 		})
 		Build.Decor({
 			Name = "WallTrim",
-			Size = Vector3.new(width, 1.6, 1.6),
-			CFrame = frame * CFrame.new(0, 30.4, 0),
+			Size = Vector3.new(width + 0.3, 1.6, 1.6),
+			CFrame = frame * CFrame.new(0, 30.4 + nudge, 0),
 			Color = rgb(150, 110, 200),
 			Material = Enum.Material.SmoothPlastic,
 			Parent = arena,
 		})
 		Build.Decor({
 			Name = "Skirting",
-			Size = Vector3.new(width, 1.6, 1.4),
-			CFrame = frame * CFrame.new(0, 0.8, 0),
+			Size = Vector3.new(width + 0.3, 1.6 + nudge, 1.4),
+			CFrame = frame * CFrame.new(0, 0.82 + nudge / 2, -0.05),
 			Color = rgb(150, 110, 200),
 			Material = Enum.Material.SmoothPlastic,
 			Parent = arena,
@@ -264,7 +267,7 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 	}
 	for _, giant in giants do
 		local angle = math.rad(giant[3] + 36)
-		local at = center + Vector3.new(math.cos(angle) * 9.5, 0.1, math.sin(angle) * 9.5)
+		local at = center + Vector3.new(math.cos(angle) * 9, 0.11, math.sin(angle) * 9)
 		MeshLibrary.Get(giant[1], {
 			Scale = giant[2],
 			CFrame = CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z)) * SPIN,
@@ -274,7 +277,7 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 	local boxColors = { rgb(255, 120, 170), rgb(120, 200, 255), rgb(255, 210, 80), rgb(160, 120, 230) }
 	for index = 0, 4 do
 		local angle = math.rad(index * 72)
-		local at = center + Vector3.new(math.cos(angle) * 13, 0.1, math.sin(angle) * 13)
+		local at = center + Vector3.new(math.cos(angle) * 15.5, 0.02, math.sin(angle) * 15.5)
 		MeshLibrary.Get("GiftBox", {
 			Scale = rng:NextNumber(0.35, 0.5),
 			Colors = { Box = boxColors[index % #boxColors + 1] },
@@ -359,6 +362,8 @@ function MessyMemory:Start()
 	-- 2. Mischief! Every toy is knocked onto the counter, in a jumble.
 	ctx:Delay(Rules.STUDY, function()
 		local t0 = ctx:Now()
+		-- (The phase first, so clients see the toys fly off as the mischief, not as moves.)
+		self:_setPhase({ N = "Mess", T0 = t0, T1 = t0 + Rules.MESS })
 		for player, booth in self.booths do
 			local spots = {}
 			for spot = 1, #Rules.TOYS do
@@ -374,7 +379,6 @@ function MessyMemory:Start()
 			end
 			self:_shareBooth(player)
 		end
-		self:_setPhase({ N = "Mess", T0 = t0, T1 = t0 + Rules.MESS })
 		ctx:SetStatus("Mischief! The toys got knocked off!")
 		ctx:Sound("HazardWarning")
 	end)
@@ -455,7 +459,6 @@ function MessyMemory:_onPeek(player: Player, userId: any)
 	for other, booth in self.booths do
 		if other.UserId == userId and booth.Open and not booth.Left then
 			self.context:Fire(other, "Peeked", player.UserId)
-			self.context:Fire(player, "PeekOk", userId)
 			return
 		end
 	end

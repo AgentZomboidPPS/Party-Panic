@@ -14,7 +14,7 @@ return function(h)
 	return {
 		MessyMemoryShelf = {
 			Height = 12.7,
-			AssetId = 0,
+			AssetId = 91868090868988,
 			Palette = {
 				Wood = h.rgb(236, 186, 122),
 				Back = h.rgb(255, 238, 210),
@@ -41,7 +41,7 @@ return function(h)
 		},
 		MessyMemoryBooth = {
 			Height = 14.9,
-			AssetId = 0,
+			AssetId = 111819152207980,
 			BlocksCamera = { "Wall", "Roof" },
 			Palette = {
 				Wall = h.rgb(255, 240, 228),
@@ -69,7 +69,7 @@ return function(h)
 				h.block(m, "Wall", Vector3.new(0.4, 14.4, 7.8), Vector3.new(-6.6, 7.2, 0.4))
 				h.block(m, "Wall", Vector3.new(0.4, 14.4, 7.8), Vector3.new(6.6, 7.2, 0.4))
 				h.block(m, "Wall", Vector3.new(13.6, 14.4, 0.4), Vector3.new(0, 7.2, 4.1))
-				h.block(m, "Roof", Vector3.new(14, 0.5, 8.6), Vector3.new(0, 14.65, 0))
+				h.block(m, "Roof", Vector3.new(13.5, 0.5, 8.6), Vector3.new(0, 14.65, 0))
 				h.block(m, "Awning", Vector3.new(13.6, 2.4, 0.36), Vector3.new(0, 13.2, -4.12))
 				h.block(m, "Counter", Vector3.new(11.2, 2.35, 3.6), Vector3.new(0, 1.175, -1))
 				h.block(m, "CounterTop", Vector3.new(11.7, 0.25, 4.05), Vector3.new(0, 2.475, -1.025))
@@ -79,7 +79,7 @@ return function(h)
 		-- One half of a booth's curtain (the client stretches it shut or bunches it open).
 		MessyMemoryCurtain = {
 			Height = 12.5,
-			AssetId = 0,
+			AssetId = 139907732869068,
 			Shadow = false,
 			Palette = { Cloth = h.rgb(210, 40, 70), Trim = h.rgb(255, 205, 80) },
 			Materials = { Cloth = fabric, Trim = fabric },
@@ -90,7 +90,7 @@ return function(h)
 		},
 		MessyMemorySmoke = {
 			Height = 3.55,
-			AssetId = 0,
+			AssetId = 106259084147884,
 			Shadow = false,
 			Palette = { Puff = h.rgb(240, 238, 248) },
 			Materials = { Puff = smooth },
@@ -104,7 +104,7 @@ return function(h)
 		-- The eight toys (each about 1.4-1.9 tall; they face -Z, the game turns them to the player).
 		MessyMemoryTeddy = {
 			Height = 1.78,
-			AssetId = 0,
+			AssetId = 92549483536483,
 			Palette = {
 				Fur = h.rgb(190, 125, 70),
 				Snout = h.rgb(245, 210, 165),
@@ -122,7 +122,7 @@ return function(h)
 		},
 		MessyMemoryDuck = {
 			Height = 1.43,
-			AssetId = 0,
+			AssetId = 101942143080476,
 			Palette = { Body = h.rgb(255, 214, 40), Beak = h.rgb(255, 135, 30), Face = h.rgb(35, 30, 30) },
 			Materials = { Body = smooth, Beak = smooth, Face = smooth },
 			Fallback = function(m)
@@ -133,7 +133,7 @@ return function(h)
 		},
 		MessyMemoryRocket = {
 			Height = 1.82,
-			AssetId = 0,
+			AssetId = 97893374045285,
 			Palette = {
 				Body = h.rgb(250, 250, 255),
 				Nose = h.rgb(235, 55, 65),
@@ -151,7 +151,7 @@ return function(h)
 		},
 		MessyMemoryRobot = {
 			Height = 1.92,
-			AssetId = 0,
+			AssetId = 81356842930611,
 			Palette = {
 				Metal = h.rgb(150, 185, 225),
 				Screen = h.rgb(40, 50, 72),
@@ -176,7 +176,7 @@ return function(h)
 		},
 		MessyMemoryBall = {
 			Height = 1.65,
-			AssetId = 0,
+			AssetId = 118051720769887,
 			Palette = {
 				Red = h.rgb(235, 60, 60),
 				White = h.rgb(252, 252, 252),
@@ -191,7 +191,7 @@ return function(h)
 		},
 		MessyMemoryTop = {
 			Height = 1.72,
-			AssetId = 0,
+			AssetId = 83265844188016,
 			Palette = { Body = h.rgb(160, 110, 235), Band = h.rgb(255, 130, 195), Handle = h.rgb(255, 205, 80) },
 			Materials = { Body = smooth, Band = smooth, Handle = smooth },
 			Fallback = function(m)
@@ -201,7 +201,7 @@ return function(h)
 		},
 		MessyMemoryBlock = {
 			Height = 1.52,
-			AssetId = 0,
+			AssetId = 91132748217251,
 			Palette = { Block = h.rgb(90, 200, 110), Star = h.rgb(255, 225, 80) },
 			Materials = { Block = smooth, Star = smooth },
 			Fallback = function(m)
@@ -211,7 +211,7 @@ return function(h)
 		},
 		MessyMemoryBoat = {
 			Height = 1.88,
-			AssetId = 0,
+			AssetId = 103424099382325,
 			Palette = {
 				Hull = h.rgb(60, 120, 225),
 				Stripe = h.rgb(255, 255, 255),
@@ -230,7 +230,7 @@ return function(h)
 		-- The shop's centrepiece: an open toy chest with toys spilling out of the top.
 		MessyMemoryToyBox = {
 			Height = 6.53,
-			AssetId = 0,
+			AssetId = 129942540977277,
 			BlocksCamera = { "Chest", "Lid" },
 			Palette = {
 				Chest = h.rgb(255, 150, 190),

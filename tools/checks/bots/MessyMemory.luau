@@ -24,7 +24,9 @@ return function(env)
 						if booth then
 							table.insert(
 								line,
-								`P{index}={Rules.Correct(booth.Positions, mode.answer)}{if booth.Open then "" else "(shut)"}`
+								`P{index}={Rules.Correct(booth.Positions, mode.answer)}{if booth.Open
+									then ""
+									else "(shut)"}`
 							)
 						end
 					end
