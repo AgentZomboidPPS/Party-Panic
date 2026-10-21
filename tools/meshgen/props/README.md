@@ -20,7 +20,8 @@ names; give each piece a palette color (and material) in the matching `src/serve
 
     python3 tools/meshgen/generate_meshes.py --only Pump
 
-Roblox doesn't draw the back of a face, so every face must point outward: run `lathe` profiles
-bottom, outside, then top (counter-clockwise), and note that `tube()` and `sdf_mesh()` currently
-wind their faces inward (a closed piece's signed volume comes out negative). `Lobby.py` wraps them
-with flipped versions you can copy.
+Roblox doesn't draw the back of a face, so every face must point outward (counter-clockwise seen
+from outside). The shared helpers do (`tube`, `taper`, `sdf_mesh` and `extrude` with points either
+way round); run `lathe` profiles bottom, outside, then top. Don't flip a helper's faces yourself.
+The generator warns about inside-out closed parts as it writes each prop, and
+`python3 tools/checks/mesh_orientation.py` checks every `assets/meshes/*.glb`.

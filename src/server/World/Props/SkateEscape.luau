@@ -5,7 +5,7 @@ return function(h)
 	return {
 		SkateBoard = {
 			Height = 0.825,
-			AssetId = 128887480377174,
+			AssetId = 91529705586550,
 			Shadow = false,
 			Palette = {
 				Grip = h.rgb(40, 40, 48),
@@ -38,7 +38,7 @@ return function(h)
 		},
 		SkateBarrier = {
 			Height = 3.6,
-			AssetId = 79107194580564,
+			AssetId = 105085257585720,
 			Palette = {
 				Legs = h.rgb(70, 70, 80),
 				Red = h.rgb(235, 60, 60),
@@ -55,7 +55,7 @@ return function(h)
 		},
 		SkateBoost = {
 			Height = 0.3,
-			AssetId = 129442765777999,
+			AssetId = 114012835317318,
 			Shadow = false,
 			Palette = { Pad = h.rgb(40, 36, 60), Rim = h.rgb(90, 80, 120), Arrows = h.rgb(255, 220, 60) },
 			Materials = { Arrows = Enum.Material.Neon },
@@ -84,7 +84,7 @@ return function(h)
 		},
 		SkateRail = {
 			Height = 3.675,
-			AssetId = 127518926056832,
+			AssetId = 130291182748171,
 			Palette = { Posts = h.rgb(110, 74, 48), Rail = h.rgb(130, 88, 56), Rope = h.rgb(210, 180, 130) },
 			Materials = { Posts = wood, Rail = wood, Rope = Enum.Material.Fabric },
 			Fallback = function(m)
@@ -96,7 +96,7 @@ return function(h)
 		},
 		SkateTorch = {
 			Height = 4.0,
-			AssetId = 88518381598054,
+			AssetId = 101236794696421,
 			Palette = { Iron = h.rgb(60, 58, 62), Coals = h.rgb(255, 120, 40) },
 			Materials = { Iron = Enum.Material.Metal, Coals = Enum.Material.Neon },
 			Fallback = function(m)
@@ -106,7 +106,7 @@ return function(h)
 		},
 		SkateArch = {
 			Height = 30.8,
-			AssetId = 110839506779670,
+			AssetId = 101314872413939,
 			Collide = true,
 			Palette = {
 				Stone = h.rgb(120, 110, 115),

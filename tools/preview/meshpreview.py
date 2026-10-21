@@ -46,6 +46,18 @@ for item in items:
                 bsdf = m.node_tree.nodes.get("Principled BSDF")
                 bsdf.inputs["Emission Color"].default_value = bsdf.inputs["Base Color"].default_value
                 bsdf.inputs["Emission Strength"].default_value = 3.0
+            if m and m.use_nodes and not m.get("culled"):
+                # Roblox draws only the front of each face: back faces render see-through, so an
+                # inside-out piece looks hollow here, as it would in game.
+                m["culled"] = True
+                nodes, links = m.node_tree.nodes, m.node_tree.links
+                output = next(n for n in nodes if n.type == "OUTPUT_MATERIAL")
+                surface = output.inputs["Surface"].links[0].from_socket
+                geometry, clear, mix = nodes.new("ShaderNodeNewGeometry"), nodes.new("ShaderNodeBsdfTransparent"), nodes.new("ShaderNodeMixShader")
+                links.new(geometry.outputs["Backfacing"], mix.inputs["Fac"])
+                links.new(surface, mix.inputs[1])
+                links.new(clear.outputs["BSDF"], mix.inputs[2])
+                links.new(mix.outputs["Shader"], output.inputs["Surface"])
     extents.append((x, x + width, hi.z))
     x += width + 4
 total = x - 4

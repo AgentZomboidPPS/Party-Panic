@@ -23,34 +23,18 @@ from generate_meshes import (
     rounded_box,
     sd_capsule,
     sd_ellipsoid,
+    sdf_mesh,
     smin,
     sphere,
     torus,
+    tube,
     weld,
 )
-from generate_meshes import sdf_mesh as _sdf_mesh
-from generate_meshes import tube as _tube
 
 TAU = 2 * math.pi
 
 
 # ====================================================================== helpers
-
-# Roblox culls back faces, so every face must point outward. The shared tube() and sdf_mesh() wind
-# their faces inward (their signed volume is negative), so the lobby's props flip them.
-
-
-def tube(points, radius: float, sides: int = 8) -> Mesh:
-    mesh = _tube(points, radius, sides)
-    mesh.f = mesh.f[:, ::-1].copy()
-    return mesh
-
-
-def sdf_mesh(sdf, lo, hi, step) -> Mesh:
-    mesh = _sdf_mesh(sdf, lo, hi, step)
-    mesh.f = mesh.f[:, ::-1].copy()
-    return mesh
-
 
 def orient(mesh: Mesh, center) -> Mesh:
     """Flips every face whose normal points toward `center` (for convex-ish closed shapes)."""

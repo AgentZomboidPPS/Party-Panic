@@ -59,7 +59,7 @@ return function(h)
 		},
 		TargetBoard = {
 			Height = 7.79,
-			AssetId = 110516461206126,
+			AssetId = 129534287871471,
 			Collide = false, -- the client moves boards; arrows are blocked by the server's own check
 			Palette = {
 				Wood = h.rgb(196, 146, 96),
@@ -91,7 +91,7 @@ return function(h)
 		},
 		AmbushBow = {
 			Height = 4.84,
-			AssetId = 94235542385657,
+			AssetId = 114834088053406,
 			Palette = {
 				Limbs = h.rgb(156, 98, 56),
 				Grip = h.rgb(92, 52, 42),
@@ -124,7 +124,7 @@ return function(h)
 		},
 		HayBale = {
 			Height = 2.52,
-			AssetId = 87956010572806,
+			AssetId = 137933577361025,
 			Palette = { Straw = h.rgb(234, 202, 112), Twine = h.rgb(150, 100, 60) },
 			Materials = { Straw = Enum.Material.Fabric },
 			Fallback = function(m)
@@ -133,7 +133,7 @@ return function(h)
 		},
 		ArrowBarrel = {
 			Height = 4.14,
-			AssetId = 71958171764252,
+			AssetId = 107614183157636,
 			Palette = {
 				Barrel = h.rgb(160, 105, 62),
 				Hoops = h.rgb(80, 80, 92),
@@ -148,7 +148,7 @@ return function(h)
 		},
 		Bunting = {
 			Height = 2.28,
-			AssetId = 106651535892450,
+			AssetId = 119795646147853,
 			Shadow = false,
 			Palette = {
 				Rope = h.rgb(240, 235, 220),

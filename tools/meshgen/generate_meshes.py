@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import math
 import struct
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -265,7 +266,7 @@ def tube(points: list[tuple[float, float, float]], radius: float, sides: int = 8
         for j in range(sides):
             a = i * sides + j
             b = i * sides + (j + 1) % sides
-            faces += [(a, a + sides, b), (b, a + sides, b + sides)]
+            faces += [(a, b, a + sides), (b, b + sides, a + sides)]  # outward (Roblox culls back faces)
     return Mesh(verts, faces)
 
 
@@ -289,8 +290,12 @@ def taper(points: list[tuple[float, float, float]], r0: float, r1: float, sides:
 
 
 def extrude(polygon: list[tuple[float, float]], depth: float) -> Mesh:
-    """Extrudes a star-shaped 2D polygon (fan-triangulated from its centroid) along Z."""
+    """Extrudes a star-shaped 2D polygon (fan-triangulated from its centroid) along Z. The points may
+    go either way round; the faces always point outward."""
     pts = np.array(polygon, dtype=float)
+    x, y = pts[:, 0], pts[:, 1]
+    if np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y) < 0:  # clockwise (star() is): reverse
+        pts = pts[::-1].copy()
     center = pts.mean(axis=0)
     n = len(pts)
     verts = [(center[0], center[1], -depth / 2), (center[0], center[1], depth / 2)]
@@ -362,9 +367,9 @@ def sdf_mesh(sdf, lo, hi, step):
     axes = [np.arange(lo[i], hi[i] + step, step) for i in range(3)]
     grid = np.stack(np.meshgrid(*axes, indexing="ij"), -1)
     field = sdf(grid.reshape(-1, 3)).reshape(grid.shape[:3])
+    # marching_cubes' faces point toward lower values, which for a signed distance field is outward.
     verts, faces, _, _ = marching_cubes(field, 0.0, spacing=(step, step, step))
-    # marching_cubes winds faces for an increasing field; flip so normals point outward.
-    return taubin_smooth(Mesh(verts + lo, faces[:, ::-1].copy()), 6)
+    return taubin_smooth(Mesh(verts + lo, faces), 6)
 
 
 def taubin_smooth(mesh: Mesh, iterations: int, lam: float = 0.5, mu: float = -0.53) -> Mesh:
@@ -991,12 +996,20 @@ def main():
     if wanted and wanted - set(PROPS):
         raise SystemExit(f"Unknown props: {', '.join(sorted(wanted - set(PROPS)))}")
     OUT.mkdir(parents=True, exist_ok=True)
+    sys.path.insert(0, str(ROOT / "tools" / "checks"))
+    from mesh_orientation import inside_out_parts
+
     for name, build in PROPS.items():
         if wanted and name not in wanted:
             continue
         pieces = build()
         write_obj(OUT / f"{name}.obj", pieces)
         write_glb(OUT / f"{name}.glb", pieces)
+        for piece, mesh in pieces.items():
+            positions, _, faces = mesh.normals()
+            bad, closed = inside_out_parts(positions, faces)
+            if bad:
+                print(f"WARNING {name}.{piece}: {bad} of {closed} closed parts are inside-out (faces point inward)")
         tris = sum(len(m.f) for m in pieces.values())
         bounds = np.vstack([m.v for m in pieces.values()])
         size = bounds.max(axis=0) - bounds.min(axis=0)

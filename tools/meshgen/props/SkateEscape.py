@@ -251,10 +251,11 @@ def _flat_poly(poly, y0, thickness):
             faces += [(n + a, n + b, n + c), (a, c, b)]
     for i in range(n):
         j = (i + 1) % n
+        # Walls face outward (Roblox culls back faces).
         if sign > 0:
-            faces += [(i, j, n + i), (j, n + j, n + i)]
-        else:
             faces += [(i, n + i, j), (j, n + i, n + j)]
+        else:
+            faces += [(i, j, n + i), (j, n + j, n + i)]
     return np.array(verts, dtype=float), np.array(faces, dtype=np.int64), False
 
 
