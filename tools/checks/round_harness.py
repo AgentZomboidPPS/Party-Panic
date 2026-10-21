@@ -90,7 +90,7 @@ def rewrite(module: str, text: str, is_init: bool) -> str:
 def other_mode(module: str, game: str) -> bool:
     """Another mini-game's rules, brain or client half (a round only needs its own)."""
     modes = {path.stem for path in (SRC / "server" / "MiniGames").glob("*.luau")} - {"init"}
-    for prefix in ("Server/MiniGames/", "Server/MiniGames/Bots/", "Client/MiniGames/"):
+    for prefix in ("Server/MiniGames/", "Server/MiniGames/Bots/", "Client/MiniGames/", "Server/World/Props/"):
         name = module[len(prefix):] if module.startswith(prefix) else None
         if name in modes and name != game:
             return True
