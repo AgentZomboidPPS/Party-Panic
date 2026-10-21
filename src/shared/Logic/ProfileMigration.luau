@@ -17,6 +17,8 @@
 --     EconomyVersion 2 that comes back with Version 1 had a session on an old server: what its
 --     coins went up (or down) there is divided by 10 too, once (the next save stamps again).
 --   * Counts worked out from other saved stats (GamesTried) are redone on every load.
+--   * Either change leaves a note for the player in the profile (Meta.CoinNotice). DataService
+--     clears it only once the message was sent, so leaving before it shows never loses it.
 -- The career milestones count from the update on, except podiums: every win saved so far was one.
 -- Leaf module: no requires, no Roblox APIs.
 
@@ -26,6 +28,13 @@ ProfileMigration.EconomyVersion = 2 -- coins on the low scale
 ProfileMigration.SchemaVersion = 2 -- the Version this code saves (Logic/ProfileTemplate's)
 ProfileMigration.LowScaleSchema = 2 -- the first Version saved by code on the low scale
 ProfileMigration.CoinScale = 10 -- old coins per new coin
+
+-- The note for the player about their coins, kept in Meta.CoinNotice until they've been told.
+export type CoinNotice = {
+	Kind: string, -- "Converted" (Before -> After) | "OldServer" (After)
+	Before: number?,
+	After: number,
+}
 
 export type Report = {
 	CoinsBefore: number?, -- set when this load moved the balance to the low scale
@@ -110,8 +119,26 @@ function ProfileMigration.Load(
 	if type(data.Stats) == "table" then
 		data.Stats.GamesTried = ProfileMigration.GamesTried(data.Stats.ModePlays, knownGames)
 	end
+	if type(data.Meta) == "table" then
+		ProfileMigration.NoteCoins(data.Meta, report)
+	end
 	data.Version = math.max(tonumber(data.Version) or 1, ProfileMigration.SchemaVersion)
 	return report
+end
+
+-- Leaves the note about what this load did to the coins in `meta.CoinNotice` (kept until the
+-- player has been told). The one-time conversion wins over a later old-server change: that one is
+-- small, and "your 1234 coins are now 124" is the message that matters.
+function ProfileMigration.NoteCoins(meta: { [string]: any }, report: Report)
+	local pending = meta.CoinNotice
+	local converted = type(pending) == "table" and pending.Kind == "Converted"
+	if report.CoinsBefore and report.CoinsBefore > 0 then
+		local notice: CoinNotice = { Kind = "Converted", Before = report.CoinsBefore, After = report.CoinsAfter or 0 }
+		meta.CoinNotice = notice
+	elseif report.OldServerChange and not converted then
+		local notice: CoinNotice = { Kind = "OldServer", After = report.OldServerAfter or 0 }
+		meta.CoinNotice = notice
+	end
 end
 
 -- Just before every save: the balance this save writes, so a later load can tell what a session

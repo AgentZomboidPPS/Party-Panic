@@ -60,5 +60,8 @@ return {
 		FirstJoin = 0,
 		LastJoin = 0,
 		Sessions = 0,
+		-- What a load did to the coins, until the player was told (Logic/ProfileMigration). Never a
+		-- default: only a load that changed the coins sets it, and DataService clears it once said.
+		CoinNotice = nil :: { Kind: string, Before: number?, After: number }?,
 	},
 }

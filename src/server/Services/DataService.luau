@@ -9,6 +9,16 @@
 -- "I want low currency not high"); a player whose coins were just converted is told so, once. Every
 -- save stamps the balance it writes, so coins paid by a server still running the old code (before
 -- the owner restarts servers after a publish) are converted too, on the next load.
+--
+-- Second pass (the owner restarts every server after each publish, so shutdowns are routine):
+--   * The message about converted coins waits in the profile (Meta.CoinNotice) until it was sent,
+--     so a player who leaves before it shows gets it next time.
+--   * A player who leaves while their profile is still loading gets our lock released and nothing
+--     else: their saved data isn't touched (it is converted on their next real load).
+--   * The save when a player leaves (or the server closes) is tried again a few times (1, 2, 4 s),
+--     and the server's close (BindToClose) waits for every save still running, whoever started
+--     it, so the last minutes of play aren't lost and no lock is left behind.
+--   * An autosave that was still running when the player left never locks the record again.
 
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
@@ -49,6 +59,10 @@ local profiles: { [Player]: Profile } = {}
 local loadingThreads: { [Player]: boolean } = {}
 local replicateQueued: { [Player]: boolean } = {}
 local store: DataStore? = nil
+local inFlight = 0 -- saves and lock releases still running; BindToClose waits for every one
+local closeDeadline = math.huge -- set when the server closes: no retry may wait past it
+local RELEASE_RETRY_WAITS = { 1, 2, 4 } -- seconds between the tries of a release
+local releasing: { [string]: boolean } = {} -- keys whose release is still running here
 
 local loadedEvent = Instance.new("BindableEvent")
 DataService.ProfileLoaded = loadedEvent.Event -- (player, profile)
@@ -147,12 +161,15 @@ local function loadRecord(player: Player): (any, boolean)
 	return nil, false
 end
 
+-- One save of a profile (`release`: and give up our lock). True when it's done with: saved, not
+-- saved on purpose (another server owns it now, or this profile never saves), false on an error.
 local function saveRecord(profile: Profile, release: boolean): boolean
 	local dataStore = store
 	if not profile.CanSave or not dataStore then
 		return true
 	end
 	local lostLock = false
+	inFlight += 1
 	local ok, err = pcall(function()
 		dataStore:UpdateAsync(profile.Key, function(stored)
 			stored = stored or {}
@@ -160,6 +177,11 @@ local function saveRecord(profile: Profile, release: boolean): boolean
 			if lock and lock.JobId ~= game.JobId then
 				-- Another server owns this profile now; never overwrite its newer data.
 				lostLock = true
+				return nil
+			end
+			if not release and profile.Released then
+				-- An autosave still waiting when the player left: the release save writes the data
+				-- and clears the lock, and this one must not lock the record again.
 				return nil
 			end
 			-- The balance this save writes (stamped here, where nothing can change it before it's
@@ -170,6 +192,7 @@ local function saveRecord(profile: Profile, release: boolean): boolean
 			return stored
 		end)
 	end)
+	inFlight -= 1
 	if not ok then
 		Telemetry.Error("DataSave", `{profile.Key}: {err}`)
 		return false
@@ -179,6 +202,60 @@ local function saveRecord(profile: Profile, release: boolean): boolean
 		profile.CanSave = false
 	end
 	return true
+end
+
+-- Tries `attempt` (true when done) a few times with growing waits, never waiting past the server's
+-- close. Counted in `inFlight` the whole time, waits included.
+local function withRetries(attempt: () -> boolean): boolean
+	inFlight += 1
+	local done = false
+	for try = 1, #RELEASE_RETRY_WAITS + 1 do
+		done = attempt()
+		local wait = RELEASE_RETRY_WAITS[try]
+		if done or not wait or os.clock() + wait > closeDeadline then
+			break
+		end
+		task.wait(wait)
+	end
+	inFlight -= 1
+	return done
+end
+
+-- The save when a player leaves or the server closes: their data, and our lock given up.
+local function releaseProfile(profile: Profile)
+	profile.Released = true
+	releasing[profile.Key] = true
+	if not withRetries(function()
+		return saveRecord(profile, true)
+	end) then
+		Telemetry.Error("DataSave", `{profile.Key}: release failed after retries`)
+	end
+	releasing[profile.Key] = nil
+end
+
+-- A player left while their profile was loading: give up the lock we took and touch nothing else
+-- (no session happened, so there's nothing to save; their data converts on their next real load).
+local function releaseLockOnly(key: string)
+	local dataStore = store
+	if not dataStore then
+		return
+	end
+	withRetries(function()
+		local ok, err = pcall(function()
+			dataStore:UpdateAsync(key, function(stored)
+				local lock = if type(stored) == "table" then stored.Lock else nil
+				if type(lock) ~= "table" or lock.JobId ~= game.JobId then
+					return nil -- not ours (any more): leave the record as it is
+				end
+				stored.Lock = nil
+				return stored
+			end)
+		end)
+		if not ok then
+			Telemetry.Error("DataSave", `{key}: lock release failed: {err}`)
+		end
+		return ok
+	end)
 end
 
 function DataService.Get(player: Player): Profile?
@@ -286,6 +363,17 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 	loadingThreads[player] = true
+	-- Back on this server while the save from their last visit is still being retried: wait for
+	-- it, or this load would read the record from before that visit (our own lock doesn't stop it).
+	local key = keyFor(player)
+	local waitUntil = os.clock() + 30
+	while releasing[key] and player.Parent and os.clock() < waitUntil do
+		task.wait(0.25)
+	end
+	if not player.Parent then
+		loadingThreads[player] = nil
+		return
+	end
 
 	local leaderstats = Instance.new("Folder")
 	leaderstats.Name = "leaderstats"
@@ -298,21 +386,18 @@ local function onPlayerAdded(player: Player)
 	winsValue.Parent = leaderstats
 	leaderstats.Parent = player
 
+	-- A load counts as a save in flight until its profile is registered (or its lock released), so
+	-- a server closing meanwhile waits for it and never leaves the lock behind.
+	inFlight += 1
 	local stored, canSave = loadRecord(player)
 	loadingThreads[player] = nil
 
 	if not player.Parent then
-		-- Left while loading: release the lock we may have taken.
+		-- Left while loading: release the lock we took, and nothing else.
 		if canSave then
-			saveRecord({
-				Player = player,
-				Key = keyFor(player),
-				Data = migrate(stored or newData()),
-				CanSave = true,
-				IsVip = false,
-				Released = false,
-			}, true)
+			releaseLockOnly(key)
 		end
+		inFlight -= 1
 		return
 	end
 
@@ -327,7 +412,7 @@ local function onPlayerAdded(player: Player)
 
 	local profile: Profile = {
 		Player = player,
-		Key = keyFor(player),
+		Key = key,
 		Data = data,
 		CanSave = canSave,
 		IsVip = false,
@@ -335,36 +420,43 @@ local function onPlayerAdded(player: Player)
 		Migration = migration,
 	}
 	profiles[player] = profile
+	if closeDeadline < math.huge then
+		task.spawn(releaseProfile, profile) -- loaded while the server is closing: save and let go
+	end
+	inFlight -= 1
 
 	if migration and migration.CoinsBefore and migration.CoinsBefore > 0 then
-		-- Once, the first time this profile loads on the low coin scale: say what happened to the coins.
-		local before, after = migration.CoinsBefore, migration.CoinsAfter
+		Telemetry.PlayerEvent(player, "EconomyMigrated", migration.CoinsBefore)
+	elseif migration and migration.OldServerChange then
+		Telemetry.PlayerEvent(player, "EconomyOldServer", 1, tostring(migration.OldServerChange))
+	end
+	-- What happened to their coins (ProfileMigration keeps it in Meta.CoinNotice until it's been
+	-- sent): said once they've had a moment to look around, then cleared, so the next save
+	-- remembers they were told. A player who leaves before that gets it next time.
+	local notice = data.Meta.CoinNotice
+	if type(notice) == "table" then
 		task.delay(6, function()
-			if player.Parent then
+			if not player.Parent or profiles[player] ~= profile or data.Meta.CoinNotice ~= notice then
+				return
+			end
+			if notice.Kind == "OldServer" then
+				-- Their last game was on a server still running the old version (big coins).
 				Notifier.Send(
 					player,
-					`Coins got smaller numbers, and prices too! Your {before} coins are now {after}.`,
+					`Coins from your last game (on an older server) are on the new small scale too: you have {notice.After}.`,
+					"info",
+					9
+				)
+			else
+				Notifier.Send(
+					player,
+					`Coins got smaller numbers, and prices too! Your {notice.Before} coins are now {notice.After}.`,
 					"reward",
 					9
 				)
 			end
+			data.Meta.CoinNotice = nil
 		end)
-		Telemetry.PlayerEvent(player, "EconomyMigrated", before)
-	elseif migration and migration.OldServerChange then
-		-- Their last game was on a server still running the old version (big coins): those coins
-		-- moved to the small scale too.
-		local after = migration.OldServerAfter
-		task.delay(6, function()
-			if player.Parent then
-				Notifier.Send(
-					player,
-					`Coins from your last game (on an older server) are on the new small scale too: you have {after}.`,
-					"info",
-					9
-				)
-			end
-		end)
-		Telemetry.PlayerEvent(player, "EconomyOldServer", 1, tostring(migration.OldServerChange))
 	end
 
 	if not canSave then
@@ -389,8 +481,9 @@ local function onPlayerRemoving(player: Player)
 	if not profile then
 		return
 	end
-	profile.Released = true
-	saveRecord(profile, true)
+	if not profile.Released then -- (the server's close may have started it already)
+		releaseProfile(profile)
+	end
 	profiles[player] = nil
 	replicateQueued[player] = nil
 end
@@ -404,20 +497,15 @@ function DataService.Init()
 	end
 
 	game:BindToClose(function()
-		local pending = 0
+		-- Release everyone still here, then wait for every save still running: these, the ones
+		-- players leaving just started, autosaves and lock releases (Roblox allows 30 s).
+		closeDeadline = os.clock() + 25
 		for _, profile in profiles do
-			if profile.Released then
-				continue
+			if not profile.Released then
+				task.spawn(releaseProfile, profile)
 			end
-			pending += 1
-			task.spawn(function()
-				profile.Released = true
-				saveRecord(profile, true)
-				pending -= 1
-			end)
 		end
-		local deadline = os.clock() + 25
-		while pending > 0 and os.clock() < deadline do
+		while inFlight > 0 and os.clock() < closeDeadline do
 			task.wait(0.1)
 		end
 	end)

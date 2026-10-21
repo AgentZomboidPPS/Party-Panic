@@ -216,6 +216,39 @@ test("Version is never lowered, and the stamp is the saved balance", function()
 	expectEqual(written.Coins, 12)
 end)
 
+test("the player is told about their coins even if they leave before the message shows", function()
+	expectEqual((ProfileTemplate :: any).Meta.CoinNotice, nil, "never a default")
+	local data, report = load(veteran(1234))
+	expectEqual(report, { CoinsBefore = 1234, CoinsAfter = 124 })
+	expectEqual(data.Meta.CoinNotice, { Kind = "Converted", Before = 1234, After = 124 })
+
+	-- They left before it showed (the note was saved): it's still waiting on the next load,
+	-- although nothing converts again.
+	local again, second = load(save(data))
+	expectEqual(second, {})
+	expectEqual(again.Meta.CoinNotice, { Kind = "Converted", Before = 1234, After = 124 })
+
+	-- Told (DataService clears it once the message was sent), saved: gone for good.
+	again.Meta.CoinNotice = nil
+	local told = load(save(again))
+	expectEqual(told.Meta.CoinNotice, nil)
+
+	-- A game on an old server after that: its own note.
+	local hop = load(oldServerSession(save(told), 230))
+	expectEqual(hop.Coins, 124 + 23)
+	expectEqual(hop.Meta.CoinNotice, { Kind = "OldServer", After = 147 })
+
+	-- Still not told about the conversion when an old-server game comes in: the conversion's note
+	-- stays (it's the one that matters), with the conversion's numbers.
+	local pending = load(oldServerSession(save(data), 100))
+	expectEqual(pending.Coins, 124 + 10)
+	expectEqual(pending.Meta.CoinNotice, { Kind = "Converted", Before = 1234, After = 124 })
+
+	-- No coins, nothing to say.
+	expectEqual((load(veteran(0))).Meta.CoinNotice, nil)
+	expectEqual((load(save(copy(ProfileTemplate)))).Meta.CoinNotice, nil)
+end)
+
 test("GamesTried counts the games played that are in the game", function()
 	expectEqual(ProfileMigration.GamesTried({ FireRope = 2, HoneyTrap = 0, Gone = 9 }, GAMES), 1)
 	expectEqual(ProfileMigration.GamesTried({ FireRope = 2, Gone = 9 }), 2)
