@@ -26,7 +26,7 @@ return function(h)
 	return {
 		PumpBalloon = {
 			Height = 15,
-			AssetId = 75995227503745,
+			AssetId = 94794024650107,
 			Shadow = true,
 			Palette = {
 				Skin = rgb(255, 80, 95),
@@ -86,7 +86,7 @@ return function(h)
 		},
 		Plunger = {
 			Height = 4.18,
-			AssetId = 88794158561404,
+			AssetId = 96075152171242,
 			Palette = {
 				PumpBase = rgb(60, 55, 75),
 				Barrel = rgb(255, 80, 95),

@@ -116,7 +116,7 @@ return function(h)
 		},
 		SandCrown = {
 			Height = 1.05,
-			AssetId = 99276892682303,
+			AssetId = 105161757060146,
 			Shadow = false,
 			Palette = { Gold = h.rgb(255, 204, 50), Gems = h.rgb(230, 50, 90) },
 			Materials = { Gold = Enum.Material.Metal, Gems = Enum.Material.Neon },

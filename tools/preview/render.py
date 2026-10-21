@@ -95,8 +95,24 @@ def material(color, mat_name, transparency):
         bsdf.inputs["Transmission Weight"].default_value = 0.8
     if transparency > 0.01:
         bsdf.inputs["Alpha"].default_value = max(0.0, 1 - transparency)
+    cull_back_faces(mat)
     MATERIAL_CACHE[key] = mat
     return mat
+
+
+def cull_back_faces(mat):
+    """Roblox draws only the front of each face, so back faces render see-through here too: an
+    inside-out mesh looks hollow in the render, as it would in game."""
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    output = next(node for node in nodes if node.type == "OUTPUT_MATERIAL")
+    surface = output.inputs["Surface"].links[0].from_socket
+    geometry = nodes.new("ShaderNodeNewGeometry")
+    clear = nodes.new("ShaderNodeBsdfTransparent")
+    mix = nodes.new("ShaderNodeMixShader")
+    links.new(geometry.outputs["Backfacing"], mix.inputs["Fac"])
+    links.new(surface, mix.inputs[1])
+    links.new(clear.outputs["BSDF"], mix.inputs[2])
+    links.new(mix.outputs["Shader"], output.inputs["Surface"])
 
 
 PRIMS: dict = {}

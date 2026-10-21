@@ -487,7 +487,7 @@ def sand_crown():
         for s in range(segments):
             a, b = r0[s], r0[(s + 1) % segments]
             c, d = r1[s], r1[(s + 1) % segments]
-            faces += [(a, b, c), (b, d, c)]
+            faces += [(a, c, b), (b, c, d)]  # outward (Roblox culls back faces)
     band = Mesh(verts, faces)
     band.smooth = False
     tips = [sphere(0.1, 6, 10).translate(math.cos(2 * math.pi * (k + 0.5) / points) * (radius + 0.06), 0.95,

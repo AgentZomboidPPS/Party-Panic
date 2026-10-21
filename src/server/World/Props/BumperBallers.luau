@@ -65,7 +65,7 @@ return function(h)
 		},
 		BumperPalm = {
 			Height = 18.35,
-			AssetId = 84557085753971,
+			AssetId = 104364791993198,
 			Palette = {
 				Trunk = h.rgb(150, 110, 72),
 				Leaves = h.rgb(66, 168, 72),
