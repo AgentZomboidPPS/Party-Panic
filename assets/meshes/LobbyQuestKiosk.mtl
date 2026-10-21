@@ -1,0 +1,47 @@
+newmtl Wood
+Kd 0.706 0.471 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Roof
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl RoofB
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 1.000 0.800 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bulbs
+Kd 1.000 0.941 0.667
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Planter
+Kd 0.902 0.431 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Leaves
+Kd 0.275 0.667 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Flowers
+Kd 1.000 0.941 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

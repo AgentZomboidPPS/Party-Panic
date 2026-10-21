@@ -1,5 +1,5 @@
 -- Lobby activities (design doc §5): vote pads, daily reward machine, confetti cannon, the hidden
--- daily token, the arcade target range and the champion podium.
+-- daily token, the arcade target range, the champion podium and beach balls to kick around.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,6 +10,7 @@ local Config = require(Shared.Config)
 local DailyLogic = require(Shared.Logic.DailyLogic)
 local GameState = require(Shared.GameState)
 
+local BeachBalls = require(script.Parent.Parent.World.BeachBalls)
 local Build = require(script.Parent.Parent.World.Build)
 local LobbyBuilder = require(script.Parent.Parent.World.LobbyBuilder)
 local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
@@ -188,6 +189,11 @@ function LobbyService.Init()
 	setupDailyMachine()
 	setupSecretToken()
 	setupTargetRange()
+	BeachBalls.Setup(refs.Root, refs.BallSpots, {
+		PlazaRadius = LobbyBuilder.PlazaRadius,
+		StageFrontZ = LobbyBuilder.StageFrontZ,
+		Traps = LobbyBuilder.BallTraps,
+	})
 	LobbyService.SetChampions({})
 end
 

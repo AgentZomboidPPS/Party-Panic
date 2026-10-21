@@ -11,14 +11,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORLD = ROOT / "src" / "server" / "World"
-MODULES = ["Build", "Shapes", "MeshAssets", "MeshLibrary", "Environment", "LobbyBuilder"]
+MODULES = ["Build", "Shapes", "MeshAssets", "MeshLibrary", "Environment", "LobbyBuilder", "BeachBalls"]
+# World/Props modules the lobby uses (the mini-games' own props are skipped).
+PROPS = ["Lobby"]
 
 
 def module_source(name: str) -> str:
     text = (WORLD / f"{name}.luau").read_text()
     text = re.sub(r"require\(script\.Parent\.(\w+)\)", r'__require("\1")', text)
-    # The lobby doesn't use the mini-games' own props (World/Props), so skip loading them.
-    text = text.replace('script.Parent:FindFirstChild("Props")', "nil")
+    # World/Props: only the modules in PROPS, served from the bundle.
+    text = text.replace('script.Parent:FindFirstChild("Props")', "__propsFolder")
+    text = text.replace("require(module :: any)(helpers)", "__props[module.Name](helpers)")
     # Type exports are only legal at the top level; inside the wrapper they become local types.
     text = re.sub(r"^export type", "type", text, flags=re.M)
     return text
@@ -34,7 +37,22 @@ def main():
         "\tend",
         "\treturn __cache[name]",
         "end",
+        "local __props = {}",
+        "local __propsFolder = {",
+        "\tGetChildren = function(_self)",
+        "\t\tlocal list = {}",
+        "\t\tfor name in __props do",
+        "\t\t\ttable.insert(list, { Name = name, IsA = function(_, class) return class == \"ModuleScript\" end })",
+        "\t\tend",
+        "\t\treturn list",
+        "\tend,",
+        "}",
     ]
+    for name in PROPS:
+        source = (WORLD / "Props" / f"{name}.luau").read_text()
+        out.append(f'__props["{name}"] = (function()')
+        out.append(source)
+        out.append("end)()")
     for name in MODULES:
         out.append(f'__modules["{name}"] = function()')
         out.append(module_source(name))

@@ -1,0 +1,23 @@
+newmtl Rope
+Kd 0.980 0.980 0.980
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FlagA
+Kd 1.000 0.329 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FlagB
+Kd 0.251 0.769 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FlagC
+Kd 1.000 0.800 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
