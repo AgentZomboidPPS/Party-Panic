@@ -8,9 +8,9 @@
 --     The rider stands on top: a BallSocket joins the rider's root to the ball's center and an
 --     AlignOrientation keeps them upright, so the ball spins freely under their feet.
 --   * A player's ball belongs to their device (ctx:GiveOwnership): their client pushes it with a
---     VectorForce from the move input (keyboard, thumbstick, gamepad or phone tilt), so steering is
---     smooth. Bots' balls belong to the server, which pushes them the same way with the same speed
---     and acceleration limits (MG_Tuning is shared so both sides use the same numbers).
+--     VectorForce from the move input (keyboard, thumbstick, gamepad, or phone tilt if they turn it
+--     on), so steering is smooth. Bots' balls belong to the server, which pushes them the same way:
+--     both sides run Logic/BumperDrive with the numbers the server shares (MG_Tuning).
 --   * Bumps are decided here, by distance and closing speed: when two balls meet, each is pushed
 --     apart by an amount that grows with the OTHER ball's speed into it, so the faster ball wins.
 --     Balls don't collide with each other physically (collision group BumperBall), because each
@@ -33,10 +33,22 @@
 --     draw.
 --   * Luau test servers have no physics, so there the server moves every ball itself with the same
 --     drive model (see :_simulate), which is also how the round harness tests bots and bumps.
+--
+-- Controls pass (owner, playing on a phone: "Bumper balls control scheme is really bad on
+-- mobile"): the drive is now Logic/BumperDrive. Steering answers the stick quickly (90% of full
+-- speed in 0.37 s instead of 1.2, half a ball of glide after letting go instead of 12 studs, a
+-- corner in a third of a second instead of one), while what a bump gives a ball fades exactly as it
+-- always did, so bumps slide riders as far as before; a ball tipping over the rim or in the air
+-- steers the old, weak way, so the edge is as unforgiving as ever. Bots roll with the same drive
+-- (their brains are unchanged). A player's ball the server has taken back (see :_takeBack) now
+-- slows as if its stick were let go, instead of coasting on frictionless for a second. The phone
+-- side of the fix (a steady camera, tilt off by default) is in the client half.
 
 local PhysicsService = game:GetService("PhysicsService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local BumperDrive = require(ReplicatedStorage.Shared.Logic.BumperDrive)
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local Build = require(script.Parent.Parent.World.Build)
 local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
@@ -54,14 +66,9 @@ local OUT_DEPTH = 1.5 -- a ball is out once its center is this far under the wat
 local BIG_BUMPS_AT = 45 -- seconds into the round
 local RIDER_GROUP = "BumperRider"
 
--- The drive model both the clients and the server use (shared as MG_Tuning).
-local TUNING = {
-	Accel = 46, -- studs/s^2 at full input
-	MaxSpeed = 24, -- studs/s top rolling speed (Accel / drag)
-	Relief = 0.3, -- seconds after a bump with less drag, so bumps carry
-	ReliefDrag = 0.6, -- drag multiplier during that time
-}
-local DRAG = TUNING.Accel / TUNING.MaxSpeed
+-- How a ball answers its stick (MaxSpeed 24 studs/s, steering, how bumps carry): Logic/BumperDrive,
+-- shared with the clients as MG_Tuning.
+local TUNING = BumperDrive.Tuning
 -- A full-speed hit on a rider standing still slides them about 17 studs (about 5 if they steer
 -- against it), 24 with BIG BUMPS, on an island 44 studs from middle to edge: a ring-out takes a hit
 -- near the edge or a few in a row. (Owner, after playing: "you get bounced off way too quickly" -
@@ -86,7 +93,7 @@ local SEPARATE_SPEED = 6 -- studs/s that pushes two slowly overlapping balls apa
 local BALL_GROUP = "BumperBall"
 local FLOOR_GROUP = "BumperFloor" -- the hidden floor under the sea: everything lands on it
 local FLOOR_DEPTH = 9 -- how far under the water surface it is
-local ROLL_MASS = 1.4 -- a rolling solid ball needs 7/5 of the force to speed up (it spins up too)
+local ROLL_MASS = BumperDrive.RollMass -- a rolling ball needs 7/5 of the push to speed up (it spins up too)
 
 -- The look (art pass, owner: "make it look really cool"): a sunny tropical party. Turquoise
 -- shallows around the island, a ring of floats and buoys marking the edge, pool floats drifting in
@@ -149,6 +156,7 @@ export type Entry = {
 	RiderOffset: number,
 	ClientDriven: boolean,
 	Input: Vector3,
+	Drive: BumperDrive.Drive, -- rolls a bot's ball, or a player's the server has taken back (else their device does)
 	Position: Vector3,
 	Velocity: Vector3,
 	History: { Vector3 },
@@ -161,6 +169,7 @@ export type Entry = {
 	LastBumpAt: number,
 	BeyondSince: number?,
 	PolicedUntil: number?,
+	ServerDriving: boolean?, -- a player's ball the server has taken back is pushed by the server
 	FastSince: number?,
 	HighSince: number?,
 	HangSince: number?,
@@ -585,6 +594,7 @@ function BumperBallers:_makeBall(player, index: number, spot: Vector3): Entry
 		RiderOffset = RADIUS + 3,
 		ClientDriven = false,
 		Input = Vector3.zero,
+		Drive = BumperDrive.new(),
 		Position = spot,
 		Velocity = Vector3.zero,
 		History = {},
@@ -760,8 +770,10 @@ function BumperBallers:Prepare()
 	end
 
 	ctx:SetSharedJSON("Tuning", {
-		Accel = TUNING.Accel,
 		MaxSpeed = TUNING.MaxSpeed,
+		SteerGain = TUNING.SteerGain,
+		SteerAccel = TUNING.SteerAccel,
+		Accel = TUNING.Accel,
 		Relief = TUNING.Relief,
 		ReliefDrag = TUNING.ReliefDrag,
 		Touch = TOUCH, -- the client boings at the same distance and closing speed the server bumps at
@@ -924,19 +936,41 @@ function BumperBallers:_step(entry: Entry, dt: number)
 	if entry.ClientDriven then
 		entry.Position = body.Position
 		entry.Velocity = body.AssemblyLinearVelocity
+		if physics and os.clock() < (entry.PolicedUntil or 0) then
+			-- Taken back for a moment (see :_takeBack): it rolls as if its stick were let go, so it
+			-- slows like any ball instead of coasting on with nothing holding it back.
+			self:_drive(entry, dt, Vector3.zero)
+			entry.ServerDriving = true
+		elseif entry.ServerDriving then
+			entry.ServerDriving = false
+			entry.Force.Force = Vector3.zero -- their device drives it again
+		end
 		return
 	end
-	local now = os.clock()
-	local drag = if now < entry.ReliefUntil then DRAG * TUNING.ReliefDrag else DRAG
 	if physics then
-		local velocity = body.AssemblyLinearVelocity
-		entry.Force.Force = (entry.Input * TUNING.Accel - flat(velocity) * drag) * self:_mass(entry, true)
-		entry.Position = body.Position
-		entry.Velocity = velocity
-		self:_face(entry, flat(velocity), dt)
+		self:_drive(entry, dt, entry.Input)
+		self:_face(entry, flat(entry.Velocity), dt)
 		return
 	end
-	self:_simulate(entry, dt, drag)
+	self:_simulate(entry, dt)
+end
+
+-- Whether a ball sitting here grips the island top (steers hard; see Logic/BumperDrive).
+function BumperBallers:_grips(position: Vector3): boolean
+	return BumperDrive.Grips(flat(position - self.center).Magnitude, position.Y - self.top, ISLAND_RADIUS, RADIUS)
+end
+
+-- Pushes a ball the server rolls (with physics) the way `input` steers, with the drive every
+-- device rolls its own ball with.
+function BumperBallers:_drive(entry: Entry, dt: number, input: Vector3)
+	local body = entry.Body
+	local velocity = body.AssemblyLinearVelocity
+	local grip = self:_grips(body.Position)
+	local ax, az = entry.Drive:Step(os.clock(), dt, velocity.X, velocity.Z, input.X, input.Z, grip)
+	-- On the island it rolls (it spins up too); off it, in the air, it doesn't.
+	entry.Force.Force = Vector3.new(ax, 0, az) * self:_mass(entry, grip)
+	entry.Position = body.Position
+	entry.Velocity = velocity
 end
 
 -- Turns the rider to face where they roll (or where they steer when nearly still).
@@ -953,10 +987,13 @@ function BumperBallers:_face(entry: Entry, velocity: Vector3, dt: number)
 end
 
 -- No-physics servers: integrate the same drive model, fall off the edge, and keep balls apart.
-function BumperBallers:_simulate(entry: Entry, dt: number, drag: number)
+function BumperBallers:_simulate(entry: Entry, dt: number)
 	local position, velocity = entry.Position, entry.Velocity
 	local horizontal = flat(velocity)
-	horizontal += (entry.Input * TUNING.Accel - horizontal * drag) * dt
+	local input = entry.Input
+	local grip = self:_grips(position)
+	local ax, az = entry.Drive:Step(os.clock(), dt, horizontal.X, horizontal.Z, input.X, input.Z, grip)
+	horizontal += Vector3.new(ax, 0, az) * dt
 	local vertical = velocity.Y
 	local onIsland = flat(position - self.center).Magnitude <= ISLAND_RADIUS and position.Y >= self.restY - 0.5
 	if onIsland and position.Y <= self.restY + 0.01 and vertical <= 0 then
@@ -1022,8 +1059,9 @@ function BumperBallers:_push(entry: Entry, dv: Vector3, bumper: Entry?)
 		entry.LastBumper = bumper.Player
 		entry.LastBumpAt = now
 	end
+	local relief = if bumper then TUNING.Relief else 0
 	if entry.ClientDriven and now >= (entry.PolicedUntil or 0) then
-		self.context:Fire(entry.Player, "Bump", dv, if bumper then TUNING.Relief else 0)
+		self.context:Fire(entry.Player, "Bump", dv, relief)
 		if bumper then
 			local pending = entry.PendingBump
 			if pending then
@@ -1032,10 +1070,24 @@ function BumperBallers:_push(entry: Entry, dv: Vector3, bumper: Entry?)
 				entry.PendingBump = { Dv = dv, Before = entry.Velocity, At = now, Peak = 0 }
 			end
 		end
-	elseif physics then
+	else
+		self:_kick(entry, dv, relief)
+	end
+end
+
+-- Pushes a ball the server rolls itself (a bot's, or a player's it has taken back) by `dv`, with
+-- `relief` seconds of bump relief.
+function BumperBallers:_kick(entry: Entry, dv: Vector3, relief: number)
+	local now = os.clock()
+	if physics then
 		entry.Body:ApplyImpulse(dv * self:_mass(entry))
+		-- What the ball rolls on with once it grips the ground again (the rest spins it up): its drive
+		-- lets that fade the way bumps always did instead of steering it away.
+		local keep = self:_mass(entry) / self:_mass(entry, true)
+		entry.Drive:Bump(now, dv.X * keep, dv.Z * keep, relief)
 	else
 		entry.Velocity += dv
+		entry.Drive:Bump(now, dv.X, dv.Z, relief)
 	end
 end
 
@@ -1063,7 +1115,7 @@ function BumperBallers:_checkBump(entry: Entry)
 	end
 	entry.PendingBump = nil
 	if self:_takeBack(entry, 1) then
-		entry.Body:ApplyImpulse(pending.Dv * self:_mass(entry))
+		self:_kick(entry, pending.Dv, TUNING.Relief)
 		self.forcedBumps = (self.forcedBumps or 0) + 1
 	end
 end
@@ -1073,6 +1125,9 @@ function BumperBallers:_takeBack(entry: Entry, seconds: number): boolean
 	local body = entry.Body
 	if entry.Out or not body.Parent or body.Anchored then
 		return false
+	end
+	if os.clock() >= (entry.PolicedUntil or 0) then
+		entry.Drive = BumperDrive.new() -- the server rolls it from here (see :_step): nothing carried over
 	end
 	entry.PolicedUntil = math.max(entry.PolicedUntil or 0, os.clock() + seconds)
 	entry.PendingBump = nil
