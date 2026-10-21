@@ -4,6 +4,9 @@
 -- the same for the music and effects, and whether the music really plays on that device (owner:
 -- "Music isn't working for my friend"). Reports are kept per player in the PP_ClientReports data
 -- store (tools/checks/client_reports.py reads them) and logged to the server output.
+-- A mini-game can keep its own trouble report about a player there too (ClientReports.Record):
+-- Shark Bait says what held someone who got stuck, or an error their device hit (owner: "Broke. I
+-- chomped someone and now cant move.").
 
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -84,6 +87,54 @@ local function clean(report: any): { [string]: any }?
 		Version = Config.Version,
 		PlaceVersion = game.PlaceVersion,
 	}
+end
+
+-- Keeps a mini-game's trouble report about a real player (the latest per player, key m<UserId>):
+-- `what` happened last in mode `mode`, and everything seen (`text`). Bots and the check tools'
+-- stand-ins aren't Players, and Studio keeps nothing. A key is written at most every few seconds
+-- (the data store's limit for one key): a newer report waits and replaces the one before.
+local MODE_WRITE_GAP = 7
+local modeWritten: { [string]: number } = {}
+local modePending: { [string]: { [string]: any } } = {}
+
+local function writeMode(key: string)
+	local entry = modePending[key]
+	modePending[key] = nil
+	if not entry then
+		return
+	end
+	modeWritten[key] = os.clock()
+	task.spawn(function()
+		pcall(function()
+			DataStoreService:GetDataStore("PP_ClientReports"):SetAsync(key, entry)
+		end)
+	end)
+end
+
+function ClientReports.Record(player: any, mode: string, what: string, text: string)
+	if typeof(player) ~= "Instance" or not player:IsA("Player") or RunService:IsStudio() then
+		return
+	end
+	local key = `m{player.UserId}`
+	local waiting = modePending[key] ~= nil
+	modePending[key] = {
+		Kind = "Mode",
+		Mode = string.sub(mode, 1, 24),
+		What = string.sub(what, 1, 40),
+		Text = string.sub(text, 1, 4000),
+		Time = os.time(),
+		Version = Config.Version,
+		PlaceVersion = game.PlaceVersion,
+	}
+	if waiting then
+		return -- (already due: it goes out with this one)
+	end
+	local since = os.clock() - (modeWritten[key] or -math.huge)
+	if since >= MODE_WRITE_GAP then
+		writeMode(key)
+	else
+		task.delay(MODE_WRITE_GAP - since, writeMode, key)
+	end
 end
 
 function ClientReports.Init()

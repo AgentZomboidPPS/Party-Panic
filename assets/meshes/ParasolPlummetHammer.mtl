@@ -1,0 +1,17 @@
+newmtl Handle
+Kd 0.980 0.980 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Head
+Kd 0.471 0.494 0.549
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Band
+Kd 1.000 0.784 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
