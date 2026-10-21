@@ -276,8 +276,10 @@ def honey_oak():
     leaves_light = merge(*light)
 
     # Blossoms: little five-petal flowers on the canopy surface, facing out.
-    candidates = [i for i in range(len(leaves.v)) if normals_v[i][1] > -0.2 and leaves.v[i][1] > 40]
-    picks = rng.choice(candidates, 90, replace=False)
+    # Half on the top, half on the front and the underside's rim (what the players look up at).
+    top = [i for i in range(len(leaves.v)) if normals_v[i][1] > -0.2 and leaves.v[i][1] > 40]
+    front = [i for i in range(len(leaves.v)) if normals_v[i][2] < -0.3 and normals_v[i][1] > -0.7 and leaves.v[i][1] > 33]
+    picks = np.concatenate([rng.choice(top, 60, replace=False), rng.choice(front, 55, replace=False)])
     blossoms, pollen = [], []
     for n, i in enumerate(picks):
         position = leaves.v[i] + normals_v[i] * 0.15

@@ -14,8 +14,8 @@ return function(h)
 	return {
 		-- The tree. "Anchor" is the tip of the front branch, where the vine hangs.
 		HoneyOak = {
-			Height = 64.259,
-			AssetId = 80244830886492,
+			Height = 64.698,
+			AssetId = 103149679285590,
 			Collide = true,
 			Palette = {
 				Trunk = h.rgb(139, 94, 62),
