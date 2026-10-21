@@ -922,9 +922,20 @@ function Tanks.Start(api)
 
 	-- Knock-outs -------------------------------------------------------------------------------------
 
-	local feed: { TextLabel } = {}
 	local hud = api:TopHud()
 	local hudY = api:HudY()
+	local feed: { TextLabel } = {}
+	local hintUp = true -- the controls hint, until 8 s after GO (the rules card hides it before then)
+	-- The kill feed sits under the hits line (under the hint while it's up); fewer lines on phones,
+	-- where the thumbstick's corner starts not far below.
+	local function layoutFeed()
+		local top = hudY + 38 + (if hintUp then 36 else 0)
+		local most = (if touch then 2 else 3) - (if hintUp and touch then 1 else 0)
+		for index, item in feed do
+			item.Position = UDim2.new(0.5, 0, 0, top + (index - 1) * 32)
+			item.Visible = index <= most
+		end
+	end
 	local hitsLabel = UIKit.Label({
 		Name = "Hits",
 		Text = "",
@@ -950,10 +961,10 @@ function Tanks.Start(api)
 			Name = "Feed",
 			Text = text,
 			Font = Theme.Fonts.Display,
-			TextSize = 22,
+			TextSize = 28,
 			TextColor3 = color,
 			AnchorPoint = Vector2.new(0.5, 0),
-			Size = UDim2.fromOffset(420, 26),
+			Size = UDim2.fromOffset(440, 32),
 			Parent = hud,
 			Children = { UIKit.TextStroke(0.1) },
 		})
@@ -964,17 +975,13 @@ function Tanks.Start(api)
 				oldest:Destroy()
 			end
 		end
-		for index, item in feed do
-			item.Position = UDim2.new(0.5, 0, 0, hudY + 38 + (index - 1) * 26)
-		end
+		layoutFeed()
 		task.delay(4.5, function()
 			local index = table.find(feed, label)
 			if index then
 				table.remove(feed, index)
 				label:Destroy()
-				for position, item in feed do
-					item.Position = UDim2.new(0.5, 0, 0, hudY + 38 + (position - 1) * 26)
-				end
+				layoutFeed()
 			end
 		end)
 	end
@@ -1070,13 +1077,10 @@ function Tanks.Start(api)
 	end))
 	api:Hint(
 		if touch
-			then "Stick: drive • Drag right side: aim • FIRE!"
+			then "Stick: drive • Drag right: aim • FIRE!"
 			else "WASD drive • Mouse aim • Click to FIRE • E: mine",
-		hudY + 120
+		hudY + 38
 	)
-	task.delay(9, function()
-		api:Hint("")
-	end)
 
 	if not touch then
 		reticle = decor({
@@ -1148,6 +1152,11 @@ function Tanks.Start(api)
 		local dt = math.min(rawDt, 0.1)
 		local now = api:Now()
 		local clock = os.clock()
+		if hintUp and now > goAt + 8 then
+			hintUp = false
+			api:Hint("")
+			layoutFeed()
+		end
 
 		for index = #effects, 1, -1 do
 			local item = effects[index]
