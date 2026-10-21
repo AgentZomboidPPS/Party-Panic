@@ -3,6 +3,11 @@
 --
 -- Every mini-game call runs through a guarded runner with a timeout, so a broken or stalled mode
 -- ends the round safely instead of trapping the server (§4 "Round end conditions", §19 risks).
+--
+-- Who plays comes from SitOutService.Lineup: people sitting out the next rounds (owner: "we do
+-- need to add somewhere super apparent a toggle where you skip next round") stay in the lobby and
+-- aren't counted; when everyone here is on a break, rounds wait in the lobby ("Everyone's taking a
+-- break!") instead of running with bots only.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13,14 +18,14 @@ local Config = require(Shared.Config)
 local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local Placement = require(Shared.Logic.Placement)
+local Roster = require(Shared.Logic.Roster)
 
-local BotRegistry = require(script.Parent.BotRegistry)
 local BotService = require(script.Parent.BotService)
-local DataService = require(script.Parent.DataService)
 local LobbyService = require(script.Parent.LobbyService)
 local Notifier = require(script.Parent.Notifier)
 local RewardService = require(script.Parent.RewardService)
 local RoundContext = require(script.Parent.RoundContext)
+local SitOutService = require(script.Parent.SitOutService)
 local Telemetry = require(script.Parent.Telemetry)
 local VotingService = require(script.Parent.VotingService)
 
@@ -45,30 +50,15 @@ local function ignoreModeLimits(): boolean
 	return isStudio() and session.IgnoreModePlayerLimitsInStudio
 end
 
--- Players who can take part: profile loaded and still connected.
-local function readyPlayers(): { Player }
-	local list = {}
-	for _, player in Players:GetPlayers() do
-		if DataService.Get(player) then
-			table.insert(list, player)
-		end
-	end
-	return list
+-- Everyone who'd play the next round: people who are ready and not sitting out, plus the bots
+-- filling in (bots never play without at least one person).
+local function participantsNow(): { Player }
+	return SitOutService.Lineup().Participants
 end
 
--- Everyone who'd play the next round: ready players plus the bots filling in (bots never play
--- without at least one person).
-local function participantsNow(): { Player }
-	local list = readyPlayers()
-	if #list == 0 then
-		return list
-	end
-	for _, bot in BotRegistry.List() do
-		if bot.Character then
-			table.insert(list, bot)
-		end
-	end
-	return list
+-- Why the next round can't start yet ("" when it can), and how many more players it needs.
+local function blocker(): (string, number)
+	return Roster.Blocker(SitOutService.Lineup(), minPlayers())
 end
 
 local function setPhase(phase: string, duration: number?, message: string?)
@@ -91,7 +81,11 @@ local function waitFor(duration: number, abort: (() -> boolean)?): boolean
 end
 
 local function tooFewPlayers(): boolean
-	return #readyPlayers() == 0 or #participantsNow() < minPlayers()
+	return (blocker()) ~= ""
+end
+
+local function everyoneOnBreak(): boolean
+	return (blocker()) == "Break"
 end
 
 -- Runs a mini-game step in its own thread with a timeout so it can never stall the loop.
@@ -258,14 +252,13 @@ local function runRound(definition, participants: { Player })
 end
 
 local function runCycle()
-	-- Waiting for enough players
-	while tooFewPlayers() do
-		local needed = math.max(1, minPlayers() - #participantsNow())
-		setPhase(
-			"Waiting",
-			nil,
-			if needed == 1 then "Waiting for 1 more player..." else `Waiting for {needed} more players...`
-		)
+	-- Waiting for enough players (or for someone to come back from a break)
+	while true do
+		local reason, needed = blocker()
+		if reason == "" then
+			break
+		end
+		setPhase("Waiting", nil, Roster.WaitingMessage(reason, needed))
 		task.wait(1)
 	end
 
@@ -294,17 +287,22 @@ local function runCycle()
 	end
 	setPhase("Voting", session.VoteTime, "Vote for the next game!")
 	VotingService.Begin(options)
-	waitFor(session.VoteTime)
+	-- Nobody can vote once everyone is sitting out: back to the lobby to wait for them.
+	local voted = waitFor(session.VoteTime, everyoneOnBreak)
 	local winner, _, wasTie = VotingService.End()
-	if not winner then
+	if not voted or not winner then
 		return
 	end
 
-	local participants = participantsNow()
-	if #participants < minPlayers() then
-		Notifier.All("Not enough players to start - back to the lobby.", "warning")
+	local lineup = SitOutService.Lineup()
+	local reason = Roster.Blocker(lineup, minPlayers())
+	if reason ~= "" then
+		if reason ~= "Break" then -- a break shows on the lobby banner
+			Notifier.All("Not enough players to start - back to the lobby.", "warning")
+		end
 		return
 	end
+	local participants = lineup.Participants
 
 	local gameId = chooseRunnableGame(winner.Id, #participants)
 	if not gameId then

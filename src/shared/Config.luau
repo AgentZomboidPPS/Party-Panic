@@ -67,6 +67,7 @@ Config.RateLimits = {
 	Settings = { 10, 5 },
 	Tutorial = { 5, 5 },
 	ClientReport = { 3, 60 },
+	SitOut = { 4, 4 }, -- the sit-out switch: a few quick changes of mind, not a stream
 }
 
 Config.EmoteCooldown = 1.5

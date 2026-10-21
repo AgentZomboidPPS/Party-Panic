@@ -16,6 +16,7 @@ local order = {
 	"QuestService",
 	"ShopService",
 	"SocialService",
+	"SitOutService",
 	"VotingService",
 	"LobbyService",
 	"BotService", -- after the lobby exists (spawns, vote pads)

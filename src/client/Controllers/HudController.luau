@@ -6,6 +6,9 @@
 -- pill (level, name, XP) with the coins tucked under it at the top left, which makes way for the
 -- standings during a round; the round's status line under the top bar; the menu down the right
 -- edge, with 44 pt buttons. Nothing goes in the thumbstick's corner or near the jump button.
+-- The sit-out switch (owner: "we do need to add somewhere super apparent a toggle where you skip
+-- next round", UI/SitOutSwitch) sits right by the banner where everyone looks for the timer:
+-- beside it in the top bar row on phones, above it in that row on PC; it's in Settings too.
 
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -22,6 +25,7 @@ local Teams = require(Shared.Teams)
 
 local State = require(script.Parent.Parent.State)
 local Modal = require(script.Parent.Parent.UI.Modal)
+local SitOutSwitch = require(script.Parent.Parent.UI.SitOutSwitch)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
@@ -293,6 +297,19 @@ local function bannerTitle(touch: boolean): string
 	return `{icon} {if message ~= "" then message else phase}`
 end
 
+-- The line under the banner during a round: the mode's status ("Survivors: 7"), mostly meant
+-- for its players ("Tap ADD when..."). Anyone not in this round gets their own line instead.
+local function statusLine(phase: string): string
+	if phase ~= "InRound" then
+		return ""
+	elseif State.InRound() then
+		return GameState.Get("Status") or ""
+	elseif State.SittingOut() then
+		return "💤 Sitting out - tap to jump in next round"
+	end
+	return "🎮 You're in the next round!"
+end
+
 local function followTimer(timerPill: Frame, timer: TextLabel)
 	local lastWhole = -1
 	RunService.Heartbeat:Connect(function()
@@ -388,7 +405,7 @@ local function buildPhaseBanner(parent: Instance)
 	RunService.Heartbeat:Connect(function()
 		local phase = GameState.Get("Phase") or "Waiting"
 		title.Text = bannerTitle(false)
-		status.Text = if phase == "InRound" then GameState.Get("Status") or "" else ""
+		status.Text = statusLine(phase)
 	end)
 
 	local function refreshTeams()
@@ -429,8 +446,11 @@ local function buildPhaseBanner(parent: Instance)
 end
 
 -- Phones: the banner sits in Roblox's top bar row (its own ScreenGui inside the device's safe area,
--- level with Roblox's 44 pt buttons), centered, one short line as wide as its words.
+-- level with Roblox's 44 pt buttons), centered, one short line as wide as its words. The sit-out
+-- switch rides on its right, in the same row and at the same height (clear of the vote cards and
+-- the menu under the top bar).
 local TOUCH_BANNER_HEIGHT = 66
+local SIT_OUT_GAP = 10 -- between the banner and the sit-out switch
 local function buildTopBarBanner(hud: Instance)
 	local gui = UIKit.new("ScreenGui", {
 		Name = "PartyPanicTopBar",
@@ -453,12 +473,14 @@ local function buildTopBarBanner(hud: Instance)
 	})
 	UIKit.AutoScale(holder, 0.8) -- phone size on tablets too, like Roblox's own buttons
 	local banner = UIKit.Panel({
+		Name = "Banner",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(300, TOUCH_BANNER_HEIGHT),
 		CornerRadius = TOUCH_BANNER_HEIGHT / 2,
 		Parent = holder,
 	})
+	local sitOut = SitOutSwitch.new(holder, { Name = "SitOut", Hud = true, AnchorPoint = Vector2.new(0, 0.5) })
 	local title = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
@@ -501,9 +523,35 @@ local function buildTopBarBanner(hud: Instance)
 		measuredFor, measuredAt = key, os.clock()
 		local width = math.ceil(UIKit.TextWidth(text, 26, Theme.Fonts.Display)) + 4
 		title.Size = UDim2.fromOffset(width, TOUCH_BANNER_HEIGHT)
-		banner.Size =
-			UDim2.fromOffset(20 + width + (if timerPill.Visible then 12 + 88 + 7 else 20), TOUCH_BANNER_HEIGHT)
+		local bannerWidth = 20 + width + (if timerPill.Visible then 12 + 88 + 7 else 20)
+		banner.Size = UDim2.fromOffset(bannerWidth, TOUCH_BANNER_HEIGHT)
+		sitOut.Position = UDim2.new(0.5, bannerWidth / 2 + SIT_OUT_GAP, 0.5, 0)
 	end)
+end
+
+-- PC: the sit-out switch sits in Roblox's top bar row too (free in the middle), right above the
+-- phase banner, at about the size of Roblox's own buttons (that row doesn't grow with the screen).
+local PC_TOP_BAR_SCALE = 0.75
+local function buildTopBarSwitch(hud: Instance)
+	local gui = UIKit.new("ScreenGui", {
+		Name = "PartyPanicTopBar",
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		DisplayOrder = 5,
+	})
+	gui.IgnoreGuiInset = true
+	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	gui.Parent = hud.Parent
+	local holder = UIKit.new("Frame", {
+		Name = "SitOutHolder",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0, 34), -- level with Roblox's buttons (12 to 55)
+		Size = UDim2.fromOffset(400, 72),
+		BackgroundTransparency = 1,
+		Parent = gui,
+		Children = { UIKit.new("UIScale", { Scale = PC_TOP_BAR_SCALE }) },
+	})
+	SitOutSwitch.new(holder, { Name = "SitOut", Hud = true })
 end
 
 -- Phones: the round's status line ("Survivors: 7") and team scores, just under the top bar in the
@@ -545,8 +593,7 @@ local function buildTouchStatus(parent: Instance)
 		Parent = teams,
 	})
 	RunService.Heartbeat:Connect(function()
-		local phase = GameState.Get("Phase") or "Waiting"
-		status.Text = if phase == "InRound" then GameState.Get("Status") or "" else ""
+		status.Text = statusLine(GameState.Get("Phase") or "Waiting")
 	end)
 	local function refreshTeams()
 		local scores = GameState.GetJSON("TeamScores")
@@ -743,9 +790,31 @@ local function musicRow(parent: Instance, order: number, setSetting: RemoteEvent
 	refresh()
 end
 
+-- The sit-out switch again, first in Settings: "Next round: PLAYING / SITTING OUT".
+local function sitOutRow(parent: Instance, order: number)
+	local row = UIKit.new("Frame", {
+		Size = UDim2.new(1, 0, 0, 76),
+		BackgroundTransparency = 1,
+		LayoutOrder = order,
+		Parent = parent,
+	})
+	local switch = SitOutSwitch.new(row, {
+		Name = "SitOutSwitch",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+	})
+	UIKit.Label({
+		Text = "🎮 Next round",
+		TextSize = 24,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -(switch.Size.X.Offset + 24), 1, 0),
+		Parent = row,
+	})
+end
+
 local function buildSettings(overlay: Instance)
 	local touch = isTouch()
-	local modal = Modal.new(overlay, "Settings", "⚙️", Vector2.new(560, if touch then 440 else 420))
+	local modal = Modal.new(overlay, "Settings", "⚙️", Vector2.new(560, if touch then 450 else 420))
 	local list = UIKit.new("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
@@ -753,6 +822,7 @@ local function buildSettings(overlay: Instance)
 		Children = { UIKit.List(Enum.FillDirection.Vertical, 10) },
 	})
 	local setSetting = Remotes.Get("SetSetting")
+	sitOutRow(list, 0)
 	musicRow(list, 1, setSetting)
 	toggleRow(list, 2, "✨ Reduced effects", function()
 		return State.Setting("ReducedEffects") == true
@@ -800,6 +870,7 @@ function HudController.Start(context)
 	else
 		buildProfileChip(context.Hud)
 		buildPhaseBanner(context.Hud)
+		buildTopBarSwitch(context.Hud)
 	end
 	buildMenu(context.Hud)
 	local settings = buildSettings(context.Overlay)
