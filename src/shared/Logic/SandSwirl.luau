@@ -246,6 +246,40 @@ function SandSwirl.WalkerFlow(segments: { Segment }, r: number, t: number): (num
 	return (v + lip) * fade, s * SandSwirl.WALK_SPIN * fade
 end
 
+-- Where someone at (px, pz) heads for (ax, az) without going into the hole, the way a player rounds
+-- it (offsets from the funnel's center; the bots steer with it, "Bots are terrible at this game"):
+-- no nearer the middle than `keepOut` (a grab reaches past that, so treasure sliding by the edge
+-- is still in reach), and when the straight way runs nearer the middle than that, a few steps round
+-- the hole towards the aim's side instead, along the slope and back out to `keepOut` + 1 if the
+-- sand has dragged them in (asked again every step, it walks an arc that never closes in).
+SandSwirl.DETOUR_STEP = 4
+function SandSwirl.Detour(px: number, pz: number, ax: number, az: number, keepOut: number): (number, number)
+	local ar = math.sqrt(ax * ax + az * az)
+	if ar < keepOut then
+		if ar < 0.01 then
+			ax, az, ar = px, pz, math.max(0.01, math.sqrt(px * px + pz * pz))
+		end
+		ax, az = ax / ar * keepOut, az / ar * keepOut
+	end
+	-- Nearest the straight way comes to the middle.
+	local dx, dz = ax - px, az - pz
+	local length = dx * dx + dz * dz
+	local k = if length > 1e-6 then math.clamp(-(px * dx + pz * dz) / length, 0, 1) else 0
+	local cx, cz = px + dx * k, pz + dz * k
+	if cx * cx + cz * cz >= (keepOut - 0.05) ^ 2 then
+		return ax, az
+	end
+	local pr = math.max(0.01, math.sqrt(px * px + pz * pz))
+	-- (turning the shorter way round: the aim's side of the line through the middle)
+	local side = if px * az - pz * ax >= 0 then 1 else -1
+	local ring = keepOut + 1
+	-- From further out: along the straight line that just grazes that ring, then on round it.
+	local angle = math.atan2(pz, px) + side * math.acos(math.min(1, ring / pr))
+	local ux, uz = math.cos(angle), math.sin(angle)
+	local step = SandSwirl.DETOUR_STEP * side
+	return ux * ring - uz * step, uz * ring + ux * step
+end
+
 -- Polar <-> flat offsets from the funnel's center (x, z).
 function SandSwirl.ToXZ(r: number, a: number): (number, number)
 	return r * math.cos(a), r * math.sin(a)
