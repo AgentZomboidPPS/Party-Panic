@@ -46,6 +46,10 @@ local DESK = Vector3.new(236, 4, 184) -- the desk top (its top is the arena orig
 local AIR_HEIGHT = 1.6 -- feet this far above the paper: in the air
 local LAND_HEIGHT = 0.7 -- ...and back within this: landed
 local MIN_STAMP_GAP = 0.3 -- seconds between two stamps of one player
+local MIN_AIRTIME = 0.25 -- a landing counts only after this long in the air (no bobbing)
+local MAX_JUMP_AIR = 1.2 -- a plain jump's reach grows with airtime up to this (no hovering)
+local TAKEOFF_NEAR = 3 -- a Hop arriving while the feet are this close to the paper is a take-off
+local GRID_EVERY = 2.5 -- seconds between full-pad resyncs (Stamp events carry the changes)
 local SYNC_EVERY = 0.5
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -112,6 +116,9 @@ function StampOut:Prepare()
 		self.Track[player] = nil
 		self.Flying[player] = nil
 		self.ChargeStart[player] = nil
+		-- Their ink stays on the paper, but they leave the standings.
+		inks[tostring(player.UserId)] = nil
+		ctx:SetSharedJSON("Inks", inks)
 	end
 
 	local count = #ctx:GetPlayers()
@@ -302,7 +309,8 @@ function StampOut:Dress(player: any, character: Model)
 	local model = MeshLibrary.Get("StampOutRider", { Colors = { Rubber = ink.Color, Band = ink.Color } })
 	local _, size = model:GetBoundingBox()
 	-- The rubber's face sits a hair below the soles; the wooden block rises around the feet.
-	model:PivotTo(root.CFrame * CFrame.new(0, -legs(humanoid, root) - 0.1, 0))
+	-- (Its rubber starts a hair above the soles, so the ink tiles on the paper never cover it.)
+	model:PivotTo(root.CFrame * CFrame.new(0, -legs(humanoid, root) + 0.05, 0))
 	local pivot = model:GetPivot()
 	local base = MeshLibrary.Assemble(model, true)
 	local badge = Build.Part({
@@ -408,30 +416,41 @@ function StampOut:WatchLandings()
 		if height >= LAND_HEIGHT then
 			continue
 		end
-		-- Landed.
-		track.Air = false
-		local x, z = self:Local(position)
-		local hop = track.Hop
-		track.Hop = nil
-		local reach, radius
-		if hop and now - hop.At < hop.Airtime + 1.5 then
-			reach, radius = hop.Distance + 8, hop.Radius
-		else
-			-- A plain jump: as far as walking carries you in the air, and then some.
-			reach = humanoid.WalkSpeed * (now - (track.AirAt or now)) + 10
-			radius = StampGrid.JUMP_RADIUS
+		self:Land(player, track, humanoid, root, height, now)
+	end
+end
+
+-- A touchdown: stamps if it's a fair landing. A hop counts as a hop (its reach and bigger stamp)
+-- only if the server saw the take-off right around the Hop and it really travelled; anything else
+-- is a plain jump, whose reach is capped (no hovering) and which must have been in the air a moment.
+function StampOut:Land(player: any, track, humanoid: Humanoid, root: BasePart, height: number, now: number)
+	track.Air = false
+	local position = root.Position
+	local x, z = self:Local(position)
+	local hop = track.Hop
+	track.Hop = nil
+	local airtime = now - (track.AirAt or now)
+	local travelled = Vector3.new(position.X - track.From.X, 0, position.Z - track.From.Z).Magnitude
+	track.From = position
+	local reach = humanoid.WalkSpeed * math.min(airtime, MAX_JUMP_AIR) + 10
+	local radius = StampGrid.JUMP_RADIUS
+	if hop then
+		local slack = 0.2 + hop.Ping * 2
+		local tookOff = track.AirAt and track.AirAt >= hop.At - slack - 0.1 and track.AirAt <= hop.At + slack
+		if tookOff and travelled >= hop.Distance * 0.5 then
+			reach = math.max(reach, hop.Reach)
+			radius = hop.Radius
 		end
-		local travelled = Vector3.new(position.X - track.From.X, 0, position.Z - track.From.Z).Magnitude
-		track.From = position
-		if
-			height > -0.6 -- on the paper, not down on the desk beside it
-			and StampGrid.OnPad(x, z)
-			and travelled <= reach
-			and now - track.LastStamp >= MIN_STAMP_GAP
-		then
-			track.LastStamp = now
-			self:Stamp(player, x, z, radius)
-		end
+	end
+	if
+		height > -0.6 -- on the paper, not down on the desk beside it
+		and StampGrid.OnPad(x, z)
+		and airtime >= MIN_AIRTIME
+		and travelled <= reach
+		and now - track.LastStamp >= MIN_STAMP_GAP
+	then
+		track.LastStamp = now
+		self:Stamp(player, x, z, radius)
 	end
 end
 
@@ -468,7 +487,7 @@ function StampOut:Start()
 	-- The STAMP button: "Charge" when it goes down, "Hop" (charge 0..1, direction x, z) when it's let go.
 	ctx:OnAction("Charge", function(player)
 		self.ChargeStart[player] = ctx:Now()
-	end, { Interval = 0.1 })
+	end, { Interval = 0 })
 	ctx:OnAction("Hop", function(player, charge, dx, dz)
 		if type(charge) ~= "number" or type(dx) ~= "number" or type(dz) ~= "number" then
 			return
@@ -480,17 +499,35 @@ function StampOut:Start()
 		if not humanoid or not root or ctx:IsStunned(player) then
 			return
 		end
-		-- The charge is what the device timed, but never more than the server saw (plus ping leeway).
+		-- The stamp's size comes from the charge the device says, but never more than the server timed
+		-- between the presses (plus ping leeway). How far the landing may be is what the device flew
+		-- (its own charge), so a legit hop always stamps even if a "Charge" got lost.
 		local started = self.ChargeStart[player]
 		self.ChargeStart[player] = nil
 		local ping = math.min(player:GetNetworkPing(), 0.5)
 		local timed = if started then (ctx:Now() - started) / StampGrid.CHARGE_TIME else 0
-		charge = math.clamp(math.min(charge, timed + 0.15 + ping * 2), 0, 1)
+		local claimed = math.clamp(charge, 0, 1)
+		charge = math.clamp(math.min(claimed, timed + 0.15 + ping * 2), 0, 1)
 		local distance, up, along, airtime, radius = StampGrid.Hop(charge, gravity)
+		local flown = StampGrid.Hop(claimed, gravity)
 		self.Hops = (self.Hops or 0) + 1
 		local track = self.Track[player]
 		if track then
-			track.Hop = { At = ctx:Now(), Distance = distance, Radius = radius, Airtime = airtime }
+			-- A hop chained straight off a landing the server hasn't seen yet (positions arrive ~20
+			-- times a second): that landing happened, stamp it first.
+			if track.Air then
+				local height = root.Position.Y - legs(humanoid, root) - self.Paper.Y
+				if height < TAKEOFF_NEAR then
+					self:Land(player, track, humanoid, root, math.max(height, 0), ctx:Now())
+				end
+			end
+			track.Hop = {
+				At = ctx:Now(),
+				Ping = ping,
+				Distance = distance,
+				Reach = flown + 8,
+				Radius = radius,
+			}
 		end
 		if not isBot(player) then
 			return -- their own device flies the hop; the landing watch stamps it
@@ -532,7 +569,12 @@ function StampOut:Start()
 		end
 		if self.Dirty then
 			self.Dirty = false
-			ctx:SetShared("Grid", StampGrid.Encode(self.Owners))
+			if ctx:Now() - (self.GridAt or 0) >= GRID_EVERY then
+				self.GridAt = ctx:Now()
+				ctx:SetShared("Grid", StampGrid.Encode(self.Owners))
+			else
+				self.Dirty = true -- (standings below still refresh; the pad goes out on the next resync)
+			end
 			local bestInk, best = nil, 0
 			for ink, cells in self.Counts do
 				local owner = self.PlayerOf[ink]

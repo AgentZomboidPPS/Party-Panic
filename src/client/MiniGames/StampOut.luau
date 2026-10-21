@@ -5,8 +5,8 @@
 --     sends a "Stamp" event (ink, x, z, radius) for every landing. Each event is redrawn at once with
 --     the same Logic/StampGrid.Disc() the server used, so the ink appears the moment it lands; the
 --     string keeps everyone in step (cells an event touched in the last moment are left alone, so
---     an older string never flickers them back). Cells are flat tiles made when first inked, a hair
---     above the paper, never collidable. Each stamp also leaves its owner's symbol in the middle of
+--     an older string never flickers them back). Each row of cells is drawn as one flat part per
+--     run of one ink (a few hundred parts at most), a hair above the paper, never collidable. Each stamp also leaves its owner's symbol in the middle of
 --     the blot (removed when someone stamps over it), so the pad reads without colour too.
 --   * STAMP (E, or the button beside jump on phones): hold to charge (the button fills and a ring
 --     shows where you'll land), let go to hop forward. This device flies its own character (the
@@ -26,7 +26,7 @@ local StampOut = {}
 
 local CELL = StampGrid.CELL
 local INKS = StampGrid.INKS
-local MAX_MARKS = 100
+local MAX_MARKS = 40
 local EVENT_HOLD = 0.8 -- seconds a cell an event drew ignores the shared string
 
 local function brightness(color: Color3): number
@@ -89,9 +89,11 @@ function StampOut.Start(api)
 			paperX, paperY, paperZ = value.X, value.Y, value.Z
 		end
 	end)
+	local dirty = true -- the HUD needs a redraw
 	api:OnShared("Inks", function()
 		inks = api:SharedJSON("Inks") or {}
 		myInk = inks[tostring(api.Player.UserId)]
+		dirty = true
 	end)
 
 	-- The pad's ink ---------------------------------------------------------------------------------
@@ -100,16 +102,58 @@ function StampOut.Start(api)
 	folder.Parent = api.World
 	local owners = table.create(N * N, 0)
 	local counts = {} -- ink -> cells
-	local tiles = {} -- cell -> Part
+	local rowParts = {} -- row -> { Part }: one flat part per run of one ink along the row
+	local dirtyRows = {} -- rows to redraw on the next frame
 	local heldUntil = {} -- cell -> os.clock() until which the shared string leaves it alone
 	local marks = {} -- cell -> { Part, Ink }
 	local markOrder = {}
-	local dirty = true
 
 	local function tint(cell: number, color: Color3): Color3
 		-- A little mottling so the ink looks printed rather than painted.
 		local wobble = ((cell * 7919) % 101) / 101
 		return color:Lerp(Color3.new(1, 1, 1), wobble * 0.09)
+	end
+
+	-- Redraws one row of the pad: each run of one ink is one part (phones draw a few hundred parts,
+	-- not one per cell). Runs are 0.1 shorter and narrower than their cells, so neighbours' sides
+	-- never share a plane (no flicker); the hairline of paper between them reads as print.
+	local function drawRow(iz: number)
+		local parts = rowParts[iz]
+		if not parts then
+			parts = {}
+			rowParts[iz] = parts
+		end
+		local half = StampGrid.PAD / 2
+		local z = -half + (iz - 0.5) * CELL
+		local base = (iz - 1) * N
+		local used = 0
+		local ix = 1
+		while ix <= N do
+			local ink = owners[base + ix]
+			if ink == 0 then
+				ix += 1
+				continue
+			end
+			local from = ix
+			while ix + 1 <= N and owners[base + ix + 1] == ink do
+				ix += 1
+			end
+			local length = ix - from + 1
+			used += 1
+			local part = parts[used]
+			if not part then
+				part = decor({ Name = "Ink", Parent = folder })
+				parts[used] = part
+			end
+			part.Size = Vector3.new(length * CELL - 0.1, 0.04, CELL - 0.1)
+			part.CFrame = CFrame.new(paperX - half + (from - 1 + length / 2) * CELL, paperY + 0.22, paperZ + z)
+			part.Color = tint(base + from, INKS[ink].Color)
+			part.Transparency = 0
+			ix += 1
+		end
+		for index = used + 1, #parts do
+			parts[index].Transparency = 1
+		end
 	end
 
 	local function removeMark(cell: number)
@@ -133,28 +177,7 @@ function StampOut.Start(api)
 			counts[ink] = (counts[ink] or 0) + 1
 		end
 		dirty = true
-		local tile = tiles[cell]
-		if ink == 0 then
-			if tile then
-				tile.Transparency = 1
-			end
-		else
-			if not tile then
-				local x, z = StampGrid.Center(cell)
-				tile = decor({
-					Name = "Ink",
-					-- 0.1 under a cell: neighbours' sides never share a plane (no flicker); the hairline of paper
-					-- between them reads as print.
-					Size = Vector3.new(CELL - 0.1, 0.04, CELL - 0.1),
-					CFrame = CFrame.new(paperX + x, paperY + 0.22, paperZ + z),
-					Parent = folder,
-				})
-				tiles[cell] = tile
-			end
-			local t = tile :: Part
-			t.Transparency = 0
-			t.Color = tint(cell, INKS[ink].Color)
-		end
+		dirtyRows[(cell - 1) // N + 1] = true
 		local mark = marks[cell]
 		if mark and mark.Ink ~= ink then
 			removeMark(cell)
@@ -179,7 +202,7 @@ function StampOut.Start(api)
 		local gui = Instance.new("SurfaceGui")
 		gui.Face = Enum.NormalId.Top
 		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-		gui.PixelsPerStud = 24
+		gui.PixelsPerStud = 10
 		gui.LightInfluence = 1
 		gui.MaxDistance = 220
 		gui.Parent = part
@@ -375,15 +398,26 @@ function StampOut.Start(api)
 				symbol.Visible = counts[ink] / total > 0.06
 			end
 		end
-		-- Chips: the top three, then you if you're not among them.
+		-- Chips: the top three still in the round (someone who left keeps their ink on the paper and
+		-- in the bar, but not a rank), then you if you're not among them.
+		local playing = {}
+		for _, ink in inks do
+			playing[ink] = true
+		end
+		local ranked = {}
+		for _, ink in order do
+			if playing[ink] then
+				table.insert(ranked, ink)
+			end
+		end
 		local shown = {}
-		for rank = 1, math.min(3, #order) do
-			table.insert(shown, { Rank = rank, Ink = order[rank] })
+		for rank = 1, math.min(3, #ranked) do
+			table.insert(shown, { Rank = rank, Ink = ranked[rank] })
 		end
 		if myInk then
-			local myRank = table.find(order, myInk)
+			local myRank = table.find(ranked, myInk)
 			if not myRank or myRank > 3 then
-				table.insert(shown, { Rank = myRank or (#order + 1), Ink = myInk })
+				table.insert(shown, { Rank = myRank or (#ranked + 1), Ink = myInk })
 			end
 		end
 		for index = 1, 4 do
@@ -471,7 +505,7 @@ function StampOut.Start(api)
 		if humanoid and grounded(humanoid) and not flight then
 			hop(charge)
 		else
-			queued = { Charge = charge, Until = os.clock() + 0.3 }
+			queued = { Charge = charge, Until = os.clock() + 2.5 } -- let go mid-air: hop on landing
 		end
 	end)
 
@@ -503,6 +537,9 @@ function StampOut.Start(api)
 			local charge = charged()
 			button:SetFill(charge)
 			local distance, _, _, _, radius = StampGrid.Hop(charge, workspace.Gravity)
+			if api:Shared("Final") then
+				radius *= StampGrid.FINAL_BOOST -- BIG STAMPS
+			end
 			local dir = hopDirection(humanoid, root)
 			local spot = root.Position + dir * distance
 			aim.Size = Vector3.new(0.1, radius * 2, radius * 2)
@@ -511,6 +548,10 @@ function StampOut.Start(api)
 		else
 			aim.Transparency = 1
 		end
+		for iz in dirtyRows do
+			drawRow(iz)
+		end
+		table.clear(dirtyRows)
 		if dirty then
 			dirty = false
 			refreshHud()

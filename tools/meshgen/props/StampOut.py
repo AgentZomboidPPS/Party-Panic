@@ -49,7 +49,8 @@ def ink_pad():
     felt = rounded_box(27.0, 0.6, 17.0, 0.25).translate(0, 2.35, 0)
     lid = rounded_box(30.0, 1.0, 20.0, 0.5).translate(0, 0.5, -10.0).rotate("x", 100).translate(0, 2.2, 10.0)
     hinge = lathe([(0.0, -14.5), (0.5, -14.5), (0.5, 14.5), (0.0, 14.5)], 12).rotate("z", 90).translate(0, 2.3, 10.2)
-    return {"Tin": merge(tray, lid, hinge), "Felt": felt}
+    # Separate pieces, so each one's collision hull hugs it (one hull round tray + lid would fill the corner).
+    return {"Tin": tray, "Lid": lid, "Hinge": hinge, "Felt": felt}
 
 
 def pencil():
@@ -102,6 +103,8 @@ COLORS = {
     "Handle": (176, 120, 70),
     "Knob": (226, 40, 52),
     "Tin": (200, 50, 60),
+    "Lid": (200, 50, 60),
+    "Hinge": (200, 200, 210),
     "Felt": (70, 40, 120),
     "Body": (250, 196, 40),
     "Wood": (232, 196, 150),

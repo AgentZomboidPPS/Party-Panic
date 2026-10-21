@@ -74,8 +74,8 @@ return function(env)
 					s.HopAt = now + charge * StampGrid.CHARGE_TIME + 0.05
 					env.Action(player, "Charge")
 				else
-					-- A plain jump while walking: 0.55 s up and down, drifting 6 studs.
-					local up = 26
+					-- A plain jump while walking (a default Roblox jump: 0.5 s up and down), drifting 6 studs.
+					local up = 50
 					s.Kind, s.T0, s.Air, s.Up, s.Dir = "Jump", now, 2 * up / gravity, up, dir
 					s.Along = 6 / s.Air
 					if not StampGrid.OnPad(x + dir.X * 6, z + dir.Z * 6, 3) then

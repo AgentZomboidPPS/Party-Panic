@@ -11,7 +11,9 @@
 --     (x, z, radius) with Disc(), so both always agree cell for cell.
 --   * Each round participant gets an ink: a colour AND a symbol, so colour is never the only cue
 --     (owner's house rule). The 12 colours are picked to stay apart from each other and from the
---     cream paper; the symbols are plain text glyphs every Roblox font has.
+--     cream paper; the symbols are six filled shapes from the basic
+--     geometric-shapes block and six ASCII marks (no emoji-capable or rare glyphs: those draw as
+--     colour emoji or empty boxes on some phones).
 --   * A hop (the STAMP button) goes HOP_MIN..HOP_MAX studs forward depending on how long it was
 --     charged, in a fixed arc; a longer hop lands a bigger stamp. A plain jump stamps too (small).
 --
@@ -45,14 +47,14 @@ StampGrid.INKS = {
 	{ Name = "Blue", Color = Color3.fromRGB(36, 104, 236), Symbol = "●" },
 	{ Name = "Green", Color = Color3.fromRGB(34, 170, 64), Symbol = "▲" },
 	{ Name = "Yellow", Color = Color3.fromRGB(250, 200, 20), Symbol = "■" },
-	{ Name = "Purple", Color = Color3.fromRGB(132, 62, 206), Symbol = "♥" },
-	{ Name = "Orange", Color = Color3.fromRGB(250, 122, 24), Symbol = "♦" },
-	{ Name = "Cyan", Color = Color3.fromRGB(24, 196, 222), Symbol = "♣" },
-	{ Name = "Pink", Color = Color3.fromRGB(246, 96, 186), Symbol = "♠" },
-	{ Name = "Lime", Color = Color3.fromRGB(150, 222, 30), Symbol = "✚" },
-	{ Name = "Brown", Color = Color3.fromRGB(128, 76, 38), Symbol = "☀" },
-	{ Name = "Teal", Color = Color3.fromRGB(0, 120, 112), Symbol = "☾" },
-	{ Name = "Black", Color = Color3.fromRGB(42, 40, 52), Symbol = "✿" },
+	{ Name = "Purple", Color = Color3.fromRGB(132, 62, 206), Symbol = "◆" },
+	{ Name = "Orange", Color = Color3.fromRGB(250, 122, 24), Symbol = "▼" },
+	{ Name = "Cyan", Color = Color3.fromRGB(24, 196, 222), Symbol = "+" },
+	{ Name = "Pink", Color = Color3.fromRGB(246, 96, 186), Symbol = "X" },
+	{ Name = "Lime", Color = Color3.fromRGB(150, 222, 30), Symbol = "#" },
+	{ Name = "Brown", Color = Color3.fromRGB(128, 76, 38), Symbol = "=" },
+	{ Name = "Teal", Color = Color3.fromRGB(0, 120, 112), Symbol = "!" },
+	{ Name = "Black", Color = Color3.fromRGB(42, 40, 52), Symbol = "?" },
 }
 
 local ZERO = string.byte("0")

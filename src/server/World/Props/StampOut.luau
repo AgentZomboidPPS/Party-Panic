@@ -2,7 +2,7 @@
 -- approved the Fallback is used).
 --
 -- Collision ("nothing solid where nothing is drawn"): the desk props that collide (big stamps, ink
--- pad, pencils) are one MeshPart per piece, each piece a simple convex-ish solid, so their collision
+-- pad: tray, lid and hinge apart; pencils) are one MeshPart per piece, each piece a simple convex-ish solid, so their collision
 -- hugs what's drawn. The paper clips are thin wire loops whose collision hull would fill the loops,
 -- so they don't collide at all (they're 1 stud tall, lying flat). The rider stamp is carried by a
 -- character (MeshLibrary.Assemble: never collides).
@@ -40,14 +40,24 @@ return function(h)
 		},
 		StampOutInkPad = {
 			Height = 21.8,
-			AssetId = 123477075662278, -- tools/upload_assets.py --only StampOutInkPad fills this in
+			AssetId = 97418802985216, -- tools/upload_assets.py --only StampOutInkPad fills this in
 			Collide = true,
-			Palette = { Tin = h.rgb(200, 50, 60), Felt = h.rgb(70, 40, 120) },
-			Materials = { Tin = Enum.Material.Metal, Felt = Enum.Material.Fabric },
+			Palette = {
+				Tin = h.rgb(200, 50, 60),
+				Lid = h.rgb(200, 50, 60),
+				Hinge = h.rgb(200, 200, 210),
+				Felt = h.rgb(70, 40, 120),
+			},
+			Materials = {
+				Tin = Enum.Material.Metal,
+				Lid = Enum.Material.Metal,
+				Hinge = Enum.Material.Metal,
+				Felt = Enum.Material.Fabric,
+			},
 			Fallback = function(m)
 				h.rounded(m, "Tin", Vector3.new(30, 2.4, 20), 0.6, Vector3.new(0, 1.2, 0))
 				h.rounded(m, "Felt", Vector3.new(27, 0.6, 17), 0.25, Vector3.new(0, 2.35, 0))
-				local lid = h.block(m, "Tin", Vector3.new(30, 20, 1), Vector3.new(0, 12, 11.5))
+				local lid = h.block(m, "Lid", Vector3.new(30, 20, 1), Vector3.new(0, 12, 11.5))
 				lid.CFrame = CFrame.new(0, 12, 11.7) * CFrame.Angles(math.rad(-10), 0, 0)
 			end,
 		},
