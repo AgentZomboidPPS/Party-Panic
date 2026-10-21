@@ -408,12 +408,17 @@ function StampOut.Start(api)
 	end
 	refreshHud()
 
-	api:Hint("Every landing stamps! Hold STAMP for a big hop", y0 + 90)
-	task.delay(8, function()
-		if hud.Parent then
-			api:Hint("")
-		end
-	end)
+	-- The tip shows once this player can move (after the rules card and the 3-2-1), for a few seconds.
+	local hinted = false
+	local function hint()
+		hinted = true
+		api:Hint("Every landing stamps! Hold STAMP for a big hop", y0 + 90)
+		task.delay(7, function()
+			if hud.Parent then
+				api:Hint("")
+			end
+		end)
+	end
 
 	-- STAMP: charge and hop -------------------------------------------------------------------------
 	local button = api:Button({ Text = "STAMP", Key = Enum.KeyCode.E, Color = Theme.Colors.Pink })
@@ -519,6 +524,9 @@ function StampOut.Start(api)
 		if dirty then
 			dirty = false
 			refreshHud()
+		end
+		if not hinted and humanoid and humanoid.WalkSpeed > 0 and api:CanAct() then
+			hint()
 		end
 	end)
 end

@@ -91,7 +91,12 @@ return function(env)
 			for ink, cells in env.game.Counts or {} do
 				table.insert(parts, `{StampGrid.INKS[ink].Name}:{StampGrid.Percent(cells)}%`)
 			end
-			env.note(`t={math.floor(elapsed)} stamps={env.game.Stamps or 0} {table.concat(parts, " ")}`)
+			env.note(
+				`t={math.floor(elapsed)} stamps={env.game.Stamps or 0} hops={env.game.Hops or 0} {table.concat(
+					parts,
+					" "
+				)}`
+			)
 		end
 	end
 end

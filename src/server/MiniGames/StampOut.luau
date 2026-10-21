@@ -480,6 +480,7 @@ function StampOut:Start()
 		local timed = if started then (ctx:Now() - started) / StampGrid.CHARGE_TIME else 0
 		charge = math.clamp(math.min(charge, timed + 0.15 + ping * 2), 0, 1)
 		local distance, up, along, airtime, radius = StampGrid.Hop(charge, gravity)
+		self.Hops = (self.Hops or 0) + 1
 		local track = self.Track[player]
 		if track then
 			track.Hop = { At = ctx:Now(), Distance = distance, Radius = radius, Airtime = airtime }
