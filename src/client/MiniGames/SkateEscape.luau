@@ -24,6 +24,9 @@ local SkateEscape = {}
 local KICK_TIME = 0.32
 local CAMERA_BACK = 15
 local CAMERA_UP = 7
+local LAVA_DEPTH = 46 -- the lava river's surface below the deck (as the server builds it)
+local DECK_WIDTH = 100
+local START_BACK = 36 -- the start pad behind the line
 local rad = math.rad
 
 type Obstacle = SkateCourse.Obstacle
@@ -538,10 +541,23 @@ function SkateEscape.Start(api)
 			api:Effect("Fireworks", origin + Vector3.new(0, 26, -length - 6))
 		end
 	end)
+	-- A fallen skater ends in the lava with a splash (they respawn 1.2 s after falling, about when
+	-- they reach it).
+	local splashes: { { At: number, Position: Vector3 } } = {}
 	api:OnEvent("Out", function(key)
-		if key == myKey and not outAt then
-			outAt = api:Now()
-			me.Done = true
+		local fellAt = api:Now()
+		if key == myKey then
+			if not outAt then
+				outAt = fellAt
+				me.Done = true
+			end
+			fellAt = outAt :: number
+		end
+		local at = if key == myKey and myLane
+			then origin + Vector3.new(SkateCourse.LaneX(myLane, lanes), 0, -me.D)
+			else racerPosition(key)
+		if at then
+			table.insert(splashes, { At = fellAt + 1.1, Position = Vector3.new(at.X, origin.Y - LAVA_DEPTH, at.Z) })
 		end
 	end)
 
@@ -550,6 +566,9 @@ function SkateEscape.Start(api)
 	local pieces = {}
 	local added: { [Instance]: boolean } = {}
 	local arena = api:Arena()
+	local hot = Color3.fromRGB(255, 110, 50)
+	local startLamps: { [string]: { Part: BasePart, Color: Color3 } } = {}
+	local lampsGreen: boolean? = nil
 	local function addPiece(child: Instance)
 		if not child:IsA("Model") or not string.match(child.Name, "^Seg%d+$") then
 			return
@@ -559,11 +578,16 @@ function SkateEscape.Start(api)
 			return
 		end
 		added[child] = true
-		local planks = nil
+		-- The deck's surface parts (both plank tones, or the start pad) glow hot as the collapse nears.
+		local planks = {}
 		for _, part in child:GetDescendants() do
-			if part.Name == "Planks" or part.Name == "StartPad" then
-				planks = part
-				break
+			if part:IsA("BasePart") then
+				if part.Name == "Planks" or part.Name == "PlanksB" or part.Name == "StartPad" then
+					table.insert(planks, { Part = part, Color = part.Color })
+				elseif part.Name == "LampRed" or part.Name == "LampAmber" or part.Name == "LampGreen" then
+					startLamps[part.Name] = { Part = part, Color = part.Color }
+					lampsGreen = nil -- (re)light them on the next frame
+				end
 			end
 		end
 		table.insert(pieces, {
@@ -572,8 +596,8 @@ function SkateEscape.Start(api)
 			D0 = d0,
 			D1 = d1,
 			Planks = planks,
-			Color = planks and planks.Color,
 			State = "Still",
+			Cracked = false,
 			Splashed = false,
 		})
 	end
@@ -584,11 +608,142 @@ function SkateEscape.Start(api)
 		api:Track(arena.ChildAdded:Connect(addPiece))
 	end
 
-	local function updateBridge(now: number)
-		if not collapse then
+	-- The start lamps: red until GO, then green (the others dark).
+	local function setLamps(green: boolean)
+		if lampsGreen == green then
 			return
 		end
+		lampsGreen = green
+		for name, lamp in startLamps do
+			local lit = if name == "LampGreen" then green elseif name == "LampRed" then not green else false
+			lamp.Part.Material = if lit then Enum.Material.Neon else Enum.Material.SmoothPlastic
+			lamp.Part.Color = if lit then lamp.Color else lamp.Color:Lerp(Color3.new(0, 0, 0), 0.65)
+		end
+	end
+
+	-- The collapse front: a band of dust, sparks and lava glow riding along where the bridge is
+	-- giving way, so the danger behind the pack reads from anywhere (particles only with full effects).
+	local frontPart = Instance.new("Part")
+	frontPart.Name = "CollapseFront"
+	frontPart.Anchored = true
+	frontPart.CanCollide = false
+	frontPart.CanQuery = false
+	frontPart.CanTouch = false
+	frontPart.CastShadow = false
+	frontPart.Transparency = 1
+	frontPart.Size = Vector3.new(DECK_WIDTH, 1, 6)
+	frontPart.CFrame = CFrame.new(0, -1e4, 0)
+	frontPart.Parent = api.World
+	local frontGlow = Instance.new("PointLight")
+	frontGlow.Color = Color3.fromRGB(255, 110, 40)
+	frontGlow.Range = 40
+	frontGlow.Brightness = 2.5
+	frontGlow.Shadows = false
+	frontGlow.Parent = frontPart
+	local frontEmitters: { ParticleEmitter } = {}
+	if not reduced then
+		local dust = Instance.new("ParticleEmitter")
+		dust.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		dust.Color = ColorSequence.new(Color3.fromRGB(150, 110, 90), Color3.fromRGB(70, 56, 58))
+		dust.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.5),
+			NumberSequenceKeypoint.new(0.5, 0.7),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		dust.Size = NumberSequence.new(5, 14)
+		dust.Lifetime = NumberRange.new(1.6, 2.6)
+		dust.Speed = NumberRange.new(6, 12)
+		dust.SpreadAngle = Vector2.new(25, 25)
+		dust.Acceleration = Vector3.new(0, 4, 0)
+		dust.RotSpeed = NumberRange.new(-30, 30)
+		dust.EmissionDirection = Enum.NormalId.Top
+		dust.Rate = 14
+		dust.Enabled = false
+		dust.Parent = frontPart
+		local sparks = Instance.new("ParticleEmitter")
+		sparks.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		sparks.Color = ColorSequence.new(Color3.fromRGB(255, 210, 90), Color3.fromRGB(255, 100, 40))
+		sparks.LightEmission = 1
+		sparks.Size = NumberSequence.new(0.7, 0)
+		sparks.Lifetime = NumberRange.new(0.8, 1.4)
+		sparks.Speed = NumberRange.new(14, 24)
+		sparks.SpreadAngle = Vector2.new(35, 35)
+		sparks.Acceleration = Vector3.new(0, -30, 0)
+		sparks.EmissionDirection = Enum.NormalId.Top
+		sparks.Rate = 40
+		sparks.Enabled = false
+		sparks.Parent = frontPart
+		frontEmitters = { dust, sparks }
+	end
+	api:Track(function()
+		frontPart:Destroy()
+	end)
+
+	-- Sparks drifting up from the lava past both rails, wherever I am (full effects only).
+	local sparkParts: { { Part: BasePart, Side: number } } = {}
+	if not reduced then
+		for _, side in { -1, 1 } do
+			local part = Instance.new("Part")
+			part.Name = "LavaSparks"
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.CastShadow = false
+			part.Transparency = 1
+			part.Size = Vector3.new(70, 1, 140)
+			part.CFrame = CFrame.new(0, -1e4, 0)
+			local sparks = Instance.new("ParticleEmitter")
+			sparks.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+			sparks.Color = ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(255, 100, 40))
+			sparks.LightEmission = 1
+			sparks.Size = NumberSequence.new(0.6, 0)
+			sparks.Lifetime = NumberRange.new(4, 6)
+			sparks.Speed = NumberRange.new(9, 15)
+			sparks.SpreadAngle = Vector2.new(15, 15)
+			sparks.EmissionDirection = Enum.NormalId.Top
+			sparks.Rate = 10
+			sparks.Parent = part
+			part.Parent = api.World
+			table.insert(sparkParts, { Part = part, Side = side })
+		end
+	end
+	api:Track(function()
+		for _, spark in sparkParts do
+			spark.Part:Destroy()
+		end
+	end)
+
+	local function updateBridge(now: number)
+		for index = #splashes, 1, -1 do
+			local splash = splashes[index]
+			if now >= splash.At then
+				table.remove(splashes, index)
+				if (splash.Position - camera.CFrame.Position).Magnitude < 260 then
+					api:Effect("Poof", splash.Position, { Color3.fromRGB(255, 120, 40), Color3.fromRGB(255, 200, 80) })
+				end
+			end
+		end
+		if #sparkParts > 0 then
+			local z = camera.CFrame.Position.Z - 40
+			for _, spark in sparkParts do
+				spark.Part.CFrame = CFrame.new(origin.X + spark.Side * 90, origin.Y - 30, z)
+			end
+		end
+		if not collapse then
+			setLamps(false)
+			return
+		end
+		setLamps(now >= collapse.T0 - 5) -- the race starts (GO) five seconds before the collapse does
 		local front = SkateCourse.CollapseAt(collapse, now, length)
+		local crumbling = now >= collapse.T0 and front < length
+		frontPart.CFrame = if crumbling
+			then CFrame.new(origin + Vector3.new(0, -1, -math.max(front, -START_BACK)))
+			else CFrame.new(0, -1e4, 0)
+		frontGlow.Enabled = crumbling
+		for _, emitter in frontEmitters do
+			emitter.Enabled = crumbling
+		end
 		for _, piece in pieces do
 			if piece.State == "Gone" or front < piece.D0 - 32 then
 				continue
@@ -600,15 +755,25 @@ function SkateEscape.Start(api)
 				local heat = 1 - (piece.D0 - front) / 32
 				local jitter = heat * heat * 0.18
 				model:PivotTo(piece.Base * CFrame.new(math.sin(now * 53) * jitter, math.sin(now * 61) * jitter, 0))
-				if piece.Planks and piece.Color then
-					piece.Planks.Color = piece.Color:Lerp(Color3.fromRGB(255, 110, 50), heat * 0.6)
+				for _, plank in piece.Planks do
+					plank.Part.Color = plank.Color:Lerp(hot, heat * 0.6)
 				end
 				piece.State = "Warn"
 			elseif front < piece.D1 then
-				-- The back end gives way first, hinging on the front.
+				-- The back end gives way first, hinging on the front, with a puff of splinters.
 				local t = (front - piece.D0) / math.max(1, piece.D1 - piece.D0)
 				local tilt = CFrame.new(hinge) * CFrame.Angles(rad(28 * t), 0, 0) * CFrame.new(-hinge)
 				model:PivotTo(tilt * piece.Base)
+				if not piece.Cracked then
+					piece.Cracked = true
+					for _, plank in piece.Planks do
+						plank.Part.Color = plank.Color:Lerp(hot, 0.75)
+					end
+					local at = origin + Vector3.new(0, 0, -piece.D0)
+					if not reduced and (at - camera.CFrame.Position).Magnitude < 160 then
+						api:Effect("Poof", at, { Color3.fromRGB(150, 104, 70), Color3.fromRGB(255, 140, 60) })
+					end
+				end
 				piece.State = "Tilt"
 			else
 				local t = now - SkateCourse.CollapseTime(collapse, piece.D1)
@@ -617,14 +782,15 @@ function SkateEscape.Start(api)
 					* CFrame.Angles(rad(28 + t * 40), 0, rad(t * 8))
 					* CFrame.new(-hinge)
 				model:PivotTo(tilt * piece.Base)
-				if not piece.Splashed and drop > 30 then
+				if not piece.Splashed and drop > LAVA_DEPTH then
 					piece.Splashed = true
-					local at = origin + Vector3.new(0, -32, -(piece.D0 + piece.D1) / 2)
+					local at = origin + Vector3.new(0, -LAVA_DEPTH, -(piece.D0 + piece.D1) / 2)
 					if (at - camera.CFrame.Position).Magnitude < 220 then
 						api:Effect("Poof", at, { Color3.fromRGB(255, 120, 40), Color3.fromRGB(90, 70, 70) })
 					end
 				end
-				if drop > 90 then
+				-- Gone once even its pier's tower tops are under the lava.
+				if drop > LAVA_DEPTH + 80 then
 					model:PivotTo(piece.Base - Vector3.new(0, 400, 0))
 					piece.State = "Gone"
 				end
