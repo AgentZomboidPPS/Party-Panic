@@ -18,32 +18,34 @@ local MAX_CHECKED = 300
 local reported: { [string]: boolean } = {} -- content ids already checked on this device
 
 local function check(where: string)
-	local ids = {}
+	-- One MeshPart per mesh: PreloadAsync must get the part itself (a bare id string is loaded as an
+	-- image, which "fails" for every mesh).
+	local parts = {}
 	for _, descendant in workspace:GetDescendants() do
-		if #ids >= MAX_CHECKED then
+		if #parts >= MAX_CHECKED then
 			break
 		end
 		if descendant:IsA("MeshPart") then
 			local id = descendant.MeshId
 			if id ~= "" and not reported[id] then
 				reported[id] = true
-				table.insert(ids, id)
+				table.insert(parts, descendant)
 			end
 		end
 	end
-	if #ids == 0 then
+	if #parts == 0 then
 		return
 	end
 	local failed = {}
 	pcall(function()
-		ContentProvider:PreloadAsync(ids, function(id: string, status: Enum.AssetFetchStatus)
-			if status ~= Enum.AssetFetchStatus.Success then
+		ContentProvider:PreloadAsync(parts, function(id: string, status: Enum.AssetFetchStatus)
+			if status ~= Enum.AssetFetchStatus.Success and id ~= "" then
 				failed[id] = status.Name
 			end
 		end)
 	end)
 	Remotes.Get("ClientReport"):FireServer({
-		Checked = #ids,
+		Checked = #parts,
 		Failed = failed,
 		Where = where,
 		Touch = UserInputService.TouchEnabled,
