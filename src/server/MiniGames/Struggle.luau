@@ -55,6 +55,7 @@ local FENCE_X = Rules.FIELD_X + 2
 local FENCE_Z = Rules.FIELD_Z + 2
 local PANEL = 12 -- a fence panel's width (studs; the sides are whole numbers of panels)
 local SIGN = { Y = 10.6, W = 15.5, H = 6.2, Z = 0.62 } -- the scoreboard's lit face (its mesh, studs)
+local BOARD_SCALE = 1.3 -- the scoreboard is drawn this much bigger, so its face clears the fence
 local CHARGE_SPEED = 10 -- walk speed while charging
 local MAX_LAG = 0.4 -- the longest round trip we allow for
 local REWIND_CAP = 0.3 -- the furthest back a victim is judged
@@ -245,7 +246,7 @@ function Struggle:_buildArena()
 		Build.Decor({
 			Name = "Chalk",
 			Size = Vector3.new(0.4, 0.04, 1.4),
-			CFrame = CFrame.new(origin + Vector3.new(math.cos(angle) * 9, 0.07, math.sin(angle) * 9))
+			CFrame = CFrame.new(origin + Vector3.new(math.cos(angle) * 9, 0.085, math.sin(angle) * 9))
 				* CFrame.Angles(0, -angle, 0),
 			Color = chalk,
 			Transparency = 0.2,
@@ -275,6 +276,7 @@ function Struggle:_buildArena()
 	-- North: the scoreboard behind the fence, looking over it, flanked by banners.
 	local boardAt = origin + Vector3.new(0, 0, -FENCE_Z - 8)
 	local board = MeshLibrary.Get("StruggleScoreboard", {
+		Scale = BOARD_SCALE,
 		CFrame = CFrame.lookAt(boardAt, Vector3.new(origin.X, boardAt.Y, origin.Z)),
 		Parent = arena,
 	})
@@ -355,8 +357,8 @@ end
 function Struggle:_scoreboardSign(board: Model)
 	local holder = Build.Decor({
 		Name = "ScoreSign",
-		Size = Vector3.new(SIGN.W, SIGN.H, 0.05),
-		CFrame = board:GetPivot() * CFrame.new(0, SIGN.Y, -SIGN.Z),
+		Size = Vector3.new(SIGN.W, SIGN.H, 0.05) * BOARD_SCALE,
+		CFrame = board:GetPivot() * CFrame.new(0, SIGN.Y * BOARD_SCALE, -SIGN.Z * BOARD_SCALE),
 		Transparency = 1,
 		Parent = board,
 	})
