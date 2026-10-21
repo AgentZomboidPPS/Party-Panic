@@ -129,7 +129,9 @@ function RockinRaceway:_strip(
 	yaw: number?
 )
 	local origin = self.origin
-	local height = top + 0.06
+	-- (each kind sinks to its own depth, so buried bottoms never share a plane either)
+	local sink = if name == "Curb" then 0.14 elseif name == "Check" then 0.22 else 0.06
+	local height = top + sink
 	return Build.Decor({
 		Name = name,
 		Size = Vector3.new(size.X, height, size.Y),
@@ -221,11 +223,11 @@ function RockinRaceway:_buildArena()
 
 	-- The start / finish line: a checkered band across the home straight at d = 0.
 	local squares = Build.Folder("FinishLine", field)
-	local cell = 1.5
-	local rows = math.floor(half * 2 / cell)
+	local rows = 36
+	local cell = (half * 2 - 0.2) / rows -- (inset a little from the track's edges)
 	for row = 0, rows - 1 do
 		for column = 0, 1 do
-			local z = R - half + (row + 0.5) * cell
+			local z = R - half + 0.1 + (row + 0.5) * cell
 			local dark = (row + column) % 2 == 0
 			self:_strip(
 				squares,
