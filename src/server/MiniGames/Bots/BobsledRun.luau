@@ -1,5 +1,5 @@
 -- How bots play Bobsled Run (contract in Bots/Default.luau). A bot rides in its crew's sled and,
--- for each curve, waits for the lean window to open, then leans the curve's way after its own
+-- as soon as the next curve's window opens (its cue shows), leans the curve's way after its own
 -- reaction time (bot:Reaction(), quicker with skill), pressed through ctx:BotAction at that exact
 -- moment (ctx:Delay), so the server judges it like any rider's press. Clumsier bots now and then
 -- lean the wrong way, miss a curve or react too late; a skilled crew takes most curves clean, a
@@ -7,10 +7,6 @@
 --
 -- Hazard parity: there's nothing a client animates that a bot could dodge. Wall bumps come from the
 -- server's own judging of every crew's leans, and the server moves bots' characters with their sled.
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local BobsledCourse = require(ReplicatedStorage.Shared.Logic.BobsledCourse)
 
 local Brain = {}
 
@@ -25,11 +21,11 @@ function Brain.Step(bot, ctx, mode, _dt)
 	if not curve or memory.Planned == curve.Index then
 		return
 	end
-	-- Wait for the window (leaning earlier wouldn't count).
-	local secondsToCurve = (curve.D0 - sled.D) / math.max(sled.V, 1)
-	if secondsToCurve > BobsledCourse.OPEN then
+	-- Wait for the window (open from GO, then from the moment the last curve was judged).
+	if not sled.OpenAt then
 		return
 	end
+	local secondsToCurve = (curve.D0 - sled.D) / math.max(sled.V, 1)
 	memory.Planned = curve.Index
 	local skill = bot.Skill
 	local roll = bot.Rng:NextNumber()
@@ -40,20 +36,27 @@ function Brain.Step(bot, ctx, mode, _dt)
 		return -- didn't see it coming
 	end
 	local dir = curve.Dir
-	local delay = bot:Reaction() * 0.9
+	-- Reads the cue, then presses (a little slower when the curve is still far off).
+	local delay = bot:Reaction() * 0.9 + math.clamp(secondsToCurve - 2, 0, 1.5) * bot.Rng:NextNumber(0.2, 0.6)
 	if roll < wrong then
 		dir = -dir
 	elseif roll < late then
 		delay = secondsToCurve + 0.4 -- too late: the sled's already in the curve
 	end
 	delay = math.min(delay, secondsToCurve + 0.6)
+	-- A press that comes after the curve was judged is dropped: it mustn't count for the next one.
+	local function press(lean: number)
+		if sled.Next == curve.Index and not sled.Place then
+			ctx:BotAction(bot, "Lean", lean)
+		end
+	end
 	ctx:Delay(math.max(0, delay), function()
-		ctx:BotAction(bot, "Lean", dir)
+		press(dir)
 	end)
 	-- A wrong lean is sometimes corrected in time.
 	if dir ~= curve.Dir and bot:Chance(skill * 0.4) then
 		ctx:Delay(math.max(0, delay + 0.25 + bot.Rng:NextNumber(0, 0.25)), function()
-			ctx:BotAction(bot, "Lean", curve.Dir)
+			press(curve.Dir)
 		end)
 	end
 end

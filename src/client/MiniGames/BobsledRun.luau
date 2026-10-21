@@ -7,7 +7,9 @@
 -- the kickers; a "Curve" event slams it into the wall or sends it off with a boost. Every rider's
 -- character (players and bots, via api:CharacterOf) is set into its seat here each frame and posed
 -- sitting and leaning; your own character is moved for real, so the server sees you in your sled.
--- The next curve's arrow shows WARN seconds early and says LEAN when its window opens.
+-- The next curve's cue (LEAN LEFT! / LEAN RIGHT!) shows as soon as its window opens on the server
+-- (the sled's "O" time: at GO, then the moment the last curve was judged), in the same colour and
+-- shape as its button; before GO it previews the first curve, with the buttons off.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,6 +28,7 @@ local BobsledRun = {}
 local SHAPES = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
 local SEAT_Y = 1.9
 local LEAN_HOLD = 1.3 -- seconds a lean shows on a rider
+local LEFT_ARROW, RIGHT_ARROW = "◀", "▶"
 local rad = math.rad
 
 local JOINTS = {
@@ -456,22 +459,25 @@ function BobsledRun.Start(api)
 
 	-- Controls --------------------------------------------------------------------------------------
 
-	local left = api:Button({ Text = "◀ LEAN", Key = Enum.KeyCode.A, Color = Theme.Colors.Cyan, Slot = 2 })
-	local right = api:Button({ Text = "LEAN ▶", Key = Enum.KeyCode.D, Color = Theme.Colors.Orange, Slot = 1 })
+	-- (Plain < > in the buttons' font: its own triangles would turn into emoji boxes.)
+	local LEFT_COLOR, RIGHT_COLOR = Theme.Colors.Cyan, Theme.Colors.Orange
+	local left = api:Button({ Text = "< LEFT", Key = Enum.KeyCode.A, Color = LEFT_COLOR, Slot = 2 })
+	local right = api:Button({ Text = "RIGHT >", Key = Enum.KeyCode.D, Color = RIGHT_COLOR, Slot = 1 })
 	local lastPress = -math.huge
-	local earlyCurve = 0
 
-	local function windowState(): (BobsledCourse.Curve?, number?)
+	-- My sled's next curve, the seconds to it, and when its window opened (nil before GO).
+	local function windowState(): (BobsledCourse.Curve?, number?, number?)
 		local entry = myTeam and snapshot[myTeam]
 		local visual = myTeam and visuals[myTeam]
 		if not course or not entry or not visual or entry.F then
-			return nil, nil
+			return nil, nil, nil
 		end
 		local curve = course.Curves[entry.N or 1]
 		if not curve then
-			return nil, nil
+			return nil, nil, nil
 		end
-		return curve, (curve.D0 - visual.D) / math.max(visual.V, 8)
+		local opened = if type(entry.O) == "number" then entry.O else nil
+		return curve, (curve.D0 - visual.D) / math.max(visual.V, 8), opened
 	end
 
 	local function lean(dir: number)
@@ -486,11 +492,6 @@ function BobsledRun.Start(api)
 		api:Action("Lean", dir)
 		noteLean(myId, dir, now)
 		api:Sound("Click")
-		local curve, seconds = windowState()
-		if curve and seconds and seconds > BobsledCourse.OPEN + 0.05 and seconds < BobsledCourse.WARN + 0.5 then
-			earlyCurve = curve.Index
-			say("TOO EARLY! Wait for LEAN", Theme.Colors.Yellow, 1.1)
-		end
 	end
 	left.Pressed:Connect(function()
 		lean(-1)
@@ -502,9 +503,10 @@ function BobsledRun.Start(api)
 		if processed then
 			return
 		end
-		if input.KeyCode == Enum.KeyCode.Left then
+		local key = input.KeyCode
+		if key == Enum.KeyCode.Left or key == Enum.KeyCode.ButtonL1 or key == Enum.KeyCode.DPadLeft then
 			lean(-1)
-		elseif input.KeyCode == Enum.KeyCode.Right then
+		elseif key == Enum.KeyCode.Right or key == Enum.KeyCode.ButtonR1 or key == Enum.KeyCode.DPadRight then
 			lean(1)
 		end
 	end))
@@ -662,7 +664,7 @@ function BobsledRun.Start(api)
 
 	local hintUntil = 0
 	local lastPlace = ""
-	local cueMode = ""
+	local cueKey = ""
 	local leanEnabled = nil :: boolean?
 	local spraySet: { [string]: number } = {}
 	local rowMarkers: { { any } } = { {}, {} }
@@ -831,20 +833,20 @@ function BobsledRun.Start(api)
 			releaseCamera()
 		end
 
-		-- The next curve's cue.
-		local curve, seconds = windowState()
+		-- The next curve's cue: redrawn for every new curve (two curves can follow each other with
+		-- the cue never hiding in between).
+		local curve, seconds, opened = windowState()
 		local mode = ""
-		if curve and seconds and seconds <= BobsledCourse.WARN and api:Alive() then
-			mode = if seconds <= BobsledCourse.OPEN then "Lean" else "Ready"
-			if curve.D0 <= (mine and mine.D or 0) then
-				mode = "Lean" -- in the curve, waiting for the judging
-			end
+		if curve and seconds and api:Alive() then
+			mode = if opened then "Lean" else "Ready"
 		end
-		if mode ~= cueMode then
-			cueMode = mode
+		local key = if curve and mode ~= "" then `{mode}:{curve.Index}` else ""
+		local dirColor = if curve and curve.Dir < 0 then LEFT_COLOR else RIGHT_COLOR
+		if key ~= cueKey then
+			cueKey = key
 			cue.Visible = mode ~= ""
 			if curve and mode ~= "" then
-				local glyph = if curve.Dir < 0 then "◀" else "▶"
+				local glyph = if curve.Dir < 0 then LEFT_ARROW else RIGHT_ARROW
 				arrow.Text = glyph
 				arrow2.Text = glyph
 				local word = if curve.Dir < 0 then "LEFT" else "RIGHT"
@@ -855,24 +857,19 @@ function BobsledRun.Start(api)
 					UIKit.PopIn(cue, 0.2)
 				else
 					cueText.Text = `{word} CURVE`
-					timingFill.BackgroundColor3 = Theme.Colors.Cyan
+					timingFill.BackgroundColor3 = Theme.Colors.TextDim
 				end
 			end
 		end
 		if cue.Visible and seconds then
 			local fill = math.clamp(1 - seconds / BobsledCourse.WARN, 0, 1)
 			timingFill.Size = UDim2.fromScale(fill, 1)
-			local hot = cueMode == "Lean"
+			local hot = mode == "Lean"
 			local pulse = if hot then 0.5 + 0.5 * math.sin(os.clock() * 14) else 0
-			local color = if hot
-				then Color3.fromRGB(255, 255, 255):Lerp(Theme.Colors.Yellow, pulse)
-				else Theme.Colors.TextDim
+			local color = if hot then dirColor:Lerp(Color3.new(1, 1, 1), pulse * 0.55) else Theme.Colors.TextDim
 			arrow.TextColor3 = color
 			arrow2.TextColor3 = color
-			cueText.TextColor3 = if hot then Theme.Colors.Yellow else Theme.Colors.Text
-			if hot and earlyCurve == (curve and curve.Index) and leanOf(myId, now) == 0 then
-				cueText.Text = if curve and curve.Dir < 0 then "AGAIN: LEFT!" else "AGAIN: RIGHT!"
-			end
+			cueText.TextColor3 = if hot then dirColor else Theme.Colors.TextDim
 		end
 
 		-- My crew's leans.
@@ -885,7 +882,9 @@ function BobsledRun.Start(api)
 		local crewText = ""
 		if myInfo and #(myInfo.R or {}) > 1 then
 			for index, userId in myInfo.R do
-				local dir = leanOf(userId, now)
+				-- Only a lean made since this curve's window opened counts (and shows).
+				local seen = leans[userId]
+				local dir = if opened and seen and seen.At > opened then seen.Dir else 0
 				local pip = pips[index]
 				if not pip then
 					pip = UIKit.Label({
@@ -902,10 +901,15 @@ function BobsledRun.Start(api)
 					})
 					pips[index] = pip
 				end
-				local glyph = if dir < 0 then "◀" elseif dir > 0 then "▶" else "•"
+				local glyph = if dir < 0 then LEFT_ARROW elseif dir > 0 then RIGHT_ARROW else "•"
 				crewText ..= glyph
 				pip.Text = glyph
-				pip.TextColor3 = if userId == myId then Theme.Colors.Yellow else Theme.Colors.Text
+				pip.TextColor3 = if dir < 0
+					then LEFT_COLOR
+					elseif dir > 0 then RIGHT_COLOR
+					elseif userId == myId then Theme.Colors.Yellow
+					else Theme.Colors.Text
+				pip.BackgroundColor3 = if userId == myId then Theme.Colors.PanelLight else Theme.Colors.PanelDark
 				pip.Visible = true
 			end
 			for index = #myInfo.R + 1, #pips do
@@ -924,8 +928,8 @@ function BobsledRun.Start(api)
 			hintUntil = os.clock() + 7
 			api:Hint(
 				if touch
-					then "Lean with your crew on each ◀ ▶"
-					else "Lean with your crew: ◀ A / D ▶ when the arrow says",
+					then "Tap the curve's way before it, all together!"
+					else "Press the curve's way (A / D) before it, all together!",
 				hudY + barHeight + 180
 			)
 		elseif hintUntil > 0 and os.clock() > hintUntil then
@@ -947,7 +951,7 @@ function BobsledRun.Start(api)
 			placeLabel.Text = place
 		end
 		local entry = myTeam and snapshot[myTeam]
-		local canLean = myTeam ~= nil and entry ~= nil and not entry.F and api:Alive()
+		local canLean = myTeam ~= nil and entry ~= nil and not entry.F and entry.O ~= nil and api:Alive()
 		if canLean ~= leanEnabled then
 			leanEnabled = canLean
 			left:SetEnabled(canLean)

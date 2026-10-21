@@ -6,10 +6,12 @@
 --
 -- The players split into 2-4 sleds (Teams.CountFor, 1-4 riders each) racing side by side in their own
 -- lanes down one wide ice channel with banked curves, kickers that throw the sleds into the air and a
--- finish arch. A curve counts the crew's leans from OPEN seconds before it until the sled enters
--- it (plus the riders' ping): score = (right - wrong) / riders, so a short crew's leans count for
--- more and uneven teams are fair. Score >= CLEAN takes it clean, >= HALF scrapes, else it's a bump.
--- Ends when every sled is home (or time runs out: finish order first, then distance).
+-- finish arch. As soon as a curve is judged, the next one's cue shows (LEAN RIGHT!) and its window
+-- opens: each rider's last lean from then until the sled enters the curve (plus the riders' ping)
+-- counts, once. The crew takes it clean when no more riders missed than the round allows (the same
+-- number for every sled, so a 3 v 2 split is fair: BobsledCourse.Judge), else scrapes or bumps.
+-- The first sled home starts an 8 s finish clock; the round ends when it runs out or every sled is
+-- home (finish order first, then distance).
 --
 -- How it works: the course is a string of fixed track pieces (Shared/Logic/BobsledCourse) that the
 -- server and clients both turn into the same path, so the curve "schedule" is just the course: a
@@ -39,6 +41,7 @@ BobsledRun.Shapes = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
 
 local SEAT_Y = 1.9 -- a seated rider's root above the sled's pivot (runner bottoms)
 local PRE_UNITS = 3 -- straights behind the start line (the start house)
+local FINISH_CLOCK = 8 -- seconds the finish stays open after the first sled is home
 
 local rng = Random.new()
 
@@ -50,7 +53,7 @@ type Sled = {
 	D: number,
 	V: number,
 	Next: number, -- the next curve to judge
-	OpenAt: number?,
+	OpenAt: number?, -- when the next curve's window opened (leans after it count)
 	EnterAt: number?,
 	JudgeAt: number?,
 	Place: number?,
@@ -385,6 +388,11 @@ function BobsledRun:Prepare()
 	self.sleds = {} :: { [string]: Sled }
 	self.riders = {} :: { [any]: Rider }
 	self.finished = 0
+	local maxCrew = 1
+	for _, team in names do
+		maxCrew = math.max(maxCrew, #(teams[team] or {}))
+	end
+	self.maxCrew = maxCrew
 	local shared = {}
 	for index, team in names do
 		local sled: Sled = {
@@ -473,6 +481,15 @@ end
 function BobsledRun:Start()
 	local ctx = self.context
 	self.startAt = ctx:Now()
+	-- Riders whose character never loaded aren't in the round: they don't ride (or count).
+	for player in table.clone(self.riders) do
+		if not ctx:State(player) then
+			self:_leave(player)
+		end
+	end
+	for _, team in self.order do
+		self.sleds[team].OpenAt = self.startAt -- the first curve's window opens at GO
+	end
 	for _, player in ctx:GetPlayers() do
 		if not self.riders[player] then
 			continue
@@ -514,16 +531,16 @@ end
 -- The crew's leans for a curve: right ones, wrong ones, and the riders counted.
 function BobsledRun:_crewScore(sled: Sled, curve: BobsledCourse.Curve): (number, number, number)
 	local right, wrong, count = 0, 0, 0
-	local from = (sled.OpenAt or 0) - 0.05
+	local from = sled.OpenAt or math.huge
 	local to = sled.JudgeAt or math.huge
 	for _, player in sled.Riders do
 		local rider = self.riders[player]
-		if not rider then
+		if not rider or not self.context:State(player) then
 			continue
 		end
 		count += 1
 		rider.Seen += 1
-		if rider.LeanAt >= from and rider.LeanAt <= to then
+		if rider.LeanAt > from and rider.LeanAt <= to then
 			if rider.Lean == curve.Dir then
 				right += 1
 				rider.Good += 1
@@ -538,8 +555,8 @@ end
 function BobsledRun:_judge(sled: Sled, curve: BobsledCourse.Curve)
 	local ctx = self.context
 	local right, wrong, count = self:_crewScore(sled, curve)
-	local score = if count > 0 then (right - wrong) / count else 0
-	local kind, speed = BobsledCourse.Judge(score, sled.V)
+	local allowed = BobsledCourse.AllowedMisses(self.maxCrew or 1, count)
+	local kind, speed = BobsledCourse.Judge(right, wrong, count, allowed, sled.V)
 	sled.V = speed
 	if kind == "Clean" then
 		sled.Clean += 1
@@ -548,7 +565,9 @@ function BobsledRun:_judge(sled: Sled, curve: BobsledCourse.Curve)
 	end
 	ctx:Fire(nil, "Curve", sled.Team, curve.Index, kind, right, count)
 	sled.Next += 1
-	sled.OpenAt, sled.EnterAt, sled.JudgeAt = nil, nil, nil
+	-- The next curve's window opens right where this one's closed: every lean counts exactly once.
+	sled.OpenAt = sled.JudgeAt
+	sled.EnterAt, sled.JudgeAt = nil, nil
 end
 
 function BobsledRun:_tick(dt: number, now: number)
@@ -575,9 +594,6 @@ function BobsledRun:_tick(dt: number, now: number)
 		sled.D += sled.V * dt
 		local curve = course.Curves[sled.Next]
 		if curve then
-			if not sled.OpenAt and (curve.D0 - sled.D) <= BobsledCourse.OPEN * math.max(sled.V, 1) then
-				sled.OpenAt = now
-			end
 			if sled.D >= curve.D0 and not sled.EnterAt then
 				-- In the curve: wait out the crew's ping before judging, so a press made in time on a
 				-- laggy phone still counts.
@@ -587,7 +603,6 @@ function BobsledRun:_tick(dt: number, now: number)
 				end
 				sled.EnterAt = now
 				sled.JudgeAt = now + leeway
-				sled.OpenAt = sled.OpenAt or now
 			end
 			if sled.JudgeAt and now >= sled.JudgeAt then
 				self:_judge(sled, curve)
@@ -612,7 +627,14 @@ function BobsledRun:_tick(dt: number, now: number)
 		if sled.Place == 1 then
 			ctx:Announce(`{BobsledRun.Shapes[sled.Team] or ""} {string.upper(sled.Team)} WINS THE RUN!`, "success", 3)
 			ctx:Sound("Victory")
+			self.closeAt = now + FINISH_CLOCK
 		end
+	end
+	-- The finish closes FINISH_CLOCK seconds after the winner: nobody waits long on the runout.
+	if self.closeAt and now >= self.closeAt and not everyoneHome and not self.ending then
+		self.ending = true
+		ctx:End("FinishClosed")
+		return
 	end
 	if everyoneHome and not self.ending then
 		self.ending = true
@@ -652,6 +674,7 @@ function BobsledRun:_share()
 			T = round(now, 0.001),
 			N = sled.Next,
 			F = sled.Place,
+			O = sled.OpenAt and round(sled.OpenAt, 0.001),
 			Tm = sled.Time and round(sled.Time, 0.01),
 			G = if sled.Gone then 1 else nil,
 			L = leans,
@@ -677,8 +700,9 @@ function BobsledRun:_share()
 		local status = if best
 			then `{BobsledRun.Shapes[best] or ""} {string.upper(best)} {if home > 0 then "WON" else "LEADS"}`
 			else ""
-		if home > 0 and home < #self.order then
-			status ..= `  •  🏁 {home} home`
+		if home > 0 and self.closeAt and not self.ending then
+			local left = math.max(0, math.ceil(self.closeAt - now))
+			status = `{status}  •  🏁 FINISH CLOSES IN {left}`
 		end
 		if status ~= self.status then
 			self.status = status

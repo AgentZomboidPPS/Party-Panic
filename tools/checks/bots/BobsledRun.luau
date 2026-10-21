@@ -1,12 +1,11 @@
 -- Test bot for Bobsled Run (tools/checks/round_harness.py): every stand-in player leans the next
--- curve's way once its window opens, through the same action a client sends. The first ones lean
+-- curve's way about a second before it, through the same action a client sends. The first ones lean
 -- well; later ones are sloppier (wrong way, late or not at all), so crews take some curves clean
 -- and bump others. No physics here, so their rigs are put in their seats (the stand-in client, Bot1,
--- seats its own from the client half). With 4 or more, one rider leaves mid-run.
+-- seats its own from the client half). With 2 or more, one rider leaves mid-run.
 return function(env)
 	local ctx = env.ctx
 	local mode = env.game
-	local BobsledCourse = __require("Shared/Logic/BobsledCourse") -- the harness bundle's module loader
 	local planned = {}
 	local leans, results, reported = 0, {}, {}
 	return function(elapsed)
@@ -19,9 +18,9 @@ return function(env)
 			end
 			local skill = math.clamp(1 - index * 0.07, 0.2, 0.95)
 			local curve = mode.course.Curves[sled.Next]
-			if curve and mode.startAt and not sled.Place and planned[player] ~= curve.Index then
+			if curve and sled.OpenAt and not sled.Place and planned[player] ~= curve.Index then
 				local seconds = (curve.D0 - sled.D) / math.max(sled.V, 1)
-				if seconds <= BobsledCourse.OPEN - 0.25 then
+				if seconds <= 1 then
 					planned[player] = curve.Index
 					local roll = env.rng:NextNumber()
 					if roll < skill then
@@ -50,7 +49,7 @@ return function(env)
 			end
 			results[team] = `{team}:{math.floor(sled.D)}@{math.floor(sled.V)} c{sled.Clean}/b{sled.Bumps}`
 		end
-		if elapsed > 9 and #env.players >= 4 and not env.left then
+		if elapsed > 9 and #env.players >= 2 and not env.left then
 			local leaver = env.players[#env.players]
 			env.left = leaver
 			env.note(`{leaver.Name} leaves (team {tostring(leaver:GetAttribute("PP_Team"))})`)
