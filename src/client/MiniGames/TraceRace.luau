@@ -284,13 +284,13 @@ function TraceRace.Start(api)
 	-- HUD -----------------------------------------------------------------------------------------------
 	local hud = api:TopHud()
 	local hudY = api:HudY()
-	local hintY = hudY + (if touch then 80 else 94)
-	local panelW = if touch then 250 else 300
+	local hintY = hudY + 108
+	local panelW = 340
 	local panel = UIKit.Panel({
 		Name = "TraceRacePanel",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, hudY),
-		Size = UDim2.fromOffset(panelW, if touch then 74 else 86),
+		Size = UDim2.fromOffset(panelW, 100),
 		BackgroundTransparency = 0.1,
 		Visible = playing,
 		Parent = hud,
@@ -299,10 +299,10 @@ function TraceRace.Start(api)
 		Name = "Accuracy",
 		Text = "100%",
 		Font = Theme.Fonts.Display,
-		TextSize = if touch then 34 else 40,
+		TextSize = 46,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(14, 4),
-		Size = UDim2.new(0.5, -14, 0, if touch then 40 else 46),
+		Size = UDim2.new(0.42, -14, 0, 52),
 		Parent = panel,
 		Children = { UIKit.TextStroke(0.3) },
 	})
@@ -310,18 +310,18 @@ function TraceRace.Start(api)
 		Name = "OnLine",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = if touch then 20 else 24,
+		TextSize = 28,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		Position = UDim2.new(0.5, 0, 0, 6),
-		Size = UDim2.new(0.5, -14, 0, if touch then 36 else 42),
+		Position = UDim2.new(0.42, 0, 0, 10),
+		Size = UDim2.new(0.58, -14, 0, 40),
 		Parent = panel,
 		Children = { UIKit.TextStroke(0.3) },
 	})
 	local track = UIKit.new("Frame", {
 		Name = "Progress",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.new(1, -28, 0, 12),
+		Position = UDim2.new(0.5, 0, 1, -14),
+		Size = UDim2.new(1, -44, 0, 16),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		BorderSizePixel = 0,
 		Parent = panel,
@@ -336,10 +336,10 @@ function TraceRace.Start(api)
 	UIKit.Label({
 		Name = "Flag",
 		Text = "🏁",
-		TextSize = 18,
+		TextSize = 26,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.fromOffset(22, 22),
+		Size = UDim2.fromOffset(30, 30),
 		Parent = track,
 	})
 	-- The arrow towards the guide when you drift off it (shape and word, not just colour).
@@ -347,25 +347,27 @@ function TraceRace.Start(api)
 		Name = "Steer",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = if touch then 30 else 36,
+		TextSize = 34,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, hintY),
-		Size = UDim2.fromOffset(260, 40),
+		Size = UDim2.fromOffset(340, 44),
 		Visible = false,
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.15) },
 	})
 
+	local hintUntil = 0 -- the steering arrow waits while the opening hint shows (same spot)
 	if playing then
+		hintUntil = os.clock() + 5
 		api:Hint(
 			if touch
 				then "Steer with the MOVE stick: stay on the dotted line!"
 				else "Steer with A / D: stay on the dotted line!",
 			hintY
 		)
-		task.delay(5, function()
+		api:Track(task.delay(5, function()
 			api:Hint("")
-		end)
+		end))
 	end
 
 	local finalShown = false
@@ -559,23 +561,23 @@ function TraceRace.Start(api)
 				if key ~= lastState then
 					lastState = key
 					if key == "On" then
-						state.Text = "✓ ON THE LINE"
+						state.Text = "✅ ON LINE"
 						state.TextColor3 = Theme.Colors.Green
 					elseif key == "Close" then
-						state.Text = "~ CLOSE"
+						state.Text = "⚠️ CLOSE"
 						state.TextColor3 = Theme.Colors.Yellow
 					elseif key == "Off" then
-						state.Text = "✗ OFF!"
+						state.Text = "❌ OFF!"
 						state.TextColor3 = Theme.Colors.Red
 					else
-						state.Text = "🏁 FINISHED"
+						state.Text = "🏁 DONE"
 						state.TextColor3 = Theme.Colors.Text
 					end
 				end
 				local guide = Rules.GuideAt(course, s + Rules.SPEED * 0.15)
-				if key == "Off" or (key == "Close" and math.abs(guide - myX) > 1.6) then
+				if os.clock() >= hintUntil and (key == "Off" or (key == "Close" and math.abs(guide - myX) > 1.6)) then
 					steer.Visible = true
-					steer.Text = if guide < myX then "◀◀ STEER LEFT" else "STEER RIGHT ▶▶"
+					steer.Text = if guide < myX then "⬅️ STEER LEFT" else "STEER RIGHT ➡️"
 					steer.TextColor3 = if key == "Off" then Theme.Colors.Red else Theme.Colors.Yellow
 				else
 					steer.Visible = false
