@@ -237,7 +237,7 @@ local function __service(name)
 	return __shims[name] or game:GetService(name)
 end
 
-local __remotes, __sent = {}, {}
+local __remotes, __sent, __soundReports = {}, {}, {}
 local __RemotesShim = {
 	Get = function(name)
 		if not __remotes[name] then
@@ -245,8 +245,11 @@ local __RemotesShim = {
 			__remotes[name] = {
 				Name = name,
 				OnClientEvent = bindable.Event,
-				FireServer = function(_, ...)
+				FireServer = function(_, first, ...)
 					table.insert(__sent, name)
+					if name == "ClientReport" and type(first) == "table" and first.Kind == "Sound" then
+						table.insert(__soundReports, first)
+					end
 				end,
 				__bindable = bindable,
 			}
@@ -382,7 +385,7 @@ local order = {
 	"AudioController", "NotificationController", "EffectsController", "AmbienceController",
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
-	"EmoteController", "SpectateController", "OnboardingController",
+	"EmoteController", "SpectateController", "OnboardingController", "AssetReportController",
 }
 -- The ScreenGuis, made with init.client.luau's own properties (see screen_guis() in the script).
 local context = {}
@@ -871,6 +874,7 @@ return game:GetService("HttpService"):JSONEncode({
 	errors = __errors,
 	startMs = startTimes,
 	sentToServer = __sent,
+	soundReports = __soundReports,
 	guiInstances = guiCount,
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,

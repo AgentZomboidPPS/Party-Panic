@@ -159,6 +159,20 @@ local function refreshVolume(time: number?)
 	end
 end
 
+-- What this device's music is doing right now, for the sound report (AssetReportController).
+function AudioController.Status(): { [string]: any }
+	local sound = currentSound
+	return {
+		Track = if sound then sound.Name else "none",
+		Loaded = sound ~= nil and sound.IsLoaded,
+		Playing = sound ~= nil and sound.IsPlaying,
+		Time = if sound then sound.TimePosition else 0,
+		Volume = if sound then sound.Volume else 0,
+		Loudness = if sound then sound.PlaybackLoudness else 0,
+		Level = playerLevel(),
+	}
+end
+
 function AudioController.Start(_context)
 	local function effectVolume(name: string): number
 		return if name == "Click" or name == "VoteClick" then 0.4 else 0.6

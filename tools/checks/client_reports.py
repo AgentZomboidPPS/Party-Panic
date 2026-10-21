@@ -1,5 +1,6 @@
-"""Shows which uploaded meshes players' devices couldn't load (Services/ClientReports records them
-in the PP_ClientReports data store; this reads it on a Roblox test server).
+"""Shows which uploaded meshes and sounds players' devices couldn't load, and whether the music
+really plays for them (Services/ClientReports records them in the PP_ClientReports data store;
+this reads it on a Roblox test server).
 
     python3 tools/checks/client_reports.py
 """
@@ -42,6 +43,13 @@ for key, entry in sorted(reports.items(), key=lambda item: -(item[1] or {}).get(
         print(key, entry)
         continue
     failed = entry.get("Failed") or {}
-    print(f"{key}: {len(failed)} of {entry.get('Checked')} meshes failed ({entry.get('Where')}, touch={entry.get('Touch')}, place v{entry.get('PlaceVersion')})")
+    if entry.get("Kind") == "Sound":
+        music = entry.get("Music") or {}
+        print(f"{key}: {len(failed)} of {entry.get('Checked')} sounds failed ({entry.get('Where')}, touch={entry.get('Touch')}, place v{entry.get('PlaceVersion')})")
+        print(f"    music {music.get('Track')}: loaded={music.get('Loaded')} playing={music.get('Playing')} at {music.get('Time')} s, "
+              f"volume {music.get('Volume')}, loudness {music.get('Loudness')} (silent = 0), music setting {music.get('Level')}, "
+              f"Roblox volume {entry.get('Master')}")
+    else:
+        print(f"{key}: {len(failed)} of {entry.get('Checked')} meshes failed ({entry.get('Where')}, touch={entry.get('Touch')}, place v{entry.get('PlaceVersion')})")
     for content, status in list(failed.items())[:20]:
         print(f"    {content}  {status}")
