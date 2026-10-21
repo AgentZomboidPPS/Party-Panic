@@ -269,6 +269,11 @@ function SandSwirl.Detour(px: number, pz: number, ax: number, az: number, keepOu
 	if cx * cx + cz * cz >= (keepOut - 0.05) ^ 2 then
 		return ax, az
 	end
+	-- Dragged a little inside the ring with the aim a step away and no nearer the middle (the way
+	-- there only leads outward): straight there, no swing out round the hole and back.
+	if k == 0 and length < SandSwirl.DETOUR_STEP ^ 2 then
+		return ax, az
+	end
 	local pr = math.max(0.01, math.sqrt(px * px + pz * pz))
 	-- (turning the shorter way round: the aim's side of the line through the middle)
 	local side = if px * az - pz * ax >= 0 then 1 else -1

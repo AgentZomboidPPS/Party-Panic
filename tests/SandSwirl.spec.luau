@@ -162,4 +162,11 @@ test("SandSwirl.Detour walks round the hole, never across it", function()
 	local ex, ez = SandSwirl.Detour(12, 0, 6, 0, keepOut)
 	near(ex, keepOut, 1e-9, "edge x")
 	near(ez, 0, 1e-9, "edge z")
+
+	-- Dragged a little inside the ring while waiting at its edge for treasure deeper in: straight
+	-- back to the spot on the edge, not a swing out and round.
+	local wx, wz = SandSwirl.Detour(7.8, 0, 6, 0.5, keepOut)
+	local wr = math.sqrt(6 ^ 2 + 0.5 ^ 2)
+	near(wx, 6 / wr * keepOut, 1e-9, "edge spot x")
+	near(wz, 0.5 / wr * keepOut, 1e-9, "edge spot z")
 end)
