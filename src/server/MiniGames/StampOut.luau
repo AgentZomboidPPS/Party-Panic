@@ -524,7 +524,8 @@ function StampOut:Start()
 			ctx:SetShared("Grid", StampGrid.Encode(self.Owners))
 			local bestInk, best = nil, 0
 			for ink, cells in self.Counts do
-				if cells > best then
+				local owner = self.PlayerOf[ink]
+				if cells > best and owner and ctx:State(owner) then -- (not someone who left)
 					bestInk, best = ink, cells
 				end
 			end
