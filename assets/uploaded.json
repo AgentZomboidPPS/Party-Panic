@@ -26,5 +26,8 @@
   "mesh:DiceBlock": 91165959902187,
   "mesh:Fruit": 75895782098920,
   "mesh:HoneyTree": 100851779929285,
-  "mesh:Honeycomb": 75888068398114
+  "mesh:Honeycomb": 75888068398114,
+  "mesh:BumperBallBands": 124794818084464,
+  "mesh:BumperBallDots": 124123644253149,
+  "mesh:BumperBallGores": 101756819052049
 }

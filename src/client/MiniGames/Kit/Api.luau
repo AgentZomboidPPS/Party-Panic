@@ -469,6 +469,7 @@ function Api.Tilt(self: Api): Tilt?
 	local right = Vector3.new(1, 0, 0)
 	local up = Vector3.new(0, 1, 0)
 	local flip = 1
+	local known = false -- the axes have been read from a tilted phone at least once
 
 	local function gravity(): Vector3
 		local ok, input = pcall(UserInputService.GetDeviceGravity, UserInputService)
@@ -487,7 +488,24 @@ function Api.Tilt(self: Api): Tilt?
 		-- "Up" on the screen points away from where gravity pulls within the screen plane.
 		local flat = Vector2.new(-neutral.X, -neutral.Y)
 		if flat.Magnitude < 0.25 then
-			flat = Vector2.new(0, 1) -- phone held nearly flat: assume portrait axes
+			-- Phone held nearly flat: the grip can't be read from gravity. Keep the axes from the
+			-- last calibration that could; failing that, go by the screen's shape and orientation.
+			if known then
+				return
+			end
+			local camera = workspace.CurrentCamera
+			local viewport = if camera then camera.ViewportSize else Vector2.new(16, 9)
+			if viewport.X > viewport.Y then
+				local playerGui = Players.LocalPlayer and Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+				local orientation = playerGui and playerGui.CurrentScreenOrientation
+				flat = if orientation == Enum.ScreenOrientation.LandscapeRight
+					then Vector2.new(-1, 0)
+					else Vector2.new(1, 0)
+			else
+				flat = Vector2.new(0, 1)
+			end
+		else
+			known = true
 		end
 		flat = flat.Unit
 		up = Vector3.new(flat.X, flat.Y, 0)
@@ -498,13 +516,12 @@ function Api.Tilt(self: Api): Tilt?
 		local x = delta:Dot(right) * flip
 		local y = delta:Dot(up)
 		local value = Vector2.new(x, y) / 0.35 -- about 20 degrees of tilt is full speed
-		if value.Magnitude < 0.12 then
+		local magnitude = value.Magnitude
+		if magnitude < 0.25 then -- about 5 degrees: a hand holding still doesn't drift
 			return Vector2.zero
 		end
-		if value.Magnitude > 1 then
-			value = value.Unit
-		end
-		return value
+		-- Speed ramps up from the edge of the dead zone, so there's no jump when tilt kicks in.
+		return value.Unit * math.min(1, (magnitude - 0.25) / 0.65)
 	end
 	function tilt.Flip(_tilt)
 		flip = -flip
