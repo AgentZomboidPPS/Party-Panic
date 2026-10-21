@@ -26,7 +26,8 @@
 -- rolling. When a round takes you, the game ends at once on this device (before the round's own
 -- camera and controls start), and while you play the camera is held on your lane every frame, so
 -- nothing else (a round's clean-up after you were knocked out) can pull it away; the move controls
--- are put away again after each phase change for the same reason.
+-- are put away again after each phase change for the same reason. The next machine's "Play
+-- SKEE-BALL" prompt (within reach of your spot) stays off your screen while you play.
 
 local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
@@ -137,6 +138,7 @@ type Machine = {
 	Frame: CFrame,
 	Color: Color3,
 	Screen: BasePart?,
+	Prompt: ProximityPrompt?,
 	Draw: (() -> ())?,
 	Bulbs: { { BasePart } },
 	BulbColors: { [BasePart]: Color3 },
@@ -765,6 +767,7 @@ local function addMachine(model: Instance)
 		Frame = if typeof(frame) == "CFrame" then frame else model:GetPivot(),
 		Color = if typeof(color) == "Color3" then color else Theme.Colors.Pink,
 		Screen = nil,
+		Prompt = nil,
 		Draw = nil,
 		Bulbs = { {}, {} },
 		BulbColors = {},
@@ -801,6 +804,21 @@ local function addMachine(model: Instance)
 	machine.Ready = newBall(machine.Color)
 	if machine.Screen then
 		buildScreen(machine, machine.Screen)
+	end
+	-- While you play, the next machine's "Play SKEE-BALL" prompt (its spot is within reach of
+	-- yours) stays off your screen, even when the server turns it back on (showPrompts).
+	local stand = model:FindFirstChild("Stand")
+	local prompt = stand and stand:FindFirstChildOfClass("ProximityPrompt")
+	machine.Prompt = prompt
+	if prompt then
+		prompt:GetPropertyChangedSignal("Enabled"):Connect(function()
+			if play.Active and prompt.Enabled then
+				prompt.Enabled = false
+			end
+		end)
+		if play.Active then
+			prompt.Enabled = false
+		end
 	end
 	for _, attribute in { "SkeeState", "SkeeScore", "SkeeBalls", "SkeeName", "SkeeBest" } do
 		model:GetAttributeChangedSignal(attribute):Connect(function()
@@ -1141,6 +1159,17 @@ local function holdControlsAway()
 	end)
 end
 
+-- The machines' prompts on this screen: all off while you play; after, on where the machine is
+-- free (the server's own rule, so this device agrees with it).
+local function showPrompts(show: boolean)
+	for _, machine in machines do
+		local prompt = machine.Prompt
+		if prompt then
+			prompt.Enabled = show and (machine.Model:GetAttribute("SkeeUser") or 0) == 0
+		end
+	end
+end
+
 local function exitPlay()
 	if not play.Active then
 		return
@@ -1156,6 +1185,7 @@ local function exitPlay()
 	pcall(ContextActionService.UnbindAction, ContextActionService, "SkeeBallRoll")
 	RunService:UnbindFromRenderStep("SkeeBallCamera")
 	putControlsAway(false)
+	showPrompts(true)
 	showAim(0, 0, false)
 	setFade(0)
 	local camera = workspace.CurrentCamera
@@ -1182,6 +1212,8 @@ end
 local function enterPlay(index: number, best: number)
 	local machine = machines[index]
 	if not machine then
+		-- This device hasn't set the machine up yet (it's still loading): free it again.
+		remote:FireServer("Leave")
 		return
 	end
 	local fresh = not play.Active
@@ -1204,6 +1236,7 @@ local function enterPlay(index: number, best: number)
 	-- The first-join tips ("tap a card to vote") step aside while you play: on phones they share
 	-- the top of the screen with DONE (OnboardingController).
 	ui.Hud:SetAttribute("PP_TipsAside", true)
+	showPrompts(false)
 	-- Step up to the machine (at the height you stand at), facing it, and frame the lane.
 	local _, _, root = character()
 	local stand = machine.Frame:PointToWorldSpace(Vector3.new(0, 0, SkeeBall.STAND_Z))

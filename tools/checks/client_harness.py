@@ -548,7 +548,9 @@ do
 		piece("BulbsA", Vector3.new(0.3, 0.3, 0.3), Vector3.new(-1, 11, 6.4))
 		piece("BulbsB", Vector3.new(0.3, 0.3, 0.3), Vector3.new(1, 11, 6.4))
 		piece("Glow", Vector3.new(0.1, 0.1, 8), Vector3.new(1.6, 3.6, -2.6))
-		piece("Stand", Vector3.new(3, 5, 2), Vector3.new(0, 2.5, -9)):AddTag("SkeeStand")
+		local standPart = piece("Stand", Vector3.new(3, 5, 2), Vector3.new(0, 2.5, -9))
+		standPart:AddTag("SkeeStand")
+		Instance.new("ProximityPrompt").Parent = standPart
 		machineModel:SetAttribute("SkeeIndex", 1)
 		machineModel:SetAttribute("SkeeColor", Color3.fromRGB(64, 196, 255))
 		machineModel:SetAttribute("SkeeFrame", frame)
@@ -653,6 +655,14 @@ do
 	local skeeCamera = workspace.CurrentCamera
 	skeeChecks.cameraPlaying = skeeCamera.CameraType.Name
 	skeeChecks.reopened = controls ~= nil and controls.Visible
+	-- The machines' prompts stay off this screen while you play, even when the server turns one on.
+	local skeeStand = machineModel:FindFirstChild("Stand")
+	local skeePrompt = skeeStand and skeeStand:FindFirstChildOfClass("ProximityPrompt")
+	if skeePrompt then
+		skeePrompt.Enabled = true
+		task.wait(0.1)
+		skeeChecks.promptWhilePlaying = skeePrompt.Enabled
+	end
 	__player:SetAttribute("PP_InRound", true)
 	task.wait(0.3)
 	skeeChecks.roundClosed = controls ~= nil and not controls.Visible
@@ -660,6 +670,11 @@ do
 	__player:SetAttribute("PP_InRound", nil)
 	for key, value in { SkeeUser = 0, SkeeName = "", SkeeScore = 0, SkeeBalls = 0, SkeeState = "Idle", SkeeBest = 0 } do
 		machineModel:SetAttribute(key, value)
+	end
+	if skeePrompt then
+		skeePrompt.Enabled = true -- the server frees the machine
+		task.wait(0.1)
+		skeeChecks.promptWhenFree = skeePrompt.Enabled
 	end
 end
 
