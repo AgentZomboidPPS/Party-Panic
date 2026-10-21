@@ -71,7 +71,8 @@ return function(h)
 			},
 			Fallback = level(function(m)
 				h.pillar(m, "Deck", 14, 0.4, Vector3.new(0, 1.8, 0))
-				h.pillar(m, "Beams", 12, 0.3, Vector3.new(0, 1.45, 0))
+				-- (The biggest piece must sit level: MeshLibrary takes the pivot's turn from it.)
+				h.block(m, "Beams", Vector3.new(9.5, 1, 9.5), Vector3.new(0, 1.1, 0))
 				for index = 0, 7 do
 					local angle = index / 8 * math.pi * 2
 					h.pillar(m, "Barrels", 1.7, 1.3, Vector3.new(math.cos(angle) * 5, 0.65, math.sin(angle) * 5))
@@ -177,8 +178,8 @@ return function(h)
 			},
 			Materials = { Cage = Enum.Material.Metal, Lamp = Enum.Material.Neon, Flag = Enum.Material.Fabric },
 			Fallback = level(function(m)
-				h.pillar(m, "Float", 3, 1.6, Vector3.new(0, 0.8, 0))
-				h.pillar(m, "Stripe", 3.05, 0.5, Vector3.new(0, 1.3, 0))
+				h.blob(m, "Float", Vector3.new(3.2, 1.8, 3.2), Vector3.new(0, 0.9, 0))
+				h.pillar(m, "Stripe", 2.9, 0.4, Vector3.new(0, 1.3, 0))
 				h.pillar(m, "Cage", 0.4, 4, Vector3.new(0, 3.6, 0))
 				h.ball(m, "Lamp", 0.8, Vector3.new(0, 5.8, 0))
 				h.block(m, "Flag", Vector3.new(0.1, 0.8, 1.2), Vector3.new(0, 6.5, 0.6))
@@ -355,11 +356,8 @@ return function(h)
 				Rope = Enum.Material.Fabric,
 			},
 			Fallback = level(function(m)
-				local tilt = CFrame.Angles(math.rad(-15), 0, 0)
-				local hull = h.rounded(m, "Hull", Vector3.new(13, 9, 46), 3, Vector3.new(0, 6, 0))
-				hull.CFrame = CFrame.new(0, 7, 0) * tilt
-				local mast = h.pillar(m, "Mast", 1.2, 24, Vector3.zero)
-				mast.CFrame = CFrame.new(0, 20, -2) * tilt * CFrame.Angles(0, 0, math.rad(90))
+				h.rounded(m, "Hull", Vector3.new(13, 9, 46), 3, Vector3.new(0, 4.5, 0))
+				h.pillar(m, "Mast", 1.2, 24, Vector3.new(0, 20, -2))
 				h.block(m, "Sail", Vector3.new(10, 8, 0.2), Vector3.new(0, 24, -1))
 				h.block(m, "Flag", Vector3.new(0.1, 2.2, 3.2), Vector3.new(0, 32.5, -1))
 			end),
