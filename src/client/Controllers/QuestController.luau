@@ -58,7 +58,7 @@ local function questRow(order: number, def, quest)
 	})
 	UIKit.Label({
 		Text = `{quest.Progress} / {def.Target}`,
-		TextSize = 15,
+		TextSize = if UIKit.IsTouch() then 17 else 15,
 		Size = UDim2.fromScale(1, 1),
 		Parent = back,
 		Children = { UIKit.TextStroke(0.2) },

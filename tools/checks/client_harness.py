@@ -3,21 +3,25 @@ execution), so client code can be exercised without a player: every controller s
 script opens each screen, plays through every game phase, and fires every server->client remote.
 Errors and warnings from all of it come back in the result.
 
-    python3 tools/checks/client_harness.py [--touch] [--bots N] > client.luau
+    python3 tools/checks/client_harness.py [--touch] [--rich] [--bots N] > client.luau
     python3 tools/preview/luau_task.py client.luau - client.json
     python3 tools/checks/ui_render.py client.json /tmp/screens    # draw every screen and phase
 
 --touch makes the stand-in client a phone (touch, no keyboard), for the phone layouts.
+--rich gives the player a well-used profile (every emote, lots of coins, a long name, a claimable
+daily gift) to check the layouts at their fullest; the default is a brand-new player.
 --bots N adds N stand-in bots, shaped like BotService's (a Configuration in
 ReplicatedStorage.PartyBots with a character in the world), who play the round with the player:
 the standings, team outlines, spectating (you get knocked out), a bot leaving and one arriving
 mid-round, the results and a bot champion on the podium. The result's "botChecks" says what the
-client did with them, and the extra snapshots ("InRound teams", "Out", "Spectate", "Podium") show
-it. The stand-in player is in the round either way.
+client did with them, and the extra snapshots ("InRound teams", "Podium") show it. The stand-in
+players are in the round either way, and the player is always knocked out ("Out", "Spectate").
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
-PlayerGui folder), RenderStepped (Heartbeat), StarterGui:SetCore, and the remotes (bindable
-events the harness can fire). Shared modules come from the working tree (except Remotes).
+PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
+(Heartbeat), StarterGui:SetCore, and the remotes (bindable events the harness can fire). The two
+ScreenGuis are made like init.client.luau makes them. Shared modules come from the working tree
+(except Remotes).
 """
 
 import argparse
@@ -94,53 +98,71 @@ local __playerGui = Instance.new("Folder")
 __playerGui.Name = "PlayerGui"
 __playerGui.Parent = game:GetService("ServerStorage")
 local __characterAdded = __event()
-local __attributes, __attributeSignals = {}, {}
-local function __attributeSignal(name)
-	__attributeSignals[name] = __attributeSignals[name] or __event()
-	return __attributeSignals[name]
+-- Fake players: the local one (with the PlayerGui) and others for the standings and spectating.
+local function __makePlayer(name, displayName, userId, extra)
+	local attributes, signals = {}, {}
+	local fields = {
+		Name = name,
+		DisplayName = displayName,
+		UserId = userId,
+		CharacterAdded = __event().Event,
+		CharacterRemoving = __event().Event,
+		Changed = __event().Event,
+	}
+	for key, value in extra or {} do
+		fields[key] = value
+	end
+	local function signal(attribute)
+		signals[attribute] = signals[attribute] or __event()
+		return signals[attribute]
+	end
+	return setmetatable(fields, {
+		__index = function(_, key)
+			if key == "Character" then
+				return nil
+			elseif key == "WaitForChild" or key == "FindFirstChild" then
+				return function(self, childName)
+					return rawget(self, childName)
+				end
+			elseif key == "GetAttribute" then
+				return function(_, attribute)
+					return attributes[attribute]
+				end
+			elseif key == "SetAttribute" then
+				return function(_, attribute, value)
+					attributes[attribute] = value
+					signal(attribute):Fire()
+				end
+			elseif key == "GetAttributeChangedSignal" then
+				return function(_, attribute)
+					return signal(attribute).Event
+				end
+			elseif key == "GetPropertyChangedSignal" then
+				return function()
+					return __event().Event
+				end
+			elseif key == "IsA" then
+				return function(_, className)
+					return className == "Player" or className == "Instance"
+				end
+			end
+			error("[harness] fake player has no member '" .. tostring(key) .. "'", 2)
+		end,
+	})
 end
-local __player
-__player = setmetatable({
-	Name = "HarnessPlayer",
-	DisplayName = "Harness",
-	UserId = 1,
-	PlayerGui = __playerGui,
-	CharacterAdded = __characterAdded.Event,
-	CharacterRemoving = __event().Event,
-	Changed = __event().Event,
-}, {
-	__index = function(_, key)
-		if key == "Character" then
-			return nil
-		elseif key == "WaitForChild" or key == "FindFirstChild" then
-			return function(self, name)
-				return rawget(self, name)
-			end
-		elseif key == "GetAttribute" then
-			return function(_, name)
-				return __attributes[name]
-			end
-		elseif key == "SetAttribute" then -- the harness puts this player in rounds, like RoundContext
-			return function(_, name, value)
-				__attributes[name] = value
-				__attributeSignal(name):Fire()
-			end
-		elseif key == "GetAttributeChangedSignal" then
-			return function(_, name)
-				return __attributeSignal(name).Event
-			end
-		elseif key == "GetPropertyChangedSignal" then
-			return function()
-				return __event().Event
-			end
-		elseif key == "IsA" then
-			return function(_, className)
-				return className == "Player" or className == "Instance"
-			end
-		end
-		error("[harness] fake LocalPlayer has no member '" .. tostring(key) .. "'", 2)
-	end,
-})
+local __player = __makePlayer(
+	"HarnessPlayer",
+	if __richMode then "SuperLongDisplayNm20" else "Harness",
+	1,
+	{ PlayerGui = __playerGui, CharacterAdded = __characterAdded.Event }
+)
+-- With --bots the bots are the others (the only ones with characters to spectate).
+local __players = { __player }
+local __otherNames = { "Bubbles", "xX_Speedy_Xx", "Pancake", "NoodleArms", "Captain Waffles", "Zoomer",
+	"Mochi", "LavaLarry", "SirHopsALot", "Tiny Tim", "Glitch" }
+for index, name in if __botCount > 0 then {} else __otherNames do
+	table.insert(__players, __makePlayer(name, name, 100 + index))
+end
 
 local function __wrap(real, overrides)
 	return setmetatable(overrides, {
@@ -160,7 +182,7 @@ local __shims = {
 	Players = __wrap(__realPlayers, {
 		LocalPlayer = __player,
 		GetPlayers = function()
-			return { __player }
+			return __players
 		end,
 		GetUserThumbnailAsync = function(_, userId, ...)
 			table.insert(__thumbnailIds, userId)
@@ -284,15 +306,13 @@ local order = {
 	"RoundController", "ResultsController", "ShopController", "QuestController",
 	"EmoteController", "SpectateController", "OnboardingController",
 }
+-- The ScreenGuis, made with init.client.luau's own properties (see screen_guis() in the script).
 local context = {}
--- Made like init.client.luau makes them, so pop-ups draw over the HUD in the snapshots too.
-for key, settings in { Hud = { "PartyPanicHUD", 5, false }, Overlay = { "PartyPanicOverlay", 10, true } } do
+for key, props in __screenGuis do
 	local gui = Instance.new("ScreenGui")
-	gui.Name = settings[1]
-	gui.DisplayOrder = settings[2]
-	gui.IgnoreGuiInset = settings[3]
-	gui.ResetOnSpawn = false
-	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	for property, value in props do
+		(gui :: any)[property] = value
+	end
 	gui.Parent = __playerGui
 	context[key] = gui
 end
@@ -323,19 +343,39 @@ for _, name in order do
 	startTimes[name] = math.floor((os.clock() - t) * 1000)
 end
 
--- 2. Profile snapshot, as DataService sends it.
+-- 2. Profile snapshot, as DataService sends it: a new player (default items, 3 daily and 2 weekly
+-- quests with the longest texts), or with --rich a well-used profile.
+local Cosmetics = require(Shared.Cosmetics)
 local data = table.clone(DataService.Template)
-local profile = { Data = data, IsVip = false, CanSave = true }
+data.Owned = {}
+for _, item in Cosmetics.List do
+	if item.Default or (__richMode and item.Slot == "Emote") then
+		data.Owned[item.Id] = true
+	end
+end
+if __richMode then
+	data.Coins = 1234567
+	data.XP = 98765
+	data.Daily = { LastClaimDay = 0, Streak = 6, SecretDay = 0 }
+end
+local profile = { Data = data, IsVip = false, CanSave = not __richMode }
 local okSnap, snapshot = pcall(DataService.BuildSnapshot, profile)
 if okSnap then
-	local quests = {}
-	for id in QuestDefinitions.ById or {} do
-		table.insert(quests, { Id = id, Progress = 1, Done = false })
-		if #quests >= 3 then
-			break
-		end
+	local byPeriod = { Daily = {}, Weekly = {} }
+	for _, def in QuestDefinitions.List or {} do
+		table.insert(byPeriod[def.Period], def)
 	end
-	snapshot.Quests.Daily = quests
+	for period, defs in byPeriod do
+		table.sort(defs, function(a, b)
+			return #a.Text > #b.Text
+		end)
+		local quests = {}
+		for index = 1, math.min(#defs, if period == "Daily" then 3 else 2) do
+			local def = defs[index]
+			table.insert(quests, { Id = def.Id, Progress = math.min(index - 1, def.Target), Done = index == 2 })
+		end
+		snapshot.Quests[period] = quests
+	end
 	step = "ProfileData"
 	__fire("ProfileData", snapshot)
 	task.wait(1)
@@ -359,12 +399,19 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
 	task.wait(0.3)
 end
 
--- 4. A whole round, phase by phase. The stand-in player plays it (round attributes, as RoundContext
--- sets them), with the stand-in bots if there are any (--bots N).
+-- 4. A whole round, phase by phase, with three toasts on screen in the lobby. The vote shows the
+-- options with the longest objectives (the fullest cards). The stand-in players play it (round
+-- attributes, as RoundContext sets them), with the stand-in bots if there are any (--bots N).
 local ids = {}
 for _, def in GameDefinitions.List do
 	table.insert(ids, def.Id)
 end
+table.sort(ids, function(a, b)
+	return #GameDefinitions.Get(a).Objective > #GameDefinitions.Get(b).Objective
+end)
+__fire("Notify", "Daily gift ready! Open 📜 Quests to claim it.", "reward", 6)
+__fire("Notify", "Bubbles joined the party", "info", 6)
+__fire("Notify", "Not enough coins yet - play a round to earn more!", "warning", 6)
 
 local Participants = __require("Client/Participants")
 local botChecks = { changedFired = 0 }
@@ -426,9 +473,9 @@ if __botCount > 0 then
 		addBot()
 	end
 end
--- The player and every bot still here.
+-- The stand-in players and every bot still here.
 local function everyone()
-	local list = { __player }
+	local list = table.clone(__players)
 	for _, bot in bots do
 		if bot.info.Parent then
 			table.insert(list, bot.info)
@@ -464,6 +511,7 @@ phase("Voting", 12, function()
 		{ Id = ids[3], Mystery = true },
 	})
 	GameState.SetJSON("VoteCounts", { 1, 0, 2 })
+	__player:SetAttribute("PP_Vote", 1)
 end)
 phase("Preparing", 6, function()
 	GameState.Set("GameId", ids[1])
@@ -477,13 +525,22 @@ phase("Preparing", 6, function()
 	end
 end)
 phase("InRound", 60, function()
-	GameState.Set("Status", "Survivors: 3")
-	__player:SetAttribute("PP_Score", 5)
-	-- Scores spread around the player's, and one bot already out.
+	-- Stand-in players: scores spread out and three already out. Bots: scores spread around the
+	-- player's, and one bot already out.
+	for index, other in __players do
+		other:SetAttribute("PP_Alive", index <= 9)
+		other:SetAttribute("PP_Score", if #bots > 0 then 5 else 13 - index)
+		other:SetAttribute("PP_ScoreText", if index <= 9 then "Alive" else "Out")
+	end
 	for index, bot in bots do
 		bot.info:SetAttribute("PP_Score", (#bots - index) * 3)
 		bot.info:SetAttribute("PP_Alive", index ~= 2)
 	end
+	local survivors = 0
+	for _, who in everyone() do
+		survivors += if who:GetAttribute("PP_Alive") then 1 else 0
+	end
+	GameState.Set("Status", `Survivors: {survivors}`)
 end)
 step = "remotes"
 __fire("Notify", "Harness notification", "reward", 2)
@@ -525,17 +582,24 @@ if #bots > 0 then
 	end
 	task.wait(0.5)
 
-	-- The player is knocked out: the out panel, then spectating (bots are the only others here).
-	__player:SetAttribute("PP_Alive", false)
-	task.wait(0.8)
-	__ui.Out = __dumpGui(__playerGui)
-	local outPanel = __playerGui.PartyPanicHUD:FindFirstChild("OutPanel")
-	if outPanel then
-		outPanel.Visible = false -- what its 👀 Spectate button does
-	end
-	State.OpenScreen:Fire("Spectate")
-	task.wait(0.8)
-	__ui.Spectate = __dumpGui(__playerGui)
+end
+
+-- The player is knocked out: the out panel, then spectating (only bots have characters to watch).
+step = "Out"
+__player:SetAttribute("PP_Alive", false)
+task.wait(1.2)
+__ui.Out = __dumpGui(__playerGui)
+local outPanel = __playerGui.PartyPanicHUD:FindFirstChild("OutPanel")
+if outPanel then
+	outPanel.Visible = false -- what its 👀 Spectate button does
+end
+step = "Spectate"
+State.OpenScreen:Fire("Spectate")
+task.wait(1.2)
+__ui.Spectate = __dumpGui(__playerGui)
+
+if #bots > 0 then
+	step = "bots spectating"
 	local function watching()
 		local subject = workspace.CurrentCamera.CameraSubject
 		for _, bot in bots do
@@ -574,18 +638,32 @@ if #bots > 0 then
 	botChecks.boardAfter = boardRows()
 end
 
+local Config = require(Shared.Config)
 phase("Results", 8, function()
-	local standings = {
-		{ Name = "Harness", Place = 1, ScoreText = "Survived", UserId = 1 },
-		{ Name = "Bot", Place = 2, ScoreText = "Out", UserId = 2 },
+	-- Every reward line. Without bots the player won, ahead of 7 stand-in players; with bots a bot
+	-- won and the player came second; the third-place bot has left since (no color known).
+	local place = if #bots > 0 then 2 else 1
+	local labels = {
+		Participation = "Played the round",
+		TopHalf = "Top half finish",
+		Winner = "Winner!",
+		PersonalBest = "New personal best",
 	}
-	local champions = { { Name = "Harness", UserId = 1, Place = 1 } }
-	local place = 1
+	local lines, coins, xp = {}, 0, 0
+	for _, key in { "Participation", "TopHalf", "Winner", "PersonalBest" } do
+		if key ~= "Winner" or place == 1 then
+			local reward = Config.Rewards[key]
+			table.insert(lines, { Label = labels[key], Coins = reward.Coins, XP = reward.XP })
+			coins += reward.Coins
+			xp += reward.XP
+		end
+	end
+	local standings = {}
+	local champions = { { Name = __player.DisplayName, UserId = 1, Place = 1 } }
 	if #bots > 0 then
-		-- A bot won and the player came second; the third-place bot has left since (no color known).
 		standings = {
 			{ Name = bots[1].display, Place = 1, ScoreText = "15 pts", UserId = bots[1].userId },
-			{ Name = "Harness", Place = 2, ScoreText = "12 pts", UserId = 1 },
+			{ Name = __player.DisplayName, Place = 2, ScoreText = "12 pts", UserId = 1 },
 		}
 		for index = 3, math.min(#bots, 8) do
 			local bot = bots[index]
@@ -594,21 +672,30 @@ phase("Results", 8, function()
 		end
 		champions = {
 			{ Name = bots[1].display, UserId = bots[1].userId, Place = 1 },
-			{ Name = "Harness", UserId = 1, Place = 2 },
+			{ Name = __player.DisplayName, UserId = 1, Place = 2 },
 		}
 		if bots[3] then
 			table.insert(champions, { Name = bots[3].display, UserId = bots[3].userId, Place = 3 })
 		end
-		place = 2
+	else
+		for index = 1, 8 do
+			local other = __players[index]
+			table.insert(standings, {
+				Name = other.DisplayName,
+				UserId = other.UserId,
+				Place = index,
+				ScoreText = if index == 1 then "Last one standing" else `Out at {80 - index * 7}s`,
+			})
+		end
 	end
 	__fire("RoundResults", {
 		GameId = ids[1],
 		Place = place,
-		PlayerCount = 1 + math.max(#bots, 2),
-		ScoreText = "Survived",
-		Lines = { { Label = "Participation", Coins = 10, XP = 25 }, { Label = "1st place", Coins = 30, XP = 25 } },
-		Coins = 40,
-		XP = 50,
+		PlayerCount = #__players + #bots,
+		ScoreText = if place == 1 then "Last one standing" else "12 pts",
+		Lines = lines,
+		Coins = coins,
+		XP = xp,
 		PersonalBest = true,
 		Standings = standings,
 	})
@@ -688,13 +775,33 @@ return game:GetService("HttpService"):JSONEncode({
 '''
 
 
+def screen_guis() -> str:
+    """init.client.luau's ScreenGuis (`local hud = UIKit.new("ScreenGui", {...})`) as a Luau table
+    keyed like the controllers' context (Hud, Overlay), so the harness lays out like the game."""
+    text = (CLIENT / "init.client.luau").read_text()
+    entries = []
+    for var, body in re.findall(r'local (\w+) = UIKit\.new\("ScreenGui", \{\n(.*?)\n\}\)', text, flags=re.S):
+        props = [line.strip().rstrip(",") for line in body.splitlines()]
+        props = [prop for prop in props if prop and not prop.startswith(("Parent", "--"))]
+        entries.append(f"\t{var[0].upper() + var[1:]} = {{ {', '.join(props)} }},")
+    if not entries:
+        raise SystemExit("client_harness: no ScreenGuis found in init.client.luau")
+    return "local __screenGuis = {\n" + "\n".join(entries) + "\n}\n"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--touch", action="store_true", help="the stand-in client is a phone (touch, no keyboard)")
+    parser.add_argument("--rich", action="store_true", help="a well-used profile, to check the layouts at their fullest")
     parser.add_argument("--bots", type=int, default=0, help="stand-in bots that play the round with the player")
     args = parser.parse_args()
     gui_dump = (Path(__file__).resolve().parent / "gui_dump.luau").read_text()
-    out = [f"__touchMode = {'true' if args.touch else 'false'}\n__botCount = {args.bots}\n" + gui_dump + PRELUDE]
+    flags = (
+        f"__touchMode = {'true' if args.touch else 'false'}\n"
+        f"__richMode = {'true' if args.rich else 'false'}\n"
+        f"__botCount = {args.bots}\n"
+    )
+    out = [flags + gui_dump + PRELUDE + screen_guis()]
     for module, path in module_paths().items():
         out.append(f'__modules["{module}"] = function()')
         out.append(rewrite(module, path.read_text()))

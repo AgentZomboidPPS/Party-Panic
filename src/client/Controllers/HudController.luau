@@ -79,9 +79,10 @@ local function buildProfileChip(parent: Instance)
 		Size = UDim2.new(1, -96, 0, 24),
 		Parent = chip,
 	})
+	-- Phones: a taller bar so its numbers stay readable.
 	local barBack = UIKit.new("Frame", {
-		Position = UDim2.fromOffset(80, 40),
-		Size = UDim2.new(1, -100, 0, 18),
+		Position = UDim2.fromOffset(80, if isTouch() then 38 else 40),
+		Size = UDim2.new(1, -100, 0, if isTouch() then 24 else 18),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		Parent = chip,
 		Children = { UIKit.Round() },
@@ -94,7 +95,7 @@ local function buildProfileChip(parent: Instance)
 	})
 	local xpText = UIKit.Label({
 		Text = "",
-		TextSize = 14,
+		TextSize = if isTouch() then 18 else 14,
 		Size = UDim2.fromScale(1, 1),
 		Parent = barBack,
 		Children = { UIKit.TextStroke(0.3) },
@@ -270,7 +271,7 @@ local function menuButton(
 	end, top, bottom)
 	UIKit.Label({
 		Text = caption,
-		TextSize = 15,
+		TextSize = if isTouch() then 17 else 15,
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, 2),
 		Size = UDim2.new(1, 10, 0, 18),
@@ -450,7 +451,7 @@ local function buildSettings(overlay: Instance)
 		)
 	end
 	local saveNote =
-		UIKit.Label({ Text = "", TextSize = 16, TextColor3 = Theme.Colors.TextDim, LayoutOrder = 5, Parent = list })
+		UIKit.Label({ Text = "", TextSize = 17, TextColor3 = Theme.Colors.TextDim, LayoutOrder = 5, Parent = list })
 	State.ProfileChanged:Connect(function(profile)
 		saveNote.Text = if profile.CanSave
 			then "Your progress saves automatically."
