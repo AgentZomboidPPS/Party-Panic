@@ -198,8 +198,24 @@ return function(env)
 					flipped += 1
 				end
 			end
+			-- Collision groups: bots and sharks pass through everyone (the mode's BODY_GROUP).
+			local groups = {}
+			for _, player in ctx:GetPlayers() do
+				local _, _, root = ctx:GetCharacter(player)
+				if root then
+					local role = if mode:IsShark(player) then "shark" else "swimmer"
+					local key = `{role}:{root.CollisionGroup}`
+					groups[key] = (groups[key] or 0) + 1
+				end
+			end
+			local counts = {}
+			for key, count in groups do
+				table.insert(counts, `{key} {count}`)
+			end
+			table.sort(counts)
+			local groupText = table.concat(counts, ", ")
 			env.note(
-				`{chomps} chomps, {hops} hops, {dives} dives, haul {mode.haul}/{mode.goal}, swimmers left {mode:SwimmersLeft()}, rafts down {flipped}, coins {mode:CoinCount()}`
+				`{chomps} chomps, {hops} hops, {dives} dives, haul {mode.haul}/{mode.goal}, swimmers left {mode:SwimmersLeft()}, rafts down {flipped}, coins {mode:CoinCount()}, groups {groupText}`
 			)
 		end
 	end

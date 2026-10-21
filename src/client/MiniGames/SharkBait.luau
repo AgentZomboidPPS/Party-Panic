@@ -569,7 +569,7 @@ function SharkBait.Start(api)
 			if state == WOBBLING then
 				raft.Warning.Enabled = true
 				if not isShark and myRaft() == raft then
-					showFlash("⚠️ TIPPING! JUMP! ⚠️", Theme.Colors.Orange, 1.4)
+					showFlash("⚠️ TIPPING! JUMP!", Theme.Colors.Orange, 1.4)
 					api:Sound("HazardWarning")
 				end
 			elseif state == FLIPPED then
@@ -1095,7 +1095,7 @@ function SharkBait.Start(api)
 		floatText(at + Vector3.new(0, 4, 0), "SPAT OUT!", Theme.Colors.Cyan, 34)
 		if userId == api.Player.UserId then
 			releaseGulp()
-			showFlash("PTOOEY! Back on a raft!", Theme.Colors.Cyan, 1.6)
+			showFlash("PTOOEY! 💦", Theme.Colors.Cyan, 1.6)
 			api:Sound("Boing")
 		end
 	end)
@@ -1106,7 +1106,7 @@ function SharkBait.Start(api)
 			splash(root.Position, 0.9)
 		end
 		if userId == api.Player.UserId then
-			showFlash("SPLASH! Swim to a raft! 🌊", Theme.Colors.Cyan, 1.8)
+			showFlash("SPLASH! GET OUT!", Theme.Colors.Cyan, 1.8)
 		end
 	end)
 	api:OnEvent("Splash", function(userId: number, x: number, z: number)
@@ -1114,7 +1114,7 @@ function SharkBait.Start(api)
 		if userId == api.Player.UserId and not isShark then
 			api:Sound("Splash")
 			if flash.Visible == false or os.clock() > flashUntil - 0.5 then
-				showFlash("🌊 IN THE WATER! Get on a raft!", Theme.Colors.Cyan, 1.6)
+				showFlash("GET ON A RAFT!", Theme.Colors.Cyan, 1.6)
 			end
 		end
 	end)
@@ -1170,7 +1170,7 @@ function SharkBait.Start(api)
 	api:OnEvent("Win", function(team: string)
 		api:Effect("Fireworks", origin + Vector3.new(0, 12, 0))
 		if team == "Swimmers" then
-			showFlash("🏊 SWIMMERS WIN! 🏊", swimmerColor, 3)
+			showFlash("🏊 SWIMMERS WIN!", swimmerColor, 3)
 		else
 			showFlash("🦈 SHARK WINS! 🦈", Teams.Colors.Sharks or Theme.Colors.Red, 3)
 		end
@@ -1482,7 +1482,7 @@ function SharkBait.Start(api)
 			for _, view in sharks do
 				if view.Last and flatDistance(view.Last, myRoot.Position) < 15 then
 					nextWarning = clock + 2.5
-					showFlash("🦈 SHARK! GET OUT! 🦈", Theme.Colors.Red, 1.2)
+					showFlash("🦈 GET OUT! 🦈", Theme.Colors.Red, 1.2)
 					api:Sound("HazardWarning")
 					break
 				end

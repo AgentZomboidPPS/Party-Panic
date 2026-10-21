@@ -90,6 +90,9 @@ local TOSS_OUT, TOSS_UP = 20, 34 -- thrown about 2 to 9 studs out past the edge
 local GULP_TIME = 4 -- a swallowed swimmer is spat back out onto a raft after this long
 SharkBait.CHOMP_COST = 2 -- coins a chomp takes off the swimmers' haul
 local POCKET = -32.5 -- the shark's belly: a hidden ledge under the sea bed, where swallowed swimmers wait
+-- Each swallowed swimmer waits on their own spot there, a 4 x 3 grid 5 studs apart: two players
+-- put in one place would shove each other apart, hard.
+local BELLY_SPOTS = 12
 local CLIMB_TIME = 0.8 -- no-physics test servers: how long a swimmer takes to climb out at a raft
 -- Bots and the sharks' hidden bodies pass through every character (players keep the lobby's
 -- PP_Players group and bump each other as everywhere else). On a live server each device moves its
@@ -259,6 +262,7 @@ function SharkBait:Prepare()
 	self.role = {} :: { [any]: string }
 	self.sharks = {} :: { any }
 	self.gulped = {} :: { [any]: number } -- swallowed swimmers: when they're spat out
+	self.bellySpot = {} :: { [any]: number } -- and where each waits in the belly
 	self.chomped = {} :: { [any]: number } -- how often each swimmer was swallowed
 	self.wet = {} :: { [any]: boolean }
 	self.spots = {} :: { [any]: Vector3 } -- each swimmer's middle at the last grab check
@@ -613,7 +617,7 @@ function SharkBait:_buildArena()
 	-- under the deep sea floor) until they're spat out.
 	Build.Part({
 		Name = "Belly",
-		Size = Vector3.new(12, 1, 12),
+		Size = Vector3.new(24, 1, 20),
 		CFrame = CFrame.new(origin + Vector3.new(0, POCKET - 0.5, 0)),
 		Transparency = 1,
 		CastShadow = false,
@@ -971,7 +975,17 @@ function SharkBait:_gulp(swimmer: any, shark: any)
 		self:_sharkText(shark)
 	end
 	ctx:Fire(nil, "Eaten", swimmer.UserId, if shark then shark.UserId else 0, round(at.X, 2), round(at.Z, 2), lost)
-	character:PivotTo(CFrame.new(self.origin + Vector3.new(0, POCKET + SharkBait.HIP, 0)))
+	local taken = {}
+	for _, index in self.bellySpot do
+		taken[index] = true
+	end
+	local spot = 1
+	while taken[spot] and spot < BELLY_SPOTS do
+		spot += 1
+	end
+	self.bellySpot[swimmer] = spot
+	local column, row = (spot - 1) % 4, (spot - 1) // 4
+	character:PivotTo(CFrame.new(self.origin + Vector3.new(-7.5 + 5 * column, POCKET + SharkBait.HIP, -5 + 5 * row)))
 	ctx:Freeze(swimmer, true)
 	ctx:Delay(GULP_TIME, function()
 		self:_spitOut(swimmer)
@@ -986,6 +1000,7 @@ function SharkBait:_spitOut(swimmer: any)
 		return
 	end
 	self.gulped[swimmer] = nil
+	self.bellySpot[swimmer] = nil
 	self.spots[swimmer] = nil
 	local character = ctx:GetCharacter(swimmer)
 	if not character or not ctx:IsAlive(swimmer) then
