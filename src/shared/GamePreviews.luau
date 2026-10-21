@@ -15,8 +15,43 @@ export type Preview = {
 }
 
 local previews: { [string]: Preview } = {
+	ArrowAmbush = {
+		Image = "rbxassetid://85090344603530",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
+	BumperBallers = {
+		Image = "rbxassetid://103022323251086",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
 	FireRope = {
 		Image = "rbxassetid://96774319824802",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
+	HexMeltdown = {
+		Image = "rbxassetid://128323814807071",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
+	HoneyTrap = {
+		Image = "rbxassetid://120713916880559",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
+	PumpAndPop = {
+		Image = "rbxassetid://82171771927787",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),

@@ -1,4 +1,24 @@
 {
+  "ArrowAmbush": {
+    "columns": 6,
+    "decal": 88718471507328,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 85090344603530,
+    "made": "2026-10-21",
+    "width": 168
+  },
+  "BumperBallers": {
+    "columns": 6,
+    "decal": 94418061819263,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 103022323251086,
+    "made": "2026-10-21",
+    "width": 168
+  },
   "FireRope": {
     "columns": 6,
     "decal": 85842654051598,
@@ -6,6 +26,36 @@
     "frames": 24,
     "height": 240,
     "image": 96774319824802,
+    "made": "2026-10-21",
+    "width": 168
+  },
+  "HexMeltdown": {
+    "columns": 6,
+    "decal": 75711318439236,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 128323814807071,
+    "made": "2026-10-21",
+    "width": 168
+  },
+  "HoneyTrap": {
+    "columns": 6,
+    "decal": 128660840761711,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 120713916880559,
+    "made": "2026-10-21",
+    "width": 168
+  },
+  "PumpAndPop": {
+    "columns": 6,
+    "decal": 96348004893020,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 82171771927787,
     "made": "2026-10-21",
     "width": 168
   },
