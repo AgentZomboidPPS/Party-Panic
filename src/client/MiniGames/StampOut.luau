@@ -134,8 +134,8 @@ function StampOut.Start(api)
 				local x, z = StampGrid.Center(cell)
 				tile = decor({
 					Name = "Ink",
-					Size = Vector3.new(CELL, 0.04, CELL),
-					CFrame = CFrame.new(paperX + x, paperY + 0.04, paperZ + z),
+					Size = Vector3.new(CELL - 0.02, 0.04, CELL - 0.02), -- a hair under a cell: neighbours share no face
+					CFrame = CFrame.new(paperX + x, paperY + 0.11, paperZ + z),
 					Parent = folder,
 				})
 				tiles[cell] = tile
@@ -161,7 +161,7 @@ function StampOut.Start(api)
 		local part = decor({
 			Name = "Mark",
 			Size = Vector3.new(size, 0.05, size),
-			CFrame = CFrame.new(paperX + x, paperY + 0.09, paperZ + z),
+			CFrame = CFrame.new(paperX + x, paperY + 0.16, paperZ + z),
 			Transparency = 1,
 			Parent = folder,
 		})
@@ -198,7 +198,7 @@ function StampOut.Start(api)
 			Name = "Splash",
 			Shape = Enum.PartType.Cylinder,
 			Size = Vector3.new(0.12, radius * 1.2, radius * 1.2),
-			CFrame = CFrame.new(paperX + x, paperY + 0.14, paperZ + z) * CFrame.Angles(0, 0, math.pi / 2),
+			CFrame = CFrame.new(paperX + x, paperY + 0.2, paperZ + z) * CFrame.Angles(0, 0, math.pi / 2),
 			Color = INKS[ink].Color,
 			Material = Enum.Material.Neon,
 			Transparency = 0.35,
@@ -501,7 +501,7 @@ function StampOut.Start(api)
 			local dir = hopDirection(humanoid, root)
 			local spot = root.Position + dir * distance
 			aim.Size = Vector3.new(0.1, radius * 2, radius * 2)
-			aim.CFrame = CFrame.new(spot.X, paperY + 0.16, spot.Z) * CFrame.Angles(0, 0, math.pi / 2)
+			aim.CFrame = CFrame.new(spot.X, paperY + 0.24, spot.Z) * CFrame.Angles(0, 0, math.pi / 2)
 			aim.Transparency = 0.55
 		else
 			aim.Transparency = 1

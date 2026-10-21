@@ -11,7 +11,7 @@ return function(h)
 	return {
 		StampOutRider = {
 			Height = 1.42,
-			AssetId = 0, -- tools/upload_assets.py --only StampOutRider fills this in
+			AssetId = 73397414880871, -- tools/upload_assets.py --only StampOutRider fills this in
 			Palette = { Rubber = h.rgb(226, 40, 52), Block = wood, Band = h.rgb(226, 40, 52) },
 			Materials = { Block = Enum.Material.Wood },
 			Fallback = function(m)
@@ -22,7 +22,7 @@ return function(h)
 		},
 		StampOutBigStamp = {
 			Height = 21.6,
-			AssetId = 0, -- tools/upload_assets.py --only StampOutBigStamp fills this in
+			AssetId = 83349437901810, -- tools/upload_assets.py --only StampOutBigStamp fills this in
 			Collide = true,
 			Palette = {
 				Rubber = h.rgb(226, 40, 52),
@@ -40,7 +40,7 @@ return function(h)
 		},
 		StampOutInkPad = {
 			Height = 21.8,
-			AssetId = 0, -- tools/upload_assets.py --only StampOutInkPad fills this in
+			AssetId = 123477075662278, -- tools/upload_assets.py --only StampOutInkPad fills this in
 			Collide = true,
 			Palette = { Tin = h.rgb(200, 50, 60), Felt = h.rgb(70, 40, 120) },
 			Materials = { Tin = Enum.Material.Metal, Felt = Enum.Material.Fabric },
@@ -53,7 +53,7 @@ return function(h)
 		},
 		StampOutPencil = {
 			Height = 5.7,
-			AssetId = 0, -- tools/upload_assets.py --only StampOutPencil fills this in
+			AssetId = 97491736669429, -- tools/upload_assets.py --only StampOutPencil fills this in
 			Collide = true,
 			Palette = {
 				Body = h.rgb(250, 196, 40),
@@ -72,7 +72,7 @@ return function(h)
 		},
 		StampOutClip = {
 			Height = 1,
-			AssetId = 0, -- tools/upload_assets.py --only StampOutClip fills this in
+			AssetId = 108727151684414, -- tools/upload_assets.py --only StampOutClip fills this in
 			Palette = { Wire = h.rgb(200, 205, 215) },
 			Materials = { Wire = Enum.Material.Metal },
 			Fallback = function(m)
