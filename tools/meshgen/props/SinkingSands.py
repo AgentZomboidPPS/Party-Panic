@@ -883,10 +883,45 @@ def sand_temple():
     return _clean(pieces)
 
 
+def collar_band(r0, r1, a0, a1, depth, n=16):
+    """A flat crescent band (a slice of a ring between radii r0 and r1, angles a0..a1 in degrees, in
+    the XY plane, `depth` thick along Z), closed and facing outward: one row of a broad collar."""
+    angles = np.radians(np.linspace(a0, a1, n + 1))
+    verts = []
+    for z in (-depth / 2, depth / 2):
+        for r in (r0, r1):
+            verts += [(r * math.cos(a), r * math.sin(a), z) for a in angles]
+    m = n + 1
+    fi, fo, bi, bo = 0, m, 2 * m, 3 * m  # front inner/outer, back inner/outer rows
+    groups = []
+
+    def quads(a, b, want):
+        faces = []
+        for i in range(n):
+            faces += [(a + i, b + i, b + i + 1), (a + i, b + i + 1, a + i + 1)]
+        groups.append((faces, want))
+
+    quads(fi, fo, lambda c: np.tile([0.0, 0.0, -1.0], (len(c), 1)))
+    quads(bi, bo, lambda c: np.tile([0.0, 0.0, 1.0], (len(c), 1)))
+    quads(fo, bo, lambda c: c * np.array([1.0, 1.0, 0.0]))
+    quads(fi, bi, lambda c: -c * np.array([1.0, 1.0, 0.0]))
+    pieces = []
+    for faces, want in groups:
+        pieces.append(oriented(Mesh(verts, faces), want))
+    for k, sign in ((0, -1), (n, 1)):  # the two ends
+        a = angles[k]
+        tangent = np.array([-math.sin(a), math.cos(a), 0.0]) * sign
+        end = Mesh(verts, [(fi + k, fo + k, bo + k), (fi + k, bo + k, bi + k)])
+        pieces.append(oriented(end, lambda c, t=tangent: np.tile(t, (len(c), 1))))
+    mesh = merge(*pieces)
+    mesh.smooth = False
+    return mesh
+
+
 def sand_sphinx():
     """A giant cat sphinx lying with its paws forward (-Z): a striped royal nemes headdress that frames
     the face (gold brow band and cobra, flaring wings, lappets on the chest and a braided beard), a
-    broad striped usekh collar with a gem, almond eyes that glow and a cat's muzzle: the Sand Kings'
+    broad usekh collar of gold and blue rows with a gem, almond eyes that glow and a cat's muzzle: the Sand Kings'
     guardian behind the arena."""
     def torso_sdf(p):
         d = sd_ellipsoid(p, (0, 2.0, 1.6), (2.2, 1.7, 4.0))
@@ -930,11 +965,6 @@ def sand_sphinx():
         beard = sd_capsule(p, (0, 4.3, -3.5), (0, 3.25, -3.85), 0.24)
         return np.minimum(d, beard)
 
-    def collar_sdf(p):
-        # A broad bib lying on the chest and neck below the chin (a shell over the torso).
-        shell = np.abs(torso_sdf(p) - 0.12) - 0.14
-        return np.maximum(shell, sd_ellipsoid(p, (0, 3.25, -2.9), (1.55, 1.0, 1.3)))
-
     def band_sdf(p):
         # The gold brow band across the front of the headdress, and a little cobra rising from it.
         band = np.maximum(np.maximum(cap_sdf(p) - 0.12, np.abs(p[..., 1] - 5.98) - 0.16), p[..., 2] + 2.6)
@@ -942,21 +972,28 @@ def sand_sphinx():
         return np.minimum(band, cobra)
 
     def sdf(p):
-        return np.minimum(np.minimum(body_sdf(p), nemes_sdf(p)), np.minimum(collar_sdf(p), band_sdf(p)))
+        return np.minimum(np.minimum(body_sdf(p), nemes_sdf(p)), band_sdf(p))
 
     mesh = sdf_mesh(sdf, (-3.2, -0.2, -6.6), (3.4, 7.6, 6.2), 0.18)
     outward(mesh)
     tri = mesh.v[mesh.f].mean(axis=1)
-    label = np.argmin(np.stack([body_sdf(tri), nemes_sdf(tri), collar_sdf(tri), band_sdf(tri)]), axis=0)
-    # Stripes: level bands on the headdress, rings out from the throat on the collar.
-    stripe = (np.floor((tri[:, 1] + 0.1 * tri[:, 2]) / 0.34) % 2) == 0
-    ring = (np.floor(np.linalg.norm(tri - np.array([0.0, 4.2, -2.5]), axis=1) / 0.42) % 2) == 0
+    label = np.argmin(np.stack([body_sdf(tri), nemes_sdf(tri), band_sdf(tri)]), axis=0)
+    stripe = (np.floor((tri[:, 1] + 0.1 * tri[:, 2]) / 0.4) % 2) == 0  # level bands on the headdress
     body = split_faces(mesh, label == 0)
-    gold = split_faces(mesh, ((label == 1) & stripe) | ((label == 2) & ring) | (label == 3))
-    blue = split_faces(mesh, ((label == 1) & ~stripe) | ((label == 2) & ~ring))
+    gold = split_faces(mesh, ((label == 1) & stripe) | (label == 2))
+    blue = split_faces(mesh, (label == 1) & ~stripe)
+    # The usekh collar: crescent rows of gold and blue round the throat, bent to lie on the chest.
+    rows = [(0.36, 0.7), (0.7, 0.95), (0.95, 1.18), (1.18, 1.38), (1.38, 1.5)]
+    collar_rows = []
+    for k, (r0, r1) in enumerate(rows):
+        band = collar_band(r0, r1, 196, 344, 0.3 + 0.02 * k, 20)
+        band.v[:, 2] += 0.26 * band.v[:, 0] ** 2  # wrap round the chest
+        collar_rows.append(band.translate(0, 4.32, -3.36 - 0.01 * k))
+    gold = merge(gold, *collar_rows[0::2])
+    blue = merge(blue, *collar_rows[1::2])
     eyes = merge(*(solid(icosphere(0.27, 2), True).scale(1.45, 0.75, 0.55).rotate("z", s * -10).translate(s * 0.6, 5.45, -3.74) for s in (-1, 1)))
     nose = solid(lathe([(0.0, 0.0), (0.24, 0.0), (0.0, -0.22)], 3), True).scale(1.0, 1.0, 0.6).rotate("y", 30).translate(0, 5.14, -4.02)
-    gem = merge(solid(icosphere(0.34, 1)).scale(1, 1.2, 0.7).translate(0, 3.05, -3.62), solid(icosphere(0.16, 1)).translate(0, 6.62, -4.1))
+    gem = merge(solid(icosphere(0.32, 1)).scale(1, 1.2, 0.7).translate(0, 2.9, -3.6), solid(icosphere(0.16, 1)).translate(0, 6.62, -4.1))
     plinth = merge(box(7.2, 0.5, 13.6, y=-0.25, bevel=0.1), box(7.8, 0.3, 14.2, y=-0.6, bevel=0.08))
     for piece in (body, gold, blue, eyes, nose, gem, plinth):
         piece.translate(0, 0.75, 0)
