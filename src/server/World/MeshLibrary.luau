@@ -619,6 +619,7 @@ local KEPT = {
 	"Color",
 	"Material",
 	"Transparency",
+	"TextureID",
 }
 
 -- Templates still being rebuilt: where the pieces are among the template's descendants (a copy's
