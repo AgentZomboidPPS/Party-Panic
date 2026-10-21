@@ -1,0 +1,29 @@
+newmtl Pad
+Kd 0.157 0.141 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 0.518 0.455 0.439
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Posts
+Kd 0.431 0.290 0.188
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl BarA
+Kd 0.235 0.510 0.941
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl BarB
+Kd 0.980 0.980 0.980
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
