@@ -8,6 +8,9 @@
 -- line, category as just its icon, and the votes. It leaves the middle of the view free and stays
 -- above the thumbstick's corner and away from the jump button (the objective and length are on the
 -- rules card).
+-- Only people who'll play vote: while you're sitting out (UI/SitOutSwitch) the cards are dimmed and
+-- a note says why (under the cards on phones, over them on PC); tapping one tells you how to jump
+-- back in. The server refuses those votes anyway (VotingService).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,6 +20,8 @@ local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 
+local NotificationController = require(script.Parent.NotificationController)
+local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
@@ -35,17 +40,21 @@ type Card = {
 	check: TextLabel,
 	stroke: UIStroke,
 	gradient: UIGradient,
+	dim: Frame,
 }
 
 local cards: { Card } = {}
 local holder: Frame
 local row: Frame
+local sitOutNote: TextLabel
 local touch = false
+local lastSitOutTip = -math.huge
 
 local CARDS = 4
 local CARD_W = 228 -- PC
 local TOUCH_W, TOUCH_H, TOUCH_GAP = 150, 94, 10
 local TOUCH_TOP = 12 -- room above the row for the "YOUR VOTE" tag on a card's top edge
+local PC_TOP = 34 -- PC: the same room above the cards (the sit-out note uses it when there's no vote)
 
 local function darker(color: Color3): Color3
 	local h, s, v = color:ToHSV()
@@ -66,6 +75,14 @@ local function buildCard(index: number): Card
 		LayoutOrder = index,
 		Parent = row,
 	}, function()
+		if State.SittingOut() then
+			local now = os.clock()
+			if now - lastSitOutTip > 2 then
+				lastSitOutTip = now
+				NotificationController.Show("You're sitting out - tap SITTING OUT up top to play and vote!", "info", 4)
+			end
+			return
+		end
 		Remotes.Get("CastVote"):FireServer(index)
 	end, Theme.Colors.PanelLight, Theme.Colors.Panel)
 	local gradient = button:FindFirstChildOfClass("UIGradient") :: UIGradient
@@ -162,6 +179,17 @@ local function buildCard(index: number): Card
 		Parent = button,
 		Children = { UIKit.Round(), UIKit.TextStroke(0.3) },
 	})
+	-- Sitting out: the card stays readable but dimmed.
+	local dim = UIKit.new("Frame", {
+		Name = "Dim",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(16, 10, 34),
+		BackgroundTransparency = 0.42,
+		ZIndex = 5,
+		Visible = false,
+		Parent = button,
+		Children = { UIKit.Corner(if touch then 18 else 22) },
+	})
 	return {
 		button = button,
 		icon = icon,
@@ -173,7 +201,38 @@ local function buildCard(index: number): Card
 		check = check,
 		stroke = stroke,
 		gradient = gradient,
+		dim = dim,
 	}
+end
+
+-- The note that says why the cards are dimmed: under the cards on phones (short, to stay clear of
+-- the thumbstick's corner), over them on PC.
+local function buildSitOutNote()
+	local text = if touch
+		then "💤 Sitting out - can't vote"
+		else "💤 Sitting out - can't vote. Tap SITTING OUT up top to play!"
+	local size = if touch then Theme.Touch.MinText else 20
+	sitOutNote = UIKit.Label({
+		Name = "SitOutNote",
+		Text = text,
+		TextSize = size,
+		TextWrapped = false,
+		BackgroundTransparency = 0.15,
+		BackgroundColor3 = Theme.Colors.PanelDark,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, if touch then TOUCH_TOP + TOUCH_H + 6 else 2),
+		Size = UDim2.fromOffset(
+			math.ceil(UIKit.TextWidth(text, size, Theme.Fonts.Bold)) + 32,
+			if touch then 28 else 30
+		),
+		Visible = false,
+		Parent = holder,
+		Children = { UIKit.Round(), UIKit.TextStroke(0.4) },
+	})
+	task.delay(3, function() -- again once the font has surely loaded
+		local width = math.ceil(UIKit.TextWidth(text, size, Theme.Fonts.Bold)) + 32
+		sitOutNote.Size = UDim2.fromOffset(math.max(width, sitOutNote.Size.X.Offset), sitOutNote.Size.Y.Offset)
+	end)
 end
 
 local function refresh()
@@ -185,6 +244,8 @@ local function refresh()
 	if not holder.Visible then
 		return
 	end
+	local sittingOut = State.SittingOut()
+	sitOutNote.Visible = sittingOut
 	for index, card in cards do
 		local option = options[index]
 		card.button.Visible = option ~= nil
@@ -210,7 +271,8 @@ local function refresh()
 		end
 		local votes = counts[index] or 0
 		card.count.Text = `{votes} vote{if votes == 1 then "" else "s"}`
-		local selected = myVote == index
+		local selected = myVote == index and not sittingOut
+		card.dim.Visible = sittingOut
 		card.check.Visible = selected
 		card.stroke.Color = if selected then Theme.Colors.Yellow else Color3.new(1, 1, 1)
 		card.stroke.Thickness = if selected then (if touch then 4 else 5) else 2
@@ -252,18 +314,24 @@ function VoteController.Start(context)
 			Name = "Vote",
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -18),
-			Size = UDim2.fromOffset(CARDS * CARD_W + (CARDS - 1) * 16 + 20, 248),
+			Size = UDim2.fromOffset(CARDS * CARD_W + (CARDS - 1) * 16 + 20, PC_TOP + 214),
 			BackgroundTransparency = 1,
 			Visible = false,
 			Parent = context.Hud,
-			Children = { list },
 		})
 		UIKit.AutoScale(holder)
-		row = holder
+		row = UIKit.new("Frame", {
+			Name = "Cards",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Parent = holder,
+			Children = { list },
+		})
 	end
 	for index = 1, CARDS do
 		table.insert(cards, buildCard(index))
 	end
+	buildSitOutNote()
 
 	GameState.Changed("Phase", function(phase)
 		refresh()
@@ -276,6 +344,7 @@ function VoteController.Start(context)
 	GameState.Changed("VoteOptions", refresh)
 	GameState.Changed("VoteCounts", refresh)
 	player:GetAttributeChangedSignal("PP_Vote"):Connect(refresh)
+	player:GetAttributeChangedSignal("PP_SitOut"):Connect(refresh)
 	refresh()
 end
 

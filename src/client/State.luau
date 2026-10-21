@@ -61,4 +61,9 @@ function State.Alive(): boolean
 	return State.LocalPlayer:GetAttribute("PP_Alive") == true
 end
 
+-- Sitting out the next rounds (the server's word: Services/SitOutService sets PP_SitOut).
+function State.SittingOut(): boolean
+	return State.LocalPlayer:GetAttribute("PP_SitOut") == true
+end
+
 return State

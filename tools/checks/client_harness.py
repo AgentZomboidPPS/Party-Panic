@@ -3,7 +3,7 @@ execution), so client code can be exercised without a player: every controller s
 script opens each screen, plays through every game phase, and fires every server->client remote.
 Errors and warnings from all of it come back in the result.
 
-    python3 tools/checks/client_harness.py [--touch] [--rich] [--bots N] > client.luau
+    python3 tools/checks/client_harness.py [--touch] [--rich] [--bots N] [--sit-out] > client.luau
     python3 tools/preview/luau_task.py client.luau - client.json
     python3 tools/checks/ui_render.py client.json /tmp/screens    # draw every screen and phase
 
@@ -21,6 +21,15 @@ client did with them, and the extra snapshots ("InRound teams", "Podium") show i
 players are in the round either way, and the player is always knocked out ("Out", "Spectate").
 The result's "portals" says what each of the vote stage's portals shows in each phase (its game,
 "✓ YOUR VOTE", Random's spinning reel, the winner), as text.
+After the round the player sits out (the sit-out switch by the banner): a tap with no answer from
+the server (it slides back), then the server's answer, and the screens that change for someone
+sitting out. The result's "sitOutChecks" says what the switches, the vote note and the round HUD
+showed. --sit-out draws those screens ("Intermission sitting out", "Voting sitting out", "Waiting
+everyone on a break", "Preparing sitting out", "InRound sitting out", "InRound back in", "Settings
+sitting out") next to the playing ones to compare (Intermission, Voting, Preparing, InRound,
+Results, Settings), and leaves the rest out. Open Cloud caps the size of a task's result, and every
+screen in one run is over it (about 3 MB of snapshots): Roblox then reports "Task timed out due to
+an internal error" and returns nothing.
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
@@ -361,18 +370,44 @@ local function portalReport()
 	return rows
 end
 
-local function phase(name, seconds, extra)
-	step = "phase " .. name
+-- The snapshots this run returns (Open Cloud caps a task's result, and every screen at once is
+-- over it): the sit-out screens only with --sit-out (true: drawn then; false: never), and then
+-- just the playing screens to compare them with.
+local SIT_OUT_SHOTS = {
+	["Intermission sitting out"] = true,
+	["Voting sitting out"] = true,
+	["Waiting everyone on a break"] = true,
+	["Preparing sitting out"] = true,
+	["InRound sitting out"] = true,
+	["InRound back in"] = true,
+	["Settings sitting out"] = true,
+	["Cleanup sitting out"] = false,
+}
+local SIT_OUT_COMPARE =
+	{ Intermission = true, Voting = true, Preparing = true, InRound = true, Results = true, Settings = true }
+local function snap(key, root)
+	local sitOut = SIT_OUT_SHOTS[key]
+	local wanted = if __sitOutMode then sitOut == true or SIT_OUT_COMPARE[key] == true else sitOut == nil
+	if wanted then
+		__ui[key] = __dumpGui(root or __playerGui, key)
+	end
+end
+
+-- `label` names the snapshot when it isn't the phase's own (e.g. "Voting sitting out"); `message`
+-- is the banner's line when it isn't the usual one.
+local function phase(name, seconds, extra, label, message)
+	local key = label or name
+	step = "phase " .. key
 	if extra then
 		extra()
 	end
 	local definition = GameDefinitions.Get(GameState.Get("GameId") or "")
-	GameState.Set("Message", MESSAGES[name] or (definition and definition.Name) or "")
+	GameState.Set("Message", message or MESSAGES[name] or (definition and definition.Name) or "")
 	GameState.Set("Phase", name)
 	GameState.Set("PhaseEndsAt", if seconds > 0 then workspace:GetServerTimeNow() + seconds else 0) -- 0: no timer, like RoundManager
 	task.wait(1.2)
-	__ui[name] = __dumpGui(__playerGui, name)
-	__portals[name] = portalReport()
+	snap(key)
+	__portals[key] = portalReport()
 end
 
 -- 1. Start every controller like init.client.luau does.
@@ -469,7 +504,7 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings" } do
 	step = "OpenScreen " .. screen
 	State.OpenScreen:Fire(screen)
 	task.wait(1)
-	__ui[screen] = __dumpGui(__playerGui, screen)
+	snap(screen)
 	local Modal = __require("Client/UI/Modal")
 	if Modal.CloseAll then
 		pcall(Modal.CloseAll)
@@ -676,7 +711,7 @@ if #bots > 0 then
 		who:SetAttribute("PP_Team", if index % 2 == 0 then "Red" else "Blue")
 	end
 	task.wait(0.8)
-	__ui["InRound teams"] = __dumpGui(__playerGui, "InRound teams")
+	snap("InRound teams")
 	local outlined = 0
 	for _, bot in bots do
 		if bot.rig and bot.rig:FindFirstChildOfClass("Highlight") then
@@ -695,7 +730,7 @@ end
 step = "Out"
 __player:SetAttribute("PP_Alive", false)
 task.wait(1.2)
-__ui.Out = __dumpGui(__playerGui, "Out")
+snap("Out")
 local outPanel = __playerGui.PartyPanicHUD:FindFirstChild("OutPanel")
 if outPanel then
 	outPanel.Visible = false -- what its 👀 Spectate button does
@@ -703,7 +738,7 @@ end
 step = "Spectate"
 State.OpenScreen:Fire("Spectate")
 task.wait(1.2)
-__ui.Spectate = __dumpGui(__playerGui, "Spectate")
+snap("Spectate")
 
 if #bots > 0 then
 	step = "bots spectating"
@@ -854,7 +889,7 @@ if #bots > 0 then
 	table.sort(podium, function(a, b)
 		return a.place < b.place
 	end)
-	__ui.Podium = __dumpGui(folder, "Podium")
+	snap("Podium", folder)
 	botChecks.podium = podium
 	botChecks.headshotsAskedFor = __thumbnailIds
 end
@@ -868,6 +903,135 @@ end)
 phase("Waiting", 0)
 task.wait(1)
 
+-- 5. Sitting out (UI/SitOutSwitch: by the banner, and in Settings). A tap flips the switches at
+-- once and asks the server; with no answer they slide back. Then the server's answer (PP_SitOut,
+-- as Services/SitOutService sets it) and the screens that change for someone sitting out.
+local sitOutChecks = {}
+local SitOutSwitch = __require("Client/UI/SitOutSwitch")
+-- What each switch says, e.g. "SitOut (shown): 💤 SITTING OUT / tap to play".
+local function switches()
+	local rows = {}
+	for _, item in __playerGui:GetDescendants() do
+		if item:IsA("TextButton") and (item.Name == "SitOut" or item.Name == "SitOutSwitch") then
+			local pill = item:FindFirstChild("Pill")
+			local track = pill and pill:FindFirstChild("Track")
+			local knob = track and track:FindFirstChild("Knob")
+			local function text(parent, name)
+				local label = parent and parent:FindFirstChild(name)
+				return if label then label.Text else "?"
+			end
+			local side = if knob and knob.Position.X.Offset < 10 then "knob left" else "knob right"
+			table.insert(
+				rows,
+				`{item.Name} ({if item.Visible then "shown" else "hidden"}): {text(knob, "Icon")} {text(pill, "Title")} / {text(pill, "Hint")}, {side}`
+			)
+		end
+	end
+	table.sort(rows)
+	return rows
+end
+local function hudText(name)
+	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+	local found = hud and hud:FindFirstChild(name, true)
+	if not found then
+		return "missing"
+	end
+	local visible = found:IsA("GuiObject") and found.Visible
+	return (if visible then "shown" else "hidden") .. (if found:IsA("TextLabel") then ": " .. found.Text else "")
+end
+-- The sit-out lines on screen (under the banner, under the vote cards).
+local function statusLines()
+	local lines = {}
+	for _, gui in __playerGui:GetChildren() do
+		for _, item in gui:GetDescendants() do
+			if item:IsA("TextLabel") and (item.Text:find("Sitting out", 1, true) or item.Text:find("next round!", 1, true)) then
+				local shown, node = true, item
+				while node and node ~= gui do
+					shown = shown and (not node:IsA("GuiObject") or node.Visible)
+					node = node.Parent
+				end
+				if shown then
+					table.insert(lines, item.Text)
+				end
+			end
+		end
+	end
+	return lines
+end
+
+step = "sit out: a tap"
+sitOutChecks.before = switches()
+local sentBefore = #__sent
+SitOutSwitch.Request(true)
+task.wait(0.4)
+sitOutChecks.afterTap = switches()
+sitOutChecks.tapAsked = table.concat(table.move(__sent, sentBefore + 1, #__sent, 1, {}), ", ")
+task.wait(2.2) -- the server never answers here: the switches slide back
+sitOutChecks.noAnswer = switches()
+
+-- The server's answer, then the lobby, the vote and the lobby when everyone is on a break.
+__player:SetAttribute("PP_SitOut", true)
+phase("Intermission", 20, nil, "Intermission sitting out")
+sitOutChecks.lobby = switches()
+phase("Voting", 12, function()
+	GameState.SetJSON("VoteOptions", {
+		{ Id = longNames[1], Mystery = false },
+		{ Id = ids[1], Mystery = false },
+		{ Id = longNames[2], Mystery = false },
+		{ Id = ids[1], Mystery = true },
+	})
+	GameState.SetJSON("VoteCounts", { 1, 0, 2, 1 })
+	__player:SetAttribute("PP_Vote", 0)
+end, "Voting sitting out")
+local dimmed = 0
+for _, item in __playerGui.PartyPanicHUD:GetDescendants() do
+	if item.Name == "Dim" and item:IsA("GuiObject") and item.Visible then
+		dimmed += 1
+	end
+end
+sitOutChecks.vote = { note = hudText("SitOutNote"), dimmedCards = dimmed }
+phase("Waiting", 0, nil, "Waiting everyone on a break", "Everyone's taking a break!")
+
+-- A round they watch from the lobby: everyone else plays it.
+phase("Preparing", 6, function()
+	GameState.Set("RoundId", 2)
+	for _, who in everyone() do
+		local playing = who ~= __player
+		who:SetAttribute("PP_InRound", playing)
+		who:SetAttribute("PP_Alive", playing)
+		who:SetAttribute("PP_Score", 0)
+	end
+end, "Preparing sitting out")
+sitOutChecks.preparing = { rules = hudText("Rules"), switches = switches() }
+phase("InRound", 60, function()
+	GameState.Set("Status", "Watch the vine: count the fruit before each honeycomb!")
+end, "InRound sitting out")
+sitOutChecks.inRound = { lines = statusLines(), outPanel = hudText("OutPanel"), switches = switches() }
+
+-- Back in, mid-round: the next round is theirs.
+step = "sit out: back in"
+__player:SetAttribute("PP_SitOut", false)
+task.wait(1.2)
+snap("InRound back in")
+sitOutChecks.backIn = { lines = statusLines(), switches = switches() }
+
+-- The second switch, in Settings.
+step = "sit out: settings"
+__player:SetAttribute("PP_SitOut", true)
+phase("Cleanup", 3, function()
+	for _, who in everyone() do
+		who:SetAttribute("PP_InRound", false)
+		who:SetAttribute("PP_Alive", false)
+	end
+end, "Cleanup sitting out")
+State.OpenScreen:Fire("Settings")
+task.wait(1)
+snap("Settings sitting out")
+sitOutChecks.settings = switches()
+pcall(__require("Client/UI/Modal").CloseAll)
+__player:SetAttribute("PP_SitOut", false)
+task.wait(0.5)
+
 local guiCount = #__playerGui:GetDescendants()
 return game:GetService("HttpService"):JSONEncode({
 	ui = __ui,
@@ -878,6 +1042,7 @@ return game:GetService("HttpService"):JSONEncode({
 	guiInstances = guiCount,
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
+	sitOutChecks = sitOutChecks,
 	textReport = __textReport,
 	portals = __portals,
 })
@@ -903,6 +1068,8 @@ def main():
     parser.add_argument("--touch", action="store_true", help="the stand-in client is a phone (touch, no keyboard)")
     parser.add_argument("--rich", action="store_true", help="a well-used profile, to check the layouts at their fullest")
     parser.add_argument("--bots", type=int, default=0, help="stand-in bots that play the round with the player")
+    parser.add_argument("--sit-out", action="store_true", help="draw the screens of a player sitting out (and the "
+                        "playing ones to compare) instead of every screen")
     parser.add_argument("--sizes", help="screens to lay the UI out on with the engine (ui_render.py's names or "
                         "groups; default: touch with --touch, else pc; none to skip)")
     args = parser.parse_args()
@@ -912,6 +1079,7 @@ def main():
         f"__touchMode = {'true' if args.touch else 'false'}\n"
         f"__richMode = {'true' if args.rich else 'false'}\n"
         f"__botCount = {args.bots}\n"
+        f"__sitOutMode = {'true' if args.sit_out else 'false'}\n"
         + (devices_luau(size_names(sizes)) if sizes != "none" else "")
     )
     out = [flags + gui_dump + PRELUDE + screen_guis()]

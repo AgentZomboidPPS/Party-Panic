@@ -701,8 +701,134 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	return HttpService:JSONEncode(summary)
 end
 
+-- Sitting out (Services/SitOutService), with stand-in people who have profiles: the switch's
+-- request through the remote (validated and rate limited), the notifications, votes, the lineup
+-- RoundManager plays (people sitting out aren't in it; everyone on a break pauses rounds) and how
+-- many bots BotService wants. Runs during __runLobby, with its bots in the world.
+function __checkSitOut(VotingService, BotService)
+	local SitOutService = __require("Server/Services/SitOutService")
+	local DataService = __require("Server/Services/DataService")
+	local Notifier = __require("Server/Services/Notifier")
+	local Telemetry = __require("Server/Services/Telemetry")
+	local GameState = __require("Shared/GameState")
+	local Roster = __require("Shared/Logic/Roster")
+	local TableUtil = __require("Shared/Logic/TableUtil")
+	-- Stand-ins aren't real Players: keep their notifications here (Notifier only sends to real
+	-- ones) and leave them out of AnalyticsService.
+	local told = {}
+	local realSend, realEvent = Notifier.Send, Telemetry.PlayerEvent
+	Notifier.Send = function(player, text, kind)
+		table.insert(told, `{player.Name}: {text} ({kind or "info"})`)
+	end
+	Telemetry.PlayerEvent = function() end
+	local result = {}
+	local ok, err = pcall(function()
+		SitOutService.Init()
+		VotingService.Init()
+		local people = {}
+		for index, name in { "Ann", "Bo", "Cy", "Di" } do
+			local person = __newPlayer(index)
+			person.Name, person.DisplayName = name, name
+			table.insert(__fakePlayers, person)
+			DataService.All()[person] = {
+				Player = person,
+				Key = "",
+				Data = TableUtil.DeepCopy(DataService.Template),
+				CanSave = false,
+				IsVip = false,
+				Released = false,
+			}
+			people[name] = person
+		end
+		local function ask(person, value)
+			__remoteObjects.SetSitOut.__bindable:Fire(__playerKey(person), value)
+			task.wait(0.05)
+		end
+		local function lineup()
+			local current = SitOutService.Lineup()
+			local names, bots = {}, 0
+			for _, who in current.Participants do
+				if who.IsBot then
+					bots += 1
+				else
+					table.insert(names, who.Name)
+				end
+			end
+			local reason, needed = Roster.Blocker(current, 2)
+			return {
+				people = table.concat(names, ","),
+				bots = bots,
+				blocker = reason,
+				banner = if reason ~= "" then Roster.WaitingMessage(reason, needed) else "",
+				botsWanted = BotService.Desired(),
+			}
+		end
+		local ann, bo, cy, di = people.Ann, people.Bo, people.Cy, people.Di
+		-- Di isn't in these: she's here for the rate limit below.
+		local function lineupWithoutDi()
+			local index = table.find(__fakePlayers, di)
+			table.remove(__fakePlayers, index)
+			local current = lineup()
+			table.insert(__fakePlayers, di)
+			return current
+		end
+		result.allPlaying = lineupWithoutDi()
+
+		GameState.Set("Phase", "Voting")
+		VotingService.Begin({
+			{ Id = "FireRope", Mystery = false },
+			{ Id = "HexMeltdown", Mystery = false },
+			{ Id = "HoneyTrap", Mystery = false },
+			{ Id = "PumpAndPop", Mystery = true },
+		})
+		result.annVotes = VotingService.Cast(ann, 2)
+		ask(ann, true)
+		result.annSitsOut = {
+			attribute = ann:GetAttribute("PP_SitOut"),
+			voteAttribute = ann:GetAttribute("PP_Vote"),
+			counts = GameState.GetJSON("VoteCounts"),
+			voteAgainRefused = not VotingService.Cast(ann, 3),
+		}
+		result.annOut = lineupWithoutDi()
+		ask(bo, "yes please")
+		result.junkIgnored = bo:GetAttribute("PP_SitOut") == nil
+		ask(bo, true)
+		ask(cy, true)
+		result.everyoneOut = lineupWithoutDi()
+		ask(ann, false)
+		result.annBack = { votes = VotingService.Cast(ann, 1), lineup = lineupWithoutDi() }
+		VotingService.End()
+
+		-- Sitting out mid-round: they finish it (the round's own list), and miss the next one.
+		GameState.Set("Phase", "InRound")
+		ann:SetAttribute("PP_InRound", true)
+		ann:SetAttribute("PP_Alive", true)
+		ask(ann, true)
+		ann:SetAttribute("PP_InRound", false)
+		ann:SetAttribute("PP_Alive", false)
+		result.annOutMidRound = lineupWithoutDi()
+
+		-- Di flips the switch eight times as fast as she can: the server takes four (Config.RateLimits).
+		local flips = 0
+		di:GetAttributeChangedSignal("PP_SitOut"):Connect(function()
+			flips += 1
+		end)
+		for index = 1, 8 do
+			ask(di, index % 2 == 1)
+		end
+		result.rateLimitedFlips = flips
+	end)
+	Notifier.Send, Telemetry.PlayerEvent = realSend, realEvent
+	result.told = told
+	if not ok then
+		result.failed = tostring(err)
+	end
+	return result
+end
+
 -- The lobby with bots (round_harness.py LOBBY): builds the lobby, adds bots, and plays an
 -- intermission and a vote, to check their wandering and that they never vote (people pick games).
+-- Then people sit out (__checkSitOut).
 function __runLobby(botCount, intermission, voteTime)
 	local GameState = __require("Shared/GameState")
 	GameState.Folder()
@@ -771,6 +897,7 @@ function __runLobby(botCount, intermission, voteTime)
 	summary.afterVote = positions()
 	local winner = VotingService.End()
 	summary.winner = winner and winner.Id
+	summary.sitOut = __checkSitOut(VotingService, BotService)
 	task.cancel(stepper)
 	-- One leaves (as if a player joined), to see the fade-out.
 	BotService.Remove(bots[1])
