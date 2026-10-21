@@ -554,7 +554,8 @@ function SkateEscape.Start(api)
 	local added: { [Instance]: boolean } = {}
 	local arena = api:Arena()
 	local hot = Color3.fromRGB(255, 110, 50)
-	local startLamps: { [string]: BasePart } = {}
+	local startLamps: { [string]: { Part: BasePart, Color: Color3 } } = {}
+	local lampsGreen: boolean? = nil
 	local function addPiece(child: Instance)
 		if not child:IsA("Model") or not string.match(child.Name, "^Seg%d+$") then
 			return
@@ -571,7 +572,8 @@ function SkateEscape.Start(api)
 				if part.Name == "Planks" or part.Name == "PlanksB" or part.Name == "StartPad" then
 					table.insert(planks, { Part = part, Color = part.Color })
 				elseif part.Name == "LampRed" or part.Name == "LampAmber" or part.Name == "LampGreen" then
-					startLamps[part.Name] = part
+					startLamps[part.Name] = { Part = part, Color = part.Color }
+					lampsGreen = nil -- (re)light them on the next frame
 				end
 			end
 		end
@@ -593,17 +595,16 @@ function SkateEscape.Start(api)
 		api:Track(arena.ChildAdded:Connect(addPiece))
 	end
 
-	-- The start lamps: red until GO, then green.
-	local lampsGreen: boolean? = nil
+	-- The start lamps: red until GO, then green (the others dark).
 	local function setLamps(green: boolean)
 		if lampsGreen == green then
 			return
 		end
 		lampsGreen = green
-		for name, part in startLamps do
+		for name, lamp in startLamps do
 			local lit = if name == "LampGreen" then green elseif name == "LampRed" then not green else false
-			part.Material = if lit then Enum.Material.Neon else Enum.Material.SmoothPlastic
-			part.Transparency = if lit then 0 else 0.35
+			lamp.Part.Material = if lit then Enum.Material.Neon else Enum.Material.SmoothPlastic
+			lamp.Part.Color = if lit then lamp.Color else lamp.Color:Lerp(Color3.new(0, 0, 0), 0.65)
 		end
 	end
 

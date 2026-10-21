@@ -196,7 +196,7 @@ return function(h)
 		-- The start gate over all twelve lanes: striped towers, a banner beam and three start lamps.
 		SkateStartGate = {
 			Height = 38,
-			AssetId = 93895540555980,
+			AssetId = 123118841481494,
 			Collide = true,
 			Palette = {
 				Stone = h.rgb(190, 172, 160),

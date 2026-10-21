@@ -740,7 +740,7 @@ def start_gate():
     # The start lamps on top of the beam.
     housing.append(box(16.0, 6.4, 3.0, 0.8, 0, height + 1.4, 0, n=2))
     for k, bucket in enumerate((lamp_r, lamp_y, lamp_g)):
-        x = (k - 1) * 5.0
+        x = (1 - k) * 5.0  # red on the left as seen from the front
         bucket.append(sphere(1.9, 10, 16).scale(1, 1, 0.55).translate(x, height + 1.6, -1.6))
         housing.append(box(4.4, 0.5, 1.6, 0.2, x, height + 3.9, -1.9, n=2))
     out = {
