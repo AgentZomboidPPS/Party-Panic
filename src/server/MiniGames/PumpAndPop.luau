@@ -418,8 +418,8 @@ function PumpAndPop:Start()
 		self:_up(player)
 	end, { Interval = 0.08 })
 
-	-- A team that loses members needs less air (what's left of it still has to be pumped by the
-	-- ones who stayed); a team with nobody left drops out of the scores.
+	-- A team that loses members needs less air in all (the same per player as every other team);
+	-- a team with nobody left drops out of the scores.
 	ctx.Hooks.PlayerLeft = function(player)
 		local pumper = self.pumpers[player]
 		self.pumpers[player] = nil
@@ -438,7 +438,10 @@ function PumpAndPop:Start()
 			ctx:SetShared("Air_" .. station.Team, 0)
 			return
 		end
-		station.Need = math.max(PumpAndPop.PUMPS_PER_PLAYER * #station.Members, station.Air + 1)
+		-- The balloon stays as full as it was; what's left to pump shrinks with the team.
+		local need = PumpAndPop.PUMPS_PER_PLAYER * #station.Members
+		station.Air *= need / station.Need
+		station.Need = need
 		self:_publish(station)
 	end
 

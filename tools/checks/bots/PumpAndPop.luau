@@ -37,6 +37,13 @@ return function(env)
 				env.Action(player, "Down")
 			end
 		end
+		-- With 4 or more, one player leaves mid-round: their team needs less air and plays on.
+		if elapsed > 9 and #env.players >= 4 and not env.left then
+			local leaver = env.players[#env.players]
+			env.left = leaver
+			env.note(`{leaver.Name} leaves (team {tostring(leaver:GetAttribute("PP_Team"))})`)
+			env.Leave(leaver)
+		end
 		if elapsed > 12 and not reported then
 			reported = true
 			local parts = {}
