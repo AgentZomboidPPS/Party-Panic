@@ -15,7 +15,7 @@ return function(h)
 		-- The tree. "Anchor" is the tip of the front branch, where the vine hangs.
 		HoneyOak = {
 			Height = 64.189,
-			AssetId = 103149679285590,
+			AssetId = 88558606527722,
 			Collide = true,
 			Palette = {
 				Trunk = h.rgb(139, 94, 62),
@@ -77,7 +77,7 @@ return function(h)
 		-- The flower each player stands on (petals are recolored per pad).
 		HoneyDaisyPad = {
 			Height = 0.413,
-			AssetId = 86600152445852,
+			AssetId = 129141385838615,
 			Shadow = false,
 			Palette = {
 				Petals = h.rgb(255, 255, 255),
@@ -95,7 +95,7 @@ return function(h)
 		},
 		HoneyBasket = {
 			Height = 1.695,
-			AssetId = 124702206684663,
+			AssetId = 109355733218790,
 			Palette = {
 				Basket = h.rgb(190, 132, 74),
 				Weave = h.rgb(226, 174, 106),
@@ -111,7 +111,7 @@ return function(h)
 		-- The clearing: lawn, sand crescent, stepping stones, flower beds, toadstools, tufts.
 		HoneyGlade = {
 			Height = 2.493,
-			AssetId = 123644092688627,
+			AssetId = 102847449948310,
 			Shadow = false,
 			Palette = {
 				Lawn = h.rgb(136, 206, 90),
@@ -144,7 +144,7 @@ return function(h)
 		-- Tall storybook sunflowers around the meadow, facing the front (-Z).
 		HoneySunflower = {
 			Height = 14.094,
-			AssetId = 71469977575955,
+			AssetId = 118533923409720,
 			Palette = {
 				Stem = h.rgb(92, 160, 62),
 				SunLeaves = h.rgb(104, 182, 70),
@@ -160,7 +160,7 @@ return function(h)
 		-- A straw beehive on a stool (entrance at the front, -Z).
 		HoneySkep = {
 			Height = 5.037,
-			AssetId = 101982584421193,
+			AssetId = 116969547774471,
 			Collide = true,
 			Palette = {
 				Straw = h.rgb(236, 188, 98),
