@@ -608,9 +608,10 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Rewards", "Rewards C
 end
 
 -- 3a. The HALLOWEEN PARTY (Controllers/EventController): the lobby chip and the event screen ("Event":
--- 31 candy, the first reward claimed, the next two ready), then a double coins weekend during it
--- ("Event double") and one on its own. Then the candy a round pays pops on the chip back in the
--- lobby. The result's "eventChecks" says what the chip read each time. The party stays on after.
+-- 31 candy, the first reward claimed, the next two ready), then one of its double coins weekends
+-- ("Event double"), then the party over (nothing on: the chip leaves the row, the light goes back).
+-- Then the candy a round pays pops on the chip back in the lobby. The result's "eventChecks" says
+-- what the chip read each time. The party stays on after.
 local eventChecks = {}
 do
 	local function chipText()
@@ -656,9 +657,11 @@ do
 	task.wait(1.2)
 	snap("Shop event")
 	pcall(__require("Client/UI/Modal").CloseAll)
-	GameState.SetJSON("Event", { Id = "", Name = "", EndsAt = 0, DoubleCoins = true, DoubleEndsAt = now + 86400 + 4 * 3600 + 120 })
+	-- The party over: nothing on (double coins never come on their own), so no chip and the lobby's
+	-- light exactly as it was.
+	GameState.Set("Event", "")
 	task.wait(1.2)
-	eventChecks.chipWeekendOnly = chipText()
+	eventChecks.chipAfterParty = chipText()
 	eventChecks.lookAfter = look()
 	party.DoubleCoins, party.DoubleEndsAt = false, 0
 	GameState.SetJSON("Event", party)

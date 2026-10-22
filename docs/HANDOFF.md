@@ -137,7 +137,8 @@ Branch **`claude/quirky-hopper-5yk8zk`**. Session B merges it before publishing 
      - candy from rounds and 3 golden pumpkins a day in the lobby;
      - a free track of 5 limited cosmetics at 10/25/45/70/100 candy, with the Halloween medal at 100;
      - decorations and a spookier lobby look, drawn per device;
-     - double coins every Saturday and Sunday UTC (`DoubleCoinsWeekends`).
+     - double coins only on the party's weekends, 24-25 Oct and 31 Oct-1 Nov UTC (`DoubleCoinsWeekends` on the
+       event in `Events.luau`); none after it (owner: "NO" to double coins after Halloween).
 - **Shared screen rules added for them:**
   - Toasts wait while the results card or the cup podium is up (`PP_ResultsShowing`, `PP_CupPodium`;
     NotificationController).

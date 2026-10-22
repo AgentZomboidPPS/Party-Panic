@@ -1,9 +1,9 @@
 --!strict
--- The rules of the limited-time events (Halloween first) and the double coins weekends (owner, asked
--- what keeps players coming back, then: "Can you work on all of that? this wont mess with what the
--- other workers are working on right?"): which event is on at a given moment, when a double coins
--- weekend ends, how much candy a round pays, claiming a step of the reward track, and the pumpkins
--- hidden in the lobby each day. Shared/Events has the schedule and the tracks; Services/EventService
+-- The rules of the limited-time events (Halloween first) and their double coins weekends (owner,
+-- asked what keeps players coming back, then: "Can you work on all of that? this wont mess with what
+-- the other workers are working on right?"; on double coins after Halloween: "NO"): which event is
+-- on at a given moment, when one of its double coins weekends ends, how much candy a round pays,
+-- claiming a step of the reward track, and the pumpkins hidden in the lobby each day. Shared/Events has the schedule and the tracks; Services/EventService
 -- applies these rules, and Controllers/EventController shows the same numbers.
 -- Times are Unix seconds (UTC): os.time() on the server, workspace:GetServerTimeNow() on a device.
 -- Leaf module: no requires, no Roblox APIs (Lune runs the tests: tests/EventLogic.spec.luau).
@@ -33,11 +33,11 @@ export type Progress = {
 
 -- What GameState's "Event" attribute holds (JSON), and what the lobby chip counts down from.
 export type State = {
-	Id: string, -- the event on now ("" when only a double coins weekend is)
+	Id: string, -- the event on now
 	Name: string,
-	EndsAt: number, -- when the event ends (0 when none is on)
-	DoubleCoins: boolean,
-	DoubleEndsAt: number, -- when the double coins weekend ends (0 when it isn't on)
+	EndsAt: number, -- when the event ends
+	DoubleCoins: boolean, -- one of the event's double coins weekends
+	DoubleEndsAt: number, -- when that weekend's double coins end (0 when they aren't on)
 }
 
 -- Dates ------------------------------------------------------------------------------------------
@@ -115,18 +115,21 @@ function EventLogic.Active<T>(events: { T }, unixTime: number): (T?, number?)
 	return nil, nil
 end
 
--- What's on at `unixTime`: the event (if any) and the double coins weekend (if they're switched on
--- and it's a Saturday or Sunday in UTC). Nil when neither is.
-function EventLogic.State(events: { any }, doubleWeekends: boolean, unixTime: number): State?
+-- What's on at `unixTime`: the event, and whether it's one of its double coins weekends (a Saturday
+-- or Sunday in UTC while an event with DoubleCoinsWeekends is on; the double coins stop when the
+-- weekend or the event ends, whichever comes first). Nil when no event is on: double coins never
+-- come on their own.
+function EventLogic.State(events: { any }, unixTime: number): State?
 	local event, endsAt = EventLogic.Active(events, unixTime)
-	local doubleEnds = if doubleWeekends then EventLogic.WeekendEndsAt(unixTime) else nil
-	if not event and not doubleEnds then
+	if not event or not endsAt then
 		return nil
 	end
+	local weekendEnds = if event.DoubleCoinsWeekends == true then EventLogic.WeekendEndsAt(unixTime) else nil
+	local doubleEnds = if weekendEnds then math.min(weekendEnds, endsAt) else nil
 	return {
-		Id = if event then event.Id else "",
-		Name = if event then event.Name else "",
-		EndsAt = endsAt or 0,
+		Id = event.Id,
+		Name = event.Name,
+		EndsAt = endsAt,
 		DoubleCoins = doubleEnds ~= nil,
 		DoubleEndsAt = doubleEnds or 0,
 	}

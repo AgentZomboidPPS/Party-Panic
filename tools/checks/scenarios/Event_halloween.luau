@@ -14,7 +14,8 @@
 --   * after the round: each stand-in's results lines (the "2× COINS WEEKEND" line pays the round's
 --     coins again), the candy it paid (bots get none), the medal for Bot1 reaching the end of the
 --     track (once), the golden pumpkin hunt for Bot3 (today's spot, once, not from afar, not a spot
---     with nothing), then the clock moved past the end: the rewards reached but not claimed are given.
+--     with nothing), then the clock moved past the end: the rewards reached but not claimed are given,
+--     and double coins are on only on the party's weekends (24 Oct and 1 Nov yes; 7 and 8 Nov no).
 return function(env)
 	local EventService = __require("Server/Services/EventService")
 	local EventLogic = __require("Shared/Logic/EventLogic")
@@ -157,6 +158,16 @@ return function(env)
 			for _, player in env.players do
 				note("after the end: " .. describe(player))
 			end
+			-- No double coins after it, weekends included (owner: no double coins after Halloween).
+			local doubles = {}
+			for _, when in { "2026-10-24 09:00", "2026-11-01 23:00", "2026-11-07 12:00", "2026-11-08 12:00" } do
+				local at = EventLogic.ParseUtc(when) :: number
+				EventService.SetClockForTests(function()
+					return at
+				end)
+				table.insert(doubles, `{when} {EventService.DoubleCoins()}`)
+			end
+			note(`double coins: {table.concat(doubles, ", ")}`)
 			EventService.SetClockForTests(nil)
 			MedalService.Award, Boosts.Apply = realAward, realApply
 		end)
