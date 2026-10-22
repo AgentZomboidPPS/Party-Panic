@@ -7,7 +7,8 @@
 --
 -- Extra coins from what keeps players coming back (Services/Boosts: a friend in the round, double
 -- coins weekends) are lines of their own; six lines or more draw compact so they fit a phone, and a
--- line with no XP shows just its coins.
+-- line with no XP shows just its coins. While the card is up, the local player's PP_ResultsShowing
+-- holds the toasts back (NotificationController): the card draws over them.
 --
 -- The headline names the game in capitals, like every other screen, on one line: a long name with
 -- "Your team won!" draws a little smaller rather than wrapping out of its box.
@@ -17,6 +18,7 @@
 -- row's result needs. It used to be one line ("🥇  name  ·  result") that a 15-character name cut
 -- short in every mode.
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
@@ -209,6 +211,13 @@ end
 
 function ResultsController.Start(context)
 	modal = Modal.new(context.Overlay, "Round Results", "🏆", Vector2.new(820, 470))
+	-- Toasts wait while the card is up (it draws over them: NotificationController).
+	modal.Opened:Connect(function()
+		Players.LocalPlayer:SetAttribute("PP_ResultsShowing", true)
+	end)
+	modal.Closed:Connect(function()
+		Players.LocalPlayer:SetAttribute("PP_ResultsShowing", nil)
+	end)
 	headline = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
