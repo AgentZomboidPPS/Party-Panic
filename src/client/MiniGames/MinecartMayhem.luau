@@ -19,6 +19,12 @@
 -- Controls: PC, A / D or the arrow keys to pick a way and lean, Space to JUMP. Phones: two big
 -- ◀ ▶ pads just right of the middle (clear of the MOVE stick's half; the stick pushed left or right
 -- leans too), JUMP beside the jump button (the jump button jumps too).
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): only icons every device draws. On a
+-- real Roblox server ★ measures as the missing-glyph box in FredokaOne and Builder Sans (it showed
+-- only where a device's own fallback fonts had it) and ✖ comes from the emoji font as a dark grey
+-- cross that the dark panels swallow: FAST is ⭐ and DEAD END / WOBBLE ❌ now. ◀ ▶ ● measure as
+-- real glyphs in those fonts, so they stay.
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
@@ -195,7 +201,7 @@ function MinecartMayhem.Start(api)
 				rider.B = way
 				if live and way == 2 and tile.O == "Short" and not called["short" .. event.Tile] then
 					called["short" .. event.Tile] = true
-					say("★ SHORTCUT!", Theme.Colors.Yellow, 1.2)
+					say("⭐ SHORTCUT!", Theme.Colors.Yellow, 1.2)
 				end
 			elseif event.K == "Gap" then
 				local fell = myGaps[event.Tile]
@@ -511,8 +517,8 @@ function MinecartMayhem.Start(api)
 	})
 	local HINTS = {
 		Long = { Icon = "●", Word = "SAFE", Color = Color3.fromRGB(120, 200, 255) },
-		Short = { Icon = "★", Word = "FAST", Color = Color3.fromRGB(255, 215, 80) },
-		Dead = { Icon = "✖", Word = "DEAD END", Color = Color3.fromRGB(230, 230, 230) },
+		Short = { Icon = "⭐", Word = "FAST", Color = Color3.fromRGB(255, 215, 80) },
+		Dead = { Icon = "❌", Word = "DEAD END", Color = Color3.fromRGB(230, 230, 230) },
 		TNT = { Icon = "☠", Word = "TNT", Color = Color3.fromRGB(255, 90, 70) },
 	}
 	local wayBoxes = {}
@@ -881,7 +887,7 @@ function MinecartMayhem.Start(api)
 			api:Effect("Stars", at + Vector3.new(0, 5, 0))
 		end
 		if userId == myId then
-			say("✖ DEAD END! Rolling back…", Theme.Colors.TextDim, 2)
+			say("❌ DEAD END! Rolling back…", Theme.Colors.TextDim, 2)
 			api:Sound("Hit")
 			shake = 0.3
 		end
@@ -1304,7 +1310,7 @@ function MinecartMayhem.Start(api)
 					promptText.Text = `✔ BOOST {arrow}`
 					promptText.TextColor3 = Theme.Colors.Green
 				elseif leanNow ~= 0 and myLean == -leanNow then
-					promptText.Text = `✖ WOBBLE! {arrow}`
+					promptText.Text = `❌ WOBBLE! {arrow}`
 					promptText.TextColor3 = Theme.Colors.Red
 				else
 					promptText.Text = if dir < 0 then "◀ LEAN" else "LEAN ▶"
