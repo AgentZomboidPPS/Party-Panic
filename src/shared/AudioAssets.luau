@@ -17,7 +17,7 @@ return {
 		ModePack3 = 96432706159875,
 		ModePack4 = 91819577463974,
 		ModePack5 = 111855655225102,
-		ModePack6 = 0,
+		ModePack6 = 111377793680965,
 	},
 	Sfx = {
 		VoteOpen = 0,
