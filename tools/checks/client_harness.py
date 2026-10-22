@@ -879,6 +879,47 @@ do
 	end
 end
 
+-- 3c. The weekly leaderboard (HallOfFameController): this week's board and last week's top three
+-- with long names, the player 14th with 35 points, so its chip is in the lobby's row from here on,
+-- and the THIS WEEK window the chip opens ("Weekly").
+do
+	local week = __require("Shared/Logic/DailyLogic").WeekNumber(os.time())
+	local top, last = {}, {}
+	for index = 1, 10 do
+		local name = if index % 2 == 1 then "SuperLongDisplayNm20" else "Captain Waffles"
+		table.insert(top, { UserId = 200 + index, Name = name, Points = 1250 - index * 37 })
+	end
+	for index = 1, 3 do
+		table.insert(last, { UserId = 300 + index, Name = "SuperLongDisplayNm20", Points = 2400 - index * 300 })
+	end
+	GameState.SetJSON("HallOfFame", { Week = week, LastWeek = last, Top = top })
+	__player:SetAttribute("PP_WeeklyRank", 14)
+	if okSnap then
+		snapshot.Weekly = { Week = week, Points = 35 }
+		__fire("ProfileData", snapshot)
+	end
+	task.wait(0.5)
+	-- Phones: the row as a player who has finished the first-join tips sees it (this run's player is
+	-- new, so everywhere else the tip has the row's spot): the tip put away for one snapshot.
+	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+	local tip = hud and hud:FindFirstChild("Onboarding", true)
+	if __touchMode and tip and tip.Visible then
+		tip.Visible = false
+		hud:SetAttribute("PP_TipShowing", false)
+		task.wait(1)
+		snap("Weekly row")
+		tip.Visible = true
+		hud:SetAttribute("PP_TipShowing", true)
+		task.wait(0.3)
+	end
+	step = "OpenScreen Weekly"
+	State.OpenScreen:Fire("Weekly")
+	task.wait(1)
+	snap("Weekly")
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
+end
+
 -- 4. A whole round, phase by phase, with three toasts on screen in the lobby. The vote shows the
 -- fullest cards: the two longest names and the longest objective (that game is the one played).
 -- The stand-in players play it (round attributes, as RoundContext sets them), with the stand-in
