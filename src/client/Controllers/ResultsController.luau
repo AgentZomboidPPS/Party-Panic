@@ -24,6 +24,16 @@
 -- gets a ✓ and a yellow rim, and you can change it until the results end. The title bar is where
 -- phones keep them clear of the menu column, the jump button and the MOVE stick, as 44 pt buttons.
 -- After the most replays in a row it says a new vote is next instead.
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): the card closed on Cleanup or
+-- Intermission only. A replay goes from Results through Cleanup into its own Preparing in one server
+-- step (and a round nobody can play next goes to Waiting), and a device only gets the phase set
+-- last in a step, so the card stayed up over the replay's rules card and the round. Any phase but
+-- Results closes it now.
+--
+-- NO THANKS wore the panels' dark purple on the card's (owner: "why are the close menu buttons and
+-- the invite friend button so dark?"): it's Theme's neutral lavender button now, beside the green
+-- PLAY AGAIN.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -191,7 +201,7 @@ local function buildReplay()
 		Parent = strip,
 	}, function()
 		choose(false)
-	end, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+	end, Theme.Colors.Lavender, Theme.Colors.Purple)
 	local note = UIKit.Label({
 		Name = "Note",
 		Text = `🗳️ {Config.Session.MaxReplays + 1} in a row - a new vote next!`,
@@ -399,8 +409,9 @@ function ResultsController.Start(context)
 			show(data)
 		end
 	end)
+	-- (The card opens as the round ends, just before Results: InRound can't come back after it.)
 	GameState.Changed("Phase", function(phase)
-		if phase == "Cleanup" or phase == "Intermission" then
+		if phase ~= "Results" then
 			modal:Close()
 		end
 	end)

@@ -9,6 +9,9 @@
 -- them.
 -- SocialService here is Roblox's, not the game's server module of that name (Services/
 -- SocialService: emotes, the daily reward...).
+--
+-- The chip wore the panels' dark purple (owner: "why are the close menu buttons and the invite
+-- friend button so dark?"): it's a bright green "go" button now, white words with a stroke.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -62,7 +65,13 @@ local function invite()
 end
 
 function InviteController.Start(context)
-	local added = LobbyRibbon.Add(context, { Name = "Invite", Priority = 3, OnClick = invite })
+	local added = LobbyRibbon.Add(context, {
+		Name = "Invite",
+		Priority = 3,
+		OnClick = invite,
+		Top = Theme.Colors.Green,
+		Bottom = Color3.fromRGB(60, 160, 90),
+	})
 	chip = added
 	-- A chip ahead of it that grew can push the long words off the row; the short ones may still fit.
 	added.Button:GetPropertyChangedSignal("Visible"):Connect(function()

@@ -18,6 +18,10 @@
 -- BAIT, SINKING SANDS and ARROW AMBUSH showed 0 — 0 all round and Green and Yellow never showed.
 -- It marks the player's own team too (owner: "I couldnt tell what color I was on prime cut."): a
 -- "YOU" beside its mark and a white-rimmed box round it, in every team game.
+--
+-- The menu column's Settings button wore the panels' dark purple and looked switched off (owner:
+-- "why are the close menu buttons and the invite friend button so dark?"): it's lavender to purple
+-- now (Theme's neutral button), apart from Shop's pink, Quests' yellow and Emotes' cyan.
 
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -813,7 +817,7 @@ local function buildMenu(parent: Instance)
 	menuButton(menu, "Shop", "🛍️", "Shop", 1, Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
 	menuButton(menu, "Quests", "📜", "Quests", 2, Theme.Colors.Yellow, Theme.Colors.Orange)
 	menuButton(menu, "Emotes", "🕺", "Emotes", 3, Theme.Colors.Cyan, Color3.fromRGB(50, 120, 230))
-	menuButton(menu, "Settings", "⚙️", "Settings", 4, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+	menuButton(menu, "Settings", "⚙️", "Settings", 4, Theme.Colors.Lavender, Theme.Colors.Purple)
 
 	State.ProfileChanged:Connect(function(profile)
 		local claimable = profile.Daily.CanClaim
