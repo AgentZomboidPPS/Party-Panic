@@ -22,10 +22,14 @@
 -- each physics step, never by anchoring it (modes anchor riders on the server until GO: Bumper
 -- Ballers, Skate Escape, Parasol Plummet's fallers; a local un-anchor would undo theirs), and it
 -- lets go the moment the root is anchored, the humanoid is PlatformStanding or sitting (Parasol
--- Plummet, Bobsled Run, Rockin' Raceway and Tanks! pose their riders that way; Sinking Sands' Kings
--- sit on thrones), or the server moves it again (then it starts over there). Walking, jumping and
--- falling in play are physics, not arrivals, so they're never held: a fall off an edge counts
--- wherever it did before.
+-- Plummet, Bobsled Run, Rockin' Raceway and Tanks! pose their riders that way), or the server moves
+-- it again (then it starts over there). Walking, jumping and falling in play are physics, not
+-- arrivals, so they're never held: a fall off an edge counts wherever it did before.
+--
+-- No sitting (owner: "Also theres times where I will sit on invisible shit in game. NO mini game
+-- should require you to sit."): nothing sits a character down any more (Shared/NoSitting), so the
+-- sitting test below never lets go on its own; Sinking Sands' Kings, who sat on their thrones, now
+-- stand on the dais and are held like anyone else until this device has it.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
