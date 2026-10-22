@@ -3,7 +3,7 @@
     python3 tools/meshgen/generate_meshes.py --only HotPotatoSpud,HotPotatoPuff,HotPotatoFence,HotPotatoLights,HotPotatoGrill,HotPotatoTable,HotPotatoHay
 
 The potato bomb is a lumpy baked spud with a metal cap and a curling fuse; the backyard has picket fence
-panels (10.5 studs: well over a jump), string lights for the fence top, a giant kettle grill with
+panels (13.5 studs: a jump from a table top still falls 2.7 short), string lights for the fence top, a giant kettle grill with
 foil-wrapped potatoes on it, picnic tables and hay bales, and a cartoon blast puff."""
 
 import math
@@ -48,7 +48,7 @@ def puff():
 
 
 def fence():
-    width, height = 8.4, 10.5
+    width, height = 8.4, 13.5
     pickets = []
     count = 13
     step = width / count
@@ -58,9 +58,9 @@ def fence():
         outline = [(x - w / 2, 0.0), (x + w / 2, 0.0), (x + w / 2, height - 0.45), (x, height), (x - w / 2, height - 0.45)]
         pickets.append(extrude(outline, 0.8))
     rails = merge(rounded_box(width, 0.6, 0.65, 0.08, 3).translate(0, 2.0, 0.68),
-                  rounded_box(width, 0.6, 0.65, 0.08, 3).translate(0, 8.2, 0.68))
-    posts = merge(rounded_box(0.9, 10.0, 1.0, 0.1, 3).translate(-width / 2, 5.0, 0.5),
-                  rounded_box(0.9, 10.0, 1.0, 0.1, 3).translate(width / 2, 5.0, 0.5))
+                  rounded_box(width, 0.6, 0.65, 0.08, 3).translate(0, 11.2, 0.68))
+    posts = merge(rounded_box(0.9, 13.0, 1.0, 0.1, 3).translate(-width / 2, 6.5, 0.5),
+                  rounded_box(0.9, 13.0, 1.0, 0.1, 3).translate(width / 2, 6.5, 0.5))
     return {"Pickets": merge(*pickets), "Rails": rails, "Posts": posts}
 
 

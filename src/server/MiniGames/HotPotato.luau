@@ -27,8 +27,8 @@
 --
 -- Nothing solid where nothing is drawn (owner: "Theres invisible stuff you can jump on and hang on
 -- in several games"): only the drawn lawn, fence panels, grill, tables and hay bales collide, with
--- collision that follows their meshes; the fence (10.5 studs) is well over a jump (7.2), nothing to
--- climb stands within 8 studs of it, and a safety net puts anyone found outside the lawn back in.
+-- collision that follows their meshes; the fence (13.5 studs) is well over a jump (7.2) even from a
+-- table top (10.8), and a safety net puts anyone found outside the lawn back in.
 
 local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -46,7 +46,7 @@ local HotPotato = MiniGame.Define("HotPotato", { Results = "Survival" })
 local FIRST_DROP = 2 -- seconds after GO
 local BREATHER = 2 -- after a blast, before fresh potatoes drop
 local LAWN_Y = 0.2 -- the lawn's top above the origin
-local FENCE_HEIGHT = 10.5 -- HotPotatoFence's height (a jump reaches 7.2)
+local FENCE_HEIGHT = 13.5 -- HotPotatoFence's height (a jump reaches 7.2, from a table top 10.8)
 local PANEL_WIDTH = 8 -- each fence panel covers this much of the ring (the mesh is a bit wider)
 -- Solid props stand this far above the lawn: an invisible sliver, but a probe rising from the lawn under
 -- them then meets their underside instead of starting inside them (tools/checks/colliders.py).
@@ -231,14 +231,14 @@ function HotPotato:_buildArena()
 	-- well inside the fence (nothing to climb near it).
 	MeshLibrary.Get("HotPotatoGrill", { CFrame = CFrame.new(center + Vector3.new(0, SET_ON, 0)), Parent = arena })
 	local count = if radius < 26 then 4 else 6
-	local ring = math.min(radius * 0.55, radius - 9)
+	local ring = (radius + 4) / 2 -- halfway between the grill and the fence
 	local turn = rng:NextNumber(0, math.pi * 2)
 	for index = 0, count - 1 do
 		local angle = turn + index / count * math.pi * 2
 		local at = center + Vector3.new(math.cos(angle) * ring, SET_ON, math.sin(angle) * ring)
 		local facing = CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z))
 		MeshLibrary.Get(if index % 2 == 0 then "HotPotatoTable" else "HotPotatoHay", {
-			CFrame = facing * CFrame.Angles(0, math.pi / 2, 0),
+			CFrame = facing, -- lengthwise round the ring
 			Parent = arena,
 		})
 	end

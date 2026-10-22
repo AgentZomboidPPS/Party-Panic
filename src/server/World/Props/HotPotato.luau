@@ -36,13 +36,13 @@ return function(h)
 			end,
 		},
 		HotPotatoFence = {
-			Height = 10.5,
-			AssetId = 70543224773631,
+			Height = 13.5,
+			AssetId = 75081713699876,
 			Collide = true,
 			Palette = { Pickets = h.rgb(250, 246, 236), Rails = h.rgb(232, 224, 208), Posts = h.rgb(240, 234, 220) },
 			Materials = { Pickets = Enum.Material.Wood, Rails = Enum.Material.Wood, Posts = Enum.Material.Wood },
 			Fallback = function(m)
-				h.block(m, "Pickets", Vector3.new(8.4, 10.5, 1.4), Vector3.new(0, 5.25, 0))
+				h.block(m, "Pickets", Vector3.new(8.4, 13.5, 1.4), Vector3.new(0, 6.75, 0))
 			end,
 		},
 		HotPotatoLights = {
