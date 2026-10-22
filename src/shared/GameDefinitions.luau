@@ -136,7 +136,6 @@ local list: { GameDefinition } = {
 		Duration = 55,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "CrazyCutters",
@@ -149,7 +148,6 @@ local list: { GameDefinition } = {
 		Duration = 85,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "BobsledRun",
@@ -162,7 +160,6 @@ local list: { GameDefinition } = {
 		Duration = 55,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "CakeFactory",
@@ -175,7 +172,6 @@ local list: { GameDefinition } = {
 		Duration = 55,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "SharkBait",
@@ -188,7 +184,6 @@ local list: { GameDefinition } = {
 		Duration = 60,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "MechaMarathon",
@@ -341,6 +336,19 @@ local list: { GameDefinition } = {
 		Color = Color3.fromRGB(240, 120, 50),
 		Objective = "Eat your team's part of the giant pizza first! Pepperoni slices take more bites.",
 		Controls = "Stand on your team's slice and mash EAT (E). Slice gone? Walk to the next one!",
+		Duration = 30,
+		MinPlayers = 2,
+		IsTeam = true,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "LogJam",
+		Name = "Log Jam",
+		Category = "Team",
+		Icon = "🪓",
+		Color = Color3.fromRGB(196, 132, 72),
+		Objective = "Work your team's sawmill: place a log, chop a log. Most logs chopped in 30 seconds wins!",
+		Controls = "Press the shape on your screen (■ ♥ ♠ ♣) when it's your turn. Wrong one? Your mill jams!",
 		Duration = 30,
 		MinPlayers = 2,
 		IsTeam = true,

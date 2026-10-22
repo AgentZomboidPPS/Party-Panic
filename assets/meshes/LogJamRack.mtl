@@ -1,0 +1,23 @@
+newmtl Frame
+Kd 0.980 0.980 0.961
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Peg
+Kd 0.431 0.290 0.173
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Logs
+Kd 0.478 0.329 0.204
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LogEnds
+Kd 0.910 0.769 0.549
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
