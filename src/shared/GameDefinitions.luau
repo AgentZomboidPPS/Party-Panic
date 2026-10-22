@@ -320,6 +320,33 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "TraceRace",
+		Name = "Trace Race",
+		Category = "Reaction",
+		Icon = "🖍️",
+		Color = Color3.fromRGB(120, 170, 255),
+		Objective = "Ride your giant crayon down the dotted line. The most accurate line wins!",
+		Controls = "Steer left and right with the MOVE stick, A / D or the arrow keys. The crayon goes forward by itself.",
+		Duration = 45,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "EatsaPizza",
+		Name = "Eatsa Pizza",
+		Category = "Team",
+		Icon = "🍕",
+		Color = Color3.fromRGB(240, 120, 50),
+		Objective = "Eat your team's part of the giant pizza first! Pepperoni slices take more bites.",
+		Controls = "Stand on your team's slice and mash EAT (E). Slice gone? Walk to the next one!",
+		Duration = 30,
+		MinPlayers = 2,
+		IsTeam = true,
+		Enabled = false, -- in its review-fix pass (games-4 session); that session turns it on when it's done
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
