@@ -4,8 +4,8 @@
 -- The picker pops up in the middle of the screen, clear of the thumbstick, the jump button and the
 -- vote cards; two rows show at a time (the rest scroll), and it closes when the game moves on to
 -- the next phase or a window opens, so it's never left covering the vote.
--- Phones: 68 pt cells with 11 pt names and a 44 pt close button, under the tip and vote cards at the
--- top middle.
+-- Phones: 73 pt cells with 11 pt names and a 44 pt close button, under the tip and vote cards at the
+-- top middle (the cells grew from 68 pt when "Crown Shower" didn't fit under its icon).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -137,7 +137,7 @@ end
 
 function EmoteController.Start(context)
 	touch = UIKit.IsTouch()
-	cellSize = if touch then 110 else 84
+	cellSize = if touch then 118 else 84
 	-- Phones: a taller title row, so the close button is big enough for a thumb.
 	header = if touch then 84 else 44
 	local width = COLUMNS * cellSize + (COLUMNS - 1) * GAP + 2 * PADDING

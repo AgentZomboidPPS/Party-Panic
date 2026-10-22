@@ -10,12 +10,15 @@ Config.Session = {
 	MinPlayers = 2,
 	MinPlayersInStudio = 1, -- lets a single tester run the loop in Studio
 	IgnoreModePlayerLimitsInStudio = true,
-	IntermissionTime = 20, -- lobby social time before each vote
-	VoteTime = 12,
+	-- Between two rounds, ResultsTime + IntermissionTime + VoteTime: 6 + 6 + 8 = 20 seconds at most
+	-- (owner: "Less time sitting in the lobby. total of 20 seconds instead of 40.").
+	IntermissionTime = 6, -- lobby social time before each vote
+	VoteTime = 8, -- at most: once every person playing has voted, it ends VoteLastBeat after the last vote
+	VoteLastBeat = 1, -- so the last voter sees their tick before the winner shows (VotingService.Wait)
 	VoteChoices = 3, -- games shown in a vote; a 4th card, Random, is always added (owner: "4 options always")
 	RulesTime = 10, -- the rules card's time on screen before 3-2-1 (owner: "give players more time to read the instructions")
 	CountdownTime = 3,
-	ResultsTime = 8,
+	ResultsTime = 6, -- the results card, before everyone's back in the lobby
 	RoundGraceTime = 10, -- watchdog: hard stop this long after a mode's own time limit
 	RecentGameMemory = 2,
 }
@@ -89,7 +92,7 @@ Config.Debug = {
 	LogPhases = true,
 	-- Studio-only helpers for building new modes. Ignored in live servers.
 	ForceGame = "", -- e.g. "HexMeltdown": every vote offers only this mode
-	StudioIntermissionTime = 8, -- shorter lobby wait while testing
+	StudioIntermissionTime = 3, -- shorter lobby wait while testing (live: Session.IntermissionTime)
 }
 
 return Config
