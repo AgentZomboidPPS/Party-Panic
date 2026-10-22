@@ -45,9 +45,16 @@ local KINDS = {
 	reward = { Icon = "🎁", Color = Theme.Colors.Yellow },
 }
 
--- Low HUD panels (RoundController, SpectateController, SquadController's squad bar in the lobby) the
--- phone toasts stay above: name -> their height plus a gap, in the same scaled units.
-local BOTTOM_PANELS = { OutPanel = 86 + 12, Spectate = 86 + 12, SpectateButton = 72 + 12, SquadBar = 84 + 18 }
+-- Low HUD panels (RoundController, SpectateController, SquadController's squad bar in the lobby,
+-- VoteController's cards: 110 laid out, drawn 1.25 times, 10 off the bottom) the phone toasts stay
+-- above: name -> their height plus a gap, in the same scaled units.
+local BOTTOM_PANELS = {
+	OutPanel = 86 + 12,
+	Spectate = 86 + 12,
+	SpectateButton = 72 + 12,
+	SquadBar = 84 + 18,
+	Vote = 110 * 1.25 + 10 + 12,
+}
 
 -- Toast width and text (scaled units): PC, then phones.
 local WIDTH, TEXT, PAD_X, PAD_Y = 360, 21, 18, 10

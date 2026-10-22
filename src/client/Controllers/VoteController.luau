@@ -4,13 +4,15 @@
 -- portals only play a preview of each option); your choice is clearly marked and can be changed
 -- until the timer ends.
 -- PC: a row along the bottom. Phones and tablets (owner: "Wtf is this mobile Ui lol"): a slim row
--- of four small cards just under the top bar, centered under the "VOTE!" banner: icon, name on one
--- line, category as just its icon, and the votes. It leaves the middle of the view free and stays
--- above the thumbstick's corner and away from the jump button (the objective and length are on the
--- rules card). A long name (Mecha-Marathon) is drawn a little smaller so it fits its card.
+-- of four cards: icon, name on one line, category as just its icon, and the votes (the objective and
+-- length are on the rules card). A long name (Mecha-Marathon) is drawn a little smaller so it fits
+-- its card. The row sits at the bottom middle, drawn a quarter bigger (owner: "Can we make the vote
+-- buttons go to the bottom middle and make them 25% larger."): every card is laid out at the old
+-- size and the row is scaled up whole (TOUCH_GROW), between the thumbstick's corner and the jump
+-- button. Toasts stay above it (NotificationController's BOTTOM_PANELS).
 -- Only people who'll play vote: while you're sitting out (UI/SitOutSwitch) the cards are dimmed and
--- a note says why (under the cards on phones, over them on PC); tapping one tells you how to jump
--- back in. The server refuses those votes anyway (VotingService).
+-- a note says why (over the cards); tapping one tells you how to jump back in. The server refuses
+-- those votes anyway (VotingService).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -55,6 +57,8 @@ local CARD_W = 228 -- PC
 local TOUCH_W, TOUCH_H, TOUCH_GAP = 150, 94, 10
 local TOUCH_NAME_TEXT = 20 -- a phone card's name (a long one is drawn a little smaller to fit)
 local TOUCH_TOP = 12 -- room above the row for the "YOUR VOTE" tag on a card's top edge
+local TOUCH_GROW = 1.25 -- phones: the row is drawn this much bigger than it's laid out
+local TOUCH_BOTTOM = 10 -- phones: the row's gap above the screen's bottom edge
 local PC_TOP = 34 -- PC: the same room above the cards (the sit-out note uses it when there's no vote)
 
 local function darker(color: Color3): Color3
@@ -206,9 +210,8 @@ local function buildCard(index: number): Card
 	}
 end
 
--- The note that says why the cards are dimmed: under the cards on phones (short, to stay clear of
--- the thumbstick's corner), over them on PC.
-local function buildSitOutNote()
+-- The note that says why the cards are dimmed, over the cards (short on phones).
+local function buildSitOutNote(parent: Instance)
 	local text = if touch
 		then "💤 Sitting out - can't vote"
 		else "💤 Sitting out - can't vote. Tap SITTING OUT up top to play!"
@@ -220,14 +223,14 @@ local function buildSitOutNote()
 		TextWrapped = false,
 		BackgroundTransparency = 0.15,
 		BackgroundColor3 = Theme.Colors.PanelDark,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, if touch then TOUCH_TOP + TOUCH_H + 6 else 2),
+		AnchorPoint = if touch then Vector2.new(0.5, 1) else Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, if touch then TOUCH_TOP - 4 else 2),
 		Size = UDim2.fromOffset(
 			math.ceil(UIKit.TextWidth(text, size, Theme.Fonts.Bold)) + 32,
 			if touch then 28 else 30
 		),
 		Visible = false,
-		Parent = holder,
+		Parent = parent,
 		Children = { UIKit.Round(), UIKit.TextStroke(0.4) },
 	})
 	task.delay(3, function() -- again once the font has surely loaded
@@ -301,27 +304,38 @@ function VoteController.Start(context)
 		Enum.HorizontalAlignment.Center,
 		if touch then Enum.VerticalAlignment.Top else Enum.VerticalAlignment.Bottom
 	)
+	local noteParent: Instance
 	if touch then
-		-- Centered just under the top bar (the "VOTE!" banner sits above it, in the top bar row).
+		-- At the bottom middle, a quarter bigger: the cards are laid out at their size in "Grow", which
+		-- a UIScale draws TOUCH_GROW times as big (text and all) inside the holder.
 		local width = CARDS * TOUCH_W + (CARDS - 1) * TOUCH_GAP
+		local height = TOUCH_TOP + TOUCH_H + 4
 		holder = UIKit.new("Frame", {
 			Name = "Vote",
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 2),
-			Size = UDim2.fromOffset(width, TOUCH_TOP + TOUCH_H + 4),
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -TOUCH_BOTTOM),
+			Size = UDim2.fromOffset(width * TOUCH_GROW, height * TOUCH_GROW),
 			BackgroundTransparency = 1,
 			Visible = false,
 			Parent = context.Hud,
 		})
 		UIKit.AutoScale(holder)
+		local grow = UIKit.new("Frame", {
+			Name = "Grow",
+			Size = UDim2.fromOffset(width, height),
+			BackgroundTransparency = 1,
+			Parent = holder,
+			Children = { UIKit.new("UIScale", { Scale = TOUCH_GROW }) },
+		})
 		row = UIKit.new("Frame", {
 			Name = "Cards",
 			Position = UDim2.fromOffset(0, TOUCH_TOP),
 			Size = UDim2.fromOffset(width, TOUCH_H),
 			BackgroundTransparency = 1,
-			Parent = holder,
+			Parent = grow,
 			Children = { list },
 		})
+		noteParent = grow
 	else
 		holder = UIKit.new("Frame", {
 			Name = "Vote",
@@ -340,11 +354,12 @@ function VoteController.Start(context)
 			Parent = holder,
 			Children = { list },
 		})
+		noteParent = holder
 	end
 	for index = 1, CARDS do
 		table.insert(cards, buildCard(index))
 	end
-	buildSitOutNote()
+	buildSitOutNote(noteParent)
 
 	GameState.Changed("Phase", function(phase)
 		refresh()
