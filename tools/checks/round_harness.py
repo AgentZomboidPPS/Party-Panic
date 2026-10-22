@@ -93,13 +93,24 @@ def rewrite(module: str, text: str, is_init: bool) -> str:
     return re.sub(r"^export type", "type", text, flags=re.M)
 
 
+def borrowed_props(owner: str, game: str) -> bool:
+    """Does `game` use a prop from World/Props/<owner>.luau? (Rake It In's hay bales are Arrow Ambush's.)"""
+    props = SRC / "server" / "World" / "Props" / f"{owner}.luau"
+    rules = SRC / "server" / "MiniGames" / f"{game}.luau"
+    if not props.exists() or not rules.exists():
+        return False
+    names = re.findall(r"^\t\t([A-Z]\w*) = \{", props.read_text(), flags=re.M)
+    text = rules.read_text()
+    return any(f'"{name}"' in text for name in names)
+
+
 def other_mode(module: str, game: str) -> bool:
     """Another mini-game's rules, brain or client half (a round only needs its own)."""
     modes = {path.stem for path in (SRC / "server" / "MiniGames").glob("*.luau")} - {"init"}
     for prefix in ("Server/MiniGames/", "Server/MiniGames/Bots/", "Client/MiniGames/", "Server/World/Props/"):
         name = module[len(prefix):] if module.startswith(prefix) else None
         if name in modes and name != game:
-            return True
+            return not (prefix == "Server/World/Props/" and borrowed_props(name, game))
     return False
 
 
