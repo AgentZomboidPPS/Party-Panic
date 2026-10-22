@@ -108,14 +108,15 @@ def prime_cut():
 
     def rasgueado(bar, step, notes, gain):
         """A flamenco strum: four quick strokes, the last one up."""
-        for k in range(4):
-            strum(tr, "nylon", bar, step + k * 0.5, notes, ins.nylon, 0.25, gain * (0.7 + 0.1 * k), spread=0.006, down=k < 3)
+        for k in range(4):  # (each finger its own pluck, so the strokes don't comb against each other)
+            strum(tr, "nylon", bar, step + k * 0.5, notes, lambda m, sec, k=k: ins.nylon(m, sec, variant=k + 1), 0.25,
+                  gain * (0.7 + 0.1 * k), spread=0.006, down=k < 3)
 
     # ---- the intro: noon at the grill
     tr.add("grill", 0, 0, sizzle(tr.bar * 6), 1.0)
-    tr.add("bell", 0, 0, bell(220.0), 0.75, -0.3)
-    tr.add("bell", 1, 0, bell(220.0), 0.6, -0.3)
-    tr.add("strings", 0, 0, ins.strings((45, 52), tr.bar * 6, attack=3.0, bright=0.25), 0.5)
+    tr.add("bell", 0, 0, bell(220.0), 0.55, -0.3)
+    tr.add("bell", 1, 0, bell(220.0), 0.5, -0.3)
+    tr.add("strings", 0, 0, ins.strings((45, 52), tr.bar * 6, attack=3.0, bright=0.25), 0.4)
     tr.play("whistle", 2, lonely, whistle, 0.6)
     tr.play("trumpet", 4, [n for n in theme if n.step < 16 * 3], trumpet, 0.5)  # a call from across the yard
 

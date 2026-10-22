@@ -220,8 +220,8 @@ def crazy_cutters():
                     tr.add("snare", bar, k, snare, 0.3 + 0.1 * (k - 6))
 
     # intro: the oven is set, the vibes noodle, the clarinet joins, then a run up into GO
-    tr.add("fx", 0, 0, ding(), 0.45, 0.3)
-    play_struck(tr, "vibes", 0, [n for n in motif if n.step < 12 * 2], vib, 0.45)
+    tr.add("fx", 0, 0, ding(), 0.3, 0.3)
+    play_struck(tr, "vibes", 0, [n for n in motif if n.step < 12 * 2], vib, 0.38)
     play_struck(tr, "vibes", 0, [n for n in motif if n.step >= 12 * 2], vib, 0.55)
     play_struck(tr, "vibes", 4, motif, vib, 0.62, humanize=0.08)
     tr.play("clar2", 4, guide, clar, 0.65)

@@ -120,7 +120,8 @@ def mecha_marathon():
                 ring = [n + 12 for n in voicing(c, 62, 74)]
                 for k in range(int(length)):
                     m = ring[(0, 1, 2, 1, 3, 1, 2, 1)[k % 8] % len(ring)]
-                    tr.add("xylo", bar, step + k, ins.xylophone(m, tr.step), 0.9 if k % 4 == 0 else 0.6, 0.3)
+                    note = ins._gate(np.asarray(ins.xylophone(m, tr.step)), tr.step * 2, 0.03)  # damped before it comes round again
+                    tr.add("xylo", bar, step + k, note, 0.9 if k % 4 == 0 else 0.6, 0.3)
             # pads: strings while the toys fly, brass for the landing and the winner
             if name in ("ready", "flight", "landing") or (name == "tag" and local < 2):
                 tr.add("strings", bar, step, ins.strings(tuple(notes), seconds, attack=0.15 if name != "ready" else 1.2, bright=0.55), 1.0)
@@ -136,8 +137,8 @@ def mecha_marathon():
         for bar in part.bars_range():
             local = bar - part.first
             if name == "intro":
-                tr.drum("tick", bar, "x...x...x...x...", tick, 0.35 + 0.04 * local, 0.3)
-                tr.drum("tick", bar, "..x...x...x...x.", tock, 0.3 + 0.04 * local, -0.3)
+                tr.drum("tick", bar, "x...x...x...x...", tick, 0.25 + 0.05 * local, 0.3)
+                tr.drum("tick", bar, "..x...x...x...x.", tock, 0.2 + 0.05 * local, -0.3)
                 if local >= 2:  # somebody winds the key
                     tr.drum("ratchet", bar, "x...x...x...x..." if local < 6 else "x.x.x.x.x.x.x.x.", ins.ratchet(0.16, 5), 0.35 + 0.06 * local)
                 if local >= 4:
@@ -188,7 +189,7 @@ def mecha_marathon():
                     tr.add("fx", bar, 0, s.riser(tr.bar), 0.4)
 
     # the tunes
-    play_struck(tr, "lead", 0, slow, ins.music_box, 0.55)
+    play_struck(tr, "lead", 0, slow, ins.music_box, 0.45)
     play_struck(tr, "lead2", 0, shift(slow, -12), ins.celesta, 0.3)
     play_struck(tr, "lead", 6, shift([n for n in theme if n.step >= 48], 0, -48), ins.music_box, 0.65, roll=1)
     for k, m in enumerate((57, 61, 64, 67, 69, 73, 76, 79)):  # a run up the dominant into GO
