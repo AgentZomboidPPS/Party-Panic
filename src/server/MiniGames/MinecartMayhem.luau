@@ -38,6 +38,15 @@
 -- a device's own fallback fonts had it; ✖ is drawn by the emoji font as a dark grey cross, lost on
 -- the dark signs and HUD panels. FAST is now ⭐ and DEAD END ❌ (emoji every device has); ● measures
 -- as a real glyph and ☠ comes from the emoji font, so they stay.
+--
+-- Jump pass (owner: "Minecart mayhem needs to be fixed on mobile. you cannot see where to jump."):
+-- every broken bridge has a JUMP gate now: a glowing post each side of the take-off arrows (four
+-- lamps up each post and a beacon on top), a red glow in the hole and red lights on the broken
+-- rails' ends, so where the gap is and where to jump read from far down the mine, in the cave's
+-- gloom too. The posts stand clear of carts side by side and lower than every chase camera; nothing
+-- about them is solid. The arrows on the ties glow (Props). Phones ride with a higher chase camera
+-- (client half), so the junction gantries hang 2.5 studs higher, clear above it. The rules are as
+-- before: Track.Clears decides every jump, judged here the same way.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -55,6 +64,12 @@ local MAX_LEEWAY = 0.4
 local SEAT_DROP = 0.5 -- a rider stands in the cart this much lower than on the ground (knees bent)
 local CART_FLOOR = 1.15 -- the cart's floor above the rails' top
 local CAVE_STEP = 44 -- studs between the cave's rock rings
+-- Junction gantries this much higher than the sign mesh's own rest, so the phones' camera passes
+-- under their boards (tools/checks/MinecartMayhemCamera measures it; change its copy with it).
+local GANTRY_UP = 2.5
+local GATE_X = 6 -- a JUMP gate's posts this far each side of the rails (clear of carts side by side)
+local GATE_YELLOW = Color3.fromRGB(255, 205, 40) -- the take-off arrows' own yellow
+local GAP_RED = Color3.fromRGB(255, 60, 60)
 
 -- Cart trims, one per start lane (the lane number on the cart's badge is the second cue).
 local COLORS = {
@@ -397,13 +412,13 @@ function MinecartMayhem:_buildArena()
 		local kinds = { [longSide] = "Long", [-longSide] = tile.O or "Short" }
 		local signAt = self:_tilePoint(tile, Track.SPLIT - 30, 0, 0)
 		local sign = Build.Folder("JunctionSign" .. tile.Index, props)
-		-- (the gantry raised 4 studs, so its boards hang clear above the chase camera)
-		MeshLibrary.Get("MinecartMayhemSign", { CFrame = signAt * CFrame.new(0, -20, 0), Parent = sign })
+		-- (the gantry raised 4 + GANTRY_UP studs, so its boards hang clear above every chase camera)
+		MeshLibrary.Get("MinecartMayhemSign", { CFrame = signAt * CFrame.new(0, -20 + GANTRY_UP, 0), Parent = sign })
 		for _, side in { -1, 1 } do
 			local hint = HINTS[kinds[side]]
 			local arrow = if side < 0 then "◀" else "▶"
 			local text = if side < 0 then `{arrow} {hint.Icon} {hint.Word}` else `{hint.Icon} {hint.Word} {arrow}`
-			self:_board(sign, signAt * CFrame.new(side * 3.6, 12.2, 0), 7, text, hint.Color)
+			self:_board(sign, signAt * CFrame.new(side * 3.6, 12.2 + GANTRY_UP, 0), 7, text, hint.Color)
 		end
 		-- (the board at the start of each way, and its tell-tale)
 		for _, side in { -1, 1 } do
@@ -467,6 +482,83 @@ function MinecartMayhem:_buildArena()
 				Parent = props,
 			}).Name =
 				"Crystal"
+		end
+	end
+
+	-- Every broken bridge's JUMP gate.
+	for _, tile in course.Tiles do
+		if tile.K == "Gap" then
+			self:_jumpGate(tile, props)
+		end
+	end
+end
+
+-- A broken bridge's JUMP gate: a post each side of the take-off arrows (the middle of
+-- Track.TAKEOFF_NEAR..FAR, where pressing JUMP clears the gap at any speed), with four lamps up it
+-- and a beacon on top, a red glow in the hole and red lights on the broken rails' ends. Everything
+-- glows, so it reads from far down the dark mine. The posts' tops stay under every chase camera, and they stand GATE_X out,
+-- clear of carts side by side. Clients light the lamps as their own JUMP cue counts down
+-- ("GateLamp1" is the lowest).
+function MinecartMayhem:_jumpGate(tile: Track.BuiltTile, parent: Instance)
+	local gate = Build.Folder("JumpGate" .. tile.Index, parent)
+	local takeoff = Track.GAP_FROM - (Track.TAKEOFF_NEAR + Track.TAKEOFF_FAR) / 2
+	local upright = CFrame.Angles(0, 0, math.pi / 2) -- (a cylinder's length is along its X)
+	for _, side in { -1, 1 } do
+		local x = side * GATE_X
+		Build.Decor({
+			Name = "GatePost",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(15.6, 0.8, 0.8), -- (from down in the dark up to 7.6 over the rails)
+			CFrame = self:_tilePoint(tile, takeoff, x, -0.2) * upright,
+			Color = rgb(44, 38, 52),
+			Material = Enum.Material.Metal,
+			Parent = gate,
+		})
+		for k = 1, 4 do
+			Build.Decor({
+				Name = "GateLamp" .. k,
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(0.5, 1.3, 1.3),
+				CFrame = self:_tilePoint(tile, takeoff, x, 0.9 + (k - 1) * 1.6) * upright,
+				Color = GATE_YELLOW,
+				Material = Enum.Material.Neon,
+				Parent = gate,
+			})
+		end
+		local beacon = Build.Decor({
+			Name = "GateBeacon",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.new(1.5, 1.5, 1.5),
+			CFrame = self:_tilePoint(tile, takeoff, x, 8.3),
+			Color = GATE_YELLOW,
+			Material = Enum.Material.Neon,
+			Parent = gate,
+		})
+		Build.Light(beacon, GATE_YELLOW, 18, 2.2)
+	end
+	-- (a red glow just under where the ties are missing, so from up the rails the hole itself lights
+	-- up; deeper, the near edge would hide it)
+	Build.Decor({
+		Name = "GapGlow",
+		Size = Vector3.new(4.6, 0.1, Track.GAP_TO - Track.GAP_FROM - 0.6),
+		CFrame = self:_tilePoint(tile, (Track.GAP_FROM + Track.GAP_TO) / 2, 0, -0.55),
+		Color = GAP_RED,
+		Material = Enum.Material.Neon,
+		Transparency = 0.35,
+		Parent = gate,
+	})
+	-- (on the ties' ends beside the rails, where the rails break off and where they start again)
+	for _, f in { Track.GAP_FROM - 0.4, Track.GAP_TO + 0.4 } do
+		for _, side in { -1, 1 } do
+			Build.Decor({
+				Name = "GapLight",
+				Shape = Enum.PartType.Ball,
+				Size = Vector3.new(0.7, 0.7, 0.7),
+				CFrame = self:_tilePoint(tile, f, side * 2.1, 0.8),
+				Color = GAP_RED,
+				Material = Enum.Material.Neon,
+				Parent = gate,
+			})
 		end
 	end
 end
