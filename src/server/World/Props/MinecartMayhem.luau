@@ -101,7 +101,7 @@ return function(h)
 	local props = {
 		MinecartMayhemCart = {
 			Height = 3.12,
-			AssetId = 0, -- tools/upload_assets.py --only MinecartMayhemCart fills this in
+			AssetId = 107257913022144, -- tools/upload_assets.py --only MinecartMayhemCart fills this in
 			Shadow = true,
 			Palette = {
 				Body = rgb(96, 100, 110),
@@ -130,40 +130,40 @@ return function(h)
 		-- The rail tiles share everything but their shape (filled in below); each keeps its own block
 		-- with its AssetId, which is where the upload and permission tools look.
 		MinecartMayhemRailStart = {
-			AssetId = 0,
+			AssetId = 137570203510302,
 			Rail = true,
 		},
 		MinecartMayhemRailBendL = {
-			AssetId = 0,
+			AssetId = 115815017233744,
 			Rail = true,
 		},
 		MinecartMayhemRailBendR = {
-			AssetId = 0,
+			AssetId = 77662819118252,
 			Rail = true,
 		},
 		MinecartMayhemRailJunctionL = {
-			AssetId = 0,
+			AssetId = 106494779995004,
 			Rail = true,
 		},
 		MinecartMayhemRailJunctionR = {
-			AssetId = 0,
+			AssetId = 112712754403066,
 			Rail = true,
 		},
 		MinecartMayhemRailGap = {
-			AssetId = 0,
+			AssetId = 74366814212882,
 			Rail = true,
 		},
 		MinecartMayhemRailHill = {
-			AssetId = 0,
+			AssetId = 71146920759880,
 			Rail = true,
 		},
 		MinecartMayhemRailFinish = {
-			AssetId = 0,
+			AssetId = 131188828381113,
 			Rail = true,
 		},
 		MinecartMayhemCave = {
 			Height = 88.63,
-			AssetId = 0,
+			AssetId = 72581873531246,
 			Shadow = false,
 			Palette = { Rock = rockColor, Crystal = crystal },
 			Materials = { Rock = rock, Crystal = neon },
@@ -176,7 +176,7 @@ return function(h)
 		},
 		MinecartMayhemPortal = {
 			Height = 111.5,
-			AssetId = 0,
+			AssetId = 130311793125291,
 			Shadow = true,
 			Palette = { Rock = rgb(110, 98, 92), Timber = timber, Glow = rgb(255, 200, 120) },
 			Materials = { Rock = rock, Timber = wood, Glow = neon },
@@ -190,7 +190,7 @@ return function(h)
 		},
 		MinecartMayhemSign = {
 			Height = 35,
-			AssetId = 0,
+			AssetId = 72717983982550,
 			Shadow = true,
 			Palette = { Timber = timber, Chains = rgb(70, 70, 75), Glow = rgb(255, 200, 120) },
 			Materials = { Timber = wood, Glow = neon },
@@ -203,7 +203,7 @@ return function(h)
 		},
 		MinecartMayhemPost = {
 			Height = 29,
-			AssetId = 0,
+			AssetId = 91043378019756,
 			Shadow = true,
 			Palette = { Timber = timber },
 			Materials = { Timber = wood },
@@ -213,7 +213,7 @@ return function(h)
 		},
 		MinecartMayhemTNT = {
 			Height = 2.87,
-			AssetId = 0,
+			AssetId = 104455096986796,
 			Shadow = true,
 			Palette = {
 				Crate = rgb(170, 120, 70),
@@ -231,7 +231,7 @@ return function(h)
 		},
 		MinecartMayhemBuffer = {
 			Height = 2.63,
-			AssetId = 0,
+			AssetId = 121310193748023,
 			Shadow = true,
 			Palette = {
 				Timber = timber,
@@ -249,7 +249,7 @@ return function(h)
 		},
 		MinecartMayhemRubble = {
 			Height = 4.43,
-			AssetId = 0,
+			AssetId = 104325293328734,
 			Shadow = true,
 			Palette = { Rock = rgb(100, 88, 104) },
 			Materials = { Rock = rock },
@@ -259,7 +259,7 @@ return function(h)
 		},
 		MinecartMayhemCrystal = {
 			Height = 1.16,
-			AssetId = 0,
+			AssetId = 86997312242607,
 			Shadow = false,
 			Palette = { Crystal = rgb(110, 255, 200), Stones = rgb(90, 80, 100) },
 			Materials = { Crystal = neon, Stones = rock },
@@ -270,7 +270,7 @@ return function(h)
 		},
 		MinecartMayhemCluster = {
 			Height = 9.73,
-			AssetId = 0,
+			AssetId = 127888765282466,
 			Shadow = false,
 			Palette = { Crystal = crystal, Rock = rockColor },
 			Materials = { Crystal = neon, Rock = rock },
@@ -281,7 +281,7 @@ return function(h)
 		},
 		MinecartMayhemLantern = {
 			Height = 30.2,
-			AssetId = 0,
+			AssetId = 102368589385003,
 			Shadow = true,
 			Palette = { Timber = timber, Iron = rgb(50, 50, 55), Glow = rgb(255, 205, 120) },
 			Materials = { Timber = wood, Glow = neon, Iron = metal },
