@@ -42,7 +42,7 @@ for key in ["bots", "brain", "prepare", "prepareSeconds", "arenaParts", "perf", 
             "rulesCard", "start", "endReason", "endHeld", "roundSeconds", "stop", "cleanup",
             "destroy", "arenaLeftovers", "sharedLeftovers", "winningTeam", "clientGuiDuringResults",
             "clientModeGuisAfterCleanup", "lobby", "portalScreens", "votePads", "botVoteRefused",
-            "finished", "seconds", "botReplayRefused"]:
+            "finished", "seconds", "botReplayRefused", "parties", "partyTeams", "partyToasts"]:
     if key in d:
         print(f"{key:28s}", fix(str(d.get(key))))
 # The lobby run (round_harness.py LOBBY) and the replay run (<Mode> --replay): each phase, and how
@@ -74,6 +74,14 @@ for vote in d.get("votes") or []:
           f"; winner {vote.get('winner')}{' (tie broken at random)' if vote.get('tie') else ''}; counts {vote.get('counts')}")
     print(f"    cards {vote.get('options')}")
     print(f"    {'; '.join(vote.get('casts') or [])}; the banner's timer just after each: {vote.get('timerAfter')}")
+# The lobby run's party check (harness_prelude.luau, __checkParties): each step, and what was sent.
+for key, value in (d.get("partyCheck") or {}).items():
+    if isinstance(value, list):
+        print(f"party {key}:")
+        for item in value:
+            print("   ", item)
+    else:
+        print(f"party {key:22s}", value)
 results = d.get("results")
 if isinstance(results, list):
     print("results:")

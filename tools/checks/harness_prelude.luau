@@ -751,6 +751,86 @@ end
 -- out ({ sitOut = true }), or is knocked out `outAt` seconds in.
 -- `colliders` (round_harness.py --colliders-at, tools/checks/colliders.luau): snapshots of every part
 -- characters collide with, { times = { seconds into the round, 0 = after Prepare } }.
+-- Parties (round_harness.py --party; Services/PartyService): what partied stand-ins are told (stand-ins
+-- aren't real Players, so Notifier keeps nothing for them), as "Bot2: 👥 You joined Bot1's party!".
+function __watchPartyToasts()
+	local Notifier = __require("Server/Services/Notifier")
+	local toasts = {}
+	local function keep(names, text)
+		if
+			type(text) == "string"
+			and (string.find(text, "👥", 1, true) == 1 or string.find(text, "👑", 1, true) == 1)
+		then
+			if #toasts < 60 then
+				table.insert(toasts, `{names}: {text}`)
+			end
+		end
+	end
+	local realSend, realPlayers = Notifier.Send, Notifier.Players
+	Notifier.Send = function(player, text, ...)
+		keep(player.Name, text)
+		return realSend(player, text, ...)
+	end
+	Notifier.Players = function(list, text, ...)
+		local names = {}
+		for _, player in list do
+			table.insert(names, player.Name)
+		end
+		keep(table.concat(names, "+"), text)
+		return realPlayers(list, text, ...)
+	end
+	return toasts
+end
+
+-- Puts the stand-ins with these numbers in parties as players do: the first invites the others
+-- through the Party remote, and each says JOIN. Returns what each one's PP_Party became.
+function __formParties(parties)
+	local remote = __remoteObjects.Party
+	local formed = {}
+	for _, numbers in parties do
+		local members = {}
+		for _, number in numbers do
+			table.insert(members, __fakePlayers[number])
+		end
+		local leader = members[1]
+		for index = 2, #members do
+			remote.__bindable:Fire(__playerKey(leader), "Invite", members[index].UserId)
+			task.wait(0.1)
+			remote.__bindable:Fire(__playerKey(members[index]), "Answer", leader.UserId, true)
+			task.wait(0.1)
+		end
+		local row = {}
+		for _, member in members do
+			table.insert(
+				row,
+				`{member.Name}={member:GetAttribute("PP_Party") or "-"}:{member:GetAttribute("PP_PartySeat") or "-"}`
+			)
+		end
+		table.insert(formed, table.concat(row, " "))
+	end
+	return formed
+end
+
+-- The team (or role) each party's members were dealt, and whether the party is on one.
+function __partyTeams(parties)
+	local rows = {}
+	for _, numbers in parties do
+		local members, teams, together = {}, {}, true
+		for _, number in numbers do
+			local who = __fakePlayers[number]
+			local team = who:GetAttribute("PP_Team") or ""
+			table.insert(members, who.Name)
+			table.insert(teams, team)
+			together = together and team ~= "" and team == teams[1]
+		end
+		table.insert(
+			rows,
+			{ members = table.concat(members, ","), teams = table.concat(teams, ","), together = together }
+		)
+	end
+	return rows
+end
+
 function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, uiAt, botCount, watch, colliders)
 	local GameDefinitions = __require("Shared/GameDefinitions")
 	local GameState = __require("Shared/GameState")
@@ -853,7 +933,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	workspace:SetAttribute("PP_Harness", true)
 	-- The features that hang off rounds (they hear RoundEvents.Finished from __grantRewards), started
 	-- the way the server starts them.
-	for _, name in { "CupService", "FriendsService", "MedalService", "LeaderboardService", "EventService" } do
+	for _, name in
+		{ "CupService", "FriendsService", "PartyService", "MedalService", "LeaderboardService", "EventService" }
+	do
 		local okLoad, service = pcall(__require, "Server/Services/" .. name)
 		if not okLoad or type(service) ~= "table" then
 			__note(`{name} failed to load: {service}`)
@@ -873,6 +955,13 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 				end
 			end)
 		end
+	end
+
+	-- Parties (--party): formed the way players form them, before the round.
+	local partyToasts = __watchPartyToasts()
+	if watch and watch.parties then
+		task.wait(0.2) -- PartyService's Start
+		summary.parties = __formParties(watch.parties)
 	end
 
 	-- Real bots (Services/BotService) driven by the mode's brain, alongside the scripted stand-ins.
@@ -942,6 +1031,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	summary.prepare = if okPrepare then "ok" else tostring(prepareErr)
 	summary.prepareSeconds = __round(os.clock() - t0)
 	summary.arenaParts = #ctx.Arena:GetDescendants()
+	if watch and watch.parties then
+		summary.partyTeams = __partyTeams(watch.parties) -- dealt in Prepare
+	end
 	-- What a device has to draw, at its peak during the round (phone performance): the arena's parts
 	-- (MeshParts among them), particle emitters, lights and surface/billboard GUIs, and the parts the
 	-- client half made (workspace.MiniGameClient).
@@ -1258,6 +1350,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	if stopWatchingHolds then
 		stopWatchingHolds()
 	end
+	summary.partyToasts = if #partyToasts > 0 then partyToasts else nil
 	summary.errors = __errors
 	summary.textReport = if summary.ui then __textReport else nil
 	summary.uiDefaults = if summary.ui then __uiDefaults else nil -- what gui_dump.luau left out of them
@@ -1389,6 +1482,188 @@ function __checkSitOut(VotingService, BotService)
 	if not ok then
 		result.failed = tostring(err)
 	end
+	return result
+end
+
+-- Parties (Services/PartyService; owner: "stuff to work on right now is parties."), with stand-in
+-- people sending what their devices would through the Party remote: junk and impossible requests do
+-- nothing (wrong types, yourself, a bot, someone not here, a JOIN with no invite waiting), an invite
+-- and a JOIN make a party led by the inviter, four at most, the leader leaving hands over, leaving
+-- the server takes you out, a NO means not again straight away, a flood of requests is rate limited,
+-- an invite's time stops in a round and its card comes back after, joining a new party leaves the
+-- old one, and a party of one is over. Each step records everyone's party ("Pia=1:1": party 1, its
+-- leader); "sent" is what the server sent each device, "told" their toasts.
+function __checkParties()
+	local PartyService = __require("Server/Services/PartyService")
+	local Notifier = __require("Server/Services/Notifier")
+	local GameState = __require("Shared/GameState")
+	local BotRegistry = __require("Server/Services/BotRegistry")
+	local told, sent = {}, {}
+	local realSend = Notifier.Send
+	Notifier.Send = function(player, text)
+		table.insert(told, `{player.Name}: {text}`)
+	end
+	local result = {}
+	local names = { "Pia", "Quin", "Rex", "Sol", "Tess", "Uma" }
+	local people = {}
+	local clock = nil
+	local ok, err = pcall(function()
+		PartyService.Init()
+		clock = task.spawn(PartyService.Start)
+		local remote = __remoteObjects.Party
+		local realFire = remote.FireClient
+		remote.FireClient = function(self, player, ...)
+			local parts = {}
+			for _, value in { ... } do
+				table.insert(parts, tostring(if type(value) == "number" then math.round(value * 10) / 10 else value))
+			end
+			table.insert(sent, `{player.Name} <- {table.concat(parts, " ")}`)
+			return realFire(self, player, ...)
+		end
+		for index, name in names do
+			local who = __newPlayer(200 + index)
+			who.Name, who.DisplayName = name, name
+			table.insert(__fakePlayers, who)
+			people[name] = who
+		end
+		local pia, quin, rex, sol, tess, uma = people.Pia, people.Quin, people.Rex, people.Sol, people.Tess, people.Uma
+		local function ask(who, ...)
+			remote.__bindable:Fire(__playerKey(who), ...)
+			task.wait(0.08)
+		end
+		local function parties()
+			local list = {}
+			for _, name in names do
+				local who = people[name]
+				local id = who:GetAttribute("PP_Party")
+				if not who.Parent then
+					table.insert(list, `{name} gone`)
+				else
+					table.insert(list, if id then `{name}={id}:{who:GetAttribute("PP_PartySeat")}` else `{name}=-`)
+				end
+			end
+			return table.concat(list, " ")
+		end
+		local function invitedCount()
+			local count = 0
+			for _, line in sent do
+				if string.find(line, "<- Invited", 1, true) then
+					count += 1
+				end
+			end
+			return count
+		end
+		GameState.Set("Phase", "Intermission")
+		GameState.Set("Replay", "")
+		task.wait(0.3)
+
+		-- Junk and impossible requests: no invite goes out, nobody's in a party.
+		ask(pia, "Invite", "Quin")
+		ask(pia, "Invite", 0 / 0)
+		ask(pia, 42, quin.UserId)
+		ask(pia, "Invite", pia.UserId)
+		local bot = BotRegistry.List()[1]
+		result.botAsked = if bot then bot.UserId else "no bot"
+		if bot then
+			ask(pia, "Invite", bot.UserId)
+		end
+		ask(pia, "Invite", 987654321)
+		ask(quin, "Answer", pia.UserId, true) -- no invite waiting
+		result.junk = `{parties()}; invites sent {invitedCount()}`
+
+		-- An invite and a JOIN; the answer must be a yes or a no.
+		ask(pia, "Invite", quin.UserId)
+		ask(quin, "Answer", pia.UserId, "yes please")
+		result.junkAnswer = parties()
+		ask(quin, "Answer", pia.UserId, true)
+		result.joined = parties()
+
+		-- Four at most: anyone in the party can invite; a fifth is refused.
+		ask(pia, "Invite", rex.UserId)
+		ask(rex, "Answer", pia.UserId, true)
+		ask(quin, "Invite", sol.UserId)
+		ask(sol, "Answer", quin.UserId, true)
+		local before = invitedCount()
+		ask(pia, "Invite", tess.UserId)
+		ask(tess, "Answer", pia.UserId, true)
+		result.full = `{parties()}; a fifth invited: {invitedCount() > before}`
+
+		-- The leader leaves: the next one in leads.
+		ask(pia, "Leave")
+		result.leaderLeft = parties()
+
+		-- Sol leaves the server.
+		table.remove(__fakePlayers, table.find(__fakePlayers, sol))
+		sol.Parent = nil
+		__playerRemoving:Fire(sol)
+		task.wait(0.2)
+		result.solGone = parties()
+
+		-- A NO, then asking again at once: not yet.
+		ask(quin, "Invite", tess.UserId)
+		ask(tess, "Answer", quin.UserId, false)
+		before = invitedCount()
+		ask(quin, "Invite", tess.UserId)
+		result.afterNo = `{parties()}; asked again at once: {invitedCount() > before}`
+
+		-- Uma floods: 25 invites to Pia as fast as she can. The server takes 10 (5 s window).
+		local function toUma()
+			local count = 0
+			for _, line in sent do
+				if string.sub(line, 1, 7) == "Uma <- " then
+					count += 1
+				end
+			end
+			return count
+		end
+		local answeredBefore = toUma()
+		for _ = 1, 25 do
+			remote.__bindable:Fire(__playerKey(uma), "Invite", pia.UserId)
+		end
+		task.wait(0.5)
+		result.flood = `25 asked, {toUma() - answeredBefore} answered`
+
+		-- Uma's invite waits through a round (its time stops) and comes back after.
+		GameState.Set("Phase", "Preparing")
+		task.wait(1)
+		GameState.Set("Phase", "InRound")
+		task.wait(3)
+		GameState.Set("Phase", "Results")
+		task.wait(1)
+		GameState.Set("Phase", "Cleanup")
+		task.wait(0.6)
+		local lastToPia = nil
+		for _, line in sent do
+			if string.sub(line, 1, 15) == "Pia <- Invited " then
+				lastToPia = line
+			end
+		end
+		result.cardAfterRound = lastToPia
+
+		-- Joining a new party leaves the old one: Rex goes to Tess's; Quin is left alone, so that
+		-- party is over.
+		ask(tess, "Invite", rex.UserId)
+		ask(rex, "Answer", tess.UserId, true)
+		result.rexMoved = parties()
+	end)
+	if clock then
+		pcall(task.cancel, clock)
+	end
+	Notifier.Send = realSend
+	for _, who in people do
+		local index = table.find(__fakePlayers, who)
+		if index then
+			table.remove(__fakePlayers, index)
+		end
+		if who.Character then
+			who.Character:Destroy()
+		end
+	end
+	if not ok then
+		result.failed = tostring(err)
+	end
+	result.told = told
+	result.sent = sent
 	return result
 end
 
@@ -1569,6 +1844,7 @@ function __runLobby(botCount, seconds)
 	task.wait(math.max(0, seconds - (os.clock() - t0)))
 
 	summary.sitOut = __checkSitOut(VotingService, BotService)
+	summary.partyCheck = __checkParties()
 	task.cancel(stepper)
 	-- One leaves (as if a player joined), to see the fade-out.
 	BotService.Remove(bots[1])
@@ -1592,8 +1868,9 @@ end
 -- the replay's results Ann says yes, Bo and Cy no: no replay, so the lobby and a vote follow, where
 -- the picker's recent list and options are recorded (the replayed game is left out). "phases" says
 -- when each phase started, "replayVotes" every state of the vote, "rounds" who played each round and
--- on which teams, "toasts" what everyone was told.
-function __runReplay(id, botCount)
+-- on which teams, "toasts" what everyone was told. With `party`, Ann and Bo are in a party first
+-- (through Services/PartyService's remote): they should be on one team in the round and in its replay.
+function __runReplay(id, botCount, party)
 	local GameState = __require("Shared/GameState")
 	GameState.Folder()
 	local DataService = __require("Server/Services/DataService")
@@ -1660,6 +1937,12 @@ function __runReplay(id, botCount)
 		return who
 	end
 	local ann, bo = person(1, "Ann"), person(2, "Bo")
+	if party then
+		local PartyService = __require("Server/Services/PartyService")
+		PartyService.Init()
+		task.spawn(PartyService.Start)
+		summary.parties = __formParties({ { 1, 2 } })
+	end
 	BotService.Setup()
 	local bots = {}
 	for _ = 1, botCount do

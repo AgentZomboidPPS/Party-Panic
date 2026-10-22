@@ -41,6 +41,13 @@ character (Controllers/ArrivalController): never, once it's on a floor that's th
 gives that device the arena T seconds late (its ground probe finds nothing until then, like a phone
 still loading a big arena): it must be held where the round put it until then.
 
+--party 1,2 (as many times as there are parties) puts those stand-ins in a party before the round,
+the way players do it: through PartyService's remote, the first one invites the others and each
+says JOIN. The summary's "parties" says what each stand-in's PP_Party became, "partyTeams" the team
+(or role) each member was dealt and whether the party is together, and "partyToasts" what partied
+people were told (a party that had to be split is told so). With --replay, any --party puts the
+two people (Ann and Bo) in a party: "rounds" shows their teams in the round and in its replay.
+
 CUP plays a whole PARTY CUP and the next cup's first round (tools/checks/cup_rounds.luau): --rounds
 real rounds of the --modes in turn, with --players stand-ins and --bots real bots, then the rest of
 cup 2 made up, to check the standings, the podium, the prizes, the medal and the crown.
@@ -269,6 +276,8 @@ def main():
     parser.add_argument("--no-csg", action="store_true", help="build as if CSG had failed on this server (Shapes from plain parts)")
     parser.add_argument("--modes", default=CUP_MODES, help="CUP: the modes its rounds play, in turn")
     parser.add_argument("--rounds", type=int, default=6, help="CUP: real rounds to play (a cup is 5)")
+    parser.add_argument("--party", action="append", default=[], help="stand-ins in one party, e.g. 1,2 (repeat it for "
+                        "more parties): formed through PartyService before the round (with --replay: Ann and Bo)")
     parser.add_argument("--replay", action="store_true", help="the real round loop with this mode as the only game: a "
                         "vote, the round, PLAY AGAIN passing, the replay, PLAY AGAIN failing, the lobby and a vote")
     args = parser.parse_args()
@@ -351,12 +360,13 @@ def main():
     elif args.game == "LOBBY":
         out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8})")
     elif args.replay:
-        out.append(f'return __runReplay("{args.game}", {args.bots or 6})')
+        out.append(f'return __runReplay("{args.game}", {args.bots or 6}, {"true" if args.party else "false"})')
     else:
         def number(value):
             return "nil" if value is None else str(value)
 
-        watch = "{ sitOut = %s, outAt = %s, leaveAt = %s, spawnFails = %s, resetAt = %s, dropAt = %s, lateFloor = %s }" % (
+        parties = ", ".join("{ " + ", ".join(str(int(n)) for n in group.split(",")) + " }" for group in args.party)
+        watch = "{ sitOut = %s, outAt = %s, leaveAt = %s, spawnFails = %s, resetAt = %s, dropAt = %s, lateFloor = %s, parties = %s }" % (
             "true" if args.client_sits_out else "false",
             number(args.client_out_at),
             number(args.leave_at),
@@ -364,6 +374,7 @@ def main():
             number(args.reset_at),
             number(args.drop_at),
             number(args.late_floor),
+            "{ " + parties + " }" if args.party else "nil",
         )
         colliders = "nil"
         if args.colliders_at is not None:
