@@ -139,7 +139,7 @@ local function buildYard(ctx, origin: Vector3, frames: { CFrame })
 	-- The sawmill shed behind the stations, with lumber stacks either side.
 	local millAt = origin + Vector3.new(0, 0, -38)
 	MeshLibrary.Get("LogJamMill", { Scale = 1.25, CFrame = facing(millAt, front), Parent = arena })
-	for _, spot in { { -40, -30, 15 }, { 40, -30, -15 }, { -58, -6, 70 }, { 58, -4, -70 }, { -30, 34, 160 } } do
+	for _, spot in { { -74, -32, 15 }, { 74, -32, -15 }, { -88, 0, 70 }, { 88, 2, -70 }, { -36, 40, 160 } } do
 		local at = origin + Vector3.new(spot[1], 0, spot[2])
 		MeshLibrary.Get("LogJamLumber", {
 			Scale = 1.3,
@@ -150,7 +150,7 @@ local function buildYard(ctx, origin: Vector3, frames: { CFrame })
 	-- Sawdust and chips scattered on the yard.
 	for _ = 1, 10 do
 		local angle = rng:NextNumber(0, math.pi * 2)
-		local distance = rng:NextNumber(30, 60)
+		local distance = rng:NextNumber(64, 74) -- (clear of the decks, even with four mills)
 		MeshLibrary.Get("LogJamChips", {
 			Scale = rng:NextNumber(1, 1.8),
 			CFrame = CFrame.new(origin + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance - 8))
@@ -190,7 +190,7 @@ local function buildYard(ctx, origin: Vector3, frames: { CFrame })
 			Parent = arena,
 		})
 	end
-	for _, spot in { { -52, 18 }, { 50, 22 }, { -70, -40 }, { 72, -36 } } do
+	for _, spot in { { -66, 24 }, { 64, 28 }, { -70, -46 }, { 72, -42 } } do
 		MeshLibrary.Get("LogJamStump", {
 			Scale = rng:NextNumber(0.9, 1.3),
 			CFrame = CFrame.new(origin + Vector3.new(spot[1], 0, spot[2]))
