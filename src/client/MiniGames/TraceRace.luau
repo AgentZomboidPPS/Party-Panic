@@ -26,7 +26,9 @@ local SEAT = CFrame.new(0, 5.44 + 3, 10.2) -- a rider's root from the crayon's t
 local SEND_EVERY = 0.1
 local LATE_SEND = 0.6 -- keep sending unconfirmed positions this long after the ride
 local LINE_THICK = 0.1
-local MERGE_ANGLE = math.cos(math.rad(0.8)) -- strokes this close to straight join into one part
+local MERGE_ANGLE = math.cos(math.rad(3.5)) -- strokes this close to straight join into one part...
+local MERGE_LENGTH = 12 -- ...up to this long (so a joined stroke stays within a few tenths of the line)
+local MAX_YAW = math.rad(22) -- the crayon leans into a turn at most this much (it stays in its lane)
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -88,6 +90,7 @@ function TraceRace.Start(api)
 		}
 	end
 	local mine = riders[myId]
+	-- (Re-checked every frame: someone whose character never spawned, or who's out, isn't riding.)
 	local playing = mine ~= nil and api:Alive()
 	local race: { T0: number, T1: number }? = nil
 
@@ -147,7 +150,7 @@ function TraceRace.Start(api)
 		if stroke and start then
 			local d1 = Vector2.new(from[1] - start[1], from[2] - start[2])
 			local d2 = Vector2.new(s - from[1], x - from[2])
-			if d1.Magnitude > 1e-3 and d1.Unit:Dot(d2.Unit) >= MERGE_ANGLE and d1.Magnitude < 40 then
+			if d1.Magnitude > 1e-3 and d1.Unit:Dot(d2.Unit) >= MERGE_ANGLE and d1.Magnitude < MERGE_LENGTH then
 				placeStroke(rider, stroke, start, point, strokeBottom(rider))
 				rider.Drawn = point
 				return
@@ -297,7 +300,7 @@ function TraceRace.Start(api)
 	})
 	local accuracy = UIKit.Label({
 		Name = "Accuracy",
-		Text = "100%",
+		Text = "--",
 		Font = Theme.Fonts.Display,
 		TextSize = 46,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -356,21 +359,31 @@ function TraceRace.Start(api)
 		Children = { UIKit.TextStroke(0.15) },
 	})
 
-	local hintUntil = 0 -- the steering arrow waits while the opening hint shows (same spot)
-	if playing then
-		hintUntil = os.clock() + 5
+	local finalShown = false
+	-- The opening hint shows at GO (before it, the rules card and countdown are on screen).
+	local hintUntil = math.huge -- the steering arrow waits while the opening hint shows (same spot)
+	local hintShown = false
+	local function openingHint(now: number)
+		if hintShown or not race or now < race.T0 then
+			return
+		end
+		hintShown = true
+		if not playing then
+			hintUntil = 0
+			return
+		end
+		hintUntil = os.clock() + 4.5
 		api:Hint(
-			if touch
-				then "Steer with the MOVE stick: stay on the dotted line!"
-				else "Steer with A / D: stay on the dotted line!",
+			if touch then "Steer: stay on the dotted line!" else "Steer with A / D: stay on the dotted line!",
 			hintY
 		)
-		api:Track(task.delay(5, function()
-			api:Hint("")
+		api:Track(task.delay(4.5, function()
+			if not finalShown then
+				api:Hint("")
+			end
 		end))
 	end
 
-	local finalShown = false
 	api:OnEvent("Final", function(results: any)
 		if type(results) ~= "table" then
 			return
@@ -400,10 +413,17 @@ function TraceRace.Start(api)
 	local savedType, savedFov = camera.CameraType, camera.FieldOfView
 	local cameraX = 0
 	local cameraUp = 0
-	if playing then
-		camera.CameraType = Enum.CameraType.Scriptable
-		camera.FieldOfView = 62
-		api:Track(function()
+	local claimed = false
+	local function claim(want: boolean)
+		if want == claimed then
+			return
+		end
+		claimed = want
+		if want then
+			savedType, savedFov = camera.CameraType, camera.FieldOfView
+			camera.CameraType = Enum.CameraType.Scriptable
+			camera.FieldOfView = 62
+		else
 			camera.CameraType = savedType
 			camera.FieldOfView = savedFov
 			local _, humanoid, root = api:Character()
@@ -414,8 +434,12 @@ function TraceRace.Start(api)
 			if root then
 				root.AssemblyLinearVelocity = Vector3.zero
 			end
-		end)
+		end
 	end
+	claim(playing)
+	api:Track(function()
+		claim(false)
+	end)
 
 	-- Crayons are the server's models (tagged with their rider); this client moves them smoothly.
 	local function findCrayons()
@@ -439,6 +463,17 @@ function TraceRace.Start(api)
 		local t0 = if race then race.T0 else math.huge
 		local t1 = if race then race.T1 else math.huge
 		local s = if race then math.clamp((now - t0) * Rules.SPEED, 0, course.Length) else 0
+		local wasPlaying = playing
+		playing = mine ~= nil and api:Alive()
+		if playing ~= wasPlaying then
+			claim(playing)
+			panel.Visible = playing
+			if not playing then
+				steer.Visible = false
+				api:Hint("")
+			end
+		end
+		openingHint(now)
 
 		-- My crayon: steer while the ride is on, sample it, send it.
 		if mine and playing and race then
@@ -494,7 +529,11 @@ function TraceRace.Start(api)
 				rider.V += ((rider.X - before) / math.max(dt, 1e-3) - rider.V) * (1 - math.exp(-dt * 8))
 			end
 			local tip = tipFrame(rider, s, rider.X)
-			local yaw = if race and now >= t0 and now <= t1 then -math.atan2(rider.V, Rules.SPEED) else 0
+			local yaw = if race
+					and now >= t0
+					and now <= t1
+				then math.clamp(-math.atan2(rider.V, Rules.SPEED), -MAX_YAW, MAX_YAW)
+				else 0
 			local turned = tip * CFrame.Angles(0, yaw, 0)
 			local crayon = rider.Crayon
 			if crayon and crayon.Parent then
@@ -546,7 +585,8 @@ function TraceRace.Start(api)
 		if mine and playing and not finalShown then
 			fill.Size = UDim2.fromScale(if course.Length > 0 then s / course.Length else 0, 1)
 			if race and now >= t0 then
-				accuracy.Text = `{tracker:Live()}%`
+				local live = tracker:Live()
+				accuracy.Text = if live then `{live}%` else "--"
 				local off = Rules.Distance(course, s, myX)
 				local key
 				if now > t1 then

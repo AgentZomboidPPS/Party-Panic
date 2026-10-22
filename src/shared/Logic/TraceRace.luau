@@ -13,6 +13,11 @@
 -- your crayon never drew scores 0. Full marks while the drawn line touches the guide (FULL comes
 -- from the two lines' widths, as drawn), nothing from ZERO studs off. The line between two sent
 -- positions is straight on every screen, and it's scored straight too.
+--
+-- The guide spends a good part of the course near the lane's middle, so a crayon that never steers
+-- would still touch it often. Scores are measured against that: every step also knows what a crayon
+-- left in the middle would score there (Course.I), and a player's percent is how much of the gap
+-- between "never steered" and "perfect" they made up. Never steering scores 0; a perfect line 100.
 
 local TraceRace = {}
 
@@ -36,6 +41,8 @@ export type Course = {
 	Pieces: { Piece },
 	Length: number, -- in whole studs
 	G: { number }, -- guide x at s = 0, 1, 2, ... (index s + 1)
+	I: { number }, -- what a crayon left in the middle scores at each step (index s + 1)
+	Idle: number, -- I added up
 }
 
 local function ease(t: number): number
@@ -130,7 +137,13 @@ function TraceRace.Build(pieces: { Piece }): Course
 		end
 		x = g[#g]
 	end
-	return { Pieces = pieces, Length = #g - 1, G = g }
+	local course = { Pieces = pieces, Length = #g - 1, G = g, I = {}, Idle = 0 }
+	for k = 0, course.Length do
+		local idle = TraceRace.Accuracy(TraceRace.Distance(course :: any, k, 0))
+		course.I[k + 1] = idle
+		course.Idle += idle
+	end
+	return course :: any
 end
 
 -- The guide's x at distance s (between whole studs it's a straight line, as drawn).
@@ -183,9 +196,10 @@ export type Tracker = {
 	Next: number, -- the next whole step to score
 	Sum: number,
 	Count: number,
+	IdleSum: number, -- what never steering would have scored on the steps counted so far
 	Add: (self: Tracker, s: number, x: number) -> (),
 	Score: (self: Tracker) -> number,
-	Live: (self: Tracker) -> number,
+	Live: (self: Tracker) -> number?,
 }
 
 local Tracker = {}
@@ -199,6 +213,7 @@ function TraceRace.Tracker(course: Course): Tracker
 		Next = 0,
 		Sum = 0,
 		Count = 0,
+		IdleSum = 0,
 	}, Tracker)
 	return (self :: any) :: Tracker
 end
@@ -216,24 +231,36 @@ function Tracker.Add(self: Tracker, s: number, x: number)
 		local f = if s > s0 then (step - s0) / (s - s0) else 1
 		local at = x0 + (x - x0) * math.clamp(f, 0, 1)
 		self.Sum += TraceRace.Accuracy(TraceRace.Distance(course, step, at))
+		self.IdleSum += course.I[step + 1] or 0
 		self.Count += 1
 		self.Next += 1
 	end
 	self.S, self.X = s, x
 end
 
--- The final score in percent (one decimal): steps never drawn count as 0.
-function Tracker.Score(self: Tracker): number
-	local steps = self.Course.Length + 1
-	return math.floor(self.Sum / steps * 1000 + 0.5) / 10
+-- Accuracy over some steps against what never steering scores on them, 0..1.
+local function beyondIdle(sum: number, idle: number, steps: number): number
+	local room = steps - idle
+	if room <= 1e-6 then
+		return if sum >= steps - 1e-6 then 1 else 0
+	end
+	return math.clamp((sum - idle) / room, 0, 1)
 end
 
--- The score so far (over the steps drawn), in whole percent: what the HUD shows during the ride.
-function Tracker.Live(self: Tracker): number
+-- The final score in percent (one decimal): steps never drawn count as 0.
+function Tracker.Score(self: Tracker): number
+	local course = self.Course
+	local share = beyondIdle(self.Sum, course.Idle, course.Length + 1)
+	return math.floor(share * 1000 + 0.5) / 10
+end
+
+-- The score so far (over the steps drawn), in whole percent: what the HUD shows during the ride
+-- (nil before anything is drawn).
+function Tracker.Live(self: Tracker): number?
 	if self.Count == 0 then
-		return 100
+		return nil
 	end
-	return math.floor(self.Sum / self.Count * 100 + 0.5)
+	return math.floor(beyondIdle(self.Sum, self.IdleSum, self.Count) * 100 + 0.5)
 end
 
 -- Twelve crayon colours with names (colour is never the only cue: the name and the lane number go

@@ -438,7 +438,11 @@ function TraceRace:Start()
 	local now = ctx:Now()
 	local t0 = now + 0.2
 	self.race = { T0 = t0, T1 = t0 + self.course.Length / Rules.SPEED }
-	for player in self.lanes do
+	-- (Only who's still in the round: someone whose character never spawned is back in the lobby.)
+	for _, player in ctx:GetPlayers() do
+		if not self.lanes[player] then
+			continue
+		end
 		local track = Rules.Tracker(self.course) :: Track
 		-- The first position may be drawn the moment the ride starts.
 		track.LastT = t0 - Rules.SAMPLE_GAP
@@ -501,6 +505,18 @@ function TraceRace:Start()
 	end)
 end
 
+-- The board sorts by the numeric score: keep it equal to the shown percent (in tenths).
+function TraceRace:_setScore(player: any, percent: number)
+	local ctx = self.context
+	local state = ctx:State(player)
+	if state then
+		local target = math.floor(percent * 10 + 0.5)
+		if state.Score ~= target then
+			ctx:AddScore(player, target - state.Score)
+		end
+	end
+end
+
 function TraceRace:_liveScores()
 	local ctx = self.context
 	local best, bestScore = nil, -1
@@ -509,8 +525,9 @@ function TraceRace:_liveScores()
 			continue
 		end
 		local live = track:Live()
-		ctx:SetScoreText(player, `{live}%`)
-		if track.Count > 0 and live > bestScore then
+		ctx:SetScoreText(player, if live then `{live}%` else "--")
+		self:_setScore(player, live or 0)
+		if live and live > bestScore then
 			best, bestScore = player, live
 		end
 	end
@@ -531,6 +548,7 @@ function TraceRace:_finish()
 		self.final[player] = score
 		results[tostring(player.UserId)] = score
 		ctx:SetScoreText(player, `{math.floor(score + 0.5)}%`)
+		self:_setScore(player, score)
 	end
 	ctx:Fire(nil, "Final", results)
 	local best, bestScore = nil, -1
@@ -578,6 +596,7 @@ function TraceRace:_onTrace(player: any, data: any)
 		if
 			t < track.LastT + Rules.SAMPLE_GAP * 0.5
 			or t < race.T0 - 0.001
+			or t < now - lag - 1.5 -- (drawn this long ago, even a resent one would have arrived)
 			or t > math.min(now + 0.1, race.T1 + 0.1)
 		then
 			continue
