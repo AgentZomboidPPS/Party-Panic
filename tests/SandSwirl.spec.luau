@@ -104,6 +104,23 @@ test("walkers feel more pull near the hole and none outside the rim", function()
 	expectTrue(inwardOut == 0, "no drift outside the funnel")
 end)
 
+test("a Diver on the very lip can still walk out of the strongest PULL", function()
+	-- (owner: "also increase pull"; however strong a PULL gets, it must stay beatable) The end of
+	-- the round, where the base drain is strongest, with three PULLs piled up at their peak: right
+	-- at the hole's edge the sand still drags slower than a Diver walks (16 studs/s).
+	local fx = effects()
+	for _, start in { 1042, 1042.25, 1042.5 } do
+		table.insert(fx.Pulls, start)
+	end
+	local segments = SandSwirl.Build(fx, 1040, 8)
+	for t = 1043, 1045, 0.1 do
+		local inward = SandSwirl.WalkerFlow(segments, SandSwirl.HOLE, t)
+		expectTrue(inward < 16, `{inward} studs/s inward at the hole's edge at {t}`)
+	end
+	local peak = SandSwirl.WalkerFlow(segments, 20, 1043.5)
+	expectTrue(peak > SandSwirl.DRAIN[2] + SandSwirl.PULL - 0.5, `a PULL still drains hard: {peak} studs/s at 20`)
+end)
+
 test("a SWIRL carries treasure away from a Diver standing on it", function()
 	local fx = effects()
 	table.insert(fx.Surges, 1002)
