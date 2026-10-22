@@ -234,7 +234,6 @@ local list: { GameDefinition } = {
 		Duration = 75,
 		MinPlayers = 2,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "PrimeCut",
@@ -247,7 +246,6 @@ local list: { GameDefinition } = {
 		Duration = 56,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "Slaparazzi",
@@ -376,6 +374,19 @@ local list: { GameDefinition } = {
 		Controls = "Press ROLL (E, tap, or jump) to stop your die. That's the only button!",
 		Duration = 60,
 		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "HotPotato",
+		Name = "Hot Potato",
+		Category = "Survival",
+		Icon = "🥔",
+		Color = Color3.fromRGB(235, 150, 70),
+		Objective = "Don't be holding a potato when it blows! Tag someone to pass it on. Last one standing wins.",
+		Controls = "Got the potato? Touch someone, or THROW (E) it at a player in front.",
+		Duration = 90,
+		MinPlayers = 2,
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
