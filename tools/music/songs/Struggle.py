@@ -135,9 +135,12 @@ def crowd_line(tr, stem, bar, notes, gain=1.0, rng=None):
 
 def struggle():
     """Sandlot Smash (120 bpm, A minor): a stadium organ rock anthem for a foam-bat brawl on a sunset
-    sandlot. A growling organ riff, rock drums, bleacher stomps and claps; the crowd chants
-    'whoa-oh' and the organ answers; a sing-along chorus in C on the ballpark organ; a climbing charge
-    with the crowd's HEY!s, then the last chorus a step up in D with everybody singing."""
+    sandlot. The crowd fills the bleachers and stomps while the organist warms up; at GO a growling
+    organ riff with a blue note, doubled by the bass, over rock drums and crowd claps (0-16 s after
+    GO); the crowd chants 'whoa-oh' on a bleacher stomp and the organ answers (16-32 s); a sing-along
+    chorus in C on the ballpark organ (32-48 s); a charge where the band drops out to stomps and the
+    crowd's HEY!s and climbs back in bar by bar (48-56 s); then the last chorus a step up in D with
+    everybody singing for the final stretch (56-72 s), and a short fill back into the riff."""
     tr = Track(bpm=120, bars=44)
     parts = plan(tr, [
         ("intro", 8, "Am | Am | F | G | Am | Am | F | E7"),

@@ -132,11 +132,14 @@ def yodel_line(tr, stem, bar, notes, gain=1.0, pan=0.0):
 # ---------------------------------------------------------------- the song
 
 def snowball_summit():
-    """Avalanche Polka (128 bpm, F major): an alpine oom-pah band on the frozen summit. An alphorn
-    calls across the valley and echoes back, then tuba, accordion and a clarinet strike up the polka;
-    a whistled yodel takes over, the trio swings up to B flat, and the finale goes up again to C with
-    cowbells, clarinet runs and shouts as the summit thins out. A stop-time clarinet cadenza leads
-    back to the top."""
+    """Avalanche Polka (128 bpm, F major): an alpine oom-pah band on the frozen summit, getting wilder
+    as the summit thins out. In the intro an alphorn calls across the valley and echoes back over the
+    wind, distant cowbells and snowflakes; the band strikes up and a snowball rumbles in to GO. Then a
+    clarinet polka over tuba and accordion (0-15 s after GO), a whistled yodel that flips between
+    registers (15-30 s), the trio up in B flat with the whole band on the tune (30-45 s), and the
+    finale up again in C for the last 15 s of the 60: the whistle on the theme, clarinet runs,
+    cowbells on every beat, the bellows shaking and the band shouting. The round's end lands on the
+    big hit, and a stop-time clarinet cadenza walks the tuba down into the drop for the loop."""
     tr = Track(bpm=128, bars=42)
     parts = plan(tr, [
         ("intro", 8, "F | F | F | F | Bb | F | Gm7 C7 | C7"),
@@ -198,9 +201,9 @@ def snowball_summit():
         return out
 
     # ------------------------------------------------ the intro: an alphorn across the valley
-    tr.add("fx", 0, 0, wind(tr.bar * 6), 0.45)
-    tr.play("alphorn", 0, segment(call, 0, 2), alphorn, 0.55)  # the first call, far away
-    tr.play("alphorn", 2, segment(call, 2, 3), alphorn, 0.72)  # the answer, nearer
+    tr.add("wind", 0, 0, wind(tr.bar * 6), 1.0)
+    tr.play("alphorn", 0, segment(call, 0, 2), alphorn, 0.6)  # the first call, far away
+    tr.play("alphorn", 2, segment(call, 2, 3), alphorn, 0.85)  # the answer, nearer
     for bar in range(1, 5):  # snowflakes
         for k in range(3):
             m = (77, 79, 81, 84, 86, 89)[rng.integers(6)]
@@ -350,7 +353,8 @@ def snowball_summit():
         "clar2": Bus(-11, reverb=0.18),
         "whistle": Bus(-6, reverb=0.2, delay=0.1),
         "melody": Bus(-6, reverb=0.15),
-        "alphorn": Bus(-12, reverb=0.35, delay=0.4),
+        "alphorn": Bus(-15, reverb=0.35, delay=0.4),
+        "wind": Bus(-22, reverb=0.2),
         "pah": Bus(-12, reverb=0.12),
         "tuba": Bus(-9, reverb=0.05),
         "glock": Bus(-15, reverb=0.3, delay=0.12),

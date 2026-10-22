@@ -159,7 +159,6 @@ def cake_factory():
     play_struck(tr, "toy", 0, shift(chime, -12), ins.celesta, 0.3)
     play_struck(tr, "lead", 6, shift(shift_up, 0, -12 * 4), ins.music_box, 0.5)
     for bar in range(2, 10):
-        local = bar
         c = parts[0].at(bar)[0][2]
         tr.drum("belt", bar, "x.xx.xx.xx.x", tk, 0.3 + 0.05 * min(bar - 2, 6))
         if bar < 4:
@@ -192,9 +191,8 @@ def cake_factory():
     next_root = {"belt1": 40, "belt2": 42, "belt3": 43, "dash": 38}  # E, F#, G, then D again
     for part in parts[1:]:
         name = part.name
-        for bar, step, length, c in part.changes:
-            local = bar - part.first
-            last = local == part.bars - 1
+        for bar, _, _, c in part.changes:
+            last = bar - part.first == part.bars - 1
             if last:
                 gear(bar, c, next_root[name])
                 continue

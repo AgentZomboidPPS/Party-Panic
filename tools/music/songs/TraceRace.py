@@ -96,10 +96,13 @@ def zigzag(root, scale):
 # ---------------------------------------------------------------- the song
 
 def trace_race():
-    """Crayon Cruise (140 bpm, A minor): an 80s synth-pop drive down a giant crayon's guideline. A
-    zig-zag synth riff that winds like the line, a bright octave bass, gated snares and crayon
-    scribbles; a syncopated chorus hook in C, a loop-the-loop bridge that climbs, and a last chorus a
-    step up in D with both hooks at once for the final straight."""
+    """Crayon Cruise (140 bpm, A minor): an 80s synth-pop drive down a giant crayon's guideline. The
+    intro draws a scribble and opens an arpeggio's filter bar by bar; at GO a zig-zag synth riff that
+    winds like the line rides a bright octave bass, gated snares and Simmons toms (0-14 s after GO),
+    then a syncopated chorus hook in C (14-27 s) and a half-time loop-the-loop bridge that climbs
+    (27-34 s). The last chorus goes up a step to D with an 'aah' choir and the zig-zag riff winding
+    under the hook for the final straight (34-48 s; the 45 s round ends in its seventh bar), and a
+    short fill drops back down to the riff for the loop."""
     tr = Track(bpm=140, bars=36)
     parts = plan(tr, [
         ("intro", 8, "Am | Am | F | G | Am | Am | F | E"),

@@ -63,7 +63,7 @@ def watch(pitch: float) -> np.ndarray:
 
 def prime_cut():
     """High Steaks (120 bpm, A minor): a spaghetti-western showdown at the backyard grill. A lonesome
-    whistle, a reverb-soaked baritone twang, nylon-string strums, mariachi trumpets in sixths, a choir,
+    whistle, a reverb-soaked baritone twang, nylon-string strums, mariachi trumpets in harmony, a choir,
     whip cracks and a ticking pocket watch. Every steak is eight bars, timed to the round: four bars of
     the tense theme while teams line their knives up, a crescendo through the 3-2-1, a hush for the CHOP and
     the verdict (a heartbeat), then the crown in F major (the key of the game's own victory jingle) and a

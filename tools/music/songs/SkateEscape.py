@@ -7,6 +7,14 @@ from score import Note
 from songkit import *  # noqa: F403 (the kit: score, instruments, synth and the song helpers)
 
 
+def faded(x, seconds=0.03):
+    """A short fade at the very end, so a tail that's cut off doesn't click."""
+    x = np.array(x, dtype=float)
+    k = min(x.shape[-1], s.samples(seconds))
+    x[..., -k:] *= np.linspace(1.0, 0.0, k)
+    return x
+
+
 def harmony(notes, first, parts, spb=16):
     """A second voice under the tune: for every note, the nearest chord tone at least a minor third
     below it (in the chord playing under that note), so the twin line never rubs against the band."""
@@ -62,7 +70,7 @@ def punk_kick():
     t = np.arange(n) / s.SR
     body = s.sine(58 + 150 * np.exp(-t / 0.028), n) * np.exp(-t / 0.11)
     click = ins.eq(np.random.default_rng(4).uniform(-1, 1, n), ("hp", 1500), ("lp", 6000)) * np.exp(-t / 0.004) * 0.5
-    return ins.normalize(np.tanh((body + click) * 1.8))
+    return faded(ins.normalize(np.tanh((body + click) * 1.8)))
 
 
 @lru_cache(maxsize=None)
@@ -78,7 +86,7 @@ def crumble(length=1.8, seed=3):
         size = min(n - start, s.samples(0.08))
         burst = ins.eq(rng.uniform(-1, 1, size), ("hp", 500), ("lp", 3000)) * np.exp(-np.arange(size) / (s.SR * 0.012))
         cracks[start:start + size] += burst * rng.uniform(0.4, 1.0)
-    return ins.normalize(rumble * 1.2 + cracks)
+    return faded(ins.normalize(rumble * 1.2 + cracks))
 
 
 @lru_cache(maxsize=None)
@@ -88,7 +96,7 @@ def lava(length):
     t = np.arange(n) / s.SR
     rng = np.random.default_rng(29)
     swell = 0.6 + 0.4 * np.sin(2 * np.pi * t / 3.1) * np.sin(2 * np.pi * t / 1.7 + 1.0)
-    return ins.normalize(ins.eq(rng.uniform(-1, 1, n), ("hp", 90), ("lp", 420)) * swell * np.clip(t / 2.5, 0, 1))
+    return faded(ins.normalize(ins.eq(rng.uniform(-1, 1, n), ("hp", 90), ("lp", 420)) * swell * np.clip(t / 2.5, 0, 1)), 1.0)
 
 
 def skate_escape():
@@ -188,7 +196,7 @@ def skate_escape():
                     for k, idx in enumerate((0, 1, 2, 3, 4, 3, 2, 1)):
                         tr.add("clean", bar, k * 2, ins.electric_guitar(ring[idx], tr.step * 4, False, k), 0.28 + 0.1 * local, 0.25)
                 if 4 <= local < 8:  # the band creeps in under it
-                    chug(bar, beats, root, True, 0.25 + 0.12 * (local - 4))
+                    chug(bar, beats, root, True, 0.2 + 0.1 * (local - 4))
                     for k in beats:
                         tr.add("bass", bar, k, ins.bass_guitar(low, tr.step * 1.8, 0.5, k % 3), 0.35 + 0.15 * (local - 4))
                 elif local == 8:
@@ -275,7 +283,7 @@ def skate_escape():
             if name == "climax" and local == 0:
                 tr.add("fx", bar, 0, crumble(2.4, 5), 0.8)
 
-    tr.play("lead", 6, tease, lead_guitar, 0.75)
+    tr.play("lead", 6, tease, lead_guitar, 0.6)
     tr.play("lead", 10, verse, lead_guitar)
     tr.play("lead", 18, verse, lead_guitar)
     tr.play("lead2", 18, harmony(verse, 18, parts), lead_guitar, pan=0.3)

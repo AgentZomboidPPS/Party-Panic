@@ -5,6 +5,14 @@ from functools import lru_cache
 from songkit import *  # noqa: F403 (the kit: score, instruments, synth and the song helpers)
 
 
+def faded(x, seconds=0.03):
+    """A short fade at the very end, so a tail that's cut off doesn't click."""
+    x = np.array(x, dtype=float)
+    k = min(x.shape[-1], s.samples(seconds))
+    x[..., -k:] *= np.linspace(1.0, 0.0, k)
+    return x
+
+
 @lru_cache(maxsize=None)
 def trumpets(m, sec):
     return ins.brass(m, sec, bright=1.0, section=3)
@@ -33,7 +41,7 @@ def bass_drum():
     t = np.arange(n) / s.SR
     body = s.sine(62 + 60 * np.exp(-t / 0.035), n) * np.exp(-t / 0.18)
     felt = ins.eq(np.random.default_rng(8).uniform(-1, 1, n), ("hp", 150), ("lp", 1200)) * np.exp(-t / 0.012) * 0.3
-    return ins.normalize(np.tanh((body + felt) * 1.4))
+    return faded(ins.normalize(np.tanh((body + felt) * 1.4)))
 
 
 @lru_cache(maxsize=None)
@@ -46,7 +54,7 @@ def wind(length):
     for ch in range(2):
         centre = 700 + 350 * np.sin(2 * np.pi * t / (3.7 + ch) + ch)
         out[ch] = ins.tv_lowpass(rng.uniform(-1, 1, n), centre, q=3.0) - ins.tv_lowpass(rng.uniform(-1, 1, n), centre * 0.5, q=0.7) * 0.5
-    return ins.normalize(ins.eq(out, ("hp", 250), ("lp", 3000)) * np.clip(t / 2.0, 0, 1))
+    return faded(ins.normalize(ins.eq(out, ("hp", 250), ("lp", 3000)) * np.clip(t / 2.0, 0, 1)), 1.5)
 
 
 def bobsled_run():
@@ -54,24 +62,26 @@ def bobsled_run():
     the theme over driving spiccato strings, timpani and a concert bass drum; the curves are a
     swaying tune the horns (left) and strings (right) trade like a crew leaning together, with the
     sled's whoosh through every bend; the climax lifts the theme to D major with a choir for the home
-    stretch (24-37 s after GO, when the first sleds come home) and a fanfare finish as the finish
-    clock runs out. A calmer coda in C winds back up into the drop."""
+    stretch (21-34 s after GO: the first sleds come home at about 29 s) and the fanfare finish lands
+    as the 8 s finish clock runs out (34-40 s). A calmer coda in C climbs down B flat, A flat, G7 and
+    back into the drop."""
     tr = Track(bpm=156, bars=45)
     parts = plan(tr, [
         ("intro", 9, "C | C | Am | Am | F | F | G | G | G"),
         ("A", 8, "C | Bb/C | C | F/A | C | Bb | Ab Bb | C"),
-        ("B", 8, "Am | F | C | G | Am | F | G | A7"),
+        ("B", 6, "Am | F | C | G | G | A7"),
         ("climax", 8, "D | C/D | D | G/B | D | C | Bb C | D"),
         ("final", 4, "Bb | C | D | D"),
-        ("coda", 8, "F | C/E | Dm | C | F | C/E | Dm7 | G7"),
+        ("coda", 10, "F | C/E | Dm | C | F | C/E | Dm7 | Bb | Ab | G7"),
     ])
     theme = melody("""G4:3 C5:1 E5:4 G5:6 E5:2 | F5:3 D5:1 Bb4:4 D5:8 | G4:3 C5:1 E5:4 G5:4 C6:4 | A5:4 G5:2 F5:2 C5:8 |
                       E5:3 F5:1 G5:4 C6:6 B5:2 | Bb5:4 A5:2 F5:2 D5:8 | C6:4 Ab5:4 D6:4 Bb5:4 | C6:12 r:4""")
     counter = melody("E4:8 G4:8 | F4:16 | E4:8 C4:8 | C4:8 F4:8 | G4:16 | F4:8 D4:8 | Eb4:8 F4:8 | E4:12 r:4")
-    lean_left = melody("E5:8 A5:8 | A5:4 G5:4 F5:8 | r:16 | r:16 | E5:8 A5:8 | C6:4 A5:4 F5:8 | B5:4 C6:4 D6:4 B5:4 | C#6:8 E6:8")
-    lean_right = melody("r:16 | r:16 | G5:8 C6:8 | B5:4 A5:4 G5:8 | r:16 | r:16 | B5:4 C6:4 D6:4 B5:4 | C#6:8 E6:8")
+    lean_left = melody("E5:8 A5:8 | A5:4 G5:4 F5:8 | r:16 | r:16 | B5:4 C6:4 D6:4 B5:4 | C#6:8 E6:8")
+    lean_right = melody("r:16 | r:16 | G5:8 C6:8 | B5:4 A5:4 G5:8 | B5:4 C6:4 D6:4 B5:4 | C#6:8 E6:8")
     fanfare = melody("Bb4:3 D5:1 F5:4 Bb5:8 | C5:3 E5:1 G5:4 C6:8 | D5:3 F#5:1 A5:4 D6:4 C#6:2 D6:2 | D6:12 r:4")
-    coda = melody("A4:8 C5:8 | G4:8 C5:4 E5:4 | F5:8 E5:4 D5:4 | E5:16 | A5:8 G5:4 F5:4 | E5:8 G5:8 | F5:4 E5:4 D5:4 C5:4 | B4:8 D5:4 G5:4")
+    coda = melody("""A4:8 C5:8 | G4:8 C5:4 E5:4 | F5:8 E5:4 D5:4 | E5:16 | A5:8 G5:4 F5:4 | E5:8 G5:8 | F5:4 E5:4 D5:4 C5:4 |
+                     D5:8 F5:8 | Eb5:8 C5:8 | B4:4 D5:4 F5:4 G5:4""")
     head = melody("G4:3 C5:1 E5:4 G5:8 | r:16")
 
     kick = bass_drum()
@@ -218,15 +228,15 @@ def bobsled_run():
     tr.play("horns", 9, [n for n in counter if n.step >= 4 * 16], horns, 0.8, pan=-0.3)
     tr.play("horns", 17, shift(lean_left, -12), horns, pan=-0.5)
     tr.play("strings", 17, lean_right, violins, pan=0.5)
-    tr.play("lead", 17, [n for n in lean_left if n.step >= 6 * 16], trumpets, 0.55)
-    tr.play("lead", 25, shift(theme, 2), trumpets)
-    tr.play("horns", 25, shift(counter, 2), horns, pan=-0.3)
-    tr.play("ice", 25, shift(theme, 14), ins.glock, 0.5, pan=0.3)
-    tr.play("strings", 25, shift(theme, 14), violins, 0.6, pan=0.3)
-    tr.play("lead", 33, fanfare, trumpets)
-    tr.play("horns", 33, shift(fanfare, -12), horns, pan=-0.3)
-    tr.play("horns", 37, coda, horns, pan=-0.2)
-    tr.play("strings", 37, shift([n for n in coda if n.step >= 4 * 16], 12), violins, 0.8, pan=0.3)
+    tr.play("lead", 17, [n for n in lean_left if n.step >= 4 * 16], trumpets, 0.55)
+    tr.play("lead", 23, shift(theme, 2), trumpets)
+    tr.play("horns", 23, shift(counter, 2), horns, pan=-0.3)
+    tr.play("ice", 23, shift(theme, 14), ins.glock, 0.5, pan=0.3)
+    tr.play("strings", 23, shift(theme, 14), violins, 0.6, pan=0.3)
+    tr.play("lead", 31, fanfare, trumpets)
+    tr.play("horns", 31, shift(fanfare, -12), horns, pan=-0.3)
+    tr.play("horns", 35, coda, horns, pan=-0.2)
+    tr.play("strings", 35, shift([n for n in coda if n.step >= 4 * 16], 12), violins, 0.8, pan=0.3)
 
     mix = Mix(buses={
         "lead": Bus(-5, reverb=0.25),

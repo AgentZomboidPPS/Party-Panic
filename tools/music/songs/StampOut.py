@@ -25,7 +25,7 @@ def tack_piano(midi: float, length: float) -> np.ndarray:
             amp = k ** -0.9 * (1 + 0.35 * np.exp(-((fk - 2600) / 1400) ** 2))
             tau = 1.5 * (261.6 / f0) ** 0.35 / (1 + 0.25 * (k - 1))
             out += amp * np.sin(2 * np.pi * fk * t + rng.uniform(0, 6.28)) * np.exp(-t / tau)
-    out *= 0.6 + 0.4 * np.exp(-t / 0.09)
+    out *= (0.75 + 0.25 * np.exp(-t / 0.09)) * np.clip(t / 0.0025, 0, 1)
     tick = s.bandpass(rng.uniform(-1, 1, n), 2000, 6000) * np.exp(-t / 0.004) * 0.16
     zing = sum(np.sin(2 * np.pi * fz * t) * np.exp(-t / 0.025) for fz in (3100.0, 4300.0, 5200.0)) * 0.03
     out = out / np.max(np.abs(out)) + tick + zing

@@ -7,6 +7,14 @@ from score import Note
 from songkit import *  # noqa: F403 (the kit: score, instruments, synth and the song helpers)
 
 
+def faded(x, seconds=0.03):
+    """A short fade at the very end, so a tail that's cut off doesn't click."""
+    x = np.array(x, dtype=float)
+    k = min(x.shape[-1], s.samples(seconds))
+    x[..., -k:] *= np.linspace(1.0, 0.0, k)
+    return x
+
+
 def harmony(notes, first, parts, spb=16):
     """A second voice under the tune: for every note, the nearest chord tone at least a minor third
     below it (in the chord playing under that note), so the second line never rubs against the band."""
@@ -85,7 +93,7 @@ def bass_drum():
     t = np.arange(n) / s.SR
     body = s.sine(64 + 70 * np.exp(-t / 0.03), n) * np.exp(-t / 0.12)
     felt = ins.eq(np.random.default_rng(6).uniform(-1, 1, n), ("hp", 200), ("lp", 1500)) * np.exp(-t / 0.01) * 0.3
-    return ins.normalize(np.tanh((body + felt) * 1.5))
+    return faded(ins.normalize(np.tanh((body + felt) * 1.5)))
 
 
 @lru_cache(maxsize=None)
@@ -95,7 +103,7 @@ def whip():
     t = np.arange(n) / s.SR
     rng = np.random.default_rng(23)
     swish = ins.eq(rng.uniform(-1, 1, n), ("hp", 1500), ("lp", 5000)) * np.clip(t / 0.06, 0, 1) ** 2 * (t < 0.06)
-    snap = ins.eq(rng.uniform(-1, 1, n), ("hp", 900), ("lp", 6500)) * np.exp(-np.clip(t - 0.06, 0, None) / 0.014) * (t >= 0.06)
+    snap = ins.eq(rng.uniform(-1, 1, n), ("hp", 900), ("lp", 5000), ("lp", 6500)) * np.exp(-np.clip(t - 0.06, 0, None) / 0.014) * (t >= 0.06)
     return ins.normalize(swish * 0.25 + snap)
 
 
@@ -110,11 +118,11 @@ def crowd(length, cheer=False):
         babble = np.zeros(n)
         for vowel in ((620, 1100), (450, 1700), (750, 1250)):
             flutter = ins.eq(rng.uniform(0, 1, n), ("lp", 9.0)) ** 2  # each voice group comes and goes
-            babble += ins.formant(ins.eq(rng.uniform(-1, 1, n), ("hp", 250), ("lp", 3200)),
+            babble += ins.formant(ins.eq(rng.uniform(-1, 1, n), ("hp", 250), ("lp", 3200), ("lp", 4000)),
                                   [(vowel[0], 10, 3), (vowel[1], 8, 3)]) * flutter
         out[ch] = babble
     shape = np.clip(t / 0.4, 0, 1) * np.exp(-np.clip(t - length * 0.35, 0, None) / (length * 0.3)) if cheer else np.clip(t / 1.5, 0, 1)
-    return ins.normalize(out * shape)
+    return faded(ins.normalize(out * shape), 0.5 if cheer else 1.5)
 
 
 def rockin_raceway():

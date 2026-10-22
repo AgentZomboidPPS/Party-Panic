@@ -186,8 +186,8 @@ def tiki_bumper_bash():
             big = name in ("climax",)
             tr.kick("kick", bar, "X...X...X...X...", kick, 1.0)
             tr.drum("snare", bar, "....X..x....X..x" if name != "B" else "....X.......X...", snare, 0.9, 0.05)
-            if name in ("A2", "climax", "final"):
-                tr.drum("snare", bar, "....X.......X...", clap, 0.8, -0.05)
+            if name in ("A2", "B", "climax", "final"):
+                tr.drum("snare", bar, "....X.......X...", clap, 0.8 if name != "B" else 0.65, -0.05)
             tr.drum("iron", bar, "X.xxX.xxX.xxX.xx" if name != "B" else "x.x.x.x.x.x.x.x.", irons[local % 3], 0.8, 0.2)
             tr.drum("hats", bar, "..X...X...X...X.", ohat, 0.9, -0.2)
             if big:
@@ -208,9 +208,12 @@ def tiki_bumper_bash():
             if big and local == 4:
                 tr.add("hats", bar, 0, s.crash(), 1.4, -0.2)
             # fills into the next section
-            if local == part.bars - 1 and name in ("A1", "A2", "climax"):
+            if local == part.bars - 1 and name in ("A1", "A2", "climax", "final"):
                 for k, st in enumerate((12, 13, 14, 15)):
-                    tr.add("toms", bar, st, toms[2 - k // 2 if k < 4 else 0], 0.75)
+                    tr.add("toms", bar, st, toms[2 - k // 2], 0.75)
+            if name == "final" and local == part.bars - 1:  # into the loop, the way the intro goes into GO
+                tr.add("whistle", bar, 12, pea_whistle(tr.beat * 0.4), 0.75)
+                tr.add("whistle", bar, 14, pea_whistle(tr.beat * 0.4), 0.85)
             if name == "B" and local == part.bars - 1:
                 for k in range(8, 16):
                     tr.add("snare", bar, k, snare, 0.45 + 0.06 * (k - 8), 0.05)

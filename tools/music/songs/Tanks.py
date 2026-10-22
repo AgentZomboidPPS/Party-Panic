@@ -5,12 +5,20 @@ from functools import lru_cache
 from songkit import *  # noqa: F403 (the kit: score, instruments, synth and the song helpers)
 
 
+def faded(x, seconds=0.03):
+    """A short fade at the very end, so a tail that's cut off doesn't click."""
+    x = np.array(x, dtype=float)
+    k = min(x.shape[-1], s.samples(seconds))
+    x[..., -k:] *= np.linspace(1.0, 0.0, k)
+    return x
+
+
 @lru_cache(maxsize=None)
 def toy_trumpet(m, sec):
     """A toy soldier's tin trumpet: a small, nasal, slightly buzzy brass voice (two players, a hair apart)."""
     x = np.asarray(ins.brass(m, sec, bright=0.8, section=2, vibrato=0.03))
     x = ins.eq(x, ("hp", 420), ("peak", 1700, 6, 1.4), ("peak", 3100, 3, 2.0), ("lp", 5200))
-    return ins.normalize(ins.drive(x * 1.8, 1.6))
+    return ins.normalize(ins.eq(ins.drive(x * 1.8, 1.6), ("lp", 6000)))
 
 
 @lru_cache(maxsize=None)
@@ -39,7 +47,7 @@ def bass_drum():
     t = np.arange(n) / s.SR
     body = s.sine(70 + 50 * np.exp(-t / 0.03), n) * np.exp(-t / 0.15)
     felt = ins.eq(np.random.default_rng(12).uniform(-1, 1, n), ("hp", 150), ("lp", 1200)) * np.exp(-t / 0.01) * 0.3
-    return ins.normalize(np.tanh((body + felt) * 1.4))
+    return faded(ins.normalize(np.tanh((body + felt) * 1.4)))
 
 
 @lru_cache(maxsize=None)
@@ -49,7 +57,7 @@ def cannon(pitch=85.0):
     t = np.arange(n) / s.SR
     boom = s.sine(pitch * (1 + 0.9 * np.exp(-t / 0.02)), n) * np.exp(-t / 0.13)
     puff = ins.eq(np.random.default_rng(int(pitch)).uniform(-1, 1, n), ("hp", 300), ("lp", 2500)) * np.exp(-t / 0.07) * 0.5
-    return ins.normalize(np.tanh((boom + puff) * 1.6))
+    return faded(ins.normalize(np.tanh((boom + puff) * 1.6)))
 
 
 @lru_cache(maxsize=None)
@@ -59,7 +67,7 @@ def ricochet(up=True):
     t = np.arange(n) / s.SR
     ping = s.sine(1900 * 2 ** ((0.5 if up else -0.6) * np.clip(t / 0.2, 0, 1)), n) * np.exp(-t / 0.07)
     knock = ins.eq(np.random.default_rng(5 if up else 6).uniform(-1, 1, n), ("hp", 800), ("lp", 3500)) * np.exp(-t / 0.005) * 0.6
-    return ins.normalize(ins.eq(ping * 0.8 + knock, ("lp", 5000)))
+    return faded(ins.normalize(ins.eq(ping * 0.8 + knock, ("lp", 5000))))
 
 
 def tanks():

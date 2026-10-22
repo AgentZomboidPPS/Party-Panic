@@ -191,9 +191,11 @@ def shark_surf_panic():
                 tr.add("cymbal", bar, 0, s.crash(), 1.6, 0.25)
             if fast and local == 4:
                 tr.add("cymbal", bar, 0, s.crash(), 1.3, -0.25)
-            if local == part.bars - 1 and name in ("A1", "A2", "rush"):
+            if local == part.bars - 1 and name in ("A1", "A2", "rush", "final"):
                 for k, st in enumerate((12, 13, 14, 15)):
                     tr.add("toms", bar, st, toms[2 - k // 2], 0.75)
+            if name == "final" and local == part.bars - 1:  # back into the loop with the intro's pick slide
+                tr.add("fx", bar, 4, pick_slide(tr.beat * 3), 0.8, -0.1)
             # COIN RUSH: coins glitter up out of the water
             if fast:
                 chord_tones = [m + 24 for m in voicing(part.at(bar)[0][2], 57, 69, size=3)]

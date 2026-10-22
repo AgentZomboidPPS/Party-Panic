@@ -36,10 +36,10 @@ def chick() -> np.ndarray:
 
 
 @lru_cache(maxsize=None)
-def ding() -> np.ndarray:
+def ding(pitch: int = 91) -> np.ndarray:
     """The oven timer: the cookies are done."""
-    bell = np.asarray(ins.fm(91, 1.0, 3.47, 1.1, 1.2, mod_decay=0.12)).copy()
-    ping = np.asarray(ins.fm(103, 0.3, 2.0, 0.4, 0.4))
+    bell = np.asarray(ins.fm(pitch, 1.0, 3.47, 1.1, 1.2, mod_decay=0.12)).copy()
+    ping = np.asarray(ins.fm(pitch + 12, 0.3, 2.0, 0.4, 0.4))
     bell[: len(ping)] += 0.25 * ping[: len(bell)]
     return ins.normalize(ins.eq(bell, ("hp", 600), ("lp", 7000)))
 
@@ -55,6 +55,23 @@ def play_struck(tr, stem, bar, notes, voice, gain=1.0, pan=0.0, humanize=0.0):
             sound = ins._gate(sound, (again - n.step) * tr.step, 0.03)
         vel = n.vel * (1 + rng.uniform(-humanize, humanize)) if humanize else n.vel
         tr.add(stem, bar, n.step, sound, gain * vel, pan)
+
+
+def walk(tr, stem, changes, voice, gain, after, low=38):
+    """A walking bass, four to the bar: the root, chord tones, then a half step into the next root
+    (across section boundaries; `after` is the chord that follows the last change)."""
+    beat = tr.spb // 4
+    for index, (bar, step, length, c) in enumerate(changes):
+        nxt = changes[index + 1][3] if index + 1 < len(changes) else after
+        beats = max(1, int(round(length / beat)))
+        root = bass_note(c, low)
+        target = bass_note(nxt, low)
+        third = root + c.intervals[1] % 12
+        fifth = root + (c.intervals[2] % 12 if len(c.intervals) > 2 else 7)
+        approach = target - 1 if target - 1 not in (root, fifth) else target + 1
+        line = [root, third, fifth, approach][:beats] if beats >= 3 else [root, approach]
+        for k, m in enumerate(line):
+            tr.add(stem, bar, step + k * beat, voice(m, tr.step * beat * 0.95), gain * (1.0 if k == 0 else 0.85))
 
 
 def shell(c) -> list:
@@ -112,15 +129,11 @@ def crazy_cutters():
     crash = ins.eq(s.crash(2.0), ("lp", 9000))
 
     rng = np.random.default_rng(31)
-    prev = None
     for part in parts:
         name = part.name
         for bar, step, length, c in part.changes:
             local = bar - part.first
             root = bass_note(c, 38)
-            notes = voicing(c, 52, 64, prev)
-            prev = notes
-            seconds = length * tr.step
             beats = int(round(length / 3))
             # the rhythm guitar: a short chunk on every beat, 2 and 4 leaning in
             if name in ("A1", "A2", "B", "A3", "shout") or (name == "tag" and bar - part.first >= 4):
@@ -148,9 +161,7 @@ def crazy_cutters():
                         tr.add("bass", bar, st, bass(root, tr.step * 1.8), g)
                         strum(tr, "guitar", bar, st, shell(c), gtr, tr.step * 1.6, 1.0, spread=0.006)
                         strum(tr, "comp", bar, st, voicing(c, 57, 69), vib, tr.step * 2, 0.8, spread=0.004)
-        if name in ("A1", "A2", "B", "A3", "shout"):
-            walking_bass(tr, "bass", part, bass, 1.0, low=38)
-        elif name == "tag":
+        if name == "tag":
             for bar in part.bars_range():
                 local = bar - part.first
                 root = bass_note(part.at(bar)[0][2], 38)
@@ -162,7 +173,7 @@ def crazy_cutters():
                 elif local < 4:
                     tr.add("bass", bar, 0, bass(root, tr.step * 5.5), 0.8)
                     tr.add("bass", bar, 6, bass(root + 7 if root + 7 <= 50 else root - 5, tr.step * 5.5), 0.7)
-            walking_bass(tr, "bass", Part("vamp", part.first + 4, 4, [ch for ch in part.changes if ch[0] >= part.first + 4]), bass, 0.9, low=38)
+            walk(tr, "bass", [ch for ch in part.changes if ch[0] >= part.first + 4], bass, 0.9, after=parts[1].changes[0][3])
 
         # drums
         for bar in part.bars_range():
@@ -190,7 +201,8 @@ def crazy_cutters():
                     for k in range(12):  # a soft cymbal roll under the held chord
                         tr.add("ride", bar, k, ride, 0.1 + 0.02 * k, -0.2)
                     tr.add("kick", bar, 0, bd, 0.8)
-                    tr.add("fx", bar, 0, ding(), 1.0, 0.3)
+                    tr.add("fx", bar, 0, ding(93), 1.0, 0.3)
+                    strum(tr, "comp", bar, 0, [62, 66, 69, 71, 76], vib, tr.bar * 0.95, 0.9, spread=0.04)
                 continue
             brushes = name == "A2" or name == "tag"
             if brushes:
@@ -219,6 +231,8 @@ def crazy_cutters():
                 for k in range(6, 12):
                     tr.add("snare", bar, k, snare, 0.3 + 0.1 * (k - 6))
 
+    body = [ch for part in parts if part.name in ("A1", "A2", "B", "A3", "shout") for ch in part.changes]
+    walk(tr, "bass", body, bass, 1.0, after=parts[-1].changes[0][3])
     # intro: the oven is set, the vibes noodle, the clarinet joins, then a run up into GO
     tr.add("fx", 0, 0, ding(), 0.3, 0.3)
     play_struck(tr, "vibes", 0, [n for n in motif if n.step < 12 * 2], vib, 0.38)

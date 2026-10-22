@@ -37,12 +37,12 @@ def spring(length: float = 0.5) -> np.ndarray:
 
 def play_struck(tr, stem, bar, notes, voice, gain=1.0, pan=0.0, roll=0, humanize=0.0):
     """Plays tines and mallets. A note struck again stops the one still ringing (a music box's tooth
-    does), so fast repeats don't pile up in phase; with `roll`, a note that long or longer is re-struck
-    every `roll` steps (a mechanical tremolo)."""
+    does), so fast repeats don't pile up in phase; with `roll`, a long note (five rolls or more) is
+    re-struck every `roll` steps (a mechanical tremolo) while the march's dotted notes stay single."""
     rng = np.random.default_rng(int(bar * 1000 + len(notes)))
     hits = []
     for n in notes:
-        if roll and n.length >= roll * 3:
+        if roll and n.length >= roll * 5:
             k = 0.0
             while k < n.length - 1e-6:
                 hits.append((n.step + k, n.midi, min(roll, n.length - k), n.vel * (1.0 if int(k / roll) % 2 == 0 else 0.72)))
@@ -108,7 +108,7 @@ def mecha_marathon():
             seconds = length * tr.step
             # the bass: clockwork octaves in 8ths (a held note while everyone waits for LAUNCH)
             if name == "ready":
-                tr.add("bass", bar, 0, ins.synth_bass(root + 12, seconds * 0.95, cutoff=500, env_amt=500, sub=0.5), 1.0)
+                tr.add("bass", bar, 0, ins.synth_bass(root, seconds * 0.95, cutoff=600, env_amt=500, sub=0.5), 1.0)
             elif name != "intro" or local >= 4:
                 quiet = name == "intro"
                 for k in range(int(length // 2)):
