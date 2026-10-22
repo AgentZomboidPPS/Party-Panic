@@ -106,6 +106,11 @@ Also: `api:Shared/SharedJSON/OnShared`, `api:Mine/OnMine` (per-player state), `a
 `api:Hint(text, y)`, `api:Template(name)`, `api:Sound(name)`, `api:Effect(name, position)`,
 `api:Tilt()` (phone tilt), `api:World` (a folder for client-made parts), `api:Track(thing)`.
 
+**Posing characters** (sitting in a ride, a hop, holding something): use `client/Pose` (`Pose.Rig`,
+`Pose.Ease`, `Pose.Step`, `Pose.ReleaseAll`), never a Motor6D's `Transform` directly: this place's
+servers give R15 bodies (every bot) AnimationConstraint joints instead, and a Motor6D-only pose never
+shows on them (`tests/Pose.spec.luau` checks).
+
 **Bots play too:** they aren't in `Players`, so never look people up with `Players:GetPlayers()`.
 `api:Participants()` lists everyone in the round (players and bots: `DisplayName`, `UserId`,
 `IsBot`, `:GetAttribute()`, `:Character()`), and `api:CharacterOf(userId)` finds anyone's character

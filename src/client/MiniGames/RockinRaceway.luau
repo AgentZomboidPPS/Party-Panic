@@ -23,15 +23,23 @@
 -- your own the moment it hits on your screen (Track.HitAt: the server's rule with your own press,
 -- which is what the server judges), everyone else's when the server says so. The chase camera rises
 -- a little with your hop so you stay in view.
+--
+-- Poses pass (owner: "Bots are STILL ruberbanding and floating."): riders gallop on their hobby
+-- horses on R15 bodies now, legs swinging with the pace, both hands on the stick, legs tucked in a
+-- hop. This place's servers build R15 bodies (every bot's, and players' R15 avatars) with
+-- AnimationConstraint joints instead of Motor6Ds, and the pose only looked for Motor6Ds, so it
+-- found none there and no limb moved (measured on a test server: 0 of a rider's 12 joints; riders
+-- stood stiff over their horses). The pose goes through client/Pose now, which turns either kind of
+-- joint; the poses themselves are as before (R6's too).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local RaceBar = require(ReplicatedStorage.Shared.Logic.RaceBar)
 local Track = require(ReplicatedStorage.Shared.Logic.RockinRacewayTrack)
 
+local Pose = require(script.Parent.Parent.Pose)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -48,22 +56,26 @@ local CAMERA_RISE = 0.5 -- how much of your hop the chase camera rises with (the
 -- sits where the old, half-as-high hop's did: under the carrot meter on phones)
 local rad = math.rad
 
+-- The joints a rider's pose turns: R15's, then R6's four limbs, which hang off its torso (client/Pose
+-- finds them on either kind of body).
 local JOINTS = {
-	UpperTorso = "Waist",
-	Head = "Neck",
-	LeftUpperArm = "LeftShoulder",
-	RightUpperArm = "RightShoulder",
-	LeftLowerArm = "LeftElbow",
-	RightLowerArm = "RightElbow",
-	LeftUpperLeg = "LeftHip",
-	RightUpperLeg = "RightHip",
-	LeftLowerLeg = "LeftKnee",
-	RightLowerLeg = "RightKnee",
-	LeftFoot = "LeftAnkle",
-	RightFoot = "RightAnkle",
+	"Waist",
+	"Neck",
+	"LeftShoulder",
+	"RightShoulder",
+	"LeftElbow",
+	"RightElbow",
+	"LeftHip",
+	"RightHip",
+	"LeftKnee",
+	"RightKnee",
+	"LeftAnkle",
+	"RightAnkle",
+	"Left Shoulder",
+	"Right Shoulder",
+	"Left Hip",
+	"Right Hip",
 }
-
-local R6_JOINTS = { "Left Shoulder", "Right Shoulder", "Left Hip", "Right Hip" }
 
 local function angles(x: number, y: number, z: number): CFrame
 	return CFrame.Angles(rad(x), rad(y), rad(z))
@@ -237,46 +249,28 @@ function RockinRaceway.Start(api)
 
 	-- Posing riders -----------------------------------------------------------------------------------
 
-	local rigs: { [Model]: { [string]: { Motor: Motor6D, Current: CFrame } } } = {}
+	local rigs: { [Model]: { [string]: Pose.Joint } } = {}
 	local posed: { [Model]: string } = {}
 	local function rigOf(character: Model)
 		local rig = rigs[character]
-		if rig then
-			return rig
+		if not rig then
+			rig = Pose.Rig(character, JOINTS)
+			rigs[character] = rig
 		end
-		rig = {}
-		for partName, motorName in JOINTS do
-			local part = character:FindFirstChild(partName)
-			local motor = part and part:FindFirstChild(motorName)
-			if motor and motor:IsA("Motor6D") then
-				rig[motorName] = { Motor = motor, Current = CFrame.identity }
-			end
-		end
-		local torso = character:FindFirstChild("Torso") -- (R6: its four limbs hang off the torso)
-		for _, motorName in R6_JOINTS do
-			local motor = torso and torso:FindFirstChild(motorName)
-			if motor and motor:IsA("Motor6D") then
-				rig[motorName] = { Motor = motor, Current = CFrame.identity }
-			end
-		end
-		rigs[character] = rig
 		return rig
 	end
 	local function unpose(character: Model)
 		local rig = rigs[character]
 		if rig then
-			for _, joint in rig do
-				joint.Motor.Transform = CFrame.identity
-			end
+			Pose.ReleaseAll(rig)
 		end
 		rigs[character] = nil
 		posed[character] = nil
 	end
-	local poseConnection = (RunService :: any).PreSimulation or RunService.Stepped
-	api:Track(poseConnection:Connect(function(dt)
+	-- Just before physics, every frame: after the Animator, so the pose is what shows.
+	api:Track(Pose.Step(function(dt)
 		local now = api:Now()
-		local step = if type(dt) == "number" then dt else 1 / 60
-		local alpha = 1 - math.exp(-step * 18)
+		local alpha = 1 - math.exp(-dt * 18)
 		for character, key in posed do
 			if not character.Parent then
 				posed[character] = nil
@@ -294,8 +288,7 @@ function RockinRaceway.Start(api)
 			local stride = math.clamp(entry.V / Track.GALLOP, 0, 1)
 			local target = ridePose(entry.Phase, stride, air, spinning, data.F ~= nil, now)
 			for name, joint in rigOf(character) do
-				joint.Current = joint.Current:Lerp(target[name] or CFrame.identity, alpha)
-				joint.Motor.Transform = joint.Current
+				Pose.Ease(joint, target[name] or CFrame.identity, alpha)
 			end
 		end
 	end))
