@@ -56,11 +56,11 @@ def fence():
     for i in range(count):
         x = -width / 2 + step * (i + 0.5)
         outline = [(x - w / 2, 0.0), (x + w / 2, 0.0), (x + w / 2, height - 0.45), (x, height), (x - w / 2, height - 0.45)]
-        pickets.append(extrude(outline, 0.7))
-    rails = merge(rounded_box(width, 0.6, 0.45, 0.08, 3).translate(0, 2.0, 0.55),
-                  rounded_box(width, 0.6, 0.45, 0.08, 3).translate(0, 8.2, 0.55))
-    posts = merge(rounded_box(0.8, 10.0, 0.8, 0.1, 3).translate(-width / 2, 5.0, 0.4),
-                  rounded_box(0.8, 10.0, 0.8, 0.1, 3).translate(width / 2, 5.0, 0.4))
+        pickets.append(extrude(outline, 0.8))
+    rails = merge(rounded_box(width, 0.6, 0.65, 0.08, 3).translate(0, 2.0, 0.68),
+                  rounded_box(width, 0.6, 0.65, 0.08, 3).translate(0, 8.2, 0.68))
+    posts = merge(rounded_box(0.9, 10.0, 1.0, 0.1, 3).translate(-width / 2, 5.0, 0.5),
+                  rounded_box(0.9, 10.0, 1.0, 0.1, 3).translate(width / 2, 5.0, 0.5))
     return {"Pickets": merge(*pickets), "Rails": rails, "Posts": posts}
 
 
@@ -146,9 +146,9 @@ def table():
 
 
 def hay():
-    bale = rounded_box(5.0, 2.8, 2.8, 0.45, 12)
+    bale = rounded_box(5.0, 2.8, 2.8, 0.25, 8)
     rng = np.random.default_rng(9)
-    bale.v = bale.v + rng.normal(0, 0.03, bale.v.shape)
+    bale.v = bale.v + rng.normal(0, 0.015, bale.v.shape)
     bale.translate(0, 1.4, 0)
     twine = []
     for x in (-1.3, 1.3):
