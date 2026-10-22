@@ -9,6 +9,13 @@
 -- position it takes ("Trails"); other riders' crayons follow their relayed line (a little behind,
 -- eased forward so they glide), and every line is drawn as straight strokes between positions, the
 -- way the server scores it. Your accuracy on the HUD comes from the same Tracker the server uses.
+--
+-- Wandering (owner: "On trace race you should be able to leave your own lane. They wont score points
+-- but its funny"): your crayon steers anywhere on the paper (Rules.Bounds), over the other lanes,
+-- and stops a stud and a half from its edges. Out of your lane the camera follows it, the accuracy
+-- drops (only your own guide scores) and the arrow points back to YOUR LANE. Everyone's crayon,
+-- rider and line show wherever they ride; lines can cross now, so each rider's strokes have heights
+-- of their own and crossing lines never flicker.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,7 +37,7 @@ local MERGE_ANGLE = math.cos(math.rad(3.5)) -- strokes this close to straight jo
 local MERGE_LENGTH = 20 -- ...up to this long (a joined stroke stays within ~0.6 of the line: half its width)
 local MERGE_ANGLE_OTHERS = math.cos(math.rad(5)) -- the same for other riders' lines
 local MERGE_LENGTH_OTHERS = 18
-local MAX_YAW = math.rad(22) -- the crayon leans into a turn at most this much (it stays in its lane)
+local MAX_YAW = math.rad(22) -- the crayon leans into a turn at most this much
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -42,6 +49,8 @@ type Rider = {
 	Color: Color3,
 	ColorName: string,
 	Frame: CFrame,
+	Lo: number, -- the crayon's x goes from Lo to Hi: anywhere on the paper (Rules.Bounds)
+	Hi: number,
 	Samples: { number }, -- flat { t, x, ... } in order
 	LastT: number,
 	Drawn: { number }?, -- the last drawn point { s, x }
@@ -76,12 +85,15 @@ function TraceRace.Start(api)
 	for _, entry in layout.Lanes do
 		local info = Rules.Colors[entry.C] or Rules.Colors[1]
 		local x = layout.X + (entry.I - (layout.Count + 1) / 2) * Rules.LANE
+		local lo, hi = Rules.Bounds(entry.I, layout.Count)
 		riders[entry.U] = {
 			User = entry.U,
 			Index = entry.I,
 			Color = info.Color,
 			ColorName = info.Name,
 			Frame = CFrame.new(x, paperY, layout.Z),
+			Lo = lo,
+			Hi = hi,
 			Samples = {},
 			LastT = -math.huge,
 			Drawn = { 0, 0 },
@@ -124,7 +136,9 @@ function TraceRace.Start(api)
 	-- Places a stroke from (s0, x0) to (s1, x1) on the rider's lane: a strip LINE_THICK thick whose
 	-- bottom floats `bottom` above the paper, clear of every marking on it (they stand up to 0.4).
 	-- Neighbouring strokes take turns at three heights a bit apart and the live stroke to the tip
-	-- floats above them all, so overlapping ends never flicker.
+	-- floats above them all, so overlapping ends never flicker. Riders can cross each other's lines
+	-- (wandering), so each rider's heights are raised a hundredth of a stud per lane too (twelve lanes
+	-- fit in the 0.12 between two heights): two riders' strokes never share a height.
 	local function placeStroke(rider: Rider, part: BasePart, a: { number }, b: { number }, bottom: number)
 		local pa = tipFrame(rider, a[1], a[2]).Position
 		local pb = tipFrame(rider, b[1], b[2]).Position
@@ -137,8 +151,9 @@ function TraceRace.Start(api)
 			part.CFrame = CFrame.lookAt(pa + lift, pb + lift) * CFrame.new(0, 0, -span / 2)
 		end
 	end
-	local function strokeBottom(rider: Rider): number
-		return 0.5 + (rider.StrokeCount % 3) * 0.12
+	-- (Levels 0-2 take turns along the line; level 3 is the live stroke.)
+	local function strokeBottom(rider: Rider, level: number): number
+		return 0.5 + level * 0.12 + ((rider.Index - 1) % 12) * 0.01
 	end
 
 	-- The line goes on to (s, x): a new stroke, or the last one longer if it runs on straight.
@@ -158,14 +173,14 @@ function TraceRace.Start(api)
 			local straightEnough = if mineLine then MERGE_ANGLE else MERGE_ANGLE_OTHERS
 			local longest = if mineLine then MERGE_LENGTH else MERGE_LENGTH_OTHERS
 			if d1.Magnitude > 1e-3 and d1.Unit:Dot(d2.Unit) >= straightEnough and d1.Magnitude < longest then
-				placeStroke(rider, stroke, start, point, strokeBottom(rider))
+				placeStroke(rider, stroke, start, point, strokeBottom(rider, rider.StrokeCount % 3))
 				rider.Drawn = point
 				return
 			end
 		end
 		local part = strokePart(rider)
 		rider.StrokeCount += 1
-		placeStroke(rider, part, from, point, strokeBottom(rider))
+		placeStroke(rider, part, from, point, strokeBottom(rider, rider.StrokeCount % 3))
 		rider.Stroke = part
 		rider.StrokeFrom = from
 		rider.Drawn = point
@@ -418,7 +433,7 @@ function TraceRace.Start(api)
 	-- Camera ---------------------------------------------------------------------------------------------
 	local camera = workspace.CurrentCamera
 	local savedType, savedFov = camera.CameraType, camera.FieldOfView
-	local cameraX = 0
+	local followX = 0 -- the crayon's x, smoothed: what the camera follows
 	local cameraUp = 0
 	local claimed = false
 	local function claim(want: boolean)
@@ -489,7 +504,14 @@ function TraceRace.Start(api)
 				local want = steerInput() * Rules.STEER
 				myV += (want - myV) * (1 - math.exp(-dt * 16))
 				myV = math.clamp(myV, -Rules.STEER, Rules.STEER)
-				myX = math.clamp(myX + myV * dt, -Rules.LIMIT, Rules.LIMIT)
+				-- Anywhere on the paper, over the other lanes too; at its edge the crayon stops (and
+				-- stops leaning) until you steer back.
+				myX += myV * dt
+				if myX >= mine.Hi then
+					myX, myV = mine.Hi, math.min(myV, 0)
+				elseif myX <= mine.Lo then
+					myX, myV = mine.Lo, math.max(myV, 0)
+				end
 				if now - lastSample >= Rules.SAMPLE_GAP then
 					lastSample = now
 					-- (Never further than the server lets the crayon steer since the last position.)
@@ -530,7 +552,7 @@ function TraceRace.Start(api)
 					if n >= 4 and tl - samples[n - 3] > 1e-3 then
 						v = (xl - samples[n - 2]) / (tl - samples[n - 3])
 					end
-					target = math.clamp(xl + v * math.clamp(now - tl, 0, 0.25), -Rules.LIMIT, Rules.LIMIT)
+					target = math.clamp(xl + v * math.clamp(now - tl, 0, 0.25), rider.Lo, rider.Hi)
 				end
 				local before = rider.X
 				rider.X += (target - rider.X) * (1 - math.exp(-dt * 12))
@@ -558,7 +580,7 @@ function TraceRace.Start(api)
 					live = strokePart(rider)
 					rider.Live = live
 				end
-				placeStroke(rider, live :: Part, drawn, { s, rider.X }, 0.86)
+				placeStroke(rider, live :: Part, drawn, { s, rider.X }, strokeBottom(rider, 3))
 			end
 			-- The rider stands on the crayon's back.
 			local character = api:CharacterOf(user)
@@ -578,14 +600,17 @@ function TraceRace.Start(api)
 			end
 		end
 
-		-- Chase camera behind my crayon: the guide scrolls at you.
+		-- Chase camera behind my crayon: the guide scrolls at you. In your lane it sits between the
+		-- crayon and the lane's middle, so the guide stays in view; out of it, it keeps the framing it
+		-- had at the lane's edge and follows the crayon over the paper.
 		if mine and playing then
-			cameraX += (myX * 0.55 - cameraX) * (1 - math.exp(-dt * 5))
+			followX += (myX - followX) * (1 - math.exp(-dt * 5))
 			if race and now > t1 + 0.4 then
 				cameraUp += (1 - cameraUp) * (1 - math.exp(-dt * 1.2))
 			end
-			local eye = mine.Frame * Vector3.new(cameraX, 22 + cameraUp * 18, -s + 17 + cameraUp * 14)
-			local look = mine.Frame * Vector3.new(cameraX * 0.7, 0, -s - 12)
+			local lean = math.clamp(followX, -Rules.LIMIT, Rules.LIMIT)
+			local eye = mine.Frame * Vector3.new(followX - 0.45 * lean, 22 + cameraUp * 18, -s + 17 + cameraUp * 14)
+			local look = mine.Frame * Vector3.new(followX - 0.615 * lean, 0, -s - 12)
 			camera.CFrame = CFrame.lookAt(eye, look)
 		end
 
@@ -628,7 +653,13 @@ function TraceRace.Start(api)
 				local guide = Rules.GuideAt(course, s + Rules.SPEED * 0.15)
 				if os.clock() >= hintUntil and (key == "Off" or (key == "Close" and math.abs(guide - myX) > 1.6)) then
 					steer.Visible = true
-					steer.Text = if guide < myX then "⬅️ STEER LEFT" else "STEER RIGHT ➡️"
+					-- (Out in another lane, or past the outer lane line: the way back to your own.)
+					local away = math.abs(myX) > Rules.LANE / 2
+					if guide < myX then
+						steer.Text = if away then "⬅️ YOUR LANE" else "⬅️ STEER LEFT"
+					else
+						steer.Text = if away then "YOUR LANE ➡️" else "STEER RIGHT ➡️"
+					end
 					steer.TextColor3 = if key == "Off" then Theme.Colors.Red else Theme.Colors.Yellow
 				else
 					steer.Visible = false
