@@ -170,8 +170,13 @@ Branch **`claude/quirky-hopper-5yk8zk`**. Session B merges it before publishing 
   - no double coins after Halloween: only on the weekends during the HALLOWEEN PARTY (24-25 Oct, 31 Oct-1 Nov UTC;
     done, 6d89d31);
   - the pumpkin hat now: done (see the HALLOWEEN line above; mesh model 82691154142514, approved).
-- **Songs for games 27-29** (Hot Potato, Dice Dash, Minecart Mayhem): being written. They'll go up as a 6th pack
-  (one more audio upload, which needs the owner's OK; 5 left this month). Until then those games play Panic Mode.
+- **Songs for games 27-29**, uploaded on the owner's "Upload now" as ModePack6 111377793680965 (approved):
+  - Hot Potato: "Mambo Kaboom";
+  - Minecart Mayhem: "Crystal Cave Express";
+  - Dice Dash: "Lucky Roll Cha-Cha".
+
+  All 30 games have their own song. 6 of the owner's 10 audio uploads this month are used. A new game's song goes in
+  a new pack: `modes.py pack` never changes an uploaded one.
 
 ## 0. Start here (the first 10 minutes)
 
