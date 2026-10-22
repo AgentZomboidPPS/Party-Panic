@@ -57,11 +57,11 @@ off do it."). Briefs: [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md) 27-29 and `docs
 | Dice Dash (`DiceDash`) | Luck | games-2 |
 | Minecart Mayhem (`MinecartMayhem`) | Race | games-3 |
 
-- **Build each on a fresh branch from the coordinator's latest**, not on your `claude/games-N` branch:
-  `git fetch origin claude/upbeat-galileo-gvwq66 && git checkout -B claude/games-N-<Id> FETCH_HEAD`, and push that
-  branch. The `claude/games-2` and `claude/games-3` branches carry the second shop pass, which the owner holds back until
-  "after everything else is finished", so nothing built on them can be merged whole. If a push of the new branch is
-  refused, push to your session branch instead and say so in your report.
+- **Branches:** a session can only push its own `claude/games-N` branch, so each game is built there (merge the
+  coordinator's latest in first). `claude/games-2` and `claude/games-3` carry the second shop pass, which the owner holds
+  back until "after everything else is finished": keep it there, never force-push or reset those branches (a copy is in
+  `docs/wip/shop-pass2.bundle`), keep the game in its own files and commits, and list in the report every file the game
+  changed outside its own new files. The coordinator takes only the game's changes.
 - Give the definition `IsNew = true`. The coordinator keeps the vote's new-game boost within its cap when merging.
 - Report as in "Reporting back" below.
 
