@@ -21,6 +21,14 @@
 -- PLAYING / SITTING OUT switch, joined after it started, or already knocked out) and everyone once it's
 -- over sees the mode without its buttons, because the server only takes actions from players still
 -- in the round. Api.Button does this for every mode; a mode's own SetVisible still applies on top.
+--
+-- More of the game on screen (owner: "During the mini games, any way we can save UI space so they
+-- can see more of the game at one time?"): the TopHud moves up into the status line's room when the
+-- line has nothing to say (its players-left count is a pill in the banner now: HudController), and
+-- back down when it has, so whatever a mode places at y >= api:HudY() still sits right under the
+-- banner, status line and team scores on every screen (State.TopHudShift, in the HUD's scaled
+-- units; at once with reduced effects). A hint fades out once it has been up 6 seconds and comes
+-- back whenever the mode sets a new one.
 
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
@@ -71,6 +79,11 @@ export type Tilt = {
 
 local actionRemote = Remotes.Get("MiniGameAction")
 local eventRemote = Remotes.Get("MiniGameEvent")
+
+local HINT_FADE = 6 -- seconds a hint is on screen before it fades (a new hint comes back)
+local HINT_FADE_TIME = 0.6
+local HINT_STROKE = 0.2
+local SHIFT_TIME = 0.25 -- the TopHud's move with the status line (HudController's team pill's too)
 
 function Api.new(id: string)
 	local self = setmetatable({}, Api)
@@ -473,47 +486,48 @@ local TOUCH_HUD_SCALE = 0.75
 -- The space under the round banner (title, timer, status line and team scores) for a mode's own
 -- HUD, 620 units wide. It's laid out like the banner and scales with it, so anything placed at
 -- y >= api:HudY() never covers the banner on any screen. On phones the banner is up in Roblox's
--- top bar row and this space starts under the status line, drawn a little smaller.
+-- top bar row and this space starts under the status line, drawn a little smaller. It sits in a
+-- holder scaled like the banner, and moves inside it with the status line (State.TopHudShift).
 function Api.TopHud(self: Api): Frame
 	local hud = self.Gui:FindFirstChild("TopHud", true) :: Frame?
 	if not hud then
-		if self:IsTouch() then
-			local holder = UIKit.new("Frame", {
-				Name = "TopHudHolder",
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromScale(0.5, 0),
-				Size = UDim2.fromOffset(620, 420),
-				BackgroundTransparency = 1,
-				Parent = self.Gui,
-			})
-			UIKit.AutoScale(holder)
-			hud = UIKit.new("Frame", {
-				Name = "TopHud",
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromScale(0.5, 0),
-				Size = UDim2.fromScale(1, 1),
-				BackgroundTransparency = 1,
-				Parent = holder,
-				Children = { UIKit.new("UIScale", { Scale = TOUCH_HUD_SCALE }) },
-			})
-		else
-			hud = UIKit.new("Frame", {
-				Name = "TopHud",
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.5, 0, 0, 10),
-				Size = UDim2.fromOffset(620, 420),
-				BackgroundTransparency = 1,
-				Parent = self.Gui,
-			})
-			UIKit.AutoScale(hud :: Frame)
-		end
+		local touch = self:IsTouch()
+		local holder = UIKit.new("Frame", {
+			Name = "TopHudHolder",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = if touch then UDim2.fromScale(0.5, 0) else UDim2.new(0.5, 0, 0, 10),
+			Size = UDim2.fromOffset(620, 420),
+			BackgroundTransparency = 1,
+			Parent = self.Gui,
+		})
+		UIKit.AutoScale(holder)
+		local made = UIKit.new("Frame", {
+			Name = "TopHud",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, State.TopHudShift),
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Parent = holder,
+			Children = if touch then { UIKit.new("UIScale", { Scale = TOUCH_HUD_SCALE }) } else {},
+		})
+		self.Janitor:Add(State.TopHudShiftChanged:Connect(function(shift: number)
+			local goal = UDim2.new(0.5, 0, 0, shift)
+			if State.ReducedEffects() then
+				made.Position = goal
+			else
+				UIKit.Tween(made, SHIFT_TIME, { Position = goal })
+			end
+		end))
+		hud = made
 	end
 	return hud :: Frame
 end
 
 -- First free line in the TopHud: under the status line, or under the team scores in team modes.
 -- (Phones: HudController's status line ends 36 units down and the team scores 82, in the HUD's
--- units; the TopHud's units are TOUCH_HUD_SCALE of those.)
+-- units; the TopHud's units are TOUCH_HUD_SCALE of those.) The same number all round: when the
+-- status line is out of the way the whole TopHud moves up instead (State.TopHudShift), so this line
+-- is then right under the banner, or under the team scores.
 function Api.HudY(self: Api): number
 	local definition = GameDefinitions.Get(self.Id)
 	local team = definition and definition.IsTeam
@@ -523,8 +537,39 @@ function Api.HudY(self: Api): number
 	return if team then 156 else 112
 end
 
+-- Each mode HUD's hint: how long its words have been on screen, and whether they've faded.
+type HintClock = { Shown: number, Faded: boolean }
+local hintClocks: { [TextLabel]: HintClock } = setmetatable({}, { __mode = "k" }) :: any
+
+-- Counts how long a hint is on screen: only while the mode's HUD shows (not behind the rules card,
+-- where a hint set in Preparing waits), and fades it out at HINT_FADE seconds.
+local function followHint(self: Api, hint: TextLabel)
+	local stroke = hint:FindFirstChildOfClass("UIStroke")
+	self.Janitor:Add(RunService.Heartbeat:Connect(function(dt)
+		local clock = hintClocks[hint]
+		if not clock or clock.Faded or hint.Text == "" or not hint.Visible or not self.Gui.Enabled then
+			return
+		end
+		clock.Shown += dt
+		if clock.Shown < HINT_FADE then
+			return
+		end
+		clock.Faded = true
+		UIKit.Tween(hint, HINT_FADE_TIME, { TextTransparency = 1 })
+		if stroke then
+			UIKit.Tween(stroke, HINT_FADE_TIME, { Transparency = 1 })
+		end
+		task.delay(HINT_FADE_TIME, function()
+			if hintClocks[hint] == clock then
+				hint.Visible = false
+			end
+		end)
+	end))
+end
+
 -- A line of instructions under the banner (pass "" to hide it). `y` is a TopHud offset (default
--- api:HudY()).
+-- api:HudY()). It fades out once it has been on screen HINT_FADE seconds; setting the same words
+-- again leaves it be, new words bring it back.
 function Api.Hint(self: Api, text: string, y: number?)
 	local hud = self:TopHud()
 	local label = hud:FindFirstChild("Hint") :: TextLabel?
@@ -537,14 +582,32 @@ function Api.Hint(self: Api, text: string, y: number?)
 			AnchorPoint = Vector2.new(0.5, 0),
 			Size = UDim2.fromOffset(620, 64),
 			TextYAlignment = Enum.TextYAlignment.Top,
+			Visible = false,
 			Parent = hud,
-			Children = { UIKit.TextStroke(0.2) },
+			Children = { UIKit.TextStroke(HINT_STROKE) },
 		})
+		followHint(self, label :: TextLabel)
 	end
 	local hint = label :: TextLabel
 	hint.Position = UDim2.new(0.5, 0, 0, y or self:HudY())
+	if text == hint.Text then
+		return -- the same words: a hint that has faded stays gone
+	end
 	hint.Text = text
 	hint.Visible = text ~= ""
+	-- Fully shown again (a tween too: it takes over from a fade still running), with a new clock.
+	local stroke = hint:FindFirstChildOfClass("UIStroke")
+	UIKit.Tween(hint, 0, { TextTransparency = 0 })
+	hint.TextTransparency = 0
+	if stroke then
+		UIKit.Tween(stroke, 0, { Transparency = HINT_STROKE })
+		stroke.Transparency = HINT_STROKE
+	end
+	if text ~= "" then
+		hintClocks[hint] = { Shown = 0, Faded = false }
+	else
+		hintClocks[hint] = nil
+	end
 	if self:IsTouch() then
 		-- Phones: only as wide (and as tall) as the words, so the line stays clear of the thumbstick's
 		-- corner and of anything a mode shows under it.

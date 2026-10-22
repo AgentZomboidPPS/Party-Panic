@@ -115,6 +115,12 @@ from a UserId the server shared.
 round banner, status line or team scores; action buttons come from `api:Button`, which only shows them
 to players still in the round (`api:CanAct()`: not to anyone sitting out, knocked out or watching).
 Keep text short and big, and pair every color with a shape or icon. Check the layout on phones (below).
+A status of `Players left: N` (or `Survivors: N`, `N tanks left`, `🏃 N runners left`, alone or as one
+`  •  ` part of the line) shows as a `👤 N` pill in the banner, and the rest of the line fades after 6
+seconds without a change; when the line is empty the whole TopHud moves up into its room, so keep
+placing things at `y >= api:HudY()` and they stay right under whatever is left. Hints fade after 6
+seconds too (a new text brings them back). `ctx:Announce` callouts still reach players mid-round (a
+strip under the banner on phones); other toasts wait for the results.
 
 ## 5. Props and meshes
 
