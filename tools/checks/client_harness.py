@@ -31,6 +31,8 @@ standings show the player and the leader; "InRound menu" is the screen with both
 pill, the status line, the mode HUDs' shift). Of the two toasts in "InRound buttons", the round's
 callout (topic "Round") shows (on phones in the strip under the banner) and the quest waits until
 the player is out ("hudChecks.toasts"); the mode's hint has faded 7 seconds after it was set.
+The result's "botReports" holds the round's bot report (Controllers/BotWatchController) as the
+device would send it.
 The result's "portals" says what each of the vote stage's portals shows in each phase (its game,
 "✓ YOUR VOTE", Random's spinning reel, the winner), as text.
 After the round the player sits out (the sit-out switch by the banner): a tap with no answer from
@@ -314,7 +316,7 @@ local function __service(name)
 	return __shims[name] or game:GetService(name)
 end
 
-local __remotes, __sent, __soundReports, __skeeSent = {}, {}, {}, {}
+local __remotes, __sent, __soundReports, __skeeSent, __botReports = {}, {}, {}, {}, {}
 local __RemotesShim = {
 	Get = function(name)
 		if not __remotes[name] then
@@ -329,6 +331,9 @@ local __RemotesShim = {
 					end
 					if name == "ClientReport" and type(first) == "table" and first.Kind == "Sound" then
 						table.insert(__soundReports, first)
+					end
+					if name == "ClientReport" and type(first) == "table" and first.Kind == "Bots" then
+						table.insert(__botReports, first) -- Controllers/BotWatchController's round report
 					end
 				end,
 				__bindable = bindable,
@@ -496,6 +501,7 @@ local order = {
 	"RewardsController", "CelebrationController",
 	"CupController", "InviteController", "MedalController", "HallOfFameController", "EventController",
 	"EmoteController", "SpectateController", "OnboardingController", "SkeeBallController", "AssetReportController",
+	"BotWatchController",
 }
 -- The ScreenGuis, made with init.client.luau's own properties (see screen_guis() in the script).
 local context = {}
@@ -2145,6 +2151,11 @@ return game:GetService("HttpService"):JSONEncode({
 	startMs = startTimes,
 	sentToServer = __sent,
 	soundReports = __soundReports,
+	botReports = __botReports,
+	botWatch = (function() -- what Controllers/BotWatchController did (rounds watched, reports, a problem)
+		local ok, watcher = pcall(__require, "Client/Controllers/BotWatchController")
+		return if ok and watcher.Status then watcher.Status() else tostring(watcher)
+	end)(),
 	guiInstances = guiCount,
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,

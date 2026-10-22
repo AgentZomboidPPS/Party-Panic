@@ -7,6 +7,11 @@
 -- A mini-game can keep its own trouble report about a player there too (ClientReports.Record):
 -- Shark Bait says what held someone who got stuck, or an error their device hit (owner: "Broke. I
 -- chomped someone and now cant move.").
+-- Bot reports (owner: "Bots are STILL ruberbanding and floating." "This has got to be fixed. You said
+-- last time you did but clearly you didnt fix it."): after each round a device says how the bots
+-- moved on its screen (snaps, hovers, time held anchored, the server's own counts on them) and what
+-- happened to the player's own character (Controllers/BotWatchController). The last few rounds'
+-- are kept per player (key b<UserId>). Never from a test run (workspace attribute PP_Harness).
 
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -89,6 +94,49 @@ local function clean(report: any): { [string]: any }?
 	}
 end
 
+-- Keeps only what a bot report can sensibly hold: short lines and numbers.
+local BOT_REPORTS_KEPT = 6
+
+local function lines(value: any, most: number, length: number): { string }
+	local list = {}
+	if type(value) == "table" then
+		for _, text in value do
+			if type(text) == "string" and #list < most then
+				table.insert(list, string.sub(text, 1, length))
+			end
+		end
+	end
+	return list
+end
+
+local function cleanBots(report: { [string]: any }): { [string]: any }
+	local counts = {}
+	local kept = 0
+	if type(report.Counts) == "table" then
+		for name, value in report.Counts do
+			local amount = number(value)
+			if type(name) == "string" and #name <= 16 and amount and kept < 24 then
+				counts[name] = amount
+				kept += 1
+			end
+		end
+	end
+	return {
+		Kind = "Bots",
+		Where = if type(report.Where) == "string" then string.sub(report.Where, 1, 24) else "?",
+		Touch = report.Touch == true,
+		In = report.In == true,
+		Seconds = number(report.Seconds),
+		Counts = counts,
+		Events = lines(report.Events, 16, 220),
+		Server = lines(report.Server, 14, 80),
+		Anchored = lines(report.Anchored, 14, 40),
+		Time = os.time(),
+		Version = Config.Version,
+		PlaceVersion = game.PlaceVersion,
+	}
+end
+
 -- Keeps a mini-game's trouble report about a real player (the latest per player, key m<UserId>):
 -- `what` happened last in mode `mode`, and everything seen (`text`). Bots and the check tools'
 -- stand-ins aren't Players, and Studio keeps nothing. A key is written at most every few seconds
@@ -143,6 +191,27 @@ function ClientReports.Init()
 	local store = if RunService:IsStudio() then nil else DataStoreService:GetDataStore("PP_ClientReports")
 	Remotes.Get("ClientReport").OnServerEvent:Connect(function(player, report)
 		if not limiter:Check(player) then
+			return
+		end
+		if type(report) == "table" and report.Kind == "Bots" then
+			-- The last few rounds' bot reports, newest first.
+			local entry = cleanBots(report)
+			if store and not workspace:GetAttribute("PP_Harness") then
+				task.spawn(function()
+					pcall(function()
+						store:UpdateAsync(`b{player.UserId}`, function(old)
+							local list = if type(old) == "table" and type(old.Reports) == "table"
+								then old.Reports
+								else {}
+							table.insert(list, 1, entry)
+							while #list > BOT_REPORTS_KEPT do
+								table.remove(list)
+							end
+							return { Kind = "BotsLog", Reports = list }
+						end)
+					end)
+				end)
+			end
 			return
 		end
 		local entry = clean(report)
