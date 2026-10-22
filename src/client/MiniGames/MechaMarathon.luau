@@ -746,6 +746,13 @@ function MechaMarathon.Start(api)
 				end
 			end
 			toy.RotorAngle += spin * dt
+			-- (A toy that has landed is written once where it lies, not every frame for the rest of
+			-- the round: ~100 part moves a frame on phones for nothing.)
+			local resting = toy.Landed and spin == 0
+			if resting and toy.RestWritten then
+				continue
+			end
+			toy.RestWritten = resting
 			for index, part in toy.Parts do
 				local offset = toy.Offsets[index]
 				local kind = toy.Kinds[index]

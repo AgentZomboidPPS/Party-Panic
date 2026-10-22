@@ -396,6 +396,18 @@ function RakeItIn.Start(api)
 		if root and (root.Position - station.Stand).Magnitude < 12 then
 			hands = root.Position + Vector3.new(0, 0.2, 0) - station.Out * 1.1
 		end
+		-- (A rake at rest whose holder hasn't moved is left where it is: twelve rakes re-placed every
+		-- frame, handle resized and all, cost phones for nothing.)
+		if
+			u > 1
+			and station.RestSocket == socket
+			and station.RestHands
+			and (station.RestHands - hands).Magnitude < 0.05
+		then
+			return
+		end
+		station.RestSocket = if u > 1 then socket else nil
+		station.RestHands = hands
 		local along = socket - hands
 		if along.Magnitude < 0.5 then
 			along = -station.Out
@@ -407,7 +419,10 @@ function RakeItIn.Start(api)
 		head:PivotTo(CFrame.fromMatrix(socket, x, y, z) * CFrame.new(-SOCKET))
 		local length = math.max(along.Magnitude, 0.5)
 		local mid = hands + along / 2
-		station.Handle.Size = Vector3.new(length, 0.34, 0.34)
+		if station.HandleLength ~= length then
+			station.HandleLength = length
+			station.Handle.Size = Vector3.new(length, 0.34, 0.34)
+		end
 		station.Handle.CFrame = CFrame.lookAt(mid, socket) * CFrame.Angles(0, math.pi / 2, 0)
 		station.Grip.CFrame = CFrame.lookAt(hands, socket) * CFrame.new(0, 0, -0.65) * CFrame.Angles(0, math.pi / 2, 0)
 	end
