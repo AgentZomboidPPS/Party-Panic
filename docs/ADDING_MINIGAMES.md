@@ -183,6 +183,18 @@ cases for them, with two exceptions:
 Test with real bots: `round_harness.py <Mode> --players 2 --bots 10 ...` (the test server has no
 physics, so bots' walking and jumping are simulated there).
 
+**On a real server, let physics move people and bots** (owner: "Bots are STILL ruberbanding and
+floating."). The test servers can't run physics at all (`workspace:StepPhysics` needs a plugin's
+rights there), so whatever a mode does by hand to stand in for it there (a scripted fall: anchor
+and move down every frame) must stay there: check `RunService:IsRunning()` (Spleef's
+`self.physics`). On a real server the server sees each person a moment late and their own device
+holds them up, so a scripted move freezes them where they no longer are, and an anchored part is
+drawn without smoothing. Bots never touch people in any mode (`BotService`'s `PP_Bots` group): the
+server moves bots and each device moves its own player, and each side worked out their bumps
+differently. A mode that needs a body contact should judge it by position, like every hit and stomp
+does. After a real game, `python3 tools/checks/client_reports.py --bots` shows how the bots moved on
+each player's screen (snaps, hovers, anchored time, the server's drops and clamps).
+
 ## 7. Check it looks right
 
 ```sh

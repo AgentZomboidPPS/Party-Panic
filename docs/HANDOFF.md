@@ -282,7 +282,9 @@ merged; they're still in git history (`git show 4117d67:docs/wip/<name>.bundle >
 
 Everything below runs real Roblox servers through Open Cloud Luau execution. **No physics** there: harness bots move
 rigs with `PivotTo`, real bots' walking is simulated, so anything physical (flings, collisions, falling) can only be
-confirmed by the owner in a real game.
+confirmed by the owner in a real game. (Checked 2026-10-22: `workspace:StepPhysics` and `RunService:Run` fail with
+"lacking capability Plugin", only Heartbeat fires, `GetRealPhysicsFPS()` is 0, and a moving part or a
+LinearVelocity never moves. There is no way to step physics in a test; the bot reports below are the live check.)
 
 - `tools/checks/mode_check.sh <Id>` (set `OUT=/tmp/mode_check/<name>` to keep runs apart): code checks, a 12-player
   round with the client half, a round with 10 real bots, and the phone HUD drawn at phone sizes (PNGs). Must show 0
@@ -297,7 +299,9 @@ confirmed by the owner in a real game.
 - Assets for other players: `python3 tools/checks/asset_status.py --meshes` and `tools/asset_permissions.py`
   (`publish_place.py` runs the grants every time). An "NOT APPROVED" from asset_status can be HTTP 429: re-check.
 - What players' devices load: `python3 tools/checks/client_reports.py` (mesh and sound reports from each device, with
-  the place version they're on).
+  the place version they're on). `--bots`: each device's bot reports from its last 6 rounds
+  (Controllers/BotWatchController: snaps, hovers, anyone sitting, anchored time, the server's retakes, drops
+  and clamps); the only way to see how bots really move, since the test servers have no physics.
 - Gotchas: Open Cloud caps a script at 1 MiB; "INTERNAL_ERROR Task timed out" is transient (re-run once); HTTP 429
   means wait and retry.
 
