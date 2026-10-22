@@ -30,11 +30,12 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 local LogJam = {}
 
 local SYMBOLS = { "▲", "■", "●", "◆" }
+-- (Not the teams' colours: the team scores wear red, blue, green and yellow.)
 local SYMBOL_COLORS = {
-	Color3.fromRGB(255, 92, 92),
-	Color3.fromRGB(70, 150, 255),
-	Color3.fromRGB(255, 196, 40),
-	Color3.fromRGB(176, 104, 255),
+	Color3.fromRGB(255, 140, 40),
+	Color3.fromRGB(30, 190, 196),
+	Color3.fromRGB(255, 96, 186),
+	Color3.fromRGB(150, 96, 255),
 }
 local KEYS = { Enum.KeyCode.Q, Enum.KeyCode.W, Enum.KeyCode.E, Enum.KeyCode.R }
 local SWING = 0.13 -- the axe's swing down (seconds)
@@ -517,6 +518,7 @@ function LogJam.Start(api)
 	-- The card: what this player should do right now.
 	local function showCard(text: string, symbol: number?, dim: boolean, color: Color3?)
 		card.Visible = true
+		card.Size = UDim2.fromOffset(card.Size.X.Offset, if symbol then 150 else 48)
 		title.Text = text
 		title.TextColor3 = color or Color3.new(1, 1, 1)
 		if symbol and SYMBOLS[symbol] then
@@ -550,8 +552,11 @@ function LogJam.Start(api)
 		end
 		if not started then
 			started = true
-			api:Hint("Press the shape on your card when it's your turn!", y + 160)
-			hintUntil = os.clock() + 6
+			-- (PC only: on phones the card says it all, and a long line would reach the move stick.)
+			if not touch then
+				api:Hint("Press the shape on your card when it's your turn!", y + 160)
+				hintUntil = os.clock() + 6
+			end
 		end
 		local jammed = nowServer < (state.JamUntil or 0)
 		local placing = state.Phase == "Place" and state.Placer == me
