@@ -196,6 +196,23 @@ local function __engineLayout(playerGui, entries)
 		end
 	end
 	task.wait()
+	-- A list the harness scrolled to its end (PP_ScrollToEnd) is scrolled to the end of this
+	-- screen's canvas once it has been laid out (the engine keeps the position inside the canvas).
+	local scrolled = false
+	for _, frames in areas do
+		for area in frames do
+			for _, item in area:GetDescendants() do
+				if item:IsA("ScrollingFrame") and item:GetAttribute("PP_ScrollToEnd") then
+					item.CanvasPosition = Vector2.new(0, 100000)
+					scrolled = true
+				end
+			end
+		end
+	end
+	if scrolled then
+		task.wait()
+		task.wait()
+	end
 
 	local lineHeights = {}
 	local function lineHeight(font)
