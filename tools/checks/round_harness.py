@@ -121,10 +121,16 @@ def rewrite(module: str, text: str, is_init: bool) -> str:
 
 def borrowed_props(game: str) -> set:
     """The other modes whose props this mode's own code asks for by name (Shark Bait's palms are
-    Bumper Ballers' BumperPalm): their Props files stay in its bundle."""
+    Bumper Ballers' BumperPalm): their Props files stay in its bundle. For the lobby (game ""), the
+    modes whose props the lobby's own World code asks for (the Halloween decorations' pumpkins are
+    Rake It In's GoldenPumpkin)."""
     own = ""
-    for path in (SRC / "server" / "MiniGames" / f"{game}.luau", SRC / "client" / "MiniGames" / f"{game}.luau",
-                 SRC / "server" / "MiniGames" / "Bots" / f"{game}.luau"):
+    if game:
+        sources = [SRC / "server" / "MiniGames" / f"{game}.luau", SRC / "client" / "MiniGames" / f"{game}.luau",
+                   SRC / "server" / "MiniGames" / "Bots" / f"{game}.luau"]
+    else:
+        sources = sorted((SRC / "server" / "World").glob("*.luau"))
+    for path in sources:
         if path.exists():
             own += path.read_text()
     names = set(re.findall(r'"(\w+)"', own))
@@ -142,6 +148,13 @@ def borrowed_props(game: str) -> set:
 
 
 _borrowed: dict = {}
+
+
+def lobby_props() -> set:
+    """The modes' Props files the lobby's own World code borrows from (see borrowed_props)."""
+    if "" not in _borrowed:
+        _borrowed[""] = borrowed_props("")
+    return _borrowed[""]
 
 
 def other_mode(module: str, game: str) -> bool:
@@ -266,6 +279,8 @@ def main():
     parser.add_argument("--colliders-at", help="snapshot every part characters collide with at these round times (0 = after "
                         "Prepare), e.g. 0,5,80, for tools/checks/colliders.py; with LOBBY: the lobby's")
     parser.add_argument("--colliders-reach", type=float, default=600, help="with --colliders-at: map this far from the arena's middle")
+    parser.add_argument("--decor", help="LOBBY --colliders-at: put up this event's lobby decorations and every hunt pumpkin "
+                        "first (e.g. Halloween; EventService does it on a live server)")
     parser.add_argument("--no-csg", action="store_true", help="build as if CSG had failed on this server (Shapes from plain parts)")
     parser.add_argument("--modes", default=CUP_MODES, help="CUP: the modes its rounds play, in turn")
     parser.add_argument("--rounds", type=int, default=6, help="CUP: real rounds to play (a cup is 5)")
@@ -275,6 +290,7 @@ def main():
 
     header = "__touchMode = true\n" if args.touch else "__touchMode = false\n"
     header += "__noCsg = true\n" if args.no_csg else "__noCsg = false\n"
+    header += f"__decor = {json.dumps(args.decor)}\n" if args.decor else "__decor = nil\n"
     if args.ui_at:
         header += devices_luau(size_names(args.sizes or ("touch" if args.touch else "pc")))
     prelude = PRELUDE + ("\n" + COLLIDERS if args.colliders_at is not None else "")
@@ -292,8 +308,9 @@ def main():
             continue  # CUP: not one of its modes'
         if not lobby and not cup_modes and other_mode(module, args.game):
             continue  # another mode's
-        if lobby and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES):
-            continue  # the lobby keeps LOBBY_MODES only
+        if (lobby and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES)
+                and module.removeprefix("Server/World/Props/") not in lobby_props()):
+            continue  # the lobby keeps LOBBY_MODES only (and the props its own World code borrows)
         available[module] = slim(rewrite(module, path.read_text(), path.name == "init.luau"))
     # Only what this run can load (tools/checks/bundling.py): the modules the harness's own Luau asks
     # for and everything they reach. A require the bundler can't follow stops the build here.

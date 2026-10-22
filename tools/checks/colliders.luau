@@ -602,9 +602,20 @@ function __runLobbyColliders(reach: number)
 	end
 	local LobbyBuilder = __require("Server/World/LobbyBuilder")
 	local BeachBalls = __require("Server/World/BeachBalls")
+	local EventDecor = __require("Server/World/EventDecor")
 	local summary = {}
+	if __decor then
+		EventDecor.Show(__decor) -- (round_harness.py --decor: as EventService does while an event is on)
+	end
 	local buildStart = os.clock()
 	local okLobby, refs = pcall(LobbyBuilder.Build)
+	if okLobby and __decor then
+		local spots = {}
+		for index in EventDecor.HuntSpots(__decor) do
+			table.insert(spots, index)
+		end
+		summary.decor = { set = EventDecor.Showing(), pumpkins = #EventDecor.PlaceHunt(__decor, spots) }
+	end
 	summary.buildSeconds = os.clock() - buildStart
 	summary.lobby = if okLobby then "ok" else tostring(refs)
 	if okLobby then
