@@ -910,6 +910,55 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	summary.prepare = if okPrepare then "ok" else tostring(prepareErr)
 	summary.prepareSeconds = __round(os.clock() - t0)
 	summary.arenaParts = #ctx.Arena:GetDescendants()
+	-- What a device has to draw, at its peak during the round (phone performance): the arena's parts
+	-- (MeshParts among them), particle emitters, lights and surface/billboard GUIs, and the parts the
+	-- client half made (workspace.MiniGameClient).
+	if okPrepare then
+		local perf = {
+			arenaBaseParts = 0,
+			arenaMeshParts = 0,
+			arenaEmitters = 0,
+			arenaLights = 0,
+			arenaGuis = 0,
+			clientParts = 0,
+		}
+		summary.perf = perf
+		task.spawn(function()
+			while ctx.Arena and ctx.Arena.Parent and not ctx.EndReason do
+				local base, mesh, emitters, lights, guis = 0, 0, 0, 0, 0
+				for _, item in ctx.Arena:GetDescendants() do
+					if item:IsA("BasePart") then
+						base += 1
+						if item:IsA("MeshPart") then
+							mesh += 1
+						end
+					elseif item:IsA("ParticleEmitter") then
+						emitters += 1
+					elseif item:IsA("Light") then
+						lights += 1
+					elseif item:IsA("SurfaceGui") or item:IsA("BillboardGui") then
+						guis += 1
+					end
+				end
+				local client = 0
+				local folder = workspace:FindFirstChild("MiniGameClient")
+				if folder then
+					for _, item in folder:GetDescendants() do
+						if item:IsA("BasePart") then
+							client += 1
+						end
+					end
+				end
+				perf.arenaBaseParts = math.max(perf.arenaBaseParts, base)
+				perf.arenaMeshParts = math.max(perf.arenaMeshParts, mesh)
+				perf.arenaEmitters = math.max(perf.arenaEmitters, emitters)
+				perf.arenaLights = math.max(perf.arenaLights, lights)
+				perf.arenaGuis = math.max(perf.arenaGuis, guis)
+				perf.clientParts = math.max(perf.clientParts, client)
+				task.wait(1)
+			end
+		end)
+	end
 	if okPrepare and watch then
 		__prepEvents(ctx, roundPlayers, watch, summary, leave, t0, prepDeadline)
 	end
