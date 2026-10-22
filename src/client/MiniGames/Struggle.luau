@@ -38,6 +38,7 @@ local UserInputService = game:GetService("UserInputService")
 local GameState = require(ReplicatedStorage.Shared.GameState)
 local Rules = require(ReplicatedStorage.Shared.Logic.Struggle)
 
+local Api = require(script.Parent.Kit.Api)
 local Pose = require(script.Parent.Parent.Pose)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -284,7 +285,8 @@ function Struggle.Start(api)
 		if not found then
 			local folder = ReplicatedStorage:FindFirstChild("MiniGameAssets")
 			local shared = folder and folder:FindFirstChild(name)
-			if shared then
+			-- (Only once all its parts are here: this copy is kept for the round.)
+			if shared and Api.Arrived(shared) then
 				found = shared:Clone()
 				templates[name] = found :: Instance
 			end
