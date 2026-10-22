@@ -10,7 +10,7 @@ return function(h)
 	return {
 		HotPotatoSpud = {
 			Height = 2.6,
-			AssetId = 0,
+			AssetId = 91667410422335,
 			Palette = {
 				Spud = h.rgb(196, 140, 78),
 				Eyes = h.rgb(120, 78, 40),
@@ -28,7 +28,7 @@ return function(h)
 		},
 		HotPotatoPuff = {
 			Height = 3.7,
-			AssetId = 0,
+			AssetId = 111494431788956,
 			Shadow = false,
 			Palette = { Puff = h.rgb(255, 250, 240) },
 			Fallback = function(m)
@@ -37,7 +37,7 @@ return function(h)
 		},
 		HotPotatoFence = {
 			Height = 10.5,
-			AssetId = 0,
+			AssetId = 91005300102154,
 			Collide = true,
 			Palette = { Pickets = h.rgb(250, 246, 236), Rails = h.rgb(232, 224, 208), Posts = h.rgb(240, 234, 220) },
 			Materials = { Pickets = Enum.Material.Wood, Rails = Enum.Material.Wood, Posts = Enum.Material.Wood },
@@ -47,7 +47,7 @@ return function(h)
 		},
 		HotPotatoLights = {
 			Height = 1.0,
-			AssetId = 0,
+			AssetId = 131816898096963,
 			Shadow = false,
 			Palette = {
 				Wire = h.rgb(40, 40, 46),
@@ -65,7 +65,7 @@ return function(h)
 		},
 		HotPotatoGrill = {
 			Height = 8,
-			AssetId = 0,
+			AssetId = 125271739096064,
 			Collide = true,
 			Palette = {
 				Bowl = h.rgb(200, 50, 45),
@@ -91,7 +91,7 @@ return function(h)
 		},
 		HotPotatoTable = {
 			Height = 3.6,
-			AssetId = 0,
+			AssetId = 105868232967252,
 			Collide = true,
 			Palette = {
 				Top = h.rgb(176, 112, 64),
@@ -115,7 +115,7 @@ return function(h)
 		},
 		HotPotatoHay = {
 			Height = 2.9,
-			AssetId = 0,
+			AssetId = 92565034769592,
 			Collide = true,
 			Palette = { Hay = h.rgb(226, 190, 96), Twine = h.rgb(150, 100, 60) },
 			Materials = { Hay = Enum.Material.Fabric },
