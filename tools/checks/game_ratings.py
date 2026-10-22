@@ -49,16 +49,38 @@ SCRIPT = """
 local GameRatings = (function()
 %s
 end)()
-local store = game:GetService("DataStoreService"):GetDataStore("%s")
+local DataStoreService = game:GetService("DataStoreService")
+local store = DataStoreService:GetDataStore("%s")
 local weeks = GameRatings.LastWeeks(os.time(), %d)
 local records = {}
 local read = 0
+-- A fresh test server has little request budget (listing especially): wait for it, and try a
+-- throttled request again a few seconds later.
+local function call(kind, fn, ...)
+	for _ = 1, 20 do
+		local waited = 0
+		while DataStoreService:GetRequestBudgetForRequestType(kind) < 1 and waited < 30 do
+			task.wait(1)
+			waited += 1
+		end
+		local ok, result = pcall(fn, ...)
+		if ok then
+			return true, result
+		elseif not string.find(tostring(result), "hrottl") then
+			return false, result
+		end
+		task.wait(5)
+	end
+	return false, "still throttled"
+end
+local LIST, GET = Enum.DataStoreRequestType.ListAsync, Enum.DataStoreRequestType.GetAsync
 for _, week in weeks do
-	local pages = store:ListKeysAsync(week .. "/")
+	local okList, pages = call(LIST, store.ListKeysAsync, store, week .. "/")
+	assert(okList, pages)
 	while true do
 		for _, key in pages:GetCurrentPage() do
 			local game = string.match(key.KeyName, "^[^/]+/(.+)$")
-			local ok, value = pcall(store.GetAsync, store, key.KeyName)
+			local ok, value = call(GET, store.GetAsync, store, key.KeyName)
 			if game and ok and value ~= nil then -- (a removed key can still be listed)
 				records[game] = records[game] or {}
 				table.insert(records[game], value)
@@ -68,7 +90,7 @@ for _, week in weeks do
 		if pages.IsFinished then
 			break
 		end
-		pages:AdvanceToNextPageAsync()
+		assert(call(LIST, pages.AdvanceToNextPageAsync, pages))
 	end
 end
 return game:GetService("HttpService"):JSONEncode({ weeks = weeks, keys = read, rows = GameRatings.Summary(records) })
