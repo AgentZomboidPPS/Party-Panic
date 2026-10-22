@@ -43,6 +43,27 @@
 --   * The crumble (from 42% of the round with 2 players, 52% with 12) uses the same Fade schedule
 --     with a longer warning, rim first; the upper floors go completely and the last floor shrinks to a small core.
 -- Bots (Bots/Spleef.luau) plan their steps over the fresh blocks and drop down when cornered.
+--
+-- Falls on a real server (owner: "Bots are STILL ruberbanding and floating." "This has got to be
+-- fixed." "Theres still invisible stuff I latched onto on spleef."): the server's own drop, above,
+-- froze a character (anchored) wherever it judged it unsupported and moved it down by hand every
+-- frame. That's only needed where physics doesn't run (the test servers). On a real server physics
+-- holds a character on a block's edge by its body (its root is 2 x 1: at a slant that reaches about
+-- 1.1 studs past the edge, where the rule above dropped at 1), and the server sees a person a
+-- moment late (their ping, longer when their connection hitches), so it could freeze people in
+-- mid-air over a hole they were already falling through, or where their own screen still had them
+-- standing: caught on nothing, snapped back and let down in steps (an anchored part isn't smoothed
+-- on screens), and a bot in the same state hung in the air in its falling pose (arms raised: the
+-- fall animation). Now, where physics runs (self.physics), falls are physics: blocks go on the
+-- server at their time and everyone drops by their own device's physics (bots by the server's).
+-- The server's drop stays only as a net against hovering: someone at a floor's height with no block
+-- within their body's reach (HOLD_FOOT) for HOLD_GRACE (people add their ping). Which blocks a step
+-- starts is unchanged. At the buzzer, anyone already through the last floor (by physics) is ranked
+-- out at the moment they left a floor, as a server drop through it was. Each server drop counts on
+-- the one dropped (PP_Drops) and each velocity clamp on a bot (PP_Clamps), for the devices' bot
+-- reports (Controllers/BotWatchController).
+
+local RunService = game:GetService("RunService")
 
 local ArenaKit = require(script.Parent.Kit.ArenaKit)
 local MiniGame = require(script.Parent.Kit.MiniGame)
@@ -63,6 +84,11 @@ local FADE = 0.3 -- ...then fades this long, then it's gone (it holds you up unt
 local STEP_TIME = WARN + FADE
 local FREEZE_AFTER = 0.5 -- at the round's end, blocks due this soon still go; later ones freeze
 local GRACE = 0.25 -- standing over a hole this long drops a character (people add their ping)
+-- Where physics runs: a body stands on a block's edge out to its corner (the root is 2 x 1, its
+-- corner 1.12 from its middle); nobody further than this (or than its own corner and a little) from a
+-- block is held up by it, and nobody is dropped by the server unless held up over a hole this long.
+local HOLD_FOOT = 1.6
+local HOLD_GRACE = 1
 local AIR_MAX = 1.4 -- hanging above the floors longer than this counts as standing on the one below
 local NEAR_FLOOR = 3 -- feet this little above a block in the air: still stepping on it (hops)
 local PING_MAX = 0.3 -- the most of anyone's ping that is made up for
@@ -317,8 +343,11 @@ function Spleef:Prepare()
 	self.falling = {} :: { [any]: { Character: Model, Speed: number, Out: boolean, At: number } }
 	self.unsupported = {} :: { [any]: number }
 	self.airborne = {} :: { [any]: number }
+	self.airborneAt = {} :: { [any]: number } -- (round time) when each one in the air left a floor
 	self.track = {} :: { [any]: { Floor: number, Position: Vector3 } }
+	self.clampsWritten = {} :: { [any]: number }
 	self.crumbling = false
+	self.physics = RunService:IsRunning() -- false on the test servers: no physics, the server drops everyone
 
 	local count = #ctx:GetPlayers()
 	local radius = Spleef.RadiusFor(count)
@@ -389,18 +418,21 @@ end
 -- The blocks of `floor` (not gone) under a character whose middle is at `position`: any block whose
 -- top comes within FOOT of its middle (a round footprint, the body's width). These hold it up, and
 -- these are the ones it steps on: the same rule for both, so nobody stands on a block without
--- starting it, and a block nothing of the body is over is never started.
-function Spleef:Supports(floor: number, position: Vector3): { Cell }
+-- starting it, and a block nothing of the body is over is never started. `reach` (default FOOT):
+-- how far from a block still counts (on a real server the server's net against hovering reaches
+-- further: HOLD_FOOT).
+function Spleef:Supports(floor: number, position: Vector3, reach: number?): { Cell }
 	local found = {}
 	local i0, j0 = self:GridOf(position)
 	local half = BLOCK / 2
+	local within = reach or FOOT
 	for i = i0 - 1, i0 + 1 do
 		for j = j0 - 1, j0 + 1 do
 			local cell = self:CellAt(floor, i, j)
 			if cell and cell.State ~= "Gone" then
 				local dx = math.max(math.abs(position.X - cell.Position.X) - half, 0)
 				local dz = math.max(math.abs(position.Z - cell.Position.Z) - half, 0)
-				if dx * dx + dz * dz <= FOOT * FOOT then
+				if dx * dx + dz * dz <= within * within then
 					table.insert(found, cell)
 				end
 			end
@@ -409,8 +441,8 @@ function Spleef:Supports(floor: number, position: Vector3): { Cell }
 	return found
 end
 
-function Spleef:Supported(floor: number, position: Vector3): boolean
-	return #self:Supports(floor, position) > 0
+function Spleef:Supported(floor: number, position: Vector3, reach: number?): boolean
+	return #self:Supports(floor, position, reach) > 0
 end
 
 -- Seconds until a block is gone (math.huge while untouched, 0 once gone).
@@ -646,9 +678,11 @@ function Spleef:_falls(dt: number)
 			-- whoever gets out here is falling out, wherever they stand.
 			self.track[player] = nil
 			self.airborne[player] = nil
+			self.airborneAt[player] = self.airborneAt[player] or ctx:Elapsed()
 			floor = self:FloorBelow(feet) or FLOORS
 		elseif floor then
 			self.airborne[player] = nil
+			self.airborneAt[player] = nil
 		else
 			-- In the air: a jump or a fall is fine; hanging up here longer than a jump isn't (on
 			-- someone's head, on the crater rim, a device that hovers): it counts as standing on the
@@ -664,12 +698,14 @@ function Spleef:_falls(dt: number)
 					end
 				end
 				self.airborne[player] = now
+				self.airborneAt[player] = self.airborneAt[player] or ctx:Elapsed()
 				self.unsupported[player] = nil
 				continue
 			end
 			local since = self.airborne[player]
 			if not since then
 				self.airborne[player] = now
+				self.airborneAt[player] = self.airborneAt[player] or ctx:Elapsed()
 			elseif now - since > AIR_MAX + ping then
 				floor = below
 			end
@@ -687,20 +723,26 @@ function Spleef:_falls(dt: number)
 		elseif not outside then
 			self:_step(player, floor, position, dropAt, fresh)
 		end
-		if self:Supported(floor, position) then
+		-- Held up here? Where physics runs, by anything within the body's reach (physics drops anyone
+		-- it doesn't hold, long before the net below); on the test servers, by the footprint rule.
+		local reach = if self.physics
+			then math.max(HOLD_FOOT, Vector2.new(root.Size.X, root.Size.Z).Magnitude / 2 + 0.5)
+			else nil
+		if self:Supported(floor, position, reach) then
 			self.unsupported[player] = nil
 			continue
 		end
 		local since = self.unsupported[player]
 		if not since then
 			self.unsupported[player] = now
-		elseif now - since > GRACE + ping then
+		elseif now - since > (if self.physics then HOLD_GRACE else GRACE) + ping then
 			self.unsupported[player] = nil
 			self.airborne[player] = nil
 			self.track[player] = nil
 			if isBot then
 				(player :: any):Stop()
 			end
+			player:SetAttribute("PP_Drops", (tonumber(player:GetAttribute("PP_Drops")) or 0) + 1)
 			root.Anchored = true
 			self.falling[player] = {
 				Character = character,
@@ -785,24 +827,41 @@ function Spleef:_willLand(character: Model): boolean
 	return false
 end
 
+-- Whether someone (falling by physics) is already through the last floor.
+function Spleef:_throughLast(player: any): boolean
+	local _, humanoid, root = self.context:GetCharacter(player)
+	if not humanoid or not root or not self.tops then
+		return false
+	end
+	return self:Feet(humanoid, root) < self.tops[FLOORS] - STAND_BAND
+end
+
 -- Survivors share first place, except anyone the server was dropping through the last floor when
 -- the round ended (nothing under them to land on: out, they just hadn't got through yet), ranked by
--- when they were dropped. (Someone dropping onto a lower floor still survived.)
+-- when they were dropped. (Someone dropping onto a lower floor still survived.) Where physics runs,
+-- the same for anyone already through the last floor by physics, ranked by when they left a floor.
 function Spleef:GetResults()
 	local ctx = self.context
 	local results = ctx:SurvivalResults()
 	for _, entry in results.Entries do
-		local fall = self.falling and self.falling[entry.Player]
+		local player = entry.Player
+		local fall = self.falling and self.falling[player]
+		local at: number? = nil
 		if
 			fall
-			and fall.Character == entry.Player.Character
-			and ctx:IsAlive(entry.Player)
+			and fall.Character == player.Character
+			and ctx:IsAlive(player)
 			and not self:_willLand(fall.Character)
 		then
-			entry.Rank = math.floor(fall.At * 10) / 10
-			entry.ScoreText = string.format("Lasted %ds", math.floor(fall.At))
-			entry.BestScore = math.floor(fall.At)
-			entry.Survived = fall.At
+			at = fall.At
+		elseif self.physics and ctx:IsAlive(player) and self:_throughLast(player) then
+			at = self.airborneAt[player] or ctx:Elapsed()
+		end
+		if at then
+			entry.Rank = math.floor(at * 10) / 10
+			entry.ScoreText = string.format("Lasted %ds", math.floor(at))
+			entry.BestScore = math.floor(at)
+			entry.Survived = at
 		end
 	end
 	return results
@@ -826,6 +885,12 @@ function Spleef:_limitBots()
 				flat = flat.Unit * BOT_MAX_FLAT
 			end
 			root.AssemblyLinearVelocity = Vector3.new(flat.X, math.min(velocity.Y, BOT_MAX_UP), flat.Z)
+			-- (Counted for the devices' bot reports: a bot shoved this hard, at most twice a second.)
+			local now = os.clock()
+			if now - (self.clampsWritten[player] or 0) >= 0.5 then
+				self.clampsWritten[player] = now
+				player:SetAttribute("PP_Clamps", (tonumber(player:GetAttribute("PP_Clamps")) or 0) + 1)
+			end
 		end
 	end
 end
