@@ -79,8 +79,14 @@ CAMERAS: dict[str, dict] = {
     # Low in front of the launch line: two wind-up toys just launched, flying toward the camera, the
     # players who wound them behind their pads.
     "MechaMarathon": {"yaw": 200, "pitch": 13, "distance": 26, "fov": 46, "shift": [-3, 4, -15], "raise": 9, "sway": 8},
+    # From the infield at a hurdle row: a rider hopping it on his hobby horse, the pack behind on the
+    # carrot panels, the grandstand beyond.
+    "RockinRaceway": {"yaw": 150, "pitch": 16, "distance": 26, "shift": [25, 0, -22], "raise": 6},
     # The turning field from a player's corner: lanes, veggies and bombs, the silo in the middle.
     "RakeItIn": {"look_at": "SiloBody", "yaw": 30, "pitch": 30, "distance": 50, "shift": [0, -4, 0], "raise": 2},
+    # Across the giant pizza on its pan: teams on their slices, half of them eaten down to the pan, the
+    # wood-fired oven and the pizzeria's sign beyond.
+    "EatsaPizza": {"look_at": "Pan", "yaw": 15, "pitch": 40, "distance": 66, "shift": [2, 2, -12], "raise": 9},
     # Over the cutters' shoulders: their boards with the dotted outlines half cut, the giant glass of
     # milk beyond.
     "CrazyCutters": {"yaw": 80, "pitch": 40, "distance": 38, "shift": [-12, -5, 0], "raise": 2},
@@ -89,6 +95,13 @@ CAMERAS: dict[str, dict] = {
     # Over a team's shoulders at its grill: the giant knife lined up over the steak, the glowing line
     # where it will cut, the coals under the grate.
     "PrimeCut": {"look_at": "CutLine", "yaw": 28, "pitch": 36, "distance": 39, "shift": [-0.5, 0, 10.5], "raise": 4},
+    # Behind a player at their booth's counter: the mischief's smoke over the cubby shelf, toys
+    # tumbling off it onto the counter.
+    "MessyMemory": {"look_at": "CounterTop", "yaw": 168, "pitch": 16, "distance": 25, "shift": [0, 2, 0], "raise": 6},
+    # Side-on from a little below: two fallers under open umbrellas, the left throwers on their
+    # clouds, coins in the air, a hot-air balloon and the sun beyond.
+    "ParasolPlummet": {"look_at": "Cap", "yaw": 0, "pitch": -8, "distance": 58, "shift": [12, -1, 0], "raise": 6,
+                       "sway": 6},
     # A team pumping its balloon (with a face), a rival team's balloon beside it.
     "PumpAndPop": {"yaw": 25, "pitch": 12, "distance": 40, "shift": [0, 8.5, -4], "sway": 8},
     # Two riders who just bumped, the sea and a palm island behind.
@@ -97,10 +110,27 @@ CAMERAS: dict[str, dict] = {
     "ArrowAmbush": {"yaw": 15, "pitch": 22, "distance": 40, "shift": [0, -3, 2], "raise": 12},
     # Behind the pack, down the bridge: crates ahead, the viaduct towers and the canyon either side.
     "SkateEscape": {"yaw": 12, "pitch": 15, "distance": 30, "shift": [0, 2, 0], "raise": 5, "sway": 8},
+    # From over the backdrop: everyone crowding into the photo frame's gold ring, the paparazzi on
+    # their tripods down the red carpet and the fans' stand beyond.
+    "Slaparazzi": {"look_at": "Gold", "yaw": 180, "pitch": 34, "distance": 36, "fov": 55, "shift": [0, 3, 4],
+                   "raise": 11},
+    # From the air past the rim: a player at the icy edge, rivals with snowballs behind, the peak's
+    # icicles and the sea of clouds far below, spires and mountains beyond.
+    "SnowballSummit": {"look_at": "SnowballSummitSnowfield", "yaw": -135, "pitch": 24, "distance": 58,
+                       "shift": [-14, 1, -8], "raise": 2},
     # Low through the gaps between the floors: rivals around a fresh hole in the packed snow, one
     # dropping through, two more on the blue ice below (no dolly, so they stay in sight under it).
     "Spleef": {"look_at": "Water", "yaw": 210, "pitch": 8, "distance": 49, "fov": 44, "shift": [2, 27.5, -1],
                "raise": 7, "bob": 1, "dolly": 0},
+    # A tank going up in a toy explosion (turret and driver flying) beside a pink rival, a toy brick in
+    # front, the playroom window and a beach ball beyond.
+    "Tanks": {"look_at": "Cork", "yaw": -60, "pitch": 30, "distance": 44, "shift": [-63, 3.5, -26], "raise": 6},
+    # Over the paper pad: stampers on their rubber stamps hopping across a patchwork of everyone's ink,
+    # bare ruled paper still to win beyond.
+    "StampOut": {"look_at": "Paper", "yaw": 20, "pitch": 50, "distance": 38, "shift": [5, 2, 6], "raise": 6},
+    # Chasing two riders down their lanes: their crayons drawing purple and teal lines behind them, the
+    # dotted guides curving away ahead.
+    "TraceRace": {"look_at": "StartLine", "yaw": 0, "pitch": 45, "distance": 46, "shift": [29, 3, -110], "raise": 6},
     # Divers at the rim of the swirling sinkhole, treasure on the sand around it.
     "SinkingSands": {"yaw": 30, "pitch": 30, "distance": 36, "shift": [0, 2, 6]},
     # Low over the water: a shark's fin between the rafts, swimmers and coins on the decks, the
@@ -112,13 +142,22 @@ CAMERAS: dict[str, dict] = {
 DUMP_AT: dict[str, float] = {
     "BobsledRun": 12,  # the sleds well down the run, a banked curve ahead
     "CakeFactory": 14,  # cakes with a few layers on every belt
+    "EatsaPizza": 15,  # halfway: some slices eaten down to the pan, teams munching on the rest
     "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
     "MechaMarathon": 12.5,  # a second after lift-off: the toys climbing away from their pads
+    "MessyMemory": 8,  # a second into the mischief: smoke puffs, the last toys tumbling onto the counters
+    "ParasolPlummet": 7,  # fallers still spread across the sky, a dozen lobs in the air
     "PrimeCut": 9,  # the first steak, a second before the chop: the knives lined up
     "PumpAndPop": 16,  # the balloons are big by now
+    "RockinRaceway": 4,  # the pack galloping down the home straight into the first panel rows
     "SkateEscape": 10,
+    "Slaparazzi": 11.7,  # just before the second photo: everyone crowding into the frame's rings
+    "SnowballSummit": 25,  # snowballs rolling, someone teetering at the rim, most still on top
     "Spleef": 12,  # holes dug in every floor, players on all three
+    "StampOut": 34,  # BIG STAMPS: the pad patched with everyone's ink, stampers mid-hop
+    "Tanks": 5.5,  # a second after the shields drop: the first tanks blowing up, the rest still rolling
+    "TraceRace": 8,  # past the straight start, into the first curves, lines trailing behind
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole
     "SharkBait": 13,  # a raft tipping, coins spilled in the water, the sharks closing in
 }
