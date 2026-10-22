@@ -320,6 +320,10 @@ function VoteController.Start(context)
 			Parent = context.Hud,
 		})
 		UIKit.AutoScale(holder)
+		-- Where the owner wants them: the first two cards reach into the MOVE stick's corner, so a
+		-- thumb that starts there taps a card (a vote can be changed until the timer ends) instead
+		-- of walking, for the few seconds of the vote. (tools/checks: allowed over the stick's zone.)
+		holder:SetAttribute("PP_Popup", true)
 		local grow = UIKit.new("Frame", {
 			Name = "Grow",
 			Size = UDim2.fromOffset(width, height),
