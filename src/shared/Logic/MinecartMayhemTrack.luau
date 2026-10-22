@@ -90,6 +90,30 @@ Track.TAKEOFF_NEAR = 1.2
 Track.TAKEOFF_FAR = 5.2
 Track.CHECKPOINT = 6 -- after a fall the cart comes back this far into the gap tile
 
+-- Each rail tile mesh's pivot (its bounding box's bottom centre) relative to its entry, and its
+-- size: printed by `PYTHONPATH=tools/meshgen python3 tools/meshgen/props/MinecartMayhem.py`.
+Track.Anchor = {
+	MinecartMayhemRailStart = { 0.0000, -92.0249, -28.6000, 65.5000, 93.3249, 70.8000 },
+	MinecartMayhemRailBendL = { -17.9835, -92.0346, -55.0835, 54.1577, 92.7846, 110.2330 },
+	MinecartMayhemRailBendR = { 17.9835, -92.0346, -55.0835, 54.1577, 92.7846, 110.2330 },
+	MinecartMayhemRailJunctionL = { -15.6974, -92.0349, -75.0000, 67.5113, 98.7849, 150.0000 },
+	MinecartMayhemRailJunctionR = { 15.6974, -92.0349, -75.0000, 67.5113, 98.7849, 150.0000 },
+	MinecartMayhemRailGap = { 0.0000, -92.0247, -36.1000, 18.5322, 92.7747, 72.2000 },
+	MinecartMayhemRailHill = { 0.0000, -92.0254, -45.0000, 18.3919, 92.7754, 90.0000 },
+	MinecartMayhemRailFinish = { 0.0000, -92.0247, -45.0000, 19.0040, 96.7747, 90.0000 },
+}
+-- The tile each rail mesh is swept along.
+Track.RailTile = {
+	MinecartMayhemRailStart = { K = "Start" },
+	MinecartMayhemRailBendL = { K = "Bend", D = -1 },
+	MinecartMayhemRailBendR = { K = "Bend", D = 1 },
+	MinecartMayhemRailJunctionL = { K = "Junction", L = -1, O = "Short" },
+	MinecartMayhemRailJunctionR = { K = "Junction", L = 1, O = "Short" },
+	MinecartMayhemRailGap = { K = "Gap" },
+	MinecartMayhemRailHill = { K = "Hill" },
+	MinecartMayhemRailFinish = { K = "Finish" },
+}
+
 export type Tile = {
 	K: string,
 	D: number?, -- a bend's first side
@@ -237,8 +261,14 @@ function Track.Build(tiles: { Tile }): Course
 		elseif tile.K == "Bend" then
 			local dir = tile.D or 1
 			local len = tile.Len
-			table.insert(features, { K = "Lean", B = 1, S = sAt(main, len * 0.02), S1 = sAt(main, len * 0.3), Dir = dir })
-			table.insert(features, { K = "Lean", B = 1, S = sAt(main, len * 0.4), S1 = sAt(main, len * 0.68), Dir = -dir })
+			table.insert(
+				features,
+				{ K = "Lean", B = 1, S = sAt(main, len * 0.02), S1 = sAt(main, len * 0.3), Dir = dir }
+			)
+			table.insert(
+				features,
+				{ K = "Lean", B = 1, S = sAt(main, len * 0.4), S1 = sAt(main, len * 0.68), Dir = -dir }
+			)
 			table.insert(features, { K = "Crystal", B = 1, S = sAt(main, len * 0.35) })
 		elseif tile.K == "Gap" then
 			table.insert(features, { K = "Gap", B = 1, S = sAt(main, Track.GAP_FROM), S1 = sAt(main, Track.GAP_TO) })
@@ -466,7 +496,9 @@ function Track.Ride(course: Course, rider: Rider, dt: number, now: number): { Ev
 			continue
 		end
 		local kind = feature.K
-		local mark = if kind == "Gap" or kind == "Buffer" or kind == "TNT"
+		local mark = if kind == "Gap"
+				or kind == "Buffer"
+				or kind == "TNT"
 			then feature.S - Track.HALF_BASE -- (the front wheels reach it)
 			else feature.S
 		local at = crossing(mark)

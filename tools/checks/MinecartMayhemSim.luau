@@ -166,9 +166,22 @@ for round = 1, ROUNDS do
 			end
 			for _, event in events do
 				if event.K == "Switch" then
-					table.insert(rider.Pending, { K = "Switch", At = event.At, Tile = event.Tile, JudgeAt = event.At + Track.GRACE + LEEWAY })
+					table.insert(
+						rider.Pending,
+						{ K = "Switch", At = event.At, Tile = event.Tile, JudgeAt = event.At + Track.GRACE + LEEWAY }
+					)
 				elseif event.K == "Gap" or event.K == "Crystal" then
-					table.insert(rider.Pending, { K = event.K, At = event.At, Tile = event.Tile, V = event.V, Gap = event.Gap, JudgeAt = event.At + LEEWAY })
+					table.insert(
+						rider.Pending,
+						{
+							K = event.K,
+							At = event.At,
+							Tile = event.Tile,
+							V = event.V,
+							Gap = event.Gap,
+							JudgeAt = event.At + LEEWAY,
+						}
+					)
 				elseif event.K == "Buffer" then
 					rider.Bumps += 1
 					rider.Pending = {}
@@ -184,7 +197,8 @@ for round = 1, ROUNDS do
 				end
 				local tile = course.Tiles[item.Tile]
 				if item.K == "Switch" and rider.Tile == item.Tile and rider.B == 1 then
-					rider.B = Track.BranchFor(tile, Track.Choose(rider.Picks, rider.ZoneAt[item.Tile] or item.At, item.At))
+					rider.B =
+						Track.BranchFor(tile, Track.Choose(rider.Picks, rider.ZoneAt[item.Tile] or item.At, item.At))
 					if rider.B == 2 and tile.O == "Short" then
 						rider.Shorts += 1
 					end

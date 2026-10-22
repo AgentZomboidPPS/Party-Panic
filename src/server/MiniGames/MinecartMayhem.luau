@@ -45,8 +45,8 @@ local MinecartMayhem = MiniGame.Define("MinecartMayhem", { Results = "Score" })
 
 local FINISH_CLOCK = 12 -- seconds the finish stays open after the first cart is out
 local MAX_LEEWAY = 0.4
-local SEAT_Y = 1.15 -- a seated rider's root above a standing one's, relative to the cart's floor
-local CART_FLOOR = 1.1 -- the cart's floor above the rail line
+local SEAT_DROP = 0.5 -- a rider stands in the cart this much lower than on the ground (knees bent)
+local CART_FLOOR = 1.15 -- the cart's floor above the rails' top
 local CAVE_STEP = 44 -- studs between the cave's rock rings
 
 -- Cart trims, one per start lane (the lane number on the cart's badge is the second cue).
@@ -151,9 +151,12 @@ end
 function MinecartMayhem:_tilePoint(tile: Track.BuiltTile, f: number, x: number?, y: number?, branch: number?): CFrame
 	local sx, sy = Track.Shape(tile, branch or 1, f)
 	local entry = tile.Entry
-	return CFrame.new(
-		self.origin + Vector3.new(entry[1] + sx + (x or 0), entry[2] + sy + (y or 0), entry[3] - f)
-	)
+	return CFrame.new(self.origin + Vector3.new(entry[1] + sx + (x or 0), entry[2] + sy + (y or 0), entry[3] - f))
+end
+
+-- A lantern's pivot for its pole at `pole` (on the track's `side`), the lamp hanging toward the track.
+function MinecartMayhem:_lanternAt(pole: CFrame, side: number): CFrame
+	return pole * CFrame.Angles(0, if side < 0 then math.pi else 0, 0) * CFrame.new(-0.7, -24, 0)
 end
 
 -- A sign board on a post with a surface text on its front (toward riders coming down the mine).
@@ -322,8 +325,7 @@ function MinecartMayhem:_buildArena()
 			x2 = Track.Shape(tile, 2, local_f)
 		end
 		local entry = tile.Entry
-		local center = self.origin
-			+ Vector3.new(entry[1] + (x1 + x2) / 2, entry[2] + y1 - 54, entry[3] - local_f)
+		local center = self.origin + Vector3.new(entry[1] + (x1 + x2) / 2, entry[2] + y1 - 54, entry[3] - local_f)
 		flip = not flip
 		MeshLibrary.Get("MinecartMayhemCave", {
 			CFrame = CFrame.new(center) * CFrame.Angles(0, if flip then math.pi else 0, 0),
@@ -367,7 +369,7 @@ function MinecartMayhem:_buildArena()
 		for _, at in { 12, tile.Len - 20 } do
 			local side = if (tile.Index + at) % 2 == 0 then 1 else -1
 			local lantern = MeshLibrary.Get("MinecartMayhemLantern", {
-				CFrame = self:_tilePoint(tile, at, side * 3.6, 0.2) * CFrame.Angles(0, if side > 0 then math.pi else 0, 0),
+				CFrame = self:_lanternAt(self:_tilePoint(tile, at, side * 4.2, 0.2), side),
 				Parent = props,
 			})
 			local glass = lantern:FindFirstChild("Glow", true)
@@ -387,7 +389,7 @@ function MinecartMayhem:_buildArena()
 		local kinds = { [longSide] = "Long", [-longSide] = tile.O or "Short" }
 		local signAt = self:_tilePoint(tile, Track.SPLIT - 30, 0, 0)
 		local sign = Build.Folder("JunctionSign" .. tile.Index, props)
-		MeshLibrary.Get("MinecartMayhemSign", { CFrame = signAt, Parent = sign })
+		MeshLibrary.Get("MinecartMayhemSign", { CFrame = signAt * CFrame.new(0, -24, 0), Parent = sign })
 		for _, side in { -1, 1 } do
 			local hint = HINTS[kinds[side]]
 			local arrow = if side < 0 then "◀" else "▶"
@@ -400,8 +402,8 @@ function MinecartMayhem:_buildArena()
 			local kind = kinds[side]
 			local hint = HINTS[kind]
 			local postAt = self:_tilePoint(tile, Track.SPLIT + 16, side * 4.2, 0, branch)
-			MeshLibrary.Get("MinecartMayhemPost", { CFrame = postAt, Parent = props })
-			self:_board(props, postAt * CFrame.new(0, 5.6, 0), 4.2, `{hint.Icon} {hint.Word}`, hint.Color)
+			MeshLibrary.Get("MinecartMayhemPost", { CFrame = postAt * CFrame.new(0, -24, 0), Parent = props })
+			self:_board(props, postAt * CFrame.new(0, 5.6, 0.45), 4.6, `{hint.Icon} {hint.Word}`, hint.Color)
 		end
 		local span = Track.MERGE - Track.SPLIT
 		local otherSide = -longSide
@@ -409,19 +411,18 @@ function MinecartMayhem:_buildArena()
 			local fAt = Track.SPLIT + span * Track.TNT_T
 			for k, offset in { { 0, 0.7 }, { -1.1, 2.4 }, { 1.2, 2.6 } } do
 				MeshLibrary.Get("MinecartMayhemTNT", {
-					CFrame = self:_tilePoint(tile, fAt + offset[2], offset[1], Track.RAIL_TOP, 2)
-						* CFrame.Angles(0, k * 0.4, 0),
+					CFrame = self:_tilePoint(tile, fAt + offset[2], offset[1], 0.45, 2) * CFrame.Angles(0, k * 0.4, 0),
 					Parent = props,
 				}).Name =
 					"TNT"
 			end
 			local skullAt = self:_tilePoint(tile, fAt - 4, otherSide * 3.4, 0, 2)
-			MeshLibrary.Get("MinecartMayhemPost", { CFrame = skullAt, Parent = props })
-			self:_board(props, skullAt * CFrame.new(0, 5.6, 0), 3.2, "☠", HINTS.TNT.Color)
+			MeshLibrary.Get("MinecartMayhemPost", { CFrame = skullAt * CFrame.new(0, -24, 0), Parent = props })
+			self:_board(props, skullAt * CFrame.new(0, 5.6, 0.45), 3.2, "☠", HINTS.TNT.Color)
 		elseif tile.O == "Dead" then
 			local fAt = Track.SPLIT + span * Track.BUFFER_T
 			MeshLibrary.Get("MinecartMayhemBuffer", {
-				CFrame = self:_tilePoint(tile, fAt + 0.4, 0, 0, 2),
+				CFrame = self:_tilePoint(tile, fAt + 1.6, 0, 0.45, 2) * CFrame.Angles(0, math.pi, 0), -- (pads toward the cart)
 				Parent = props,
 			})
 			MeshLibrary.Get("MinecartMayhemRubble", {
@@ -432,8 +433,7 @@ function MinecartMayhem:_buildArena()
 			-- (a shortcut: a lantern glowing at its far end)
 			for _, sideOff in { -1, 1 } do
 				local lantern = MeshLibrary.Get("MinecartMayhemLantern", {
-					CFrame = self:_tilePoint(tile, Track.MERGE - 26, sideOff * 3.6, 0.2, 2)
-						* CFrame.Angles(0, if sideOff > 0 then math.pi else 0, 0),
+					CFrame = self:_lanternAt(self:_tilePoint(tile, Track.MERGE - 26, sideOff * 4.2, 0.2, 2), sideOff),
 					Parent = props,
 				})
 				local glass = lantern:FindFirstChild("Glow", true)
@@ -452,7 +452,7 @@ function MinecartMayhem:_buildArena()
 			end
 			local path = tile.Paths[feature.B]
 			local x, y, z, hx, _, hz = Track.At(path, feature.S)
-			local at = origin + Vector3.new(x, y + Track.RAIL_TOP + 0.3, z)
+			local at = origin + Vector3.new(x, y + 0.45, z) -- (on the ties, low enough to roll over)
 			MeshLibrary.Get("MinecartMayhemCrystal", {
 				CFrame = CFrame.lookAt(at, at + Vector3.new(hx, 0, hz)),
 				Parent = props,
@@ -557,7 +557,8 @@ end
 
 -- Where a rider sits: in its cart (a standing root's height, lowered into the cart).
 function MinecartMayhem:_seat(rider: Rider): CFrame
-	return self:_frame(rider.Tile, rider.B, rider.S, rider.Lane) * CFrame.new(0, CART_FLOOR + 3 - SEAT_Y, 0.3)
+	return self:_frame(rider.Tile, rider.B, rider.S, rider.Lane)
+		* CFrame.new(0, Track.RAIL_TOP + CART_FLOOR + 3 - SEAT_DROP, 0.3)
 end
 
 -- Bots ride where the server has them (players' own clients seat themselves in their carts).

@@ -36,7 +36,6 @@ function Brain.Step(bot, ctx, mode, _dt)
 	local memory = bot.Memory
 	local skill = bot.Skill
 	local rng = bot.Rng
-	local now = ctx:Now()
 	if memory.Ways == nil then
 		memory.Ways = {}
 		memory.Jumps = {}
