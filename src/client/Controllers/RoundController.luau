@@ -23,6 +23,12 @@
 -- The ✕ was a near-black dot on the card (owner: "why are the close menu buttons and the invite
 -- friend button so dark?"): it's the windows' bright red round ✕ now (UI/Modal: a red gradient,
 -- a white ✕ with a text stroke and a white ring), with the same size and tap area as before.
+--
+-- Smaller standings on phones (owner: "During the mini games, any way we can save UI space so they
+-- can see more of the game at one time?"): the board shows your own place and the leader's ("1.
+-- Bubbles 12", "6. You 4"), or just your row when you lead (Logic/RoundHud.BoardPlaces). A tap on
+-- it shows the top three plus you for a few seconds, in slimmer rows that keep it clear of the MOVE
+-- stick's corner. Someone watching who isn't in the round sees the top three. PC keeps its board.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,6 +39,7 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = ReplicatedStorage.Shared
 local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
+local RoundHud = require(Shared.Logic.RoundHud)
 local Teams = require(Shared.Teams)
 
 local Participants = require(script.Parent.Parent.Participants)
@@ -54,6 +61,7 @@ local teamTabLabel: TextLabel
 local rulesClosed = false -- this player closed this round's card (its ✕); a new phase clears it
 local countdown: TextLabel
 local board: Frame
+local boardRoot: GuiObject -- what shows and hides the board: it, or on phones its tap area
 local outPanel: Frame
 
 -- The ✕: its tap area and the round mark in it (scaled units). Phones: 44 pt and 25 pt.
@@ -61,6 +69,8 @@ local CLOSE_HIT, CLOSE_MARK = Theme.Touch.Target, 40
 local PC_CLOSE_HIT, PC_CLOSE_MARK = 48, 34
 -- The team tab under the card (scaled units): its gap, height, text size and side padding.
 local TEAM_TAB_GAP, TEAM_TAB_HEIGHT, TEAM_TAB_TEXT, TEAM_TAB_PAD = 8, 50, 30, 26
+
+local refreshBoard: () -> ()
 
 -- Phones and tablets without a keyboard get their own layouts (fewer standings rows, smaller cards).
 local function isTouch(): boolean
@@ -330,21 +340,51 @@ local function flashCountdown(text: string, color: Color3)
 end
 
 -- PC: the standings sit under the profile card, clear of the tips panel now that bots keep the
--- board full. Phones: in the profile pill's corner (it makes way during the round), the top three
--- rows with no title, clear of the thumbstick's corner below.
-local TOUCH_ROW, TOUCH_ROWS, TOUCH_PAD = 26, 3, 8
+-- board full. Phones: in the profile pill's corner (it makes way during the round), with no title:
+-- you and the leader (RoundHud.BoardPlaces); a tap shows the top three plus you for BOARD_OPEN
+-- seconds, four slimmer rows that end about where three used to, clear of the thumbstick's corner.
+-- The tap area is an invisible button round the board, at least a 44 pt touch target however few
+-- rows show (one row is 26 pt).
+local TOUCH_ROW, TOUCH_GAP, TOUCH_PAD = 26, 3, 8
+local TOUCH_TAP = Theme.Touch.Target
+local TOUCH_ROW_SLIM, TOUCH_GAP_SLIM, TOUCH_PAD_SLIM = 22, 2, 6 -- four rows
+local BOARD_OPEN = 4
+local boardOpenUntil = 0 -- phones: the board shows its top three plus you until then
+-- What a tap on the phone standings does (the client harness taps them this way): the top three
+-- plus you for BOARD_OPEN seconds, or back to you and the leader if they're showing.
+function RoundController.ToggleStandings()
+	if board and isTouch() then
+		boardOpenUntil = if os.clock() < boardOpenUntil then 0 else os.clock() + BOARD_OPEN
+		refreshBoard()
+	end
+end
+
 local function buildBoard(parent: Instance)
 	if isTouch() then
-		board = UIKit.Panel({
-			Name = "Leaderboard",
+		local list = UIKit.List(Enum.FillDirection.Vertical, TOUCH_GAP)
+		list.Name = "Rows"
+		local padding = UIKit.Padding(TOUCH_PAD, 12)
+		padding.Name = "Room"
+		local tap = UIKit.new("TextButton", {
+			Name = "Standings",
+			Text = "",
+			AutoButtonColor = false,
+			BackgroundTransparency = 1,
 			Position = UDim2.fromOffset(8, 6),
-			Size = UDim2.fromOffset(230, 2 * TOUCH_PAD + TOUCH_ROWS * TOUCH_ROW + (TOUCH_ROWS - 1) * 3),
-			CornerRadius = 16,
+			Size = UDim2.fromOffset(230, TOUCH_TAP),
 			Visible = false,
 			Parent = parent,
-			Children = { UIKit.List(Enum.FillDirection.Vertical, 3), UIKit.Padding(TOUCH_PAD, 12) },
+		})
+		UIKit.AutoScale(tap)
+		tap.Activated:Connect(RoundController.ToggleStandings)
+		board = UIKit.Panel({
+			Name = "Leaderboard",
+			Size = UDim2.fromOffset(230, 2 * TOUCH_PAD + 2 * TOUCH_ROW + TOUCH_GAP),
+			CornerRadius = 16,
+			Parent = tap,
+			Children = { list, padding },
 		}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
-		UIKit.AutoScale(board)
+		boardRoot = tap
 		return
 	end
 	board = UIKit.Panel({
@@ -357,6 +397,7 @@ local function buildBoard(parent: Instance)
 		Children = { UIKit.List(Enum.FillDirection.Vertical, 4), UIKit.Padding(10, 12) },
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 	UIKit.AutoScale(board, 0.9)
+	boardRoot = board
 	-- Just under the profile chip and coins (HudController: 130 tall at y 12, scaled the same way).
 	local function place()
 		board.Position = UDim2.fromOffset(14, 12 + 130 * UIKit.CurrentScale() + 8)
@@ -368,8 +409,9 @@ end
 
 local boardKey = ""
 
-local function refreshBoard()
+function refreshBoard()
 	local touch = isTouch()
+	local expanded = touch and os.clock() < boardOpenUntil
 	local entries = {}
 	for _, other in Participants.InRound() do
 		table.insert(entries, {
@@ -391,7 +433,7 @@ local function refreshBoard()
 	end)
 	-- Rebuilt only when something on it changed (it's checked ~3 times a second all round, and
 	-- rebuilding every row and measuring its text each time cost phones for nothing).
-	local parts = { if touch then "T" else "P" }
+	local parts = { if expanded then "T+" elseif touch then "T" else "P" }
 	for _, entry in entries do
 		table.insert(
 			parts,
@@ -419,17 +461,42 @@ local function refreshBoard()
 			Parent = board,
 		})
 	end
-	-- The top rows, and always your own (in place of the last row if you're further down).
-	local rows = if touch then TOUCH_ROWS else 6
+	-- PC: the top rows, and always your own (in place of the last row if you're further down).
+	-- Phones: you and the leader, or the top three plus you after a tap.
 	local shown = {}
-	for index = 1, math.min(rows, #entries) do
-		table.insert(shown, index)
-	end
-	for index, entry in entries do
-		if entry.who.IsLocal and index > rows then
-			shown[#shown] = index
+	if touch then
+		local mine = nil
+		for index, entry in entries do
+			if entry.who.IsLocal then
+				mine = index
+			end
+		end
+		shown = RoundHud.BoardPlaces(#entries, mine, expanded)
+		local slim = #shown >= 4
+		local rowHeight = if slim then TOUCH_ROW_SLIM else TOUCH_ROW
+		local gap = if slim then TOUCH_GAP_SLIM else TOUCH_GAP
+		local pad = if slim then TOUCH_PAD_SLIM else TOUCH_PAD
+		local rows = math.max(1, #shown)
+		local list = board:FindFirstChild("Rows") :: UIListLayout?
+		local room = board:FindFirstChild("Room") :: UIPadding?
+		if list and room then
+			list.Padding = UDim.new(0, gap)
+			room.PaddingTop, room.PaddingBottom = UDim.new(0, pad), UDim.new(0, pad)
+		end
+		local height = 2 * pad + rows * rowHeight + (rows - 1) * gap
+		board.Size = UDim2.fromOffset(230, height)
+		boardRoot.Size = UDim2.fromOffset(230, math.max(TOUCH_TAP, height))
+	else
+		for index = 1, math.min(6, #entries) do
+			table.insert(shown, index)
+		end
+		for index, entry in entries do
+			if entry.who.IsLocal and index > 6 then
+				shown[#shown] = index
+			end
 		end
 	end
+	local touchRow = if #shown >= 4 then TOUCH_ROW_SLIM else TOUCH_ROW
 	-- The score column is as wide as the widest score shown ("5 perfect", "2 KOs", "Alive"), up to
 	-- about half the board; names give way and are shortened if they must.
 	local textSize = if touch then 19 else 18
@@ -449,7 +516,9 @@ local function refreshBoard()
 		local who = entry.who
 		local status = if entry.alive then "" else "💀 "
 		local teamColor = TEAM_COLORS[entry.team]
-		local name = Participants.ListName(who.DisplayName, who.IsBot and not teamColor) -- teams keep their color
+		local name = if touch and who.IsLocal
+			then "You"
+			else Participants.ListName(who.DisplayName, who.IsBot and not teamColor) -- teams keep their color
 		local detail = Participants.Escape(if entry.text ~= "" then entry.text else tostring(entry.score))
 		local color = if who.IsLocal
 			then Theme.Colors.Yellow
@@ -458,7 +527,7 @@ local function refreshBoard()
 			else Theme.Colors.TextDim
 		-- The name (shortened if it must be) and the score on the right, always shown.
 		local row = UIKit.new("Frame", {
-			Size = UDim2.new(1, 0, 0, if touch then TOUCH_ROW else 24),
+			Size = UDim2.new(1, 0, 0, if touch then touchRow else 24),
 			BackgroundTransparency = 1,
 			LayoutOrder = index,
 			Parent = board,
@@ -621,7 +690,8 @@ function RoundController.Start(context)
 		elseif phase == "InRound" and State.InRound() then
 			flashCountdown("GO!", Theme.Colors.Green)
 		end
-		board.Visible = phase == "InRound"
+		boardRoot.Visible = phase == "InRound"
+		boardOpenUntil = 0
 		refreshHighlights()
 	end)
 	-- The round's players get PP_InRound as it's set up; it can land just after the phase does (but
@@ -642,7 +712,7 @@ function RoundController.Start(context)
 	end)
 	-- A bot fading in or out shows up in the standings right away.
 	Participants.Changed:Connect(function()
-		if board.Visible then
+		if boardRoot.Visible then
 			refreshBoard()
 		end
 	end)
@@ -663,8 +733,8 @@ function RoundController.Start(context)
 		accumulator += dt
 		if accumulator > 0.3 then
 			accumulator = 0
-			if board.Visible then
-				refreshBoard()
+			if boardRoot.Visible then
+				refreshBoard() -- (a tapped board closes again when its time is up)
 			end
 			if phase == "InRound" then
 				refreshHighlights()
