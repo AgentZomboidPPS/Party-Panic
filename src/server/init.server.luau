@@ -23,6 +23,7 @@ local order = {
 	"SitOutService",
 	"VotingService",
 	"ReplayService", -- the results card's PLAY AGAIN vote
+	"RatingService", -- the results card's 👍 / 👎 on the game
 	"LobbyService",
 	"SkeeBallService", -- after the lobby exists (its arcade)
 	-- What keeps players coming back (they listen to RoundEvents; the lobby exists for their pieces).

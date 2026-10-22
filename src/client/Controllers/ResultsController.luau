@@ -36,6 +36,15 @@
 -- NO THANKS wore the panels' dark purple on the card's (owner: "why are the close menu buttons and
 -- the invite friend button so dark?"): it's Theme's neutral lavender button now, beside the green
 -- PLAY AGAIN.
+--
+-- 👍 / 👎 on the game (owner: "lets add to the backburner a away for players to downvote a minigame
+-- and then we can harvest that data to disable minigames in the future." Then: "Also while you make
+-- the downvote for mini games can you also do an upvote one so we can see if players like it"; the
+-- totals are Services/RatingService's): two buttons the same size in the title bar, just after its
+-- title, for everyone who played the round. 👍 ("Loved it") lights green, 👎 ("Not for me") red, with
+-- the yellow rim of an answer; tapping the other one switches the vote and tapping the lit one again
+-- takes it back, until the results end. On phones they're 44 pt like the rest of the bar, and the
+-- card is wider than it was so the title, the thumbs and PLAY AGAIN all fit beside each other.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -94,6 +103,15 @@ type ReplayStrip = {
 }
 local replay: ReplayStrip
 
+-- The 👍 / 👎 pair (scaled units): each a square the size of the bar's other buttons, THUMB_GAP apart,
+-- RATE_GAP after the title.
+local THUMB_GAP, RATE_GAP = 10, 16
+local THUMBS = {
+	Up = { Name = "ThumbUp", Icon = "👍", Lit = Theme.Colors.Green, LitDark = GREEN_DARK },
+	Down = { Name = "ThumbDown", Icon = "👎", Lit = Theme.Colors.Red, LitDark = Color3.fromRGB(190, 40, 60) },
+}
+local rating: { row: Frame, buttons: { [string]: TextButton } }
+
 local function clear(frame: Instance)
 	for _, child in frame:GetChildren() do
 		if child:IsA("GuiObject") then
@@ -128,6 +146,82 @@ local function refreshReplay()
 	end
 	mark(replay.againRim, mine == "Yes")
 	mark(replay.noRim, mine == "No")
+end
+
+-- Shows the 👍 / 👎 pair while the vote on this card's game is open, the player's vote lit.
+local function refreshRating()
+	local vote = GameState.GetJSON("Rating")
+	local open = type(vote) == "table" and vote.Open == true and cardGame ~= "" and vote.Game == cardGame
+	rating.row.Visible = open
+	local mine = State.LocalPlayer:GetAttribute("PP_Rating")
+	for choice, button in rating.buttons do
+		local look = THUMBS[choice]
+		local lit = mine == choice
+		local gradient = button:FindFirstChildOfClass("UIGradient")
+		if gradient then
+			gradient.Color = ColorSequence.new(
+				if lit then look.Lit else Theme.Colors.Lavender,
+				if lit then look.LitDark else Theme.Colors.Purple
+			)
+		end
+		local rim = button:FindFirstChildOfClass("UIStroke")
+		if rim then
+			rim.Color = if lit then Theme.Colors.Yellow else Color3.new(1, 1, 1)
+			rim.Thickness = if lit then 4 else 2
+			rim.Transparency = if lit then 0 else 0.55
+		end
+	end
+end
+
+local function buildRating()
+	local touch = UIKit.IsTouch()
+	local titleBar = modal.Window:FindFirstChild("TitleBar") or modal.Window
+	local size = if touch then Theme.Touch.Target else 52
+	-- Just after the title (Modal's label, as wide as its text).
+	local title: TextLabel? = nil
+	for _, child in titleBar:GetChildren() do
+		if child:IsA("TextLabel") then
+			title = child
+		end
+	end
+	local titleWidth = if title then UIKit.TextWidth(title.Text, title.TextSize, title.Font) else 0
+	local row = UIKit.new("Frame", {
+		Name = "Rating",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 24 + math.ceil(titleWidth) + RATE_GAP, 0, Modal.TitleHeight() / 2 + 2),
+		Size = UDim2.fromOffset(2 * size + THUMB_GAP, size),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 23,
+		Parent = titleBar,
+		Children = {
+			UIKit.List(
+				Enum.FillDirection.Horizontal,
+				THUMB_GAP,
+				Enum.HorizontalAlignment.Left,
+				Enum.VerticalAlignment.Center
+			),
+		},
+	})
+	local buttons = {}
+	for order, choice in { "Up", "Down" } do
+		local look = THUMBS[choice]
+		buttons[choice] = UIKit.Button({
+			Name = look.Name,
+			Text = look.Icon,
+			TextSize = if touch then 36 else 30,
+			Size = UDim2.fromOffset(size, size),
+			CornerRadius = 18,
+			LayoutOrder = order,
+			ZIndex = 23,
+			Parent = row,
+		}, function()
+			-- The other one switches the vote; the lit one again takes it back.
+			local mine = State.LocalPlayer:GetAttribute("PP_Rating")
+			Remotes.Get("RateGame"):FireServer(if mine == choice then "None" else choice)
+		end, Theme.Colors.Lavender, Theme.Colors.Purple)
+	end
+	rating = { row = row, buttons = buttons }
 end
 
 local function buildReplay()
@@ -377,12 +471,14 @@ local function show(data)
 
 	cardGame = if type(data.GameId) == "string" then data.GameId else ""
 	refreshReplay()
+	refreshRating()
 	modal:Open()
 	AudioController.Play(if data.Place == 1 then "Victory" else "Results")
 end
 
 function ResultsController.Start(context)
-	modal = Modal.new(context.Overlay, "Round Results", "🏆", Vector2.new(820, 470))
+	-- (960 wide: the title, 👍 / 👎 and PLAY AGAIN side by side in the title bar.)
+	modal = Modal.new(context.Overlay, "Round Results", "🏆", Vector2.new(960, 470))
 	-- Toasts wait while the card is up (it draws over them: NotificationController).
 	modal.Opened:Connect(function()
 		Players.LocalPlayer:SetAttribute("PP_ResultsShowing", true)
@@ -415,6 +511,7 @@ function ResultsController.Start(context)
 	})
 
 	buildReplay()
+	buildRating()
 
 	Remotes.Get("RoundResults").OnClientEvent:Connect(function(data)
 		if type(data) == "table" then
@@ -429,6 +526,8 @@ function ResultsController.Start(context)
 	end)
 	GameState.Changed("ReplayVote", refreshReplay)
 	State.LocalPlayer:GetAttributeChangedSignal("PP_Replay"):Connect(refreshReplay)
+	GameState.Changed("Rating", refreshRating)
+	State.LocalPlayer:GetAttributeChangedSignal("PP_Rating"):Connect(refreshRating)
 end
 
 return ResultsController

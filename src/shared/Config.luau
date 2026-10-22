@@ -82,6 +82,7 @@ Config.Data = {
 Config.RateLimits = {
 	CastVote = { 8, 2 },
 	ReplayVote = { 6, 2 }, -- PLAY AGAIN / NO THANKS on the results card
+	RateGame = { 6, 2 }, -- 👍 / 👎 on the results card
 	Shop = { 6, 2 },
 	Emote = { 4, 3 },
 	Claim = { 3, 2 },

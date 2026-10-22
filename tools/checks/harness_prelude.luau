@@ -2001,6 +2001,7 @@ function __runReplay(id, botCount, party)
 	local SitOutService = __require("Server/Services/SitOutService")
 	local VotingService = __require("Server/Services/VotingService")
 	local ReplayService = __require("Server/Services/ReplayService")
+	local RatingService = __require("Server/Services/RatingService")
 	local Notifier = __require("Server/Services/Notifier")
 	local summary = { game = id }
 	local t0 = os.clock()
@@ -2096,6 +2097,17 @@ function __runReplay(id, botCount, party)
 	local function tap(who, again)
 		__remoteObjects.ReplayVote.__bindable:Fire(__playerKey(who), again)
 	end
+	-- 👍 / 👎 on the results card (Services/RatingService), through its remote like a device: what
+	-- each tap sent and the player's PP_Rating a moment later.
+	local rateTaps = {}
+	local function rate(who, choice)
+		__remoteObjects.RateGame.__bindable:Fire(__playerKey(who), choice)
+		task.wait(0.1)
+		table.insert(rateTaps, `{at()} {who.Name} {choice} -> {who:GetAttribute("PP_Rating") or "none"}`)
+	end
+	local function rateLater(delay, who, choice)
+		task.delay(delay, rate, who, choice)
+	end
 	local function teamsNow()
 		local people = {}
 		for _, who in __fakePlayers do
@@ -2180,6 +2192,19 @@ function __runReplay(id, botCount, party)
 				task.delay(0.5, tap, ann, true)
 				task.delay(0.8, person, 3, "Cy")
 				task.delay(1, tap, bo, true)
+				-- 👍 from Ann; Bo's 👎 switched to 👍; a bot and Cy (not in this round) can't.
+				task.delay(0.3, function()
+					summary.botRatingRefused = not RatingService.Cast(bots[1], "Up")
+				end)
+				rateLater(0.4, ann, "Up")
+				rateLater(0.6, bo, "Down")
+				rateLater(0.9, bo, "Up")
+				task.delay(1.2, function()
+					local cy = __fakePlayers[3]
+					if cy then
+						rate(cy, "Up")
+					end
+				end)
 			elseif results == 2 then
 				-- Cy played this one, so he votes too: 1 of 3 want it, no replay (and everyone answered,
 				-- so the results end early again).
@@ -2191,6 +2216,16 @@ function __runReplay(id, botCount, party)
 						tap(cy, false)
 					end
 				end)
+				-- 👎 from Ann and Cy; Bo's 👍 taken back (the lit one tapped again sends "None").
+				rateLater(0.4, ann, "Down")
+				rateLater(0.6, bo, "Up")
+				rateLater(0.9, bo, "None")
+				task.delay(1.1, function()
+					local cy = __fakePlayers[3]
+					if cy then
+						rate(cy, "Down")
+					end
+				end)
 			end
 		end
 	end)
@@ -2198,6 +2233,12 @@ function __runReplay(id, botCount, party)
 	SitOutService.Init()
 	VotingService.Init()
 	ReplayService.Init()
+	RatingService.Init()
+	-- This game's week in the test store (PP_GameRatings_Test) before the run, to tell what it added.
+	local GameRatings = __require("Shared/Logic/GameRatings")
+	local ratingKey = `{GameRatings.Week(os.time())}/{id}`
+	local ratingStore = game:GetService("DataStoreService"):GetDataStore("PP_GameRatings_Test")
+	local okBefore, ratingBefore = pcall(ratingStore.GetAsync, ratingStore, ratingKey)
 	local RoundManager = __require("Server/Services/RoundManager")
 	RoundManager.Init()
 	local loop = task.spawn(RoundManager.Start)
@@ -2206,6 +2247,34 @@ function __runReplay(id, botCount, party)
 	end
 	summary.finished = done
 	summary.seconds = at()
+	-- The ratings: the taps, every write (the record after it), and what the run added to this game's
+	-- week (read back from the store).
+	task.wait(3) -- the last round's write
+	local okAfter, ratingAfter = pcall(ratingStore.GetAsync, ratingStore, ratingKey)
+	local added = {}
+	if okBefore and okAfter then
+		local before, after = GameRatings.Clean(ratingBefore), GameRatings.Clean(ratingAfter)
+		for _, name in { "Rounds", "Plays", "Up", "Down", "ReplayYes", "ReplayNo", "VoteOffers", "VoteWins" } do
+			added[name] = (after :: any)[name] - (before :: any)[name]
+		end
+		added.Voters = `{GameRatings.CountVoters(before.Seen)} -> {GameRatings.CountVoters(after.Seen)}`
+	end
+	local writes = {}
+	for _, write in RatingService.Writes() do
+		local record = write.Record
+		table.insert(
+			writes,
+			if record
+				then `{write.Key}: rounds {record.Rounds}, plays {record.Plays}, up {record.Up}, down {record.Down}, replay {record.ReplayYes}/{record.ReplayNo}, vote {record.VoteWins}/{record.VoteOffers}`
+				else `{write.Key}: FAILED {write.Error}`
+		)
+	end
+	summary.ratings = {
+		key = ratingKey,
+		taps = rateTaps,
+		added = if okBefore and okAfter then added else `couldn't read: {ratingBefore} {ratingAfter}`,
+		writes = writes,
+	}
 	summary.phases = phases
 	summary.replayVotes = replayVotes
 	summary.rounds = rounds

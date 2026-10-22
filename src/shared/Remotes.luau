@@ -21,6 +21,7 @@ local NAMES = {
 	"SkeeBall", -- both ways: the lobby arcade's Skee-Ball games; see Services/SkeeBallService
 	"EventAction", -- (action: string, ...) the limited-time event (claim a reward...); see Services/EventService
 	"Party", -- both ways: invites, JOIN / NO and LEAVE for parties; see Services/PartyService
+	"RateGame", -- (choice: "Up" | "Down" | "None") 👍 / 👎 on the results card; see Services/RatingService
 	-- server -> client
 	"ProfileData", -- (snapshot)
 	"Notify", -- (text, kind?, duration?, topic?) a toast; topic "Round" is a callout about the round (Services/Notifier)

@@ -67,7 +67,10 @@ medal wall lit up for the player; the result's "medalChecks" says what showed wh
 out the vote and steps aside for a level-up card).
 The results card asks PLAY AGAIN? (Services/ReplayService): "Results" shows the vote open, "Results
 replay" after the player tapped PLAY AGAIN, "Results replay capped" after the most replays in a row;
-the result's "replayChecks" says what the strip showed each time.
+the result's "replayChecks" says what the strip showed each time. Beside the title, 👍 / 👎 on the game
+(Services/RatingService): "Results" with neither lit, "Results replay" with 👍 lit, "Results rated
+down" with 👎 lit; "ratingChecks" says what the pair showed each time (and nothing once the vote
+closes).
 The GOLD PASS (Controllers/GoldPassController, the Rewards screen's gold lane): the screen while the
 pass is off sale on Roblox ("Rewards gold soon": COMING SOON) and on sale ("Rewards gold offer": GET
 GOLD PASS with its price), the UNLOCKED N REWARDS! card a purchase shows ("Gold unlocked"), the screen
@@ -2138,10 +2141,14 @@ phase("Results", 8, function()
 		Need = math.floor(#voters / 2) + 1,
 		Capped = false,
 	})
+	-- 👍 / 👎 on the game (Services/RatingService): open for the card's game.
+	GameState.SetJSON("Rating", { Open = true, Game = if place == 1 then "SinkingSands" else ids[1] })
 end)
 -- The player taps PLAY AGAIN (marked, counted), then a card after the most replays in a row (no
--- buttons: a new vote is next). replayChecks: what the strip showed each time.
+-- buttons: a new vote is next). replayChecks: what the strip showed each time; ratingChecks: the
+-- 👍 / 👎 pair.
 local replayChecks = {}
+local ratingChecks = {}
 do
 	step = "replay vote"
 	local function strip(label)
@@ -2166,14 +2173,45 @@ do
 			note = text("Note"),
 		}
 	end
+	-- The 👍 / 👎 pair: shown, its buttons' size, and which one is lit (its gradient's top colour).
+	local function thumbs(label)
+		local overlay = __playerGui:FindFirstChild("PartyPanicOverlay")
+		local row = overlay and overlay:FindFirstChild("Rating", true)
+		local function button(name)
+			local item = row and row:FindFirstChild(name)
+			if not item or not item:IsA("TextButton") then
+				return "missing"
+			end
+			local gradient = item:FindFirstChildOfClass("UIGradient")
+			local top = gradient and gradient.Color.Keypoints[1].Value:ToHex() or "?"
+			local rim = item:FindFirstChildOfClass("UIStroke")
+			return `{item.Text} {item.Size.X.Offset}x{item.Size.Y.Offset} top #{top}{if rim and rim.Thickness > 2 then " LIT" else ""}`
+		end
+		ratingChecks[label] = {
+			row = if row and row:IsA("GuiObject") and row.Visible then "shown" else "hidden",
+			up = button("ThumbUp"),
+			down = button("ThumbDown"),
+		}
+	end
+	thumbs("open")
 	strip("open")
 	__player:SetAttribute("PP_Replay", "Yes")
+	__player:SetAttribute("PP_Rating", "Up")
 	local vote = GameState.GetJSON("ReplayVote")
 	vote.Yes += 1
 	GameState.SetJSON("ReplayVote", vote)
 	task.wait(0.6)
 	strip("tappedYes")
+	thumbs("up")
 	snap("Results replay")
+	__player:SetAttribute("PP_Rating", "Down")
+	task.wait(0.3)
+	thumbs("down")
+	snap("Results rated down")
+	__player:SetAttribute("PP_Rating", nil)
+	GameState.SetJSON("Rating", { Open = false, Game = "" })
+	task.wait(0.3)
+	thumbs("closed")
 	vote.Open, vote.Capped = false, true
 	GameState.SetJSON("ReplayVote", vote)
 	__player:SetAttribute("PP_Replay", nil)
@@ -2720,6 +2758,7 @@ return game:GetService("HttpService"):JSONEncode({
 	partyChecks = partyChecks,
 	medalChecks = medalChecks,
 	replayChecks = replayChecks,
+	ratingChecks = ratingChecks,
 	goldChecks = goldChecks,
 	textReport = __textReport,
 	portals = __portals,

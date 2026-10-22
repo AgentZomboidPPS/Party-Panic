@@ -46,6 +46,7 @@ local BotService = require(script.Parent.BotService)
 local LobbyService = require(script.Parent.LobbyService)
 local Notifier = require(script.Parent.Notifier)
 local ReplayService = require(script.Parent.ReplayService)
+local RatingService = require(script.Parent.RatingService)
 local RewardService = require(script.Parent.RewardService)
 local RoundEvents = require(script.Parent.RoundEvents)
 local RoundContext = require(script.Parent.RoundContext)
@@ -276,9 +277,13 @@ local function runRound(definition, participants: { Player })
 	setPhase("Results", session.ResultsTime, definition.Name)
 	-- PLAY AGAIN? on the results cards. Once everyone who can has answered, the results end a moment
 	-- after the last answer (but the cards get ResultsMinTime first).
+	-- 👍 / 👎 on the game, beside it (Services/RatingService): written when the results end.
 	ReplayService.Begin(definition.Id, if carded then context:GetPlayers() else {}, replayStreak)
+	RatingService.Begin(definition.Id, if carded then context:GetPlayers() else {})
 	ReplayService.Wait(session.ResultsTime, session.ResultsMinTime)
-	local again = ReplayService.End()
+	local replayOffered = ReplayService.IsOpen()
+	local again, replayTally = ReplayService.End()
+	RatingService.End(if replayOffered then replayTally else nil)
 
 	-- Cleanup, then the lobby, or the same game again (said before the phase changes, so the lobby's
 	-- celebrations wait for real lobby time: CelebrationController).
@@ -391,7 +396,8 @@ local function runCycle()
 	-- Nobody can vote once everyone is sitting out: back to the lobby to wait for them. Once every
 	-- person playing has voted, it ends a moment after the last vote instead of running its time.
 	local voted = VotingService.Wait(session.VoteTime, everyoneOnBreak)
-	local winner, _, wasTie = VotingService.End()
+	local winner, counts, wasTie = VotingService.End()
+	RatingService.NoteVote(VotingService.Options(), winner, counts) -- how often each game is offered and wins
 	if not voted or not winner then
 		return
 	end
