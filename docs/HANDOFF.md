@@ -8,8 +8,8 @@ from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes fro
 
 `tools/publish_place.py` refuses while it's public (pass `--allow-public` only once the owner says yes).
 
-- **Waiting for the owner's yes:** `ce8754f` (bots), on top of live version 43. Owner: "Bots are STILL
-  ruberbanding and floating." / "Yes fix it.":
+- **Live: version 44** (published 21:37 UTC from `ce8754f` + docs, owner: "Yes push to live."). Bots. Owner:
+  "Bots are STILL ruberbanding and floating." / "Yes fix it.":
   - Trace Race, Minecart Mayhem, Rockin' Raceway, Bobsled Run, Dice Dash: the server no longer moves bot riders
     during the race (it seats them at the start and for a new character). Every client already stood every rider in
     place each frame; the server's moves, a network trip behind, pulled bots back ~5 studs many times a second
