@@ -17,9 +17,10 @@
 --     EventAction remote ("Claim", rewardId), checked here and rate limited. Reaching the end of the
 --     track gives the event's medal (MedalService.Award). Rewards reached but never claimed are
 --     given when the event ends (or on the next visit after it), so nobody loses one.
---   * Double coins weekends: a boost (Services/Boosts) that pays the round's coins again, with its
---     own line on the results card ("2× COINS WEEKEND"). It's registered after the other features'
---     boosts (EventService starts last), so it doubles a friend bonus too.
+--   * Double coins weekends, only while an event that has them is on (owner, on double coins after
+--     Halloween: "NO"): a boost (Services/Boosts) that pays the round's coins again on its Saturdays
+--     and Sundays (UTC), with its own line on the results card ("2× COINS WEEKEND"). It's registered
+--     after the other features' boosts (EventService starts last), so it doubles a friend bonus too.
 -- A test run (workspace attribute PP_Harness) can move this service's clock (SetClockForTests), to
 -- check a Saturday on a Thursday; nothing else changes for tests (profiles there are never saved).
 
@@ -66,9 +67,10 @@ function EventService.Current(): Events.Event?
 	return (EventLogic.Active(Events.List, now()))
 end
 
--- True on a double coins weekend.
+-- True on one of the event's double coins weekends (never outside an event).
 function EventService.DoubleCoins(): boolean
-	return Events.DoubleCoinsWeekends and EventLogic.WeekendEndsAt(now()) ~= nil
+	local state = EventLogic.State(Events.List, now())
+	return state ~= nil and state.DoubleCoins
 end
 
 -- A person in the game with a loaded profile (never a bot, never someone who just left).
@@ -298,7 +300,7 @@ end
 -- pumpkins at midnight, and gives everyone here what they reached in an event that just ended.
 local function refresh()
 	local time = now()
-	local state = EventLogic.State(Events.List, Events.DoubleCoinsWeekends, time)
+	local state = EventLogic.State(Events.List, time)
 	local encoded = if state then HttpService:JSONEncode(state) else ""
 	if encoded ~= published then
 		published = encoded

@@ -6,8 +6,9 @@
 -- on, the profile's Events field holds the candy); this only shows it and asks.
 --
 --   * The chip, first in the lobby's row (UI/LobbyRibbon, priority 1): "🎃 HALLOWEEN · 9D" (PC
---     adds the candy), "🎃 2× COINS · 1D 4H" on a double coins weekend during the event, and
---     "💰 2× COINS · 1D 4H" for a weekend on its own. A red "!" when a reward is ready to claim.
+--     adds the candy), and "🎃 2× COINS · 1D 4H" on one of the event's double coins weekends (there
+--     are none outside an event; owner, on double coins after Halloween: "NO"). A red "!" when a
+--     reward is ready to claim.
 --     After a round, the candy it paid pops on the chip ("+2 🍬 CANDY") once the player is back in
 --     the lobby: never on the results card, and never a toast (the end of a round has enough).
 --   * The event screen (tap the chip, or a locked event reward in the Shop): the candy, the track of
@@ -35,7 +36,6 @@ local Events = require(Shared.Events)
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 
-local NotificationController = require(script.Parent.NotificationController)
 local State = require(script.Parent.Parent.State)
 local LobbyRibbon = require(script.Parent.Parent.UI.LobbyRibbon)
 local Modal = require(script.Parent.Parent.UI.Modal)
@@ -104,11 +104,8 @@ local function refreshChip()
 	if badge then
 		badge.Visible = claimable()
 	end
-	if state and state.DoubleCoins then
-		ribbonChip:Set(
-			if definition then definition.Icon else Theme.CoinIcon,
-			`2× COINS · {timeLeft(state.DoubleEndsAt)}`
-		)
+	if state and definition and state.DoubleCoins then
+		ribbonChip:Set(definition.Icon, `2× COINS · {timeLeft(state.DoubleEndsAt)}`)
 	elseif state and definition then
 		local words = `{definition.Short} · {timeLeft(state.EndsAt)}`
 		-- PC has the room for the candy too; phones keep the row for the other chips.
@@ -146,12 +143,6 @@ local function buildChip(context)
 		OnClick = function()
 			if event() then
 				State.OpenScreen:Fire("Event")
-			elseif current and current.DoubleCoins then
-				NotificationController.Show(
-					`{Theme.CoinIcon} 2× COINS WEEKEND: every round pays double for {timeLeft(current.DoubleEndsAt)} more!`,
-					"reward",
-					5
-				)
 			end
 		end,
 		Top = Theme.Colors.Orange,
@@ -221,7 +212,7 @@ local function stepCard(
 	order: number,
 	step: EventLogic.Step,
 	mine: EventLogic.Progress,
-	height: number,
+	size: Vector2,
 	medal: boolean -- the track's last step, which also gives the event's medal
 )
 	local item = Cosmetics.Get(step.Reward)
@@ -233,7 +224,7 @@ local function stepCard(
 	local ready = not claimed and mine.Candy >= step.Candy
 	local card = UIKit.Panel({
 		Name = step.Reward,
-		Size = UDim2.fromOffset(176, height),
+		Size = UDim2.fromOffset(size.X, size.Y),
 		LayoutOrder = order,
 		CornerRadius = 18,
 		Parent = parent,
@@ -421,8 +412,10 @@ local function render()
 		ticking[label] = weekend
 	end
 
-	-- The track: one card a step, in order.
+	-- The track: one card a step, in order, every card in the window's width (940 units) side by side.
 	local cardHeight = if touch then 212 else 270
+	local steps = #definition.Track
+	local cardSize = Vector2.new(math.min(176, math.floor((940 - 10 * (steps - 1)) / steps)), cardHeight)
 	local track = UIKit.new("ScrollingFrame", {
 		Name = "Track",
 		Size = UDim2.new(1, 0, 0, cardHeight + 8),
@@ -439,7 +432,7 @@ local function render()
 		},
 	})
 	for order, step in definition.Track do
-		stepCard(track, order, step, mine, cardHeight, order == #definition.Track and definition.Medal ~= nil)
+		stepCard(track, order, step, mine, cardSize, order == steps and definition.Medal ~= nil)
 	end
 
 	-- Where candy comes from (and the medal, once the track is done).

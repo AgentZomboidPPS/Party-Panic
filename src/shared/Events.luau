@@ -8,15 +8,16 @@
 -- (Services/EventService) reads this to decide what's on; Logic/EventLogic has the rules; each
 -- device shows the same numbers (Controllers/EventController).
 --
+-- Double coins come with an event, never on their own (owner, asked about double coins after
+-- Halloween: "NO"): an event with DoubleCoinsWeekends pays every round's coins twice on the
+-- Saturdays and Sundays (UTC) it's on, with a line of their own on the results card. Once it's
+-- over, weekends are ordinary again.
+--
 -- An event's rewards are cosmetics marked with its Id (Cosmetics.luau: Event = "Halloween2026"):
 -- nobody can buy them, and the shop says where they came from after the event too.
 -- Leaf module: plain data and a lookup, no requires (Lune reads it: tests/EventLogic.spec.luau).
 
 local Events = {}
-
--- Double coins every Saturday and Sunday (UTC), all year: the round's coins are paid twice, with a
--- line of their own on the results card. Set to false to switch the weekends off.
-Events.DoubleCoinsWeekends = true
 
 export type Event = {
 	Id: string, -- the save key (profile.Events[Id]) and the medal it gives
@@ -26,9 +27,11 @@ export type Event = {
 	Icon: string,
 	Starts: string, -- "YYYY-MM-DD HH:MM", UTC
 	Ends: string, -- "YYYY-MM-DD HH:MM", UTC (the first moment it's over)
+	DoubleCoinsWeekends: boolean?, -- 2× coins on the Saturdays and Sundays (UTC) while it's on
 	Medal: string?, -- MedalService id, for finishing the reward track
 	Candy: { Played: number, TopHalf: number, Win: number, Pumpkin: number, PumpkinsPerDay: number },
 	Track: { { Candy: number, Reward: string } }, -- in order; the last step is the whole track
+	Headline: string?, -- the track's star reward, shown off on the Rewards screen too
 	Decor: string?, -- World/EventDecor's lobby decorations (and each device's lobby look)
 	-- The lobby's light on each device while the event is on (colours as { r, g, b }, 0-255).
 	Look: {
@@ -50,6 +53,9 @@ Events.List = {
 		Icon = "🎃",
 		Starts = "2026-10-22 00:00", -- UTC
 		Ends = "2026-11-02 00:00", -- UTC: over at midnight after Sunday 1 November
+		-- 2× coins on its two weekends: Saturday 24 - Sunday 25 and Saturday 31 October - Sunday
+		-- 1 November (UTC). Nothing after it ends.
+		DoubleCoinsWeekends = true,
 		Medal = "Halloween2026",
 		-- Candy: a little from every round, and 3 golden pumpkins hidden in the lobby each day.
 		Candy = { Played = 1, TopHalf = 1, Win = 2, Pumpkin = 3, PumpkinsPerDay = 3 },
@@ -58,9 +64,12 @@ Events.List = {
 			{ Candy = 10, Reward = "Emote_CandyToss" },
 			{ Candy = 25, Reward = "Title_PumpkinKing" },
 			{ Candy = 45, Reward = "Elim_Spooked" },
+			{ Candy = 55, Reward = "Hat_Pumpkin" },
 			{ Candy = 70, Reward = "Victory_BatBurst" },
 			{ Candy = 100, Reward = "Trail_CandyCorn" },
 		},
+		-- The one to show off: the Rewards screen's road opens with it (owner: "do pumpkin hat now").
+		Headline = "Hat_Pumpkin",
 		Decor = "Halloween",
 		-- Dusk in the lobby: warm light, purple shadows (kept bright enough for phones).
 		Look = {

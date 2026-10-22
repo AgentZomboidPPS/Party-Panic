@@ -1,4 +1,4 @@
--- The limited-time events and double coins weekends (Logic/EventLogic, Shared/Events): the schedule,
+-- The limited-time events and their double coins weekends (Logic/EventLogic, Shared/Events): the schedule,
 -- the weekend check, the countdown, candy, the reward track and the pumpkin hunt, and that every
 -- event reward is a cosmetic nobody can buy.
 local fs = require("@lune/fs")
@@ -64,28 +64,59 @@ test("the HALLOWEEN PARTY is on from 22 October until 2 November 00:00 UTC", fun
 	expectEqual(EventLogic.Active({ { Id = "Typo", Starts = "2026-1O-01", Ends = "2026-12-01" } }, MON_NOV_2), nil)
 end)
 
-test("State: the event, its end, and double coins weekends with or without it", function()
+test("State: the event, its end, and its double coins weekends", function()
 	local list = Events.List
 	expectEqual(
-		EventLogic.State(list, true, THU_OCT_22 + 3600),
+		EventLogic.State(list, THU_OCT_22 + 3600),
 		{ Id = "Halloween2026", Name = "HALLOWEEN PARTY", EndsAt = MON_NOV_2, DoubleCoins = false, DoubleEndsAt = 0 }
 	)
-	expectEqual(EventLogic.State(list, true, SAT_OCT_31 + 3600), {
+	expectEqual(EventLogic.State(list, SAT_OCT_31 + 3600), {
 		Id = "Halloween2026",
 		Name = "HALLOWEEN PARTY",
 		EndsAt = MON_NOV_2,
 		DoubleCoins = true,
 		DoubleEndsAt = MON_NOV_2,
 	})
-	-- After the party: a weekend on its own, and nothing on a weekday.
-	local saturday = MON_NOV_2 + 5 * DAY
-	expectEqual(
-		EventLogic.State(list, true, saturday),
-		{ Id = "", Name = "", EndsAt = 0, DoubleCoins = true, DoubleEndsAt = saturday + 2 * DAY }
-	)
-	expectEqual(EventLogic.State(list, true, MON_NOV_2 + DAY), nil)
-	expectEqual(EventLogic.State(list, false, saturday), nil, "weekends switched off")
-	expectEqual((EventLogic.State(list, false, SAT_OCT_24) :: any).DoubleCoins, false)
+	-- After the party: nothing, weekends included (owner: no double coins after Halloween).
+	expectEqual(EventLogic.State(list, MON_NOV_2), nil, "over at midnight")
+	expectEqual(EventLogic.State(list, MON_NOV_2 + 5 * DAY), nil, "the Saturday after")
+	expectEqual(EventLogic.State(list, MON_NOV_2 + 6 * DAY), nil, "the Sunday after")
+	expectEqual(EventLogic.State(list, THU_OCT_22 - 5 * DAY), nil, "the Saturday before")
+	-- An event without double coins weekends never has them.
+	local plain = { { Id = "Plain", Name = "PLAIN", Starts = "2026-10-22", Ends = "2026-11-02" } }
+	expectEqual((EventLogic.State(plain, SAT_OCT_24) :: any).DoubleCoins, false)
+	-- An event that ends on a Sunday stops the double coins with it, not at Monday's midnight.
+	local early = {
+		{ Id = "Early", Name = "EARLY", Starts = "2026-10-22", Ends = "2026-10-25 12:00", DoubleCoinsWeekends = true },
+	}
+	local state = EventLogic.State(early, SUN_OCT_25 + 3600) :: any
+	expectEqual(state.DoubleCoins, true)
+	expectEqual(state.DoubleEndsAt, SUN_OCT_25 + 12 * 3600)
+	expectEqual(EventLogic.State(early, SUN_OCT_25 + 12 * 3600), nil)
+end)
+
+test("2× coins on exactly the HALLOWEEN PARTY's two weekends: 24-25 October and 31 October - 1 November", function()
+	local list = Events.List
+	local doubled = {}
+	for day = EventLogic.DayNumber(THU_OCT_22) - 7, EventLogic.DayNumber(MON_NOV_2) + 14 do
+		for _, hour in { 0, 12, 23 } do
+			local state = EventLogic.State(list, day * DAY + hour * 3600)
+			if state and state.DoubleCoins then
+				doubled[day] = true
+			end
+		end
+	end
+	local days = {}
+	for day in doubled do
+		table.insert(days, day)
+	end
+	table.sort(days)
+	local sat24 = EventLogic.DayNumber(SAT_OCT_24)
+	local sat31 = EventLogic.DayNumber(SAT_OCT_31)
+	expectEqual(days, { sat24, sat24 + 1, sat31, sat31 + 1 })
+	expectEqual((EventLogic.State(list, SAT_OCT_24) :: any).DoubleEndsAt, MON_OCT_26)
+	expectEqual((EventLogic.State(list, SUN_OCT_25 + 23 * 3600) :: any).DoubleEndsAt, MON_OCT_26)
+	expectEqual((EventLogic.State(list, MON_OCT_26) :: any).DoubleCoins, false, "Monday is ordinary")
 end)
 
 test("the countdown is short: days, then hours, then minutes", function()
