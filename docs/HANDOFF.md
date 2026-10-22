@@ -1,38 +1,57 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-22 11:55 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-22 15:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (2026-10-22 11:55 UTC)
+## Session B in flight (2026-10-22 15:00 UTC)
 
-- **Live version 35** (published 11:50 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `645aff5`, on the owner's "Push";
-  the owner must restart servers). 30 mini-games. It adds to version 34:
-  - games 27-29, built in the game sessions (owner: "Let's add the stars"): Hot Potato (Survival, games-1), Dice Dash
-    (Luck, games-2) and Minecart Mayhem (Race, games-3), each with its portal preview; the new-game vote boost ended for
-    Tanks! and Prime Cut (14 of 30 boosted, within the VoteFairness cap of half);
-  - the PLAY AGAIN replay vote (`Services/ReplayService`, `Logic/ReplayVote`, the results card);
-  - the Spleef rework (no digging, blocks fade a second after a step, bigger arena, planning bots);
-  - bots stay server-owned (owner: "Bots are still rubber banding on spleef"): `RoundContext.GiveOwnership` gives a
-    bot's part to the server and BotService's loop takes back any bot root left in automatic ownership (anchoring a
-    part, as Spleef's scripted fall does, resets it to automatic, and the engine handed bots to players' devices);
-  - Slaparazzi bots, Sinking Sands' role chip and team-marked results, the sky islands out of every arena's reach;
-  - games-4's phone performance audit (cached participant lookups, fewer per-frame writes, lighter Skate Escape, Trace
-    Race, Crazy Cutters, Tanks!, Bobsled Run, Snowball Summit, Mecha-Marathon, Rake It In, Prime Cut on phones).
-  - **Checks:** a full regression of the 28 games then merged (12-player, bots and phone rounds, 0 errors after re-running
-    5 rounds that hit Roblox's transient task errors), Hot Potato's and Minecart Mayhem's mode_check on the merged tree,
-    the lobby with 8 bots, the whole client on phone and PC, all 45 new models and their 144 inner meshes approved.
-  - **Store description:** `docs/STORE_DESCRIPTION.txt` (30 games, the PLAY AGAIN line); sent to the owner to paste.
-- **Running: the full bug and clean sweep** (owner: "Let's do a full bug and clean sweep."), five helpers in worktrees
-  branched from 4117d67: three mode groups of 10 games (replays of the same game twice in a row, leavers, resets,
-  spawn failures, 1-2 players, exploits, bots, cleanup, phone HUD), the core systems (round loop and replay vote, lobby,
-  data and rewards, remotes, client controllers) and a clean-up of docs, tools, assets and wip bundles (src clean-up
-  candidates listed for a later pass). Their fixes merge into the next version after a regression.
+- **Live version 36** (published ~13:35 UTC on 2026-10-22 from `f288f2f`, on the owner's word; the owner must restart
+  servers after every publish). 30 mini-games. Version 35 (645aff5) added games 27-29 (Hot Potato, Dice Dash, Minecart
+  Mayhem), the PLAY AGAIN vote, the Spleef rework and server-owned bots. Version 36 added Session A's work (round songs,
+  Friends, Party Cups, Medals, the weekly leaderboard and Hall of Fame, the Halloween party with the pumpkin hat, 2x
+  coins on Halloween weekends) and the sweep's core, clean-up and group C fixes (brighter buttons among them).
+- **Next update, merged on the branch and not published** (publish only on the owner's word: `python3
+  tools/publish_place.py --universe-id 10772087888 --place-id 78868713931081`; the settings PATCH's 403 is expected):
+  - sweep A (37f3813): Crazy Cutters' magnifier bubble on phones, mode fixes;
+  - sweep B (a3fe9a1): Prime Cut's floating YOU badge gone, Spleef bot jumps, Shark Bait's stuck watchdog, mode fixes;
+  - in-round screen space (81b2e02): the ☰ menu in rounds, compact standings on phones, the players-left pill in the
+    banner, hints that fade, a round-only toast strip;
+  - no sitting (e878148): the cause of "invisible stuff I latched onto" was a lobby bench's invisible Seat carried into
+    the arena by whoever sat when a round began. `src/shared/NoSitting.luau` and `Services/NoSitService` stop all sitting;
+    `tests/NoSeats.spec.luau` keeps seats out of the code; Sand Kings stand at their thrones;
+  - the bots pass (9de5e9d; owner: "Bots are STILL ruberbanding and floating."): bots and people never collide
+    (collision groups `PP_Bots` and `PP_Players`; a mode's own group still wins), Spleef's bots fall by physics on real
+    servers (the scripted drop is only a hover net), and live counters for every bot problem. **Read them after the
+    owner's playtest:** `python3 tools/checks/client_reports.py --bots`. Success: snap, hover, head and seat at 0,
+    Spleef bots never anchored, Drops 0, Retakes 0. Open Cloud test servers have no physics (`StepPhysics` needs the
+    Plugin capability), so only a live game proves it. Other modes still move anchored bots by CFrame (Snowball
+    flights, Stamp Out hops, Parasol, the rides, the Hex drop): watch the counters before touching them;
+  - Struggle's bats (685d38f): a bat mesh (asset 103167926267453) held in the right hand by a grip joint, a scripted
+    swing that follows the hit rule's reach (`tests/Struggle.spec.luau`). Its portal preview still shows the old bats:
+    re-render it (`tools/preview/make_preview.py Struggle`) before publishing;
+  - parties (7ea6168; owner: "if you party with others for team games you are on the same team"): the 👥 PARTY chip
+    and window in the lobby, invite cards, parties of up to 4 that last across rounds (`Logic/PartyLogic`,
+    `Services/PartyService`, `Controllers/PartyController`), kept on one team in team games and on one side in the role
+    games (`Logic/PartyTeams`, `ctx:PartyGroups()`, `ctx:PartySides(n)`), split as evenly as possible only when a team
+    can't hold them. Open question for the owner: on Halloween the PARTY chip pushes 👋 INVITE off the chip row
+    (or PARTY could go after INVITE);
+  - marks the fonts draw (dc3358f): FredokaOne and Builder Sans draw ★ ✕ ✚ ☾ ◐ ✦ ☆ ☰ as blanks (measured on a real
+    server). Red teams wear ■, Stamp Out's red ink is ♥, close buttons read X; `tests/Marks.spec.luau` checks mark sets.
+  - **Running:** R15 poses. This place's R15 bodies use AnimationConstraint joints, not Motor6D, so the rides' and
+    Struggle's poses need a shared helper (`src/client/Pose.luau`) for Bobsled Run, Dice Dash, Minecart Mayhem, Parasol
+    Plummet, Rockin' Raceway, Skate Escape and Struggle.
+  - **Checks before publishing:** the full regression of all 30 games on 9de5e9d is running; then mode checks on the
+    final tree for Struggle and the party modes (Pump & Pop, Cake Factory, Shark Bait, Arrow Ambush, Sinking Sands, Log
+    Jam, Prime Cut), the lobby, and the client on phone and PC.
+- **Src clean-up candidates (from the clean sweep, not done):** the unused `Kit/Glove.luau` and its README line, unused
+  remotes `EventAction` and `MedalEarned`, preloaded MeshLibrary specs no mode uses (ShoppingCart, YeetGlove, Anvil,
+  MalletHead, Chest, Cone, FireWheel, HoneyTree, Basket), Skate Escape's unused Boost broadcast, shared values no client
+  reads (Arrow Ambush `Tags`, Prime Cut `History`, Rockin' Raceway's and Minecart Mayhem's `CloseAt`). Check the held
+  shop pass before removing a model or kit it might use.
 - **Held until the owner says the bug-fix wave is done ("after everything else is finished"):** the second shop
   pass, 25 coin items and 10 effects, finished on `claude/games-3` at f0cb9da (a copy is in
   `docs/wip/shop-pass2.bundle`). `claude/games-2` and `claude/games-3` carry it, so take only other work from them.
-- **Round songs:** the owner's other window uploads the 5 packs and pushes their ids to `claude/quirky-hopper-5yk8zk`;
-  until then every game plays Panic Mode.
 - **Game sessions:** games-1 to games-4 are idle (standing by: the account is near its weekly usage limit, which resets
   2026-10-28 17:00 UTC). Follow-ups noted from games-4's audit: Rockin' Raceway's riders JSON and parts, Bobsled Run's
   and Parasol Plummet's bot roots set every Heartbeat.
