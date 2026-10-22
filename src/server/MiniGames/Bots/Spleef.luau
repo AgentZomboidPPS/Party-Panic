@@ -250,7 +250,7 @@ local function leaveTime(bot): number
 	if bot.Memory.Restless then
 		return math.huge
 	end
-	if bot:Chance((1 - skill) * 0.05) then
+	if bot:Chance((1 - skill) ^ 2 * 0.08) then
 		return 0.03 -- daydreaming
 	end
 	return 0.27 + 0.13 * skill + bot.Rng:NextNumber(-0.1, 0.1) * (1 - skill)
