@@ -70,7 +70,9 @@ test("shop prices, quests, gifts and the road are on the same small scale", func
 	expectTrue(token <= 5, "the secret token stays small")
 end)
 
-test("pacing: a few rounds for a cheap item, a long evening for the best one", function()
+-- Since the second shop pass (owner: "Yes lets add more items after everything else is finished")
+-- the best items are something to save up for over a few evenings (Catalog.spec checks the totals).
+test("pacing: a few rounds for a cheap item, a few evenings for the best one", function()
 	-- An average round for an average player in an 8-player round: everyone plays, half finish in
 	-- the top half, one wins, about one in ten beats their best. Round coins only (no gifts,
 	-- quests or road coins, which only make it quicker).
@@ -88,8 +90,8 @@ test("pacing: a few rounds for a cheap item, a long evening for the best one", f
 	end
 	local cheap, mid, top = prices[1], prices[math.ceil(#prices / 2)], prices[#prices]
 	expectTrue(rounds(cheap) <= 4, `the cheapest item takes {rounds(cheap)} rounds`)
-	expectTrue(rounds(mid) >= 4 and rounds(mid) <= 10, `a middle item takes {rounds(mid)} rounds`)
-	expectTrue(rounds(top) >= 10 and rounds(top) <= 20, `the best item takes {rounds(top)} rounds`)
+	expectTrue(rounds(mid) >= 4 and rounds(mid) <= 15, `a middle item takes {rounds(mid)} rounds`)
+	expectTrue(rounds(top) >= 20 and rounds(top) <= 45, `the best item takes {rounds(top)} rounds`)
 end)
 
 test("the Rewards Road pays every level once, more every 5th and 10th", function()
