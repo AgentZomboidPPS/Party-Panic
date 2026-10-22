@@ -165,7 +165,7 @@ def rubber_stamp_rag():
     bell, zip_back = typewriter_bell(), carriage_return()
     stamp, big_stamp, staple = rubber_stamp(), rubber_stamp(True), stapler()
     twang, snip = ruler_twang(), scissors()
-    tick, tock = ins.woodblock(1400.0), ins.woodblock(950.0)
+    tick, tock = ins.woodblock(1568.0), ins.woodblock(1046.5)  # pencil taps on G6 and C6
     rng = np.random.default_rng(7)
 
     def typing(bar, pattern, gain):

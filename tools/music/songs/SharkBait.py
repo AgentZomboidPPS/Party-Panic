@@ -17,10 +17,10 @@ def pick_slide(length: float = 0.9) -> np.ndarray:
 
 
 def sonar(length: float = 1.4) -> np.ndarray:
-    """A sonar ping from the deep: something big is down there."""
+    """A sonar ping from the deep (on B, the fifth of E minor): something big is down there."""
     n = s.samples(length)
     t = np.arange(n) / s.SR
-    f = 1180 * (1 - 0.03 * t / length)
+    f = 987.8 * (1 - 0.02 * t / length)
     tone = s.sine(f, n) * np.exp(-t / 0.35) * np.clip(t / 0.004, 0, 1)
     return ins.normalize(tone + 0.25 * s.sine(f * 2.01, n) * np.exp(-t / 0.12))
 
@@ -142,8 +142,9 @@ def shark_surf_panic():
                 if local >= 1:  # the low E rumbling, swelling up
                     for k in range(16):
                         tr.add("lowgtr", bar, k, guitar(40, tr.step * 1.25, k), (0.18 + 0.08 * (local - 1)) * (1.0 if k % 2 == 0 else 0.75))
-                if 3 <= local <= 6:
-                    tr.play("bass", bar, [n for n in riff if n.step < 16] if local % 2 == 1 else shift([n for n in riff if 16 <= n.step < 32], steps=-16), lambda m, sec: ins.bass_guitar(m, sec, bright=0.6), 0.55 + 0.1 * (local - 3))
+                if 3 <= local <= 6:  # the shark riff's first two bars, creeping in on the bass
+                    half = [n for n in riff if n.step < 16] if local % 2 == 1 else shift([n for n in riff if 16 <= n.step < 32], steps=-16)
+                    tr.play("bass", bar, half, lambda m, sec: ins.bass_guitar(m, sec, bright=0.6), 0.55 + 0.1 * (local - 3))
                 if local >= 5:
                     tr.drum("toms", bar, "X.....X.....X...", toms[0], 0.45 + 0.1 * (local - 5))
                 if local >= 6:

@@ -39,7 +39,7 @@ def iron(variant: int = 0) -> np.ndarray:
     return ins.normalize(ins.eq(ring + click, ("lp", 6500), ("hp", 700)))
 
 
-def pea_whistle(length: float, pitch: float = 2500.0) -> np.ndarray:
+def pea_whistle(length: float, pitch: float = 2093.0) -> np.ndarray:
     """A carnival pea whistle: a high tone the rattling pea chops into a trill."""
     n = s.samples(length + 0.03)
     t = np.arange(n) / s.SR
@@ -109,7 +109,9 @@ def tiki_bumper_bash():
     kick, clap, snare = s.kick(1.0, 0.4), s.clap(), ins.snare2(230.0, 0.8)
     ohat, chat, shake = s.hat(True), s.hat(False), s.shaker()
     irons = [iron(v) for v in range(3)]
-    logs = {"lo": ins.log_drum(240.0), "mid": ins.log_drum(320.0), "hi": ins.log_drum(430.0)}
+    # slit drums tuned to the key: C4 F4 A4 in F, D4 G4 B4 for the G major climax and tag
+    logs_f = {"lo": ins.log_drum(261.6), "mid": ins.log_drum(349.2), "hi": ins.log_drum(440.0)}
+    logs_g = {"lo": ins.log_drum(293.7), "mid": ins.log_drum(392.0), "hi": ins.log_drum(493.9)}
     toms = [ins.tom(p, 0.4) for p in (120.0, 160.0, 210.0)]
     boings = {"A1": ins.jaw_harp(53, 0.45), "climax": ins.jaw_harp(55, 0.45)}  # F and G: the sections' roots
     congas = {"open": ins.conga(230.0), "slap": ins.conga(330.0, True), "low": ins.conga(175.0)}
@@ -146,7 +148,8 @@ def tiki_bumper_bash():
                 for v, m in enumerate(notes):
                     k = 0.0
                     while k < length - 0.5:
-                        tr.add("roll", bar, step + k + rng.uniform(-0.06, 0.06), ins.steel_pan(m, 0.3), (0.55 if k else 0.8) * (0.5 if name == "intro" else 1.0), -0.35 + 0.35 * v)
+                        level = (0.55 if k else 0.8) * (0.5 if name == "intro" else 1.0)
+                        tr.add("roll", bar, step + k + rng.uniform(-0.06, 0.06), ins.steel_pan(m, 0.3), level, -0.35 + 0.35 * v)
                         k += 0.5
             # chopping guitar pans
             chop = {"A1": "..x...x...x...x.", "A2": "..x..xx...x..x.x", "climax": "x.xx.xx.x.xx.xx.", "final": "..x...x...x...x."}.get(name)
@@ -158,6 +161,7 @@ def tiki_bumper_bash():
             if name in ("B", "climax") and local % 2 == 1 and step + length == 16:
                 strum(tr, "brass", bar, 14, voicing(c, 62, 76, size=3), horn, tr.step * 1.6, 1.0, spread=0.0, pan=-0.15)
 
+        logs = logs_g if name in ("climax", "final") else logs_f
         for bar in part.bars_range():
             local = bar - part.first
             if name == "intro":

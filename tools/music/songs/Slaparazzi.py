@@ -150,10 +150,12 @@ def red_carpet_strut():
             if name in ("A", "tag") or (name == "intro" and local >= 4):
                 seventh = 10 if "maj" not in c.name else 11
                 target = bass_note(nxt, 29) + 12
-                line = [(0, root, 2), (3, root + 7, 2), (5, root + 12, 1), (6, root + seventh, 2), (9, root + 7, 2), (11, target - 1 if target - 1 != root + 7 else target + 1, 1)]
+                approach = target - 1 if target - 1 != root + 7 else target + 1
+                line = [(0, root, 2), (3, root + 7, 2), (5, root + 12, 1), (6, root + seventh, 2), (9, root + 7, 2), (11, approach, 1)]
                 for st, m, ln in line:
                     if st < length:
-                        tr.add("bass", bar, step + st, ins.bass_guitar(m, tr.step * ln * 0.95, bright=0.45), (1.0 if st % 3 == 0 else 0.75) * (0.6 if name == "intro" else 1.0))
+                        level = (1.0 if st % 3 == 0 else 0.75) * (0.6 if name == "intro" else 1.0)
+                        tr.add("bass", bar, step + st, ins.bass_guitar(m, tr.step * ln * 0.95, bright=0.45), level)
         if name in ("B", "shout"):
             walking_bass(tr, "bass", part, lambda m, sec: ins.bass_guitar(m, sec, bright=0.45), 1.0, low=29 + 12)
 
@@ -271,7 +273,7 @@ def sum_organ(notes, length):
 def chord_at(parts, bar):
     """The chord that starts the given bar."""
     for part in parts:
-        for b, step, length, c in part.changes:
+        for b, _, _, c in part.changes:
             if b == bar:
                 return c
     raise ValueError(bar)
