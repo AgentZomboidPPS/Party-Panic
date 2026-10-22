@@ -45,6 +45,25 @@ test("VoteLogic.ResolveWinner clamps an out-of-range roll", function()
 	expectEqual(winner, 2)
 end)
 
+test("VoteLogic.ClosesAt waits for the deadline until everyone who votes has voted", function()
+	local ann, bo = { Name = "Ann" }, { Name = "Bo" }
+	expectEqual(VoteLogic.ClosesAt(108, { ann, bo }, {}, 0, 1), 108, "nobody has voted")
+	expectEqual(VoteLogic.ClosesAt(108, { ann, bo }, { [ann] = 2 }, 101, 1), 108, "Bo hasn't voted")
+	-- A vote from someone who isn't voting any more (sat out) doesn't count for Bo.
+	expectEqual(VoteLogic.ClosesAt(108, { ann, bo }, { [ann] = 2, [{}] = 1 }, 101, 1), 108, "a stranger's vote")
+	expectEqual(VoteLogic.ClosesAt(108, {}, {}, 0, 1), 108, "nobody to vote: the full time")
+end)
+
+test("VoteLogic.ClosesAt ends a beat after the last vote once everyone has voted", function()
+	local ann, bo = { Name = "Ann" }, { Name = "Bo" }
+	expectEqual(VoteLogic.ClosesAt(108, { ann, bo }, { [ann] = 2, [bo] = 3 }, 102.5, 1), 103.5)
+	-- Changing a vote moves the last vote, and the beat with it; the deadline still stands.
+	expectEqual(VoteLogic.ClosesAt(108, { ann, bo }, { [ann] = 4, [bo] = 3 }, 107.6, 1), 108)
+	-- Bo, the last one left to vote, sat out at 104, long after Ann voted at 101: with only Ann
+	-- voting it closes at 102, already past, so at once.
+	expectEqual(VoteLogic.ClosesAt(108, { ann }, { [ann] = 1 }, 101, 1), 102)
+end)
+
 test("VoteLogic.IsValidChoice rejects junk", function()
 	expectTrue(VoteLogic.IsValidChoice(2, 3))
 	expectEqual(VoteLogic.IsValidChoice(0, 3), false)

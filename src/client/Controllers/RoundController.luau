@@ -6,6 +6,14 @@
 -- "you're out" pill sits low between the thumbstick's corner and the jump button.
 -- The rules card and the 3-2-1 are for the round's players only: someone sitting it out (or who
 -- arrived mid-round) watches from the lobby, with a line under the banner (HudController).
+--
+-- A small ✕ in the card's top right corner closes it (owner: "Let players close the instructions
+-- if they want. add a close button top right. Maybe a small X."): just for that player and that
+-- round (it comes back for the next one), and the round starts on time for everyone, with the
+-- 3-2-1 as usual. A closed card counts as not up: the mode's HUD comes in (Kit/Api), every toast
+-- shows (NotificationController) and the "Read the rules card" tip goes with it (OnboardingController).
+-- The ✕ looks small (25 pt on phones) in a 44 pt tap area inside the card (on phones that's under
+-- the tip and its Skip), clear of the menu column, the jump button and the MOVE stick.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -32,13 +40,78 @@ local TEAM_COLORS = Teams.Colors
 local rules: Frame -- the card (PC), or the frame it sits in (phones)
 local rulesCard: Frame
 local rulesFields: { [string]: TextLabel } = {}
+local rulesClosed = false -- this player closed this round's card (its ✕); a new phase clears it
 local countdown: TextLabel
 local board: Frame
 local outPanel: Frame
 
+-- The ✕: its tap area and the round mark in it (scaled units). Phones: 44 pt and 25 pt.
+local CLOSE_HIT, CLOSE_MARK = Theme.Touch.Target, 40
+local PC_CLOSE_HIT, PC_CLOSE_MARK = 48, 34
+
 -- Phones and tablets without a keyboard get their own layouts (fewer standings rows, smaller cards).
 local function isTouch(): boolean
 	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+end
+
+-- Closes the rules card for this player until the next round (its ✕; the round harness uses this
+-- too). Nothing else changes: the round, its 3-2-1 and GO keep their times.
+function RoundController.CloseRules()
+	if rules and rules.Visible then
+		rulesClosed = true
+		rules.Visible = false
+	end
+end
+
+-- The ✕ in the card's top right corner: a small round mark in a bigger, invisible tap area (the
+-- name and category lines end before it).
+local function buildClose(touch: boolean)
+	local hit = if touch then CLOSE_HIT else PC_CLOSE_HIT
+	local size = if touch then CLOSE_MARK else PC_CLOSE_MARK
+	local button = UIKit.new("TextButton", {
+		Name = "Close",
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = if touch then UDim2.new(1, -2, 0, 2) else UDim2.new(1, -8, 0, 8),
+		Size = UDim2.fromOffset(hit, hit),
+		Parent = rulesCard,
+	})
+	local press = UIKit.new("UIScale", { Scale = 1 })
+	UIKit.Label({
+		Name = "Mark",
+		Text = "✕",
+		Font = Theme.Fonts.Display,
+		TextSize = if touch then 24 else 20,
+		TextWrapped = false,
+		BackgroundTransparency = 0.2,
+		BackgroundColor3 = Theme.Colors.PanelDark,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(size, size),
+		Parent = button,
+		Children = { UIKit.Round(), UIKit.Stroke(nil, 2, 0.45), press },
+	})
+	local function pressTo(value: number, time: number)
+		UIKit.Tween(press, time, { Scale = value })
+	end
+	button.MouseEnter:Connect(function()
+		pressTo(1.1, 0.12)
+	end)
+	button.MouseLeave:Connect(function()
+		pressTo(1, 0.12)
+	end)
+	button.MouseButton1Down:Connect(function()
+		pressTo(0.9, 0.06)
+	end)
+	button.MouseButton1Up:Connect(function()
+		pressTo(1, 0.1)
+	end)
+	button.Activated:Connect(function()
+		pressTo(1, 0.05) -- the card hides at once: the next round's ✕ mustn't still look pressed
+		RoundController.CloseRules()
+	end)
 end
 
 local function buildRules(parent: Instance)
@@ -46,7 +119,8 @@ local function buildRules(parent: Instance)
 	if touch then
 		-- Phones: in a frame at the top middle (scaled like the tip toast above it), so the card
 		-- starts just under the tip on every screen. Shown for a few seconds before the round and
-		-- nothing on it takes taps, so it may reach into the thumbstick's corner.
+		-- nothing in its lower left takes taps (its one button, the ✕, is in the top right), so it
+		-- may reach into the thumbstick's corner.
 		rules = UIKit.new("Frame", {
 			Name = "Rules",
 			AnchorPoint = Vector2.new(0.5, 0),
@@ -93,7 +167,8 @@ local function buildRules(parent: Instance)
 		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = if touch then UDim2.fromOffset(100, 10) else UDim2.fromOffset(140, 18),
-		Size = if touch then UDim2.new(1, -116, 0, 44) else UDim2.new(1, -160, 0, 56),
+		-- Ends before the ✕'s tap area (the longest name, Mecha-Marathon, needs about 280 / 345).
+		Size = if touch then UDim2.new(1, -178, 0, 44) else UDim2.new(1, -200, 0, 56),
 		Parent = rulesCard,
 		Children = { UIKit.TextStroke(0.2) },
 	})
@@ -104,7 +179,7 @@ local function buildRules(parent: Instance)
 		TextColor3 = Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = if touch then UDim2.fromOffset(102, 54) else UDim2.fromOffset(142, 74),
-		Size = if touch then UDim2.new(1, -118, 0, 26) else UDim2.new(1, -160, 0, 30),
+		Size = if touch then UDim2.new(1, -180, 0, 26) else UDim2.new(1, -160, 0, 30),
 		Parent = rulesCard,
 	})
 	rulesFields.Objective = UIKit.Label({
@@ -135,6 +210,7 @@ local function buildRules(parent: Instance)
 		Parent = controls,
 		Children = { UIKit.Padding(if touch then 8 else 10, 16) },
 	})
+	buildClose(touch)
 
 	countdown = UIKit.Label({
 		Name = "Countdown",
@@ -155,7 +231,7 @@ end
 
 local function showRules()
 	local definition = GameDefinitions.Get(GameState.Get("GameId"))
-	if not definition then
+	if not definition or rulesClosed then
 		return
 	end
 	local info = GameDefinitions.Categories[definition.Category]
@@ -455,6 +531,7 @@ function RoundController.Start(context)
 	local lastSecond = -1
 	GameState.Changed("Phase", function(phase)
 		rules.Visible = false
+		rulesClosed = false -- a card closed with its ✕ stays closed for the rest of that round only
 		outPanel.Visible = false
 		if phase == "Preparing" and State.InRound() then
 			showRules()
@@ -464,9 +541,10 @@ function RoundController.Start(context)
 		board.Visible = phase == "InRound"
 		refreshHighlights()
 	end)
-	-- The round's players get PP_InRound as it's set up; it can land just after the phase does.
+	-- The round's players get PP_InRound as it's set up; it can land just after the phase does (but
+	-- a card its player closed doesn't come back).
 	player:GetAttributeChangedSignal("PP_InRound"):Connect(function()
-		if GameState.Get("Phase") == "Preparing" and State.InRound() and not rules.Visible then
+		if GameState.Get("Phase") == "Preparing" and State.InRound() and not rules.Visible and not rulesClosed then
 			showRules()
 		end
 	end)
