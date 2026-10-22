@@ -6,12 +6,25 @@ Session A's handoff from 17:40 UTC, still accurate except where this block says 
 
 ## Session B in flight (2026-10-22 16:00 UTC)
 
-- **Live version 37** (published 15:56 UTC on 2026-10-22 from `7405f0c`, on the owner's "Push when things come back";
-  the owner must restart servers after every publish). Version 36 was published ~13:35 UTC from `f288f2f`. 30 mini-games. Version 35 (645aff5) added games 27-29 (Hot Potato, Dice Dash, Minecart
+- **Live version 38** (published ~17:10 UTC on 2026-10-22 from a hotfix copy, `8579655` in the detached worktree
+  /home/user/pp-hotfix: version 37's `5783546` plus cherry-picks of the fixes below; the same commits are on this branch).
+  It adds to version 37:
+  - Struggle's invisible bats (owner: "Friend cant see the bat."): a device copied the shared bat model before all of its
+    parts had replicated and drew every bat as its tape band alone. RoundContext.ShareTemplate records PP_Parts, and
+    Kit/Api.Arrived / Api.Template (and Struggle's and Cake Factory's own lookups) copy a template only once all of its
+    parts are there (e65e9df);
+  - Tanks! on phones: FIRE is a stick, drag to aim and let go to shoot (58921d3); no jump button in Trace Race or
+    Tanks! (ba5b9f6);
+  - a calmer lobby: less saturation, a softer bloom, dimmer neon floor, no Halloween saturation boost (4410578);
+  - Bumper Ballers bumps 25% stronger (70db3e7); Shark Bait's water slows swimmers to 7 and keeps them there (99b2a70).
+  Version 37 was published 15:56 UTC from `7405f0c`; version 36 ~13:35 UTC from `f288f2f`.
+- **The owner's standing word on publishing:** "You can push as soon as things are finished for now untill the game is
+  live to the public." Publish each finished, checked update without asking, while the experience is private; tell the
+  owner to restart servers after each one. Once the game goes public, ask again. 30 mini-games. Version 35 (645aff5) added games 27-29 (Hot Potato, Dice Dash, Minecart
   Mayhem), the PLAY AGAIN vote, the Spleef rework and server-owned bots. Version 36 added Session A's work (round songs,
   Friends, Party Cups, Medals, the weekly leaderboard and Hall of Fame, the Halloween party with the pumpkin hat, 2x
   coins on Halloween weekends) and the sweep's core, clean-up and group C fixes (brighter buttons among them).
-- **Version 37 carries** (publish only on the owner's word: `python3 tools/publish_place.py --universe-id 10772087888
+- **Version 37 carried** (publish per the standing word above: `python3 tools/publish_place.py --universe-id 10772087888
   --place-id 78868713931081` from the main checkout at the release commit; the settings PATCH's 403 is expected):
   - sweep A (37f3813): Crazy Cutters' magnifier bubble on phones, mode fixes;
   - sweep B (a3fe9a1): Prime Cut's floating YOU badge gone, Spleef bot jumps, Shark Bait's stuck watchdog, mode fixes;
