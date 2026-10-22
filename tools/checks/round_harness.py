@@ -21,6 +21,12 @@ two stand-in people voting and --bots bots wandering: a vote everyone answers (i
 the last vote), one somebody skips (its full time), and one where the last voter-to-be sits out. The
 summary's "phases" and "votes" say when each phase started and how each vote went.
 
+<Mode> --replay runs the real RoundManager loop with that mode as the only game, two stand-in people
+and --bots bots (default 6): a vote, the round, its results' PLAY AGAIN vote passing (the same game
+straight again, while someone joins), the replay, its results' vote failing, then the lobby and a
+vote again. The summary's "phases", "replayVotes", "rounds", "builds" and "toasts" show it
+(tools/checks/harness_prelude.luau, __runReplay).
+
 During the rules card: --leave-at T makes every stand-in leave T seconds in, and --spawn-fails gives
 them no character, so with --bots only bots are left: the round is called off (summary: calledOff).
 --reset-at T kills the last stand-in's character T seconds in (a reset); the summary's "reset" says
@@ -263,6 +269,8 @@ def main():
     parser.add_argument("--no-csg", action="store_true", help="build as if CSG had failed on this server (Shapes from plain parts)")
     parser.add_argument("--modes", default=CUP_MODES, help="CUP: the modes its rounds play, in turn")
     parser.add_argument("--rounds", type=int, default=6, help="CUP: real rounds to play (a cup is 5)")
+    parser.add_argument("--replay", action="store_true", help="the real round loop with this mode as the only game: a "
+                        "vote, the round, PLAY AGAIN passing, the replay, PLAY AGAIN failing, the lobby and a vote")
     args = parser.parse_args()
 
     header = "__touchMode = true\n" if args.touch else "__touchMode = false\n"
@@ -304,6 +312,8 @@ def main():
         cup_luau = (Path(__file__).resolve().parent / "cup_rounds.luau").read_text()
         harness += "\n" + cup_luau + "\n" + cup_table(cup_modes)  # (the modes it names, for the bundler)
         entry = "__runCup"
+    elif args.replay:
+        entry = "__runReplay"
     roots = {"Shared", "Server"} | ({"Client"} if args.client else set())
     try:
         start = bundling.seeds(reachable_luau(harness, entry) + "\n" + bot, args.game, available, roots)
@@ -340,6 +350,8 @@ def main():
         out.append("return __runSkeeBall()")
     elif args.game == "LOBBY":
         out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8})")
+    elif args.replay:
+        out.append(f'return __runReplay("{args.game}", {args.bots or 6})')
     else:
         def number(value):
             return "nil" if value is None else str(value)
