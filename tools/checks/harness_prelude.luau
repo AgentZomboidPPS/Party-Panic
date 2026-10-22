@@ -761,6 +761,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	if __noCsg then
 		__require("Server/World/Shapes").PauseCsgForTests(1e6) -- as if CSG failed on this server
 	end
+	if colliders then
+		__buildEnvironment() -- the terrain round the arenas, as on a real server (colliders.luau)
+	end
 	local module = __require("Server/MiniGames/" .. id)
 	local definition = GameDefinitions.Get(id)
 	assert(definition, "no definition for " .. id)
