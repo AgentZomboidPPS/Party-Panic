@@ -1,7 +1,7 @@
 """Composes and renders Party Panic's original music and sound effects.
 
-    python3 tools/music/compose.py            # renders everything into assets/audio
-    python3 tools/music/compose.py --preview  # also writes MP3 previews
+    python3 tools/music/compose.py                       # renders everything into assets/audio
+    python3 tools/music/compose.py --preview previews/   # also writes MP3 previews into previews/
 
 Tracks loop seamlessly: reverb and delay tails from the end of each loop wrap around to its start.
 """
