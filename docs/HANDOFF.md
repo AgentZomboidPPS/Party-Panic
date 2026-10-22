@@ -1,75 +1,42 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-22 03:15 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-22 11:55 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (2026-10-22 03:15 UTC)
+## Session B in flight (2026-10-22 11:55 UTC)
 
-- **Live version 34** (published 02:38 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `1f08776`, on the
-  owner's "merge my branch claude/quirky-hopper-5yk8zk" and that window's "merge my branch ... and publish"; the owner
-  must restart servers).
-  - **Quick check on that exact commit:**
-    - code checks;
-    - the 12-player, bots and phone rounds of SinkingSands, PrimeCut, RockinRaceway, PumpAndPop, LogJam, Struggle,
-      ArrowAmbush and HoneyTrap;
-    - a lobby round with 8 bots;
-    - the whole client on phone and PC.
-
-    All had 0 errors and 0 render problems. The full regression of v33 (all 25 games) was clean.
-  - **What it adds to v33:**
-    - the invisible-collision sweep: precise mesh collision, no reachable invisible walls, and the CSG fallback from
-      pieces;
-    - no falling through floors on load-in (`ArrivalController`, plus a put-back before GO);
-    - the lobby at 20 s, with the vote ending 1 s after the last person votes;
-    - the rules card's ✕;
-    - the Sand King rework (BLAST, SUNKEN CHEST, stronger PULL);
-    - team identity (Prime Cut's grills, the YOU'RE ON tab, the YOU mark on the pill);
-    - Rockin' Raceway's 3D hurdles;
-    - Log Jam and Struggle (27 games);
-    - Tanks! and Snowball Summit bot fixes;
-    - the vote-variety spec;
-    - all 27 portal previews;
-    - Stamp Out's 👣 icon;
-    - the Skee-Ball flicker and grass fix;
-    - from the owner's other window's branch `claude/quirky-hopper-5yk8zk`: per-game round songs (5 packs, NOT
-      uploaded yet, so every game plays Panic Mode until `AudioAssets` gets the ids) and Friends (invite chip, +1 coin
-      with a friend, beat-a-friend moments).
-  - **Store description:** `docs/STORE_DESCRIPTION.txt` lists 27 games. The owner pastes it in Creator Hub, because
-    publish_place can't set it (403).
-- Version 33 was published 00:58 UTC from `d10b635`, and version 32 at 21:55 UTC from `6e0029b`; both regressions
-  were clean.
-- **On the branch since version 34 (ships in version 35):**
-  - Sinking Sands' role chip (💎 DIVER / 👑 SAND KING all round) and team-marked results rows (owner: "I couldnt tell
-    what color I was on prime cut.");
-  - Slaparazzi bots (owner: "Bots are terrible at slaparazzi");
-  - the Spleef rework from games-2 (owner: "spleef doesnt require you to dig. It should be you walk over it and it
-    fades out within like 1 second or so", "Bots are awful at spleef", "make the spleef arena larger"), squashed
-    from `claude/games-2` 7073f05..1c0d206 without that branch's held shop commits;
-  - the PLAY AGAIN replay vote (owner: "Add a vote at the end of each minigame to replay the same minigame."):
-    `Services/ReplayService`, `Logic/ReplayVote`, the results card's PLAY AGAIN? / NO THANKS; more than half of the
-    round's people (never bots or anyone sitting out) replays the same game straight away, at most 3 plays in a row;
-  - the lobby's sky islands moved 700-1200 studs out, clear of every arena (they broke through the floor or sea of 21
-    arenas; games-2 saw a Spleef bot standing on one), and `tools/checks/colliders.py` now flags terrain near arenas.
-- **Still to come for version 35:**
-  - games-4's phone performance audit (`claude/games-4`: the round harness's `perf` line, cached participant lookups,
-    fewer per-frame writes in Trace Race, Skate Escape, Tanks!, Crazy Cutters and others);
-  - the round songs: the owner's other window uploads the 5 packs and pushes their ids to
-    `claude/quirky-hopper-5yk8zk`; until then every game plays Panic Mode.
-  A quick check of 7d3137b (code checks; SinkingSands, Slaparazzi, Spleef and PumpAndPop rounds; the lobby; the client
-  on phone and PC) is running. Publish on the owner's word.
-- **Games 27-29, building** (owner: "Let's add the stars. If you need to hand them off do it."): Hot Potato (Survival,
-  games-1), Dice Dash (Luck, games-2) and Minecart Mayhem (Race, games-3), each on its session's `claude/games-N` branch
-  (sessions can only push their own branch; games-2's and games-3's also carry the held shop pass, so take only the
-  game's changes from them). Briefs: `docs/MINIGAME_BACKLOG.md` 27-29 and `docs/builds/`. On merge: keep
-  IsNew within the vote's cap (`tests/VoteFairness.spec.luau`: at most half of the games), make portal previews, add
-  them to `docs/STORE_DESCRIPTION.txt` and the lineup doc.
+- **Live version 35** (published 11:50 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `645aff5`, on the owner's "Push";
+  the owner must restart servers). 30 mini-games. It adds to version 34:
+  - games 27-29, built in the game sessions (owner: "Let's add the stars"): Hot Potato (Survival, games-1), Dice Dash
+    (Luck, games-2) and Minecart Mayhem (Race, games-3), each with its portal preview; the new-game vote boost ended for
+    Tanks! and Prime Cut (14 of 30 boosted, within the VoteFairness cap of half);
+  - the PLAY AGAIN replay vote (`Services/ReplayService`, `Logic/ReplayVote`, the results card);
+  - the Spleef rework (no digging, blocks fade a second after a step, bigger arena, planning bots);
+  - bots stay server-owned (owner: "Bots are still rubber banding on spleef"): `RoundContext.GiveOwnership` gives a
+    bot's part to the server and BotService's loop takes back any bot root left in automatic ownership (anchoring a
+    part, as Spleef's scripted fall does, resets it to automatic, and the engine handed bots to players' devices);
+  - Slaparazzi bots, Sinking Sands' role chip and team-marked results, the sky islands out of every arena's reach;
+  - games-4's phone performance audit (cached participant lookups, fewer per-frame writes, lighter Skate Escape, Trace
+    Race, Crazy Cutters, Tanks!, Bobsled Run, Snowball Summit, Mecha-Marathon, Rake It In, Prime Cut on phones).
+  - **Checks:** a full regression of the 28 games then merged (12-player, bots and phone rounds, 0 errors after re-running
+    5 rounds that hit Roblox's transient task errors), Hot Potato's and Minecart Mayhem's mode_check on the merged tree,
+    the lobby with 8 bots, the whole client on phone and PC, all 45 new models and their 144 inner meshes approved.
+  - **Store description:** `docs/STORE_DESCRIPTION.txt` (30 games, the PLAY AGAIN line); sent to the owner to paste.
+- **Running: the full bug and clean sweep** (owner: "Let's do a full bug and clean sweep."), five helpers in worktrees
+  branched from 4117d67: three mode groups of 10 games (replays of the same game twice in a row, leavers, resets,
+  spawn failures, 1-2 players, exploits, bots, cleanup, phone HUD), the core systems (round loop and replay vote, lobby,
+  data and rewards, remotes, client controllers) and a clean-up of docs, tools, assets and wip bundles (src clean-up
+  candidates listed for a later pass). Their fixes merge into the next version after a regression.
 - **Held until the owner says the bug-fix wave is done ("after everything else is finished"):** the second shop
-  pass, 25 coin items and 10 effects, finished on `claude/games-3` at f0cb9da (reviewed; its client checks are in
-  the same branch; a copy is in `docs/wip/shop-pass2.bundle`). `claude/games-2` also carries the earlier shop commits, so don't merge that branch whole.
-- **Game sessions** (see [HANDOFF_GAMES.md](HANDOFF_GAMES.md)): all 14 backlog games are merged (27 games); games-1
-  to games-3 are building games 27-29 and games-4 is on the performance audit.
-- **Later (owner):** the owner's call on rebalancing thin categories (Messy Memory to Luck, Tanks! to Knockback).
+  pass, 25 coin items and 10 effects, finished on `claude/games-3` at f0cb9da (a copy is in
+  `docs/wip/shop-pass2.bundle`). `claude/games-2` and `claude/games-3` carry it, so take only other work from them.
+- **Round songs:** the owner's other window uploads the 5 packs and pushes their ids to `claude/quirky-hopper-5yk8zk`;
+  until then every game plays Panic Mode.
+- **Game sessions:** games-1 to games-4 are idle (standing by: the account is near its weekly usage limit, which resets
+  2026-10-28 17:00 UTC). Follow-ups noted from games-4's audit: Rockin' Raceway's riders JSON and parts, Bobsled Run's
+  and Parasol Plummet's bot roots set every Heartbeat.
+- **Later (owner):** nothing open; the category question was settled by games 27-29.
 - **Toolchain in a fresh container (GitHub downloads are blocked here):** `cargo install --locked stylua@2.6.0 --features
   luau`, `selene@0.31.0`, `rojo@7.7.1`, `lune@0.11.0` (crates.io works); luau-lsp from source: `git clone --depth 1
   --branch 1.70.1 https://github.com/JohnnyMorganz/luau-lsp`, `git submodule update --init --depth 1`, cmake Release with
