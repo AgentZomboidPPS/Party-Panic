@@ -1,5 +1,5 @@
 -- Client half of Log Jam: draws every team's sawmill from the state the server shares ("Mill_<Team>"),
--- and gives this player the four shape buttons (▲ ■ ● ◆, each its own colour too) and a prompt card.
+-- and gives this player the four shape buttons (■ ♥ ♠ ♣, each its own colour too) and a prompt card.
 --
 -- The mills: when a log is placed it flies from the rack and lands upright on the stump (the
 -- server's BEAT); when it's chopped the big axe swings down on its hinge, the log splits into two
@@ -12,7 +12,7 @@
 -- The buttons only light up while your prompt is showing on your screen (a press before that would
 -- be a guess, and the server jams a guess), so what you see is what counts. A press sends the shape,
 -- the log number and the phase it answered, plus the synced time it was pressed (for the buzzer).
--- Phones get the buttons as a 2 x 2 pad beside the jump button (▲ ■ over ● ◆); PC a row with Q W E R.
+-- Phones get the buttons as a 2 x 2 pad beside the jump button (■ ♥ over ♠ ♣); PC a row with Q W E R.
 -- Each player on turn gets a PLACE / CHOP tag over their head, and each mill's sign counts its logs.
 
 local Players = game:GetService("Players")
@@ -29,7 +29,7 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local LogJam = {}
 
-local SYMBOLS = { "▲", "■", "●", "◆" }
+local SYMBOLS = { "■", "♥", "♠", "♣" } -- (the server's LogJam.SYMBOLS: none is a team's mark)
 -- (Not the teams' colours: the team scores wear red, blue, green and yellow.)
 local SYMBOL_COLORS = {
 	Color3.fromRGB(255, 140, 40),
@@ -328,7 +328,7 @@ function LogJam.Start(api)
 			end
 			local inner = holder:FindFirstChild("Button") :: GuiObject?
 			if touch then
-				-- Slots 1-2 are the bottom row (beside the jump button); ▲ ■ sit right above ● ◆.
+				-- Slots 1-2 are the bottom row (beside the jump button); ■ ♥ sit right above ♠ ♣.
 				if inner then
 					inner.Position = if index <= 2 then UDim2.new(0, 0, -1, -12) else UDim2.new()
 				end
@@ -339,7 +339,7 @@ function LogJam.Start(api)
 			end
 		end
 	end
-	local touchSlots = { 2, 1, 2, 1 } -- ▲ ■ (top row, raised) and ● ◆ (bottom row)
+	local touchSlots = { 2, 1, 2, 1 } -- ■ ♥ (top row, raised) and ♠ ♣ (bottom row)
 	local live = {
 		Seq = -1,
 		Phase = "",

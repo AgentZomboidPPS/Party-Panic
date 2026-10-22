@@ -28,7 +28,7 @@ function LogJamBrain.Step(bot, ctx, mode, _dt)
 	if not mine then
 		return
 	end
-	local key = `{station.Seq}:{phase}:{station.JamUntil}`
+	local key = `{station.Seq}:{phase}:{station.JamUntil}:{station.ShowAt}`
 	if memory.Planned == key then
 		return
 	end

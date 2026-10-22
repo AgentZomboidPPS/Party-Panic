@@ -7,7 +7,7 @@
 -- a wooden deck: the log rack on the players' left, the chopping stump in the middle and a big axe
 -- on a hinge post on their right. The roles rotate every log (A places and B chops, then B places
 -- and C chops...), so everyone both places and chops; a team of one does both. The prompt is one of
--- four shapes (▲ ■ ● ◆, each with its own colour too): the placer sees it at once, the chopper when
+-- four shapes (■ ♥ ♠ ♣, each with its own colour too): the placer sees it at once, the chopper when
 -- the log lands on the stump (BEAT later). A wrong shape, or a press before your prompt was showing,
 -- jams the mill for JAM seconds (the same log waits).
 --
@@ -27,15 +27,18 @@ local Buzzer = require(ReplicatedStorage.Shared.Logic.Buzzer)
 local Teams = require(ReplicatedStorage.Shared.Teams)
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
+local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
 local Build = require(script.Parent.Parent.World.Build)
 local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 
 local LogJam = MiniGame.Define("LogJam", { Results = "Team" })
 
-LogJam.SYMBOLS = { "▲", "■", "●", "◆" }
+-- (None of the teams' own marks ★ ● ▲ ◆, so a team pill never reads as a prompt.)
+LogJam.SYMBOLS = { "■", "♥", "♠", "♣" }
 LogJam.BEAT = 0.4 -- the placed log's flight to the stump; the chopper's prompt shows when it lands
 LogJam.NEXT = 0.55 -- after a chop, until the next log's prompt
 LogJam.JAM = 1.1 -- a wrong press stops the mill this long
+LogJam.IDLE = 3.5 -- a prompt nobody answers this long goes to the next teammate
 LogJam.FIRST = 0.3 -- after GO, until the first prompt
 
 -- Station geometry (studs, in the station's own frame: right = the players' right, up, toward = towards
@@ -103,6 +106,9 @@ end
 
 -- Slack for a press's timing, from the player's ping (bots have none).
 local function lagOf(player: Player): number
+	if BotRegistry.IsBot(player) then
+		return 0
+	end
 	local ok, ping = pcall(function()
 		return (player :: any):GetNetworkPing()
 	end)
@@ -310,7 +316,10 @@ function LogJam:Prepare()
 	local players = ctx:GetPlayers()
 	local names = {}
 	-- (A solo test gets a single mill instead of an empty rival.)
-	for index = 1, math.min(Teams.CountFor(#players, 2), math.max(#players, 1)) do
+	-- (Teams of two or three, never one, when there are enough players: a team of one knows its own
+	-- chop shape a beat early.)
+	local teamCount = if #players <= 1 then 1 else math.clamp(math.floor(#players / 2), 2, 4)
+	for index = 1, teamCount do
 		table.insert(names, Teams.Order[index])
 	end
 	local teams = ctx:AssignTeams(names)
@@ -381,7 +390,7 @@ function LogJam:Prepare()
 		return self.spots[player]
 	end
 	for _, player in players do
-		ctx:SetScoreText(player, "0 logs")
+		ctx:SetScoreText(player, "0 turns")
 	end
 	ctx:SetStatus("Press the shape on your screen!")
 	ctx.Hooks.PlayerLeft = function(player)
@@ -416,6 +425,15 @@ function LogJam:_publish(station: Station)
 	})
 end
 
+-- A random shape, never `previous` again.
+function LogJam:_newSymbol(previous: number): number
+	local symbol = self.rng:NextInteger(1, #LogJam.SYMBOLS - 1)
+	if symbol >= previous and previous > 0 then
+		symbol += 1
+	end
+	return symbol
+end
+
 -- The next log: a new shape (never the same twice running) and the next pair of teammates.
 function LogJam:_nextLog(station: Station, showAt: number)
 	if station.Phase == "Gone" or self.context:TimeIsUp() then
@@ -423,11 +441,7 @@ function LogJam:_nextLog(station: Station, showAt: number)
 	end
 	station.Seq += 1
 	station.Turn += 1
-	local symbol = self.rng:NextInteger(1, #LogJam.SYMBOLS - 1)
-	if symbol >= station.Symbol and station.Symbol > 0 then
-		symbol += 1
-	end
-	station.Symbol = symbol
+	station.Symbol = self:_newSymbol(station.Symbol)
 	station.Phase = "Place"
 	station.ShowAt = showAt
 	self:_roles(station)
@@ -440,7 +454,8 @@ function LogJam:_bump(player: Player, field: string)
 		return
 	end
 	(stats :: any)[field] += 1
-	self.context:SetScoreText(player, `{stats.Placed + stats.Chopped} logs`)
+	-- (A player's own count is turns done, placing or chopping: "logs" is the team's count.)
+	self.context:SetScoreText(player, `{stats.Placed + stats.Chopped} turns`)
 end
 
 -- A press of one of the four shapes. `seq` and `phase` say which prompt the player answered: a press
@@ -490,6 +505,10 @@ function LogJam:_press(player: Player, symbol: any, seq: any, phase: any, sentAt
 	if phase == "Place" then
 		station.Phase = "Chop"
 		station.ShowAt = now + LogJam.BEAT
+		if station.Chopper == station.Placer then
+			-- (Someone placing and chopping alone gets a new shape to chop, like a partner would.)
+			station.Symbol = self:_newSymbol(station.Symbol)
+		end
 		self:_bump(player, "Placed")
 		ctx:AddScore(player, 1)
 		self:_publish(station)
@@ -497,7 +516,7 @@ function LogJam:_press(player: Player, symbol: any, seq: any, phase: any, sentAt
 	end
 	station.Phase = "Split"
 	station.Logs += 1
-	station.LastChopAt = pressedAt
+	station.LastChopAt = now -- (the tie-break goes by arrival: a press's claimed time can be bent)
 	self:_bump(player, "Chopped")
 	ctx:AddScore(player, 1)
 	ctx:AddTeamScore(station.Team, 1)
@@ -508,6 +527,37 @@ function LogJam:_press(player: Player, symbol: any, seq: any, phase: any, sentAt
 			self:_nextLog(station, ctx:Now())
 		end
 	end)
+end
+
+-- The member after `who` in the team's turn order (the first one if nil); with one member, them.
+function LogJam:_after(station: Station, who: Player?): Player?
+	local members = station.Members
+	if #members == 0 then
+		return nil
+	end
+	local index = if who then table.find(members, who) else nil
+	return members[if index then index % #members + 1 else 1]
+end
+
+-- Someone on turn who doesn't press (away, distracted, their screen didn't load) would stall the
+-- whole mill: after IDLE seconds the prompt goes to the next teammate.
+function LogJam:_passIdle(station: Station, now: number)
+	if #station.Members < 2 or (station.Phase ~= "Place" and station.Phase ~= "Chop") then
+		return
+	end
+	if now < math.max(station.ShowAt, station.JamUntil) + LogJam.IDLE then
+		return
+	end
+	if station.Phase == "Place" then
+		station.Placer = self:_after(station, station.Placer)
+		if station.Placer == station.Chopper then
+			station.Chopper = self:_after(station, station.Placer)
+		end
+	else
+		station.Chopper = self:_after(station, station.Chopper)
+	end
+	station.ShowAt = now
+	self:_publish(station)
 end
 
 -- A player who leaves: the turn goes on with whoever is left; a team with nobody left stops.
@@ -528,12 +578,25 @@ function LogJam:_leave(player: Player)
 		self:_publish(station)
 		return
 	end
-	if station.Placer == player or station.Chopper == player then
-		self:_roles(station)
+	-- Only the role the leaver held changes hands (in the chop phase the placer's part is done).
+	local changed = false
+	if station.Chopper == player then
+		station.Chopper = self:_after(station, station.Placer ~= player and station.Placer or nil)
+		changed = station.Phase == "Chop"
+	end
+	if station.Placer == player then
+		if station.Phase == "Place" then
+			station.Placer = self:_after(station, nil)
+			changed = true
+		else
+			station.Placer = station.Chopper
+		end
+	end
+	if changed then
 		-- The new player on this prompt sees it from now.
 		station.ShowAt = math.max(station.ShowAt, self.context:Now())
-		self:_publish(station)
 	end
+	self:_publish(station)
 end
 
 function LogJam:Start()
@@ -577,6 +640,11 @@ function LogJam:Start()
 		end
 		if live then
 			ctx:HoldEnd(0.3)
+		end
+		if not ctx:TimeIsUp() then
+			for _, team in self.order do
+				self:_passIdle(self.stations[team], now)
+			end
 		end
 		if now - lastStatus > 1 then
 			lastStatus = now
@@ -656,7 +724,9 @@ function LogJam:GetResults()
 		if station then
 			entry.Rank = station.Logs + later[station.Team] * 0.1
 			entry.ScoreText =
-				`{entry.Team} {station.Logs} logs • you {if stats then stats.Placed + stats.Chopped else 0}`
+				`{entry.Team} {station.Logs} logs • you placed {if stats then stats.Placed else 0}, chopped {if stats
+					then stats.Chopped
+					else 0}`
 		end
 	end
 	results.WinningTeam = self:_leader()
