@@ -84,7 +84,8 @@ def audit(name: str, body: str):
 
 def seeds(text: str, game: str, available: dict, roots: set) -> set:
     """The modules a harness's own Luau (prelude, bot, scenario) asks for: by name, plus the ones it
-    builds from a prefix (the run's mode, its bot brain and Default, every controller it names).
+    builds from a prefix (the run's mode, its bot brain and Default, every controller and service it
+    names).
     A name under a root this run bundles (Shared, Server, and Client with --client) must exist."""
     found = set()
     text = "\n".join(_code(line) for line in text.split("\n"))
@@ -101,6 +102,8 @@ def seeds(text: str, game: str, available: dict, roots: set) -> set:
             wanted = [f"Server/MiniGames/Bots/{game}", "Server/MiniGames/Bots/Default"]
         elif prefix == "Client/Controllers/":
             wanted = [f"Client/Controllers/{n}" for n in re.findall(r'"(\w+Controller)"', text)]
+        elif prefix == "Server/Services/":  # the round harness starts the services it names (CupService...)
+            wanted = [f"Server/Services/{n}" for n in re.findall(r'"(\w+Service)"', text)]
         else:
             raise BundleError(f'the harness requires "{prefix}" .. something: tell tools/checks/bundling.py which ones')
         found.update(name for name in wanted if name in available)
