@@ -18,12 +18,15 @@ EatsaPizza.MESH_CHEESE = 0.31 -- the cheese's top in the meshes (pepperoni sit o
 EatsaPizza.REACH = { 1.0, 0.8, 0.6, 0.38 } -- how far stage 0..3 reaches (share of the radius)
 EatsaPizza.STAGES = { "EatsaPizzaSlice", "EatsaPizzaSlice1", "EatsaPizzaSlice2", "EatsaPizzaSlice3" }
 
-EatsaPizza.PER_PLAYER = 130 -- bites a team has to eat for each of its players
+EatsaPizza.PER_PLAYER = 110 -- bites a team has to eat for each of its players
 EatsaPizza.PEPPERONI_WEIGHT = 0.14 -- each pepperoni makes its slice this share bigger
-EatsaPizza.RATE = 10 -- bites a second, at most (a quick human's mashing)
+EatsaPizza.RATE = 8 -- bites a second, at most (a quick human's mashing: an auto-clicker gains little)
 EatsaPizza.BURST = 4
 EatsaPizza.EDGE_LEEWAY = 2.2 -- studs past a slice's bitten front that still count
-EatsaPizza.SIDE_LEEWAY = 1.4 -- studs past a slice's sides that still count
+EatsaPizza.SIDE_LEEWAY = 1.4 -- studs past a slice's sides that still count...
+EatsaPizza.SIDE_ANGLE = 0.12 -- ...but never more than this far round (radians), so near the middle
+-- a step off a slice is a step off it
+EatsaPizza.MIDDLE = 2.5 -- the very middle, where every slice's tip meets, is nobody's slice
 
 -- The pizza's radius for a round of `count` players.
 function EatsaPizza.Radius(count: number): number
@@ -84,11 +87,13 @@ function EatsaPizza.Locate(offset: Vector3, radius: number, stageOf: (index: num
 			continue
 		end
 		local delta = (angle - EatsaPizza.Angle(index) + math.pi) % (2 * math.pi) - math.pi
-		local side = if math.abs(delta) > half
-			then distance * math.sin(math.min(math.abs(delta) - half, math.pi / 2))
-			else 0
+		local excess = math.max(0, math.abs(delta) - half)
+		local side = distance * math.sin(math.min(excess, math.pi / 2))
 		local over = math.max(0, distance - EatsaPizza.Reach(stage, radius))
-		if side <= EatsaPizza.SIDE_LEEWAY and over <= EatsaPizza.EDGE_LEEWAY then
+		-- (The leeway past the sides is in studs out on the slice, and a small angle near the middle:
+		-- standing where the tips meet must not reach every slice at once.)
+		local sideOk = excess <= math.min(EatsaPizza.SIDE_LEEWAY / math.max(distance, 1), EatsaPizza.SIDE_ANGLE)
+		if distance >= EatsaPizza.MIDDLE and sideOk and over <= EatsaPizza.EDGE_LEEWAY then
 			local out = side + over
 			if out < bestOut then
 				best, bestOut = index, out
