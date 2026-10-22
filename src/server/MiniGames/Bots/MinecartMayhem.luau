@@ -8,6 +8,8 @@
 -- Jumps: a bot aims to be in the air from the gap's edge until its back wheels are over the far
 -- side (Track.Clears), off by more the clumsier it is, and now and then jumps far too early or not
 -- at all. The press is timed with ctx:Delay, so it doesn't depend on how often the brain runs.
+-- Since players' early presses are held for the best moment (Track.HOLD), a bot's "far too early"
+-- is earlier than that: it hops at once and comes down before the gap, so bots miss about as often.
 -- Bends: a bot leans into each half of a bend, better bots more often and sooner; clumsy ones now
 -- and then lean the wrong way and wobble.
 --
@@ -144,7 +146,9 @@ function Brain.Step(bot, ctx, mode, _dt)
 				lead = Track.JUMP_TIME / 2 - (gap + Track.WHEELBASE) / (2 * v)
 				lead += rng:NextNumber(-1, 1) * (1 - skill) * 0.22
 			elseif roll < 0.8 + skill * 0.15 then
-				lead = rng:NextNumber(0.55, 0.8) -- far too early: down before the far side
+				-- far too early (before a press would be held): down before the gap
+				local v = math.max(rider.V, 10)
+				lead = Track.JUMP_TIME / 2 - (gap + Track.WHEELBASE) / (2 * v) + Track.HOLD + rng:NextNumber(0.3, 0.6)
 			else
 				lead = -1 -- doesn't jump
 			end

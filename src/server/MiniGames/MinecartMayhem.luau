@@ -47,6 +47,11 @@
 -- about them is solid. The arrows on the ties glow (Props). Phones ride with a higher chase camera
 -- (client half), so the junction gantries hang 2.5 studs higher, clear above it. The rules are as
 -- before: Track.Clears decides every jump, judged here the same way.
+--
+-- Held jumps (owner: "Minecart mayham is still terrible. Iam not sure how we can fix it. I cant see
+-- when to jump."): a JUMP pressed up to Track.HOLD seconds early for the next gap takes off at the
+-- best moment instead of at once (Track.JumpFor, the same rule the rider's own screen predicts with),
+-- so from the JUMP! cue to the gap any press clears it.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -811,9 +816,10 @@ function MinecartMayhem:_jump(player: any, pressedAt: any)
 		return
 	end
 	if at < rider.JumpAt + Track.JUMP_TIME + Track.JUMP_REST - 0.05 then
-		return -- still in the air (or just landed)
+		return -- still in the air (or just landed, or a held jump is waiting)
 	end
-	rider.JumpAt = at
+	-- (early for a gap ahead: held until the best moment, Track.TakeOff)
+	rider.JumpAt = Track.JumpFor(self.course, rider, at, self.context:Now())
 end
 
 -- One step of a cart's ride; true when it crossed the finish line in this step.

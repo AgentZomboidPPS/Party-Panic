@@ -51,6 +51,14 @@
 -- (Track.Clears, the server's own rule); an arc of lamps over the rider and the gate's lamps fill
 -- toward that moment, and so does the JUMP button. LEAN prompts, the callouts and the controls hint
 -- show there too. PC keeps its camera, its strip and its switch panel.
+--
+-- Held jumps (owner: "Minecart mayham is still terrible. Iam not sure how we can fix it. I cant see
+-- when to jump."): JUMP! used to show only while a press cleared the gap, about a third of a second
+-- at cruising speed, so it was over before anyone could react to it, and the gap itself sits behind
+-- your own cart on screen. Now a press up to Track.HOLD seconds before the best moment is held and
+-- the cart takes off at the best moment (Track.JumpFor, the server's rule too). The cue says GAP
+-- AHEAD (the lamps filling), then JUMP! (green and big, with the haptic tap) from the moment a press
+-- would clear it until it's too late, and ✓ GOT IT once you've pressed and the cart waits to hop.
 
 local HapticService = game:GetService("HapticService")
 local Lighting = game:GetService("Lighting")
@@ -84,11 +92,10 @@ local rad = math.rad
 local CAMERA = { Up = 7.5, Back = 15, Ahead = 14, Aim = 2.5 }
 local PHONE_CAMERA = { Up = 10, Back = 9.5, Ahead = 13, Aim = 0 }
 
--- The JUMP cue on my cart: GAP AHEAD from WARN seconds before the best moment to press, READY...
--- from READY, the lamps filling over the last FILL seconds, JUMP! while a press clears the gap.
+-- The JUMP cue on my cart: GAP AHEAD from WARN seconds before the best moment to press, the lamps
+-- filling until JUMP!, which shows from Track.HOLD seconds before it (a press then is held for it)
+-- until a press is too late.
 local WARN = 2.6
-local READY = 0.9
-local FILL = 1.6
 local CUE_SIZE = 0.44 -- the cue's square, a share of the screen's height (my cart's size on screen)
 local ARC_LAMPS = 7 -- over the rider, lit from both ends toward the top (4 steps, like the gate's lamps)
 local GATE_YELLOW = Color3.fromRGB(255, 205, 40) -- the gate as the server built it
@@ -974,12 +981,23 @@ function MinecartMayhem.Start(api)
 		if mine and (mine.DownUntil > 0 or mine.Back) then
 			return
 		end
-		myJumpAt = now
+		-- (early for a gap: held until the best moment, as the server does: Track.JumpFor)
+		local c = course
+		local takeOff = if mine and c then Track.JumpFor(c, mine, now, now) else now
+		myJumpAt = takeOff
 		if mine then
-			mine.JumpAt = now
+			mine.JumpAt = takeOff
 		end
 		api:Action("Jump", now)
-		api:Sound("Boing")
+		if takeOff > now + 0.03 then
+			task.delay(takeOff - now, function()
+				if racing() then
+					api:Sound("Boing")
+				end
+			end)
+		else
+			api:Sound("Boing")
+		end
 	end
 	jump.Pressed:Connect(doJump)
 	api:Track(UserInputService.JumpRequest:Connect(doJump)) -- (Roblox's own jump button jumps too)
@@ -1461,17 +1479,24 @@ function MinecartMayhem.Start(api)
 			local v = math.max(m.V, 1)
 			local lead = Track.JUMP_TIME / 2 - (gapLength + Track.WHEELBASE) / (2 * v)
 			local wait = if gapFront then gapFront / v - lead else math.huge
-			local resting = now < myJumpAt + Track.JUMP_TIME + Track.JUMP_REST
+			local held = myJumpAt > now -- pressed, and waiting for the best moment to hop
+			local resting = not held and now < myJumpAt + Track.JUMP_TIME + Track.JUMP_REST
 			if gapFront and gapAt and gapFront > 0 and wait <= WARN and not resting then
-				jumpNow = Track.Clears(now, now + gapFront / v, v, gapLength)
+				-- (a press now clears it: in the window, or early enough to be held for it)
+				jumpNow = held
+					or Track.Clears(now, now + gapFront / v, v, gapLength)
+					or (wait > 0 and wait <= Track.HOLD)
 				if jumpNow or wait > 0 then
-					lit = if jumpNow then 4 else math.clamp(math.ceil((1 - wait / FILL) * 4), 0, 4)
+					local filling = (WARN - wait) / (WARN - Track.HOLD)
+					lit = if jumpNow then 4 else math.clamp(math.ceil(filling * 4), 0, 4)
 					lampColor = if jumpNow then Theme.Colors.Green else Theme.Colors.Yellow
 					gateTile, gateLit = gapAt, if jumpNow then 5 else lit
-					if jumpNow then
+					if held then
+						cueText, cueColor = "✓ GOT IT", Theme.Colors.Green
+					elseif jumpNow then
 						cueText, cueColor, cueBig = "JUMP!", Theme.Colors.Green, true
 					else
-						cueText = if wait > READY then "GAP AHEAD" else "READY…"
+						cueText = "GAP AHEAD"
 					end
 					if warnedGap ~= gapAt then
 						warnedGap = gapAt

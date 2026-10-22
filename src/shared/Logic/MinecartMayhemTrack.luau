@@ -28,6 +28,13 @@
 -- jump is one hump, so it is up all the time between). The server judges a player's JUMP by when it
 -- was pressed on their screen, and the client lights JUMP by the same rule.
 --
+-- Held jumps (owner: "Minecart mayham is still terrible. Iam not sure how we can fix it. I cant see
+-- when to jump."): a press that clears the gap had to come in a window about a third of a second
+-- long at cruising speed (less when slow), ending as the front wheels reach the gap, so a cue had to
+-- be guessed, not followed. Now a JUMP pressed early, up to HOLD seconds before the best moment, is
+-- held and the cart takes off at the best moment (TakeOff): from the JUMP! cue to the gap, any press
+-- clears it. A press earlier than that jumps at once (and lands before the gap), as before.
+--
 -- Fair switches: the way a cart takes is the side of the latest LEFT or RIGHT tapped after the cart
 -- came within CHOOSE studs of the switch (or pressed earlier and still held there), up to GRACE
 -- seconds after its middle reached the switch on the player's screen (Choose). No press: the long,
@@ -84,6 +91,7 @@ Track.JUMP_TIME = 0.85
 Track.JUMP_HEIGHT = 4.5
 Track.JUMP_REST = 0.15
 Track.MIN_CLEAR = 0.6
+Track.HOLD = 1.2 -- an early JUMP up to this long before a gap's best moment waits for it (TakeOff)
 -- The take-off marker (yellow chevrons on the ties): the cart's FRONT wheels over it, from
 -- TAKEOFF_FAR to TAKEOFF_NEAR studs before the gap, clears at any speed from 20 to 32.
 Track.TAKEOFF_NEAR = 1.2
@@ -405,6 +413,63 @@ end
 function Track.Clears(jumpAt: number, at: number, v: number, gap: number): boolean
 	local across = (gap + Track.WHEELBASE) / math.max(v, 1)
 	return Track.Airborne(jumpAt, at) and Track.Airborne(jumpAt, at + across)
+end
+
+-- The best moment to jump a gap of `gap` studs whose start the front wheels reach at `at`, at speed
+-- `v`: the middle of the jump over the middle of the gap.
+function Track.BestJump(at: number, v: number, gap: number): number
+	return at - (Track.JUMP_TIME / 2 - (gap + Track.WHEELBASE) / (2 * math.max(v, 1)))
+end
+
+-- When a JUMP pressed at `pressAt` takes off, for a gap whose start the front wheels reach at `at`
+-- (nil: no gap coming) at speed `v`: at once, unless it's early for the gap (it wouldn't clear it,
+-- and the best moment is at most HOLD away): then at the best moment.
+function Track.TakeOff(pressAt: number, at: number?, v: number, gap: number): number
+	if at == nil or Track.Clears(pressAt, at, v, gap) then
+		return pressAt
+	end
+	local best = Track.BestJump(at, v, gap)
+	if pressAt < best and best - pressAt <= Track.HOLD then
+		return best
+	end
+	return pressAt
+end
+
+-- The next gap a rider's front wheels haven't reached yet, on its tile or the next: how far away
+-- (studs along the rails), its length and its tile. Nil when there's none within `reach` studs.
+function Track.NextGap(course: Course, rider: Rider, reach: number): (number?, number, number)
+	local tile = course.Tiles[rider.Tile]
+	if not tile then
+		return nil, 0, 0
+	end
+	local path = tile.Paths[rider.B] or tile.Paths[1]
+	local tiles: { BuiltTile? } = { tile, course.Tiles[rider.Tile + 1] }
+	local extras = { 0, path.Total }
+	for index = 1, 2 do
+		local t, extra = tiles[index], extras[index]
+		if t then
+			for _, feature in t.Features do
+				if feature.K == "Gap" then
+					local front = feature.S - Track.HALF_BASE + extra - rider.S
+					if front > 0 and front <= reach then
+						return front, (feature.S1 :: number) - feature.S, t.Index
+					end
+				end
+			end
+		end
+	end
+	return nil, 0, 0
+end
+
+-- When a JUMP pressed at `pressAt` takes off, for a rider whose place is as at `now` (TakeOff with
+-- its next gap).
+function Track.JumpFor(course: Course, rider: Rider, pressAt: number, now: number): number
+	local front, gap = Track.NextGap(course, rider, 90)
+	if not front then
+		return pressAt
+	end
+	local v = math.max(rider.V, 1)
+	return Track.TakeOff(pressAt, now + front / v, v, gap)
 end
 
 -- The way a cart takes at a switch: the side of the latest press made after `zoneAt` (a tap is
