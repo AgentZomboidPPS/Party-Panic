@@ -225,10 +225,12 @@ def ui_time(token: str) -> str:
 
 
 def slim(text: str) -> str:
-    """Comment-only lines blanked and indentation dropped, with every line kept where it is (the line
-    map and error lines stay right): Open Cloud caps a script at 1 MiB, and the biggest mode's
-    bundle (Shark Bait's) is within a few dozen KB of it."""
+    """Comment-only lines blanked, indentation dropped, and a comment after code cut off on lines with
+    no string or long bracket in them (so no "--" inside a string is ever taken for one), with every
+    line kept where it is (the line map and error lines stay right): Open Cloud caps a script at
+    1 MiB, and the biggest bundles come within a few dozen KB of it."""
     text = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", text)
+    text = re.sub(r"(?m)^([^\"'`\[\n]*?\S)[ \t]+--(?!\[)[^\n]*$", r"\1", text)
     return re.sub(r"(?m)^[ \t]+", "", text)
 
 

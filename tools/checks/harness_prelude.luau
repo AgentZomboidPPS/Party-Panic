@@ -833,8 +833,10 @@ end
 -- Parties on the stand-in client's device (round_harness.py --party with --client; owner: "Also make
 -- the party system insane. I want it to look super epic."): what a party controller shows now.
 __partyControllers = {}
+-- `name` without "Controller" ("Squad"): tools/checks/bundling.py seeds a run with every quoted
+-- "...Controller" in the harness's Luau, and these only come along with --party (__partyClient).
 function __partyStatus(name)
-	local controller = __partyControllers[name]
+	local controller = __partyControllers[name .. "Controller"]
 	if not controller or not controller.Status then
 		return "not running"
 	end
@@ -865,10 +867,10 @@ function __partyLobbyChecks(parties)
 	GameState.Set("Phase", "Intermission")
 	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 20)
 	task.wait(0.4)
-	result.partyUp = __partyStatus("SquadController")
+	result.partyUp = __partyStatus("Squad")
 	task.wait(1.4)
-	result.world = __partyStatus("PartyWorldController")
-	result.squad = __partyStatus("SquadController")
+	result.world = __partyStatus("PartyWorld")
+	result.squad = __partyStatus("Squad")
 	result.looks = __partyLooks()
 	local leader = __fakePlayers[parties[1][1]]
 	local member = __fakePlayers[parties[1][2]]
@@ -897,8 +899,8 @@ function __partyLobbyChecks(parties)
 	ask(member, "Reroll")
 	result.refused = __partyLooks()
 	task.wait(0.6)
-	result.squadAfterLook = __partyStatus("SquadController")
-	result.worldAfterLook = __partyStatus("PartyWorldController")
+	result.squadAfterLook = __partyStatus("Squad")
+	result.worldAfterLook = __partyStatus("PartyWorld")
 	return result
 end
 
@@ -909,15 +911,15 @@ function __partyAfterChecks(parties)
 	local result = {}
 	task.wait(1.2)
 	result.looks = __partyLooks()
-	result.world = __partyStatus("PartyWorldController")
-	result.squad = __partyStatus("SquadController")
+	result.world = __partyStatus("PartyWorld")
+	result.squad = __partyStatus("Squad")
 	local member = __fakePlayers[parties[1][2]]
 	if member then
 		remote.__bindable:Fire(__playerKey(member), "Leave")
 		task.wait(1.2)
 		result.leftLooks = __partyLooks()
-		result.leftWorld = __partyStatus("PartyWorldController")
-		result.leftSquad = __partyStatus("SquadController")
+		result.leftWorld = __partyStatus("PartyWorld")
+		result.leftSquad = __partyStatus("Squad")
 	end
 	return result
 end
@@ -1145,7 +1147,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		summary.partyTeams = __partyTeams(watch.parties) -- dealt in Prepare
 		if clientMode and __partyClient then
 			task.wait(1) -- the rules card is up: the SQUAD card comes with it
-			summary.partySquad = __partyStatus("SquadController")
+			summary.partySquad = __partyStatus("Squad")
 		end
 	end
 	-- What a device has to draw, at its peak during the round (phone performance): the arena's parts
@@ -1323,7 +1325,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 				snapColliders(string.format("t%.0f", table.remove(colliderTimes, 1)))
 			end
 			if watch and watch.parties and __partyClient and not summary.partyRound and now - begin >= 2 then
-				summary.partyRound = __partyStatus("PartyWorldController") -- mates' outlines
+				summary.partyRound = __partyStatus("PartyWorld") -- mates' outlines
 			end
 			if dumpAt and not summary.dump and now - begin >= dumpAt then
 				local roots = { ctx.Arena }
