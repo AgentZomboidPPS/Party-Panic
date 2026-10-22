@@ -95,6 +95,9 @@ CAMERAS: dict[str, dict] = {
     # Over a team's shoulders at its grill: the giant knife lined up over the steak, the glowing line
     # where it will cut, the coals under the grate.
     "PrimeCut": {"look_at": "CutLine", "yaw": 28, "pitch": 36, "distance": 39, "shift": [-0.5, 0, 10.5], "raise": 4},
+    # Down the row of mills from the first one: its axe biting into a log on the stump, the team beside
+    # it, the next team's mill with its log rack and stump beyond.
+    "LogJam": {"look_at": "Top", "yaw": -110, "pitch": 26, "distance": 32, "shift": [8, 2, 6], "raise": 6},
     # Behind a player at their booth's counter: the mischief's smoke over the cubby shelf, toys
     # tumbling off it onto the counter.
     "MessyMemory": {"look_at": "CounterTop", "yaw": 168, "pitch": 16, "distance": 25, "shift": [0, 2, 0], "raise": 6},
@@ -145,6 +148,7 @@ DUMP_AT: dict[str, float] = {
     "EatsaPizza": 15,  # halfway: some slices eaten down to the pan, teams munching on the rest
     "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
+    "LogJam": 10,  # every mill going, an axe coming down on a log
     "MechaMarathon": 12.5,  # a second after lift-off: the toys climbing away from their pads
     "MessyMemory": 8,  # a second into the mischief: smoke puffs, the last toys tumbling onto the counters
     "ParasolPlummet": 7,  # fallers still spread across the sky, a dozen lobs in the air
