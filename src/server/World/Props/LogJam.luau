@@ -32,7 +32,7 @@ return function(h)
 	return {
 		LogJamStump = {
 			Height = 2.53,
-			AssetId = 0,
+			AssetId = 134000315340316,
 			Palette = {
 				Bark = rgb(116, 78, 50),
 				Top = rgb(228, 188, 130),
@@ -48,7 +48,7 @@ return function(h)
 		},
 		LogJamLog = {
 			Height = 2.24,
-			AssetId = 0,
+			AssetId = 128883571182692,
 			Palette = { Bark = rgb(126, 86, 54), Wood = rgb(232, 196, 140), Rings = rgb(186, 136, 86) },
 			Materials = { Bark = wood, Wood = wood },
 			Fallback = function(m)
@@ -58,7 +58,7 @@ return function(h)
 		},
 		LogJamHalf = {
 			Height = 2.2,
-			AssetId = 0,
+			AssetId = 135735332701957,
 			Palette = { Bark = rgb(126, 86, 54), Wood = rgb(238, 204, 150) },
 			Materials = { Bark = wood, Wood = wood },
 			Fallback = function(m)
@@ -68,7 +68,7 @@ return function(h)
 		},
 		LogJamAxe = {
 			Height = 1.88,
-			AssetId = 0,
+			AssetId = 130076494132656,
 			Shadow = true,
 			Palette = {
 				Handle = rgb(198, 142, 86),
@@ -89,7 +89,7 @@ return function(h)
 		},
 		LogJamAxeFrame = {
 			Height = 6.1,
-			AssetId = 0,
+			AssetId = 97192483170270,
 			Palette = {
 				Base = rgb(132, 130, 136),
 				Post = rgb(150, 100, 62),
@@ -106,7 +106,7 @@ return function(h)
 		},
 		LogJamRack = {
 			Height = 5.66,
-			AssetId = 0,
+			AssetId = 81371512284222,
 			Palette = {
 				Frame = rgb(140, 94, 58),
 				Peg = rgb(104, 70, 44),
@@ -124,7 +124,7 @@ return function(h)
 		},
 		LogJamChips = {
 			Height = 0.39,
-			AssetId = 0,
+			AssetId = 104801774298081,
 			Shadow = false,
 			Palette = { Sawdust = rgb(236, 206, 152), Chips = rgb(212, 166, 106) },
 			Materials = { Sawdust = Enum.Material.Sand, Chips = wood },
@@ -134,7 +134,7 @@ return function(h)
 		},
 		LogJamPine = {
 			Height = 19.45,
-			AssetId = 0,
+			AssetId = 86225046742070,
 			Palette = { Trunk = rgb(108, 72, 46), Needles = rgb(58, 132, 82) },
 			Materials = { Trunk = wood },
 			Fallback = function(m)
@@ -144,7 +144,7 @@ return function(h)
 		},
 		LogJamMill = {
 			Height = 20.9,
-			AssetId = 0,
+			AssetId = 92963898106491,
 			Palette = {
 				Walls = rgb(198, 142, 90),
 				Trim = rgb(118, 76, 46),
@@ -171,7 +171,7 @@ return function(h)
 		},
 		LogJamLumber = {
 			Height = 4.83,
-			AssetId = 0,
+			AssetId = 122362294471873,
 			Palette = {
 				Planks = rgb(228, 186, 126),
 				Straps = rgb(62, 66, 74),
