@@ -253,8 +253,9 @@ function PrimeCut:_buildArena()
 
 	-- The grills, one per team, in the team's color with its sign on the hood. Seen from a player's
 	-- camera (straight down at the grate) the hood is off the top of the screen, so the rim round
-	-- the grate and the side tables are in the team's color too (a lighter coat), and the team's rug
-	-- lies under its grill: every grill reads as its team's from above.
+	-- the grate and the side tables are in the team's color too (its own color, not a lighter coat:
+	-- a light red reads as pink), and the team's rug lies under its grill: every grill reads as its
+	-- team's from above.
 	local grate, grateTop = self.grate, self.grateTop
 	for _, team in self.order do
 		local station = self.stations[team]
@@ -279,7 +280,7 @@ function PrimeCut:_buildArena()
 		-- The grill's front (its -Z) faces the team (+Z); its grate's middle under the steak's spot.
 		local base = frame * CFrame.new(0, -grateTop, 0) * CFrame.Angles(0, math.pi, 0)
 		MeshLibrary.Get("PrimeCutGrill", {
-			Colors = { Enamel = color, Steel = color:Lerp(Color3.new(1, 1, 1), 0.3) },
+			Colors = { Enamel = color, Steel = color },
 			CFrame = base * CFrame.new(-grate.X, 0, -grate.Z),
 			Parent = arena,
 		})
