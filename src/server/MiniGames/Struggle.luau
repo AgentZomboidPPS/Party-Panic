@@ -193,6 +193,7 @@ function Struggle:Prepare()
 		ctx:ShareTemplate(slot.Prop, MeshLibrary.Get(slot.Prop))
 	end
 	ctx:ShareTemplate("StruggleBat", MeshLibrary.Get("StruggleBat"))
+	ctx:ShareTemplate("StruggleReach", MeshLibrary.Get("StruggleReach"))
 
 	self:_shareHeld()
 	self:_shareOrbs()
