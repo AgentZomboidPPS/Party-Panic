@@ -710,7 +710,7 @@ function BotService.Init()
 			end
 			local now = os.clock()
 			for _, bot in BotRegistry.List() do
-				keepServerOwned(bot)
+				pcall(keepServerOwned, bot)
 				if not bot:GetAttribute("PP_InRound") then
 					local okStep, stepErr = pcall(BotService.LobbyStep, bot, now)
 					if not okStep then
