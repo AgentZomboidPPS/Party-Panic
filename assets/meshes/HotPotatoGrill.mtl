@@ -1,0 +1,41 @@
+newmtl Bowl
+Kd 0.275 0.259 0.282
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Grate
+Kd 0.157 0.157 0.173
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Coals
+Kd 1.000 0.471 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Legs
+Kd 0.431 0.306 0.204
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Wheels
+Kd 0.745 0.753 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Spuds
+Kd 0.769 0.549 0.306
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Foil
+Kd 0.824 0.839 0.871
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
