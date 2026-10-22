@@ -22,6 +22,24 @@
 -- The menu column's Settings button wore the panels' dark purple and looked switched off (owner:
 -- "why are the close menu buttons and the invite friend button so dark?"): it's lavender to purple
 -- now (Theme's neutral button), apart from Shop's pink, Quests' yellow and Emotes' cyan.
+--
+-- More of the game on screen in a round (owner: "During the mini games, any way we can save UI space
+-- so they can see more of the game at one time?"):
+--   * While the player is playing a round (State.PlayingRound: its rules card to its end, still in)
+--     the menu column slides off the right edge and a small ☰ button waits in the top right corner,
+--     in Roblox's top bar row, with the Quests "!" on it. A tap brings the column back until a menu
+--     is opened and closed, or 5 seconds pass. It comes back on its own for the results, for anyone
+--     knocked out and watching or sitting out, and in the lobby. The ☰ is three drawn bars: the
+--     character measures as a missing-glyph box in FredokaOne and Builder Sans, like ★ and ✕.
+--   * The status line's "players left" count (Logic/RoundHud: "Players left: 6", "Survivors: 9")
+--     is a pill in the banner beside the timer, an icon and the number. Whatever else the line says
+--     stays under the banner and fades once it has gone 6 seconds without changing (it comes back
+--     when it does). When the line has nothing to say, the team scores and the mode HUDs (Kit/Api's
+--     TopHud, through State.TopHudShift) move up into its room, so a mode's chips sit right under
+--     the banner; the room stays a few seconds after the line empties, so they don't hop about.
+--   * Phones: the round's callouts (NotificationController) show in that line's place, one at a
+--     time, in a compact strip with its kind's icon and coloured rim, not over the play area.
+-- New motion (the column's slide, the pops, the HUD moving up) is instant with reduced effects.
 
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -34,6 +52,7 @@ local Config = require(Shared.Config)
 local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
+local RoundHud = require(Shared.Logic.RoundHud)
 local Teams = require(Shared.Teams)
 
 local State = require(script.Parent.Parent.State)
@@ -62,6 +81,13 @@ local SHORT_TITLES = {
 
 local player = Players.LocalPlayer
 local badges: { [string]: TextLabel } = {}
+
+local STATUS_FADE = 6 -- seconds a status line stays once it stops changing (it comes back when it does)
+local ROW_KEEP = 3 -- seconds the line's room stays once it has nothing to say (so mode HUDs don't hop)
+local FADE_TIME = 0.6
+local SLIDE_TIME = 0.25
+local MENU_PEEK = 5 -- seconds the ☰ brings the menu column back for, unless a menu is opened
+local LINE_STROKE = 0.2 -- the status line's text stroke
 
 -- Phones and tablets without a keyboard: the HUD keeps clear of the thumbstick and jump button.
 local function isTouch(): boolean
@@ -324,17 +350,166 @@ local function bannerTitle(touch: boolean): string
 	return `{icon} {if message ~= "" then message else phase}`
 end
 
--- The line under the banner during a round: the mode's status ("Survivors: 7"), mostly meant
--- for its players ("Tap ADD when..."). Anyone not in this round gets their own line instead.
-local function statusLine(phase: string): string
+-- The line under the banner during a round: the mode's status ("Tap ADD when..."), mostly meant
+-- for its players, without its players-left count (`rest`: that's the banner's pill). Anyone not in
+-- this round gets their own line instead.
+local function statusLine(phase: string, rest: string): string
 	if phase ~= "InRound" then
 		return ""
 	elseif State.InRound() then
-		return GameState.Get("Status") or ""
+		return rest
 	elseif State.SittingOut() then
 		return "💤 Sitting out - tap to jump in next round"
 	end
 	return "🎮 You're in the next round!"
+end
+
+-- The banner's count pill during a round: the players-left number from the mode's status line
+-- (Logic/RoundHud), with its icon ("👤 6", "🏃 3"); "" when there's none.
+local function countText(): string
+	if GameState.Get("Phase") ~= "InRound" then
+		return ""
+	end
+	local count, icon = RoundHud.SplitStatus(GameState.Get("Status"))
+	return if count then `{icon} {count}` else ""
+end
+
+-- Keeps the count pill on countText (both layouts), as wide as its words, popping when the number
+-- changes; `onChanged` runs whenever it comes, goes or changes width, for the banner to make room.
+local function followCount(pill: Frame, label: TextLabel, textSize: number, pad: number, onChanged: () -> ())
+	local shown = ""
+	RunService.Heartbeat:Connect(function()
+		local text = countText()
+		if text == shown then
+			return
+		end
+		local before = shown
+		shown = text
+		label.Text = text
+		pill.Visible = text ~= ""
+		if text ~= "" then
+			pill.Size = UDim2.fromOffset(
+				math.ceil(UIKit.TextWidth(text, textSize, Theme.Fonts.Display)) + pad,
+				pill.Size.Y.Offset
+			)
+			if before ~= "" and not State.ReducedEffects() then
+				UIKit.PopIn(pill, 0.25)
+			end
+		end
+		onChanged()
+	end)
+end
+
+-- Shows or hides a line's words (and their stroke) with a fade, or at once with `time` 0 (a tween
+-- all the same: it takes over from a fade still running, which setting the values wouldn't stop).
+local function fadeText(label: TextLabel, shown: boolean, time: number)
+	local stroke = label:FindFirstChildOfClass("UIStroke")
+	local transparency = if shown then 0 else 1
+	UIKit.Tween(label, time, { TextTransparency = transparency })
+	if stroke then
+		UIKit.Tween(stroke, time, { Transparency = if shown then LINE_STROKE else 1 })
+	end
+	if time <= 0 then
+		label.TextTransparency = transparency
+		if stroke then
+			stroke.Transparency = if shown then LINE_STROKE else 1
+		end
+	end
+end
+
+-- The status line's row under the banner (both layouts), in its holder's scaled units: where the
+-- line starts and how tall it is, where the team pill sits with the line out of the way, and where
+-- the line ends in the layout Kit/Api's HudY expects.
+type StatusRow = {
+	Label: TextLabel,
+	Teams: Frame,
+	LineTop: number,
+	LineHeight: number,
+	CollapsedTop: number,
+	Base: number,
+	Strip: Frame?, -- phones: the round callout strip, in the line's place while it's up
+}
+
+-- Keeps the status row: the line's words (fading once they've gone STATUS_FADE seconds without
+-- changing, for the round's players), the row's room (kept while the line or a callout has
+-- something to say, let go ROW_KEEP seconds after), the team pill under it and State.TopHudShift.
+local function followStatusRow(row: StatusRow)
+	local label = row.Label
+	local shownText = ""
+	local changedAt = 0
+	local faded = false
+	local fadeToken = 0
+	local reserved = true -- the line has room (today's layout until a round says otherwise)
+	local emptySince: number? = nil
+	local teamsY = -1
+	RunService.Heartbeat:Connect(function()
+		local now = os.clock()
+		local phase = GameState.Get("Phase") or "Waiting"
+		local _, _, rest = RoundHud.SplitStatus(GameState.Get("Status"))
+		local participant = State.InRound()
+		local text = statusLine(phase, rest)
+		local strip = row.Strip
+		local calloutUp = strip ~= nil and strip.Visible
+
+		-- The words: back at once when they change; for the round's players, gone after a while.
+		if text ~= shownText then
+			shownText = text
+			changedAt = now
+			label.Text = text
+			if faded then
+				faded = false
+				fadeToken += 1
+				fadeText(label, true, 0)
+			end
+		end
+		if not faded and participant and text ~= "" and now - changedAt >= STATUS_FADE then
+			faded = true
+			fadeToken += 1
+			local token = fadeToken
+			fadeText(label, false, FADE_TIME)
+			task.delay(FADE_TIME, function()
+				if token == fadeToken then
+					label.Visible = false
+				end
+			end)
+		end
+		if not faded then
+			label.Visible = text ~= "" and not calloutUp
+		elseif calloutUp then
+			label.Visible = false
+		end
+
+		-- The room: kept while there's something to say (the line, even faded, or a callout), let go
+		-- a few seconds after there's nothing; decided before and during the round only, so the mode
+		-- HUD is already in place at GO and stays put through the results.
+		if phase == "Preparing" or phase == "InRound" then
+			local wanted = calloutUp or (if participant then rest ~= "" else true)
+			if wanted then
+				reserved = true
+				emptySince = nil
+			elseif reserved then
+				emptySince = emptySince or now
+				if now - (emptySince :: number) >= ROW_KEEP then
+					reserved = false
+				end
+			end
+		end
+
+		-- The team pill under the line, and the mode HUDs under both.
+		local height = if calloutUp and strip then math.max(row.LineHeight, strip.Size.Y.Offset) else row.LineHeight
+		local top = if reserved then row.LineTop + height + 4 else row.CollapsedTop
+		if top ~= teamsY then
+			local first = teamsY < 0
+			teamsY = top
+			local goal = UDim2.new(0.5, 0, 0, top)
+			if first or State.ReducedEffects() then
+				row.Teams.Position = goal
+			else
+				UIKit.Tween(row.Teams, SLIDE_TIME, { Position = goal })
+			end
+		end
+		State.SetTopHudShift(top - (row.Base + 4))
+	end)
 end
 
 -- The round's team scores, team by team (the team pill under the status line): every team in the
@@ -565,14 +740,35 @@ local function buildPhaseBanner(parent: Instance)
 		TextColor3 = Theme.Colors.Yellow,
 		Parent = timerPill,
 	})
+	-- The players left, beside the timer (the title makes room).
+	local countPill = UIKit.new("Frame", {
+		Name = "Count",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -(10 + 124 + 10), 0.5, 0),
+		Size = UDim2.fromOffset(90, 52),
+		BackgroundColor3 = Theme.Colors.PanelDark,
+		Visible = false,
+		Parent = banner,
+		Children = { UIKit.Round() },
+	})
+	local countLabel = UIKit.Label({
+		Name = "Text",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = 30,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		Parent = countPill,
+	})
 	local status = UIKit.Label({
+		Name = "Status",
 		Text = "",
 		TextSize = 22,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 76),
 		Size = UDim2.fromOffset(620, 28),
 		Parent = holder,
-		Children = { UIKit.TextStroke(0.2) },
+		Children = { UIKit.TextStroke(LINE_STROKE) },
 	})
 	local teams = UIKit.Panel({
 		Name = "TeamScores",
@@ -585,11 +781,18 @@ local function buildPhaseBanner(parent: Instance)
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 
 	followTimer(timerPill, timer)
+	local function makeRoom()
+		local count = if countPill.Visible then countPill.Size.X.Offset + 10 else 0
+		title.Size = UDim2.new(1, -170 - count, 1, 0)
+		countPill.Position = UDim2.new(1, if timerPill.Visible then -(10 + 124 + 10) else -10, 0.5, 0)
+	end
+	followCount(countPill, countLabel, 30, 28, makeRoom)
+	timerPill:GetPropertyChangedSignal("Visible"):Connect(makeRoom)
 	RunService.Heartbeat:Connect(function()
-		local phase = GameState.Get("Phase") or "Waiting"
 		title.Text = bannerTitle(false)
-		status.Text = statusLine(phase)
 	end)
+	-- The line ends 104 down (76 + 28); without it the team pill sits 6 under the banner.
+	followStatusRow({ Label = status, Teams = teams, LineTop = 76, LineHeight = 28, CollapsedTop = 76, Base = 104 })
 	followTeamScores(teams)
 end
 
@@ -599,7 +802,7 @@ end
 -- the menu under the top bar).
 local TOUCH_BANNER_HEIGHT = 66
 local SIT_OUT_GAP = 10 -- between the banner and the sit-out switch
-local function buildTopBarBanner(hud: Instance)
+local function buildTopBarBanner(hud: Instance): ScreenGui
 	local gui = UIKit.new("ScreenGui", {
 		Name = "PartyPanicTopBar",
 		ResetOnSpawn = false,
@@ -658,29 +861,56 @@ local function buildTopBarBanner(hud: Instance)
 		Parent = timerPill,
 	})
 	followTimer(timerPill, timer)
+	-- The players left, between the title and the timer.
+	local countPill = UIKit.new("Frame", {
+		Name = "Count",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -(7 + 88 + 8), 0.5, 0),
+		Size = UDim2.fromOffset(70, 52),
+		BackgroundColor3 = Theme.Colors.PanelDark,
+		Visible = false,
+		Parent = banner,
+		Children = { UIKit.Round() },
+	})
+	local countLabel = UIKit.Label({
+		Name = "Text",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = 26,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		Parent = countPill,
+	})
+	local measuredFor = ""
+	followCount(countPill, countLabel, 26, 24, function()
+		measuredFor = "" -- the banner makes room for it at once
+	end)
 
 	-- As wide as the words (re-measured every second too, in case the font was still loading).
-	local measuredFor, measuredAt = "", 0
+	local measuredAt = 0
 	RunService.Heartbeat:Connect(function()
 		local text = bannerTitle(true)
 		title.Text = text
-		local key = text .. tostring(timerPill.Visible)
+		local key = `{text}|{timerPill.Visible}|{countPill.Visible and countLabel.Text}`
 		if key == measuredFor and os.clock() - measuredAt < 1 then
 			return
 		end
 		measuredFor, measuredAt = key, os.clock()
 		local width = math.ceil(UIKit.TextWidth(text, 26, Theme.Fonts.Display)) + 4
 		title.Size = UDim2.fromOffset(width, TOUCH_BANNER_HEIGHT)
-		local bannerWidth = 20 + width + (if timerPill.Visible then 12 + 88 + 7 else 20)
+		local count = if countPill.Visible then countPill.Size.X.Offset + 8 else 0
+		countPill.Position = UDim2.new(1, if timerPill.Visible then -(7 + 88 + 8) else -7, 0.5, 0)
+		local bannerWidth = 20 + width + count + (if timerPill.Visible then 12 + 88 + 7 else 20)
 		banner.Size = UDim2.fromOffset(bannerWidth, TOUCH_BANNER_HEIGHT)
 		sitOut.Position = UDim2.new(0.5, bannerWidth / 2 + SIT_OUT_GAP, 0.5, 0)
 	end)
+	return gui
 end
 
 -- PC: the sit-out switch sits in Roblox's top bar row too (free in the middle), right above the
 -- phase banner, at about the size of Roblox's own buttons (that row doesn't grow with the screen).
 local PC_TOP_BAR_SCALE = 0.75
-local function buildTopBarSwitch(hud: Instance)
+local function buildTopBarSwitch(hud: Instance): ScreenGui
 	local gui = UIKit.new("ScreenGui", {
 		Name = "PartyPanicTopBar",
 		ResetOnSpawn = false,
@@ -700,21 +930,27 @@ local function buildTopBarSwitch(hud: Instance)
 		Children = { UIKit.new("UIScale", { Scale = PC_TOP_BAR_SCALE }) },
 	})
 	SitOutSwitch.new(holder, { Name = "SitOut", Hud = true })
+	return gui
 end
 
--- Phones: the round's status line ("Survivors: 7") and team scores (teamScoreLine), just under the
--- top bar in the middle. Mode HUDs go under them (Api.TopHud / HudY).
+-- Phones: the round's status line and team scores (teamScoreLine), just under the top bar in the
+-- middle. Mode HUDs go under them (Api.TopHud / HudY, moved by State.TopHudShift).
+-- The round's callouts (State.RoundCallout, from NotificationController) take the line's place one
+-- at a time: a compact strip as wide as its words (up to 560 units, clear of the standings), on two
+-- lines if it must, with the kind's icon and its colour on the rim.
+local CALLOUT_TEXT, CALLOUT_PAD, CALLOUT_MAX = 20, 12, 560
 local function buildTouchStatus(parent: Instance)
 	local holder = UIKit.new("Frame", {
 		Name = "RoundStatus",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.fromScale(0.5, 0),
-		Size = UDim2.fromOffset(620, 90),
+		Size = UDim2.fromOffset(620, 110),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	})
 	UIKit.AutoScale(holder)
 	local status = UIKit.Label({
+		Name = "Status",
 		Text = "",
 		TextSize = 22,
 		TextWrapped = false,
@@ -722,7 +958,7 @@ local function buildTouchStatus(parent: Instance)
 		Position = UDim2.new(0.5, 0, 0, 6),
 		Size = UDim2.fromOffset(600, 30),
 		Parent = holder,
-		Children = { UIKit.TextStroke(0.2) },
+		Children = { UIKit.TextStroke(LINE_STROKE) },
 	})
 	local teams = UIKit.Panel({
 		Name = "TeamScores",
@@ -733,9 +969,64 @@ local function buildTouchStatus(parent: Instance)
 		Visible = false,
 		Parent = holder,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
-	RunService.Heartbeat:Connect(function()
-		status.Text = statusLine(GameState.Get("Phase") or "Waiting")
+	local strip = UIKit.Panel({
+		Name = "Callout",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 6),
+		Size = UDim2.fromOffset(300, 30),
+		CornerRadius = 15,
+		Visible = false,
+		Parent = holder,
+	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+	local rim = strip:FindFirstChildOfClass("UIStroke") :: UIStroke
+	rim.Thickness = 2
+	rim.Transparency = 0.1
+	local words = UIKit.Label({
+		Name = "Text",
+		Text = "",
+		TextSize = CALLOUT_TEXT,
+		Size = UDim2.fromScale(1, 1),
+		Parent = strip,
+		Children = { UIKit.Padding(5, CALLOUT_PAD) },
+	})
+	local token = 0
+	State.RoundCallout:Connect(function(message: string, color: Color3, duration: number)
+		token += 1
+		local mine = token
+		local width = math.ceil(UIKit.TextWidth(message, CALLOUT_TEXT, Theme.Fonts.Bold)) + 2 * CALLOUT_PAD + 4
+		local lines = if width <= CALLOUT_MAX
+			then 1
+			else UIKit.TextLines(message, CALLOUT_TEXT, Theme.Fonts.Bold, CALLOUT_MAX - 2 * CALLOUT_PAD)
+		words.Text = message
+		words.TextWrapped = lines > 1
+		strip.Size = UDim2.fromOffset(math.min(width, CALLOUT_MAX), lines * CALLOUT_TEXT + 10)
+		rim.Color = color
+		strip.Visible = true
+		if not State.ReducedEffects() then
+			UIKit.PopIn(strip, 0.25)
+		end
+		task.delay(duration, function()
+			if mine == token then
+				strip.Visible = false
+			end
+		end)
 	end)
+	GameState.Changed("Phase", function(phase)
+		if phase ~= "InRound" then
+			token += 1
+			strip.Visible = false
+		end
+	end)
+	-- The line ends 36 down (6 + 30); without it the team pill sits just under the top bar.
+	followStatusRow({
+		Label = status,
+		Teams = teams,
+		LineTop = 6,
+		LineHeight = 30,
+		CollapsedTop = 4,
+		Base = 36,
+		Strip = strip,
+	})
 	followTeamScores(teams)
 end
 
@@ -790,7 +1081,7 @@ local function menuButton(
 	return button
 end
 
-local function buildMenu(parent: Instance)
+local function buildMenu(parent: Instance): Frame
 	-- PC: the middle of the right edge. Touch: down from the top right corner, where it can't be
 	-- hit by mistake when reaching for the jump button.
 	local touch = isTouch()
@@ -823,6 +1114,188 @@ local function buildMenu(parent: Instance)
 		local claimable = profile.Daily.CanClaim
 		badges.Quests.Visible = claimable
 	end)
+	return menu
+end
+
+-- The ☰ that stands in for the menu column while the player is playing a round: in Roblox's top
+-- bar row, in the top right corner (phones: a 44 pt button level with Roblox's own; PC: their size,
+-- like the sit-out switch in that row), with the column's "!" on it when a tile has one. Three
+-- drawn bars, since the ☰ character draws as a missing-glyph box in the game's fonts.
+local TOGGLE_SIZE, TOGGLE_BAR_W, TOGGLE_BAR_H, TOGGLE_BAR_GAP = 72, 34, 6, 12
+local function buildMenuToggle(topBar: ScreenGui, onClick: () -> ()): Frame
+	local touch = isTouch()
+	local holder = UIKit.new("Frame", {
+		Name = "MenuToggle",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -8, 0, 34), -- level with Roblox's buttons (12 to 55)
+		Size = UDim2.fromOffset(TOGGLE_SIZE, TOGGLE_SIZE),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = topBar,
+	})
+	if touch then
+		UIKit.AutoScale(holder, 0.8) -- phone size on tablets too, like the banner beside it
+	else
+		UIKit.new("UIScale", { Scale = PC_TOP_BAR_SCALE, Parent = holder })
+	end
+	-- (Its pop-in scales this frame: the holder's UIScale is the screen's, the button's its press.)
+	local pop = UIKit.new("Frame", {
+		Name = "Pop",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Parent = holder,
+	})
+	local button = UIKit.Button({
+		Name = "Button",
+		Text = "",
+		Size = UDim2.fromScale(1, 1),
+		CornerRadius = 22,
+		Parent = pop,
+	}, onClick, Theme.Colors.Lavender, Theme.Colors.Purple)
+	for index = 1, 3 do
+		UIKit.new("Frame", {
+			Name = `Bar{index}`,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, (index - 2) * TOGGLE_BAR_GAP),
+			Size = UDim2.fromOffset(TOGGLE_BAR_W, TOGGLE_BAR_H),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BorderSizePixel = 0,
+			Parent = button,
+			Children = { UIKit.Round(), UIKit.Stroke(Color3.fromRGB(30, 15, 60), 1, 0.5) },
+		})
+	end
+	local badge = UIKit.Label({
+		Name = "Badge",
+		Text = "!",
+		Font = Theme.Fonts.Display,
+		TextSize = 20,
+		TextWrapped = false,
+		BackgroundTransparency = 0,
+		BackgroundColor3 = Theme.Colors.Red,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -6, 0, 6),
+		Size = UDim2.fromOffset(if touch then 30 else 26, if touch then 30 else 26),
+		Visible = false,
+		Parent = button,
+		Children = { UIKit.Round() },
+	})
+	local function refreshBadge()
+		local any = false
+		for _, tileBadge in badges do
+			any = any or tileBadge.Visible
+		end
+		badge.Visible = any
+	end
+	for _, tileBadge in badges do
+		tileBadge:GetPropertyChangedSignal("Visible"):Connect(refreshBadge)
+	end
+	refreshBadge()
+	return holder
+end
+
+-- Tucks the menu column away while the player is playing a round (State.PlayingRound) and shows
+-- the ☰ instead; a tap on it brings the column back until a menu has been opened and closed, or
+-- MENU_PEEK seconds pass with none opened. The column slides off the right edge and back (at once
+-- with reduced effects).
+local function followMenu(hud: Instance, menu: Frame, topBar: ScreenGui)
+	local restAnchor, restPosition = menu.AnchorPoint, menu.Position
+	local awayAnchor = Vector2.new(0, restAnchor.Y) -- its left edge just past the screen's right edge
+	local awayPosition = UDim2.new(1, 8, restPosition.Y.Scale, restPosition.Y.Offset)
+	local shown = true
+	local peeking = false
+	local peekUntil = 0
+	local menuSeen = false -- a menu was opened while the column was back
+	local windowOpen = false
+	local emotes: GuiObject? = nil -- EmoteController's picker (it starts after this)
+
+	local function emotesOpen(): boolean
+		if not emotes or not emotes.Parent then
+			emotes = nil
+			for _, item in hud:GetDescendants() do
+				if item.Name == "Emotes" and item:IsA("Frame") and item:GetAttribute("PP_Popup") then
+					emotes = item
+					break
+				end
+			end
+		end
+		return emotes ~= nil and emotes.Visible
+	end
+
+	local function setShown(value: boolean)
+		if value == shown then
+			return
+		end
+		shown = value
+		local instant = State.ReducedEffects()
+		if value then
+			menu.Visible = true
+			if instant then
+				menu.AnchorPoint, menu.Position = restAnchor, restPosition
+			else
+				menu.AnchorPoint, menu.Position = awayAnchor, awayPosition
+				UIKit.Tween(menu, SLIDE_TIME, { AnchorPoint = restAnchor, Position = restPosition })
+			end
+		elseif instant then
+			menu.Visible = false
+		else
+			local tween = UIKit.Tween(
+				menu,
+				SLIDE_TIME,
+				{ AnchorPoint = awayAnchor, Position = awayPosition },
+				Enum.EasingStyle.Quad,
+				Enum.EasingDirection.In
+			)
+			tween.Completed:Connect(function()
+				if not shown then
+					menu.Visible = false
+				end
+			end)
+		end
+	end
+
+	local toggle: Frame
+	local function refresh()
+		local playing = State.PlayingRound()
+		if not playing then
+			peeking = false
+		end
+		setShown(not playing or peeking)
+		if toggle.Visible ~= playing then
+			toggle.Visible = playing
+			if playing and not State.ReducedEffects() then
+				UIKit.PopIn(toggle:FindFirstChild("Pop") :: Frame, 0.3)
+			end
+		end
+	end
+	-- (HudController.ToggleMenu: the client harness taps it this way.)
+	function HudController.ToggleMenu()
+		if not State.PlayingRound() then
+			return
+		end
+		peeking = not peeking
+		peekUntil = os.clock() + MENU_PEEK
+		menuSeen = false
+		refresh()
+	end
+	toggle = buildMenuToggle(topBar, HudController.ToggleMenu)
+
+	State.OnPlayingChanged(refresh)
+	Modal.AnyOpenChanged:Connect(function(open)
+		windowOpen = open
+	end)
+	-- While the column is back: a menu opened keeps it there until that menu closes.
+	RunService.Heartbeat:Connect(function()
+		if not peeking then
+			return
+		end
+		if windowOpen or emotesOpen() then
+			menuSeen = true
+		elseif menuSeen or os.clock() >= peekUntil then
+			peeking = false
+			refresh()
+		end
+	end)
+	refresh()
 end
 
 local function toggleRow(
@@ -994,16 +1467,17 @@ local function buildSettings(overlay: Instance)
 end
 
 function HudController.Start(context)
+	local topBar: ScreenGui
 	if isTouch() then
 		buildTouchProfile(context.Hud)
-		buildTopBarBanner(context.Hud)
+		topBar = buildTopBarBanner(context.Hud)
 		buildTouchStatus(context.Hud)
 	else
 		buildProfileChip(context.Hud)
 		buildPhaseBanner(context.Hud)
-		buildTopBarSwitch(context.Hud)
+		topBar = buildTopBarSwitch(context.Hud)
 	end
-	buildMenu(context.Hud)
+	followMenu(context.Hud, buildMenu(context.Hud), topBar)
 	local settings = buildSettings(context.Overlay)
 
 	State.OpenScreen:Connect(function(name)

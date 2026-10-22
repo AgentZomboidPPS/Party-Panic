@@ -36,7 +36,8 @@ Session A's handoff from 17:40 UTC, still accurate except where this block says 
 - **Game sessions:** games-1 to games-4 are idle (standing by: the account is near its weekly usage limit, which resets
   2026-10-28 17:00 UTC). Follow-ups noted from games-4's audit: Rockin' Raceway's riders JSON and parts, Bobsled Run's
   and Parasol Plummet's bot roots set every Heartbeat.
-- **Later (owner):** nothing open; the category question was settled by games 27-29.
+- **Later (owner):** a 👎 per game on the results card and a tool to read the totals, to pick games to switch off
+  (`docs/MINIGAME_BACKLOG.md`, "On the backburner"), after the current fixes.
 - **Toolchain in a fresh container (GitHub downloads are blocked here):** `cargo install --locked stylua@2.6.0 --features
   luau`, `selene@0.31.0`, `rojo@7.7.1`, `lune@0.11.0` (crates.io works); luau-lsp from source: `git clone --depth 1
   --branch 1.70.1 https://github.com/JohnnyMorganz/luau-lsp`, `git submodule update --init --depth 1`, cmake Release with

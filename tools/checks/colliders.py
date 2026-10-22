@@ -5,6 +5,7 @@ Owner: "Theres invisible stuff you can jump on and hang on in several games."
 
     python3 tools/checks/round_harness.py HoneyTrap --client --seconds 14 --colliders-at 0,10 > run.luau
     python3 tools/checks/round_harness.py LOBBY --colliders-at 0 --colliders-reach 135 > lobby.luau
+    (add --decor Halloween to the LOBBY run to include an event's decorations and hunt pumpkins)
     (add --no-csg to build as if CSG had failed on that server: Shapes from plain parts)
     python3 tools/preview/luau_task.py run.luau - run.json
     python3 tools/checks/colliders.py run.json --out report_dir [--verbose]
@@ -31,6 +32,8 @@ Prints one line per kind of part (every instance with --verbose) and writes a to
 snapshot (green: reachable and drawn, red: reachable and invisible, orange: reachable collision
 over a drawing, blue: invisible colliders' footprints, grey: unreachable). Reads the map only:
 it doesn't know a mode's rules (Honey Trap's frozen players, say), so "reachable" is generous.
+A mesh piece a mode clones out of its prop and renames has no prop to be redrawn from; the ones the
+game makes are in RENAMED_PIECES (Spleef's floor blocks: "Block", from SpleefBlock's Snow piece).
 --trace x,y,z prints how characters get to a spot instead (the part each move lands on), e.g. a
 flagged one's "e.g." position.
 """
@@ -51,6 +54,13 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 MESH_DIR = ROOT / "assets" / "meshes"
+
+# Mesh pieces a mode clones out of their prop model and renames (no PP_Prop above them, and a name
+# that isn't the piece's): {part name: (prop, piece)}. Owner: "Theres still invisible stuff I latched
+# onto on spleef." (its floor blocks read as undrawn here only because of this).
+RENAMED_PIECES = {
+    "Block": ("SpleefBlock", "Snow"),  # Spleef's _buildFloors clones MeshLibrary.Get("SpleefBlock").PrimaryPart
+}
 
 JUMP = 7.2  # StarterPlayer.CharacterJumpHeight
 WALK = 16.0
@@ -215,10 +225,12 @@ def mesh_local(part):
     """The drawn shape of a part in its own frame (scaled to its size): (verts, faces), or None."""
     size = np.array(part["s"], float)
     if part["c"] == "MeshPart":
-        prop = part.get("prop")
+        prop, name = part.get("prop"), part["n"]
+        if not prop and name in RENAMED_PIECES:
+            prop, name = RENAMED_PIECES[name]
         if not prop:
             return None
-        piece = glb_pieces(prop).get(part["n"])
+        piece = glb_pieces(prop).get(name)
         if piece is None:
             return None
         verts, faces = piece

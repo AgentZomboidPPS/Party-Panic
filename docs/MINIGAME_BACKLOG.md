@@ -28,8 +28,17 @@ With them: Team 6, Reaction 6, Versus 6, Knockback 3, Survival 3, Luck 3, Race 3
 
 Also asked for: **custom music for each mini-game** (owner: "put in the backlog custom music for each mini game", then
 "take over the music."). Built since: 27 games have their own round song (`tools/music/songs/`, see `docs/ASSETS.md`);
-Hot Potato, Dice Dash and Minecart Mayhem don't have one yet (`python3 tools/music/modes.py list`). The five song packs
-aren't uploaded yet, so every game plays "Panic Mode" until their ids are in `AudioAssets.ModeMusic`.
+the five song packs are uploaded and live since version 36 (`AudioAssets.ModeMusic`, `src/shared/ModeMusic.luau`).
+Dice Dash's and Minecart Mayhem's songs are written (`tools/music/songs/`) but not in an uploaded pack yet, and Hot Potato
+has none, so those three play "Panic Mode" (`python3 tools/music/modes.py list`).
+
+**On the backburner, after the current fixes** (owner, 2026-10-22: "Once all of these are resolved. lets add to the
+backburner a away for players to downvote a minigame and then we can harvest that data to disable minigames in the
+future."): a 👎 on the results card ("Not for me"; maybe a 👍 too), one per person per round they played, changeable until
+the results end, never from bots. The server keeps running totals per game (plays, 👎, 👍, unique players, by week) in
+a DataStore of its own, alongside the signals it already has (PLAY AGAIN yes/no, how often each game wins the vote). A
+tool (e.g. `tools/checks/game_ratings.py`, reading the totals through Open Cloud) prints each game's downvote rate, so
+the owner can pick games to switch off with `Enabled = false` in `src/shared/GameDefinitions.luau`.
 
 ## 13. Tanks! (`Tanks`, Versus)
 

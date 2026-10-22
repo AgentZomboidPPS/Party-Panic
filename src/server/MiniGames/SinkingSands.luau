@@ -52,6 +52,13 @@
 -- (a hacked client; only NaN was turned away) landed at NaN, and every distance to NaN failed the
 -- "too far" test, so one tap threw every Diver on the sand, spilled their treasure and dropped it
 -- at NaN. A blast must now be aimed at finite numbers.
+--
+-- Kings stand (owner: "Also theres times where I will sit on invisible shit in game. NO mini game
+-- should require you to sit."): every Sand King used to be sat on an invisible Seat over the
+-- throne's cushion and sat back down whenever they got up. There's no Seat now: a King stands on
+-- the dais just in front of the throne's seat (THRONE_STAND), facing the funnel, crowned and frozen
+-- (ctx:Freeze; their device puts the stick away), and one who is pushed or slides off that spot is
+-- put straight back on it (_keepKingsOnThrones, which also brings back one who wandered off).
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -91,6 +98,11 @@ local MESA = 40 -- mesa top above the desert floor
 -- arches are 33 high), so nobody walks round on top of it.
 local EDGE_HEIGHT = 60
 local THRONE_R = SandSwirl.RIM + 9
+-- Where a King stands at their throne (in the throne's frame, -Z towards the funnel): on the dais's
+-- top step (1.35 up), just in front of the seat block (its front face is at -1.25), and the most a
+-- King may drift from there before they're put back.
+local THRONE_STAND = CFrame.new(0, 1.4, -1.95)
+local STAND_SLACK = 1.5
 local DIVER_R = SandSwirl.RIM + 3.5
 local HOLD_DEPTH = 22 -- the dark pocket down the sinkhole where gulped divers wait
 local GULP_TIME = 1.8
@@ -185,7 +197,7 @@ function SinkingSands:Prepare()
 	self.items = {} :: { [number]: Item }
 	self.nextId = 0
 	self.kings = {} :: { any }
-	self.thrones = {} :: { [any]: { CFrame: CFrame, Seat: Seat, Angle: number } }
+	self.thrones = {} :: { [any]: { CFrame: CFrame, Stand: CFrame, Angle: number } }
 	self.gulped = {} :: { [any]: number }
 	self.lastFlip = -math.huge
 	self.dirty = true
@@ -222,16 +234,16 @@ function SinkingSands:Prepare()
 
 	ctx.Hooks.Respawn = function(player)
 		if self.thrones[player] then
-			return self.thrones[player].CFrame * CFrame.new(0, 2.6, 0.5)
+			return self.thrones[player].Stand
 		end
 		return self:_rimSpot(rng:NextNumber(0, math.pi * 2))
 	end
 	ctx.Hooks.CharacterReady = function(player, character)
 		if self.thrones[player] then
-			-- A King who reset comes back on the throne, still frozen.
+			-- A King who reset comes back at the throne, still frozen.
 			ctx:Freeze(player, true)
 			task.defer(function()
-				self:_seatKing(player, character)
+				self:_crownKing(player, character)
 			end)
 		end
 	end
@@ -254,7 +266,7 @@ function SinkingSands:Prepare()
 	local divers = #players - kingCount
 	for index, player in players do
 		if index <= kingCount then
-			spawns[index] = self.thrones[player].CFrame * CFrame.new(0, 2.6, 0.5)
+			spawns[index] = self.thrones[player].Stand
 		else
 			local k = index - kingCount
 			spawns[index] = self:_rimSpot(self.kingOffset + (k - 0.5) / math.max(1, divers) * math.pi * 2)
@@ -455,15 +467,7 @@ function SinkingSands:_buildArena(kingCount: number)
 			Colors = { Cushion = kingColor:Lerp(Color3.fromRGB(190, 40, 40), 0.5) },
 			Parent = arena,
 		})
-		local seat = Instance.new("Seat")
-		seat.Name = "ThroneSeat"
-		seat.Size = Vector3.new(3, 0.6, 2.6)
-		seat.CFrame = cframe * CFrame.new(0, 3.2, 0.5)
-		seat.Anchored = true
-		seat.Transparency = 1
-		seat.CanTouch = false
-		seat.Parent = arena
-		self.thrones[king] = { CFrame = cframe, Seat = seat, Angle = angle }
+		self.thrones[king] = { CFrame = cframe, Stand = cframe * THRONE_STAND, Angle = angle }
 	end
 
 	self:_buildCourtyard()
@@ -674,13 +678,11 @@ function SinkingSands:_ambient(emitter: ParticleEmitter, parent: Instance)
 	CollectionService:AddTag(emitter, "PP_Ambient")
 end
 
--- Sits a King on their throne with a crown on, and keeps them there.
-function SinkingSands:_seatKing(player: any, character: Model)
+-- Puts a King's crown on (once per character).
+function SinkingSands:_crownKing(player: any, character: Model)
 	local ctx = self.context
-	local throne = self.thrones[player]
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local head = character:FindFirstChild("Head") :: BasePart?
-	if not throne or not humanoid then
+	if not self.thrones[player] then
 		return
 	end
 	if head and not character:FindFirstChild("SandCrown") then
@@ -691,13 +693,11 @@ function SinkingSands:_seatKing(player: any, character: Model)
 		crown.Parent = character
 		ctx:Track(crown)
 	end
-	if throne.Seat.Parent then
-		pcall(throne.Seat.Sit, throne.Seat, humanoid)
-	end
 end
 
--- Kings stay on their thrones: one who hopped off is sat back down, one who got away is respawned.
-function SinkingSands:_keepKingsSeated()
+-- Kings stay at their thrones: one who was pushed or slid off their spot, or got away (they can't
+-- walk: frozen, and their device puts the stick away), is put straight back on it, frozen and crowned.
+function SinkingSands:_keepKingsOnThrones()
 	local ctx = self.context
 	for _, king in self.kings do
 		local throne = self.thrones[king]
@@ -705,13 +705,13 @@ function SinkingSands:_keepKingsSeated()
 		if not throne or not character or not humanoid or not root or not ctx:IsAlive(king) then
 			continue
 		end
-		local seat = throne.Seat.Position
-		if Vector2.new(root.Position.X - seat.X, root.Position.Z - seat.Z).Magnitude > 6 then
+		local spot = throne.Stand.Position
+		local feet = root.Position - Vector3.new(0, HIP, 0)
+		local drift = Vector2.new(feet.X - spot.X, feet.Z - spot.Z).Magnitude
+		if drift > STAND_SLACK or math.abs(feet.Y - spot.Y) > 2 then
 			ctx:Respawn(king)
 			ctx:Freeze(king, true)
-		elseif humanoid.SeatPart ~= throne.Seat then
-			ctx:Freeze(king, true)
-			self:_seatKing(king, character)
+			self:_crownKing(king, character)
 		end
 	end
 end
@@ -1070,7 +1070,7 @@ function SinkingSands:Start()
 		ctx:Freeze(king, true)
 		local character = ctx:GetCharacter(king)
 		if character then
-			self:_seatKing(king, character)
+			self:_crownKing(king, character)
 		end
 	end
 
@@ -1136,7 +1136,7 @@ function SinkingSands:Start()
 	local nextAutoPull = os.clock() + 9
 	local nextAutoBlast = os.clock() + 6
 	ctx:Loop(function()
-		self:_keepKingsSeated()
+		self:_keepKingsOnThrones()
 		if #self.kings == 0 then
 			local now = os.clock()
 			if now >= nextAuto then
