@@ -33,7 +33,26 @@
 -- found none there and no limb moved (measured on a test server: 0 of a rider's 10 joints; riders
 -- stood straight up in their carts). The pose goes through client/Pose now, which turns either kind
 -- of joint; the poses themselves are as before (R6's too).
+--
+-- Jump pass (owner: "Minecart mayhem needs to be fixed on mobile. you cannot see where to jump."):
+-- measured on a test server from the rider's own camera on an iPhone-sized screen (844 x 390 pt),
+-- a gap was never on screen. The camera sat 7.5 studs up and (trailing at cruising speed) 18.6
+-- back, so the rider's own head hid the rails out to about 80 studs ahead (3 s); past that the rails
+-- were a 23 pt band right under the next-switch panel and the JUMP prompt, a 140 x 26 pt box with
+-- 14 pt words in the middle of the screen. At the moment to press, the gap was under the cart's nose.
+-- Now phones ride with a higher, closer camera that looks down the rails (10 up, 9.5 back, aimed 13
+-- ahead on the rails): the rider sits low on the screen and the rails show above their head from
+-- about 20 studs out, and the gate at every gap (server half: glowing posts at the take-off arrows,
+-- red lights on the broken rails' ends) reads from far down the mine. Their strip is narrower, with
+-- the next switch's two ways beside it, so nothing of the HUD covers the rails ahead. The JUMP cue
+-- sits on my own cart on every screen (its own full-screen ScreenGui, placed from the camera each
+-- frame): GAP AHEAD 2.6 s before the best moment to press, READY... at 0.9 s, then JUMP! (green,
+-- bigger, with a haptic tap where the device has one) exactly while a press clears the gap
+-- (Track.Clears, the server's own rule); an arc of lamps over the rider and the gate's lamps fill
+-- toward that moment, and so does the JUMP button. LEAN prompts, the callouts and the controls hint
+-- show there too. PC keeps its camera, its strip and its switch panel.
 
+local HapticService = game:GetService("HapticService")
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -55,6 +74,24 @@ local COAST = 18 -- how far a finished cart rolls on past the line
 local SPREAD = 1.5 -- sideways studs between carts side by side
 local RING_DOTS = 12
 local rad = math.rad
+
+-- The chase camera: Up studs over my cart and Back behind it (it trails a little more at speed),
+-- looking at a point Ahead on the rails and Aim up. Phones ride higher and closer, looking down the
+-- rails ahead, so the rider never hides a gap's approach (tools/checks/scenarios/MinecartMayhem_jump
+-- shows it). The server hangs the junction gantries higher for it, and
+-- tools/checks/MinecartMayhemCamera checks that both cameras pass under everything over the rails
+-- (it has a copy of these numbers: change them together).
+local CAMERA = { Up = 7.5, Back = 15, Ahead = 14, Aim = 2.5 }
+local PHONE_CAMERA = { Up = 10, Back = 9.5, Ahead = 13, Aim = 0 }
+
+-- The JUMP cue on my cart: GAP AHEAD from WARN seconds before the best moment to press, READY...
+-- from READY, the lamps filling over the last FILL seconds, JUMP! while a press clears the gap.
+local WARN = 2.6
+local READY = 0.9
+local FILL = 1.6
+local CUE_SIZE = 0.44 -- the cue's square, a share of the screen's height (my cart's size on screen)
+local ARC_LAMPS = 7 -- over the rider, lit from both ends toward the top (4 steps, like the gate's lamps)
+local GATE_YELLOW = Color3.fromRGB(255, 205, 40) -- the gate as the server built it
 
 -- The joints a rider's pose turns: R15's, then R6's (client/Pose finds them on either kind of body).
 local JOINTS = {
@@ -229,7 +266,7 @@ function MinecartMayhem.Start(api)
 					Track.Fall(c, rider, event.Tile, fell)
 				elseif live and not called["clear" .. event.Tile] then
 					called["clear" .. event.Tile] = true
-					say("✔ CLEARED!", Theme.Colors.Green, 0.9)
+					say("✓ CLEARED!", Theme.Colors.Green, 0.9)
 				end
 			elseif event.K == "Crystal" then
 				if not Track.Airborne(myJumpAt, event.At) then
@@ -396,16 +433,18 @@ function MinecartMayhem.Start(api)
 	end))
 
 	-- HUD ----------------------------------------------------------------------------------------------
+	-- (Phones: a narrower strip with the next switch's two ways either side of it and my place under
+	-- its left end, so nothing covers the rails ahead in the middle of the screen. PC: the strip, my
+	-- place and the switch panel under each other, as before.)
 
 	local hud = api:TopHud()
 	local hudY = api:HudY()
-	local barWidth = 560
+	local barWidth = if touch then 380 else 560
 	local trackLength = barWidth - 64
 	local DOT = if touch then 30 else 18
 	local MY_DOT = if touch then 36 else 26
 	local LIFT = if touch then 15 else 9
 	local barHeight = if touch then 60 else 36
-	local shiftX = if touch then 100 else 0 -- (phones: right of the middle, clear of the stick's corner)
 	local bar = UIKit.Panel({
 		Name = "RaceBar",
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -488,22 +527,25 @@ function MinecartMayhem.Start(api)
 		Text = "",
 		Font = Theme.Fonts.Display,
 		TextSize = 28,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, shiftX, 0, placeY),
-		Size = UDim2.fromOffset(300, 32),
+		AnchorPoint = Vector2.new(if touch then 0 else 0.5, 0),
+		Position = UDim2.new(0.5, if touch then -barWidth / 2 + 6 else 0, 0, placeY),
+		Size = UDim2.fromOffset(if touch then 240 else 300, 32),
+		TextXAlignment = if touch then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center,
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.15) },
 	})
 
-	-- The next switch: both ways side by side (arrow, icon, word), the one I'm picking lit up, and a
-	-- countdown ring between them.
-	local wayY = placeY + 38
-	local wayHeight = if touch then 62 else 54
+	-- The next switch: both ways (arrow, icon, word), the one I'm picking lit up. PC: side by side
+	-- under my place, with a countdown ring between them. Phones: either side of the strip, on its
+	-- row; their rims turn yellow once a press counts (the ring's job on PC).
+	local WAY_BOX = 206 -- (phones: each way's box; the row clears the standings on a 667 pt screen)
+	local wayY = if touch then hudY + 4 else placeY + 38
+	local wayHeight = if touch then barHeight else 54
 	local wayPanel = UIKit.new("Frame", {
 		Name = "Ways",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, shiftX, 0, wayY),
-		Size = UDim2.fromOffset(if touch then 470 else 430, wayHeight),
+		Position = UDim2.new(0.5, 0, 0, wayY),
+		Size = UDim2.fromOffset(if touch then barWidth + 2 * (WAY_BOX + 8) else 430, wayHeight),
 		BackgroundTransparency = 1,
 		Visible = false,
 		Parent = hud,
@@ -520,7 +562,7 @@ function MinecartMayhem.Start(api)
 			Name = if side < 0 then "Left" else "Right",
 			AnchorPoint = Vector2.new(if side < 0 then 0 else 1, 0),
 			Position = UDim2.fromScale(if side < 0 then 0 else 1, 0),
-			Size = UDim2.new(0.5, -34, 1, 0),
+			Size = if touch then UDim2.new(0, WAY_BOX, 1, 0) else UDim2.new(0.5, -34, 1, 0),
 			CornerRadius = 12,
 			Parent = wayPanel,
 		}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
@@ -530,7 +572,7 @@ function MinecartMayhem.Start(api)
 			Name = "Text",
 			Text = "",
 			Font = Theme.Fonts.Display,
-			TextSize = if touch then 28 else 24,
+			TextSize = if touch then 26 else 24,
 			Size = UDim2.new(1, -8, 1, 0),
 			Position = UDim2.fromOffset(4, 0),
 			Parent = boxFrame,
@@ -571,64 +613,184 @@ function MinecartMayhem.Start(api)
 				end
 			end
 	end
-	local _, wayRing = ring(wayPanel, 56, "Ring")
+	local wayRing: ((number, Color3) -> ())? = nil
+	if not touch then
+		local _, setRing = ring(wayPanel, 56, "Ring")
+		wayRing = setRing
+	end
 
-	-- The action prompt: JUMP! or LEAN ◀ / ▶, with its own countdown ring.
-	local promptY = wayY + wayHeight + 8
-	local prompt = UIKit.Panel({
+	-- The cue on my own cart, on every screen: the JUMP and LEAN prompts, an arc of lamps over the
+	-- rider counting down to the moment, and the callouts. It has its own full-screen ScreenGui, so
+	-- it sits where my cart is drawn (placed from the camera every frame; it's a share of the
+	-- screen's height, like the cart itself) and nothing of it covers the rails ahead. It shows and
+	-- hides with the mode's HUD (the rules card).
+	local cueGui = UIKit.new("ScreenGui", {
+		Name = "MiniGame_MinecartMayhemCue",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ScreenInsets = Enum.ScreenInsets.None,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		DisplayOrder = api.Gui.DisplayOrder,
+		Enabled = api.Gui.Enabled,
+		Parent = api.Gui.Parent,
+	})
+	api:Track(cueGui)
+	api:Track(api.Gui:GetPropertyChangedSignal("Enabled"):Connect(function()
+		cueGui.Enabled = api.Gui.Enabled
+	end))
+	local cue = UIKit.new("Frame", {
+		Name = "Cue",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.66),
+		Size = UDim2.fromScale(CUE_SIZE, CUE_SIZE),
+		SizeConstraint = Enum.SizeConstraint.RelativeYY,
+		BackgroundTransparency = 1,
+		Parent = cueGui,
+	})
+	local ink = Color3.fromRGB(30, 15, 60)
+	-- (the words' width, a share of the cue: PC's wide screens take long words big; touch screens
+	-- keep them to 190 pt, clear of the MOVE stick's corner on a tablet too)
+	local CUE_WORDS = if touch then 0.95 else 1.4
+	-- (a callout no taller than two lines then, or a tablet's tall box would wrap it onto four)
+	local function narrow(tallest: number): { Instance }
+		return if touch then { UIKit.new("UISizeConstraint", { MaxSize = Vector2.new(190, tallest) }) } else {}
+	end
+	local lamps: { Frame } = {}
+	local arc = if touch then 0.42 else 0.36 -- (PC: a little tighter, under the switch panel's ring)
+	for k = 1, ARC_LAMPS do
+		-- (from upper left over the rider's head to upper right: clear of the pads and the stick)
+		local a = rad(145 - (k - 1) * 110 / (ARC_LAMPS - 1))
+		lamps[k] = UIKit.new("Frame", {
+			Name = "Lamp" .. k,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5 + arc * math.cos(a), 0.5 - arc * math.sin(a)),
+			Size = UDim2.fromScale(0.07, 0.07),
+			BackgroundColor3 = Theme.Colors.Yellow,
+			Visible = false,
+			Parent = cue,
+			Children = { UIKit.Round(), UIKit.Stroke(ink, 2, 0.1) },
+		})
+	end
+	local cueWords = UIKit.Label({
 		Name = "Prompt",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, shiftX, 0, promptY),
-		Size = UDim2.fromOffset(300, 56),
-		CornerRadius = 14,
-		Visible = false,
-		Parent = hud,
-	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
-	local promptRingHolder, promptRing = ring(prompt, 48, "Ring")
-	promptRingHolder.AnchorPoint = Vector2.new(0, 0.5)
-	promptRingHolder.Position = UDim2.new(0, 6, 0.5, 0)
-	local promptText = UIKit.Label({
-		Name = "Text",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = if touch then 30 else 28,
-		Position = UDim2.fromOffset(58, 0),
-		Size = UDim2.new(1, -64, 1, 0),
-		Parent = prompt,
-		Children = { UIKit.TextStroke(0.15) },
+		TextScaled = true,
+		TextWrapped = false,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(CUE_WORDS, 0.16),
+		Visible = false,
+		Parent = cue,
+		Children = { UIKit.new("UIStroke", { Color = ink, Thickness = 3, Transparency = 0.05 }) },
 	})
-
 	local callout = UIKit.Label({
 		Name = "Callout",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = if touch then 32 else 38,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, shiftX, 0, promptY + 64),
-		Size = UDim2.fromOffset(if touch then 360 else 520, 44),
+		TextScaled = true,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(CUE_WORDS * 1.1, 0.26),
 		Visible = false,
-		Parent = hud,
-		Children = { UIKit.TextStroke(0.1) },
+		Parent = cue,
+		Children = {
+			UIKit.new("UIStroke", { Color = ink, Thickness = 2, Transparency = 0.1 }),
+			UIKit.new("UITextSizeConstraint", { MaxTextSize = 40 }),
+		},
 	})
-	local startHint = UIKit.Label({
-		Name = "StartHint",
-		Text = "◀ ▶ pick a way & lean\nJUMP at the yellow arrows",
-		Font = Theme.Fonts.Display,
-		TextSize = 30,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, shiftX, 0, promptY + 64),
-		Size = UDim2.fromOffset(420, 80),
-		Visible = false,
-		Parent = hud,
-		Children = { UIKit.TextStroke(0.15) },
-	})
+	callout:SetAttribute("PP_Lines", 2) -- (a long one, and the phones' start hint, take two lines)
+	for label, tallest in { [cueWords] = math.huge, [callout] = 48 } do
+		for _, limit in narrow(tallest) do
+			limit.Parent = label
+		end
+	end
 	local calloutUntil = 0
 	say = function(text: string, color: Color3, seconds: number)
 		callout.Text = text
 		callout.TextColor3 = color
-		callout.Visible = true
 		calloutUntil = os.clock() + seconds
 	end
+
+	-- A light tap at the moment to JUMP, where the device has haptics (phones: HapticEffect; a
+	-- gamepad: its small motor). Anything missing just does nothing.
+	local tapEffect: HapticEffect? = nil
+	local function tap()
+		pcall(function()
+			if not tapEffect then
+				local effect = Instance.new("HapticEffect")
+				effect.Type = Enum.HapticEffectType.UIClick
+				effect.Parent = api.World
+				tapEffect = effect
+			end
+			(tapEffect :: HapticEffect):Play()
+		end)
+		pcall(function()
+			local pad = Enum.UserInputType.Gamepad1
+			if
+				HapticService:IsVibrationSupported(pad)
+				and HapticService:IsMotorSupported(pad, Enum.VibrationMotor.Small)
+			then
+				HapticService:SetMotor(pad, Enum.VibrationMotor.Small, 0.6)
+				task.delay(0.08, function()
+					pcall(HapticService.SetMotor, HapticService, pad, Enum.VibrationMotor.Small, 0)
+				end)
+			end
+		end)
+	end
+
+	-- The gate at the gap my cart is coming up to (server half): its lamps turn green from the bottom
+	-- as my cue counts down, and the whole gate in the moment to JUMP (only on this screen).
+	type Gate = { Lamps: { { BasePart } }, Beacons: { BasePart } }
+	local gates: { [number]: Gate } = {}
+	local gateShows: { [number]: number } = {}
+	local function gateOf(tileIndex: number): Gate?
+		local found = gates[tileIndex]
+		if found then
+			return found
+		end
+		local arena = workspace:FindFirstChild("Arena_" .. api.Id)
+		local folder = arena and arena:FindFirstChild("JumpGate" .. tileIndex, true)
+		if not folder then
+			return nil
+		end
+		local gate: Gate = { Lamps = { {}, {}, {}, {} }, Beacons = {} }
+		for _, part in folder:GetChildren() do
+			if part:IsA("BasePart") then
+				local k = tonumber(string.match(part.Name, "^GateLamp(%d)$"))
+				if k and gate.Lamps[k] then
+					table.insert(gate.Lamps[k], part)
+				elseif part.Name == "GateBeacon" then
+					table.insert(gate.Beacons, part)
+				end
+			end
+		end
+		gates[tileIndex] = gate
+		return gate
+	end
+	-- `lit`: how many lamps up each post are green (0: the gate as built; 5: all of it, JUMP!).
+	local function showGate(tileIndex: number, lit: number)
+		if (gateShows[tileIndex] or 0) == lit then
+			return
+		end
+		local gate = gateOf(tileIndex)
+		if not gate then
+			return
+		end
+		gateShows[tileIndex] = lit
+		for k, parts in gate.Lamps do
+			for _, part in parts do
+				part.Color = if k <= lit then Theme.Colors.Green else GATE_YELLOW
+			end
+		end
+		for _, part in gate.Beacons do
+			part.Color = if lit >= 5 then Theme.Colors.Green else GATE_YELLOW
+		end
+	end
+	local shownGate: number? = nil
+	local shownLit, shownLampColor = -2, Theme.Colors.Yellow
+	-- (the gap my cue last warned about and tapped for: once per run at a gap, again after a fall)
+	local warnedGap: number?, tappedGap: number? = nil, nil
 
 	-- Controls ---------------------------------------------------------------------------------------
 
@@ -853,6 +1015,7 @@ function MinecartMayhem.Start(api)
 			if type(tileIndex) == "number" then
 				myGaps[tileIndex] = nil -- (the snapshot carries it from here)
 			end
+			warnedGap, tappedGap = nil, nil -- (the comeback rides up to the same gap again)
 			say("💫 FELL! Jump at the yellow arrows!", Theme.Colors.Red, 2.2)
 			api:Sound("Eliminated")
 			shake = 0.35
@@ -915,6 +1078,7 @@ function MinecartMayhem.Start(api)
 
 	local cameraPosition: Vector3? = nil
 	local cameraTaken = false
+	local steep = if touch then 1 else 0 -- (how much of PHONE_CAMERA the camera takes)
 	local function releaseCamera()
 		if cameraTaken then
 			cameraTaken = false
@@ -1224,15 +1388,18 @@ function MinecartMayhem.Start(api)
 			placeLabel.Text = placeText
 		end
 
-		-- The next switch, and the JUMP / LEAN prompt.
+		-- The next switch, and the JUMP / LEAN cue on my cart.
 		local canRide = racing()
 		jump:SetEnabled(canRide)
 		for side, face in pads do
 			face.BackgroundTransparency = if canRide then (if myLean == side then 0 else 0.25) else 0.6
 		end
 		local m = mine
-		local showWays, showPrompt = false, false
+		local showWays = false
+		local cueText: string?, cueColor, cueBig = nil, Theme.Colors.Yellow, false
+		local lit, lampColor = -1, Theme.Colors.Yellow -- (the arc's lamps: -1 hides them, 0..4 lit)
 		local jumpNow = false
+		local gateTile: number?, gateLit = nil, 0
 		if m and canRide and m.DownUntil == 0 and not m.Back then
 			local index, away = Track.NextSwitch(c, m, 110)
 			if index then
@@ -1256,25 +1423,31 @@ function MinecartMayhem.Start(api)
 					end
 					box.Label.TextColor3 = hint.Color
 					local chosen = picked == side or (picked == 0 and side == long and away < 12)
-					box.Stroke.Transparency = if chosen then 0 else 1
+					-- (white round the way I'm taking; phones: yellow round the other once a press counts)
+					box.Stroke.Color = if chosen then Theme.Colors.Text else Theme.Colors.Yellow
+					box.Stroke.Transparency = if chosen then 0 elseif touch and away <= Track.CHOOSE then 0.2 else 1
 				end
-				wayRing(
-					math.clamp(away / 110, 0, 1),
-					if away <= Track.CHOOSE then Theme.Colors.Yellow else Theme.Colors.Text
-				)
+				if wayRing then
+					wayRing(
+						math.clamp(away / 110, 0, 1),
+						if away <= Track.CHOOSE then Theme.Colors.Yellow else Theme.Colors.Text
+					)
+				end
 			end
-			-- A gap ahead (this tile or the next): the ring counts down to the best moment to jump.
+			-- A gap ahead (this tile or the next): GAP AHEAD, then READY..., then JUMP! exactly while
+			-- a press now clears it (Track.Clears, the server's own rule); the lamps fill toward the
+			-- best moment to press. Nothing while my cart is in the air.
 			local tile = c.Tiles[m.Tile]
 			local path = tile.Paths[m.B] or tile.Paths[1]
-			local gapFront, gapLength = nil, 0
+			local gapFront, gapLength, gapAt = nil, 0, nil
 			for _, candidate in { { tile, 0 }, { c.Tiles[m.Tile + 1], path.Total } } do
 				local t, extra = candidate[1], candidate[2]
 				if t and gapFront == nil then
 					for _, feature in t.Features do
 						if feature.K == "Gap" then
 							local front = feature.S - Track.HALF_BASE + extra - m.S
-							if front > -2 and front < 60 then
-								gapFront, gapLength = front, (feature.S1 :: number) - feature.S
+							if front > -2 and front < 90 then
+								gapFront, gapLength, gapAt = front, (feature.S1 :: number) - feature.S, t.Index
 							end
 						end
 					end
@@ -1285,29 +1458,42 @@ function MinecartMayhem.Start(api)
 			if leanNow == 0 then
 				leanAhead = Track.LeanAt(tile, m.B, m.S + 22)
 			end
-			if gapFront and gapFront > 0 then
-				showPrompt = true
-				local v = math.max(m.V, 1)
-				local lead = Track.JUMP_TIME / 2 - (gapLength + Track.WHEELBASE) / (2 * v)
-				local wait = gapFront / v - lead
-				jumpNow = now >= myJumpAt + Track.JUMP_TIME + Track.JUMP_REST
-					and Track.Clears(now, now + gapFront / v, v, gapLength)
-				promptText.Text = if jumpNow then "JUMP NOW!" else "JUMP…"
-				promptText.TextColor3 = if jumpNow then Theme.Colors.Green else Theme.Colors.Yellow
-				promptRing(math.clamp(wait / 1.6, 0, 1), if jumpNow then Theme.Colors.Green else Theme.Colors.Yellow)
+			local v = math.max(m.V, 1)
+			local lead = Track.JUMP_TIME / 2 - (gapLength + Track.WHEELBASE) / (2 * v)
+			local wait = if gapFront then gapFront / v - lead else math.huge
+			local resting = now < myJumpAt + Track.JUMP_TIME + Track.JUMP_REST
+			if gapFront and gapAt and gapFront > 0 and wait <= WARN and not resting then
+				jumpNow = Track.Clears(now, now + gapFront / v, v, gapLength)
+				if jumpNow or wait > 0 then
+					lit = if jumpNow then 4 else math.clamp(math.ceil((1 - wait / FILL) * 4), 0, 4)
+					lampColor = if jumpNow then Theme.Colors.Green else Theme.Colors.Yellow
+					gateTile, gateLit = gapAt, if jumpNow then 5 else lit
+					if jumpNow then
+						cueText, cueColor, cueBig = "JUMP!", Theme.Colors.Green, true
+					else
+						cueText = if wait > READY then "GAP AHEAD" else "READY…"
+					end
+					if warnedGap ~= gapAt then
+						warnedGap = gapAt
+						api:Sound("HazardWarning")
+					end
+					if jumpNow and tappedGap ~= gapAt then
+						tappedGap = gapAt
+						tap()
+						if not reduced then
+							UIKit.PopIn(cueWords, 0.25)
+						end
+					end
+				end
 			elseif leanNow ~= 0 or leanAhead ~= 0 then
-				showPrompt = true
 				local dir = if leanNow ~= 0 then leanNow else leanAhead
 				local arrow = if dir < 0 then "◀" else "▶"
 				if leanNow ~= 0 and myLean == leanNow then
-					promptText.Text = `✔ BOOST {arrow}`
-					promptText.TextColor3 = Theme.Colors.Green
+					cueText, cueColor = `✓ BOOST {arrow}`, Theme.Colors.Green
 				elseif leanNow ~= 0 and myLean == -leanNow then
-					promptText.Text = `❌ WOBBLE! {arrow}`
-					promptText.TextColor3 = Theme.Colors.Red
+					cueText, cueColor = `❌ WOBBLE! {arrow}`, Theme.Colors.Red
 				else
-					promptText.Text = if dir < 0 then "◀ LEAN" else "LEAN ▶"
-					promptText.TextColor3 = Theme.Colors.Text
+					cueText, cueColor = if dir < 0 then "◀ LEAN" else "LEAN ▶", Theme.Colors.Text
 				end
 				local feature = nil
 				for _, f in tile.Features do
@@ -1320,38 +1506,74 @@ function MinecartMayhem.Start(api)
 					then 1 - (m.S - feature.S) / ((feature.S1 :: number) - feature.S)
 					elseif feature then (feature.S - m.S) / 22
 					else 0
-				promptRing(math.clamp(fraction, 0, 1), promptText.TextColor3)
+				lit, lampColor = math.clamp(math.ceil(fraction * 4), 0, 4), cueColor
 			end
 		end
 		wayPanel.Visible = showWays
-		prompt.Visible = showPrompt
-		jump:SetFill(if jumpNow then 1 else 0, Theme.Colors.Text)
-
-		if callout.Visible and os.clock() > calloutUntil then
-			callout.Visible = false
+		jump:SetFill(
+			if jumpNow then 1 elseif gateTile then gateLit / 5 else 0,
+			if jumpNow then Theme.Colors.Green else Theme.Colors.Text
+		)
+		if shownGate and shownGate ~= gateTile then
+			showGate(shownGate, 0)
 		end
-		if stage == "Race" and not hintShown and api.Gui.Enabled then -- (not while the rules card is up)
+		shownGate = gateTile
+		if gateTile then
+			showGate(gateTile, gateLit)
+		end
+
+		-- What the cue on my cart says: a prompt first, then a callout, then the controls for the
+		-- first seconds of the race (not while the rules card is up).
+		if stage == "Race" and not hintShown and api.Gui.Enabled then
 			hintShown = true
 			hintUntil = os.clock() + 6
-			if not touch then
-				api:Hint("A / D: pick a way & lean into bends · SPACE: jump at the yellow arrows", promptY + 112)
+		end
+		local hinting = os.clock() <= hintUntil
+		if cueText then
+			if cueWords.Text ~= cueText then
+				cueWords.Text = cueText
+			end
+			cueWords.TextColor3 = cueColor
+			cueWords.Size = UDim2.fromScale(CUE_WORDS, if cueBig then 0.24 else 0.16)
+			cueWords.Visible = true
+			callout.Visible = false
+		else
+			cueWords.Visible = false
+			if os.clock() <= calloutUntil then
+				callout.Visible = true
+			elseif hinting then
+				callout.Text = if touch
+					then "◀ ▶ pick a way & lean\nJUMP at the yellow arrows"
+					else "A / D: pick a way & lean\nSPACE: JUMP at the yellow arrows"
+				callout.TextColor3 = Theme.Colors.Text
+				callout.Visible = true
+			else
+				callout.Visible = false
 			end
 		end
-		startHint.Visible = touch and hintUntil > 0 and os.clock() <= hintUntil and not callout.Visible
-		if hintUntil > 0 and os.clock() > hintUntil then
-			hintUntil = -1
-			if not touch then
-				api:Hint("")
+		if lit ~= shownLit or lampColor ~= shownLampColor then
+			shownLit, shownLampColor = lit, lampColor
+			for k, lamp in lamps do
+				lamp.Visible = lit >= 0
+				lamp.BackgroundColor3 = lampColor
+				lamp.BackgroundTransparency = if math.min(k, ARC_LAMPS + 1 - k) <= lit then 0 else 0.65
 			end
 		end
 
 		-- Chase camera behind my cart, and the light: the cave's gloom inside, daylight at the ends.
+		-- (Phones: the high camera while riding, easing back to the usual one past the finish line, so
+		-- it rolls out under the exit's lintel as on PC.)
 		local me = shown[myKey]
 		if me and me.Frame and api:Alive() and m then
 			local frame = me.Frame :: CFrame
 			local flat =
 				CFrame.lookAt(frame.Position, frame.Position + Vector3.new(frame.LookVector.X, 0, frame.LookVector.Z))
-			local desired = (flat * CFrame.new(0, 7.5, 15)).Position
+			steep += ((if touch and not m.Finish then 1 else 0) - steep) * (1 - math.exp(-dt * 1.5))
+			local up = CAMERA.Up + (PHONE_CAMERA.Up - CAMERA.Up) * steep
+			local back = CAMERA.Back + (PHONE_CAMERA.Back - CAMERA.Back) * steep
+			local ahead = CAMERA.Ahead + (PHONE_CAMERA.Ahead - CAMERA.Ahead) * steep
+			local aim = CAMERA.Aim + (PHONE_CAMERA.Aim - CAMERA.Aim) * steep
+			local desired = (flat * CFrame.new(0, up, back)).Position
 			cameraPosition = if cameraPosition then cameraPosition:Lerp(desired, 1 - math.exp(-dt * 7)) else desired
 			if not cameraTaken then
 				cameraTaken = true
@@ -1361,17 +1583,30 @@ function MinecartMayhem.Start(api)
 			local jolt = if shake > 0
 				then Vector3.new(math.sin(now * 61), math.sin(now * 73), 0) * shake
 				else Vector3.zero
-			local look = (flat * CFrame.new(0, 2.5, -14)).Position
+			local look = (flat * CFrame.new(0, aim, -ahead)).Position
 			if m.DownUntil > 0 then
 				look = (flat * CFrame.new(0, 0, -6)).Position + Vector3.new(0, frame.Position.Y - flat.Position.Y, 0)
 			end
 			camera.CFrame = CFrame.lookAt((cameraPosition :: Vector3) + jolt, look)
 			camera.FieldOfView = 66 + 14 * math.clamp((m.V - Track.CRUISE) / (Track.DASH - Track.CRUISE), 0, 1)
+			-- (the cue sits where my cart's middle is drawn: worked out from the camera, so on any screen)
+			local middle = camera.CFrame:PointToObjectSpace((frame * CFrame.new(0, 1.6, 0)).Position)
+			if middle.Z < -1 then
+				local span = 2 * math.tan(rad(camera.FieldOfView) / 2)
+				local view = camera.ViewportSize
+				local x = if view.X > 100 and view.Y > 100
+					then 0.5 + middle.X / -middle.Z / (span * view.X / view.Y)
+					else 0.5
+				local y = 0.5 - middle.Y / -middle.Z / span
+				cue.Position = UDim2.fromScale(math.clamp(x, 0.35, 0.65), math.clamp(y, 0.3, 0.8))
+			end
+			cue.Visible = true
 			local progress = Track.Progress(c, m)
 			local enter = c.Tiles[1].Nominal * 0.85
 			local leave = c.Goal - 6
 			setInside(math.clamp(math.min((progress - enter + 20) / 30, (leave - progress) / 30), 0, 1))
 		else
+			cue.Visible = false
 			releaseCamera()
 		end
 	end)

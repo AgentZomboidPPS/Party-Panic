@@ -7,9 +7,10 @@
 --   MinecartMayhemRail*       the course's rail tiles (Start, BendL/R, JunctionL/R, Gap, Hill,
 --                             Finish): rails, ties and trestles swept along the same shapes as
 --                             Shared/Logic/MinecartMayhemTrack (Track.Anchor places them); the gap
---                             tile also draws the yellow take-off chevrons. Their fallbacks carry an
---                             invisible, non-colliding "Bounds" box the size of the mesh, so both
---                             versions get the same pivot.
+--                             tile also draws the yellow take-off chevrons, which glow (Neon: owner,
+--                             "you cannot see where to jump", so they read in the cave's gloom).
+--                             Their fallbacks carry an invisible, non-colliding "Bounds" box the
+--                             size of the mesh, so both versions get the same pivot.
 --   MinecartMayhemCave        a ring of cave rock round the track with crystals on its inside.
 --   MinecartMayhemPortal      the mine's portal: a cliff with the tunnel through it, a timber frame.
 --   MinecartMayhemSign        the gantry over the track before a switch (the game hangs the boards).
@@ -36,7 +37,7 @@ return function(h)
 		Trestle = rgb(92, 62, 38),
 		Marker = rgb(255, 205, 40),
 	}
-	local railMaterials = { Rails = metal, Ties = wood, Trestle = wood, Marker = Enum.Material.SmoothPlastic }
+	local railMaterials = { Rails = metal, Ties = wood, Trestle = wood, Marker = neon }
 
 	-- A primitive stand-in for a rail tile: rails, ties and a few posts along its paths.
 	local function railFallback(name: string)
