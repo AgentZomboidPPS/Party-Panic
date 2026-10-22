@@ -1,0 +1,17 @@
+newmtl PartyGold
+Kd 1.000 0.784 0.196
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl PartyStripe
+Kd 1.000 0.361 0.667
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl PartyTrim
+Kd 1.000 0.988 0.941
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

@@ -40,6 +40,11 @@
 --   * Phones: the round's callouts (NotificationController) show in that line's place, one at a
 --     time, in a compact strip with its kind's icon and coloured rim, not over the play area.
 -- New motion (the column's slide, the pops, the HUD moving up) is instant with reduced effects.
+--
+-- The GOLD PASS (owner: "Also we do need a paid battle pass too. I like the current free one. But the
+-- paid one should also be insane."): the old "💎 Get VIP" button in Settings is now a gold teaser, a
+-- shining 👑 GOLD PASS pill in the Settings window's title bar (the window's list has no room left on
+-- the shortest phone) that opens the Rewards screen on the gold lane; an owner's says 👑 GOLD ✓.
 
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -48,13 +53,14 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
-local Config = require(Shared.Config)
 local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
+local GoldPass = require(Shared.GoldPass)
 local Remotes = require(Shared.Remotes)
 local RoundHud = require(Shared.Logic.RoundHud)
 local Teams = require(Shared.Teams)
 
+local GoldPassController = require(script.Parent.GoldPassController)
 local State = require(script.Parent.Parent.State)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local SitOutSwitch = require(script.Parent.Parent.UI.SitOutSwitch)
@@ -1416,6 +1422,55 @@ local function sitOutRow(parent: Instance, order: number)
 	})
 end
 
+-- The GOLD PASS teaser in the Settings window's title bar, left of its X: a shining gold pill that
+-- opens the Rewards screen on the gold lane.
+local function goldTeaser(modal: Modal.Modal)
+	local touch = isTouch()
+	local title = Modal.TitleHeight()
+	local button = UIKit.Button({
+		Name = "GoldTeaser",
+		Text = "",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, if touch then -58 else -50, 0, -(title + 6) + title / 2 + 2),
+		Size = UDim2.fromOffset(if touch then 214 else 196, if touch then Theme.Touch.Target else 48),
+		CornerRadius = "round",
+		ZIndex = 25,
+		Parent = modal.Content,
+	}, function()
+		State.OpenScreen:Fire("Rewards", "Road")
+	end, GoldPass.Colors.Gold, GoldPass.Colors.Deep)
+	local fill = button:FindFirstChildOfClass("UIGradient")
+	if fill then
+		fill.Color = GoldPassController.Fill().Color
+	end
+	local rim = button:FindFirstChildOfClass("UIStroke")
+	if rim then
+		rim.Color, rim.Thickness, rim.Transparency = GoldPass.Colors.Shine, 2.5, 0
+	end
+	GoldPassController.Glint(button)
+	local label = UIKit.Label({
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = if touch then 22 else 21,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 27,
+		Parent = button,
+		Children = {
+			UIKit.new("UIStroke", {
+				Color = GoldPass.Colors.Ink,
+				Thickness = 2,
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+			}),
+		},
+	})
+	local function refresh()
+		label.Text = if GoldPassController.Owned() then `{GoldPass.Icon} GOLD ✓` else `{GoldPass.Icon} GOLD PASS`
+	end
+	State.ProfileChanged:Connect(refresh)
+	refresh()
+end
+
 local function buildSettings(overlay: Instance)
 	local touch = isTouch()
 	local modal = Modal.new(overlay, "Settings", "⚙️", Vector2.new(560, if touch then 450 else 420))
@@ -1441,16 +1496,7 @@ local function buildSettings(overlay: Instance)
 		LayoutOrder = 3,
 		Parent = list,
 	})
-	if Config.Monetization.VipGamePassId ~= 0 then
-		UIKit.Button({
-			Text = "💎 Get VIP (cosmetics only)",
-			Size = UDim2.new(1, 0, 0, if touch then Theme.Touch.Target else 56),
-			LayoutOrder = 4,
-			Parent = list,
-		}, function()
-			Remotes.Get("PromptVip"):FireServer()
-		end, Theme.Colors.Yellow, Theme.Colors.Orange)
-	end
+	goldTeaser(modal)
 	local saveNote = UIKit.Label({
 		Text = "",
 		TextSize = 18,

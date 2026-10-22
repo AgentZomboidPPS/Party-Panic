@@ -28,7 +28,6 @@ function __cupProfile(player, before)
 		Key = "Harness_" .. player.Name,
 		Data = data,
 		CanSave = false,
-		IsVip = false,
 		Released = false,
 		Migration = migration,
 	}

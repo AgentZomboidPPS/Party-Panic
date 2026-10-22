@@ -38,6 +38,11 @@
 --
 -- The card's ✕ wore the panels' dark purple (owner: "why are the close menu buttons and the invite
 -- friend button so dark?"): it's the windows' bright red ✕ now, same size and spot.
+--
+-- The GOLD PASS (owner: "the paid one should also be insane"): an owner's level-up shows the gold
+-- lane's reward too: its gold coins on a gold chip of their own ("+7 GOLD") and its cosmetics on gold
+-- chips, the best first; "Next up" can be a gold reward. (Buying the pass has its own card:
+-- Controllers/GoldPassController.)
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -46,10 +51,12 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage.Shared
 local Cosmetics = require(Shared.Cosmetics)
 local GameState = require(Shared.GameState)
+local GoldPass = require(Shared.GoldPass)
 local Progression = require(Shared.Progression)
 local Remotes = require(Shared.Remotes)
 
 local AudioController = require(script.Parent.AudioController)
+local GoldPassController = require(script.Parent.GoldPassController)
 local State = require(script.Parent.Parent.State)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -62,6 +69,7 @@ type Celebration = {
 	Level: number?,
 	From: number?,
 	Coins: number,
+	GoldCoins: number?, -- LevelUp: the gold lane's coins (GOLD PASS owners)
 	Items: { string },
 }
 
@@ -93,9 +101,10 @@ for index, item in Cosmetics.List do
 	catalogIndex[item.Id] = index
 end
 
--- Best first: the highest road level, then the biggest career milestone, then catalog order.
+-- Best first: the highest road level (free or gold), then the biggest career milestone, then
+-- catalog order.
 local function better(a: Cosmetics.Cosmetic, b: Cosmetics.Cosmetic): boolean
-	local levelA, levelB = a.UnlockLevel or 0, b.UnlockLevel or 0
+	local levelA, levelB = a.UnlockLevel or a.GoldLevel or 0, b.UnlockLevel or b.GoldLevel or 0
 	if levelA ~= levelB then
 		return levelA > levelB
 	end
@@ -126,6 +135,9 @@ local function merge(list: { Celebration }): Celebration
 			merged.From = math.min(merged.From or math.huge, entry.From or entry.Level or 1)
 		end
 		merged.Coins += entry.Coins or 0
+		if entry.GoldCoins and entry.GoldCoins > 0 then
+			merged.GoldCoins = (merged.GoldCoins or 0) + entry.GoldCoins
+		end
 		for _, id in entry.Items or {} do
 			if not seen[id] and Cosmetics.Get(id) then
 				seen[id] = true
@@ -184,6 +196,26 @@ local function coinChip(parent: Instance, coins: number, order: number): Frame
 	return chip
 end
 
+-- The gold lane's coins: a gold chip with a crown over the coin.
+local function goldCoinChip(parent: Instance, coins: number, order: number): Frame
+	local chip = coinChip(parent, coins, order)
+	chip.Name = "GoldCoins"
+	local fill = chip:FindFirstChildOfClass("UIGradient")
+	if fill then
+		fill.Color = GoldPassController.Fill().Color
+	end
+	local rim = chip:FindFirstChildOfClass("UIStroke")
+	if rim then
+		rim.Color, rim.Thickness, rim.Transparency = GoldPass.Colors.Ink, 2.5, 0.1
+	end
+	for _, child in chip:GetChildren() do
+		if child:IsA("TextLabel") and child.Text == "COINS" then
+			child.Text = `{GoldPass.Icon} GOLD`
+		end
+	end
+	return chip
+end
+
 local function itemChip(parent: Instance, item: Cosmetics.Cosmetic, order: number): Frame
 	local chip = UIKit.Panel({
 		Name = item.Id,
@@ -193,6 +225,17 @@ local function itemChip(parent: Instance, item: Cosmetics.Cosmetic, order: numbe
 		ZIndex = 3,
 		Parent = parent,
 	}, Theme.Colors.Card, Theme.Colors.PanelDark)
+	if item.GoldLevel then
+		-- A GOLD PASS reward: a gold chip.
+		local fill = chip:FindFirstChildOfClass("UIGradient")
+		if fill then
+			fill.Color = GoldPassController.Fill().Color
+		end
+		local rim = chip:FindFirstChildOfClass("UIStroke")
+		if rim then
+			rim.Color, rim.Thickness, rim.Transparency = GoldPass.Colors.Ink, 2.5, 0.1
+		end
+	end
 	if item.Colors and #item.Colors > 1 then
 		-- Trails and the like show their colors along the top.
 		UIKit.new("Frame", {
@@ -264,8 +307,7 @@ local function nextGoal(celebration: Celebration): string
 	local profile = State.Profile
 	if celebration.Kind ~= "Milestone" then
 		local level = celebration.Level or (profile and profile.Level) or 1
-		local nextLevel = Progression.NextItemLevel(level)
-		local item = nextLevel and Progression.ItemsAt(nextLevel)[1]
+		local nextLevel, item = Progression.NextReward(level, GoldPassController.Owned())
 		if item then
 			return `Next up: {item.Icon} {item.Name} at Lv {nextLevel}`
 		end
@@ -471,18 +513,22 @@ local function show(celebration: Celebration)
 	})
 	local chips = {}
 	local coins = celebration.Coins or 0
+	local goldCoins = celebration.GoldCoins or 0
 	if coins > 0 then
 		table.insert(chips, coinChip(row, coins, 1))
 	end
-	-- As many item chips as fit beside the coins (2, or 3 without coins), the rest as "+2 more!"
+	if goldCoins > 0 then
+		table.insert(chips, goldCoinChip(row, goldCoins, 2))
+	end
+	-- As many item chips as fit beside the coins (3 less one per coin chip), the rest as "+2 more!"
 	-- (every one is on the Rewards screen). At most 576 of the card's 600 units.
-	local room = if coins > 0 then 2 else 3
+	local room = 3 - #chips
 	for index, item in items do
 		if index > room then
 			table.insert(chips, moreChip(row, #items - room, 10))
 			break
 		end
-		table.insert(chips, itemChip(row, item, 1 + index))
+		table.insert(chips, itemChip(row, item, 2 + index))
 	end
 	-- Each chip sits in a slot of its own size that is in the row from the start, so the row is
 	-- laid out once and the chips pop in one by one without moving the others.
@@ -746,6 +792,7 @@ function CelebrationController.Start(context)
 			Level = tonumber(payload.Level),
 			From = tonumber(payload.From),
 			Coins = tonumber(payload.Coins) or 0,
+			GoldCoins = tonumber(payload.GoldCoins),
 			Items = if type(payload.Items) == "table" then payload.Items else {},
 		})
 		CelebrationController.Pump()

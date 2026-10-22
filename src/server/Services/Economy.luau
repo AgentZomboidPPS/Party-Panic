@@ -2,7 +2,8 @@
 -- clients never submit coin totals, placements or rewards (design doc §14 "Server authority").
 -- Coins are on the low scale (owner: "I want low currency not high"; see Config.Rewards). Each
 -- level reached pays the Rewards Road's coins (Config.Road) exactly once, since XP only goes up,
--- and ProgressionService unlocks the level's cosmetics and celebrates.
+-- and ProgressionService unlocks the level's cosmetics and celebrates. A GOLD PASS owner's level
+-- also pays the gold lane's coins (owner: "the paid one should also be insane"; GoldPassService).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -12,6 +13,7 @@ local LevelCurve = require(Shared.Logic.LevelCurve)
 local ProgressionLogic = require(Shared.Logic.ProgressionLogic)
 
 local DataService = require(script.Parent.DataService)
+local GoldPassService = require(script.Parent.GoldPassService)
 local ProgressionService = require(script.Parent.ProgressionService)
 local Telemetry = require(script.Parent.Telemetry)
 
@@ -50,8 +52,9 @@ function Economy.AddXP(player: Player, amount: number)
 	if after > before then
 		local coins = ProgressionLogic.CoinsBetween(before, after, Config.Road)
 		profile.Data.Coins += coins
+		local goldCoins = GoldPassService.LevelUp(player, after) -- (added already, 0 without the pass)
 		Telemetry.PlayerEvent(player, "LevelUp", after)
-		ProgressionService.LevelUp(player, before, after, coins)
+		ProgressionService.LevelUp(player, before, after, coins, goldCoins)
 	end
 	DataService.Changed(player)
 end

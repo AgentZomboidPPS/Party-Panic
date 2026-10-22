@@ -1,5 +1,5 @@
 -- Cosmetic catalog (design doc §10). Cosmetics never change gameplay.
--- Unlock sources: coin Price, account level (UnlockLevel), lifetime stat (UnlockStat), or the VIP pass.
+-- Unlock sources: coin Price, account level (UnlockLevel), lifetime stat (UnlockStat), or the GOLD PASS.
 -- Prices are on the low coin scale (owner: "Also lets balance the shop down. I want low currency
 -- not high."): a round pays 2-6 coins, so the cheapest items take a few rounds and the best a few
 -- dozen. Level and stat items can't be bought: they are the Rewards Road (one at most milestone
@@ -12,6 +12,9 @@
 -- Hats (owner: "do pumpkin hat now"): the Hat slot is worn on the head in the lobby (World/Hats builds
 -- each as an Accessory; Services/CosmeticService puts it on and takes it off). The PUMPKIN HAT is the
 -- HALLOWEEN PARTY's headline reward.
+-- The GOLD PASS (owner: "the paid one should also be insane"): an item with a GoldLevel is on the
+-- Rewards Road's gold lane, its owners' at that level. Its own cosmetics live in Shared/GoldPass and
+-- come last in the list; the two old VIP items are gold rewards now.
 
 local GameDefinitions = require(script.Parent.GameDefinitions)
 
@@ -25,7 +28,8 @@ export type Cosmetic = {
 	Default: boolean?, -- owned by every new profile
 	UnlockLevel: number?,
 	UnlockStat: { Stat: string, Value: number, Label: string }?,
-	Vip: boolean?,
+	GoldLevel: number?, -- the GOLD PASS lane's level (Shared/GoldPass): its owners get it there
+	Style: { [string]: any }?, -- a gold trail's extra looks (Shared/GoldPass: texture, glow, glitter)
 	Event: string?, -- a limited-time event's reward (Shared/Events id): claimed on its track, never sold
 	Colors: { Color3 }?, -- trails, title accents and effect tints
 	Animation: number?, -- emote animation asset id (Roblox default R15 emotes)
@@ -159,9 +163,9 @@ local list: { Cosmetic } = {
 		Id = "Trail_VIP",
 		Slot = "Trail",
 		Name = "VIP Starlight",
-		Description = "Included with the VIP pass.",
+		Description = "A GOLD PASS reward.",
 		Icon = "💎",
-		Vip = true,
+		GoldLevel = 6,
 		Colors = { rgb(255, 245, 200), rgb(190, 140, 255) },
 	},
 
@@ -332,9 +336,9 @@ local list: { Cosmetic } = {
 		Id = "Title_VIP",
 		Slot = "Title",
 		Name = "VIP Partier",
-		Description = "Included with the VIP pass.",
+		Description = "A GOLD PASS reward.",
 		Icon = "💎",
-		Vip = true,
+		GoldLevel = 2,
 		Colors = { rgb(255, 230, 140) },
 	},
 
@@ -632,6 +636,10 @@ local list: { Cosmetic } = {
 		Colors = { rgb(255, 250, 236), rgb(255, 146, 34), rgb(255, 212, 58) },
 	},
 }
+-- The GOLD PASS lane's own cosmetics (Shared/GoldPass) come last.
+for _, item in require(script.Parent.GoldPass).Items do
+	table.insert(list, item)
+end
 
 local Cosmetics = {
 	List = list,

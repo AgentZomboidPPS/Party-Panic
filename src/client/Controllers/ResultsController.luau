@@ -7,8 +7,9 @@
 --
 -- Extra coins from what keeps players coming back (Services/Boosts: a friend in the round, double
 -- coins weekends) are lines of their own; six lines or more draw compact so they fit a phone, and a
--- line with no XP shows just its coins. While the card is up, the local player's PP_ResultsShowing
--- holds the toasts back (NotificationController): the card draws over them.
+-- line with no XP shows just its coins (one with XP only, the GOLD PASS's +10% XP, just its XP;
+-- owner: "the paid one should also be insane"). While the card is up, the local player's
+-- PP_ResultsShowing holds the toasts back (NotificationController): the card draws over them.
 --
 -- The headline names the game in capitals, like every other screen, on one line: a long name with
 -- "Your team won!" draws a little smaller rather than wrapping out of its box.
@@ -317,8 +318,10 @@ local function show(data)
 			Parent = row,
 		})
 		UIKit.Label({
-			Text = if line.XP > 0
-				then `+{line.Coins} {Theme.CoinIcon}  +{line.XP} XP`
+			-- (A line of XP only: the GOLD PASS's +10% XP.)
+			Text = if line.XP > 0 and line.Coins <= 0
+				then `+{line.XP} XP`
+				elseif line.XP > 0 then `+{line.Coins} {Theme.CoinIcon}  +{line.XP} XP`
 				else `+{line.Coins} {Theme.CoinIcon}`,
 			TextSize = if compact then 18 else 19,
 			TextColor3 = Theme.Colors.Yellow,

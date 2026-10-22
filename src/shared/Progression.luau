@@ -4,9 +4,14 @@
 -- the Cosmetics with an UnlockLevel (the road) or an UnlockStat (the career milestones).
 -- Second pass: the milestones in the order to go for them (SortedMilestones), for the Career tab
 -- and the celebration's next goal.
+-- The GOLD PASS (owner: "Also we do need a paid battle pass too. I like the current free one. But the
+-- paid one should also be insane."): the road's second lane. Every level from 2 to 100 has a gold
+-- reward, a cosmetic (an item's GoldLevel) or gold coins (Logic/GoldLane, Config.GoldRoad); the
+-- road shows the levels with a gold cosmetic too, and an owner's next goal can be a gold one.
 
 local Config = require(script.Parent.Config)
 local Cosmetics = require(script.Parent.Cosmetics)
+local GoldLane = require(script.Parent.Logic.GoldLane)
 local LevelCurve = require(script.Parent.Logic.LevelCurve)
 local ProgressionLogic = require(script.Parent.Logic.ProgressionLogic)
 
@@ -17,6 +22,8 @@ Progression.MaxLevel = LevelCurve.MaxLevel
 -- Road -------------------------------------------------------------------------------------------
 
 local byLevel: { [number]: { Cosmetics.Cosmetic } } = {}
+local goldByLevel: { [number]: { Cosmetics.Cosmetic } } = {}
+local goldLevels: { [string]: number } = {}
 local milestones: { Cosmetics.Cosmetic } = {}
 for _, item in Cosmetics.List do
 	if item.UnlockLevel then
@@ -25,15 +32,22 @@ for _, item in Cosmetics.List do
 		table.insert(list, item)
 	elseif item.UnlockStat then
 		table.insert(milestones, item)
+	elseif item.GoldLevel then
+		local list = goldByLevel[item.GoldLevel] or {}
+		goldByLevel[item.GoldLevel] = list
+		table.insert(list, item)
+		goldLevels[item.Id] = item.GoldLevel
 	end
 end
 -- On each level, trails and hats first (the most visible), then titles, effects and emotes.
 local SLOT_ORDER = { Trail = 1, Hat = 2, Title = 3, Victory = 4, Elimination = 5, Emote = 6 }
-for _, list in byLevel do
-	table.sort(list, function(a, b)
-		local sa, sb = SLOT_ORDER[a.Slot] or 9, SLOT_ORDER[b.Slot] or 9
-		return if sa == sb then a.Id < b.Id else sa < sb
-	end)
+for _, levels in { byLevel, goldByLevel } do
+	for _, list in levels do
+		table.sort(list, function(a, b)
+			local sa, sb = SLOT_ORDER[a.Slot] or 9, SLOT_ORDER[b.Slot] or 9
+			return if sa == sb then a.Id < b.Id else sa < sb
+		end)
+	end
 end
 
 -- The exclusive cosmetics reaching this level unlocks (the first is the one to show off).
@@ -57,17 +71,64 @@ function Progression.NextItemLevel(level: number): number?
 end
 
 -- The levels the Rewards screen shows a player at `current`: every level near them (2 back, 12
--- ahead), every level with an exclusive reward (the ones they have and the goals) and every 10th
--- (a new name tag color). The levels in between pay coins too; the screen says so.
+-- ahead), every level with an exclusive reward, free or gold (the ones they have and the goals) and
+-- every 10th (a new name tag color). The levels in between pay coins too; the screen says so.
 function Progression.RoadLevels(current: number): { number }
 	local levels = {}
 	for level = 2, LevelCurve.MaxLevel do
 		local near = level >= current - 2 and level <= current + 12
-		if near or byLevel[level] or level % 10 == 0 then
+		if near or byLevel[level] or goldByLevel[level] or level % 10 == 0 then
 			table.insert(levels, level)
 		end
 	end
 	return levels
+end
+
+-- Gold lane (the GOLD PASS) ------------------------------------------------------------------------
+
+-- Every level's gold reward (Logic/GoldLane): its coins, or its cosmetics.
+Progression.GoldLane = GoldLane.Build(goldLevels, Config.GoldRoad, LevelCurve.MaxLevel)
+
+-- The gold cosmetics reaching this level gives an owner (the first is the one to show off).
+function Progression.GoldItemsAt(level: number): { Cosmetics.Cosmetic }
+	return goldByLevel[level] or {}
+end
+
+-- The gold coins this level pays an owner (0 on a level with a gold cosmetic).
+function Progression.GoldCoins(level: number): number
+	local reward = Progression.GoldLane[level]
+	return if reward then reward.Coins else 0
+end
+
+-- How many gold rewards there are up to `level` (coin levels and cosmetics; 100 at level 100).
+function Progression.GoldRewardCount(level: number): number
+	return GoldLane.RewardCount(Progression.GoldLane, level)
+end
+
+-- The whole lane: its rewards, cosmetics and coins.
+Progression.GoldTotals = (function()
+	local items = 0
+	for _ in goldLevels do
+		items += 1
+	end
+	local coins = GoldLane.CoinsBetween(Progression.GoldLane, 1, LevelCurve.MaxLevel)
+	return { Rewards = Progression.GoldRewardCount(LevelCurve.MaxLevel), Items = items, Coins = coins }
+end)()
+
+-- The next exclusive reward above `level`: its level and item (nil once they're all unlocked). With
+-- `gold` (an owner) the gold lane counts too, and wins a level both lanes share.
+function Progression.NextReward(level: number, gold: boolean?): (number?, Cosmetics.Cosmetic?)
+	for candidate = math.max(1, level) + 1, LevelCurve.MaxLevel do
+		local goldItem = gold and goldByLevel[candidate] and goldByLevel[candidate][1]
+		if goldItem then
+			return candidate, goldItem
+		end
+		local item = byLevel[candidate] and byLevel[candidate][1]
+		if item then
+			return candidate, item
+		end
+	end
+	return nil, nil
 end
 
 -- Total XP a player needs to reach this level.

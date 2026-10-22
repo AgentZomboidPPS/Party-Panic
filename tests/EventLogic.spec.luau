@@ -274,7 +274,7 @@ test("event rewards are free cosmetics nobody can buy, each on its event's track
 		if string.find(block, "Event =", 1, true) then
 			count += 1
 			expectTrue(onTrack[id], `{id} is an event reward on no track`)
-			for _, field in { "Price =", "UnlockLevel =", "UnlockStat =", "Default =", "Vip =" } do
+			for _, field in { "Price =", "UnlockLevel =", "UnlockStat =", "Default =", "GoldLevel =" } do
 				expectTrue(not string.find(block, field, 1, true), `{id} is an event reward but has {field}`)
 			end
 			-- The shop's card names the event it came from (its Label).

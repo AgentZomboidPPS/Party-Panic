@@ -94,10 +94,22 @@ Config.RateLimits = {
 Config.EmoteCooldown = 1.5
 Config.ConfettiCannonCooldown = 8
 
--- Optional Robux products (§10). Leave as 0 until you create them in the Creator Dashboard.
+-- Robux products (§10). Leave as 0 until you create them in the Creator Dashboard.
+-- The GOLD PASS (owner: "Also we do need a paid battle pass too. I like the current free one. But the
+-- paid one should also be insane."): one permanent game pass that opens the Rewards Road's gold lane
+-- (Shared/GoldPass, Services/GoldPassService). It took over from the old VIP pass, which was never
+-- on sale. The pass is made (399 Robux, set on Roblox); the game asks Roblox for its price and
+-- whether it's for sale (GetProductInfo), so changing either on Roblox needs no update. While it's
+-- off sale, or with the id 0, nothing can be bought and the gold lane shows as a preview, COMING
+-- SOON. (The experience's creator always has it.)
 Config.Monetization = {
-	VipGamePassId = 0,
+	GoldPassId = 2048378768,
+	GoldPassPrice = 399, -- Robux: shown only if Roblox can't be asked for the price
 }
+-- The gold lane's coins and XP boost (Logic/GoldLane): a level without a gold cosmetic pays Base
+-- coins plus PerTen for every ten levels (6 at level 3, 15 at level 99: 733 over the lane's 67 coin
+-- levels, half again the free road's 487), and owners get XPBoost more XP from rounds (10%).
+Config.GoldRoad = { Base = 6, PerTen = 1, XPBoost = 0.1 }
 
 Config.Debug = {
 	LogPhases = true,

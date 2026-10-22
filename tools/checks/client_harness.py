@@ -498,7 +498,7 @@ local order = {
 	"AudioController", "NotificationController", "EffectsController", "AmbienceController",
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
-	"RewardsController", "CelebrationController",
+	"RewardsController", "CelebrationController", "GoldPassController",
 	"CupController", "InviteController", "PartyController", "MedalController", "HallOfFameController", "EventController",
 	"EmoteController", "SpectateController", "OnboardingController", "SkeeBallController", "AssetReportController",
 	"BotWatchController",
@@ -574,7 +574,7 @@ if __richMode then
 	data.Equipped.Title = "Title_Icon"
 	data.Equipped.Trail = "Trail_Starry"
 end
-local profile = { Data = data, IsVip = false, CanSave = not __richMode }
+local profile = { Data = data, CanSave = not __richMode }
 local okSnap, snapshot = pcall(DataService.BuildSnapshot, profile)
 if okSnap then
 	local byPeriod = { Daily = {}, Weekly = {} }

@@ -20,6 +20,20 @@
 --   * Either change leaves a note for the player in the profile (Meta.CoinNotice). DataService
 --     clears it only once the message was sent, so leaving before it shows never loses it.
 -- The career milestones count from the update on, except podiums: every win saved so far was one.
+--
+-- The GOLD PASS (owner: "Also we do need a paid battle pass too. I like the current free one. But the
+-- paid one should also be insane."), which took over from the old VIP pass:
+--   * The VIP pass's flag (IsVip) was never saved: it lived on the server's record of the session,
+--     was false for everyone (the VIP pass was never on sale) and was asked of Roblox on each join.
+--     The GOLD PASS is kept in the profile (GoldPass), so a player who owns it keeps it when Roblox's
+--     ownership check fails; Services/GoldPassService confirms it on every join.
+--   * Loading never grants the pass: only `Owned = true` (written when Roblox said they own it)
+--     counts, a broken GoldPass field goes back to its default (not owned), and a stray IsVip in a
+--     save means nothing and is dropped. A save from before the pass gets the default.
+--   * CoinsTo, the last level whose gold coins were paid, is a whole level, at least 1. It only goes
+--     up (Services/GoldPassService), so no level's gold coins are paid twice.
+--   * Servers still running older code keep the field as they found it (they keep fields they don't
+--     know), so a game there loses nothing; the levels reached there are paid on the next join.
 -- Leaf module: no requires, no Roblox APIs.
 
 local ProfileMigration = {}
@@ -106,7 +120,7 @@ end
 --      EconomyVersion, and its coins would never move to the low scale;
 --   2. every field `template` has and the save doesn't gets its default (`fill`: TableUtil.Reconcile,
 --      which never overwrites a saved value);
---   3. the counts worked out from other stats;
+--   3. the counts worked out from other stats, and the GOLD PASS field made safe (GoldPass);
 --   4. Version: this code's, never lowered (a newer server may have saved it).
 function ProfileMigration.Load(
 	data: { [string]: any },
@@ -119,11 +133,33 @@ function ProfileMigration.Load(
 	if type(data.Stats) == "table" then
 		data.Stats.GamesTried = ProfileMigration.GamesTried(data.Stats.ModePlays, knownGames)
 	end
+	ProfileMigration.GoldPass(data)
 	if type(data.Meta) == "table" then
 		ProfileMigration.NoteCoins(data.Meta, report)
 	end
 	data.Version = math.max(tonumber(data.Version) or 1, ProfileMigration.SchemaVersion)
 	return report
+end
+
+-- Makes a loaded profile's GOLD PASS field safe to use (see the top): known fields fixed in place
+-- (anything newer code keeps in it stays), never granting the pass, and the old IsVip dropped.
+function ProfileMigration.GoldPass(data: { [string]: any })
+	data.IsVip = nil
+	local saved = data.GoldPass
+	if type(saved) ~= "table" then
+		saved = {}
+		data.GoldPass = saved
+	end
+	saved.Owned = saved.Owned == true
+	local since = tonumber(saved.Since)
+	saved.Since = if since and since == since and since > 0 and since < math.huge then math.floor(since) else 0
+	local coinsTo = tonumber(saved.CoinsTo)
+	saved.CoinsTo = if coinsTo
+			and coinsTo == coinsTo
+			and coinsTo >= 1
+			and coinsTo < math.huge
+		then math.floor(coinsTo)
+		else 1
 end
 
 -- Leaves the note about what this load did to the coins in `meta.CoinNotice` (kept until the
