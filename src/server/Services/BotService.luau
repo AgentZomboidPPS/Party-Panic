@@ -678,6 +678,23 @@ local function simulate(dt: number)
 	end
 end
 
+-- Bots stay the server's (owner: "Bots are still rubber banding on spleef"). A part that is anchored
+-- for a moment (a mode's scripted fall, a put-back) goes back to automatic network ownership when it's
+-- unanchored, and the engine then hands the bot to the nearest player's device: everyone else sees it
+-- snap back and forth as it hops between players' devices, and the server's own pushes on it (velocity
+-- limits, knockback) fight that device. Checked with the rebalance loop, a few times a second.
+local function keepServerOwned(bot: Bot)
+	local root = bot:Root()
+	if not physics or not root or root.Anchored or not root:IsDescendantOf(workspace) then
+		return
+	end
+	local okAuto, auto = pcall(root.GetNetworkOwnershipAuto, root)
+	local okOwner, owner = pcall(root.GetNetworkOwner, root)
+	if (okAuto and auto) or (okOwner and owner ~= nil) then
+		pcall(root.SetNetworkOwner, root, nil)
+	end
+end
+
 function BotService.Init()
 	BotService.Setup()
 
@@ -693,6 +710,7 @@ function BotService.Init()
 			end
 			local now = os.clock()
 			for _, bot in BotRegistry.List() do
+				keepServerOwned(bot)
 				if not bot:GetAttribute("PP_InRound") then
 					local okStep, stepErr = pcall(BotService.LobbyStep, bot, now)
 					if not okStep then

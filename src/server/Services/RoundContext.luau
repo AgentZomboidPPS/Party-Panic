@@ -739,9 +739,14 @@ function RoundContext.BotAction(self: RoundContext, bot: any, name: string, ...:
 	end
 end
 
--- Hands physics of a part to a player's client (smooth control of their own vehicle or ball).
+-- Hands physics of a part to a player's client (smooth control of their own vehicle or ball). A
+-- bot's part goes to the server instead: left to automatic ownership (as a part is after being
+-- anchored) the engine would hand it to the nearest player's device, and the bot would rubber-band
+-- (owner: "Bots are still rubber banding on spleef").
 function RoundContext.GiveOwnership(_self: RoundContext, part: BasePart, player: Player)
-	if typeof(player) == "Instance" then
+	if BotRegistry.IsBot(player) then
+		pcall(part.SetNetworkOwner, part, nil)
+	elseif typeof(player) == "Instance" then
 		pcall(part.SetNetworkOwner, part, player)
 	end
 end
