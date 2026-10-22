@@ -1,25 +1,43 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-22 01:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-22 02:40 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (2026-10-22 01:00 UTC)
+## Session B in flight (2026-10-22 02:40 UTC)
 
-- **Live version 33** (published 00:58 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `d10b635`, on the
-  owner's "Can we push V33 out and then you keep working on everything?"; the owner must restart servers).
-  - **It was shipped after a quick check, not the full regression:**
+- **Live version 34** (published 02:38 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `1f08776`, on the
+  owner's "merge my branch claude/quirky-hopper-5yk8zk" and that window's "merge my branch ... and publish"; the owner
+  must restart servers).
+  - **Quick check on that exact commit:**
     - code checks;
-    - FireRope, SharkBait and EatsaPizza's 12-player, bots and phone rounds;
+    - the 12-player, bots and phone rounds of SinkingSands, PrimeCut, RockinRaceway, PumpAndPop, LogJam, Struggle,
+      ArrowAmbush and HoneyTrap;
     - a lobby round with 8 bots;
     - the whole client on phone and PC.
 
-    All passed with 0 errors and 0 render problems. One EatsaPizza bots run hit Roblox's transient "INTERNAL_ERROR Task
-    timed out" and passed on the re-run. **Run the full regression on it next** and fix anything it finds in v34.
-  - **What it adds to v32:** everything in the v33 candidate below, plus Messy Memory, Snowball Summit, Trace Race and
-    Eatsa Pizza: 25 games in all, 13 classics and 12 new.
-  - The store description (`docs/STORE_DESCRIPTION.txt`, updated after the publish) has to be pasted in Creator Hub by
-    the owner: `publish_place.py` can't set it (its settings PATCH gets a 403).
+    All had 0 errors and 0 render problems. The full regression of v33 (all 25 games) was clean.
+  - **What it adds to v33:**
+    - the invisible-collision sweep: precise mesh collision, no reachable invisible walls, and the CSG fallback from
+      pieces;
+    - no falling through floors on load-in (`ArrivalController`, plus a put-back before GO);
+    - the lobby at 20 s, with the vote ending 1 s after the last person votes;
+    - the rules card's ✕;
+    - the Sand King rework (BLAST, SUNKEN CHEST, stronger PULL);
+    - team identity (Prime Cut's grills, the YOU'RE ON tab, the YOU mark on the pill);
+    - Rockin' Raceway's 3D hurdles;
+    - Log Jam and Struggle (27 games);
+    - Tanks! and Snowball Summit bot fixes;
+    - the vote-variety spec;
+    - all 27 portal previews;
+    - Stamp Out's 👣 icon;
+    - the Skee-Ball flicker and grass fix;
+    - from the owner's other window's branch `claude/quirky-hopper-5yk8zk`: per-game round songs (5 packs, NOT
+      uploaded yet, so every game plays Panic Mode until `AudioAssets` gets the ids) and Friends (invite chip, +1 coin
+      with a friend, beat-a-friend moments).
+  - **Store description:** `docs/STORE_DESCRIPTION.txt` lists 27 games. The owner pastes it in Creator Hub, because
+    publish_place can't set it (403).
+- Version 33 was published 00:58 UTC from `d10b635` after a quick check; its full regression was clean afterwards.
 - Version 32 was published 21:55 UTC from `6e0029b` after a full regression.
 - **Merged since v32 (live in v33):**
   It's v32 plus:
