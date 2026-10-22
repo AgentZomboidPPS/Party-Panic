@@ -740,13 +740,23 @@ local function work()
 	end)
 end
 
-local function preciseCollision(name: string, model: Model, pieces: { MeshPart })
+-- `first`: a prop that players' devices make solid themselves (Precise = true) goes before every
+-- other, so it's done long before a round shares it with them: copies they cloned before it was
+-- done would keep the rough hull (Arrow Ambush's target boards).
+local function preciseCollision(name: string, model: Model, pieces: { MeshPart }, first: boolean)
 	if #pieces == 0 then
 		return
 	end
 	local descendants = model:GetDescendants()
-	local rebuild: Rebuild =
-		{ Name = name, Model = model, Pieces = pieces, Indices = {}, Todo = {}, Copies = {}, UsedAt = 0 }
+	local rebuild: Rebuild = {
+		Name = name,
+		Model = model,
+		Pieces = pieces,
+		Indices = {},
+		Todo = {},
+		Copies = {},
+		UsedAt = if first then math.huge else 0,
+	}
 	for index, part in pieces do
 		rebuild.Indices[index] = table.find(descendants, part) :: number
 		rebuild.Todo[index] = index
@@ -817,7 +827,7 @@ local function normalize(name: string, model: Model, spec: Spec)
 	if spec.PostProcess then
 		spec.PostProcess(model)
 	end
-	preciseCollision(name, model, solidMeshes)
+	preciseCollision(name, model, solidMeshes, spec.Precise == true)
 end
 
 local function build(name: string, spec: Spec): Model
