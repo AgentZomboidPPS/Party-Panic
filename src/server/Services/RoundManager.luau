@@ -23,6 +23,11 @@
 -- out in), and a fresh round, so team games deal their teams again. At most Config.Session.MaxReplays
 -- replays in a row, and a replay doesn't add the game to the vote's recent list again
 -- (Logic/ReplayVote.Remember): the next vote still skips it and plays down the game before it.
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): someone who joins just before a round
+-- (during the vote, or during the results before a replay) and loads in time plays it, but 4 s in
+-- they were still told "A round is in progress ... Explore the lobby meanwhile" over the rules
+-- card. That's only said to newcomers the round didn't take in now.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -446,7 +451,12 @@ function RoundManager.Init()
 	Players.PlayerAdded:Connect(function(player)
 		task.delay(4, function()
 			local phase = GameState.Get("Phase")
-			if player.Parent and (phase == "Preparing" or phase == "InRound" or phase == "Results") then
+			-- (Not to someone the round took in: they joined just before it, or a replay, and play it.)
+			if
+				player.Parent
+				and (phase == "Preparing" or phase == "InRound" or phase == "Results")
+				and player:GetAttribute("PP_InRound") ~= true
+			then
 				Notifier.Send(
 					player,
 					"A round is in progress - the next vote begins soon! Explore the lobby meanwhile.",
