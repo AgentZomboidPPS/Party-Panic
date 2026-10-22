@@ -272,7 +272,7 @@ local list: { GameDefinition } = {
 		Id = "StampOut",
 		Name = "Stamp Out",
 		Category = "Versus",
-		Icon = "🖍️",
+		Icon = "👣", -- Trace Race has the crayon
 		Color = Color3.fromRGB(235, 90, 120),
 		Objective = "Bounce your rubber stamp around the paper and ink it with your colour. Cover the most paper to win!",
 		Controls = "Steer with the stick or WASD. Tap STAMP (E) to hop, hold it for a long jump. Land on rivals' ink to take it!",
@@ -344,7 +344,6 @@ local list: { GameDefinition } = {
 		Duration = 30,
 		MinPlayers = 2,
 		IsTeam = true,
-		Enabled = false, -- in its review-fix pass (games-4 session); that session turns it on when it's done
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{

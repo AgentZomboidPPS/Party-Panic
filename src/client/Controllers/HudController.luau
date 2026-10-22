@@ -412,8 +412,9 @@ local function followTimer(timerPill: Frame, timer: TextLabel)
 		timerPill.Visible = GameState.Get("PhaseEndsAt") > 0
 		timer.Text = UIKit.FormatTime(left)
 		local whole = math.ceil(left)
-		-- Urgency: the timer turns red and pulses in the last 10 seconds of a round or vote.
-		local urgent = (phase == "InRound" or phase == "Voting") and left > 0 and left <= 10
+		-- Urgency: the timer turns red and pulses in the last 10 seconds of a round, and the last 3 of
+		-- the vote (it's only 8 long now, owner: "Less time sitting in the lobby").
+		local urgent = left > 0 and ((phase == "InRound" and left <= 10) or (phase == "Voting" and left <= 3))
 		timer.TextColor3 = if urgent then Theme.Colors.Red else Theme.Colors.Yellow
 		if urgent and whole ~= lastWhole then
 			UIKit.PopIn(timerPill, 0.25)

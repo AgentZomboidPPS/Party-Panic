@@ -12,13 +12,28 @@ That's why mini-games check positions and distances on the server instead of rel
 With --client, Bot1 runs the client half like a real player in the round. --client-sits-out makes it a
 spectator instead (sitting the round out: on the server with PP_SitOut, not in the round), and
 --client-out-at T knocks it out T seconds into the round (ctx:Eliminate): with --ui-at, what someone
-watching sees (no mode buttons for them, for one).
+watching sees (no mode buttons for them, for one). --ui-at also takes "rules" (the screen with the
+rules card up) and "closed" (just after the player closed it with its ✕); the summary's "rulesCard"
+says what was up each time and what the 3-2-1 showed after.
+
+LOBBY plays the time between rounds (Config.Session's results, lobby and vote times) three times with
+two stand-in people voting and --bots bots wandering: a vote everyone answers (it ends a beat after
+the last vote), one somebody skips (its full time), and one where the last voter-to-be sits out. The
+summary's "phases" and "votes" say when each phase started and how each vote went.
 
 During the rules card: --leave-at T makes every stand-in leave T seconds in, and --spawn-fails gives
 them no character, so with --bots only bots are left: the round is called off (summary: calledOff).
 --reset-at T kills the last stand-in's character T seconds in (a reset); the summary's "reset" says
-where it is at GO and after. --bot FILE swaps the stand-ins' script (tools/checks/bots/<Id>.luau) for
-a scenario of your own, e.g. tools/checks/scenarios/*.luau.
+where it is at GO and after. --drop-at T drops the last stand-in through its floor to under KillY T
+seconds in (as on a device that hadn't loaded the floor); the summary's "drop" says where it is a
+moment later, at GO and after (back on its spot, the same character, still in). --bot FILE swaps the
+stand-ins' script (tools/checks/bots/<Id>.luau) for a scenario of your own, e.g.
+tools/checks/scenarios/*.luau.
+
+With --client, the summary's "clientHolds" lists every time the stand-in client's device held its
+character (Controllers/ArrivalController): never, once it's on a floor that's there. --late-floor T
+gives that device the arena T seconds late (its ground probe finds nothing until then, like a phone
+still loading a big arena): it must be held where the round put it until then.
 """
 
 import argparse
@@ -28,6 +43,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import bundling  # noqa: E402  (only the modules a run needs: Open Cloud's 1 MiB script cap)
 from ui_render import devices_luau, size_names  # noqa: E402  (the screens the engine lays the UI out on)
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -138,6 +154,15 @@ def other_mode(module: str, game: str) -> bool:
 # would go over Luau execution's 1 MB script limit as the game list grows.
 LOBBY_MODES = {"FireRope", "HexMeltdown", "HoneyTrap", "BumperBallers"}
 
+# --ui-at snapshots that aren't round times (tools/checks/harness_prelude.luau, __rulesShots).
+UI_SHOTS = ("rules", "closed")
+
+
+def ui_time(token: str) -> str:
+    """One --ui-at entry as Luau: a round time (seconds), or one of UI_SHOTS by name."""
+    token = token.strip()
+    return f'"{token}"' if token in UI_SHOTS else str(float(token))
+
 
 def slim(text: str) -> str:
     """Comment-only lines blanked and indentation dropped, with every line kept where it is (the line
@@ -147,10 +172,41 @@ def slim(text: str) -> str:
     return re.sub(r"(?m)^[ \t]+", "", text)
 
 
-PRELUDE = slim(
-    (Path(__file__).resolve().parent / "gui_dump.luau").read_text()
-    + (Path(__file__).resolve().parent / "harness_prelude.luau").read_text()
-)
+PRELUDE_RAW = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (
+    Path(__file__).resolve().parent / "harness_prelude.luau"
+).read_text()
+PRELUDE = slim(PRELUDE_RAW)
+# The collider inventory's Luau (--colliders-at): appended to the prelude when asked for.
+COLLIDERS_RAW = (Path(__file__).resolve().parent / "colliders.luau").read_text()
+COLLIDERS = slim(COLLIDERS_RAW)
+
+
+def reachable_luau(text: str, entry: str) -> str:
+    """The harness's own Luau a run can execute: its top-level code and the top-level functions it
+    reaches from `entry` (__runRound, __runLobby, __runSkeeBall), so a mode's bundle doesn't carry
+    what only the lobby run requires."""
+    blocks, top, current = {}, [], None
+    for line in text.split("\n"):
+        start = re.match(r"(?:local )?function (__\w+)\(", line)
+        if current is None and start:
+            current = start.group(1)
+            blocks[current] = [line]
+        elif current is not None:
+            blocks[current].append(line)
+            if line == "end":
+                current = None
+        else:
+            top.append(line)
+    top_text = "\n".join(top)
+    used, todo = set(), [entry] + [name for name in blocks if re.search(rf"\b{name}\b", top_text)]
+    while todo:
+        name = todo.pop()
+        if name in used or name not in blocks:
+            continue
+        used.add(name)
+        body = "\n".join(blocks[name][1:])
+        todo.extend(other for other in blocks if other not in used and re.search(rf"\b{other}\b", body))
+    return top_text + "\n" + "\n".join("\n".join(blocks[name]) for name in sorted(used))
 
 
 def main():
@@ -158,13 +214,15 @@ def main():
     parser.add_argument("game", help="mode id, LOBBY for the lobby with bots (uses --bots, --seconds), or SKEEBALL "
                         "for a Skee-Ball game in the lobby's arcade (tools/checks/skeeball_game.luau)")
     parser.add_argument("--players", type=int, default=12)
-    parser.add_argument("--seconds", type=float, default=0, help="stop after this many seconds (0 = game length)")
+    parser.add_argument("--seconds", type=float, default=0, help="stop after this many seconds (0 = game length); "
+                        "LOBBY: the run lasts at least this long (the bots keep wandering)")
     parser.add_argument("--client", action="store_true", help="also run the client half as Bot1")
     parser.add_argument("--dump-at", type=float, default=None, help="snapshot the arena this many seconds into the round")
     parser.add_argument("--map", help="write a line map (bundle line -> module) here for readable errors")
     parser.add_argument("--touch", action="store_true", help="the stand-in client is a phone (touch, no keyboard)")
     parser.add_argument("--bots", type=int, default=0, help="also add this many real bots, played by the mode's brain (MiniGames/Bots/<Id>)")
-    parser.add_argument("--ui-at", help="with --client: snapshot the player's screen UI at these round times, e.g. 2,10 (see ui_render.py)")
+    parser.add_argument("--ui-at", help="with --client: snapshot the player's screen UI at these round times, e.g. 2,10, "
+                        "and/or 'rules' (the rules card up) and 'closed' (just after its ✕ closed it) (see ui_render.py)")
     parser.add_argument("--sizes", help="with --ui-at: screens to lay the UI out on with the engine (ui_render.py's "
                         "names or groups; default: touch with --touch, else pc)")
     parser.add_argument("--client-sits-out", action="store_true", help="with --client: Bot1 sits this round out and watches")
@@ -172,28 +230,58 @@ def main():
     parser.add_argument("--leave-at", type=float, default=None, help="every stand-in leaves this many seconds into the rules card")
     parser.add_argument("--spawn-fails", action="store_true", help="the stand-ins have no character, so they can't be placed")
     parser.add_argument("--reset-at", type=float, default=None, help="the last stand-in's character dies this many seconds into the rules card")
+    parser.add_argument("--drop-at", type=float, default=None, help="the last stand-in drops through its floor this many seconds into the rules card")
+    parser.add_argument("--late-floor", type=float, default=None, help="with --client: the stand-in client's device gets the arena this many seconds late")
     parser.add_argument("--bot", help="stand-in script to use instead of tools/checks/bots/<Id>.luau")
+    parser.add_argument("--colliders-at", help="snapshot every part characters collide with at these round times (0 = after "
+                        "Prepare), e.g. 0,5,80, for tools/checks/colliders.py; with LOBBY: the lobby's")
+    parser.add_argument("--colliders-reach", type=float, default=600, help="with --colliders-at: map this far from the arena's middle")
+    parser.add_argument("--no-csg", action="store_true", help="build as if CSG had failed on this server (Shapes from plain parts)")
     args = parser.parse_args()
 
     header = "__touchMode = true\n" if args.touch else "__touchMode = false\n"
+    header += "__noCsg = true\n" if args.no_csg else "__noCsg = false\n"
     if args.ui_at:
         header += devices_luau(size_names(args.sizes or ("touch" if args.touch else "pc")))
-    out = [header + PRELUDE]
+    prelude = PRELUDE + ("\n" + COLLIDERS if args.colliders_at is not None else "")
+    out = [header + prelude]
     paths = module_paths()
     if args.client:
         paths.update(client_paths())
-    line_map = []  # (first line of the module body in the bundle, module name)
-    line = PRELUDE.count("\n") + header.count("\n") + 1  # the __touchMode (and __devices) lines come first
+    lobby = args.game in ("LOBBY", "SKEEBALL")
+    available = {}
     for module, path in paths.items():
         if module == "Shared/Remotes":
             continue  # replaced by the harness's recording stand-in
-        lobby = args.game in ("LOBBY", "SKEEBALL")
         if not lobby and other_mode(module, args.game):
-            continue  # keeps the bundle under Luau execution's 1 MB script limit
+            continue  # another mode's
         if lobby and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES):
             continue  # the lobby keeps LOBBY_MODES only
-        is_init = path.name == "init.luau"
-        body = slim(rewrite(module, path.read_text(), is_init))
+        available[module] = slim(rewrite(module, path.read_text(), path.name == "init.luau"))
+    # Only what this run can load (tools/checks/bundling.py): the modules the harness's own Luau asks
+    # for and everything they reach. A require the bundler can't follow stops the build here.
+    bot_file = Path(args.bot) if args.bot else BOTS / f"{args.game}.luau"
+    bot = bot_file.read_text() if bot_file.exists() else "return function() end"
+    harness = PRELUDE_RAW
+    entry = "__runRound"
+    if args.colliders_at is not None:
+        harness += "\n" + COLLIDERS_RAW
+    if args.game == "SKEEBALL":
+        harness += "\n" + (Path(__file__).resolve().parent / "skeeball_game.luau").read_text()
+        entry = "__runSkeeBall"
+    elif args.game == "LOBBY":
+        entry = "__runLobbyColliders" if args.colliders_at is not None else "__runLobby"
+    roots = {"Shared", "Server"} | ({"Client"} if args.client else set())
+    try:
+        start = bundling.seeds(reachable_luau(harness, entry) + "\n" + bot, args.game, available, roots)
+        keep = bundling.closure(available, start, provided={"Shared/Remotes"})
+    except bundling.BundleError as err:
+        sys.exit(f"round_harness: {err}")
+    line_map = []  # (first line of the module body in the bundle, module name)
+    line = prelude.count("\n") + header.count("\n") + 1  # the __touchMode (and __devices) lines come first
+    for module, body in available.items():
+        if module not in keep:
+            continue
         out.append(f'__modules["{module}"] = function()')
         line += 1
         line_map.append((line, module))
@@ -203,29 +291,35 @@ def main():
         line += 1
     if args.map:
         Path(args.map).write_text(json.dumps(line_map))
-    bot_file = Path(args.bot) if args.bot else BOTS / f"{args.game}.luau"
-    bot = bot_file.read_text() if bot_file.exists() else "return function() end"
     out.append("local __bot = (function()\n" + bot + "\nend)()")
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)
-    ui = "nil" if not args.ui_at else "{" + ", ".join(str(float(t)) for t in args.ui_at.split(",")) + "}"
-    if args.game == "SKEEBALL":
+    ui = "nil" if not args.ui_at else "{" + ", ".join(ui_time(t) for t in args.ui_at.split(",")) + "}"
+    if args.game == "LOBBY" and args.colliders_at is not None:
+        out.append(f"return __runLobbyColliders({args.colliders_reach})")
+    elif args.game == "SKEEBALL":
         out.append((Path(__file__).resolve().parent / "skeeball_game.luau").read_text())
         out.append("return __runSkeeBall()")
     elif args.game == "LOBBY":
-        out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8}, 10)")
+        out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8})")
     else:
         def number(value):
             return "nil" if value is None else str(value)
 
-        watch = "{ sitOut = %s, outAt = %s, leaveAt = %s, spawnFails = %s, resetAt = %s }" % (
+        watch = "{ sitOut = %s, outAt = %s, leaveAt = %s, spawnFails = %s, resetAt = %s, dropAt = %s, lateFloor = %s }" % (
             "true" if args.client_sits_out else "false",
             number(args.client_out_at),
             number(args.leave_at),
             "true" if args.spawn_fails else "false",
             number(args.reset_at),
+            number(args.drop_at),
+            number(args.late_floor),
         )
-        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots}, {watch})')
+        colliders = "nil"
+        if args.colliders_at is not None:
+            times = ", ".join(str(float(t)) for t in args.colliders_at.split(","))
+            colliders = "{ times = { %s }, reach = %s }" % (times, args.colliders_reach)
+        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots}, {watch}, {colliders})')
     sys.stdout.write("\n".join(out))
 
 

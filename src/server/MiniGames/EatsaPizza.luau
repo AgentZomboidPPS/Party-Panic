@@ -623,7 +623,8 @@ function EatsaPizza:_leave(player: any)
 			local hadFood = slice.Left > 0
 			slice.Max = math.max(1, math.floor(slice.Max * factor + 0.5))
 			slice.Left = math.clamp(math.floor(slice.Left * factor + 0.5), if hadFood then 1 else 0, slice.Max)
-			local stage = Logic.Stage(slice.Left, slice.Max)
+			-- (A slice only ever gets smaller: rounding must never grow it back a stage.)
+			local stage = math.max(slice.Stage, Logic.Stage(slice.Left, slice.Max))
 			if stage ~= slice.Stage then
 				slice.Stage = stage
 				self:_drawSlice(slice)
@@ -633,17 +634,24 @@ function EatsaPizza:_leave(player: any)
 	end
 	self:_shareLayout()
 	self.dirty = true
-	-- Every rival left: the team still here wins.
-	if self.phase == "Eat" and #self.order >= 2 then
-		local left = {}
-		for _, team in self.order do
-			if not self.teams[team].Gone then
-				table.insert(left, team)
-			end
+	if self.phase == "Eat" then
+		self:_checkUnopposed()
+	end
+end
+
+-- Every rival left: the team still here wins.
+function EatsaPizza:_checkUnopposed()
+	if #self.order < 2 then
+		return
+	end
+	local left = {}
+	for _, team in self.order do
+		if not self.teams[team].Gone then
+			table.insert(left, team)
 		end
-		if #left == 1 then
-			self:_finish(left[1], "Unopposed")
-		end
+	end
+	if #left == 1 then
+		self:_finish(left[1], "Unopposed")
 	end
 end
 
@@ -656,6 +664,11 @@ function EatsaPizza:Start()
 	end
 	self.phase = "Eat"
 	self:_shareLayout()
+	-- (A whole team may have gone before GO.)
+	self:_checkUnopposed()
+	if self.phase ~= "Eat" then
+		return
+	end
 
 	ctx:OnAction("Eat", function(player)
 		self:_bite(player)

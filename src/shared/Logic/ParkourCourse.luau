@@ -34,7 +34,11 @@ ParkourCourse.MinMargin = 2.5 -- every jump keeps this much reach to spare (phon
 ParkourCourse.PoolRadius = 23 -- the goo's edge (the fence stands just outside it)
 ParkourCourse.Floor = 2.2 -- the pool's floor, a stud under the goo (players sink into it)
 ParkourCourse.GooTop = 3.2
-ParkourCourse.FenceTop = 20.2 -- the invisible wall round the pool: out of reach from the ground
+-- The invisible wall round the pool, out of reach from the ground and from every piece: it was 20.2,
+-- a hop from CHECKPOINT 2 (19), and players walked round on it and over to the vote stage (owner:
+-- "Theres invisible stuff you can jump on and hang on"). Now 34: the 22.6 pieces need 29.8, and
+-- the tower's ledges and deck are too far in to fall onto it.
+ParkourCourse.FenceTop = 34
 ParkourCourse.TowerRadius = 5.5
 ParkourCourse.Opening = 12 -- half the fence's gap at the start, in degrees
 
