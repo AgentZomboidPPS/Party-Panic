@@ -15,7 +15,7 @@ track (modes.py says how they're written); this tool turns them into what the ga
         and writes their ids into RoundMusic.luau
 
 Why packed: Roblox allows 10 audio uploads a month without ID verification (100 with). One file
-per mini-game would need 25+ uploads; packing up to 9 minutes of tracks per file needs 4, and
+per mini-game would need 25+ uploads; packing ~6 minutes of tracks per file needs about 5, and
 the client plays each track as a PlaybackRegion + LoopRegion of its file (like the effects
 sprite). A pack keeps its id until its content changes (assets/audio/music/rounds/packs.json).
 
@@ -63,10 +63,10 @@ INTRO_MIN = 13.0
 TARGET_LUFS = -11.0
 LUFS_TOLERANCE = 0.5
 MAX_TRUE_PEAK = -1.0
-PACK_SECONDS = 540.0  # the most music in one uploaded file (25 tracks in 4 files)
+PACK_SECONDS = 360.0  # the most music in one uploaded file
 PACK_GAP = 1.0  # silence between tracks in a pack (a region seek never catches the next track)
 TRACK_QUALITY = "6"  # vorbis quality of the per-track renders (kept as the masters)
-PACK_QUALITY = "3"  # and of the packed files the game downloads (~112 kbps, ~7 MB a file)
+PACK_QUALITY = "4"  # and of the packed files the game downloads (~128 kbps)
 
 
 def durations() -> dict[str, float]:
