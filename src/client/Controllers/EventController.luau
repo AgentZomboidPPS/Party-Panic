@@ -212,7 +212,7 @@ local function stepCard(
 	order: number,
 	step: EventLogic.Step,
 	mine: EventLogic.Progress,
-	height: number,
+	size: Vector2,
 	medal: boolean -- the track's last step, which also gives the event's medal
 )
 	local item = Cosmetics.Get(step.Reward)
@@ -224,7 +224,7 @@ local function stepCard(
 	local ready = not claimed and mine.Candy >= step.Candy
 	local card = UIKit.Panel({
 		Name = step.Reward,
-		Size = UDim2.fromOffset(176, height),
+		Size = UDim2.fromOffset(size.X, size.Y),
 		LayoutOrder = order,
 		CornerRadius = 18,
 		Parent = parent,
@@ -412,8 +412,10 @@ local function render()
 		ticking[label] = weekend
 	end
 
-	-- The track: one card a step, in order.
+	-- The track: one card a step, in order, every card in the window's width (940 units) side by side.
 	local cardHeight = if touch then 212 else 270
+	local steps = #definition.Track
+	local cardSize = Vector2.new(math.min(176, math.floor((940 - 10 * (steps - 1)) / steps)), cardHeight)
 	local track = UIKit.new("ScrollingFrame", {
 		Name = "Track",
 		Size = UDim2.new(1, 0, 0, cardHeight + 8),
@@ -430,7 +432,7 @@ local function render()
 		},
 	})
 	for order, step in definition.Track do
-		stepCard(track, order, step, mine, cardHeight, order == #definition.Track and definition.Medal ~= nil)
+		stepCard(track, order, step, mine, cardSize, order == steps and definition.Medal ~= nil)
 	end
 
 	-- Where candy comes from (and the medal, once the track is done).

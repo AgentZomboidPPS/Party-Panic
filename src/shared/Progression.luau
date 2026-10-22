@@ -27,8 +27,8 @@ for _, item in Cosmetics.List do
 		table.insert(milestones, item)
 	end
 end
--- On each level, trails first (the most visible), then titles, effects and emotes.
-local SLOT_ORDER = { Trail = 1, Title = 2, Victory = 3, Elimination = 4, Emote = 5 }
+-- On each level, trails and hats first (the most visible), then titles, effects and emotes.
+local SLOT_ORDER = { Trail = 1, Hat = 2, Title = 3, Victory = 4, Elimination = 5, Emote = 6 }
 for _, list in byLevel do
 	table.sort(list, function(a, b)
 		local sa, sb = SLOT_ORDER[a.Slot] or 9, SLOT_ORDER[b.Slot] or 9

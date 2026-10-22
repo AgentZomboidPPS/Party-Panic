@@ -31,6 +31,7 @@ export type Event = {
 	Medal: string?, -- MedalService id, for finishing the reward track
 	Candy: { Played: number, TopHalf: number, Win: number, Pumpkin: number, PumpkinsPerDay: number },
 	Track: { { Candy: number, Reward: string } }, -- in order; the last step is the whole track
+	Headline: string?, -- the track's star reward, shown off on the Rewards screen too
 	Decor: string?, -- World/EventDecor's lobby decorations (and each device's lobby look)
 	-- The lobby's light on each device while the event is on (colours as { r, g, b }, 0-255).
 	Look: {
@@ -63,9 +64,12 @@ Events.List = {
 			{ Candy = 10, Reward = "Emote_CandyToss" },
 			{ Candy = 25, Reward = "Title_PumpkinKing" },
 			{ Candy = 45, Reward = "Elim_Spooked" },
+			{ Candy = 55, Reward = "Hat_Pumpkin" },
 			{ Candy = 70, Reward = "Victory_BatBurst" },
 			{ Candy = 100, Reward = "Trail_CandyCorn" },
 		},
+		-- The one to show off: the Rewards screen's road opens with it (owner: "do pumpkin hat now").
+		Headline = "Hat_Pumpkin",
 		Decor = "Halloween",
 		-- Dusk in the lobby: warm light, purple shadows (kept bright enough for phones).
 		Look = {

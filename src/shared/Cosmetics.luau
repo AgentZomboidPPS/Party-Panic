@@ -9,12 +9,15 @@
 -- wont mess with what the other workers are working on right?"): an item with Event = "<event id>"
 -- is a step of that limited-time event's free reward track (Shared/Events), claimed with candy in the
 -- event screen and never sold; the shop's card says which event it came from (Shared/Events' Label).
+-- Hats (owner: "do pumpkin hat now"): the Hat slot is worn on the head in the lobby (World/Hats builds
+-- each as an Accessory; Services/CosmeticService puts it on and takes it off). The PUMPKIN HAT is the
+-- HALLOWEEN PARTY's headline reward.
 
 local GameDefinitions = require(script.Parent.GameDefinitions)
 
 export type Cosmetic = {
 	Id: string,
-	Slot: string, -- "Trail" | "Title" | "Emote" | "Victory" | "Elimination"
+	Slot: string, -- "Trail" | "Hat" | "Title" | "Emote" | "Victory" | "Elimination"
 	Name: string,
 	Description: string,
 	Icon: string,
@@ -587,7 +590,7 @@ local list: { Cosmetic } = {
 		Slot = "Title",
 		Name = "Pumpkin King",
 		Description = "Ruler of the pumpkin patch.",
-		Icon = "🎃",
+		Icon = "👑",
 		Event = "Halloween2026",
 		Colors = { rgb(255, 150, 40) },
 	},
@@ -599,6 +602,15 @@ local list: { Cosmetic } = {
 		Icon = "🕸️",
 		Event = "Halloween2026",
 		Effect = "Spooky",
+	},
+	{
+		Id = "Hat_Pumpkin",
+		Slot = "Hat",
+		Name = "Pumpkin Hat",
+		Description = "A carved jack-o'-lantern that glows.",
+		Icon = "🎃",
+		Event = "Halloween2026",
+		Colors = { rgb(255, 128, 24), rgb(255, 186, 64) },
 	},
 	{
 		Id = "Victory_BatBurst",
@@ -625,10 +637,11 @@ local Cosmetics = {
 	List = list,
 	ById = {} :: { [string]: Cosmetic },
 	-- Slots a player equips one item into (emotes are not equipped; every owned emote is usable).
-	EquipSlots = { "Trail", "Title", "Victory", "Elimination" },
+	EquipSlots = { "Trail", "Hat", "Title", "Victory", "Elimination" },
 	-- What each slot is called on reward cards ("TRAIL", "KNOCKOUT").
 	SlotNames = {
 		Trail = "Trail",
+		Hat = "Hat",
 		Title = "Title",
 		Emote = "Emote",
 		Victory = "Victory",
@@ -636,6 +649,7 @@ local Cosmetics = {
 	} :: { [string]: string },
 	ShopTabs = {
 		{ Slot = "Trail", Label = "Trails", Icon = "🌈" },
+		{ Slot = "Hat", Label = "Hats", Icon = "🎩" },
 		{ Slot = "Title", Label = "Titles", Icon = "🏷️" },
 		{ Slot = "Emote", Label = "Emotes", Icon = "🕺" },
 		{ Slot = "Victory", Label = "Victory", Icon = "🏆" },
