@@ -1,12 +1,28 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-22 16:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-22 19:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
 ## Session B in flight (2026-10-22 16:00 UTC)
 
-- **Live version 38** (published ~17:10 UTC on 2026-10-22 from a hotfix copy, `8579655` in the detached worktree
+- **Live version 39** (published ~18:54 UTC on 2026-10-22 from `0b9ff72`, the integration tip, under the owner's standing
+  word). It adds to version 38:
+  - the party glow-up (party names, colours and emblems, squad bar, avatar-card window, PARTY UP!, invite ring, SQUAD
+    card, lobby rings, beams and crests, round outlines, streak) and its phone fixes;
+  - the GOLD PASS (gold lane on the Level Road, 100 rewards, +10% XP, gold name tag). The game pass 2048378768 went
+    **on sale at 399 Robux** right after the publish, with the listing text in GoldPass.Listing and the icon
+    assets/store/gold_pass_512.png (icon image 100580787617551). The creator always owns it, so a first real purchase
+    needs another account;
+  - phones: the vote cards at the bottom middle, 25% bigger (they reach into the MOVE stick's corner by design,
+    PP_Popup), Skee-Ball's controls rise above them, the squad bar steps aside;
+  - Minecart Mayhem's phone camera, JUMP gates and on-cart cue; Messy Memory's straight-on phone camera, booth walls,
+    and no jump button; Trace Race lets riders wander out of their lane (no points there); a new Minecart preview.
+  - Checks: all 30 modes 0 errors (Rockin' Raceway's race-bar dots overlapped mid-ease in one phone snapshot, a known
+    flake), the lobby, and the client on phone and PC with 0 problems.
+  - Tools: round_harness bundles had grown past Open Cloud's 1 MiB cap; e457e74 fixed it (largest now ~1.01 MB:
+    Shark Bait's phone run, Pump & Pop with a party). Watch it when more client code lands (the held shop pass).
+- **Version 38** (published ~17:10 UTC on 2026-10-22 from a hotfix copy, `8579655` in the detached worktree
   /home/user/pp-hotfix: version 37's `5783546` plus cherry-picks of the fixes below; the same commits are on this branch).
   It adds to version 37:
   - Struggle's invisible bats (owner: "Friend cant see the bat."): a device copied the shared bat model before all of its
