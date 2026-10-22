@@ -28,6 +28,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import bundling  # noqa: E402  (only the modules a run needs: Open Cloud's 1 MiB script cap)
 from ui_render import devices_luau, size_names  # noqa: E402  (the screens the engine lays the UI out on)
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -147,10 +148,38 @@ def slim(text: str) -> str:
     return re.sub(r"(?m)^[ \t]+", "", text)
 
 
-PRELUDE = slim(
-    (Path(__file__).resolve().parent / "gui_dump.luau").read_text()
-    + (Path(__file__).resolve().parent / "harness_prelude.luau").read_text()
-)
+PRELUDE_RAW = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (
+    Path(__file__).resolve().parent / "harness_prelude.luau"
+).read_text()
+PRELUDE = slim(PRELUDE_RAW)
+
+
+def reachable_luau(text: str, entry: str) -> str:
+    """The harness's own Luau a run can execute: its top-level code and the top-level functions it
+    reaches from `entry` (__runRound, __runLobby, __runSkeeBall), so a mode's bundle doesn't carry
+    what only the lobby run requires."""
+    blocks, top, current = {}, [], None
+    for line in text.split("\n"):
+        start = re.match(r"(?:local )?function (__\w+)\(", line)
+        if current is None and start:
+            current = start.group(1)
+            blocks[current] = [line]
+        elif current is not None:
+            blocks[current].append(line)
+            if line == "end":
+                current = None
+        else:
+            top.append(line)
+    top_text = "\n".join(top)
+    used, todo = set(), [entry] + [name for name in blocks if re.search(rf"\b{name}\b", top_text)]
+    while todo:
+        name = todo.pop()
+        if name in used or name not in blocks:
+            continue
+        used.add(name)
+        body = "\n".join(blocks[name][1:])
+        todo.extend(other for other in blocks if other not in used and re.search(rf"\b{other}\b", body))
+    return top_text + "\n" + "\n".join("\n".join(blocks[name]) for name in sorted(used))
 
 
 def main():
@@ -182,18 +211,38 @@ def main():
     paths = module_paths()
     if args.client:
         paths.update(client_paths())
-    line_map = []  # (first line of the module body in the bundle, module name)
-    line = PRELUDE.count("\n") + header.count("\n") + 1  # the __touchMode (and __devices) lines come first
+    lobby = args.game in ("LOBBY", "SKEEBALL")
+    available = {}
     for module, path in paths.items():
         if module == "Shared/Remotes":
             continue  # replaced by the harness's recording stand-in
-        lobby = args.game in ("LOBBY", "SKEEBALL")
         if not lobby and other_mode(module, args.game):
-            continue  # keeps the bundle under Luau execution's 1 MB script limit
+            continue  # another mode's
         if lobby and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES):
             continue  # the lobby keeps LOBBY_MODES only
-        is_init = path.name == "init.luau"
-        body = slim(rewrite(module, path.read_text(), is_init))
+        available[module] = slim(rewrite(module, path.read_text(), path.name == "init.luau"))
+    # Only what this run can load (tools/checks/bundling.py): the modules the harness's own Luau asks
+    # for and everything they reach. A require the bundler can't follow stops the build here.
+    bot_file = Path(args.bot) if args.bot else BOTS / f"{args.game}.luau"
+    bot = bot_file.read_text() if bot_file.exists() else "return function() end"
+    harness = PRELUDE_RAW
+    entry = "__runRound"
+    if args.game == "SKEEBALL":
+        harness += "\n" + (Path(__file__).resolve().parent / "skeeball_game.luau").read_text()
+        entry = "__runSkeeBall"
+    elif args.game == "LOBBY":
+        entry = "__runLobby"
+    roots = {"Shared", "Server"} | ({"Client"} if args.client else set())
+    try:
+        start = bundling.seeds(reachable_luau(harness, entry) + "\n" + bot, args.game, available, roots)
+        keep = bundling.closure(available, start, provided={"Shared/Remotes"})
+    except bundling.BundleError as err:
+        sys.exit(f"round_harness: {err}")
+    line_map = []  # (first line of the module body in the bundle, module name)
+    line = PRELUDE.count("\n") + header.count("\n") + 1  # the __touchMode (and __devices) lines come first
+    for module, body in available.items():
+        if module not in keep:
+            continue
         out.append(f'__modules["{module}"] = function()')
         line += 1
         line_map.append((line, module))
@@ -203,8 +252,6 @@ def main():
         line += 1
     if args.map:
         Path(args.map).write_text(json.dumps(line_map))
-    bot_file = Path(args.bot) if args.bot else BOTS / f"{args.game}.luau"
-    bot = bot_file.read_text() if bot_file.exists() else "return function() end"
     out.append("local __bot = (function()\n" + bot + "\nend)()")
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)
