@@ -1,4 +1,4 @@
-# Mini-game backlog (games 13-26)
+# Mini-game backlog (games 13-29)
 
 The owner asked for these, in this order, after the first twelve and "after everything else is finished" (owner: "dont
 start on game 13+ untill everything else is finished"). Each brief below is what the builder works from. They are built
@@ -6,9 +6,11 @@ with the workflow in tools/workflows/build-minigame.js (one builder in a worktre
 then merged with tools/checks/merge_check.sh <Id>, tested with tools/checks/mode_check.sh <Id>, given a portal preview
 (tools/preview/make_preview.py <Id>) and published. Every game is for 1-12 players (bots fill), phones first, real meshes.
 
-Planned categories once all 25 exist (the brief leaves some open; these are the picks):
+All 17 are built and merged now, 30 games in all (`src/shared/GameDefinitions.luau`).
 
-| Category | Today | After the backlog |
+Categories (the brief leaves some open; these are the picks):
+
+| Category | Before the backlog | Games 13-26 |
 | --- | --- | --- |
 | Team | Pump & Pop, Bobsled Run, Cake Factory | + Prime Cut, Eatsa Pizza, Log Jam (6) |
 | Reaction | Hex Meltdown, Rake It In, Crazy Cutters | + Mecha-Marathon, Messy Memory, Trace Race (6) |
@@ -22,9 +24,12 @@ Planned categories once all 25 exist (the brief leaves some open; these are the 
 
 Games 27-29 were added on 2026-10-22 (owner: "Let's add the stars"): one more Survival, Luck and Race game, so each of
 those categories has 3, like Knockback, and no game needs to move.
+With them: Team 6, Reaction 6, Versus 6, Knockback 3, Survival 3, Luck 3, Race 3.
 
-Also on the backlog: **custom music for each mini-game** (owner: "put in the backlog custom music for each mini game").
-No longer blocked: other players' devices load and play our uploaded music now (their reports from version 27).
+Also asked for: **custom music for each mini-game** (owner: "put in the backlog custom music for each mini game", then
+"take over the music."). Built since: 27 games have their own round song (`tools/music/songs/`, see `docs/ASSETS.md`);
+Hot Potato, Dice Dash and Minecart Mayhem don't have one yet (`python3 tools/music/modes.py list`). The five song packs
+aren't uploaded yet, so every game plays "Panic Mode" until their ids are in `AudioAssets.ModeMusic`.
 
 ## 13. Tanks! (`Tanks`, Versus)
 

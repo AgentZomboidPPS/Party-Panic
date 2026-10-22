@@ -4,7 +4,7 @@ All art props and audio are **original and generated from code**, so there's not
 
 | Folder | What | Generator |
 | --- | --- | --- |
-| `assets/meshes/*.obj, *.glb` | 15 toy-style props (shopping cart, glove, chest, trophy, trees...) | `python3 tools/meshgen/generate_meshes.py` |
+| `assets/meshes/*.obj, *.glb` | about 400 toy-style props: the lobby's (shopping cart, trophy, trees...) and each arena's own set | `python3 tools/meshgen/generate_meshes.py` (each game's props in `tools/meshgen/props/<Game>.py`) |
 | `assets/audio/music/*.ogg` | "Party Plaza" + "Sunset Social" (lobby playlist), "Panic Mode" (rounds) | `python3 tools/music/compose.py` |
 | `build/music/packs/ModePack*.ogg` (not in git: rebuilt by `pack`, kept by Roblox once uploaded) | each mini-game's own round song, several to a file | `python3 tools/music/modes.py` |
 | `assets/audio/sfx/*.ogg` | 15 sound effects, plus `SfxSprite.ogg` (all of them in one file) | same |
@@ -41,9 +41,9 @@ python3 tools/upload_assets.py --user-id <id>             # upload and write ids
 rojo build -o build/PartyPanic.rbxl                        # rebuild with the real assets
 ```
 
-This needs 15 model uploads and only **4 audio uploads** (3 tracks + 1 effects sprite). Roblox
-allows 10 audio uploads a month without ID verification, and 100 with it. Uploads go through
-moderation, and the game keeps using fallbacks until an asset is approved.
+This needs one model upload per prop and only **4 audio uploads** (3 tracks + 1 effects sprite), plus
+one per song pack (below). Roblox allows 10 audio uploads a month without ID verification, and 100
+with it. Uploads go through moderation, and the game keeps using fallbacks until an asset is approved.
 
 ### Or import the meshes in Studio
 

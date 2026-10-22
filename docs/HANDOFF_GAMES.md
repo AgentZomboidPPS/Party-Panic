@@ -42,7 +42,8 @@ are merged, and their bundles were removed.
 ## Games 27-29 (2026-10-22)
 
 The owner asked for one more Survival, Luck and Race game and picked these ("Let's add the stars. If you need to hand them
-off do it."). Briefs: [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md) 27-29 and `docs/builds/<Id>.md`.
+off do it."). Briefs: [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md) 27-29 and `docs/builds/<Id>.md`. All three are merged
+since (Dice Dash 51ba233, Hot Potato c153118, Minecart Mayhem 81c0144), each with its portal preview.
 
 | Game | Category | Session |
 | --- | --- | --- |

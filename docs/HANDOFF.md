@@ -35,8 +35,8 @@ Session A's handoff from 17:40 UTC, still accurate except where this block says 
     - from the owner's other window's branch `claude/quirky-hopper-5yk8zk`: per-game round songs (5 packs, NOT
       uploaded yet, so every game plays Panic Mode until `AudioAssets` gets the ids) and Friends (invite chip, +1 coin
       with a friend, beat-a-friend moments).
-  - **Store description:** `docs/STORE_DESCRIPTION.txt` lists 27 games. The owner pastes it in Creator Hub, because
-    publish_place can't set it (403).
+  - **Store description:** `docs/STORE_DESCRIPTION.txt` lists all 30 games now (27 at version 34). The owner pastes
+    it in Creator Hub, because publish_place can't set it (403).
 - Version 33 was published 00:58 UTC from `d10b635`, and version 32 at 21:55 UTC from `6e0029b`; both regressions
   were clean.
 - **On the branch since version 34 (ships in version 35):**
@@ -52,23 +52,24 @@ Session A's handoff from 17:40 UTC, still accurate except where this block says 
   - the lobby's sky islands moved 700-1200 studs out, clear of every arena (they broke through the floor or sea of 21
     arenas; games-2 saw a Spleef bot standing on one), and `tools/checks/colliders.py` now flags terrain near arenas.
 - **Still to come for version 35:**
-  - games-4's phone performance audit (`claude/games-4`: the round harness's `perf` line, cached participant lookups,
-    fewer per-frame writes in Trace Race, Skate Escape, Tanks!, Crazy Cutters and others);
+  - games-4's phone performance audit (merged since in b4efa64 from `claude/games-4`: the round harness's `perf` line,
+    cached participant lookups, fewer per-frame writes in Trace Race, Skate Escape, Tanks!, Crazy Cutters and others);
   - the round songs: the owner's other window uploads the 5 packs and pushes their ids to
     `claude/quirky-hopper-5yk8zk`; until then every game plays Panic Mode.
   A quick check of 7d3137b (code checks; SinkingSands, Slaparazzi, Spleef and PumpAndPop rounds; the lobby; the client
   on phone and PC) is running. Publish on the owner's word.
-- **Games 27-29, building** (owner: "Let's add the stars. If you need to hand them off do it."): Hot Potato (Survival,
-  games-1), Dice Dash (Luck, games-2) and Minecart Mayhem (Race, games-3), each on its session's `claude/games-N` branch
-  (sessions can only push their own branch; games-2's and games-3's also carry the held shop pass, so take only the
-  game's changes from them). Briefs: `docs/MINIGAME_BACKLOG.md` 27-29 and `docs/builds/`. On merge: keep
-  IsNew within the vote's cap (`tests/VoteFairness.spec.luau`: at most half of the games), make portal previews, add
-  them to `docs/STORE_DESCRIPTION.txt` and the lineup doc.
+- **Games 27-29, all merged since** (Dice Dash 51ba233, Hot Potato c153118, Minecart Mayhem 81c0144, each with its
+  portal preview and in the store description; owner: "Let's add the stars. If you need to hand them off do it."): Hot
+  Potato (Survival, games-1), Dice Dash (Luck, games-2) and Minecart Mayhem (Race, games-3), each on its session's
+  `claude/games-N` branch (sessions can only push their own branch; games-2's and games-3's also carry the held shop
+  pass, so take only the game's changes from them). Briefs: `docs/MINIGAME_BACKLOG.md` 27-29 and `docs/builds/`. On
+  merge: keep IsNew within the vote's cap (`tests/VoteFairness.spec.luau`: at most half of the games), make portal
+  previews, add them to `docs/STORE_DESCRIPTION.txt` and the lineup doc.
 - **Held until the owner says the bug-fix wave is done ("after everything else is finished"):** the second shop
   pass, 25 coin items and 10 effects, finished on `claude/games-3` at f0cb9da (reviewed; its client checks are in
   the same branch; a copy is in `docs/wip/shop-pass2.bundle`). `claude/games-2` also carries the earlier shop commits, so don't merge that branch whole.
-- **Game sessions** (see [HANDOFF_GAMES.md](HANDOFF_GAMES.md)): all 14 backlog games are merged (27 games); games-1
-  to games-3 are building games 27-29 and games-4 is on the performance audit.
+- **Game sessions** (see [HANDOFF_GAMES.md](HANDOFF_GAMES.md)): all 17 backlog games and games-4's
+  performance audit are merged (30 games).
 - **Later (owner):** the owner's call on rebalancing thin categories (Messy Memory to Luck, Tanks! to Knockback).
 - **Toolchain in a fresh container (GitHub downloads are blocked here):** `cargo install --locked stylua@2.6.0 --features
   luau`, `selene@0.31.0`, `rojo@7.7.1`, `lune@0.11.0` (crates.io works); luau-lsp from source: `git clone --depth 1

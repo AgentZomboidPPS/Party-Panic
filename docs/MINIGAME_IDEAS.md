@@ -1,9 +1,11 @@
 # Mini-game ideas (backlog)
 
 Ideas inspired by classic party-game **mechanics**. Rules and mechanics can't be owned; names,
-characters, art, music and level layouts can. Every idea below uses an original name and theme,
-and nothing should reuse Nintendo assets, characters or recognizable layouts (see the IP note in
-the design outline, §1). None of these are implemented yet.
+characters, art, music and level layouts can. Every idea below uses an original name and theme, and
+nothing should reuse Nintendo assets, characters or recognizable layouts (see the IP note in the
+design outline, §1). None of these are implemented yet, though two are close to games that exist
+now: Bumper Blobs to Bumper Ballers, Fuse Frenzy to Hot Potato. The "Fits our kit" column names
+modes that aren't in the game (Yeet Arena, Greedy Goblins, The Wrong Button, the cart race).
 
 | Idea | Mechanic | Category | Fits our kit |
 | --- | --- | --- | --- |
