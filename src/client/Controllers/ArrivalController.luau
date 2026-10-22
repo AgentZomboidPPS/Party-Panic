@@ -28,11 +28,15 @@
 -- wherever it did before.
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
 
 local ArrivalController = {}
 
-local HOLD_LIMIT = 15 -- seconds: longer than the rules card and the countdown together (Config.Session)
+-- Seconds at most: longer than the rules card and the countdown together.
+local HOLD_LIMIT = math.max(15, Config.Session.RulesTime + Config.Session.CountdownTime + 2)
 local MOVED = 4 -- studs a root went between two physics steps: only the server (or a mode) moves one so
 local REACH = 3 -- studs under the soles that still count as ground
 -- Where the rays start round the root's middle: anything solid under the character's footprint.
