@@ -9,6 +9,11 @@ return {
 		Lobby2 = 101866514278416,
 		Round = 74689013738140,
 	},
+	-- Each mini-game's own round track by mode id (tools/music/rounds.py; RoundMusic.luau has their
+	-- drop times). A mode without one, or whose track doesn't load, plays Music.Round.
+	Rounds = {
+		FireRope = 118157821114084,
+	},
 	Sfx = {
 		VoteOpen = 0,
 		VoteClick = 0,

@@ -111,6 +111,20 @@ def set_luau_value(path: Path, key_path: list[str], value: int):
     path.write_text(text)
 
 
+def set_round_id(mode_id: str, value: int):
+    """Sets AudioAssets.Rounds[mode_id] (each mini-game's own round track), adding the line if new."""
+    text = AUDIO_CONFIG.read_text()
+    block = re.search(r"\n\tRounds = \{(.*?)\n\t\}", text, re.S)
+    if not block:
+        raise SystemExit(f"Couldn't find table Rounds in {AUDIO_CONFIG}")
+    inner = block.group(1)
+    if re.search(rf"\n\t\t{mode_id} = \d+", inner):
+        inner = re.sub(rf"(\n\t\t{mode_id} = )\d+", rf"\g<1>{value}", inner, count=1)
+    else:
+        inner += f"\n\t\t{mode_id} = {value},"
+    AUDIO_CONFIG.write_text(text[: block.start(1)] + inner + text[block.end(1):])
+
+
 PROPS_DIR = ROOT / "src" / "server" / "World" / "Props"
 
 
@@ -156,8 +170,8 @@ def main():
     who = parser.add_mutually_exclusive_group(required=True)
     who.add_argument("--user-id", help="upload as this Roblox user (must own the game)")
     who.add_argument("--group-id", help="upload as this group (must own the game)")
-    parser.add_argument("--what", choices=["all", "meshes", "audio"], default="all")
-    parser.add_argument("--only", help="comma-separated mesh names (default: every mesh)")
+    parser.add_argument("--what", choices=["all", "meshes", "audio", "rounds"], default="all")
+    parser.add_argument("--only", help="comma-separated mesh names or round-track mode ids (default: all)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     only = set(args.only.split(",")) if args.only else None
@@ -173,6 +187,15 @@ def main():
         for name, title in MUSIC.items():
             jobs.append(("music", name, ROOT / "assets" / "audio" / "music" / f"{name}.ogg", "Audio", "audio/ogg", f"Party Panic - {title} (original soundtrack)"))
         jobs.append(("sprite", "SfxSprite", ROOT / "assets" / "audio" / "sfx" / "SfxSprite.ogg", "Audio", "audio/ogg", "Party Panic - sound effects"))
+    if args.what == "rounds":
+        # Each mini-game's own round track (tools/music/rounds.py). One audio upload each: Roblox caps
+        # audio uploads per month, so name the ones you mean with --only.
+        titles = dict(re.findall(r'(\w+) = \{ Title = "(.*?)"', (ROOT / "src" / "shared" / "RoundMusic.luau").read_text()))
+        for ogg in sorted((ROOT / "assets" / "audio" / "rounds").glob("*.ogg")):
+            if only and ogg.stem not in only:
+                continue
+            title = titles.get(ogg.stem, ogg.stem)
+            jobs.append(("round", ogg.stem, ogg, "Audio", "audio/ogg", f"Party Panic - {title} (original soundtrack)"))
 
     record = json.loads(RECORD.read_text()) if RECORD.exists() else {}
     for kind, name, path, asset_type, content_type, display in jobs:
@@ -209,6 +232,8 @@ def main():
             set_luau_value(MESH_CONFIG, [name], asset_id)
         elif kind == "music":
             set_luau_value(AUDIO_CONFIG, ["Music", name], asset_id)
+        elif kind == "round":
+            set_round_id(name, asset_id)
         else:
             set_luau_value(AUDIO_CONFIG, ["SfxSprite"], asset_id)
 
