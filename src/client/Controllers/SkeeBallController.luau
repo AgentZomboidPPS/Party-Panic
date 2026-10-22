@@ -1084,7 +1084,9 @@ function refreshHint()
 	local soon = showing and GameState.Get("Phase") == "Voting" and player:GetAttribute("PP_SitOut") ~= true
 	hint.Text = if soon then HINT_TEXT.Soon elseif UIKit.IsTouch() then HINT_TEXT.Touch else HINT_TEXT.Pc
 	hint.TextColor3 = if soon then Theme.Colors.Yellow else ui.HintColor
-	hint.Visible = showing and (soon or play.Rolled == 0)
+	-- (Phones put it away while the vote's up: the column rises over the vote cards then, and its top
+	-- would reach the profile chip; the cards and the timer say a round is coming anyway.)
+	hint.Visible = showing and (soon or play.Rolled == 0) and not (voteShowing and UIKit.IsTouch())
 end
 
 local function roll(aim: number, power: number)
