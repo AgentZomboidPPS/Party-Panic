@@ -7,6 +7,7 @@ All art props and audio are **original and generated from code**, so there's not
 | `assets/meshes/*.obj, *.glb` | 15 toy-style props (shopping cart, glove, chest, trophy, trees...) | `python3 tools/meshgen/generate_meshes.py` |
 | `assets/audio/music/*.ogg` | "Party Plaza" + "Sunset Social" (lobby playlist), "Panic Mode" (rounds) | `python3 tools/music/compose.py` |
 | `assets/audio/sfx/*.ogg` | 15 sound effects, plus `SfxSprite.ogg` (all of them in one file) | same |
+| `assets/audio/rounds/*.ogg` | each mini-game's own round track | `python3 tools/music/rounds.py` |
 
 Requirements for regenerating: Python 3.10+, `numpy`, `scipy`, `scikit-image` (meshes), and
 `ffmpeg` with libvorbis (audio).
@@ -63,6 +64,34 @@ How the client plays music (`AudioController`):
 - Music starts at a gentle default volume and **fades in** over 6 seconds on first launch.
 - Music **ducks** while a menu is open. Players choose Off / Low / Medium / High in Settings.
 - The round track **speeds up** during the last 10 seconds.
+
+## Mini-game round tracks
+
+Every mini-game has its own round track (owner: "put in the backlog custom music for each mini
+game"): an original song with its own band and tune, written as a lead sheet in
+`tools/music/songs/<ModeId>.py` (the first three live in `tools/music/modes.py`, which also holds the
+shared helpers and explains the plan). Each track opens with an intro of at least 13 seconds that
+plays under the rules card and the 3-2-1, the band drops in on GO, then comes at least the round's
+length of music (up to 90 s; longer rounds loop it seamlessly).
+
+```sh
+python3 tools/music/rounds.py --list                                  # songs, and modes without one
+python3 tools/music/rounds.py --only SharkBait --preview /tmp/music   # render, check, encode, MP3
+python3 tools/upload_assets.py --user-id <owner> --what rounds --only SharkBait
+```
+
+`rounds.py` checks the intro length, the length after the drop, loudness (-11 LUFS), true peak
+(at most -1 dBTP), the loop seam and the low end (phone speakers), writes
+`assets/audio/rounds/<ModeId>.ogg`, and regenerates `src/shared/RoundMusic.luau` (each track's drop
+time and length). The upload writes the asset id into `AudioAssets.Rounds`. Each track is one audio
+upload, and Roblox caps those per month, so upload the ones you mean with `--only`.
+
+**Adding a track for a new mini-game:** copy one of `tools/music/songs/*.py`, write the new tune and
+band, `SONG = Song("<ModeId>", "<Title>", bpm, intro_bars, bars, render)`, then render and upload it
+as above. Nothing else changes: `AudioController` plays the mode's own track when `AudioAssets.Rounds`
+has it, starting it so the drop lands exactly on GO, and plays "Panic Mode" for a mode without one
+(or whose track doesn't load within 4 seconds). The round harness's client notes which music plays
+(`music: ...` lines in the summary).
 
 ## Store art
 
