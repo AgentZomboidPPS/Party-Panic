@@ -29,6 +29,11 @@
 -- in several games"): only the drawn lawn, fence panels, grill, tables and hay bales collide, with
 -- collision that follows their meshes; the fence (13.5 studs) is well over a jump (7.2) even from a
 -- table top (10.8), and a safety net puts anyone found outside the lawn back in.
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): someone blown up at the buzzer reads
+-- "Buzzer blast · 3 passes" on the results card. "Blown up at the buzzer · 3 passes" measured 264
+-- wide at the card's smallest text on a real server, where its result column holds 232, so it was
+-- cut to "...· 3 pa...".
 
 local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -844,7 +849,7 @@ function HotPotato:GetResults()
 		if self.blown[entry.Player] then
 			local lasted = entry.Survived or ctx:Elapsed()
 			entry.Rank = math.floor(lasted * 10) / 10
-			entry.ScoreText = "Blown up at the buzzer"
+			entry.ScoreText = "Buzzer blast" -- (the results card cut "Blown up at the buzzer · 3 pa...")
 		end
 		entry.ScoreText ..= ` · {passes} pass{if passes == 1 then "" else "es"}`
 	end
