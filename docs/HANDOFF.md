@@ -6,7 +6,7 @@ from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes fro
 
 ## Session C, later: version 42 (the owner's playtest notes)
 
-- **Live: version 42** (published ~21:30 UTC from `795e965`, still PRIVATE). Four of the owner's notes:
+- **Live: version 42** (published ~20:55 UTC from `795e965`, still PRIVATE). Four of the owner's notes:
   - Results card (owner: "I don't like how clicking skips the ending screen. I clicked and I couldn't vote."): only
     its X closes it (`Modal.CloseOnBackdrop`), a click on any window stays on it (the window is Active), and the
     results end early only once everyone has answered PLAY AGAIN *and* given a 👍 or 👎 (`ReplayService.Wait` asks
