@@ -136,7 +136,6 @@ local list: { GameDefinition } = {
 		Duration = 55,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "CrazyCutters",
@@ -149,7 +148,6 @@ local list: { GameDefinition } = {
 		Duration = 85,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "BobsledRun",
@@ -162,7 +160,6 @@ local list: { GameDefinition } = {
 		Duration = 55,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "CakeFactory",
@@ -175,7 +172,6 @@ local list: { GameDefinition } = {
 		Duration = 55,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "SharkBait",
@@ -188,7 +184,6 @@ local list: { GameDefinition } = {
 		Duration = 60,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "MechaMarathon",
