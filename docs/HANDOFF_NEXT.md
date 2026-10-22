@@ -3,6 +3,11 @@
 Written 2026-10-22 ~19:00 UTC by the session that shipped versions 37-39. Read `docs/HANDOFF.md` too: its top block
 lists what is live. This file covers only the two jobs the owner saved for last.
 
+> **Both jobs are done** (2026-10-22, branch `claude/friendly-ramanujan-2dtfr2`): the second shop pass is version 40
+> and the 👍 / 👎 votes are version 41. `docs/HANDOFF.md`'s "Session C" block says what shipped and how to read the
+> votes (`python3 tools/checks/game_ratings.py`). The plan below is kept as the record; "Smaller things still open"
+> at the end still is.
+
 ## Where things stand
 
 - **Live: version 39** (published ~18:54 UTC from `0b9ff72` on `claude/upbeat-galileo-gvwq66`). It has 30 mini-games,

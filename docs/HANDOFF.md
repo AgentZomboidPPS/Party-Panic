@@ -1,12 +1,46 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-22 19:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
-`claude/quirky-hopper-5yk8zk` at ee14d80). Sections 0-9 are Session A's handoff from 17:40 UTC, still accurate except
-where the Session B block below says otherwise.
+Last updated: **2026-10-22 ~20:05 UTC** by Session C (branch **`claude/friendly-ramanujan-2dtfr2`**, which started
+from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes from 19:00 UTC and Session A's sections
+0-9, still accurate except where a newer block says otherwise.
 
-> **Next: read [HANDOFF_NEXT.md](HANDOFF_NEXT.md).** The owner saved two jobs for a new window: the second shop pass
-> (cherry-pick from `hold/shop-pass2`, never merge it whole) and 👍 / 👎 votes on mini-games with a tool to read the
-> totals. Session B has handed both over and won't work on them. Start there; this file is the background.
+## Session C: the two saved jobs are done (versions 40 and 41)
+
+Both jobs in [HANDOFF_NEXT.md](HANDOFF_NEXT.md) are live. Start new work from the tip of
+`claude/friendly-ramanujan-2dtfr2`.
+
+- **Live: version 41** (published ~20:00 UTC from `53773f9`), on top of version 40 (~19:40 UTC, from `765c332`).
+  Both under the owner's standing word; the experience is still PRIVATE.
+- **Version 40, the second shop pass** (owner: "Yes lets add more items after everything else is finished"): the
+  shop commits of `hold/shop-pass2` cherry-picked in order (2fb8c26, bb0aacc, ba5dbaa, 7df1526, f0cb9da; the two bot
+  commits and the idle scenario were already on the line, a83c440 skipped). 25 more coin items and 10 new effects
+  beside the Gold Pass's 33 and the Halloween items (no Id clashes, `tests/Catalog.spec.luau` checks; Gold Pass and
+  event items never have a Price). Hats show in their tab. Fixes found on the way: a merge slip that left Candy
+  Corn's entry open, a tab you switch to now starts at its top (`ShopController`), and on PC a card's description and
+  lock button shrink a little to fit. The economy test still says about 23 days for the whole shop (2.85 coins a
+  round by Config; Gold Pass and double coins only make it quicker).
+- **Version 41, 👍 / 👎 on every mini-game** (owner: "lets add to the backburner a away for players to downvote a
+  minigame..." and "can you also do an upvote one so we can see if players like it"): two 44 pt buttons beside the
+  results card's title (`ResultsController`; the card is 960 wide now so the title, the thumbs and PLAY AGAIN fit).
+  One vote per person per round, switch or take back until the results end, never bots or anyone not in the round.
+  Rules: `Shared/Logic/GameRatings` (`tests/GameRatings.spec.luau`). Server: `Services/RatingService`, remote
+  `RateGame`, `Config.RateLimits.RateGame`. Totals: data store **PP_GameRatings**, key `<ISO week>/<GameId>`
+  (rounds, plays, 👍, 👎, a 4096-bit map for unique voters without UserIds, PLAY AGAIN yes/no, vote offers and wins),
+  one UpdateAsync per game a round touched. Test runs write to **PP_GameRatings_Test**.
+  - **Read them:** `python3 tools/checks/game_ratings.py` (the last 4 weeks, best-liked first, games under 30 votes
+    listed apart, then the 5 most and least liked). `--test` reads the test store, `--weeks N` goes further back.
+    In a week or two, run it and show the owner. They switch a game off with `Enabled = false` in
+    `src/shared/GameDefinitions.luau`.
+  - **Harness:** every harness run now sets workspace `PP_Harness` on its first line (`harness_prelude.luau`). The
+    PLAY AGAIN run (`round_harness.py <Mode> --replay`) starts the real RoundManager, and before that fix one run of
+    it wrote test totals to the real PP_GameRatings; those three keys were removed and the real store was empty at
+    publish. That run's summary has "ratings": the taps, every write and what it added.
+- **Checks run:** code checks and 345 Lune tests; both client runs (phone in 3 parts and PC in 2 with
+  `tools/checks/client_split.py`: the shop tab snapshots took the phone result past Open Cloud's 4 MiB) with 0
+  errors, PC 0 layout problems, phones 2 (the in-round standings reach the MOVE stick's zone in "InRound menu" on
+  phone-small with 8 bots; not touched by either job); the shop effects scenario; Fire Rope, Spleef, Bumper Ballers,
+  Pump & Pop and Shark Bait; the lobby; the PLAY AGAIN run. Biggest round bundle now ~1.03 MB of the 1 MiB (1.05 MB) cap
+  (Pump & Pop with `--party`).
 
 ## Session B in flight (2026-10-22 16:00 UTC)
 
