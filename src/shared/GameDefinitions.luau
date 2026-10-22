@@ -268,6 +268,19 @@ local list: { GameDefinition } = {
 		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "LogJam",
+		Name = "Log Jam",
+		Category = "Team",
+		Icon = "🪓",
+		Color = Color3.fromRGB(196, 132, 72),
+		Objective = "Work your team's sawmill: place a log, chop a log. Most logs chopped in 30 seconds wins!",
+		Controls = "Press the shape on your screen (▲ ■ ● ◆) when it's your turn. Wrong one? Your mill jams!",
+		Duration = 30,
+		MinPlayers = 2,
+		IsTeam = true,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
