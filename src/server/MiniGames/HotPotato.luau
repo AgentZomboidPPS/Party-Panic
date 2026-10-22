@@ -219,7 +219,7 @@ function HotPotato:_buildArena()
 		local facing = CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z))
 		MeshLibrary.Get("HotPotatoFence", { CFrame = facing, Parent = arena })
 		MeshLibrary.Get("HotPotatoLights", {
-			CFrame = facing * CFrame.new(0, FENCE_HEIGHT - 2, -0.6),
+			CFrame = facing * CFrame.new(0, FENCE_HEIGHT - 2, -0.85),
 			Parent = arena,
 		})
 	end

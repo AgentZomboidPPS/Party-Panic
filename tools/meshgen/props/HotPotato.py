@@ -56,11 +56,11 @@ def fence():
     for i in range(count):
         x = -width / 2 + step * (i + 0.5)
         outline = [(x - w / 2, 0.0), (x + w / 2, 0.0), (x + w / 2, height - 0.45), (x, height), (x - w / 2, height - 0.45)]
-        pickets.append(extrude(outline, 0.24))
-    rails = merge(rounded_box(width, 0.5, 0.3, 0.08, 3).translate(0, 2.0, 0.27),
-                  rounded_box(width, 0.5, 0.3, 0.08, 3).translate(0, 8.2, 0.27))
-    posts = merge(rounded_box(0.7, 10.0, 0.7, 0.1, 3).translate(-width / 2, 5.0, 0.35),
-                  rounded_box(0.7, 10.0, 0.7, 0.1, 3).translate(width / 2, 5.0, 0.35))
+        pickets.append(extrude(outline, 0.7))
+    rails = merge(rounded_box(width, 0.6, 0.45, 0.08, 3).translate(0, 2.0, 0.55),
+                  rounded_box(width, 0.6, 0.45, 0.08, 3).translate(0, 8.2, 0.55))
+    posts = merge(rounded_box(0.8, 10.0, 0.8, 0.1, 3).translate(-width / 2, 5.0, 0.4),
+                  rounded_box(0.8, 10.0, 0.8, 0.1, 3).translate(width / 2, 5.0, 0.4))
     return {"Pickets": merge(*pickets), "Rails": rails, "Posts": posts}
 
 
