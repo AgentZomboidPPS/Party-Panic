@@ -48,6 +48,9 @@ local BREATHER = 2 -- after a blast, before fresh potatoes drop
 local LAWN_Y = 0.2 -- the lawn's top above the origin
 local FENCE_HEIGHT = 10.5 -- HotPotatoFence's height (a jump reaches 7.2)
 local PANEL_WIDTH = 8 -- each fence panel covers this much of the ring (the mesh is a bit wider)
+-- Solid props stand this far above the lawn: an invisible sliver, but a probe rising from the lawn under
+-- them then meets their underside instead of starting inside them (tools/checks/colliders.py).
+local SET_ON = 0.08
 local LAUNCH_UP = 150 -- studs/s: a blast throws the holder about 55 studs up
 local SHOW_AFTER = 1.8 -- the "You're out!" waits for the launch
 local PING_MAX = 0.3 -- the most of a round trip that is made up for
@@ -215,7 +218,7 @@ function HotPotato:_buildArena()
 	local fenceAt = radius + 0.7 -- the panels' inside faces on the lawn's edge
 	for index = 0, panels - 1 do
 		local angle = index / panels * math.pi * 2
-		local at = center + Vector3.new(math.cos(angle) * fenceAt, 0, math.sin(angle) * fenceAt)
+		local at = center + Vector3.new(math.cos(angle) * fenceAt, SET_ON, math.sin(angle) * fenceAt)
 		local facing = CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z))
 		MeshLibrary.Get("HotPotatoFence", { CFrame = facing, Parent = arena })
 		MeshLibrary.Get("HotPotatoLights", {
@@ -226,13 +229,13 @@ function HotPotato:_buildArena()
 
 	-- The giant grill in the middle, and things to dodge round: picnic tables and hay bales on a ring
 	-- well inside the fence (nothing to climb near it).
-	MeshLibrary.Get("HotPotatoGrill", { CFrame = CFrame.new(center), Parent = arena })
+	MeshLibrary.Get("HotPotatoGrill", { CFrame = CFrame.new(center + Vector3.new(0, SET_ON, 0)), Parent = arena })
 	local count = if radius < 26 then 4 else 6
 	local ring = math.min(radius * 0.55, radius - 9)
 	local turn = rng:NextNumber(0, math.pi * 2)
 	for index = 0, count - 1 do
 		local angle = turn + index / count * math.pi * 2
-		local at = center + Vector3.new(math.cos(angle) * ring, 0, math.sin(angle) * ring)
+		local at = center + Vector3.new(math.cos(angle) * ring, SET_ON, math.sin(angle) * ring)
 		local facing = CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z))
 		MeshLibrary.Get(if index % 2 == 0 then "HotPotatoTable" else "HotPotatoHay", {
 			CFrame = facing * CFrame.Angles(0, math.pi / 2, 0),
