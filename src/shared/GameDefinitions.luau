@@ -390,6 +390,19 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "MinecartMayhem",
+		Name = "Minecart Mayhem",
+		Category = "Race",
+		Icon = "⛏️",
+		Color = Color3.fromRGB(150, 110, 230),
+		Objective = "Race your mine cart out of the crystal cave! Pick the fast way at each split, jump the gaps, first out wins.",
+		Controls = "Hold LEFT or RIGHT (A / D) to pick a way and lean into bends. JUMP (Space) at the yellow arrows!",
+		Duration = 90,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
