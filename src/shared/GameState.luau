@@ -12,6 +12,10 @@
 --   VoteCounts    JSON list of numbers
 --   TeamScores    JSON map of team name -> score ("" when not a team game)
 --   Champions     JSON list of the last round's top three display names
+--   Cup           JSON of the Party Cup in progress ("" before the first round): see CupService
+--   Event         JSON of the limited-time event on now ("" when none): see EventService
+--   HallOfFame    JSON of last week's top three and this week's leaders ("" until loaded): see
+--                 LeaderboardService
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -43,6 +47,9 @@ function GameState.Folder(): Folder
 			created:SetAttribute("VoteCounts", "[]")
 			created:SetAttribute("TeamScores", "")
 			created:SetAttribute("Champions", "[]")
+			created:SetAttribute("Cup", "")
+			created:SetAttribute("Event", "")
+			created:SetAttribute("HallOfFame", "")
 			created.Parent = ReplicatedStorage
 			folder = created
 		end
