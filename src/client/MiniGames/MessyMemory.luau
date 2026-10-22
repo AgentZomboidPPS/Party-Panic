@@ -15,7 +15,22 @@
 -- puffs burst and the toys tumble onto the counters at the mischief, and at the reveal each right
 -- spot lights up in turn on every shelf (a ✓ or ✗ over each toy on yours, and a see-through copy of
 -- a toy where it should have gone).
+--
+-- Phones (owner, from an iPhone: "Weird angle on mobile for this mini game."): they had the PC camera
+-- moved right with a 60-degree view, so on a 2.17:1 screen the awning cut across the top shelf, a
+-- curtain and posts filled one side, the next booth the other, and the shelf sat small and skewed in
+-- between. Now a phone looks straight into the booth from Rules.PHONE_EYE (low enough that the awning
+-- clears the shelf), with the pitch and the field of view worked out from the screen: the shelf's
+-- crown just under the HUD's lines, the framing's foot just above the bottom edge. While you memorise
+-- (the counter still empty) that's the shelf alone, centred and bigger; from the mischief on (and
+-- when you peek) it's the shelf and the counter's toys, and if the right-hand toys would sit under
+-- PEEK / CLOSE the eye slides right (under a stud on 2.17:1 phones, up to MAX_SHIFT on 16:9 and 4:3
+-- screens) before the framing shrinks. Even so a wide screen holds more than one booth, so phones get
+-- a wall between every two booths: the sides show your own booth's nook, never the next booths'
+-- shelves (that's what PEEK is for). There the shout takes the hint's line, and the name boards (right
+-- behind the HUD) are off. PC is as it was.
 
+local GuiService = game:GetService("GuiService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -42,6 +57,12 @@ local PEEK_TIME = 3.5
 local CURTAIN_COOLDOWN = 0.35 -- CLOSE/OPEN presses at least this far apart
 local MOVE_TIME = 0.28
 local PICK_RADIUS = 0.11 -- of the screen's height: a tap this close to a toy or spot picks it
+
+-- Phones (see the header).
+local HUD_BAND = 108 -- HUD units from the top of the phase panel to the bottom of the line under it
+local TOUCH_HUD = 0.75 -- the TopHud's own scale on phones (Api's TOUCH_HUD_SCALE), before it's laid out
+local DIVIDER_IN, DIVIDER_OUT = 19, 29 -- the walls between booths, from and to these radii
+local DIVIDER_HEIGHT = 18
 
 local function part(props: { [string]: any }): Part
 	local p = Instance.new("Part")
@@ -298,6 +319,7 @@ function MessyMemory.Start(api)
 	end
 
 	-- HUD ------------------------------------------------------------------------------------------
+	local touch = api:IsTouch()
 	local hud = api:TopHud()
 	local hudY = api:HudY()
 	local panel = UIKit.Panel({
@@ -343,7 +365,8 @@ function MessyMemory.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 40,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, hudY + 130),
+		-- (Phones: in the hint's line, which makes way, so it never covers the top shelf.)
+		Position = UDim2.new(0.5, 0, 0, hudY + (if touch then 62 else 130)),
 		Size = UDim2.fromOffset(520, 52),
 		Visible = false,
 		Parent = hud,
@@ -371,7 +394,7 @@ function MessyMemory.Start(api)
 	local peekButton = api:Button({ Text = "PEEK 👀", Key = Enum.KeyCode.Q, Color = Theme.Colors.Cyan, Slot = 2 })
 	curtainButton:SetVisible(false)
 	peekButton:SetVisible(false)
-	if not api:IsTouch() then
+	if not touch then
 		-- PC: in the bottom-right corner instead of the bottom middle, where the counter's toys are.
 		for slot, name in { "Action_CLOSE", "Action_PEEK 👀" } do
 			local holder = api.Gui:FindFirstChild(name) :: Frame?
@@ -548,19 +571,70 @@ function MessyMemory.Start(api)
 
 	-- Camera ----------------------------------------------------------------------------------------
 	local savedFov = camera.FieldOfView
-	-- Framed so the top shelf sits under the HUD and the counter's toys above the bottom edge; on
-	-- phones a touch lower and shifted right, so the counter stays clear of the buttons there.
-	local touch = api:IsTouch()
-	local shift = if touch then Vector3.new(2.4, 0, 0) else Vector3.zero
-	local eye = Rules.EYE + shift
-	local look = (if touch then Vector3.new(0, 7.76, Rules.LOOK.Z) else Rules.LOOK) + shift
+	-- PC: one framing, the top shelf under the HUD and the counter's toys above the bottom edge.
 	local function viewOf(booth: Booth): CFrame
-		return CFrame.lookAt(booth.Frame * eye, booth.Frame * look)
+		return CFrame.lookAt(booth.Frame * Rules.EYE, booth.Frame * Rules.LOOK)
 	end
+
+	-- Phones: the framing for this screen (Rules.PhoneFraming, see the header), worked out again only
+	-- when the screen, the HUD or the buttons move. "Shelf" is the shelf alone, centred (nothing on the
+	-- counter yet); "Booth" is the shelf and the counter's toys (from the mischief on, and peeking),
+	-- clear of PEEK / CLOSE.
+	local framed = { Key = "", Eye = Rules.EYE, Pitch = 0, Fov = 60 }
+	local function phoneFraming(kind: string): (Vector3, number, number)
+		local size = camera.ViewportSize
+		local inset = GuiService:GetGuiInset().Y
+		-- The bottom of the HUD: the panel, then the hint's (and the shout's) line under it.
+		local unit = panel.AbsoluteSize.Y / 56
+		local top = 2
+			+ if unit > 0
+				then inset + panel.AbsolutePosition.Y + HUD_BAND * unit
+				else inset + (hudY + HUD_BAND) * UIKit.CurrentScale() * TOUCH_HUD
+		local buttons = {}
+		if kind == "Booth" then
+			for _, name in { "Action_CLOSE", "Action_PEEK 👀" } do
+				local holder = api.Gui:FindFirstChild(name) :: GuiObject?
+				if holder and holder.AbsoluteSize.X > 0 then
+					local middle = holder.AbsolutePosition + holder.AbsoluteSize / 2
+					table.insert(buttons, Vector3.new(middle.X, middle.Y + inset, holder.AbsoluteSize.X / 2))
+				end
+			end
+		end
+		local key = `{kind} {math.round(size.X)} {math.round(size.Y)} {math.round(top)}`
+		for _, button in buttons do
+			key ..= ` {math.round(button.X)} {math.round(button.Y)} {math.round(button.Z)}`
+		end
+		if key ~= framed.Key then
+			local eye, pitch, fov = Rules.PhoneFraming(kind, size, top, buttons)
+			if eye and pitch and fov then
+				framed = { Key = key, Eye = eye, Pitch = pitch, Fov = fov }
+			else
+				-- (A screen it can't be fitted to: the PC framing.)
+				local down = math.atan2(Rules.EYE.Y - Rules.LOOK.Y, Rules.EYE.Z - Rules.LOOK.Z)
+				framed = { Key = key, Eye = Rules.EYE, Pitch = down, Fov = 60 }
+			end
+		end
+		return framed.Eye, framed.Pitch, framed.Fov
+	end
+
+	-- Where the camera goes for a booth (and its field of view).
+	local function goal(booth: Booth): (CFrame, number)
+		if not touch then
+			return viewOf(booth), 60
+		end
+		local name = phase.N
+		local shelfOnly = booth == mine and (name == nil or name == "Ready" or name == "Study")
+		local eye, pitch, fov = phoneFraming(if shelfOnly then "Shelf" else "Booth")
+		local at = booth.Frame * eye
+		local ahead = booth.Frame:VectorToWorldSpace(Vector3.new(0, -math.sin(pitch), -math.cos(pitch)))
+		return CFrame.lookAt(at, at + ahead), fov
+	end
+
 	if mine then
 		camera.CameraType = Enum.CameraType.Scriptable
-		camera.FieldOfView = 60
-		camera.CFrame = viewOf(mine)
+		local view, fov = goal(mine)
+		camera.FieldOfView = fov
+		camera.CFrame = view
 		api:Track(function()
 			-- Back to Roblox's own camera, following this player's character.
 			camera.CameraType = Enum.CameraType.Custom
@@ -588,6 +662,52 @@ function MessyMemory.Start(api)
 				end)
 			end
 		end)
+
+		if touch then
+			-- A wall between every two booths, on this device only: the sides of a wide screen show
+			-- your own booth's nook (or the one you're peeking into), never the next booths' shelves.
+			local length = DIVIDER_OUT - DIVIDER_IN
+			for index = 1, Rules.BOOTHS do
+				local base = Rules.BoothFrame(center, index + 0.5) -- (half a booth round: after booth `index`)
+					* CFrame.new(0, 0, Rules.RING - (DIVIDER_IN + DIVIDER_OUT) / 2)
+				part({
+					Name = "Divider",
+					Size = Vector3.new(0.4, DIVIDER_HEIGHT, length),
+					CFrame = base * CFrame.new(0, DIVIDER_HEIGHT / 2, 0),
+					Color = if index % 2 == 0 then rgb(255, 214, 228) else rgb(255, 240, 246),
+					Parent = api.World,
+				})
+				part({
+					Name = "DividerTrim",
+					Size = Vector3.new(0.9, 0.8, length + 0.3),
+					CFrame = base * CFrame.new(0, DIVIDER_HEIGHT + 0.2, 0),
+					Color = rgb(150, 110, 200),
+					Parent = api.World,
+				})
+				part({
+					Name = "DividerSkirting",
+					Size = Vector3.new(0.7, 1.4, length + 0.1),
+					CFrame = base * CFrame.new(0, 0.7, 0),
+					Color = rgb(150, 110, 200),
+					Parent = api.World,
+				})
+			end
+			-- The name boards on the awnings sit right behind the HUD here, half covered: off.
+			local arena = api:Arena(2)
+			if arena then
+				local function hideSign(item: Instance)
+					if item:IsA("BasePart") and item.Name == "BoothSign" then
+						item.LocalTransparencyModifier = 1
+					elseif item:IsA("SurfaceGui") and item.Parent and item.Parent.Name == "BoothSign" then
+						item.Enabled = false
+					end
+				end
+				for _, item in arena:GetDescendants() do
+					hideSign(item)
+				end
+				api:Track(arena.DescendantAdded:Connect(hideSign))
+			end
+		end
 	end
 
 	-- Phases ----------------------------------------------------------------------------------------
@@ -800,7 +920,7 @@ function MessyMemory.Start(api)
 		elseif mine and placing then
 			line = "Tap a toy, then tap its spot"
 		end
-		hint(line)
+		hint(if touch and shoutLabel.Visible then "" else line) -- (phones: the shout is in its line)
 
 		-- Reveal steps.
 		if name == "Reveal" and phase.Order and phase.Answer then
@@ -913,14 +1033,19 @@ function MessyMemory.Start(api)
 			end
 		end
 
-		-- Camera: your booth, or the rival you're peeking at (eased, with a little lift on the way).
+		-- Camera: your booth, or the rival you're peeking at (eased, and on phones eased between the
+		-- shelf alone and the shelf with the counter).
 		if mine then
 			if camera.CameraType ~= Enum.CameraType.Scriptable then
 				camera.CameraType = Enum.CameraType.Scriptable
 			end
 			local booth = if peekUser and byUser[peekUser] then byUser[peekUser] else mine
-			local target = viewOf(booth)
-			camera.CFrame = camera.CFrame:Lerp(target, math.clamp(dt * 5, 0, 1))
+			local view, fov = goal(booth)
+			local blend = math.clamp(dt * 5, 0, 1)
+			camera.CFrame = camera.CFrame:Lerp(view, blend)
+			if camera.FieldOfView ~= fov then
+				camera.FieldOfView += (fov - camera.FieldOfView) * blend
+			end
 		end
 	end)
 end
