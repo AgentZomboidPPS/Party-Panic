@@ -4,14 +4,15 @@
 -- like a pumpkin hat, a banner with a countdown, lobby decorations and lighting").
 --
 -- The HALLOWEEN PARTY: glowing jack-o'-lanterns by the lamp posts on the south lawn, on top of the
--- vote stage's speakers and at its front corners; pumpkin piles by the flower beds either side of
--- the emote stage; bats circling over the fountain, the emote stage and the stage's two towers;
--- two ghosts bobbing on the south lawn; cobwebs on those lamp posts and on the emote stage's arch;
--- a little mist on the edge of the lawn. Small pieces, spread out, and none of them collides, takes
--- a touch or blocks a ray: nothing sits on a walkway, in front of the portals or on the vote stage's
--- floor in front of them, by the podium and the Hall of Fame (east), the shop and the medal wall
--- (west), the obby or either arcade. Made from parts and an existing mesh (Rake It In's golden
--- pumpkin, painted orange), so nothing new had to be uploaded.
+-- vote stage's speakers and at its front corners; two ghosts bobbing over pumpkin piles either side
+-- of the emote stage; bats circling over the fountain, the emote stage and the stage's two towers;
+-- cobwebs on those lamp posts and in the emote stage's arch; a little mist on the edge of the lawn.
+-- Small pieces, spread out, and none of them collides, takes a touch or blocks a ray: nothing sits
+-- on a walkway, in front of the portals or on the vote stage's floor in front of them, by the podium
+-- and the Hall of Fame (east), the shop and the medal wall (west), the obby or either arcade. What
+-- stands on the ground only goes where there's open ground with room for it (the lobby can change
+-- round it: a spot something now stands on is skipped, or the next one tried). Made from parts and
+-- an existing mesh (Rake It In's golden pumpkin, painted orange), so nothing new was uploaded.
 -- The lobby's light for the event is each device's own (Controllers/EventController, Shared/Events'
 -- Look): Lighting is the whole world's, arenas included, so the server never changes it.
 --
@@ -53,14 +54,14 @@ local SPARKLE = "rbxasset://textures/particles/sparkles_main.dds"
 -- day). Off the walkways, away from the zones above, and not where the daily secret token goes.
 local HUNT_SPOTS: { [string]: { Vector3 } } = {
 	Halloween = {
-		Vector3.new(6, 0, 68.5), -- behind the emote stage's arch
-		Vector3.new(22.8, 0, 62.6), -- behind the flower bed east of the emote stage
-		Vector3.new(-22.8, 0, 62.6), -- behind the flower bed west of the emote stage
-		Vector3.new(-21.4, 0, 25.5), -- behind the bench south-west of the fountain
-		Vector3.new(21.4, 0, 25.5), -- behind the bench south-east of the fountain
+		Vector3.new(6, 0, 70.5), -- behind the emote stage's arch
+		Vector3.new(23.1, 0, 63.4), -- behind the flower bed east of the emote stage
+		Vector3.new(-23.1, 0, 63.4), -- behind the flower bed west of the emote stage
+		Vector3.new(-21.8, 0, 26), -- behind the bench south-west of the fountain
+		Vector3.new(21.8, 0, 26), -- behind the bench south-east of the fountain
 		Vector3.new(-28, 0, -72), -- behind the vote stage, west
 		Vector3.new(28, 0, -72), -- behind the vote stage, east
-		Vector3.new(-47, 0, 57), -- behind the quest board
+		Vector3.new(-47, 0, 58), -- behind the quest board
 	},
 }
 
@@ -131,18 +132,51 @@ local function strand(parent: Instance, a: Vector3, b: Vector3, width: number)
 	})
 end
 
--- Where the ground (or whatever the lobby has there: a stage floor, a speaker's top) is under `at`.
-local function groundAt(at: Vector3): Vector3
+-- The first thing of the lobby (or the terrain) a ray straight down from high over `at` meets.
+local function rayDown(at: Vector3): RaycastResult?
 	local root = lobby
 	if not root then
-		return at
+		return nil
 	end
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
 	params.FilterDescendantsInstances = { root, workspace.Terrain }
-	local origin = Vector3.new(at.X, at.Y + 60, at.Z)
-	local hit = workspace:Raycast(origin, Vector3.new(0, -120, 0), params)
+	return workspace:Raycast(Vector3.new(at.X, at.Y + 60, at.Z), Vector3.new(0, -120, 0), params)
+end
+
+-- The top of whatever the lobby has under `at`: a stage's floor, a speaker's top.
+local function topAt(at: Vector3): Vector3
+	local hit = rayDown(at)
 	return if hit then hit.Position else at
+end
+
+-- Open ground at `at`, with room for something `size` big standing on it: the plaza's floor (or
+-- the terrain past it) is the first thing under it, and nothing solid stands in the way (a booth's
+-- back wall, a bench). Nil when it isn't open.
+local function openGround(at: Vector3, size: Vector3): Vector3?
+	local root = lobby
+	local hit = rayDown(at)
+	if not root or not hit then
+		return nil
+	end
+	local ground = root:FindFirstChild("Ground")
+	if hit.Instance ~= workspace.Terrain and not (ground and hit.Instance:IsDescendantOf(ground)) then
+		return nil
+	end
+	-- What actually stands there (its shape, not its bounding box: the turned booths' boxes are huge).
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { root }
+	local probe = Build.Decor({
+		Name = "EventDecorProbe",
+		Size = size,
+		CFrame = CFrame.new(hit.Position + Vector3.new(0, 0.4 + size.Y / 2, 0)),
+		Transparency = 1,
+		Parent = workspace,
+	})
+	local blocked = #workspace:GetPartsInPart(probe, params) > 0
+	probe:Destroy()
+	return if blocked then nil else hit.Position
 end
 
 -- The carved, glowing face on a pumpkin standing at `ground` (its front looks along LookVector),
@@ -246,43 +280,39 @@ local function batRing(parent: Instance, center: Vector3, radius: number, count:
 	return ring
 end
 
--- A small round ghost floating at `cframe` (facing its LookVector), bobbing on each device (tag
--- PP_Bob), with a pale glow.
-local function ghost(parent: Instance, cframe: CFrame)
+-- A round ghost floating at `cframe` (facing its LookVector), `scale` times 4.5 tall, bobbing on
+-- each device (tag PP_Bob), with a pale glow.
+local function ghost(parent: Instance, cframe: CFrame, scale: number)
 	local model = Build.Model("Ghost", parent)
-	local function piece(name: string, shape: Enum.PartType, size: Vector3, at: CFrame, color: Color3?)
+	local function piece(name: string, shape: Enum.PartType, size: Vector3, at: Vector3, color: Color3?)
 		return Build.Decor({
 			Name = name,
 			Shape = shape,
-			Size = size,
-			CFrame = cframe * at,
+			Size = size * scale,
+			CFrame = cframe * CFrame.new(at * scale),
 			Color = color or GHOST,
 			Transparency = if color then 0 else 0.08,
 			Parent = model,
 		})
 	end
-	local head = piece("Head", Enum.PartType.Ball, Vector3.one * 2.4, CFrame.new())
+	local head = piece("Head", Enum.PartType.Ball, Vector3.one * 2.4, Vector3.zero)
 	-- The sheet: a short upright cylinder under the head, its hem a row of little balls.
-	piece(
-		"Sheet",
-		Enum.PartType.Cylinder,
-		Vector3.new(1.9, 2.36, 2.36),
-		CFrame.new(0, -0.95, 0) * CFrame.Angles(0, 0, math.rad(90))
-	)
+	local sheet = piece("Sheet", Enum.PartType.Cylinder, Vector3.new(1.9, 2.36, 2.36), Vector3.new(0, -0.95, 0))
+	sheet.CFrame *= CFrame.Angles(0, 0, math.rad(90))
 	for index = 0, 5 do
 		local angle = index / 6 * math.pi * 2
 		piece(
 			"Hem",
 			Enum.PartType.Ball,
 			Vector3.one * 0.9,
-			CFrame.new(math.cos(angle) * 0.82, -1.9, math.sin(angle) * 0.82)
+			Vector3.new(math.cos(angle) * 0.82, -1.9, math.sin(angle) * 0.82)
 		)
 	end
 	local dark = rgb(40, 32, 60)
-	piece("Eye", Enum.PartType.Ball, Vector3.one * 0.42, CFrame.new(-0.42, 0.18, -1.02), dark)
-	piece("Eye", Enum.PartType.Ball, Vector3.one * 0.42, CFrame.new(0.42, 0.18, -1.02), dark)
-	piece("Mouth", Enum.PartType.Ball, Vector3.new(0.38, 0.5, 0.38), CFrame.new(0, -0.38, -1.04), dark)
-	Build.Light(head, rgb(205, 180, 255), 10, 0.9)
+	piece("Eye", Enum.PartType.Ball, Vector3.one * 0.42, Vector3.new(-0.42, 0.18, -1.02), dark)
+	piece("Eye", Enum.PartType.Ball, Vector3.one * 0.42, Vector3.new(0.42, 0.18, -1.02), dark)
+	piece("Mouth", Enum.PartType.Ball, Vector3.new(0.38, 0.5, 0.38), Vector3.new(0, -0.38, -1.04), dark)
+	Build.Light(head, rgb(205, 180, 255), 10 * scale, 0.9)
 	model.WorldPivot = cframe
 	CollectionService:AddTag(model, "PP_Bob")
 end
@@ -363,24 +393,53 @@ local function southLamps(root: Model): { Vector3 }
 	return list
 end
 
--- A CFrame on the ground at (x, z) that looks at `target` (level).
-local function standing(x: number, z: number, target: Vector3, y: number?): CFrame
-	local ground = groundAt(Vector3.new(x, y or 0, z))
-	return CFrame.lookAt(ground, Vector3.new(target.X, ground.Y, target.Z))
+-- Standing at `at` (its pivot on the ground), looking at `target` (level).
+local function facing(at: Vector3, target: Vector3): CFrame
+	return CFrame.lookAt(at, Vector3.new(target.X, at.Y, target.Z))
 end
+
+-- A CFrame on top of whatever is under (x, z) (a speaker, a stage's floor), looking at `target`.
+local function onTop(x: number, z: number, target: Vector3, y: number?): CFrame
+	return facing(topAt(Vector3.new(x, y or 0, z)), target)
+end
+
+-- The first of `spots` with open ground for something `size` big, or nil.
+local function firstOpen(spots: { Vector3 }, size: Vector3): Vector3?
+	for _, spot in spots do
+		local ground = openGround(spot, size)
+		if ground then
+			return ground
+		end
+	end
+	return nil
+end
+
+local LANTERN_ROOM = Vector3.new(3.6, 2.6, 3.6) -- a scale-1 jack-o'-lantern's footprint, with a little room
 
 local function halloween(root: Model, into: Model)
 	local center = Vector3.zero
-	-- Jack-o'-lanterns at the foot of the south lamp posts (with a little one beside), each lamp
-	-- with a cobweb between its pole and the bunting to the next one.
+	-- Jack-o'-lanterns at the foot of the south lamp posts (with a little one beside), on the plaza
+	-- side of the pole where there's room (else round it: one lamp stands right behind the arcade
+	-- range's booth), each lamp with a cobweb between its pole and the bunting to the next one.
 	local lamps = southLamps(root)
 	for index, lamp in lamps do
 		local inward = Vector3.new(-lamp.X, 0, -lamp.Z).Unit
 		local across = Vector3.new(-inward.Z, 0, inward.X)
-		local spot = lamp + inward * 2.1 + across * 1.1
-		pumpkin(into, standing(spot.X, spot.Z, center), 0.8, true)
-		local small = lamp + inward * 1.6 - across * 1.5
-		pumpkin(into, standing(small.X, small.Z, center) * CFrame.Angles(0, 0.7 * index, 0), 0.5, false)
+		local sides = {
+			lamp + inward * 2.3 + across * 1.2,
+			lamp + inward * 2.3 - across * 1.2,
+			lamp - inward * 2.3 + across * 1.2,
+			lamp - inward * 2.3 - across * 1.2,
+		}
+		local spot = firstOpen(sides, LANTERN_ROOM)
+		if spot then
+			pumpkin(into, facing(spot, center), 1, true)
+			local beside = spot + (lamp - spot) * 0.2 + across * (if (spot - lamp):Dot(across) > 0 then -2.6 else 2.6)
+			local small = firstOpen({ beside }, LANTERN_ROOM * 0.6)
+			if small then
+				pumpkin(into, facing(small, center) * CFrame.Angles(0, 0.7 * index, 0), 0.6, false)
+			end
+		end
 		local neighbour = lamps[index + 1] or lamps[index - 1]
 		if neighbour and (neighbour - lamp).Magnitude < 40 then
 			local toward = Vector3.new(neighbour.X - lamp.X, 0, neighbour.Z - lamp.Z).Unit
@@ -391,26 +450,36 @@ local function halloween(root: Model, into: Model)
 	-- The vote stage: a big jack-o'-lantern on each speaker stack, and one at each front corner of
 	-- the stage floor (by the light towers, outside the portals).
 	for _, side in { -1, 1 } do
-		pumpkin(into, standing(side * 51, -57, Vector3.new(0, 0, 12), 40), 1.25, true)
-		pumpkin(into, standing(side * 43.6, -42.4, center, 10), 0.9, true)
+		pumpkin(into, onTop(side * 51, -57, Vector3.new(0, 0, 12), 40), 1.25, true)
+		pumpkin(into, onTop(side * 43.6, -42.4, center, 10), 0.9, true)
 	end
-	-- Pumpkin piles at the outer ends of the flower beds beside the emote stage.
+	-- Two ghosts on the south lawn either side of the emote stage, each bobbing over a pumpkin pile
+	-- (a lantern and two little ones, put down together where the whole pile has room: the open lawn
+	-- in front of the flower beds), looking at the fountain.
 	for _, side in { -1, 1 } do
-		local x, z = side * 28.3, 55.7
-		pumpkin(into, standing(x, z, center), 1, true)
-		pumpkin(into, standing(x + side * 1.9, z + 1.4, center) * CFrame.Angles(0, 1.1, 0), 0.62, false)
-		pumpkin(into, standing(x - side * 1.4, z + 2, center) * CFrame.Angles(0, -0.6, 0), 0.5, false)
+		local spots = {
+			Vector3.new(side * 25.8, 0, 48.6),
+			Vector3.new(side * 27.5, 0, 51),
+			Vector3.new(side * 24, 0, 46.5),
+		}
+		local ground = firstOpen(spots, Vector3.new(6.4, 2.6, 5.6))
+		local float = Vector3.new(side * 33, 7.2, 65) -- (over the bushes, if no pile goes down)
+		if ground then
+			local pile = facing(ground, center)
+			pumpkin(into, pile, 1, true)
+			pumpkin(into, pile * CFrame.new(2.1, 0, 1.1) * CFrame.Angles(0, 0.9, 0), 0.62, false)
+			pumpkin(into, pile * CFrame.new(-1.8, 0, 1.5) * CFrame.Angles(0, -0.7, 0), 0.5, false)
+			float = (pile * CFrame.new(0.4, 7.4, 2.4)).Position
+		end
+		ghost(into, CFrame.lookAt(float, Vector3.new(0, float.Y, 0)), 1.5)
 	end
-	-- Bats: over the fountain's trophy, over the emote stage's crown, round the stage's towers.
-	batRing(into, Vector3.new(0, 27, 0), 9, 3, 1)
-	batRing(into, Vector3.new(0, 35, 56), 9, 3, 1)
-	batRing(into, Vector3.new(-50, 50, -70), 7, 2, 1.1)
-	batRing(into, Vector3.new(50, 50, -70), 7, 2, 1.1)
-	-- Two ghosts on the south lawn, either side of the emote stage, looking at the fountain.
-	for _, side in { -1, 1 } do
-		local position = Vector3.new(side * 33, 4.6, 65)
-		ghost(into, CFrame.lookAt(position, Vector3.new(0, 4.6, 0)))
-	end
+	-- Bats: over the fountain's trophy, over the emote stage's crown, round the stage's towers, big
+	-- enough to read as bats from across the plaza. (High enough over the trophy that, seen from the
+	-- south lawn, they cross the sky above the vote stage, never its screens or its sign.)
+	batRing(into, Vector3.new(0, 38, 0), 9, 3, 1.5)
+	batRing(into, Vector3.new(0, 36, 56), 9, 3, 1.5)
+	batRing(into, Vector3.new(-50, 51, -70), 7.5, 2, 1.8)
+	batRing(into, Vector3.new(50, 51, -70), 7.5, 2, 1.8)
 	-- Cobwebs in the emote stage arch's top corners, on its front.
 	for _, side in { -1, 1 } do
 		cobweb(into, Vector3.new(side * 12.7, 16, 60.6), Vector3.new(0, -1, 0), Vector3.new(-side, 0, 0), 3.4)
@@ -541,10 +610,12 @@ function EventDecor.PlaceHunt(set: string, spots: { number }): { Model }
 	local placed = {}
 	for _, spot in spots do
 		local where = HUNT_SPOTS[set] and HUNT_SPOTS[set][spot]
-		if where then
-			local ground = groundAt(where)
-			local facing = CFrame.lookAt(ground, Vector3.new(0, ground.Y, 0))
-			table.insert(placed, huntPumpkin(folder, facing, spot))
+		-- (A spot the lobby has since built over stays empty today rather than up on a roof.)
+		local ground = where and openGround(where, LANTERN_ROOM * 0.6)
+		if ground then
+			table.insert(placed, huntPumpkin(folder, facing(ground, Vector3.zero), spot))
+		elseif where then
+			warn(`[EventDecor] {set}: hunt spot {spot} isn't open ground any more`)
 		end
 	end
 	return placed

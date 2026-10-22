@@ -607,6 +607,14 @@ do
 			then `{chip.Text} [{if up then "on screen" else "off screen"}{if badge and badge.Visible then ", !" else ""}]`
 			else "missing"
 	end
+	-- The lobby's look for the event (this server's Lighting stands in for a device's): its colour
+	-- correction while the party is on, and Lighting exactly as it was once it's over.
+	local Lighting = game:GetService("Lighting")
+	local function look()
+		local effect = Lighting:FindFirstChild("PP_EventLook")
+		return `{if effect then "on" else "off"}, outdoor ambient {Lighting.OutdoorAmbient:ToHex()}, shift top {Lighting.ColorShift_Top:ToHex()}`
+	end
+	eventChecks.lookBefore = look()
 	local now = workspace:GetServerTimeNow()
 	local party = { Id = "Halloween2026", Name = "HALLOWEEN PARTY", EndsAt = now + 9.5 * 86400, DoubleCoins = false, DoubleEndsAt = 0 }
 	local today = math.floor(now / 86400)
@@ -617,6 +625,7 @@ do
 	GameState.SetJSON("Event", party)
 	task.wait(1.2)
 	eventChecks.chip = chipText()
+	eventChecks.lookDuring = look()
 	step = "Event screen"
 	State.OpenScreen:Fire("Event")
 	task.wait(1.2)
@@ -634,6 +643,7 @@ do
 	GameState.SetJSON("Event", { Id = "", Name = "", EndsAt = 0, DoubleCoins = true, DoubleEndsAt = now + 86400 + 4 * 3600 + 120 })
 	task.wait(1.2)
 	eventChecks.chipWeekendOnly = chipText()
+	eventChecks.lookAfter = look()
 	party.DoubleCoins, party.DoubleEndsAt = false, 0
 	GameState.SetJSON("Event", party)
 	-- A round pays 2 candy (the profile comes with its results): nothing on the results card, then

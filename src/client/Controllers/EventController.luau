@@ -62,6 +62,7 @@ local lastCandy: number? = nil
 local pendingCandy = 0 -- candy from a round, popped on the chip back in the lobby
 local popUntil = 0
 local justClaimed: string? = nil -- the reward just asked for: its card pops when the server says yes
+local ticking: { [TextLabel]: () -> string } = {} -- the open screen's countdowns, and their words
 
 -- What's on --------------------------------------------------------------------------------------
 
@@ -104,7 +105,10 @@ local function refreshChip()
 		badge.Visible = claimable()
 	end
 	if state and state.DoubleCoins then
-		ribbonChip:Set(if definition then definition.Icon else "💰", `2× COINS · {timeLeft(state.DoubleEndsAt)}`)
+		ribbonChip:Set(
+			if definition then definition.Icon else Theme.CoinIcon,
+			`2× COINS · {timeLeft(state.DoubleEndsAt)}`
+		)
 	elseif state and definition then
 		local words = `{definition.Short} · {timeLeft(state.EndsAt)}`
 		-- PC has the room for the candy too; phones keep the row for the other chips.
@@ -144,7 +148,7 @@ local function buildChip(context)
 				State.OpenScreen:Fire("Event")
 			elseif current and current.DoubleCoins then
 				NotificationController.Show(
-					`💰 2× COINS WEEKEND: every round pays double for {timeLeft(current.DoubleEndsAt)} more!`,
+					`{Theme.CoinIcon} 2× COINS WEEKEND: every round pays double for {timeLeft(current.DoubleEndsAt)} more!`,
 					"reward",
 					5
 				)
@@ -376,8 +380,11 @@ local function render()
 		Parent = count,
 		Children = { UIKit.TextStroke(0.1) },
 	})
-	UIKit.Label({
-		Text = `ENDS IN {timeLeft(state.EndsAt)}`,
+	local function endsIn(): string
+		return `ENDS IN {timeLeft(state.EndsAt)}`
+	end
+	local ends = UIKit.Label({
+		Text = endsIn(),
 		Font = Theme.Fonts.Display,
 		TextSize = 22,
 		TextWrapped = false,
@@ -388,6 +395,8 @@ local function render()
 		Parent = header,
 		Children = { UIKit.TextStroke(0.2) },
 	})
+	table.clear(ticking)
+	ticking[ends] = endsIn
 	if state.DoubleCoins then
 		local pill = UIKit.Panel({
 			Name = "DoubleCoins",
@@ -396,8 +405,11 @@ local function render()
 			CornerRadius = 18,
 			Parent = header,
 		}, Theme.Colors.Yellow, Theme.Colors.Orange)
-		UIKit.Label({
-			Text = `💰 2× COINS WEEKEND · {timeLeft(state.DoubleEndsAt)}`,
+		local function weekend(): string
+			return `{Theme.CoinIcon} 2× COINS WEEKEND · {timeLeft(state.DoubleEndsAt)}`
+		end
+		local label = UIKit.Label({
+			Text = weekend(),
 			Font = Theme.Fonts.Display,
 			TextSize = 20,
 			TextWrapped = false,
@@ -405,6 +417,7 @@ local function render()
 			Parent = pill,
 			Children = { UIKit.TextStroke(0.2) },
 		})
+		ticking[label] = weekend
 	end
 
 	-- The track: one card a step, in order.
@@ -638,11 +651,19 @@ function EventController.Start(context)
 			task.delay(1.2, popCandy) -- after the row has come back
 		end
 	end)
-	-- The countdowns tick (the words only change once a minute; the row redraws only then).
+	-- The countdowns tick (the words only change once a minute; the row redraws only then), the
+	-- open screen's too (just their words: nothing else on it moves).
 	task.spawn(function()
 		while true do
 			task.wait(1)
 			refreshChip()
+			for label, words in ticking do
+				if label.Parent then
+					label.Text = words()
+				else
+					ticking[label] = nil
+				end
+			end
 		end
 	end)
 	watchPumpkins()
