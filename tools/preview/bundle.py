@@ -11,8 +11,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORLD = ROOT / "src" / "server" / "World"
-MODULES = ["Build", "Shapes", "MeshAssets", "MeshLibrary", "Environment", "LobbyObby", "Arcade", "LobbyBuilder",
-           "BeachBalls"]
+MODULES = ["Build", "Shapes", "MeshAssets", "MeshLibrary", "Environment", "LobbyObby", "Arcade", "HallOfFame",
+           "MedalWall", "EventDecor", "LobbyBuilder", "BeachBalls"]
 # Shared modules the World modules require (ReplicatedStorage.Shared.<path>), served from the bundle
 # since a saved place version may not have them yet.
 SHARED = ["Logic/ParkourCourse", "Logic/SkeeBall"]
