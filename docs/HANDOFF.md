@@ -77,6 +77,98 @@ Session A's handoff from 17:40 UTC, still accurate except where this block says 
   repo's `scripts/`. Blender: `python3.11 -m venv` + `pip install bpy` (5.0.1). Mesh/music tools: `pip install scipy
   scikit-image`.
 
+## Session A: songs uploaded, and the five "keep players coming back" features (2026-10-22 05:00 UTC)
+
+Branch **`claude/quirky-hopper-5yk8zk`**. Session B merges it before publishing (the owner tells it to).
+
+- **Round songs uploaded** (owner: "take over the music.", then "Upload now"). There are 5 packs:
+
+  | Pack | Id |
+  | --- | --- |
+  | ModePack1 | 133632130255608 |
+  | ModePack2 | 117185721710928 |
+  | ModePack3 | 96432706159875 |
+  | ModePack4 | 91819577463974 |
+  | ModePack5 | 111855655225102 |
+
+  - All five are approved by Roblox and recorded in `AudioAssets` and `assets/uploaded.json` (c7dcb2d).
+  - That used 5 of the owner's 10 audio uploads for this month.
+  - Each of the 27 games plays its own song with the drop on GO (`tools/music`, `ModeMusic.luau`, `AudioController`).
+  - Re-check a game's timing with `python3 tools/music/modes.py check` when its round length changes. Replacing a song
+    costs an upload.
+- **The five features.** The owner asked "If you could do 5 things to keep players addicted what would you do?", then
+  "Can you work on all of that? this wont mess with what the other workers are working on right?". Each one is built
+  in its own files, hung on these shared hooks:
+  - `RoundEvents.Finished` (fired by RoundManager after the rewards);
+  - `Boosts` (extra coin lines on a round's reward);
+  - the save fields `Cups`, `Medals`, `Weekly` and `Events`, which the client snapshot carries;
+  - the GameState keys `Cup`, `Event` and `HallOfFame`;
+  - the lobby's chip row `UI/LobbyRibbon`. Chip priorities: 1 Event, 2 Cup, 3 Invite, 4 Weekly. On phones it sits in the
+    first-join tip's spot. On PC it sits under the banner, below the coins line;
+  - `MedalService.Award(player, id)`.
+
+  The features:
+  1. **Friends** (`FriendsService`, `InviteController`, `Logic/FriendLogic`):
+     - 👋 INVITE chip that opens Roblox's invite prompt;
+     - +1 coin for a round played with a Roblox friend;
+     - "You beat Ann!" / "Bo beat you" toasts after the results;
+     - "Ann is here!" when a friend joins.
+  2. **Party Cups** (`CupService`, `CupController`, `World/CupCrown`, `Logic/PartyCup`):
+     - every 5 rounds on a server make one cup, scored 10/8/6/5/4/3/2 then 1;
+     - bots can win;
+     - after the 5th round a podium pays 5/3/2 coins to people;
+     - the champion wears a crown in the lobby until the next cup ends. It comes off for their rounds.
+     - A PLAY AGAIN replay puts the podium off until the next real lobby.
+  3. **Medals** (`MedalService`, `MedalController`, `World/MedalWall`, `Shared/Medals`, `Logic/MedalLogic`):
+     - one per game (27, built from GameDefinitions) plus 9 big ones;
+     - a MEDAL EARNED card at a calm lobby moment;
+     - a 🥇 Medals tab in the Rewards screen;
+     - a medal wall on the south-west lawn that each client lights up;
+     - Roblox badges once ids go in `BADGE_IDS` (`Shared/Medals.luau`). All are 0 now.
+  4. **Weekly leaderboard + Hall of Fame** (`LeaderboardService`, `HallOfFameController`, `World/HallOfFame`,
+     `Logic/WeeklyLogic`):
+     - points 10/7/5 + 1 for playing, reset Monday 00:00 UTC;
+     - an OrderedDataStore `PP_Weekly_<week>` per week, written in the background;
+     - statues of last week's top 3 between the winner podium and the shooting gallery;
+     - the 📈 chip and the THIS WEEK window.
+  5. **HALLOWEEN PARTY + 2× coins weekends** (`EventService`, `EventController`, `World/EventDecor`, `Shared/Events`,
+     `Logic/EventLogic`):
+     - runs until 2026-11-02 00:00 UTC (`Ends` in `Events.luau`);
+     - candy from rounds and 3 golden pumpkins a day in the lobby;
+     - a free track of 5 limited cosmetics at 10/25/45/70/100 candy, with the Halloween medal at 100;
+     - decorations and a spookier lobby look, drawn per device;
+     - double coins every Saturday and Sunday UTC (`DoubleCoinsWeekends`).
+- **Shared screen rules added for them:**
+  - Toasts wait while the results card or the cup podium is up (`PP_ResultsShowing`, `PP_CupPodium`;
+    NotificationController).
+  - The results card draws 6+ reward lines compact.
+  - Pop-ups wait for calm lobby moments.
+- **Checks:**
+  - Each feature has its own round-harness check on a real server: `weekly_check.py`, `round_harness.py CUP`,
+    `scenarios/Friends.luau`, `scenarios/Medals_check.luau` and `scenarios/Event_halloween.luau`.
+  - Client harness blocks: `cupChecks`, `medalChecks` and `eventChecks`.
+  - All passed. Together, with version 35's PLAY AGAIN merged in: 6 real rounds of a cup with all five services on
+    (`round_harness.py CUP --players 3 --bots 5`): 0 errors, 28/28; the whole client on phones (5 sizes): 0 errors, 0
+    render problems; on PC: 0 problems after the chips moved below the coins' line and step aside for level-up and
+    medal cards.
+- **Tests never write real data:** under the harness flag (`workspace PP_Harness`) the weekly board uses an in-memory
+  store and badges are only listed.
+- **Not checkable here:**
+  - real friendships and invites;
+  - badges;
+  - DataStores at scale;
+  - real avatars on statues;
+  - the lobby look;
+  - touching a pumpkin;
+  - the crown on a moving character.
+- **The owner decides:**
+  - which badges to make (Creator Hub; a few free per day, then Robux);
+  - the event's end date;
+  - candy amounts;
+  - cup values;
+  - whether 2× weekends stay all year;
+  - a pumpkin hat later (needs a new Hat slot).
+
 ## 0. Start here (the first 10 minutes)
 
 1. Read section 1 (the owner and the house rules), then skim section 6 (map of the code).
