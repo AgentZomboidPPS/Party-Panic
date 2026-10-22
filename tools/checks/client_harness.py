@@ -1407,6 +1407,116 @@ end
 phase("Waiting", 0)
 task.wait(1)
 
+-- 4b. The PARTY CUP (CupController), from the server's attribute (GameState "Cup", as
+-- Services/CupService writes it): after round 2 of 5 with the player 5th of eight, the standings
+-- for a moment back in the lobby ("Cup moment": the top three and you), the chip in the lobby's row
+-- ("Cup chip"), the standings window it opens ("Cup standings"), then a cup's final standings and
+-- its podium as the results card's time runs out ("Cup podium": a bot champion with --bots, else
+-- the player), closed by the vote. cupChecks: what the chip and the screens showed.
+local cupChecks = {}
+do
+	local CupController = __require("Client/Controllers/CupController")
+	-- On phones the lobby's chips and the moment give way to the first-join tip: let it finish.
+	for _ = 1, 40 do
+		if table.find(__sent, "TutorialDone") then
+			break
+		end
+		task.wait(0.25)
+	end
+	cupChecks.tutorialDone = table.find(__sent, "TutorialDone") ~= nil
+	local others = {}
+	for index, other in __players do
+		if index > 1 then
+			table.insert(others, { other.DisplayName, other.UserId, false })
+		end
+	end
+	for _, bot in bots do
+		if bot.info.Parent then
+			table.insert(others, { bot.display, bot.userId, true })
+		end
+	end
+	local function standings(myPlace, points)
+		local rows, nextOther = {}, 0
+		for place = 1, 8 do
+			local gain = ({ 10, 8, 6, 5, 4, 3, 2, 1 })[place]
+			local who = if place == myPlace then { __player.DisplayName, __player.UserId, false } else nil
+			if not who then
+				nextOther += 1
+				who = others[nextOther]
+			end
+			if who then
+				table.insert(rows, { UserId = who[2], Name = who[1], Points = points[place], IsBot = who[3], Place = place, Gain = gain })
+			end
+		end
+		return rows
+	end
+	local lastPodium = { Number = 2, Podium = standings(if #bots > 0 then 1 else 3, { 44, 40, 37 }) }
+	-- Who wears the crown (a person: with --bots the player won last cup, and loses it to a bot now).
+	local champion = if #bots > 0
+		then { UserId = __player.UserId, Name = __player.DisplayName, Cup = 2 }
+		else { UserId = others[1][2], Name = others[1][1], Cup = 2 }
+	local function setPhase(name, seconds)
+		GameState.Set("Phase", name)
+		GameState.Set("PhaseEndsAt", if seconds > 0 then workspace:GetServerTimeNow() + seconds else 0)
+	end
+	step = "cup moment"
+	setPhase("Results", 3)
+	GameState.SetJSON("Cup", {
+		Number = 3, Round = 3, Of = 5, Played = 2, Done = false, EndedAt = workspace:GetServerTimeNow(),
+		Standings = standings(5, { 18, 16, 14, 12, 11, 9, 6, 4 }), Champion = champion, Last = lastPodium,
+	})
+	task.wait(1)
+	setPhase("Cleanup", 0)
+	task.wait(1.4) -- a beat for a level-up card to go first, then it pops in
+	snap("Cup moment")
+	cupChecks.moment = CupController.Status()
+	setPhase("Intermission", 20)
+	task.wait(4.6) -- the moment's time
+	cupChecks.afterMoment = CupController.Status()
+	snap("Cup chip")
+	step = "cup standings"
+	CupController.OpenStandings()
+	task.wait(1)
+	snap("Cup standings")
+	cupChecks.standings = CupController.Status()
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
+	-- The cup's last round: its final standings come with the results, the podium takes over as the
+	-- results card's time runs out, the new cup arrives as it's paid, and the vote closes it.
+	step = "cup podium"
+	setPhase("InRound", 30)
+	local myFinal = if #bots > 0 then 2 else 1
+	local final = standings(myFinal, { 46, 41, 37, 30, 26, 21, 17, 12 })
+	GameState.SetJSON("Cup", {
+		Number = 3, Round = 5, Of = 5, Played = 5, Done = true, EndedAt = workspace:GetServerTimeNow(),
+		Standings = final, Champion = champion, Last = lastPodium,
+	})
+	task.wait(0.5)
+	cupChecks.podiumBeforeResults = CupController.Status().Podium
+	setPhase("Results", 1.5)
+	task.wait(1.7)
+	snap("Cup podium")
+	cupChecks.podium = CupController.Status()
+	setPhase("Cleanup", 0)
+	task.wait(0.4)
+	local podiumRows = {}
+	for index = 1, 3 do
+		table.insert(podiumRows, final[index])
+	end
+	GameState.SetJSON("Cup", {
+		Number = 4, Round = 1, Of = 5, Played = 0, Done = false, EndedAt = workspace:GetServerTimeNow(),
+		Standings = {}, Champion = if final[1].IsBot then nil else { UserId = final[1].UserId, Name = final[1].Name, Cup = 3 },
+		Last = { Number = 3, Podium = podiumRows },
+	})
+	task.wait(0.5)
+	cupChecks.newCup = CupController.Status()
+	setPhase("Voting", 12)
+	task.wait(0.5)
+	cupChecks.atTheVote = CupController.Status()
+	setPhase("Waiting", 0)
+	task.wait(0.5)
+end
+
 -- 5. Sitting out (UI/SitOutSwitch: by the banner, and in Settings). A tap flips the switches at
 -- once and asks the server; with no answer they slide back. Then the server's answer (PP_SitOut,
 -- as Services/SitOutService sets it) and the screens that change for someone sitting out.
@@ -1551,6 +1661,7 @@ return game:GetService("HttpService"):JSONEncode({
 	hudChecks = hudChecks,
 	sitOutChecks = sitOutChecks,
 	tipChecks = tipChecks,
+	cupChecks = cupChecks,
 	textReport = __textReport,
 	portals = __portals,
 })
