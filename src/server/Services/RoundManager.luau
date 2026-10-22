@@ -333,6 +333,10 @@ local function startReplay(id: string): boolean
 	GameState.SetJSON("VoteCounts", {})
 	Telemetry.ServerEvent("GameSelected", { game = id, replay = replayStreak })
 	runRound(definition, lineup.Participants)
+	if not replayNext then
+		-- Called off before GO (no results, so no new vote): the replay isn't announced any more.
+		GameState.Set("Replay", "")
+	end
 	return true
 end
 

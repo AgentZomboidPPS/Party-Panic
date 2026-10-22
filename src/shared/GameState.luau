@@ -18,7 +18,8 @@
 --                 LeaderboardService
 --   ReplayVote    JSON { Open, Game, Yes, No, Voters (UserIds), Need, Capped }: the results card's
 --                 PLAY AGAIN vote (Services/ReplayService); each voter's answer is their PP_Replay
---   Replay        the game about to be played again straight after this round's results ("" if none)
+--   Replay        the game a PLAY AGAIN vote chose to play again straight after this round's results,
+--                 from the end of those results until the replay's own results ("" if none)
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
