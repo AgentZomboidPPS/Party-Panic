@@ -8,9 +8,10 @@
 -- What it checks (each line of the run's log starts with "event:"):
 --   * the clock moved to Halloween, Saturday 31 October 12:00 UTC: GameState "Event" says the party
 --     and a double coins weekend are on;
---   * during the round, claims through the EventAction remote: Bot1 (99 candy) taps all five
---     rewards at once: three go through (the rate limit) and the 100-candy one never does; it claims
---     the fourth 2.5 s later. Bot2 (9 candy) can't claim the first. Bad payloads do nothing;
+--   * during the round, claims through the EventAction remote: Bot1 (99 candy) taps every reward
+--     at once: three go through (the rate limit) and the 100-candy one never does; it claims the
+--     fourth and fifth (the PUMPKIN HAT and BAT BURST) 2.5 s later. Bot2 (9 candy) can't claim the
+--     first. Bad payloads do nothing;
 --   * after the round: each stand-in's results lines (the "2× COINS WEEKEND" line pays the round's
 --     coins again), the candy it paid (bots get none), the medal for Bot1 reaching the end of the
 --     track (once), the golden pumpkin hunt for Bot3 (today's spot, once, not from afar, not a spot
@@ -103,7 +104,7 @@ return function(env)
 		send(bot3, "Claim", string.rep("x", 100))
 		send(bot3, "Nope", track[1].Reward)
 		task.wait(0.6)
-		note("a burst of 5 claims: " .. describe(bot1))
+		note(`a burst of {#track} claims: ` .. describe(bot1))
 		note("too early: " .. describe(bot2))
 		note("bad payloads: " .. describe(bot3))
 		task.wait(2.2)
