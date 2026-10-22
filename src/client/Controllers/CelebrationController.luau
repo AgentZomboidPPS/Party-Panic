@@ -25,6 +25,12 @@
 -- comes first, which is also what EQUIP ALL puts on (a veteran's NEW REWARDS! card would
 -- otherwise equip the level-3 trail over the level-35 one). The "Lv 10!" over a head shows once
 -- everyone is back in the lobby (ProgressionService holds the ones from the end of a round).
+--
+-- Shorter lobby (owner: "Less time sitting in the lobby. total of 20 seconds instead of 40."): the
+-- calm time between the results and the vote is about 6 seconds now, so a round's card shows for
+-- those 6 (the vote closes it), and one that comes in later in the lobby (an emote quest's level-up)
+-- waits for the next calm moment rather than start with under MIN_SHOW seconds to go: it would
+-- only flash up before the vote took it away, and it wouldn't come back.
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -54,6 +60,7 @@ type Celebration = {
 
 local CALM = { Waiting = true, Intermission = true, Cleanup = true }
 local SHOW_FOR = 9
+local MIN_SHOW = 4 -- a card starts in the lobby only with at least this long before the vote
 -- The card, in scaled units (every phone shows it at 0.62 points a unit: 372 x 213 pt).
 local CARD_W, CARD_H = 600, 344
 local CHIP_Y, CHIP_H = 126, 128
@@ -624,8 +631,12 @@ end
 
 -- Shows the next celebration if it's a calm moment (several waiting make one).
 function CelebrationController.Pump()
-	if closeCurrent or windowOpen or #queue == 0 or not CALM[GameState.Get("Phase") or "Waiting"] then
+	local phase = GameState.Get("Phase") or "Waiting"
+	if closeCurrent or windowOpen or #queue == 0 or not CALM[phase] then
 		return
+	end
+	if phase == "Intermission" and GameState.TimeLeft() < MIN_SHOW then
+		return -- the vote is about to start: after the next round instead (Cleanup pumps again)
 	end
 	if not State.Profile then
 		return -- its "Next up" comes from the profile: shown once the first one arrives

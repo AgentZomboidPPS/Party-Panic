@@ -12,7 +12,14 @@ That's why mini-games check positions and distances on the server instead of rel
 With --client, Bot1 runs the client half like a real player in the round. --client-sits-out makes it a
 spectator instead (sitting the round out: on the server with PP_SitOut, not in the round), and
 --client-out-at T knocks it out T seconds into the round (ctx:Eliminate): with --ui-at, what someone
-watching sees (no mode buttons for them, for one).
+watching sees (no mode buttons for them, for one). --ui-at also takes "rules" (the screen with the
+rules card up) and "closed" (just after the player closed it with its ✕); the summary's "rulesCard"
+says what was up each time and what the 3-2-1 showed after.
+
+LOBBY plays the time between rounds (Config.Session's results, lobby and vote times) three times with
+two stand-in people voting and --bots bots wandering: a vote everyone answers (it ends a beat after
+the last vote), one somebody skips (its full time), and one where the last voter-to-be sits out. The
+summary's "phases" and "votes" say when each phase started and how each vote went.
 
 During the rules card: --leave-at T makes every stand-in leave T seconds in, and --spawn-fails gives
 them no character, so with --bots only bots are left: the round is called off (summary: calledOff).
@@ -107,6 +114,15 @@ def other_mode(module: str, game: str) -> bool:
 # would go over Luau execution's 1 MB script limit as the game list grows.
 LOBBY_MODES = {"FireRope", "HexMeltdown", "HoneyTrap", "BumperBallers"}
 
+# --ui-at snapshots that aren't round times (tools/checks/harness_prelude.luau, __rulesShots).
+UI_SHOTS = ("rules", "closed")
+
+
+def ui_time(token: str) -> str:
+    """One --ui-at entry as Luau: a round time (seconds), or one of UI_SHOTS by name."""
+    token = token.strip()
+    return f'"{token}"' if token in UI_SHOTS else str(float(token))
+
 
 PRELUDE = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (Path(__file__).resolve().parent / "harness_prelude.luau").read_text()
 
@@ -116,13 +132,15 @@ def main():
     parser.add_argument("game", help="mode id, LOBBY for the lobby with bots (uses --bots, --seconds), or SKEEBALL "
                         "for a Skee-Ball game in the lobby's arcade (tools/checks/skeeball_game.luau)")
     parser.add_argument("--players", type=int, default=12)
-    parser.add_argument("--seconds", type=float, default=0, help="stop after this many seconds (0 = game length)")
+    parser.add_argument("--seconds", type=float, default=0, help="stop after this many seconds (0 = game length); "
+                        "LOBBY: the run lasts at least this long (the bots keep wandering)")
     parser.add_argument("--client", action="store_true", help="also run the client half as Bot1")
     parser.add_argument("--dump-at", type=float, default=None, help="snapshot the arena this many seconds into the round")
     parser.add_argument("--map", help="write a line map (bundle line -> module) here for readable errors")
     parser.add_argument("--touch", action="store_true", help="the stand-in client is a phone (touch, no keyboard)")
     parser.add_argument("--bots", type=int, default=0, help="also add this many real bots, played by the mode's brain (MiniGames/Bots/<Id>)")
-    parser.add_argument("--ui-at", help="with --client: snapshot the player's screen UI at these round times, e.g. 2,10 (see ui_render.py)")
+    parser.add_argument("--ui-at", help="with --client: snapshot the player's screen UI at these round times, e.g. 2,10, "
+                        "and/or 'rules' (the rules card up) and 'closed' (just after its ✕ closed it) (see ui_render.py)")
     parser.add_argument("--sizes", help="with --ui-at: screens to lay the UI out on with the engine (ui_render.py's "
                         "names or groups; default: touch with --touch, else pc)")
     parser.add_argument("--client-sits-out", action="store_true", help="with --client: Bot1 sits this round out and watches")
@@ -168,12 +186,12 @@ def main():
     out.append("local __bot = (function()\n" + bot + "\nend)()")
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)
-    ui = "nil" if not args.ui_at else "{" + ", ".join(str(float(t)) for t in args.ui_at.split(",")) + "}"
+    ui = "nil" if not args.ui_at else "{" + ", ".join(ui_time(t) for t in args.ui_at.split(",")) + "}"
     if args.game == "SKEEBALL":
         out.append((Path(__file__).resolve().parent / "skeeball_game.luau").read_text())
         out.append("return __runSkeeBall()")
     elif args.game == "LOBBY":
-        out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8}, 10)")
+        out.append(f"return __runLobby({args.bots or 8}, {args.seconds or 8})")
     else:
         def number(value):
             return "nil" if value is None else str(value)
