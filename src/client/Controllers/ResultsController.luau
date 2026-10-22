@@ -45,6 +45,10 @@
 -- the yellow rim of an answer; tapping the other one switches the vote and tapping the lit one again
 -- takes it back, until the results end. On phones they're 44 pt like the rest of the bar, and the
 -- card is wider than it was so the title, the thumbs and PLAY AGAIN all fit beside each other.
+--
+-- Only the card's X closes it early (owner: "I don't like how clicking skips the ending screen. I
+-- clicked and I couldn't vote."): a click beside it, on the dim backdrop, used to close it, and so
+-- could a click on the card itself.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -479,6 +483,7 @@ end
 function ResultsController.Start(context)
 	-- (960 wide: the title, 👍 / 👎 and PLAY AGAIN side by side in the title bar.)
 	modal = Modal.new(context.Overlay, "Round Results", "🏆", Vector2.new(960, 470))
+	modal.CloseOnBackdrop = false -- a stray click never skips the card (and its votes)
 	-- Toasts wait while the card is up (it draws over them: NotificationController).
 	modal.Opened:Connect(function()
 		Players.LocalPlayer:SetAttribute("PP_ResultsShowing", true)

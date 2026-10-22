@@ -25,8 +25,8 @@ Config.Session = {
 	ResultsTime = 6, -- the results card, before everyone's back in the lobby
 	-- The replay vote on the results card (owner: "Add a vote at the end of each minigame to replay
 	-- the same minigame."): over half of the round's people saying PLAY AGAIN plays it again at once.
-	-- Everyone having answered ends the results early, but never before ResultsMinTime (the card's
-	-- placement and rewards need a moment to be seen).
+	-- Everyone having answered (PLAY AGAIN and 👍 / 👎) ends the results early, but never before
+	-- ResultsMinTime (the card's placement and rewards need a moment to be seen).
 	ResultsMinTime = 3,
 	MaxReplays = 2, -- replays in a row at most (3 plays of one game), then a new vote
 	RoundGraceTime = 10, -- watchdog: hard stop this long after a mode's own time limit

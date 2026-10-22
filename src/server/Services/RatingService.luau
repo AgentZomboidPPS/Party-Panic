@@ -44,6 +44,7 @@ local ATTRIBUTE = "PP_Rating"
 
 local ballot: GameRatings.Ballot? = nil
 local open = false
+local lastVoteAt = 0 -- os.clock() of the latest 👍 / 👎 (or take-back)
 -- What each key still has to add, oldest first: a round's batch, and any that failed before it.
 local pending: { [string]: { GameRatings.Additions } } = {}
 local writes: { { Key: string, Record: GameRatings.Record?, Error: string? } } = {} -- (test runs: what was written)
@@ -155,6 +156,7 @@ function RatingService.Cast(player: Player, choice: any): boolean
 		return false -- wasn't in the round, or not a choice
 	end
 	if before ~= choice then
+		lastVoteAt = os.clock()
 		player:SetAttribute(ATTRIBUTE, if choice == "None" then nil else choice)
 		Notifier.Sound({ player }, "VoteClick")
 		Telemetry.PlayerEvent(
@@ -165,6 +167,17 @@ function RatingService.Cast(player: Player, choice: any): boolean
 		)
 	end
 	return true
+end
+
+-- Whether `player` has a 👍 or 👎 in now. ReplayService ends the results early only once everyone
+-- has answered PLAY AGAIN and this (owner: "I clicked and I couldn't vote.").
+function RatingService.Rated(player: any): boolean
+	return open and ballot ~= nil and GameRatings.Current(ballot, player) ~= "None"
+end
+
+-- When the latest 👍 / 👎 came in (os.clock()), for the moment after it the results wait.
+function RatingService.LastVoteAt(): number
+	return lastVoteAt
 end
 
 -- Closes the vote and writes the round: its votes and people, and (when PLAY AGAIN was offered) its

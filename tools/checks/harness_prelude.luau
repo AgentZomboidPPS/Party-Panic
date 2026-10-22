@@ -2222,7 +2222,9 @@ function __runReplay(id, botCount, party)
 						tap(cy, false)
 					end
 				end)
-				-- 👎 from Ann and Cy; Bo's 👍 taken back (the lit one tapped again sends "None").
+				-- 👎 from Ann and Cy; Bo's 👍 taken back (the lit one tapped again sends "None"). Bo has no
+				-- 👍 / 👎 in the end, so these results run their full time (everyone answered PLAY AGAIN,
+				-- but ending early also takes a 👍 or 👎 from everyone).
 				rateLater(0.4, ann, "Down")
 				rateLater(0.6, bo, "Up")
 				rateLater(0.9, bo, "None")

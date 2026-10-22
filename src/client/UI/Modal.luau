@@ -3,6 +3,10 @@
 -- shrinks to fit small screens; its content lays out to the window, so lists scroll on phones.
 -- Phones: a 44 pt close button and a slightly smaller title (Modal.TitleHeight() says where the
 -- content starts).
+-- A tap on the dim backdrop closes a window, but never a tap on the window itself (owner: "I don't
+-- like how clicking skips the ending screen. I clicked and I couldn't vote."): the window takes the
+-- taps that land on it. A window can keep the backdrop from closing it at all (CloseOnBackdrop: the
+-- results card, which only its X closes).
 
 local GuiService = game:GetService("GuiService")
 local UserInputService = game:GetService("UserInputService")
@@ -28,6 +32,7 @@ export type Modal = typeof(setmetatable(
 		Window: Frame,
 		Content: Frame,
 		IsOpen: boolean,
+		CloseOnBackdrop: boolean,
 		Opened: any,
 		Closed: any,
 	},
@@ -65,6 +70,7 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 		Size = UDim2.fromOffset(size.X, size.Y),
 		ZIndex = 21,
 		CornerRadius = 22,
+		Active = true, -- a tap on the window stays there (it used to fall through to the backdrop)
 		Parent = root,
 	})
 	local windowScale = UIKit.AutoScale(window)
@@ -119,6 +125,7 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 			Parent = window,
 		}),
 		IsOpen = false,
+		CloseOnBackdrop = true,
 		Opened = Signal.new(),
 		Closed = Signal.new(),
 	}, Modal)
@@ -140,7 +147,9 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 	end, Theme.Colors.Red, Color3.fromRGB(190, 40, 60))
 
 	backdrop.Activated:Connect(function()
-		self:Close()
+		if self.CloseOnBackdrop then
+			self:Close()
+		end
 	end)
 	self.Opened:Connect(fit)
 	return self

@@ -4,8 +4,9 @@
 -- sees how many want a replay ("3/5 want a replay"). Bots don't vote, and nor does anyone sitting out
 -- the next round (SitOutService), still loading, or who wasn't in the round (they have no results
 -- card). More than half saying yes by the end of the results plays the same game again straight
--- away: no lobby time and no game vote (RoundManager). Once everyone who can has answered, the
--- results end Config.Session.VoteLastBeat after the last answer, like the game vote
+-- away: no lobby time and no game vote (RoundManager). Once everyone who can has answered, and has
+-- also given the game a 👍 or 👎 (Services/RatingService; owner: "I clicked and I couldn't vote."),
+-- the results end Config.Session.VoteLastBeat after the last answer, like the game vote
 -- (Logic/VoteLogic.ClosesAt), though never before ResultsMinTime (the card's placement and rewards
 -- need a moment), and the phase timer says so. After Config.Session.MaxReplays replays
 -- in a row the vote isn't offered (the card says a new vote is next), so one keen group can't keep a
@@ -28,6 +29,7 @@ local BotRegistry = require(script.Parent.BotRegistry)
 local DataService = require(script.Parent.DataService)
 local Notifier = require(script.Parent.Notifier)
 local RateLimiter = require(script.Parent.RateLimiter)
+local RatingService = require(script.Parent.RatingService)
 local SitOutService = require(script.Parent.SitOutService)
 local Telemetry = require(script.Parent.Telemetry)
 
@@ -151,11 +153,16 @@ function ReplayService.Wait(duration: number, minimum: number?)
 	while true do
 		local now = os.clock()
 		local list = voters()
+		-- Someone counts as done once they've answered PLAY AGAIN and given the game a 👍 or 👎.
+		local done = {}
+		for _, who in list do
+			if choices[who] ~= nil and RatingService.Rated(who) then
+				done[who] = true
+			end
+		end
+		local latest = math.max(lastVoteAt, RatingService.LastVoteAt())
 		local due = if open
-			then math.max(
-				earliest,
-				VoteLogic.ClosesAt(deadline, list, choices, lastVoteAt, Config.Session.VoteLastBeat)
-			)
+			then math.max(earliest, VoteLogic.ClosesAt(deadline, list, done, latest, Config.Session.VoteLastBeat))
 			else deadline
 		if due ~= closesAt then
 			closesAt = due
