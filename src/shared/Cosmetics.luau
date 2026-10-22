@@ -5,6 +5,21 @@
 -- dozen. Level and stat items can't be bought: they are the Rewards Road (one at most milestone
 -- levels) and the career milestones (owner: "Also we need cool payoffs for players that keep
 -- playing the game."). Every UnlockStat must be a stat Logic/ProgressionLogic.RecordRound keeps.
+-- Second shop pass (told "On the low-coin scale a regular player can buy the whole shop in about a
+-- week", the owner said: "Yes lets add more items after everything else is finished"): 25 more coin
+-- items across the same five slots, so the whole shop takes a regular player about 3-4 weeks.
+--   The sums (tests/Catalog.spec checks them): an average round pays 2.85 coins (2 for playing,
+--   half the time 1 for the top half, one round in 8 a 2-coin win, one in 10 a personal best). A
+--   regular player plays 15 rounds a day (about 45 minutes), wins once (5 coins) and claims the
+--   daily gift (5-15, about 8.6 a day over a week): about 56 coins a day. The 19 first items cost
+--   371 coins (about a week); the shop now costs 1381 (371 + 1010): about 25 days, 3.5 weeks.
+--   Quests and Rewards Road coins (about 28 a day more) make it about 2.5 weeks for someone who does
+--   everything; rounds alone (no gifts or quests) about 4 weeks.
+--   Price bands: a few at 10-20 for new players, most at 25-50, and four to save up for (Spotlight
+--   70, Panic Royalty 80, Northern Lights 100, Supernova 120).
+--   Roblox's default emote animations are all in use already (the other Dance variants it ships
+--   are the same animation), so the new emotes are effects, or a default dance with an effect.
+--   Every new effect is short and small (EffectsController), and trails stay the same thin ribbon.
 
 local GameDefinitions = require(script.Parent.GameDefinitions)
 
@@ -155,6 +170,52 @@ local list: { Cosmetic } = {
 		Icon = "💎",
 		Vip = true,
 		Colors = { rgb(255, 245, 200), rgb(190, 140, 255) },
+	},
+	-- Second shop pass: more for coins.
+	{
+		Id = "Trail_Mint",
+		Slot = "Trail",
+		Name = "Mint Breeze",
+		Description = "A cool, fresh green swish.",
+		Icon = "🍃",
+		Price = 15,
+		Colors = { rgb(190, 255, 220), rgb(90, 220, 160) },
+	},
+	{
+		Id = "Trail_Ocean",
+		Slot = "Trail",
+		Name = "Ocean Spray",
+		Description = "Deep blue with a foamy edge.",
+		Icon = "🌊",
+		Price = 30,
+		Colors = { rgb(230, 250, 255), rgb(60, 170, 230), rgb(20, 80, 170) },
+	},
+	{
+		Id = "Trail_Sunset",
+		Slot = "Trail",
+		Name = "Sunset Glow",
+		Description = "Peach, pink and purple skies.",
+		Icon = "🌅",
+		Price = 40,
+		Colors = { rgb(255, 200, 120), rgb(255, 110, 140), rgb(150, 80, 200) },
+	},
+	{
+		Id = "Trail_Neon",
+		Slot = "Trail",
+		Name = "Neon Nights",
+		Description = "Bright city lights after dark.",
+		Icon = "🌃",
+		Price = 50,
+		Colors = { rgb(255, 60, 200), rgb(80, 240, 255), rgb(140, 90, 255) },
+	},
+	{
+		Id = "Trail_Aurora",
+		Slot = "Trail",
+		Name = "Northern Lights",
+		Description = "Glowing ribbons from the far north.",
+		Icon = "🌠",
+		Price = 100,
+		Colors = { rgb(120, 255, 170), rgb(60, 220, 220), rgb(110, 140, 255), rgb(210, 110, 255), rgb(255, 130, 200) },
 	},
 
 	-- Titles
@@ -329,6 +390,61 @@ local list: { Cosmetic } = {
 		Vip = true,
 		Colors = { rgb(255, 230, 140) },
 	},
+	-- Second shop pass: more for coins.
+	{
+		Id = "Title_JustVibing",
+		Slot = "Title",
+		Name = "Just Vibing",
+		Description = "No pressure, just fun.",
+		Icon = "😎",
+		Price = 10,
+		Colors = { rgb(170, 230, 255) },
+	},
+	{
+		Id = "Title_LuckyDuck",
+		Slot = "Title",
+		Name = "Lucky Duck",
+		Description = "Somehow it always works out.",
+		Icon = "🍀",
+		Price = 15,
+		Colors = { rgb(140, 240, 140) },
+	},
+	{
+		Id = "Title_SnackAttack",
+		Slot = "Title",
+		Name = "Snack Attack",
+		Description = "Here for the party snacks.",
+		Icon = "🍪",
+		Price = 25,
+		Colors = { rgb(240, 190, 130) },
+	},
+	{
+		Id = "Title_ComebackKid",
+		Slot = "Title",
+		Name = "Comeback Kid",
+		Description = "Never count you out.",
+		Icon = "🔁",
+		Price = 35,
+		Colors = { rgb(120, 210, 255) },
+	},
+	{
+		Id = "Title_Unstoppable",
+		Slot = "Title",
+		Name = "Unstoppable",
+		Description = "Nothing slows you down.",
+		Icon = "🚀",
+		Price = 50,
+		Colors = { rgb(255, 150, 90) },
+	},
+	{
+		Id = "Title_PanicRoyalty",
+		Slot = "Title",
+		Name = "Panic Royalty",
+		Description = "Rules the party with style.",
+		Icon = "🏰",
+		Price = 80,
+		Colors = { rgb(255, 215, 110) },
+	},
 
 	-- Emotes (all owned emotes appear in the emote menu)
 	{
@@ -451,6 +567,64 @@ local list: { Cosmetic } = {
 		UnlockLevel = 30,
 		Effect = "Crowns",
 	},
+	-- Second shop pass: more for coins.
+	{
+		Id = "Emote_ThumbsUp",
+		Slot = "Emote",
+		Name = "Thumbs Up",
+		Description = "Nice one!",
+		Icon = "👍",
+		Price = 10,
+		Effect = "Thumbs",
+	},
+	{
+		Id = "Emote_Snow",
+		Slot = "Emote",
+		Name = "Snow Flurry",
+		Description = "A little snow shower.",
+		Icon = "❄️",
+		Price = 20,
+		Effect = "Snow",
+	},
+	{
+		Id = "Emote_Flowers",
+		Slot = "Emote",
+		Name = "Flower Toss",
+		Description = "Throw a handful of petals.",
+		Icon = "🌸",
+		Price = 25,
+		Effect = "Flowers",
+	},
+	{
+		Id = "Emote_Rainbows",
+		Slot = "Emote",
+		Name = "Rainbow Pop",
+		Description = "Rainbows pop out of thin air.",
+		Icon = "🌈",
+		Price = 30,
+		Effect = "Rainbows",
+	},
+	{
+		Id = "Emote_Encore",
+		Slot = "Emote",
+		Name = "Encore!",
+		Description = "Cheer with a burst of streamers.",
+		Icon = "👏",
+		Price = 35,
+		Animation = 507770677, -- the default Cheer, with streamers
+		Effect = "Streamers",
+	},
+	{
+		Id = "Emote_DiscoFever",
+		Slot = "Emote",
+		Name = "Disco Fever",
+		Description = "The Disco dance in a cloud of sparkles.",
+		Icon = "🕶️",
+		Price = 45,
+		Animation = 507777268, -- the default Disco dance, with sparkles
+		Looped = true,
+		Effect = "Sparkles",
+	},
 
 	-- Victory effects
 	{
@@ -518,6 +692,43 @@ local list: { Cosmetic } = {
 		UnlockStat = { Stat = "Wins", Value = 50, Label = "Wins" },
 		Effect = "Trophies",
 	},
+	-- Second shop pass: more for coins.
+	{
+		Id = "Victory_Balloons",
+		Slot = "Victory",
+		Name = "Balloon Release",
+		Description = "A bunch of balloons floats up.",
+		Icon = "🎈",
+		Price = 40,
+		Effect = "Balloons",
+	},
+	{
+		Id = "Victory_Streamers",
+		Slot = "Victory",
+		Name = "Streamer Storm",
+		Description = "Party streamers shoot up high.",
+		Icon = "🎏",
+		Price = 45,
+		Effect = "Streamers",
+	},
+	{
+		Id = "Victory_Spotlight",
+		Slot = "Victory",
+		Name = "Spotlight",
+		Description = "A beam of light, all on you.",
+		Icon = "🔦",
+		Price = 70,
+		Effect = "Spotlight",
+	},
+	{
+		Id = "Victory_Supernova",
+		Slot = "Victory",
+		Name = "Supernova",
+		Description = "A shining ring, stars and fireworks.",
+		Icon = "🌟",
+		Price = 120,
+		Effect = "Supernova",
+	},
 
 	-- Elimination effects
 	{
@@ -564,6 +775,43 @@ local list: { Cosmetic } = {
 		Icon = "💥",
 		UnlockLevel = 40,
 		Effect = "Fireworks",
+	},
+	-- Second shop pass: more for coins.
+	{
+		Id = "Elim_Frozen",
+		Slot = "Elimination",
+		Name = "Frozen Out",
+		Description = "Out in a flurry of snow.",
+		Icon = "❄️",
+		Price = 25,
+		Effect = "Snow",
+	},
+	{
+		Id = "Elim_Splat",
+		Slot = "Elimination",
+		Name = "Paint Splat",
+		Description = "Splat! A quick splash of paint.",
+		Icon = "🎨",
+		Price = 25,
+		Effect = "Splat",
+	},
+	{
+		Id = "Elim_Ducks",
+		Slot = "Elimination",
+		Name = "Rubber Ducks",
+		Description = "A few rubber ducks bob away.",
+		Icon = "🦆",
+		Price = 30,
+		Effect = "Ducks",
+	},
+	{
+		Id = "Elim_Zap",
+		Slot = "Elimination",
+		Name = "Zapped",
+		Description = "A quick electric zap.",
+		Icon = "⚡",
+		Price = 40,
+		Effect = "Zap",
 	},
 }
 
