@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local NAMES = {
 	-- client -> server
 	"CastVote", -- (optionIndex: number)
+	"ReplayVote", -- (again: boolean) PLAY AGAIN or NO THANKS on the results card; see Services/ReplayService
 	"ShopPurchase", -- (itemId: string)
 	"ShopEquip", -- (slot: string, itemId: string?)
 	"UseEmote", -- (itemId: string)

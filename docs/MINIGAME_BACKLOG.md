@@ -20,6 +20,9 @@ Planned categories once all 25 exist (the brief leaves some open; these are the 
 
 (Suggested to the owner: Messy Memory as Luck and Tanks! as Knockback would even the thin categories.)
 
+Games 27-29 were added on 2026-10-22 (owner: "Let's add the stars"): one more Survival, Luck and Race game, so each of
+those categories has 3, like Knockback, and no game needs to move.
+
 Also on the backlog: **custom music for each mini-game** (owner: "put in the backlog custom music for each mini game").
 No longer blocked: other players' devices load and play our uploaded music now (their reports from version 27).
 
@@ -92,3 +95,75 @@ Bots chase orb-rich rivals and loose orbs, swing with skill-based timing and dod
 60-75, MinPlayers 2, IsTeam false. Props as real meshes (original designs, no Kingdom Hearts branding or likenesses):
 padded foam bats, glowing orbs in player colours (with a shape per player so colour isn't the only cue), a sunset
 sandlot with a tram-yard backdrop, banners, a scoreboard and benches.
+
+## 27. Hot Potato (`HotPotato`, Survival)
+
+Added by the owner on 2026-10-22, who asked for one more Survival, Luck and Race game each and picked this pitch ("Let's
+add the stars"): "a few ticking bombs get handed out, and you tag someone to pass yours on. When a bomb goes off,
+whoever is holding it gets launched into the sky and is out. New bombs drop until one player is left." After the
+playground game and "Hot Bob-omb" (Mario Party), with an original look: the bombs are hot potatoes (lumpy baked spuds
+with a metal cap and a fizzing fuse). Everyone runs around a fenced backyard-cookout arena whose size scales with the
+player count. The server hands out one potato per 4 players still in (at least 1) to random players; each has a hidden
+fuse (a random 8-14 s, shorter as fewer players remain) and warns in its last 3 s (it glows, sizzles and beeps faster).
+The holder passes it by touching an empty-handed player (a server distance check against what the holder saw, with lag
+leeway like FireRope) or with a THROW button that lobs it to the nearest empty-handed player in front within about 12
+studs (aim-assist, a visible 0.4 s arc; if the fuse runs out mid-air the thrower is out). No tag-backs: a potato can't
+go straight back to whoever passed it for 2 s. Holders run about 10% faster so tags are possible. When a fuse runs out:
+a big cartoon blast, the holder is launched high into the sky (the same launch for players and bots, applied by the
+server) and is out; after a 2 s breather new potatoes drop on random survivors. The last one standing wins; at time-out
+everyone holding a potato blows up and the rest survive; the others rank by how long they lasted. Everyone must always
+see who holds a potato: a big bobbing potato icon above each holder's head (a shape, not just a colour), a pulsing "YOU
+HAVE THE POTATO! PASS IT!" banner and a red screen edge for the holder, and a survivors count. Bots: holders chase the
+nearest catchable player and throw with skill-based timing and aim; empty-handed bots keep away from holders with
+skill-based awareness (they don't flee in one clump, and the clumsiest sometimes freeze); nobody stands still. Category
+Survival, Duration 60-90, MinPlayers 2, IsTeam false. Props as real meshes: the potato bomb, a round lawn ringed by a
+solid picket fence (nothing solid that isn't drawn), picnic tables and hay bales to dodge around, a giant grill or
+campfire centrepiece, string lights and big blast puffs.
+
+## 28. Dice Dash (`DiceDash`, Luck)
+
+Added by the owner on 2026-10-22 with Hot Potato, from this pitch: "a 60-second board game. Everyone rolls giant dice at
+the same time and hops along a winding path. Some tiles boost you forward, one swaps you with the leader, and trapdoors
+send you back to the start. First to the finish wins, and the only button is ROLL." In the spirit of a Mario Party
+board, with an original look. Everyone starts on START of one shared winding board of about 40 big tiles laid across a
+giant tabletop in a sunny meadow (players sharing a tile stand in a small ring so nobody hides anyone). Every few
+seconds a turn starts for everyone at once: a giant die spins above each player's head and ROLL (a button, a tap or
+click, or jumping into the die) stops it; anyone who hasn't rolled after 3 s rolls automatically. The server decides
+every roll (a fair d6, never the client); then everyone hops forward tile by tile together (server-owned positions,
+smooth hops on clients; characters can't walk off the board during the round) and the tile they land on fires: BOOST
+(+3, a springboard), SLIP (-2, a banana peel), CANNON (shoots you to the next cannon ahead), SWAP (a rare golden tile:
+you trade places with the leader, with a big callout), ? (a random event: everyone behind you moves +2, a gust blows the
+leader back 3, or last place jumps ahead 5) and TRAPDOOR (back to START; one or two of them, none in the last quarter).
+Tiles you only pass over do nothing. First to reach FINISH wins (no exact landing needed); the rest rank by finish
+order, then by how far along they are. The round ends when 3 players have finished or time runs out; tune the board so
+the first finisher usually arrives at about 45-55 s. Big readable callouts for every event ("SWAP! Bo <-> Ann",
+"TRAPDOOR!"), a race strip at the top of the screen with every player's badge on a line from START to FINISH, and a
+camera that follows you along the board. Bots press ROLL with human-like delays (skill changes nothing: it's luck).
+Category Luck, Duration about 60, MinPlayers 1, IsTeam false. Props as real meshes: giant dice with rounded edges and
+pips, chunky board tiles with a raised icon per type (arrow, peel, cannon, swirl, question mark, hole), START and FINISH
+arches with flags, the springboard and cannon, and oversized board-game scenery around the board (cards, a spinner, a
+rule book, game pieces).
+
+## 29. Minecart Mayhem (`MinecartMayhem`, Race)
+
+Added by the owner on 2026-10-22 with Hot Potato, from this pitch: "race mine carts through a cave. At every split you
+pick left or right; some routes are shortcuts, some are dead ends, and a TNT track blows you off. You also jump gaps and
+lean into curves, and the first cart out of the mine wins. It works well on phones with just left, right and jump."
+After classic mine-cart levels, with an original look. Each player rides their own cart through a crystal cave; carts
+roll by themselves (faster downhill, slower uphill), and the server owns every cart's position along the track splines
+(like Bobsled Run and Rockin' Raceway: server-authoritative, clients interpolate smoothly), so bots and players are
+equal. Controls: LEFT / RIGHT (the move stick or two big buttons on phones, A/D or the arrow keys on PC) and JUMP. At
+5-6 junctions a sign shows both ways; holding LEFT or RIGHT as you reach it picks a branch (with no choice the cart
+takes the long safe way). One branch is a shortcut and one is the long safe way, and some splits hide a dead end (the
+cart bumps a buffer and rolls back to take the other way) or a TNT track (the crates blow your cart off the rails: a 2-3
+s comeback at the junction). Which branch is which is shuffled every round, with readable hints (cracked rails, a skull
+sign, light at the far end). Broken bridges and gaps need a timed JUMP (a takeoff marker; missing drops you to a 2-3 s
+comeback at the last checkpoint). On curves, leaning into the bend gives a speed boost and leaning the wrong way wobbles
+and slows you. Carts don't collide (overlapping carts shift sideways so nobody gets blocked); glowing crystals on the
+rails give a short dash. The first cart out of the mine into daylight wins; the rest rank by finish order, then by
+distance. Up to 12 riders; a good rider finishes in about 45-60 s. HUD: a progress strip with every rider's badge, the
+next junction's two arrows, and big JUMP and LEAN prompts with a countdown ring. Bots pick branches with skill (good
+bots read the hints, clumsy ones sometimes take the TNT) and time jumps and leans with skill-based accuracy. Category
+Race, Duration 75-90 (a time-out), MinPlayers 1, IsTeam false. Props as real meshes: riveted mine carts with each
+player's colour trim and badge, curved rail segments (merged into few meshes for phones), wooden trestles and supports,
+TNT crates, junction signs, glowing crystals, lanterns, a cave entrance and a sunlit exit with a FINISH banner.
