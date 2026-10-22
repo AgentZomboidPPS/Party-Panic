@@ -1,10 +1,10 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-22 02:40 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-22 03:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (2026-10-22 02:40 UTC)
+## Session B in flight (2026-10-22 03:00 UTC)
 
 - **Live version 34** (published 02:38 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `1f08776`, on the
   owner's "merge my branch claude/quirky-hopper-5yk8zk" and that window's "merge my branch ... and publish"; the owner
@@ -37,39 +37,32 @@ Session A's handoff from 17:40 UTC, still accurate except where this block says 
       with a friend, beat-a-friend moments).
   - **Store description:** `docs/STORE_DESCRIPTION.txt` lists 27 games. The owner pastes it in Creator Hub, because
     publish_place can't set it (403).
-- Version 33 was published 00:58 UTC from `d10b635` after a quick check; its full regression was clean afterwards.
-- Version 32 was published 21:55 UTC from `6e0029b` after a full regression.
-- **Merged since v32 (live in v33):**
-  It's v32 plus:
-  - the Skee-Ball arcade;
-  - the client UI batch: the team pill shows the real teams, toasts rise above action buttons, AutoScale listeners are
-    released, results rows read whole, and the results headline names the game in capitals;
-  - new games Mecha-Marathon (games-3), Spleef (games-2), Prime Cut (games-4) and Tanks! (games-1), with portal
-    previews for the first three (Tanks! in progress);
-  - round-end fairness: same-step ties, nothing counts after the buzzer, no bots-only rounds, resets before GO put you
-    back. An independent review is running.
-  - Shark Bait safety nets (owner: "I chomped someone and now cant move"), independently reviewed and fixed: stuck
-    reports, put-backs, rescues, a fresh character if stuck again, logged to `ClientReports` (`m<UserId>`);
-  - the Sinking Sands rebalance (owner: "make it stronger and add another king"): one more King and a stronger, longer
-    PULL; bot Kings win about half of 8-player rounds;
-  - DataService per-session lock ids, reviewed safe to publish (owners must restart servers promptly after);
-  - `tools/preview/luau_task.py` retrying right after Roblox's rate window resets. Starting a task is capped at
-    5 a minute for everyone (`X-Ratelimit-Limit: 5;w=60`).
-  - the round harness leaves other modes' props out of a bundle (the 1 MiB script cap).
-- **Still to merge for v33:** the CRITICAL invisible-collision sweep (owner: "Theres invisible stuff you can jump on
-  and hang on in several games"; branch `worktree-agent-a584535e5323da1d7`: precise mesh collision, `Shapes.Custom`
-  fallback from pieces, reachable invisible walls removed), the fairness review's fixes, the client-harness size fix,
-  and the Tanks! preview. Then a full regression of every mode, the lobby and the client, and publish.
-- **New games still building in 4 cloud sessions** (each pushes `claude/games-N`, reports to Session B with
-  send_message, see [HANDOFF_GAMES.md](HANDOFF_GAMES.md)):
-  - games-1: Stamp Out, Slaparazzi, Struggle
-  - games-2: Messy Memory, Snowball Summit
-  - games-3: Parasol Plummet, Rockin' Raceway
-  - games-4: Trace Race, Eatsa Pizza, Log Jam
-- **Later (owner):**
-  - more shop items ("Yes lets add more items after everything else is finished");
-  - custom music per game (WIP in `docs/wip/music.bundle`);
-  - the owner's call on rebalancing thin categories.
+- Version 33 was published 00:58 UTC from `d10b635`, and version 32 at 21:55 UTC from `6e0029b`; both regressions
+  were clean.
+- **On the branch since version 34 (ships in version 35):**
+  - Sinking Sands' role chip (💎 DIVER / 👑 SAND KING all round) and team-marked results rows (owner: "I couldnt tell
+    what color I was on prime cut.");
+  - Slaparazzi bots (owner: "Bots are terrible at slaparazzi");
+  - the Spleef rework from games-2 (owner: "spleef doesnt require you to dig. It should be you walk over it and it
+    fades out within like 1 second or so", "Bots are awful at spleef", "make the spleef arena larger"), squashed
+    from `claude/games-2` 7073f05..1c0d206 without that branch's held shop commits.
+- **In progress for version 35:**
+  - the replay vote (owner: "Add a vote at the end of each minigame to replay the same minigame."): 🔁 PLAY AGAIN?
+    on the results card; a majority of people plays the same game again, with a cap on back-to-back replays;
+  - the lobby's Terrain sky islands are solid and within reach of some arenas (games-2 found a Spleef bot standing on
+    one): Terrain joins the collider inventory, the escape audit is re-run, and the islands move out of reach;
+  - games-4's phone performance audit (`claude/games-4`: the round harness's `perf` line, cached participant lookups,
+    fewer per-frame writes in Trace Race, Skate Escape, Tanks!, Crazy Cutters and others);
+  - the round songs: the owner's other window uploads the 5 packs and pushes their ids to
+    `claude/quirky-hopper-5yk8zk`; until then every game plays Panic Mode.
+  Then a quick check (code checks, the changed games' rounds, the lobby and the client) and publish on the owner's
+  word.
+- **Held until the owner says the bug-fix wave is done ("after everything else is finished"):** the second shop
+  pass, 25 coin items and 10 effects, finished on `claude/games-3` at f0cb9da (reviewed; its client checks are in
+  the same branch). `claude/games-2` also carries the earlier shop commits, so don't merge that branch whole.
+- **Game sessions** (see [HANDOFF_GAMES.md](HANDOFF_GAMES.md)): all 14 backlog games are merged (27 games). games-1,
+  games-2 and games-3 are idle; games-4 is on the performance audit.
+- **Later (owner):** the owner's call on rebalancing thin categories (Messy Memory to Luck, Tanks! to Knockback).
 - **Toolchain in a fresh container (GitHub downloads are blocked here):** `cargo install --locked stylua@2.6.0 --features
   luau`, `selene@0.31.0`, `rojo@7.7.1`, `lune@0.11.0` (crates.io works); luau-lsp from source: `git clone --depth 1
   --branch 1.70.1 https://github.com/JohnnyMorganz/luau-lsp`, `git submodule update --init --depth 1`, cmake Release with
