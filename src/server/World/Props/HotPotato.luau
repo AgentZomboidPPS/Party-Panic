@@ -93,8 +93,18 @@ return function(h)
 			Height = 3.6,
 			AssetId = 0,
 			Collide = true,
-			Palette = { Top = h.rgb(176, 112, 64), Benches = h.rgb(160, 100, 58), Legs = h.rgb(130, 82, 48), Cloth = h.rgb(230, 70, 70) },
-			Materials = { Top = Enum.Material.Wood, Benches = Enum.Material.Wood, Legs = Enum.Material.Wood, Cloth = Enum.Material.Fabric },
+			Palette = {
+				Top = h.rgb(176, 112, 64),
+				Benches = h.rgb(160, 100, 58),
+				Legs = h.rgb(130, 82, 48),
+				Cloth = h.rgb(230, 70, 70),
+			},
+			Materials = {
+				Top = Enum.Material.Wood,
+				Benches = Enum.Material.Wood,
+				Legs = Enum.Material.Wood,
+				Cloth = Enum.Material.Fabric,
+			},
 			Fallback = function(m)
 				h.block(m, "Top", Vector3.new(7, 0.4, 3), Vector3.new(0, 3.4, 0))
 				h.block(m, "Benches", Vector3.new(7, 0.35, 1.2), Vector3.new(0, 1.8, 2.4))
