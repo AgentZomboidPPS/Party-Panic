@@ -140,23 +140,33 @@ test("a regular player buys the whole shop in about 3 to 4 weeks", function()
 		return tonumber(string.match(configSource, "\n\t" .. key .. " = %{ Coins = (%d+)")) :: number
 	end
 	-- The economy notes in Cosmetics.luau's header: 15 rounds a day, an average round in an
-	-- 8-player game, the first win of the day and the daily gift (averaged over a week's streak).
+	-- 8-player game, the first win of the day and the daily gift, which follows the streak table
+	-- and stays at its last value once the streak runs past it (DailyLogic.Claim).
 	local perRound = reward("Participation")
 		+ 0.5 * reward("TopHalf")
 		+ (1 / 8) * reward("Winner")
 		+ 0.1 * reward("PersonalBest")
-	local gifts = string.match(configSource, "Config%.DailyRewards = %{([^}]*)%}") :: string
-	local giftTotal, giftDays = 0, 0
-	for coins in string.gmatch(gifts, "%d+") do
-		giftTotal += tonumber(coins) :: number
-		giftDays += 1
+	local giftText = string.match(configSource, "Config%.DailyRewards = %{([^}]*)%}") :: string
+	local gifts = {}
+	for coins in string.gmatch(giftText, "%d+") do
+		table.insert(gifts, tonumber(coins) :: number)
 	end
-	local perDay = 15 * perRound + reward("FirstWin") + giftTotal / giftDays
+	local playing = 15 * perRound + reward("FirstWin")
 	local total = shopTotal()
-	local days = total / perDay
+	local saved, days = 0, 0
+	while true do
+		local today = playing + gifts[math.min(days + 1, #gifts)]
+		if saved + today >= total then
+			days += (total - saved) / today
+			break
+		end
+		saved += today
+		days += 1
+	end
 	expectEqual(total, 1381, "the total in the economy notes")
-	expectTrue(days >= 21 and days <= 28, `the whole shop takes {days} days`)
+	expectTrue(days >= 21 and days <= 25, `the whole shop takes {days} days (the header says about 23)`)
 	expectTrue(string.find(cosmeticsSource, "costs 1381", 1, true) ~= nil, "the header's sums are up to date")
+	expectTrue(string.find(cosmeticsSource, "about 23 days", 1, true) ~= nil, "the header's days are up to date")
 end)
 
 test("every effect an item names is drawn by EffectsController", function()

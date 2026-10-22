@@ -20,11 +20,12 @@
 -- items across the same five slots, so the whole shop takes a regular player about 3-4 weeks.
 --   The sums (tests/Catalog.spec checks them): an average round pays 2.85 coins (2 for playing,
 --   half the time 1 for the top half, one round in 8 a 2-coin win, one in 10 a personal best). A
---   regular player plays 15 rounds a day (about 45 minutes), wins once (5 coins) and claims the
---   daily gift (5-15, about 8.6 a day over a week): about 56 coins a day. The 19 first items cost
---   371 coins (about a week); the shop now costs 1381 (371 + 1010): about 25 days, 3.5 weeks.
---   Quests and Rewards Road coins (about 28 a day more) make it about 2.5 weeks for someone who does
---   everything; rounds alone (no gifts or quests) about 4 weeks.
+--   regular player plays 15 rounds a day (about 45 minutes), wins once (5 coins for the first win of
+--   the day) and claims the daily gift, which climbs 5, 6, 7, 8, 9, 10 over the first week and stays
+--   at 15 from day 7 on: about 56 coins a day in the first week, then about 63 (call it 60). The 19
+--   first items cost 371 coins (about a week); the shop now costs 1381 (371 + 1010): about 23 days,
+--   3.3 weeks. Quests and Rewards Road coins (about 28 a day more) make it about 2 weeks for someone
+--   who does everything; rounds alone (no gifts, first wins or quests) about 4.5 weeks.
 --   Price bands: a few at 10-20 for new players, most at 25-50, and four to save up for (Spotlight
 --   70, Panic Royalty 80, Northern Lights 100, Supernova 120).
 --   Roblox's default emote animations are all in use already (the other Dance variants it ships
