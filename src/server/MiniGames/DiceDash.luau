@@ -91,6 +91,16 @@ function DiceDash:_at(offset: Vector3, yaw: number?): CFrame
 	return CFrame.new(self.origin + offset) * CFrame.Angles(0, yaw or 0, 0)
 end
 
+-- A tile's raised icon is too low to stand on: only its plate is solid.
+function DiceDash:_flatIcon(model: Instance)
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") and part.Name == "Icon" then
+			part.CanCollide = false
+			part.CanQuery = false
+		end
+	end
+end
+
 -- The arena -------------------------------------------------------------------------------------------
 
 function DiceDash:_buildArena()
@@ -201,6 +211,7 @@ function DiceDash:_buildArena()
 			Parent = arena,
 		})
 		tile.Name = `Tile{index}`
+		self:_flatIcon(tile)
 		-- (springboards and cannons stand beside their tiles, on the outside of the path)
 		local side = if (z > 0) == (x > 0) then 1 else -1
 		if kind == Board.BOOST then
@@ -218,16 +229,38 @@ function DiceDash:_buildArena()
 	for _, index in { 0, Board.LAST } do
 		local x, z, yaw = Board.Tile(index)
 		local finish = index == Board.LAST
-		MeshLibrary.Get(if finish then "DiceDashPadFinish" else "DiceDashPadStart", {
+		self:_flatIcon(MeshLibrary.Get(if finish then "DiceDashPadFinish" else "DiceDashPadStart", {
 			CFrame = self:_at(Vector3.new(x, TILE_BASE, z), yaw),
 			Parent = arena,
-		})
+		}))
 		-- The arch stands over the pad's inner edge, facing along the path (its posts off the pad).
-		MeshLibrary.Get(if finish then "DiceDashArchFinish" else "DiceDashArchStart", {
+		local arch = MeshLibrary.Get(if finish then "DiceDashArchFinish" else "DiceDashArchStart", {
 			CFrame = self:_at(Vector3.new(x, 0, z), yaw)
 				* CFrame.new(0, 0, if finish then Board.PAD / 2 - 1 else -(Board.PAD / 2 - 1)),
 			Parent = arena,
 		})
+		local banner = arch:FindFirstChild("Banner", true)
+		if banner and banner:IsA("BasePart") then
+			for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
+				local gui = Instance.new("SurfaceGui")
+				gui.Face = face
+				gui.CanvasSize = Vector2.new(400, 100)
+				gui.LightInfluence = 0.3
+				local label = Instance.new("TextLabel")
+				label.BackgroundTransparency = 1
+				label.Size = UDim2.fromScale(1, 1)
+				label.Font = Enum.Font.FredokaOne
+				label.TextScaled = true
+				label.Text = if finish then "FINISH" else "START"
+				label.TextColor3 = if finish then Color3.fromRGB(255, 90, 100) else Color3.fromRGB(255, 255, 255)
+				local stroke = Instance.new("UIStroke")
+				stroke.Thickness = 3
+				stroke.Color = Color3.fromRGB(30, 24, 40)
+				stroke.Parent = label
+				label.Parent = gui
+				gui.Parent = banner
+			end
+		end
 	end
 	-- The FINISH cannon (where the last cannon fires you), behind the FINISH pad.
 	do
