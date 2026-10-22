@@ -14,6 +14,15 @@
 -- sitting in the lobby. total of 20 seconds instead of 40."; Config.Session's ResultsTime,
 -- IntermissionTime and VoteTime), and the vote ends early once every person playing has voted
 -- (VotingService.Wait).
+--
+-- The results cards ask PLAY AGAIN? (owner: "Add a vote at the end of each minigame to replay the
+-- same minigame."; Services/ReplayService): if more than half of the round's people say yes, the
+-- next round is the same game straight away, Results -> Cleanup -> Preparing with no lobby time and
+-- no game vote, announced to everyone ("🔁 REPLAY! PUMP & POP again"). It still needs enough players
+-- for the game (bots someone joining replaced leave first: there's no lobby time for them to fade
+-- out in), and a fresh round, so team games deal their teams again. At most Config.Session.MaxReplays
+-- replays in a row, and a replay doesn't add the game to the vote's recent list again
+-- (Logic/ReplayVote.Remember): the next vote still skips it and plays down the game before it.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24,11 +33,14 @@ local Config = require(Shared.Config)
 local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local Placement = require(Shared.Logic.Placement)
+local ReplayVote = require(Shared.Logic.ReplayVote)
 local Roster = require(Shared.Logic.Roster)
 
+local BotRegistry = require(script.Parent.BotRegistry)
 local BotService = require(script.Parent.BotService)
 local LobbyService = require(script.Parent.LobbyService)
 local Notifier = require(script.Parent.Notifier)
+local ReplayService = require(script.Parent.ReplayService)
 local RewardService = require(script.Parent.RewardService)
 local RoundContext = require(script.Parent.RoundContext)
 local SitOutService = require(script.Parent.SitOutService)
@@ -43,6 +55,8 @@ local session = Config.Session
 local roundId = 0
 local recentGames: { string } = {}
 local currentContext = nil
+local replayNext: string? = nil -- the game the last round's PLAY AGAIN vote chose to play again
+local replayStreak = 0 -- replays in a row of the game being played (Config.Session.MaxReplays at most)
 
 local function isStudio(): boolean
 	return RunService:IsStudio()
@@ -223,9 +237,11 @@ local function runRound(definition, participants: { Player })
 
 	-- Results: freeze scores, grant rewards, show placements.
 	local champions = {}
+	local carded = false -- the round's people got their results cards, where the PLAY AGAIN vote is
 	if context.EndReason ~= "Error" and context.EndReason ~= "NoPlayers" then
 		local ok, results = guarded("GetResults:" .. definition.Id, 5, miniGame.GetResults, miniGame)
 		if ok and results then
+			carded = true
 			local entries = {}
 			for _, entry in results.Entries do
 				if entry.Player.Parent then
@@ -251,23 +267,81 @@ local function runRound(definition, participants: { Player })
 	end
 	LobbyService.SetChampions(champions)
 	setPhase("Results", session.ResultsTime, definition.Name)
-	waitFor(session.ResultsTime)
+	-- PLAY AGAIN? on the results cards. Once everyone who can has answered, the results end a moment
+	-- after the last answer (but the cards get ResultsMinTime first).
+	ReplayService.Begin(definition.Id, if carded then context:GetPlayers() else {}, replayStreak)
+	ReplayService.Wait(session.ResultsTime, session.ResultsMinTime)
+	local again = ReplayService.End()
 
-	-- Cleanup
-	setPhase("Cleanup", nil, "Back to the lobby!")
+	-- Cleanup, then the lobby, or the same game again (said before the phase changes, so the lobby's
+	-- celebrations wait for real lobby time: CelebrationController).
+	local replayLine = `🔁 REPLAY! {string.upper(definition.Name)} again`
+	if again then
+		replayNext = definition.Id
+		GameState.Set("Replay", definition.Id)
+	end
+	setPhase("Cleanup", nil, if again then replayLine else "Back to the lobby!")
+	if again then
+		Notifier.All(replayLine, "success", 5)
+	end
 	guarded("Cleanup:" .. definition.Id, 5, miniGame.Cleanup, miniGame)
 	cleanupContext()
-	Notifier.Sound(nil, "ReturnToLobby")
+	if not again then
+		Notifier.Sound(nil, "ReturnToLobby") -- (a replay goes straight back into the game)
+	end
 	GameState.Set("GameId", "")
 	task.delay(1, BotService.Rebalance) -- bots that stayed for this round can make room now
 
-	table.insert(recentGames, 1, definition.Id)
-	while #recentGames > 5 do
-		table.remove(recentGames)
+	recentGames = ReplayVote.Remember(recentGames, definition.Id, 5)
+end
+
+-- Bots that someone joining during the round has replaced fade out in the lobby between rounds; a
+-- replay has no lobby time, so they go now (BotService takes one at a time).
+local function trimBots()
+	for _ = 1, session.MaxPlayers do
+		if #BotRegistry.List() <= BotService.Desired() then
+			return
+		end
+		BotService.Rebalance()
 	end
 end
 
+-- The same game again straight away (the last round's PLAY AGAIN vote passed): no lobby time and no
+-- game vote. It still needs someone to play and enough players for the game; returns false (and
+-- says so) when it can't go, and the lobby and the vote follow as usual.
+local function startReplay(id: string): boolean
+	local definition = GameDefinitions.Get(id)
+	trimBots()
+	local lineup = SitOutService.Lineup()
+	local reason = Roster.Blocker(lineup, minPlayers())
+	if not definition or reason ~= "" or not canStart(id, #lineup.Participants) then
+		GameState.Set("Replay", "")
+		if definition and reason ~= "Break" then -- a break shows on the lobby banner
+			Notifier.All(
+				`Not enough players for {string.upper(definition.Name)} again - next, a new vote!`,
+				"warning",
+				5
+			)
+		end
+		return false
+	end
+	replayStreak += 1
+	-- The lobby's vote stage shows no winner for it: this round wasn't voted for.
+	GameState.SetJSON("VoteOptions", {})
+	GameState.SetJSON("VoteCounts", {})
+	Telemetry.ServerEvent("GameSelected", { game = id, replay = replayStreak })
+	runRound(definition, lineup.Participants)
+	return true
+end
+
 local function runCycle()
+	-- The same game again, if the last round's players voted for it (and it can go now).
+	local replay = replayNext
+	replayNext = nil
+	if replay and startReplay(replay) then
+		return
+	end
+
 	-- Waiting for enough players (or for someone to come back from a break)
 	while true do
 		local reason, needed = blocker()
@@ -343,6 +417,7 @@ local function runCycle()
 	end
 	Telemetry.ServerEvent("GameSelected", { game = gameId, tie = wasTie, mystery = winner.Mystery })
 
+	replayStreak = 0 -- a voted game: its own run of replays starts here
 	runRound(definition, participants)
 end
 
@@ -353,6 +428,8 @@ function RoundManager.Start()
 			-- Last line of defense: log, clean up whatever was running and return everyone to the lobby.
 			Telemetry.Error("RoundCycle", tostring(err))
 			cleanupContext()
+			replayNext = nil
+			GameState.Set("Replay", "")
 			setPhase("Intermission", 5, "Something went wrong - restarting the round.")
 			task.wait(5)
 		end

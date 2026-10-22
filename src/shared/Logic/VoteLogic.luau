@@ -45,10 +45,11 @@ end
 -- When the vote closes: at `deadline`, or `beat` seconds after the latest vote (`lastVoteAt`) once
 -- every one of `voters` has a vote in `votes`, whichever is sooner (a time already past means now).
 -- With nobody to vote it runs to the deadline. Times are on any one clock (the server's os.clock()).
+-- A vote is any answer (a card's index, or the replay vote's yes or no: Services/ReplayService).
 function VoteLogic.ClosesAt(
 	deadline: number,
 	voters: { any },
-	votes: { [any]: number },
+	votes: { [any]: any },
 	lastVoteAt: number,
 	beat: number
 ): number

@@ -18,6 +18,7 @@ local order = {
 	"SocialService",
 	"SitOutService",
 	"VotingService",
+	"ReplayService", -- the results card's PLAY AGAIN vote
 	"LobbyService",
 	"SkeeBallService", -- after the lobby exists (its arcade)
 	"BotService", -- after the lobby exists (spawns, vote pads)

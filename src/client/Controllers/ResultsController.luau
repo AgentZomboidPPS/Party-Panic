@@ -12,10 +12,19 @@
 -- label: the result always reads whole and a long name gives way ("..."), only as far as its own
 -- row's result needs. It used to be one line ("🥇  name  ·  result") that a 15-character name cut
 -- short in every mode.
+--
+-- PLAY AGAIN? (owner: "Add a vote at the end of each minigame to replay the same minigame."; the
+-- vote itself is Services/ReplayService): the card's title bar, between its title and its ✕, has
+-- 🔁 PLAY AGAIN? with how many want a replay ("3/5 want a replay") and NO THANKS, for the people who
+-- vote on it (they played the round and play the next one: not someone sitting out). Your answer
+-- gets a ✓ and a yellow rim, and you can change it until the results end. The title bar is where
+-- phones keep them clear of the menu column, the jump button and the MOVE stick, as 44 pt buttons.
+-- After the most replays in a row it says a new vote is next instead.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
+local Config = require(Shared.Config)
 local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local Placement = require(Shared.Logic.Placement)
@@ -23,6 +32,7 @@ local Remotes = require(Shared.Remotes)
 
 local AudioController = require(script.Parent.AudioController)
 local Participants = require(script.Parent.Parent.Participants)
+local State = require(script.Parent.Parent.State)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -46,6 +56,24 @@ local modal: Modal.Modal
 local headline: TextLabel
 local standings: Frame
 local rewards: Frame
+local cardGame = "" -- the game of the card on screen (its PLAY AGAIN vote must be for it)
+
+-- The PLAY AGAIN strip (scaled units): phones, then PC. CLOSE_GAP keeps NO THANKS a finger away from
+-- the card's ✕ (which closes the card).
+local AGAIN_W, NO_W, STRIP_GAP, CLOSE_GAP = 220, 150, 10, 20
+local PC_AGAIN_W, PC_NO_W = 210, 140
+local GREEN_DARK = Color3.fromRGB(60, 160, 90)
+type ReplayStrip = {
+	strip: Frame,
+	again: TextButton,
+	againTitle: TextLabel,
+	againCount: TextLabel,
+	againRim: UIStroke,
+	no: TextButton,
+	noRim: UIStroke,
+	note: TextLabel,
+}
+local replay: ReplayStrip
 
 local function clear(frame: Instance)
 	for _, child in frame:GetChildren() do
@@ -53,6 +81,135 @@ local function clear(frame: Instance)
 			child:Destroy()
 		end
 	end
+end
+
+-- Shows the strip as the vote stands: the buttons for a voter while it's open, your answer marked;
+-- the note when the game has had its replays; nothing otherwise.
+local function refreshReplay()
+	local vote = GameState.GetJSON("ReplayVote")
+	local current = type(vote) == "table" and cardGame ~= "" and vote.Game == cardGame
+	local voters = if current and type(vote.Voters) == "table" then vote.Voters else {}
+	local open = current and vote.Open == true and table.find(voters, State.LocalPlayer.UserId) ~= nil
+	local capped = current and vote.Capped == true
+	replay.strip.Visible = open or capped
+	replay.again.Visible = open
+	replay.no.Visible = open
+	replay.note.Visible = capped and not open
+	if not open then
+		return
+	end
+	local mine = State.LocalPlayer:GetAttribute("PP_Replay")
+	replay.againTitle.Text = if mine == "Yes" then "✓ PLAY AGAIN" else "🔁 PLAY AGAIN?"
+	replay.againCount.Text = `{tonumber(vote.Yes) or 0}/{#voters} want a replay`
+	replay.no.Text = if mine == "No" then "✓ NO THANKS" else "NO THANKS"
+	local function mark(rim: UIStroke, chosen: boolean)
+		rim.Color = if chosen then Theme.Colors.Yellow else Color3.new(1, 1, 1)
+		rim.Thickness = if chosen then 4 else 2
+		rim.Transparency = if chosen then 0 else 0.55
+	end
+	mark(replay.againRim, mine == "Yes")
+	mark(replay.noRim, mine == "No")
+end
+
+local function buildReplay()
+	local touch = UIKit.IsTouch()
+	local titleBar = modal.Window:FindFirstChild("TitleBar") or modal.Window
+	local closeSize = if touch then Theme.Touch.Target else 46
+	local height = if touch then Theme.Touch.Target else 52
+	local againWidth = if touch then AGAIN_W else PC_AGAIN_W
+	local noWidth = if touch then NO_W else PC_NO_W
+	local strip = UIKit.new("Frame", {
+		Name = "Replay",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -(12 + closeSize + CLOSE_GAP), 0, Modal.TitleHeight() / 2 + 2), -- beside the ✕
+		Size = UDim2.fromOffset(againWidth + STRIP_GAP + noWidth, height),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 23,
+		Parent = titleBar,
+		Children = {
+			UIKit.List(
+				Enum.FillDirection.Horizontal,
+				STRIP_GAP,
+				Enum.HorizontalAlignment.Right,
+				Enum.VerticalAlignment.Center
+			),
+		},
+	})
+	local function choose(again: boolean)
+		Remotes.Get("ReplayVote"):FireServer(again)
+	end
+	local again = UIKit.Button({
+		Name = "PlayAgain",
+		Text = "",
+		Size = UDim2.fromOffset(againWidth, height),
+		CornerRadius = 18,
+		LayoutOrder = 1,
+		ZIndex = 23,
+		Parent = strip,
+	}, function()
+		choose(true)
+	end, Theme.Colors.Green, GREEN_DARK)
+	local againTitle = UIKit.Label({
+		Name = "Title",
+		Text = "🔁 PLAY AGAIN?",
+		Font = Theme.Fonts.Display,
+		TextSize = if touch then 22 else 21,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(0, if touch then 7 else 4),
+		Size = UDim2.new(1, 0, 0, if touch then 30 else 26),
+		ZIndex = 24,
+		Parent = again,
+		Children = { UIKit.TextStroke(0.3) },
+	})
+	local againCount = UIKit.Label({
+		Name = "Count",
+		Text = "",
+		TextSize = if touch then Theme.Touch.MinText else 15,
+		TextWrapped = false,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, if touch then -8 else -5),
+		Size = UDim2.new(1, 0, 0, if touch then 24 else 19),
+		ZIndex = 24,
+		Parent = again,
+		Children = { UIKit.TextStroke(0.4) },
+	})
+	local no = UIKit.Button({
+		Name = "NoThanks",
+		Text = "NO THANKS",
+		TextSize = if touch then 20 else 19,
+		Size = UDim2.fromOffset(noWidth, height),
+		CornerRadius = 18,
+		LayoutOrder = 2,
+		ZIndex = 23,
+		Parent = strip,
+	}, function()
+		choose(false)
+	end, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+	local note = UIKit.Label({
+		Name = "Note",
+		Text = `🗳️ {Config.Session.MaxReplays + 1} in a row - a new vote next!`,
+		TextSize = if touch then 19 else 18,
+		TextWrapped = false,
+		TextColor3 = Theme.Colors.Yellow,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Size = UDim2.fromOffset(againWidth + STRIP_GAP + noWidth, height),
+		LayoutOrder = 3,
+		Visible = false,
+		ZIndex = 23,
+		Parent = strip,
+		Children = { UIKit.TextStroke(0.3) },
+	})
+	replay = {
+		strip = strip,
+		again = again,
+		againTitle = againTitle,
+		againCount = againCount,
+		againRim = again:FindFirstChildOfClass("UIStroke") :: UIStroke,
+		no = no,
+		noRim = no:FindFirstChildOfClass("UIStroke") :: UIStroke,
+		note = note,
+	}
 end
 
 local function show(data)
@@ -179,7 +336,7 @@ local function show(data)
 		})
 	else
 		UIKit.Label({
-			Text = "Next vote soon - get ready!",
+			Text = "Next round soon - get ready!",
 			TextSize = 18,
 			TextColor3 = Theme.Colors.TextDim,
 			Size = UDim2.new(1, 0, 0, 26),
@@ -188,6 +345,8 @@ local function show(data)
 		})
 	end
 
+	cardGame = if type(data.GameId) == "string" then data.GameId else ""
+	refreshReplay()
 	modal:Open()
 	AudioController.Play(if data.Place == 1 then "Victory" else "Results")
 end
@@ -218,6 +377,8 @@ function ResultsController.Start(context)
 		Children = { UIKit.List(Enum.FillDirection.Vertical, 6) },
 	})
 
+	buildReplay()
+
 	Remotes.Get("RoundResults").OnClientEvent:Connect(function(data)
 		if type(data) == "table" then
 			show(data)
@@ -228,6 +389,8 @@ function ResultsController.Start(context)
 			modal:Close()
 		end
 	end)
+	GameState.Changed("ReplayVote", refreshReplay)
+	State.LocalPlayer:GetAttributeChangedSignal("PP_Replay"):Connect(refreshReplay)
 end
 
 return ResultsController

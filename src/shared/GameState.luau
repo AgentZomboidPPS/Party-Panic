@@ -12,6 +12,9 @@
 --   VoteCounts    JSON list of numbers
 --   TeamScores    JSON map of team name -> score ("" when not a team game)
 --   Champions     JSON list of the last round's top three display names
+--   ReplayVote    JSON { Open, Game, Yes, No, Voters (UserIds), Need, Capped }: the results card's
+--                 PLAY AGAIN vote (Services/ReplayService); each voter's answer is their PP_Replay
+--   Replay        the game about to be played again straight after this round's results ("" if none)
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -43,6 +46,8 @@ function GameState.Folder(): Folder
 			created:SetAttribute("VoteCounts", "[]")
 			created:SetAttribute("TeamScores", "")
 			created:SetAttribute("Champions", "[]")
+			created:SetAttribute("ReplayVote", "")
+			created:SetAttribute("Replay", "")
 			created.Parent = ReplicatedStorage
 			folder = created
 		end

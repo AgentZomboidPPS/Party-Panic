@@ -19,6 +19,12 @@ Config.Session = {
 	RulesTime = 10, -- the rules card's time on screen before 3-2-1 (owner: "give players more time to read the instructions")
 	CountdownTime = 3,
 	ResultsTime = 6, -- the results card, before everyone's back in the lobby
+	-- The replay vote on the results card (owner: "Add a vote at the end of each minigame to replay
+	-- the same minigame."): over half of the round's people saying PLAY AGAIN plays it again at once.
+	-- Everyone having answered ends the results early, but never before ResultsMinTime (the card's
+	-- placement and rewards need a moment to be seen).
+	ResultsMinTime = 3,
+	MaxReplays = 2, -- replays in a row at most (3 plays of one game), then a new vote
 	RoundGraceTime = 10, -- watchdog: hard stop this long after a mode's own time limit
 	RecentGameMemory = 2,
 }
@@ -71,6 +77,7 @@ Config.Data = {
 -- §15 Remote rate limits: calls allowed per window (seconds)
 Config.RateLimits = {
 	CastVote = { 8, 2 },
+	ReplayVote = { 6, 2 }, -- PLAY AGAIN / NO THANKS on the results card
 	Shop = { 6, 2 },
 	Emote = { 4, 3 },
 	Claim = { 3, 2 },
