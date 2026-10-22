@@ -584,6 +584,8 @@ def render(nodes: list, size_name: str, out: Path):
             if n.get("autocanvas", "None") in ("X", "XY"):
                 canvas_w = max(canvas_w, need_w)
             sx_, sy_ = n.get("cpos", [0, 0])
+            # Roblox keeps the canvas position inside the canvas (a harness may ask for "the end")
+            sx_, sy_ = max(0, min(sx_, canvas_w - w)), max(0, min(sy_, canvas_h - h))
             cx, cy = x - sx_ + left, y - sy_ + top
             cw, ch = canvas_w - left - right, canvas_h - top - bottom
         child_clip = intersect(clip, (x0, y0, x1, y1)) if n.get("clip") or n["c"] == "ScrollingFrame" else clip
