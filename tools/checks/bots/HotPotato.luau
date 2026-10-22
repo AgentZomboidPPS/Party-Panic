@@ -60,10 +60,11 @@ return function(env)
 			if not env.Alive(player) then
 				continue
 			end
-			local root = env.Root(player)
-			if not root then
+			local position = env.Root(player) -- a Vector3 here
+			if not position then
 				continue
 			end
+			local root = { Position = position }
 			local potato = mode:HolderOf(player)
 			if potato then
 				local best, bestRoot, bestDistance = nil, nil, math.huge
