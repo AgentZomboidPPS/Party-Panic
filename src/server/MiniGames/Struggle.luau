@@ -9,8 +9,10 @@
 -- of their own colour AND shape (● ■ ▲ ◆ ★ ... one per player, so colour is never the only cue).
 -- SWING (button, E, or a click on PC): a tap winds up for a moment you can see (the bat goes back
 -- over the shoulder) and strikes; holding it charges (the bat glows, you walk slower) and a charged
--- swing reaches further, knocks out 6 orbs instead of 3 and throws the victim harder. A victim is
--- safe for a moment after a hit (no juggling) and nobody is ever out: at 0 orbs you keep fighting.
+-- swing reaches further (the bat is drawn longer), knocks out 6 orbs instead of 3 (a tenth of a big
+-- pile, doubled when charged, so a runaway leader can be caught) and throws the victim harder. A
+-- victim is safe for a moment after a hit (no juggling, and no grabbing their orbs straight back)
+-- and nobody is ever out: at 0 orbs you keep fighting.
 --
 -- How it works (the server owns everything; Shared/Logic/Struggle has the numbers and the hit test):
 --   * A press sends "Charge" with when it was pressed on the player's screen, a release "Swing"
@@ -20,19 +22,23 @@
 --     lets a charge go by itself after MAX_HOLD.
 --   * The strike is judged when the attacker's screen showed it: their own position as the server
 --     has it one-way after the strike, the victims where the attacker saw them (positions recorded
---     20 times a second, rewound by the attacker's one-way trip plus Roblox's interpolation, capped)
---     or where they are now, whichever is in reach (fair to what the attacker saw). Everyone in the
---     arc is hit (a crowd can all get it). "Wind" / "Strike" / "Hit" events are cues for clients;
+--     20 times a second, rewound by the attacker's one-way trip plus Roblox's interpolation, capped).
+--     The reach is the drawn bat's (the client draws the rule itself as a fan on the sand). Everyone
+--     in the arc is hit (a crowd can all get it). "Wind" / "Strike" / "Hit" events are cues for clients;
 --     the bats are drawn on clients from them.
 --   * Loose orbs are the server's ([id, slot, x, z, fromX, fromZ, droppedAt]): a hit throws them on
---     an arc from the victim to spots around them; they can be picked up once landed, by whoever is
---     nearest within reach (players get a little extra for their screen running ahead). Shared as
---     state ("Orbs", at most twice a second, so a client that starts late sees them all) plus
---     "Drop"/"Take" events for the moment itself. Held counts and hits are shared as "Held".
+--     an arc from the victim back toward the swinger and out to the sides (the victim flies the
+--     other way); they can be picked up once landed, by whoever is nearest within reach. "Drop" /
+--     "Take" events carry each moment; the full list ("Orbs") is shared every few seconds while it
+--     changes, so a client that starts late sees them all. Held counts and hits are shared as "Held".
 --   * Bots swing through ctx:BotAction exactly like players, ctx:Knockback throws bots and players
 --     alike, and bots pick orbs up by the same distance check: no hazard is client-only.
---   * Bots and players don't collide (like Hex Meltdown): a player shoving a server-moved bot could
---     fling it; the bat decides every contact anyway.
+--   * Nobody's character collides with anyone else's (one mode-only group, respawns included): a
+--     player shoving a server-moved bot could fling it; the bat decides every contact anyway.
+--   * The fence is about 10 studs tall (a jump reaches 7.2), a knock adds no lift to someone already
+--     in the air, and anyone who still ends up outside the fence is put back inside.
+--   * A press the server turns down (cooldown, knocked down) gets a "Refused" back, so the player's
+--     screen stops drawing that swing.
 --   * Nothing solid where nothing is drawn (owner: "Theres invisible stuff you can jump on and hang
 --     on in several games"): only the sand, the ground and the fence collide; the fence is plank
 --     boards, rails and posts whose collision is their own drawn shape. Everything behind it (tram,
@@ -61,8 +67,9 @@ local MAX_LAG = 0.4 -- the longest round trip we allow for
 local REWIND_CAP = 0.3 -- the furthest back a victim is judged
 local INTERP = 0.1 -- Roblox draws other characters about this far behind
 local HISTORY = 16 -- position samples kept (every 0.05 s)
-local PICK_LEEWAY = 1.0 -- extra pick-up reach for players (their screen runs ahead of the server)
-local BOT_GROUP, PEOPLE_GROUP = "PP_StruggleBots", "PP_Players"
+local GROUP = "PP_Struggle" -- every participant's character (see setUpGroup)
+local ORB_SNAPSHOT = 3 -- seconds between full lists of loose orbs (Drop / Take events carry the moments)
+local FALL_SAFE = 3.8 -- a root this far above the sand is in the air (standing is about 3)
 local BOT_MAX_FLAT, BOT_MAX_UP = 80, 45 -- a bot never goes faster than its hardest knock
 
 local rng = Random.new()
@@ -74,35 +81,18 @@ export type Swing = {
 	Cancelled: boolean,
 }
 
-local function separateBotsFromPeople(ctx)
-	local ok = pcall(function()
-		for _, group in { BOT_GROUP, PEOPLE_GROUP } do
-			if not PhysicsService:IsCollisionGroupRegistered(group) then
-				PhysicsService:RegisterCollisionGroup(group)
-			end
+-- Everyone in the round passes through everyone else (one mode-only group that doesn't collide with
+-- itself; it still collides with the sand and the fence). Bodies shoving bodies only flung people
+-- around (a server-moved bot shoved by a player could fly), and the bat decides every contact anyway.
+-- Characters made later (a respawn) are put in it too (Struggle:_groupCharacters, every 0.1 s); the
+-- lobby's own groups come back with the fresh characters everyone gets after the round.
+local function setUpGroup(): boolean
+	return pcall(function()
+		if not PhysicsService:IsCollisionGroupRegistered(GROUP) then
+			PhysicsService:RegisterCollisionGroup(GROUP)
 		end
-		PhysicsService:CollisionGroupSetCollidable(BOT_GROUP, PEOPLE_GROUP, false)
+		PhysicsService:CollisionGroupSetCollidable(GROUP, GROUP, false)
 	end)
-	if not ok then
-		return
-	end
-	for _, player in ctx:GetPlayers() do
-		local character = ctx:GetCharacter(player)
-		if not character then
-			continue
-		end
-		local group = if BotRegistry.IsBot(player) then BOT_GROUP else PEOPLE_GROUP
-		for _, item in character:GetDescendants() do
-			if item:IsA("BasePart") then
-				item.CollisionGroup = group
-			end
-		end
-		ctx:Track(character.DescendantAdded:Connect(function(item)
-			if item:IsA("BasePart") then
-				item.CollisionGroup = group
-			end
-		end))
-	end
 end
 
 local function round2(x: number): number
@@ -145,6 +135,8 @@ function Struggle:Prepare()
 	self.heldDirty = true
 	self.lastOrbShare = -math.huge
 	self.sign = nil :: TextLabel?
+	self.grouped = {} :: { [any]: Model }
+	self.groupReady = false
 
 	self:_buildArena()
 
@@ -413,6 +405,8 @@ function Struggle:_shareHeld()
 	self:_refreshSign()
 end
 
+-- The full list of loose orbs, for a screen that starts late (and to correct any that missed an
+-- event): every few seconds while it changes. The moments themselves go as Drop / Take events.
 function Struggle:_shareOrbs()
 	local list = {}
 	for _, orb in self.orbs do
@@ -437,8 +431,10 @@ end
 
 -- Orbs -------------------------------------------------------------------------------------------
 
--- Throws `count` orbs of `slot` from `from` to spots around it (inside the fence), mostly `away`.
-function Struggle:_drop(slot: number, count: number, from: Vector3, away: Vector3?)
+-- Throws `count` orbs of `slot` from `from` to spots around it (inside the fence). After a hit they
+-- spray `toward` the swinger and out to the sides, never the way the victim is thrown (review: the
+-- victim flew along with their own orbs and caught them again); a leaver's spill goes all round.
+function Struggle:_drop(slot: number, count: number, from: Vector3, toward: Vector3?)
 	if count <= 0 then
 		return
 	end
@@ -448,12 +444,15 @@ function Struggle:_drop(slot: number, count: number, from: Vector3, away: Vector
 	local mx, mz = Rules.FIELD_X - Rules.ORB_MARGIN, Rules.FIELD_Z - Rules.ORB_MARGIN
 	local fx = math.clamp(from.X - origin.X, -Rules.FIELD_X, Rules.FIELD_X)
 	local fz = math.clamp(from.Z - origin.Z, -Rules.FIELD_Z, Rules.FIELD_Z)
-	local base = if away and away.Magnitude > 1e-3 then math.atan2(away.Z, away.X) else rng:NextNumber(0, math.pi * 2)
-	local spread = if away then 0.55 else math.pi * 2 / count
+	local aimed = toward ~= nil and toward.Magnitude > 1e-3
+	local base = if aimed
+		then math.atan2((toward :: Vector3).Z, (toward :: Vector3).X)
+		else rng:NextNumber(0, math.pi * 2)
+	local half = if aimed then 1.75 else math.pi -- each side of `toward` (about 100 degrees)
 	local new = {}
 	for index = 1, count do
-		local angle = base + (index - (count + 1) / 2) * spread + rng:NextNumber(-0.3, 0.3)
-		local distance = rng:NextNumber(4, 10)
+		local angle = base - half + 2 * half * (index - 0.5) / count + rng:NextNumber(-0.2, 0.2)
+		local distance = rng:NextNumber(4, 9)
 		local x = math.clamp(fx + math.cos(angle) * distance, -mx, mx)
 		local z = math.clamp(fz + math.sin(angle) * distance, -mz, mz)
 		self.nextOrb += 1
@@ -478,10 +477,14 @@ function Struggle:_pickUps()
 		if self.held[player] == nil then
 			continue
 		end
+		-- Nobody picks up while knocked down or in their safe moment after a hit (their own orbs
+		-- are flying away from them then).
+		if (self.safeUntil[player] or 0) > now then
+			continue
+		end
 		local _, humanoid, root = ctx:GetCharacter(player)
 		if root and humanoid and humanoid.Health > 0 then
-			local reach = Rules.PICK + (if BotRegistry.IsBot(player) then 0 else PICK_LEEWAY)
-			table.insert(roots, { Player = player, Position = root.Position - origin, Reach = reach })
+			table.insert(roots, { Player = player, Position = root.Position - origin })
 		end
 	end
 	local taken: { [any]: { number } } = {}
@@ -494,7 +497,7 @@ function Struggle:_pickUps()
 			local p = entry.Position
 			local dx, dz = p.X - orb[3], p.Z - orb[4]
 			local distance = math.sqrt(dx * dx + dz * dz)
-			if distance <= entry.Reach and distance < bestDistance and math.abs(p.Y) < 8 then
+			if distance <= Rules.PICK and distance < bestDistance and math.abs(p.Y) < 8 then
 				best, bestDistance = entry.Player, distance
 			end
 		end
@@ -556,6 +559,15 @@ function Struggle:_canStart(player: any, t: number): boolean
 	return t >= (self.readyAt[player] or 0) - 0.05
 end
 
+-- Tells a player's screen its press didn't start a swing, so it stops drawing one (and when it
+-- may try again).
+function Struggle:_refuse(player: any)
+	if not BotRegistry.IsBot(player) then
+		local ready = math.max(self.readyAt[player] or 0, self.stunUntil[player] or 0)
+		self.context:Fire(player, "Refused", round2(ready))
+	end
+end
+
 function Struggle:_charge(player: any, claimed: any)
 	local ctx = self.context
 	if self.swings[player] then
@@ -563,10 +575,12 @@ function Struggle:_charge(player: any, claimed: any)
 	end
 	local _, _, root = ctx:GetCharacter(player)
 	if not root then
+		self:_refuse(player)
 		return
 	end
 	local t = self:_pressTime(player, claimed)
 	if not self:_canStart(player, t) then
+		self:_refuse(player)
 		return
 	end
 	local swing: Swing = { Start = t, Charged = false, Cancelled = false }
@@ -594,6 +608,7 @@ function Struggle:_swing(player: any, claimed: any)
 		-- No live charge: a tap from the release (see the top).
 		local _, _, root = self.context:GetCharacter(player)
 		if not root or not self:_canStart(player, t) then
+			self:_refuse(player)
 			return
 		end
 		swing = { Start = t, Charged = false, Cancelled = false }
@@ -669,11 +684,9 @@ function Struggle:_judge(attacker: any, swing: Swing)
 		if not victimRoot then
 			continue
 		end
-		local seen = self:_positionAt(victim, strikeAt - rewind)
-		if
-			Rules.Reaches(from, look, victimRoot.Position, swing.Charged)
-			or (seen ~= nil and Rules.Reaches(from, look, seen, swing.Charged))
-		then
+		-- Where the attacker saw them, only (someone who walked in after the bat passed isn't hit).
+		local seen = if rewind > 0 then self:_positionAt(victim, strikeAt - rewind) else nil
+		if Rules.Reaches(from, look, seen or victimRoot.Position, swing.Charged) then
 			table.insert(victims, { Player = victim, Position = victimRoot.Position })
 		end
 	end
@@ -685,7 +698,7 @@ end
 function Struggle:_hit(attacker: any, victim: any, at: Vector3, from: Vector3, look: Vector3, charged: boolean)
 	local ctx = self.context
 	local now = ctx:Now()
-	local count = math.min(self.held[victim] or 0, if charged then Rules.KNOCK_CHARGED else Rules.KNOCK)
+	local count = Rules.Knocked(self.held[victim] or 0, charged)
 	local away = Vector3.new(at.X - from.X, 0, at.Z - from.Z)
 	if away.Magnitude < 0.1 then
 		away = Vector3.new(look.X, 0, look.Z)
@@ -705,10 +718,15 @@ function Struggle:_hit(attacker: any, victim: any, at: Vector3, from: Vector3, l
 	self.heldDirty = true
 	if count > 0 then
 		self:_setHeld(victim, (self.held[victim] or 0) - count)
-		self:_drop(self.slots[victim] or 1, count, at, away)
+		self:_drop(self.slots[victim] or 1, count, at, -away)
 	end
 	local speed = if charged then 62 else 36
-	ctx:Knockback(victim, away * speed + Vector3.new(0, if charged then 30 else 20, 0), stun)
+	-- Someone already in the air gets no extra lift (a jump plus a knock cleared the fence).
+	local _, _, victimRoot = ctx:GetCharacter(victim)
+	local airborne = victimRoot ~= nil
+		and (victimRoot.Position.Y - self.center.Y > FALL_SAFE or math.abs(victimRoot.AssemblyLinearVelocity.Y) > 2)
+	local lift = if airborne then 0 elseif charged then 30 else 20
+	ctx:Knockback(victim, away * speed + Vector3.new(0, lift, 0), stun)
 	ctx:Fire(
 		nil,
 		"Hit",
@@ -717,7 +735,8 @@ function Struggle:_hit(attacker: any, victim: any, at: Vector3, from: Vector3, l
 		count,
 		charged,
 		round2(now + Rules.SAFE),
-		{ round2(at.X), round2(at.Y), round2(at.Z) }
+		{ round2(at.X), round2(at.Y), round2(at.Z) },
+		round2(now + stun)
 	)
 end
 
@@ -749,6 +768,53 @@ function Struggle:_onLeave(player: any)
 	self.heldDirty = true
 end
 
+-- Puts every character in the round in the mode's group (GROUP; respawns too).
+function Struggle:_groupCharacters()
+	local ctx = self.context
+	if not self.groupReady then
+		return
+	end
+	for _, player in ctx:GetPlayers() do
+		local character = ctx:GetCharacter(player)
+		if not character or self.grouped[player] == character then
+			continue
+		end
+		self.grouped[player] = character
+		for _, item in character:GetDescendants() do
+			if item:IsA("BasePart") then
+				item.CollisionGroup = GROUP
+			end
+		end
+		ctx:Track(character.DescendantAdded:Connect(function(item)
+			if item:IsA("BasePart") then
+				item.CollisionGroup = GROUP
+			end
+		end))
+	end
+end
+
+-- A safety net: anyone who got outside the fence (a knock over it, a glitch) is put back inside,
+-- where they were nearest, players and bots alike.
+function Struggle:_keepInside()
+	local ctx = self.context
+	local origin = self.center
+	for _, player in ctx:GetAlivePlayers() do
+		local character, _, root = ctx:GetCharacter(player)
+		if not character or not root or root.Anchored then
+			continue
+		end
+		local offset = root.Position - origin
+		if math.abs(offset.X) <= FENCE_X + 1 and math.abs(offset.Z) <= FENCE_Z + 1 then
+			continue
+		end
+		local x = math.clamp(offset.X, -Rules.FIELD_X + 2, Rules.FIELD_X - 2)
+		local z = math.clamp(offset.Z, -Rules.FIELD_Z + 2, Rules.FIELD_Z - 2)
+		local spot = origin + Vector3.new(x, 3.5, z)
+		character:PivotTo(CFrame.lookAt(spot, Vector3.new(origin.X, spot.Y, origin.Z)))
+		root.AssemblyLinearVelocity = Vector3.zero
+	end
+end
+
 -- A safety net under the bots: nothing flings one faster than its hardest knock.
 function Struggle:_limitBots()
 	local ctx = self.context
@@ -773,7 +839,8 @@ end
 
 function Struggle:Start()
 	local ctx = self.context
-	separateBotsFromPeople(ctx)
+	self.groupReady = setUpGroup()
+	self:_groupCharacters()
 
 	ctx:OnAction("Charge", function(player, claimed)
 		self:_charge(player, claimed)
@@ -809,12 +876,14 @@ function Struggle:Start()
 	end)
 
 	ctx:Loop(function(): number?
+		self:_groupCharacters()
+		self:_keepInside()
 		self:_pickUps()
 		self:_limitBots()
 		if self.heldDirty then
 			self:_shareHeld()
 		end
-		if self.orbsDirty and os.clock() - self.lastOrbShare >= 0.5 then
+		if self.orbsDirty and os.clock() - self.lastOrbShare >= ORB_SNAPSHOT then
 			self:_shareOrbs()
 		end
 		return 0.1

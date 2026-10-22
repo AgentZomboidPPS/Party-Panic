@@ -153,8 +153,8 @@ return function(h)
 			end,
 		},
 		StruggleFence = {
-			Height = 8.1,
-			AssetId = 72210194858891,
+			Height = 10.5,
+			AssetId = 96648294267120,
 			Collide = true,
 			Palette = { Boards = h.rgb(196, 146, 96), Rails = h.rgb(150, 104, 66), Post = h.rgb(120, 84, 56) },
 			Materials = {
@@ -163,9 +163,19 @@ return function(h)
 				Post = Enum.Material.Wood,
 			},
 			Fallback = function(m)
-				h.block(m, "Boards", Vector3.new(12, 7.2, 0.26), Vector3.new(0, 3.85, -0.05))
+				h.block(m, "Boards", Vector3.new(12, 9.8, 0.26), Vector3.new(0, 5.15, -0.05))
 				h.block(m, "Rails", Vector3.new(12, 0.45, 0.36), Vector3.new(0, 1.6, 0.3))
-				h.block(m, "Post", Vector3.new(0.8, 8.1, 0.8), Vector3.new(-6, 4.05, 0.15))
+				h.block(m, "Post", Vector3.new(0.8, 10.5, 0.8), Vector3.new(-6, 5.25, 0.15))
+			end,
+		},
+		StruggleReach = {
+			Height = 0.02, -- a flat fan of radius 1 (the client scales it to the swing's reach)
+			AssetId = 106007616538835,
+			Palette = { Fan = h.rgb(255, 255, 255) },
+			Materials = { Fan = Enum.Material.Neon },
+			Shadow = false,
+			Fallback = function(m)
+				h.block(m, "Fan", Vector3.new(1.97, 0.02, 1), Vector3.new(0, 0.01, -0.5))
 			end,
 		},
 		StruggleScoreboard = {

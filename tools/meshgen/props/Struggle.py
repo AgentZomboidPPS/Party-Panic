@@ -1,6 +1,6 @@
 """Meshes for Struggle (see tools/meshgen/props/README.md). Units are studs, +Y up, base on y = 0,
 -Z is the front. Generate with:
-    python3 tools/meshgen/generate_meshes.py --only StruggleBat,StruggleFence,StruggleScoreboard,StruggleTram,StruggleTrack,StruggleBench,StruggleBanner,StruggleOrbBall,StruggleOrbCube,StruggleOrbPyramid,StruggleOrbDiamond,StruggleOrbStar,StruggleOrbRing,StruggleOrbPlus,StruggleOrbCross,StruggleOrbCone,StruggleOrbFrame,StruggleOrbPill,StruggleOrbKite
+    python3 tools/meshgen/generate_meshes.py --only StruggleBat,StruggleFence,StruggleScoreboard,StruggleTram,StruggleTrack,StruggleBench,StruggleBanner,StruggleReach,StruggleOrbBall,StruggleOrbCube,StruggleOrbPyramid,StruggleOrbDiamond,StruggleOrbStar,StruggleOrbRing,StruggleOrbPlus,StruggleOrbCross,StruggleOrbCone,StruggleOrbFrame,StruggleOrbPill,StruggleOrbKite
 
 Original designs (no Kingdom Hearts branding): a padded foam bat, twelve orb shapes (one per player,
 so colour is never the only cue), and a sunset sandlot's fence, scoreboard, tram yard, benches and
@@ -123,20 +123,30 @@ def orb_kite():
 # ------------------------------------------------------------------ the sandlot
 
 def fence():
-    """One 12-stud panel of a plank fence: pointed boards in front, two rails behind, the post at the
-    left end (x = -6)."""
+    """One 12-stud panel of a plank fence, too tall to jump (about 10 studs; a jump reaches 7.2):
+    pointed boards in front, three rails behind, the post at the left end (x = -6)."""
     boards = []
     count = 13
     width = 12.0 / count
     for i in range(count):
         x = -6 + width * (i + 0.5)
         w = width - 0.1
-        top = 7.3 + 0.12 * ((i * 7) % 3)
-        outline = [(-w / 2, 0.25), (w / 2, 0.25), (w / 2, top - 0.35), (0, top), (-w / 2, top - 0.35)]
+        top = 9.8 + 0.12 * ((i * 7) % 3)
+        outline = [(-w / 2, 0.25), (w / 2, 0.25), (w / 2, top - 0.4), (0, top), (-w / 2, top - 0.4)]
         boards.append(extrude(outline, 0.26).translate(x, 0, -0.05))
-    rails = merge(box(12.0, 0.45, 0.36, 0.08, 0, 1.6, 0.3), box(12.0, 0.45, 0.36, 0.08, 0, 5.8, 0.3))
-    post = merge(box(0.8, 7.9, 0.8, 0.12, -6, 3.95, 0.15), box(1.0, 0.25, 1.0, 0.08, -6, 7.98, 0.15))
+    rails = merge(*[box(12.0, 0.45, 0.36, 0.08, 0, y, 0.3) for y in (1.6, 5.0, 8.4)])
+    post = merge(box(0.8, 10.3, 0.8, 0.12, -6, 5.15, 0.15), box(1.0, 0.25, 1.0, 0.08, -6, 10.38, 0.15))
     return {"Boards": merge(*boards), "Rails": rails, "Post": post}
+
+
+def reach():
+    """The swing's reach on the sand: a flat fan of radius 1 spanning 80 degrees each side of -Z (the
+    rule's ARC), its point at the swinger. The client scales it to the swing's RANGE."""
+    points = [(0.0, 0.0)]
+    for i in range(25):
+        a = math.radians(-80 + 160 * i / 24)
+        points.append((math.sin(a), math.cos(a)))
+    return {"Fan": extrude(points, 0.02).rotate("x", -90).translate(0, 0.01, 0)}
 
 
 def scoreboard():
@@ -233,6 +243,7 @@ PROPS = {
     "StruggleOrbPill": orb_pill,
     "StruggleOrbKite": orb_kite,
     "StruggleFence": fence,
+    "StruggleReach": reach,
     "StruggleScoreboard": scoreboard,
     "StruggleTram": tram,
     "StruggleTrack": track,
@@ -244,6 +255,7 @@ COLORS = {
     "Foam": (255, 120, 60),
     "Band": (250, 250, 250),
     "Orb": (120, 220, 255),
+    "Fan": (255, 255, 255),
     "Boards": (196, 146, 96),
     "Rails": (150, 104, 66),
     "Post": (120, 84, 56),

@@ -18,18 +18,22 @@ Struggle.RECOVER = 0.45 -- after a strike, before the next press
 Struggle.RECOVER_CHARGED = 0.75
 Struggle.SWEEP = 0.16 -- how long the bat takes through its arc (drawing only)
 
--- Reach: from the swinger's middle to the victim's middle, flat, plus the victim's body.
-Struggle.RANGE = 6.4
-Struggle.RANGE_CHARGED = 7.6
+-- Reach, matching the bat as drawn (review: the rule reached further than the bat). The bat is 4.3
+-- long, held 0.4 in front of the swinger's middle, so its tip sweeps about 4.6 out; a charged swing
+-- draws the bat CHARGED_BAT times longer (5.9). Anyone with any part of them inside the drawn reach
+-- is hit: their middle within RANGE + BODY, inside the arc widened by their body; and anyone whose
+-- body overlaps the small CLOSE circle round the swinger, whatever the direction (the bat passes
+-- right through there). The client draws exactly this: a +-ARC fan of radius RANGE and the circle.
+Struggle.RANGE = 4.6
+Struggle.CHARGED_BAT = 1.3
+Struggle.RANGE_CHARGED = 5.9
 Struggle.BODY = 1.1 -- a character's half width
 Struggle.ARC = math.rad(80) -- each side of where the swinger faces
-Struggle.CLOSE = 2.6 -- this close, any direction counts (the bat passes right through)
+Struggle.CLOSE = 1.5 -- the circle round the swinger where any direction counts
 Struggle.HEIGHT = 5 -- at most this far above or below
 
-Struggle.KNOCK = 3 -- orbs a hit knocks loose
-Struggle.KNOCK_CHARGED = 6
 Struggle.SAFE = 1.4 -- seconds a victim can't be hit again
-Struggle.PICK = 3.2 -- pick-up reach (root to orb, flat)
+Struggle.PICK = 3.6 -- pick-up reach (root to orb, flat), the same for everyone
 Struggle.FLIGHT = 0.7 -- seconds an orb flies before it lands and can be picked up
 
 -- One colour and one shape per player slot (colour is never the only cue). Glyph is what the HUD
@@ -61,7 +65,7 @@ function Struggle.Reaches(from: Vector3, look: Vector3, at: Vector3, charged: bo
 	if distance > reach then
 		return false
 	end
-	if distance <= Struggle.CLOSE then
+	if distance <= Struggle.CLOSE + Struggle.BODY then
 		return true
 	end
 	local facing = Vector3.new(look.X, 0, look.Z)
@@ -72,6 +76,14 @@ function Struggle.Reaches(from: Vector3, look: Vector3, at: Vector3, charged: bo
 	-- The arc is widened by the victim's body at that distance.
 	local widen = math.asin(math.clamp(Struggle.BODY / distance, 0, 1))
 	return cos >= math.cos(math.min(Struggle.ARC + widen, math.pi))
+end
+
+-- How many orbs a hit knocks loose from someone holding `held`: 3 (6 charged), or a tenth of a big
+-- pile (twice that charged), so one runaway leader can be caught (review: 182 of 240 in one hand).
+function Struggle.Knocked(held: number, charged: boolean): number
+	local tenth = math.floor(held * 0.1 + 0.5)
+	local count = if charged then math.max(6, tenth * 2) else math.max(3, tenth)
+	return math.min(held, count)
 end
 
 -- Where an orb is at server time t: flying from (fx, fz) at t0 to (x, z), landing at t0 + FLIGHT.

@@ -31,6 +31,18 @@ function Brain.Step(bot, ctx, mode, _dt)
 	local skill = bot.Skill
 	memory.Seen = memory.Seen or {}
 	memory.Dodge = memory.Dodge or {}
+	-- Forget swings that are over (struck, knocked away or judged).
+	for swing in memory.Seen do
+		if swing.StrikeAt or swing.Cancelled then
+			memory.Seen[swing] = nil
+			memory.Dodge[swing] = nil
+		end
+	end
+	for swing in memory.Dodge do
+		if memory.Seen[swing] == nil then
+			memory.Dodge[swing] = nil
+		end
+	end
 
 	if (mode.stunUntil[bot] or 0) > now then
 		bot:Stop()

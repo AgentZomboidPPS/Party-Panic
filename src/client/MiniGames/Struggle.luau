@@ -7,13 +7,19 @@
 -- shape in that colour, and the tags and HUD draw the same shape, so colour is never the only cue.
 -- The shapes are built from UI frames or from glyphs Roblox's fonts draw everywhere.
 --
--- A wind-up is visible to everyone: the bat goes back over the shoulder and a faint disc on the sand
--- shows the swing's reach (it grows while a charge builds, and the bat glows once it's charged), so
--- you can see a hit coming and step out of it.
+-- A wind-up is visible to everyone: the bat goes back over the shoulder and the swing's reach shows on
+-- the sand exactly as the server judges it (a fan of +-ARC out to RANGE, and the small CLOSE circle:
+-- any part of you inside is hit). It grows while a charge builds; a charged bat glows and is drawn
+-- longer, out to RANGE_CHARGED. So you can see a hit coming and step out of it.
+--
+-- Your own press draws your swing at once, but only when the server will take it: not during the
+-- 3-2-1, the wait after a swing or while you're knocked down; if the server still turns it down it
+-- says so ("Refused") and the swing is dropped. A charge held to the end is let go by the server.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
+local GameState = require(ReplicatedStorage.Shared.GameState)
 local Rules = require(ReplicatedStorage.Shared.Logic.Struggle)
 
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -28,10 +34,12 @@ local ORB_SCALE = 1.25 -- orbs are drawn a little bigger than their meshes (easy
 -- Bat poses in the holder's root space (the bat's pivot is the knob; it points along its +Y).
 local REST = CFrame.new(1.05, -0.1, -0.35) * CFrame.Angles(math.rad(55), 0, math.rad(-12))
 local WIND = CFrame.new(1.25, 0.55, 0.15) * CFrame.Angles(math.rad(105), math.rad(-25), math.rad(-35))
-local SWEEP_FROM, SWEEP_TO = math.rad(-110), math.rad(85)
+-- The strike sweeps the bat through exactly the rule's arc (+-ARC), its knob 0.4 in front of the
+-- swinger's middle, so the tip passes RANGE out (RANGE_CHARGED with the longer charged bat).
+local SWEEP_FROM, SWEEP_TO = -Rules.ARC, Rules.ARC
 
 local function sweepPose(yaw: number): CFrame
-	return CFrame.new(0.4, 0.15, -0.35) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+	return CFrame.new(0, 0.15, -0.4) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(math.rad(-90), 0, 0)
 end
 
 local function partsOf(model: Instance): { BasePart }
@@ -45,6 +53,17 @@ local function partsOf(model: Instance): { BasePart }
 		end
 	end
 	return list
+end
+
+-- Scales a copy of a shared model by `factor` from the size it was shared at (MeshLibrary may have
+-- scaled the template to its canonical height already, so ScaleTo's 1 isn't always "as shipped").
+local function scaleBy(model: Model, factor: number)
+	local base = model:GetAttribute("PP_BaseScale")
+	if type(base) ~= "number" then
+		base = model:GetScale()
+		model:SetAttribute("PP_BaseScale", base)
+	end
+	model:ScaleTo((base :: number) * factor)
 end
 
 local function quiet(model: Instance)
@@ -187,6 +206,8 @@ function Struggle.Start(api)
 		Bat: Model?,
 		Foam: { BasePart },
 		Disc: Part,
+		Fan: Model?,
+		BatScale: number,
 		Tag: BillboardGui,
 		Count: TextLabel,
 		Slot: number,
@@ -200,6 +221,9 @@ function Struggle.Start(api)
 				entry.Bat:Destroy()
 			end
 			entry.Disc:Destroy()
+			if entry.Fan then
+				entry.Fan:Destroy()
+			end
 			entry.Tag:Destroy()
 			gear[userId] = nil
 		end
@@ -223,6 +247,23 @@ function Struggle.Start(api)
 		end
 		copy.Parent = api.World
 		return copy :: Model, foam
+	end
+
+	-- The reach fan on the sand (radius 1 as shipped; scaled to the swing's RANGE when drawn).
+	local function makeFan(slotIndex: number): Model?
+		local fanTemplate = template("StruggleReach")
+		if not fanTemplate then
+			return nil
+		end
+		local copy = fanTemplate:Clone() :: Model
+		quiet(copy)
+		for _, part in partsOf(copy) do
+			part.Color = (Rules.SLOTS[slotIndex] or Rules.SLOTS[1]).Color
+			part.Material = Enum.Material.Neon
+			part.Transparency = 1
+		end
+		copy.Parent = api.World
+		return copy
 	end
 
 	local function makeGear(userId: number, slotIndex: number): Gear
@@ -264,7 +305,16 @@ function Struggle.Start(api)
 			Parent = tag,
 			Children = { UIKit.TextStroke(0.1) },
 		})
-		local entry: Gear = { Bat = bat, Foam = foam, Disc = disc, Tag = tag, Count = count, Slot = slotIndex }
+		local entry: Gear = {
+			Bat = bat,
+			Foam = foam,
+			Disc = disc,
+			Fan = makeFan(slotIndex),
+			BatScale = 1,
+			Tag = tag,
+			Count = count,
+			Slot = slotIndex,
+		}
 		gear[userId] = entry
 		return entry
 	end
@@ -449,7 +499,7 @@ function Struggle.Start(api)
 			model = source:Clone() :: Model
 			quiet(model :: Model)
 		end
-		(model :: Model):ScaleTo(ORB_SCALE)
+		scaleBy(model :: Model, ORB_SCALE)
 		local parts = partsOf(model :: Model)
 		for _, part in parts do
 			part.Color = color
@@ -557,6 +607,7 @@ function Struggle.Start(api)
 
 	-- Your swings --------------------------------------------------------------------------------
 	local readyAt = 0
+	local stunnedUntil = 0 -- knocked down after a hit: presses do nothing until then
 	local holding = false -- the button (or mouse) is down for a swing we started
 	local spent = false -- this press's swing already went (hit out of your hands, or held too long)
 	api:OnMine("ReadyAt", function(value)
@@ -572,8 +623,10 @@ function Struggle.Start(api)
 			return
 		end
 		local now = api:Now()
-		if now < readyAt - 0.05 then
-			holding, spent = true, true -- not ready: this press does nothing, its release neither
+		-- Not ready (the 3-2-1, the wait after a swing, knocked down): this press does nothing, and
+		-- neither does its release (the server would turn both down).
+		if GameState.Get("Phase") ~= "InRound" or now < readyAt - 0.05 or now < stunnedUntil then
+			holding, spent = true, true
 			return
 		end
 		holding, spent = true, false
@@ -593,6 +646,9 @@ function Struggle.Start(api)
 		local swing = swings[myId]
 		if not swing or swing.Strike then
 			return
+		end
+		if now - swing.Wind >= Rules.MAX_HOLD - 0.05 then
+			return -- held to the end: the server lets it go by itself (its Strike cue draws it)
 		end
 		local strike = math.max(now, swing.Wind + Rules.WINDUP)
 		swing.Strike = strike
@@ -620,6 +676,20 @@ function Struggle.Start(api)
 		api:Hint("", y + 66)
 	end)
 
+	-- The server turned our press down: stop drawing that swing.
+	api:OnEvent("Refused", function(until_)
+		local swing = swings[myId]
+		if swing and not swing.Strike then
+			swings[myId] = nil
+		end
+		if holding then
+			spent = true
+		end
+		if type(until_) == "number" then
+			readyAt = math.max(readyAt, until_)
+		end
+	end)
+
 	-- Everyone's swings (server cues) -------------------------------------------------------------
 	api:OnEvent("Wind", function(userId, start)
 		if type(userId) ~= "number" or type(start) ~= "number" or userId == myId then
@@ -645,7 +715,7 @@ function Struggle.Start(api)
 		end
 		swings[userId] = { Wind = start, Strike = strike, Charged = charged == true }
 	end)
-	api:OnEvent("Hit", function(attacker, victim, count, charged, safe, at)
+	api:OnEvent("Hit", function(attacker, victim, count, charged, safe, at, stunned)
 		if type(victim) ~= "number" or type(attacker) ~= "number" then
 			return
 		end
@@ -658,6 +728,9 @@ function Struggle.Start(api)
 		end
 		if type(safe) == "number" then
 			safeUntil[victim] = safe
+		end
+		if victim == myId and type(stunned) == "number" then
+			stunnedUntil = math.max(stunnedUntil, stunned)
 		end
 		if type(at) == "table" and type(at[1]) == "number" then
 			local position = Vector3.new(at[1], (at[2] or 0) + 1, at[3] or 0)
@@ -723,6 +796,11 @@ function Struggle.Start(api)
 					if entry.Bat then
 						entry.Bat.Parent = nil
 					end
+					if entry.Fan then
+						for _, part in partsOf(entry.Fan) do
+							part.Transparency = 1
+						end
+					end
 					entry.Disc.Transparency = 1
 					entry.Tag.Enabled = false
 				end
@@ -774,25 +852,49 @@ function Struggle.Start(api)
 					if not strike and held_ > Rules.MAX_HOLD + 1 then
 						swings[userId] = nil
 					end
-					reach = Rules.RANGE + (Rules.RANGE_CHARGED - Rules.RANGE) * (if strike then 1 else charge)
+					reach = Rules.RANGE + (Rules.RANGE_CHARGED - Rules.RANGE) * charge
 				end
 			end
+			-- A charged swing's bat is drawn longer, to its longer reach.
+			local batScale = if glow then Rules.CHARGED_BAT else 1
 			if g.Bat then
+				if g.BatScale ~= batScale then
+					scaleBy(g.Bat, batScale)
+					g.BatScale = batScale
+				end
 				g.Bat:PivotTo(rootCF * pose)
 				for _, part in g.Foam do
 					part.Material = if glow then Enum.Material.Neon else Enum.Material.SmoothPlastic
 				end
 			end
+			-- The reach, drawn as the rule: a +-ARC fan of radius RANGE in front and the CLOSE circle
+			-- (any part of you inside either is hit).
+			if not g.Fan then
+				g.Fan = makeFan(slotIndex)
+			end
 			if reach > 0 then
-				local size = (reach + Rules.BODY) * 2
-				g.Disc.Size = Vector3.new(0.05, size, size)
 				local flat = Vector3.new(rootCF.LookVector.X, 0, rootCF.LookVector.Z)
 				local ground = root.Position - Vector3.new(0, 2.9, 0)
-				g.Disc.CFrame = CFrame.lookAt(ground, ground + (if flat.Magnitude > 0.01 then flat else Vector3.zAxis))
-					* CFrame.Angles(0, 0, math.rad(90))
+				local facing = CFrame.lookAt(ground, ground + (if flat.Magnitude > 0.01 then flat else Vector3.zAxis))
+				local size = Rules.CLOSE * 2
+				g.Disc.Size = Vector3.new(0.05, size, size)
+				g.Disc.CFrame = facing * CFrame.new(0, 0.09, 0) * CFrame.Angles(0, 0, math.rad(90))
 				g.Disc.Transparency = if glow then 0.62 else 0.8
+				local fan = g.Fan
+				if fan then
+					scaleBy(fan, reach)
+					fan:PivotTo(facing * CFrame.new(0, 0.08, -reach / 2))
+					for _, part in partsOf(fan) do
+						part.Transparency = if glow then 0.62 else 0.8
+					end
+				end
 			else
 				g.Disc.Transparency = 1
+				if g.Fan then
+					for _, part in partsOf(g.Fan) do
+						part.Transparency = 1
+					end
+				end
 			end
 		end
 
@@ -811,7 +913,7 @@ function Struggle.Start(api)
 					local position = (orb.From :: Vector3):Lerp(target, k)
 						+ Vector3.new(0, math.sin(k * math.pi) * 1.5, 0)
 					model:PivotTo(CFrame.new(position) * CFrame.Angles(0, clock * 6, 0))
-					model:ScaleTo(ORB_SCALE * math.max(0.2, 1 - k * 0.7))
+					scaleBy(model, ORB_SCALE * math.max(0.2, 1 - k * 0.7))
 				end
 				continue
 			end
@@ -837,13 +939,6 @@ function Struggle.Start(api)
 				local charge = math.clamp((now - swing.Wind) / Rules.CHARGE, 0, 1)
 				button:SetFill(charge, if charge >= 1 then Theme.Colors.Yellow else Color3.new(1, 1, 1))
 				button:SetText(if charge >= 1 then "LET GO!" else "CHARGE")
-				-- Held too long: the server lets it go; so do we.
-				if now - swing.Wind >= Rules.MAX_HOLD then
-					swing.Strike = swing.Wind + Rules.MAX_HOLD
-					swing.Charged = true
-					readyAt = swing.Strike + Rules.RECOVER_CHARGED
-					spent = true
-				end
 			end
 		else
 			local wait = readyAt - now
