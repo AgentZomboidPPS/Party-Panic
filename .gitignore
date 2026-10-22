@@ -20,5 +20,3 @@ __pycache__/
 
 # Agent worktrees
 .claude/worktrees/
-# Round-music previews (tools/music/round_music.py render --preview)
-/previews/
