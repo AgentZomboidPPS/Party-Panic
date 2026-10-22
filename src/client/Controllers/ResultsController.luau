@@ -5,6 +5,10 @@
 -- in place of the "next vote" cue (owner: "Also we need cool payoffs for players that keep playing
 -- the game.").
 --
+-- Extra coins from what keeps players coming back (Services/Boosts: a friend in the round, double
+-- coins weekends) are lines of their own; six lines or more draw compact so they fit a phone, and a
+-- line with no XP shows just its coins.
+--
 -- The headline names the game in capitals, like every other screen, on one line: a long name with
 -- "Your team won!" draws a little smaller rather than wrapping out of its box.
 --
@@ -35,6 +39,8 @@ local MEDALS = { "🥇", "🥈", "🥉" }
 -- of its row as it needs, up to RESULT_MAX (the rest stays for the place and name); one that's wider
 -- still is drawn smaller, down to RESULT_MIN_TEXT (11 pt on a phone).
 local ROW_TEXT, RESULT_MAX, RESULT_MIN_TEXT = 21, 232, 18
+-- From this many reward lines the breakdown draws compact (it has room for five at full size).
+local COMPACT_LINES = 6
 
 -- The room a result needs at this text size: a little more than it measures, because phones draw
 -- the scaled-down text up to 4% wider than that (a result given exactly its width ended in "...").
@@ -117,9 +123,16 @@ local function show(data)
 	end
 
 	clear(rewards)
+	-- Six or more lines (the boosts: a friend in the round, a double coins weekend) draw a little
+	-- tighter, and the personal best is left to its own line, so the card still fits a phone.
+	local compact = #data.Lines >= COMPACT_LINES
+	local list = rewards:FindFirstChildOfClass("UIListLayout")
+	if list then
+		list.Padding = UDim.new(0, if compact then 4 else 6)
+	end
 	for index, line in data.Lines do
 		local row = UIKit.new("Frame", {
-			Size = UDim2.new(1, 0, 0, 34),
+			Size = UDim2.new(1, 0, 0, if compact then 26 else 34),
 			BackgroundColor3 = Theme.Colors.PanelDark,
 			BackgroundTransparency = 0.35,
 			LayoutOrder = index,
@@ -128,15 +141,17 @@ local function show(data)
 		})
 		UIKit.Label({
 			Text = line.Label,
-			TextSize = 19,
+			TextSize = if compact then 18 else 19,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Size = UDim2.new(0.6, 0, 1, 0),
 			Position = UDim2.fromOffset(12, 0),
 			Parent = row,
 		})
 		UIKit.Label({
-			Text = `+{line.Coins} {Theme.CoinIcon}  +{line.XP} XP`,
-			TextSize = 19,
+			Text = if line.XP > 0
+				then `+{line.Coins} {Theme.CoinIcon}  +{line.XP} XP`
+				else `+{line.Coins} {Theme.CoinIcon}`,
+			TextSize = if compact then 18 else 19,
 			TextColor3 = Theme.Colors.Yellow,
 			TextXAlignment = Enum.TextXAlignment.Right,
 			Size = UDim2.new(0.4, -12, 1, 0),
@@ -154,7 +169,7 @@ local function show(data)
 		LayoutOrder = 100,
 		Parent = rewards,
 	})
-	if data.PersonalBest then
+	if data.PersonalBest and not compact then
 		UIKit.Label({
 			Text = "⭐ New personal best!",
 			Font = Theme.Fonts.Display,

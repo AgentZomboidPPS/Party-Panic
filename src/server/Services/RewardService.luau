@@ -15,6 +15,7 @@ local ProgressionLogic = require(Shared.Logic.ProgressionLogic)
 local Remotes = require(Shared.Remotes)
 local RewardLogic = require(Shared.Logic.RewardLogic)
 
+local Boosts = require(script.Parent.Boosts)
 local CosmeticService = require(script.Parent.CosmeticService)
 local DataService = require(script.Parent.DataService)
 local Economy = require(script.Parent.Economy)
@@ -82,6 +83,7 @@ local function grantOne(
 		PersonalBest = personalBest,
 		FirstWin = firstWin,
 	}, Config.Rewards)
+	Boosts.Apply(player, reward, { Definition = definition, Place = item.Place, PlayerCount = playerCount })
 
 	local teamWin = winningTeam ~= nil and entry.Team ~= nil and entry.Team ~= "" and entry.Team == winningTeam
 	local news = ProgressionLogic.RecordRound(stats, {

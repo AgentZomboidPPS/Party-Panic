@@ -18,6 +18,7 @@ local NAMES = {
 	"ClientReport", -- (report: table) which uploaded meshes this device couldn't load; see Services/ClientReports
 	"SetSitOut", -- (sitOut: boolean) sit out the next rounds, or play again; see Services/SitOutService
 	"SkeeBall", -- both ways: the lobby arcade's Skee-Ball games; see Services/SkeeBallService
+	"EventAction", -- (action: string, ...) the limited-time event (claim a reward...); see Services/EventService
 	-- server -> client
 	"ProfileData", -- (snapshot)
 	"Notify", -- (text, kind?, duration?)
@@ -28,6 +29,7 @@ local NAMES = {
 	"MiniGameEvent", -- (event: string, ...) mini-game specific cue for the client half of a mode
 	"Celebrate", -- (payload) a level up or career milestone to celebrate; see Services/ProgressionService
 	"LevelPop", -- (character: Model, level: number) the "Lv 10!" that pops over a player's head
+	"MedalEarned", -- (medalId: string) a new medal for the collection; see Services/MedalService
 }
 
 local Remotes = {}

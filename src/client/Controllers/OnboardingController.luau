@@ -11,6 +11,8 @@
 -- the tip popped in).
 -- On phones it also steps aside while a level-up or milestone celebration uses its spot
 -- (CelebrationController sets PP_Celebrating; owner: "cool payoffs for players that keep playing").
+-- The lobby's chips (UI/LobbyRibbon: events, the Party Cup, invites) use that spot too and give way
+-- to the tip: it sets the HUD's PP_TipShowing while it's up on a phone.
 -- The last tip's 5 seconds only count while it's on screen, so stepping aside never uses it up.
 --
 -- With the shorter lobby (owner: "Less time sitting in the lobby. total of 20 seconds instead of
@@ -78,6 +80,9 @@ local function refreshVisible()
 	else
 		panel.Visible = visible
 	end
+	if touch and hud then
+		hud:SetAttribute("PP_TipShowing", visible) -- the lobby's chips (UI/LobbyRibbon) share the spot
+	end
 	-- The last tip finishes the tips after it has been on screen for LAST_TIP_TIME (the countdown
 	-- starts over whenever it comes back after stepping aside).
 	if visible and step == #STEPS and not lastTipTimer then
@@ -99,6 +104,9 @@ function finish()
 	end
 	finished = true
 	panel.Visible = false
+	if hud then
+		hud:SetAttribute("PP_TipShowing", nil)
+	end
 	Remotes.Get("TutorialDone"):FireServer()
 end
 

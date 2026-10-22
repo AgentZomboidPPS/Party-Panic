@@ -51,6 +51,11 @@ return {
 		Daily = { Number = 0, Active = {} },
 		Weekly = { Number = 0, Active = {} },
 	},
+	-- The owner's "keep players coming back" features (owner: "Can you work on all of that?").
+	Cups = { Played = 0, Wins = 0, Podiums = 0 }, -- Party Cups finished, won, on the podium (CupService)
+	Medals = {} :: { [string]: number }, -- medal id -> the UTC day it was earned (MedalService)
+	Weekly = { Week = 0, Points = 0 }, -- the weekly leaderboard: which week, and its points (LeaderboardService)
+	Events = {} :: { [string]: { [string]: any } }, -- per limited-time event id, its progress (EventService)
 	Tutorial = { Done = false },
 	Settings = {
 		ReducedEffects = false,

@@ -40,7 +40,8 @@ everything and reports every error).
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
-(Heartbeat), StarterGui:SetCore, and the remotes (bindable events the harness can fire). The two
+(Heartbeat), StarterGui:SetCore, SocialService's invites (the invite chip) and the remotes (bindable
+events the harness can fire). The two
 ScreenGuis are made like init.client.luau makes them. Shared modules come from the working tree
 (except Remotes), and so does the profile snapshot (DataService and the two services it needs).
 Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", "Rewards Career")
@@ -60,7 +61,7 @@ from ui_render import devices_luau, size_names  # noqa: E402  (the screens the e
 
 ROOT = Path(__file__).resolve().parents[2]
 CLIENT = ROOT / "src" / "client"
-SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService")
+SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService", "SocialService")
 # Server modules bundled from the working tree: the profile snapshot the client is sent.
 SERVER_MODULES = ("DataService", "Notifier", "Telemetry")
 
@@ -287,6 +288,14 @@ local __shims = {
 		end,
 	}),
 }
+-- Roblox's SocialService (InviteController's invite chip): the stand-in player isn't a real one to
+-- ask about, so the stand-in service says it can send invites, and its prompt opens nothing.
+__shims.SocialService = __wrap(game:GetService("SocialService"), {
+	CanSendGameInviteAsync = function()
+		return true
+	end,
+	PromptGameInvite = function() end,
+})
 local function __service(name)
 	return __shims[name] or game:GetService(name)
 end
@@ -471,6 +480,7 @@ local order = {
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
 	"RewardsController", "CelebrationController",
+	"CupController", "InviteController", "MedalController", "HallOfFameController", "EventController",
 	"EmoteController", "SpectateController", "OnboardingController", "SkeeBallController", "AssetReportController",
 }
 -- The ScreenGuis, made with init.client.luau's own properties (see screen_guis() in the script).

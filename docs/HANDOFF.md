@@ -150,9 +150,33 @@ moment it was stopped, never tested. Read before reusing: continue it, take part
 - **Known phone-HUD nits:** Skate Escape's race-bar racer dots overlap when riders are side by side; Bumper Ballers' "X"
   sits over a knocked-out rider's icon; Sinking Sands' Sand King hint wraps to two lines; mode buttons (`Api.Button`) still
   show for spectators.
-- **Backlog, after everything above** (owner: "dont start on game 13+ untill everything else is finished"): games 13-25
-  ([MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md): 13 briefs in the owner's order with categories; category counts are in
-  that file) and **custom music for each mini-game** (pipeline in `tools/music`, see `docs/ASSETS.md`).
+- **Backlog, after everything above** (owner: "dont start on game 13+ untill everything else is finished"): the owner's
+  13 back-burner games, in the owner's order. Each has a full brief (controls, rules, bots, props) in
+  [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md), which also has the category table and the build steps
+  (`tools/workflows/build-minigame.js`, `merge_check.sh`, `mode_check.sh`, `make_preview.py`, publish). None is started.
+
+  | # | Game | Category | After |
+  | --- | --- | --- | --- |
+  | 13 | Tanks! | Versus | Wii Play |
+  | 14 | Spleef | Survival | Minecraft |
+  | 15 | Mecha-Marathon | Reaction | Mario Party 2 |
+  | 16 | Prime Cut | Team | Super Mario Party Jamboree |
+  | 17 | Stamp Out | Versus | Mario Party 4 / Jamboree |
+  | 18 | Messy Memory | Reaction | Mario Party 3 / Superstars |
+  | 19 | Parasol Plummet | Luck | Mario Party 3 / Superstars |
+  | 20 | Trace Race | Reaction | Mario Party 4 / Top 100 / Superstars |
+  | 21 | Eatsa Pizza | Team | Mario Party 3 / Top 100 / Superstars |
+  | 22 | Snowball Summit | Knockback | Mario Party 3 / Top 100 / Superstars |
+  | 23 | Rockin' Raceway | Race | Mario Party 3 / Top 100 / Superstars |
+  | 24 | Slaparazzi | Knockback | Super Mario Party |
+  | 25 | Log Jam | Team | Mario Party 3 |
+
+  With these, the 25 games split Team 6, Reaction 6, Versus 4, Knockback 3, Survival 2, Luck 2, Race 2 (suggested to the
+  owner: Messy Memory as Luck and Tanks! as Knockback would even it out).
+- **Also on the back burner:** custom music for each mini-game (owner: "put in the backlog custom music for each mini
+  game"; pipeline in `tools/music`, see `docs/ASSETS.md`; friends can hear our music now, so it's no longer blocked).
+- **Not the owner's list:** `docs/MINIGAME_IDEAS.md` holds ten original ideas from the project's first day (Piñata
+  Plungers, Captain Copycat, Fuse Frenzy...). The owner never picked them; only bring them up as suggestions.
 
 ## 3. What's in `docs/wip/`
 

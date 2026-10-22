@@ -20,6 +20,12 @@ local order = {
 	"VotingService",
 	"LobbyService",
 	"SkeeBallService", -- after the lobby exists (its arcade)
+	-- What keeps players coming back (they listen to RoundEvents; the lobby exists for their pieces).
+	"CupService",
+	"FriendsService",
+	"MedalService",
+	"LeaderboardService",
+	"EventService",
 	"BotService", -- after the lobby exists (spawns, vote pads)
 	"RoundManager",
 }
