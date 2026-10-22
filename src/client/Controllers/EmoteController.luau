@@ -181,7 +181,7 @@ function EmoteController.Start(context)
 	})
 	UIKit.Button({
 		Name = "Close",
-		Text = "✕",
+		Text = "X",
 		TextSize = if touch then 24 else 20,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -PADDING, 0, (header - closeSize) / 2),

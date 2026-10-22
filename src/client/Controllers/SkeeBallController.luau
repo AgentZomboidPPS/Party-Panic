@@ -734,7 +734,7 @@ local function buildBoard(part: BasePart)
 		Children = { UIKit.Gradient(Color3.fromRGB(70, 44, 150), Color3.fromRGB(30, 18, 70)) },
 	})
 	UIKit.Label({
-		Text = "★ TODAY'S BEST ★",
+		Text = "⭐ TODAY'S BEST ⭐",
 		Font = Enum.Font.LuckiestGuy,
 		TextScaled = true,
 		TextColor3 = Theme.Colors.Yellow,

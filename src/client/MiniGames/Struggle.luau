@@ -281,7 +281,7 @@ local function shapeIcon(slotIndex: number, size: number, parent: Instance?): Fr
 	elseif name == "Diamond" then
 		piece(0.6, 0.6, 45)
 	elseif name == "Star" then
-		glyph("★")
+		glyph("⭐")
 	elseif name == "Ring" then
 		piece(0.7, 0.7, 0, true, true)
 	elseif name == "Plus" then

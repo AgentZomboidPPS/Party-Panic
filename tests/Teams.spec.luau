@@ -16,7 +16,7 @@ local Teams = luau.load(fs.readFile("src/shared/Teams.luau"), {
 })()
 
 test("Teams.YouAre: colour teams say the team, with its shape", function()
-	expectEqual(Teams.YouAre("Red"), "YOU'RE ON ★ RED")
+	expectEqual(Teams.YouAre("Red"), "YOU'RE ON ■ RED")
 	expectEqual(Teams.YouAre("Blue"), "YOU'RE ON ● BLUE")
 	expectEqual(Teams.YouAre("Green"), "YOU'RE ON ▲ GREEN")
 	expectEqual(Teams.YouAre("Yellow"), "YOU'RE ON ◆ YELLOW")
@@ -47,7 +47,7 @@ test("Teams: every team with a colour has its words and its mark", function()
 		expectTrue(string.find(Teams.Label(name), mark :: string, 1, true) == 1, `{name}'s label starts with its mark`)
 	end
 	expectEqual(Teams.Label("SandKings"), "👑 SAND KINGS")
-	expectEqual(Teams.Label("Red"), "★ RED")
+	expectEqual(Teams.Label("Red"), "■ RED")
 end)
 
 return nil

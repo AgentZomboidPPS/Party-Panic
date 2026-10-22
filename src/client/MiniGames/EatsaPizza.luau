@@ -19,7 +19,7 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local EatsaPizza = {}
 
-local SHAPES = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
+local SHAPES = { Red = "■", Blue = "●", Green = "▲", Yellow = "◆" }
 local CRUMB_COLORS = { Color3.fromRGB(236, 190, 120), Color3.fromRGB(255, 214, 102), Color3.fromRGB(200, 60, 40) }
 
 function EatsaPizza.Start(api)

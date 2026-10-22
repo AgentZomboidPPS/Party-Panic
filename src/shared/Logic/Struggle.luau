@@ -51,7 +51,7 @@ Struggle.SLOTS = {
 	{ Name = "Cube", Glyph = "■", Prop = "StruggleOrbCube", Color = Color3.fromRGB(70, 160, 255) },
 	{ Name = "Pyramid", Glyph = "▲", Prop = "StruggleOrbPyramid", Color = Color3.fromRGB(255, 215, 50) },
 	{ Name = "Diamond", Glyph = "◆", Prop = "StruggleOrbDiamond", Color = Color3.fromRGB(110, 230, 100) },
-	{ Name = "Star", Glyph = "★", Prop = "StruggleOrbStar", Color = Color3.fromRGB(200, 120, 255) },
+	{ Name = "Star", Glyph = "⭐", Prop = "StruggleOrbStar", Color = Color3.fromRGB(200, 120, 255) },
 	{ Name = "Ring", Glyph = "O", Prop = "StruggleOrbRing", Color = Color3.fromRGB(255, 150, 50) },
 	{ Name = "Plus", Glyph = "+", Prop = "StruggleOrbPlus", Color = Color3.fromRGB(80, 230, 225) },
 	{ Name = "Cross", Glyph = "X", Prop = "StruggleOrbCross", Color = Color3.fromRGB(255, 120, 200) },

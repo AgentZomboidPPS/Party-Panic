@@ -157,7 +157,7 @@ function HotPotato.Start(api)
 	})
 	local function refreshLeft()
 		local count = api:Shared("Left")
-		left.Text = if type(count) == "number" then `★ {count} LEFT` else ""
+		left.Text = if type(count) == "number" then `👤 {count} LEFT` else ""
 	end
 	api:OnShared("Left", refreshLeft)
 	refreshLeft()

@@ -43,7 +43,7 @@ StampGrid.HOP_UP_MAX = 62 -- (full charge)
 
 -- name, colour, symbol
 StampGrid.INKS = {
-	{ Name = "Red", Color = Color3.fromRGB(226, 40, 52), Symbol = "★" },
+	{ Name = "Red", Color = Color3.fromRGB(226, 40, 52), Symbol = "♥" },
 	{ Name = "Blue", Color = Color3.fromRGB(36, 104, 236), Symbol = "●" },
 	{ Name = "Green", Color = Color3.fromRGB(34, 170, 64), Symbol = "▲" },
 	{ Name = "Yellow", Color = Color3.fromRGB(250, 200, 20), Symbol = "■" },

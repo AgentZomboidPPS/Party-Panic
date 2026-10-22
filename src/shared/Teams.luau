@@ -39,7 +39,7 @@ Teams.Icons = {
 -- The shape each colour team wears, so a team never goes by its colour alone (the team modes draw the
 -- same ones on their pills, stations and sleds: Pump & Pop, Cake Factory, Bobsled Run).
 Teams.Shapes = {
-	Red = "★",
+	Red = "■",
 	Blue = "●",
 	Green = "▲",
 	Yellow = "◆",

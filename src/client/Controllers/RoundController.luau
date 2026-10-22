@@ -102,10 +102,10 @@ local function buildClose(touch: boolean)
 		Parent = rulesCard,
 	})
 	local press = UIKit.new("UIScale", { Scale = 1 })
-	-- Drawn like the windows' ✕ (UI/Modal, a UIKit.Button): white under a red gradient.
+	-- Drawn like the windows' X (UI/Modal, a UIKit.Button): white under a red gradient.
 	UIKit.Label({
 		Name = "Mark",
-		Text = "✕",
+		Text = "X",
 		Font = Theme.Fonts.Display,
 		TextSize = if touch then 24 else 20,
 		TextWrapped = false,

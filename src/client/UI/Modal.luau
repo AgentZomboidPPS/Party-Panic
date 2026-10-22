@@ -127,7 +127,7 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 	local closeSize = if touch then Theme.Touch.Target else 46
 	UIKit.Button({
 		Name = "Close",
-		Text = "✕",
+		Text = "X",
 		TextSize = if touch then 30 else 26,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -12, 0, titleHeight / 2 + 2),

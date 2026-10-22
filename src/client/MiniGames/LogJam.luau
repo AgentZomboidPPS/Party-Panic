@@ -508,7 +508,7 @@ function LogJam.Start(api)
 		api:Effect("Poof", at + Vector3.new(0, 1, 0))
 		if team == myTeam() then
 			playSound(api, "HazardWarning", 0.7, 0.8)
-			float(mill, "✕ JAMMED!", Color3.fromRGB(255, 90, 90))
+			float(mill, "❌ JAMMED!", Color3.fromRGB(255, 90, 90))
 			if userId == me then
 				UIKit.PopIn(card, 0.25)
 			end
@@ -575,7 +575,7 @@ function LogJam.Start(api)
 		if jammed then
 			local left = math.clamp((state.JamUntil - nowServer) / (layout.Jam or 1.1), 0, 1)
 			jamBar.Size = UDim2.new(0.8 * left, 0, 0, 12)
-			showCard("✕ JAMMED!", nil, false, Color3.fromRGB(255, 100, 100))
+			showCard("❌ JAMMED!", nil, false, Color3.fromRGB(255, 100, 100))
 			return
 		end
 		local prompt = ""
