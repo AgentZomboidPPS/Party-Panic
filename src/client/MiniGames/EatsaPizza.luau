@@ -168,11 +168,11 @@ function EatsaPizza.Start(api)
 		Name = "Status",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 26,
+		TextSize = if touch then 30 else 26,
 		TextWrapped = false,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, if touch then hudY else hudY + 68),
-		Size = UDim2.fromOffset(if touch then 470 else 600, if touch then 28 else 32),
+		Size = UDim2.fromOffset(if touch then 470 else 600, 32),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.1) },
 	})
@@ -303,6 +303,18 @@ function EatsaPizza.Start(api)
 	local eat = nil
 	local lastBite = -math.huge
 	local deniedAt = -math.huge
+	-- (The server's bite rate, mirrored: presses over it don't land, so they don't chomp either.)
+	local tokens, tokensAt = Logic.BURST, os.clock()
+	local function spend(): boolean
+		local clock = os.clock()
+		tokens = math.min(Logic.BURST, tokens + (clock - tokensAt) * Logic.RATE)
+		tokensAt = clock
+		if tokens >= 1 then
+			tokens -= 1
+			return true
+		end
+		return false
+	end
 	if mine then
 		eat = api:Button({ Text = "EAT", Key = Enum.KeyCode.E, Color = myColor })
 		eat.Pressed:Connect(function()
@@ -312,6 +324,9 @@ function EatsaPizza.Start(api)
 			api:Action("Eat")
 			local now = api:Now()
 			if standingOn() then
+				if not spend() then
+					return
+				end
 				lastBite = now
 				api:Sound("Click")
 				local character = api:Character()
@@ -413,7 +428,11 @@ function EatsaPizza.Start(api)
 		-- The status line: what my slice is up to, or where to go.
 		if pizza.Ph == "Done" then
 			local winner = pizza.W
-			status.Text = if winner then `{SHAPES[winner] or ""} {string.upper(winner)} WINS!` else "TIME UP!"
+			-- (On phones the round's own status line under the team pill already says it.)
+			status.Text = if touch
+				then ""
+				elseif winner then `{SHAPES[winner] or ""} {string.upper(winner)} WINS!`
+				else "TIME UP!"
 			status.TextColor3 = if winner then Teams.Colors[winner] or Color3.new(1, 1, 1) else Color3.new(1, 1, 1)
 		elseif not playing then
 			status.Text = if mine then "" else "Watch them chow down!"
