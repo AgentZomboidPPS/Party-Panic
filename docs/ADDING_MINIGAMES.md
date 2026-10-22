@@ -62,10 +62,10 @@ Optional overrides: `:Stop(reason)`, `:GetResults()`, `:Cleanup()`.
 
 | Need | Use |
 | --- | --- |
-| Place players | `ctx:SpawnAll(points, true)` (frozen until GO), `ArenaKit.SpawnRing/SpawnGrid` |
+| Place players | `ctx:SpawnAll(points, true)` (frozen until GO), `ArenaKit.SpawnRing/SpawnGrid`. Put points on solid ground: each device holds a character placed over nothing until it has the floor there (15 s at most; `Controllers/ArrivalController`), unless the mode takes it itself (anchored, PlatformStand or seated) |
 | Who's playing | `ctx:GetPlayers()`, `ctx:GetAlivePlayers()`, `ctx:GetCharacter(player)` |
 | Knock someone out | `ctx:Eliminate(player, "reason")` (also automatic below `ctx.KillY`); everyone put out in the same server step ties. `ctx:Eliminate(player, "bees", 2.1)`: out now, the "You're out!" after the mode's own show |
-| Falling behavior | `ctx.RespawnMode = "Eliminate"` or `"Respawn"` + `ctx.Hooks.Respawn = function(player) return cframe end` |
+| Falling behavior | `ctx.RespawnMode = "Eliminate"` or `"Respawn"` + `ctx.Hooks.Respawn = function(player) return cframe end` (before GO a fall below `ctx.KillY` never counts: the character goes straight back to its spot) |
 | End early | `ctx.EndWhenOneLeft = true`, or `ctx:End("reason")` |
 | At the buzzer | `ctx:HoldEnd(seconds)` for something already on its way to be judged (the end waits, 0.5 s at most); then `ctx:TimeIsUp()` is true: start nothing new, and count only what happened by the buzzer, `ctx:InTime(serverTime)` (a press by when it was made: the client sends `api:Now()` with it, the server takes `Logic/Buzzer.PressTime`) |
 | Score | `ctx:AddScore(player, n)`, `ctx:SetScoreText(player, "3 laps")` |

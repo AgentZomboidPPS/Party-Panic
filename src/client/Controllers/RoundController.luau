@@ -14,6 +14,11 @@
 -- shows (NotificationController) and the "Read the rules card" tip goes with it (OnboardingController).
 -- The ✕ looks small (25 pt on phones) in a 44 pt tap area inside the card (on phones that's under
 -- the tip and its Skip), clear of the menu column, the jump button and the MOVE stick.
+--
+-- In a team round the card says which team you're on (owner: "I couldnt tell what color I was on
+-- prime cut."): a tab under it in your team's colour, "YOU'RE ON ★ RED" (or your role in a versus
+-- game, "YOU'RE AN 🏹 ARCHER": Teams.YouAre), there from the moment the server puts you on a team.
+-- It goes with the card (its ✕ too); the mode's own HUD carries the team on from the 3-2-1.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -40,6 +45,8 @@ local TEAM_COLORS = Teams.Colors
 local rules: Frame -- the card (PC), or the frame it sits in (phones)
 local rulesCard: Frame
 local rulesFields: { [string]: TextLabel } = {}
+local teamTab: Frame -- under the card in a team round: "YOU'RE ON ★ RED"
+local teamTabLabel: TextLabel
 local rulesClosed = false -- this player closed this round's card (its ✕); a new phase clears it
 local countdown: TextLabel
 local board: Frame
@@ -48,6 +55,8 @@ local outPanel: Frame
 -- The ✕: its tap area and the round mark in it (scaled units). Phones: 44 pt and 25 pt.
 local CLOSE_HIT, CLOSE_MARK = Theme.Touch.Target, 40
 local PC_CLOSE_HIT, PC_CLOSE_MARK = 48, 34
+-- The team tab under the card (scaled units): its gap, height, text size and side padding.
+local TEAM_TAB_GAP, TEAM_TAB_HEIGHT, TEAM_TAB_TEXT, TEAM_TAB_PAD = 8, 50, 30, 26
 
 -- Phones and tablets without a keyboard get their own layouts (fewer standings rows, smaller cards).
 local function isTouch(): boolean
@@ -125,7 +134,7 @@ local function buildRules(parent: Instance)
 			Name = "Rules",
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.new(0.5, 0, 0, 4),
-			Size = UDim2.fromOffset(620, 104 + 262),
+			Size = UDim2.fromOffset(620, 104 + 262 + TEAM_TAB_GAP + TEAM_TAB_HEIGHT),
 			BackgroundTransparency = 1,
 			Visible = false,
 			Parent = parent,
@@ -212,6 +221,30 @@ local function buildRules(parent: Instance)
 	})
 	buildClose(touch)
 
+	-- The team tab, centred under the card (phones: in the frame's room below it, between the move
+	-- stick's corner and the jump button; it's up only before the round, like the card).
+	teamTab = UIKit.new("Frame", {
+		Name = "YourTeam",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = if touch then UDim2.new(0.5, 0, 0, 104 + 262 + TEAM_TAB_GAP) else UDim2.new(0.5, 0, 1, TEAM_TAB_GAP),
+		Size = UDim2.fromOffset(320, TEAM_TAB_HEIGHT),
+		BackgroundColor3 = Theme.Colors.PanelDark,
+		Visible = false,
+		Parent = rules,
+		Children = { UIKit.Round(), UIKit.Stroke(Color3.new(1, 1, 1), 3, 0) },
+	})
+	teamTab:SetAttribute("PP_Popup", true)
+	teamTabLabel = UIKit.Label({
+		Name = "Text",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = TEAM_TAB_TEXT,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		Parent = teamTab,
+		Children = { UIKit.TextStroke(0.05) },
+	})
+
 	countdown = UIKit.Label({
 		Name = "Countdown",
 		Text = "",
@@ -227,6 +260,28 @@ local function buildRules(parent: Instance)
 	})
 	countdown:SetAttribute("PP_Popup", true) -- a second or two before the round
 	UIKit.AutoScale(countdown)
+end
+
+-- The team tab says the player's team (or role) once the server has put them on one, as wide as
+-- its words, in a deep shade of the team's colour so the white words read on every team.
+local function refreshTeamTab()
+	local team = player:GetAttribute("PP_Team")
+	local text = Teams.YouAre(team)
+	local color = if text then TEAM_COLORS[team] else nil
+	if not text or not color then
+		teamTab.Visible = false
+		return
+	end
+	teamTabLabel.Text = text
+	local width = UIKit.TextWidth(text, TEAM_TAB_TEXT, Theme.Fonts.Display) + 2 * TEAM_TAB_PAD
+	teamTab.Size = UDim2.fromOffset(math.ceil(width), TEAM_TAB_HEIGHT)
+	teamTab.BackgroundColor3 = color:Lerp(Color3.new(0, 0, 0), 0.3)
+	if not teamTab.Visible then
+		teamTab.Visible = true
+		if rules.Visible then
+			UIKit.PopIn(teamTab, 0.35)
+		end
+	end
 end
 
 local function showRules()
@@ -246,6 +301,7 @@ local function showRules()
 		local h, s, v = definition.Color:ToHSV()
 		gradient.Color = ColorSequence.new(Color3.fromHSV(h, s * 0.8, v * 0.75), Color3.fromHSV(h, s, v * 0.35))
 	end
+	refreshTeamTab()
 	rules.Visible = true
 	UIKit.PopIn(rulesCard, 0.45)
 end
@@ -548,6 +604,8 @@ function RoundController.Start(context)
 			showRules()
 		end
 	end)
+	-- The server puts players on teams while the card is up (the mode's Prepare).
+	player:GetAttributeChangedSignal("PP_Team"):Connect(refreshTeamTab)
 
 	player:GetAttributeChangedSignal("PP_Alive"):Connect(function()
 		if GameState.Get("Phase") == "InRound" and State.InRound() and not State.Alive() then

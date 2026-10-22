@@ -22,6 +22,19 @@
 --     pressed just before) gets a moment (HoldEnd, half a second at most) instead of being dropped
 --     because the round had just ended. Only what happened before the buzzer counts in that moment
 --     (InTime, Logic/Buzzer): nobody is put out for a fall or a reset after it.
+--
+-- Falling through a floor that hasn't loaded (owner: "Friend fell through the floor while loading
+-- into pump and pop."). The arena is built as the rules card comes up and everyone is moved onto it
+-- straight after, while a slow phone can still be downloading it; each device moves its own
+-- character, and "frozen" only stops walking and jumping, so one moved before its floor arrived fell
+-- through. Now each device holds its own character until it has the floor under it (client
+-- Controllers/ArrivalController). Under that, a net here: before GO nobody is out, so a character
+-- below KillY goes straight back to its spot (where a respawn mode's Respawn hook says, as for a new
+-- character) instead of falling on until the void kills it and the death brings it back (_putBack).
+-- After GO the fall check is as it was, mode by mode: where nobody is knocked out (RespawnMode
+-- "Respawn", Pump & Pop among them) a fall puts you back where the mode says, and where falling is
+-- part of the game it still puts you out. A floor a device hasn't loaded can't drop anyone there:
+-- that device is holding its character until it has.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -153,7 +166,8 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 	-- Fall / out-of-bounds check (server side so clients can't skip it). Everyone below KillY in one
 	-- check goes out together (see Eliminate); a new character still on its way back to its spot is
 	-- left alone (it starts in the lobby, far below). Once time is up (the end held a moment for
-	-- something in flight: HoldEnd) a fall no longer puts anyone out.
+	-- something in flight: HoldEnd) a fall no longer puts anyone out. Before GO a fall doesn't count
+	-- either: the character goes straight back to its spot (_putBack).
 	local accumulator = 0
 	self.Janitor:Add(RunService.Heartbeat:Connect(function(dt)
 		accumulator += dt
@@ -161,7 +175,7 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 			return
 		end
 		accumulator = 0
-		if not self:IsRunning() then
+		if not self.Active or self.EndReason ~= nil then
 			return
 		end
 		for player, state in self.Participants do
@@ -169,12 +183,15 @@ function RoundContext.new(roundId: number, definition, players: { Player })
 				continue
 			end
 			local _, _, root = self:GetCharacter(player)
-			if root and root.Position.Y < self.KillY then
-				if self.RespawnMode ~= "Eliminate" then
-					self:Respawn(player)
-				elseif not self.TimeUpAt then
-					self:Eliminate(player, "fell")
-				end
+			if not root or root.Position.Y >= self.KillY then
+				continue
+			end
+			if not self.Started then
+				self:_putBack(player)
+			elseif self.RespawnMode ~= "Eliminate" then
+				self:Respawn(player)
+			elseif not self.TimeUpAt then
+				self:Eliminate(player, "fell")
 			end
 		end
 	end))
@@ -1044,9 +1061,7 @@ function RoundContext._backToSpot(self: RoundContext, player: Player, character:
 	task.defer(function()
 		local root = character:WaitForChild("HumanoidRootPart", 5) :: BasePart?
 		if root and character.Parent and player.Character == character and self.Active and self:IsAlive(player) then
-			local hook = if self.RespawnMode == "Respawn" then self.Hooks.Respawn else nil
-			local cframe = (if hook then hook(player) else nil) or spot.CFrame
-			character:PivotTo(cframe + Vector3.new(0, 3, 0))
+			character:PivotTo(self:_spotFor(player, spot) + Vector3.new(0, 3, 0))
 			root.AssemblyLinearVelocity = Vector3.zero
 			if not self.Started then
 				self:Freeze(player, spot.Frozen)
@@ -1061,6 +1076,28 @@ function RoundContext._backToSpot(self: RoundContext, player: Player, character:
 			self._placing[player] = nil
 		end
 	end)
+end
+
+-- Where a participant goes back to: the spot SpawnPlayer gave them, or in a mode where people respawn,
+-- where its Respawn hook says they belong now (if it says).
+function RoundContext._spotFor(self: RoundContext, player: Player, spot: { CFrame: CFrame, Frozen: boolean }): CFrame
+	local hook = if self.RespawnMode == "Respawn" then self.Hooks.Respawn else nil
+	return (if hook then hook(player) else nil) or spot.CFrame
+end
+
+-- Before GO a fall doesn't count: a character that has dropped out of the arena (its device didn't
+-- have the floor yet, say) goes straight back to its spot and stops dead there, the same character,
+-- still frozen as it was. Not placed yet (still in the lobby, far below): SpawnPlayer does that.
+function RoundContext._putBack(self: RoundContext, player: Player)
+	local spot = self._spots[player]
+	local character, _, root = self:GetCharacter(player)
+	if not spot or not character or not root then
+		return
+	end
+	character:PivotTo(self:_spotFor(player, spot) + Vector3.new(0, 3, 0))
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+	Telemetry.ServerEvent("PutBack", { round = self.RoundId, player = player.UserId })
 end
 
 -- Whether a participant is already back in the lobby: their character is the one they got there

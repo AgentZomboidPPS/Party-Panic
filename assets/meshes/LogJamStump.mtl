@@ -1,0 +1,23 @@
+newmtl Bark
+Kd 0.478 0.329 0.204
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Top
+Kd 0.275 0.588 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rings
+Kd 0.690 0.502 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cuts
+Kd 0.353 0.235 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
