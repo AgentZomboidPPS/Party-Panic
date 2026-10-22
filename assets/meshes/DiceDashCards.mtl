@@ -1,0 +1,17 @@
+newmtl Face
+Kd 0.133 0.235 0.188
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Mark
+Kd 0.902 0.196 0.275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Back
+Kd 0.745 0.510 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
