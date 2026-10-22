@@ -111,6 +111,10 @@ CAMERAS: dict[str, dict] = {
     # their tripods down the red carpet and the fans' stand beyond.
     "Slaparazzi": {"look_at": "Gold", "yaw": 180, "pitch": 34, "distance": 36, "fov": 55, "shift": [0, 3, 4],
                    "raise": 11},
+    # From the air past the rim: a player at the icy edge, rivals with snowballs behind, the peak's
+    # icicles and the sea of clouds far below, spires and mountains beyond.
+    "SnowballSummit": {"look_at": "SnowballSummitSnowfield", "yaw": -135, "pitch": 24, "distance": 58,
+                       "shift": [-14, 1, -8], "raise": 2},
     # Low through the gaps between the floors: rivals around a fresh hole in the packed snow, one
     # dropping through, two more on the blue ice below (no dolly, so they stay in sight under it).
     "Spleef": {"look_at": "Water", "yaw": 210, "pitch": 8, "distance": 49, "fov": 44, "shift": [2, 27.5, -1],
@@ -145,6 +149,7 @@ DUMP_AT: dict[str, float] = {
     "RockinRaceway": 4,  # the pack galloping down the home straight into the first panel rows
     "SkateEscape": 10,
     "Slaparazzi": 11.7,  # just before the second photo: everyone crowding into the frame's rings
+    "SnowballSummit": 25,  # snowballs rolling, someone teetering at the rim, most still on top
     "Spleef": 12,  # holes dug in every floor, players on all three
     "StampOut": 34,  # BIG STAMPS: the pad patched with everyone's ink, stampers mid-hop
     "Tanks": 5.5,  # a second after the shields drop: the first tanks blowing up, the rest still rolling
