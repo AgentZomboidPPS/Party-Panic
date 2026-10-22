@@ -667,7 +667,8 @@ function MinecartMayhem:_seat(rider: Rider): CFrame
 		* CFrame.new(0, Track.RAIL_TOP + CART_FLOOR + 3 - SEAT_DROP, 0.3)
 end
 
--- Bots ride where the server has them (players' own clients seat themselves in their carts).
+-- Seats a bot in its cart where the server has it: at the start and for a new character (every
+-- client keeps every rider in its cart from then on; players' own clients seat themselves).
 function MinecartMayhem:_placeBot(player: any, now: number)
 	local rider = self.riders[player]
 	local character, humanoid, root = self.context:GetCharacter(player)
@@ -723,7 +724,6 @@ function MinecartMayhem:Start()
 
 	local lastShare = 0
 	local lastScore = 0
-	local lastBots = 0
 	ctx:Heartbeat(function(dt)
 		if self.ending then
 			return -- the race is over: every cart stays where it was when it closed
@@ -751,14 +751,11 @@ function MinecartMayhem:Start()
 			self:_score()
 			self:_checkDone()
 		end
-		if now - lastBots >= 1 / 20 then
-			lastBots = now
-			for player, rider in self.riders do
-				if not rider.Gone and BotRegistry.IsBot(player) then
-					self:_placeBot(player, now)
-				end
-			end
-		end
+		-- (Bots' riders aren't moved here: every client stands every rider in place each frame, and
+		-- the server's own moves, a network trip behind, pulled each bot back a few studs many times
+		-- a second (owner: "Bots are STILL ruberbanding and floating."; the devices' bot reports
+		-- counted hundreds of snaps a round). _placeBot seats them at the start and for a new
+		-- character.)
 		if now - lastShare >= 0.1 then
 			lastShare = now
 			self:_share()

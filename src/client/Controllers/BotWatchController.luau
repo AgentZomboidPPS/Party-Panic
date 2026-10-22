@@ -11,7 +11,7 @@
 --   * how long it was anchored (a mode holding it: a ride, a flight, Spleef's drop), and the
 --     server's own counts on it this round (Services/BotService, MiniGames/Spleef): taken back from a
 --     player's device (PP_Retakes), dropped by the server (PP_Drops), its speed clamped after a
---     shove (PP_Clamps).
+--     shove (PP_Clamps), woken up falling asleep in mid-air (PP_Wakes, Services/BotService).
 -- And the same for this player's own character ("me"; owner: "Theres still invisible stuff I latched
 -- onto on spleef."): its snaps (the server moving it), hovers ("mehover": held up by something no
 -- ray can find), standing on something nearly invisible ("invisible", with its name), anchored time
@@ -81,7 +81,7 @@ local rays = RaycastParams.new()
 rays.FilterType = Enum.RaycastFilterType.Exclude
 rays.RespectCanCollide = true
 
-local SERVER_COUNTS = { "PP_Retakes", "PP_Drops", "PP_Clamps" }
+local SERVER_COUNTS = { "PP_Retakes", "PP_Drops", "PP_Clamps", "PP_Wakes" }
 
 local function round1(value: number): number
 	return math.floor(value * 10 + 0.5) / 10

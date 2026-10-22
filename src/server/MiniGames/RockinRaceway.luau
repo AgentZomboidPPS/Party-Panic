@@ -528,7 +528,8 @@ function RockinRaceway:Prepare()
 	ctx:SetStatus("Hold GALLOP, but watch your carrots!")
 end
 
--- Bots ride where the server has them (players' own clients seat themselves on their horses).
+-- Seats a bot on its horse where the server has it: at the start and for a new character (every
+-- client keeps every rider on its horse from then on; players' own clients seat themselves).
 function RockinRaceway:_placeBot(player: any, now: number)
 	local rider = self.riders[player]
 	local character, humanoid, root = self.context:GetCharacter(player)
@@ -588,7 +589,6 @@ function RockinRaceway:Start()
 
 	local lastShare = 0
 	local lastScore = 0
-	local lastBots = 0
 	ctx:Heartbeat(function(dt)
 		if self.ending then
 			return -- the race is over: everyone stays where they were when it closed
@@ -616,14 +616,11 @@ function RockinRaceway:Start()
 			self:_score()
 			self:_checkDone()
 		end
-		if now - lastBots >= 1 / 20 then
-			lastBots = now
-			for player, rider in self.riders do
-				if not rider.Gone and BotRegistry.IsBot(player) then
-					self:_placeBot(player, now)
-				end
-			end
-		end
+		-- (Bots' riders aren't moved here: every client stands every rider in place each frame, and
+		-- the server's own moves, a network trip behind, pulled each bot back a few studs many times
+		-- a second (owner: "Bots are STILL ruberbanding and floating."; the devices' bot reports
+		-- counted hundreds of snaps a round). _placeBot seats them at the start and for a new
+		-- character.)
 		if now - lastShare >= 0.1 then
 			lastShare = now
 			self:_share()

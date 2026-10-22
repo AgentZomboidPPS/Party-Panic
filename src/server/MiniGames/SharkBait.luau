@@ -1131,6 +1131,20 @@ function SharkBait:_flip(raft: Raft, shark: any)
 	raft.State = SharkBait.FLIPPED
 	raft.Since = now
 	raft.Collider.CanCollide = false
+	-- A bot that stood still on it has gone to sleep in the physics, and losing its floor doesn't wake
+	-- it: it hung in mid-air (owner: "Bots are STILL ruberbanding and floating."). A nudge down wakes
+	-- every bot over the raft, so they drop with it (BotService wakes any that still sleep in the air).
+	for _, player in ctx:GetAlivePlayers() do
+		local _, _, root = ctx:GetCharacter(player)
+		if
+			root
+			and not root.Anchored
+			and BotRegistry.IsBot(player)
+			and flatDistance(root.Position, raft.Center) <= raft.Radius + OVERHANG + 1
+		then
+			root.AssemblyLinearVelocity += Vector3.new(0, -2, 0)
+		end
+	end
 	self.raftsDirty = true
 	self:_publishRafts()
 	ctx:Sound("Splash")

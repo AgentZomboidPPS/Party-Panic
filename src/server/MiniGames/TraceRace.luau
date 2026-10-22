@@ -194,7 +194,8 @@ function TraceRace:_seat(player: any): CFrame?
 	return self:_tip(lane, s, x) * SEAT
 end
 
--- Bots ride where the server has their crayon (players' own clients seat them).
+-- Seats a bot on its crayon where the server has it: at the start and for a new character (every
+-- client keeps every rider on its crayon from then on; players' own clients seat them).
 function TraceRace:_placeBot(player: any)
 	local character, humanoid, root = self.context:GetCharacter(player)
 	local seat = self:_seat(player)
@@ -498,9 +499,12 @@ function TraceRace:Start()
 		if any then
 			ctx:Fire(nil, "Trails", relay)
 		end
-		-- Riders and crayons where the server has them. Every client moves every crayon smoothly
-		-- itself, so the server's copy only needs a nudge now and then (moving 12 models 10 times a
-		-- second replicated to every phone for nothing).
+		-- Crayons where the server has them. Every client moves every crayon smoothly itself, so the
+		-- server's copy only needs a nudge now and then (moving 12 models 10 times a second replicated
+		-- to every phone for nothing). Bots' riders aren't moved here at all: every client stands
+		-- every rider on its crayon each frame, and the server's own moves, a network trip behind,
+		-- pulled each bot ~5 studs back several times a second (the devices' bot reports: 600 snaps a
+		-- round; owner: "Bots are STILL ruberbanding and floating."). _placeBot seats them at the start.
 		local moveCrayons = time - lastCrayons >= 1
 		if moveCrayons then
 			lastCrayons = time
@@ -514,9 +518,6 @@ function TraceRace:Start()
 				lane.Crayon:PivotTo(
 					self:_tip(lane, s, x) * CFrame.new(lane.Crayon:GetAttribute("TipToPivot") or Vector3.new(0, 0, TIP))
 				)
-			end
-			if BotRegistry.IsBot(player) then
-				self:_placeBot(player)
 			end
 		end
 		if time - lastScores >= 0.5 and not finalized then

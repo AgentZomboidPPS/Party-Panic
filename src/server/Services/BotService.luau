@@ -769,6 +769,41 @@ local function keepServerOwned(bot: Bot)
 	end
 end
 
+-- No bot hangs asleep in the air (owner: "Bots are STILL ruberbanding and floating."). A body that
+-- rests still for a moment goes to sleep in Roblox's physics, and taking its floor away (Shark Bait
+-- turns a flipped raft's collider off) doesn't wake it: the devices' bot reports showed four bots
+-- falling in mid-air at once, 4.5 studs up and not moving. A bot whose humanoid is falling while its
+-- body hasn't moved for ASLEEP seconds gets a small push down, which wakes it, and counts it
+-- (PP_Wakes, for the devices' bot reports).
+local ASLEEP = 0.8
+local stillSince: { [Bot]: number } = setmetatable({}, { __mode = "k" }) :: any -- (bots that go are forgotten)
+
+local function wakeIfAsleep(bot: Bot, now: number)
+	local root = bot:Root()
+	local character = bot.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if
+		not physics
+		or not root
+		or not humanoid
+		or root.Anchored
+		or humanoid.PlatformStand
+		or humanoid:GetState() ~= Enum.HumanoidStateType.Freefall
+		or root.AssemblyLinearVelocity.Magnitude > 0.5
+	then
+		stillSince[bot] = nil
+		return
+	end
+	local since = stillSince[bot]
+	if not since then
+		stillSince[bot] = now
+	elseif now - since >= ASLEEP then
+		stillSince[bot] = nil
+		root.AssemblyLinearVelocity = Vector3.new(0, -4, 0)
+		bot:SetAttribute("PP_Wakes", (tonumber(bot:GetAttribute("PP_Wakes")) or 0) + 1)
+	end
+end
+
 function BotService.Init()
 	BotService.Setup()
 
@@ -788,6 +823,7 @@ function BotService.Init()
 			local now = os.clock()
 			for _, bot in BotRegistry.List() do
 				pcall(keepServerOwned, bot)
+				pcall(wakeIfAsleep, bot, now)
 				if not bot:GetAttribute("PP_InRound") then
 					local okStep, stepErr = pcall(BotService.LobbyStep, bot, now)
 					if not okStep then

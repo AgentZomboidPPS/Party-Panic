@@ -476,7 +476,7 @@ function DiceDash:Start()
 	end, { Interval = ROLL_INTERVAL })
 
 	self:_beginTurn()
-	local lastBots, lastScore = 0, 0
+	local lastScore = 0
 	ctx:Heartbeat(function()
 		local now = ctx:Now()
 		if not self.ending then
@@ -492,10 +492,10 @@ function DiceDash:Start()
 				end
 			end
 		end
-		if now - lastBots >= 1 / 15 then
-			lastBots = now
-			self:_placeBots(now)
-		end
+		-- (Bots aren't moved here: every client stands every racer on the board each frame, its hops
+		-- drawn smoothly, and the server's own moves, a network trip behind and 15 a second, made bots
+		-- stutter and snap back (owner: "Bots are STILL ruberbanding and floating."). _placeBots
+		-- stands them at the start and for a new character.)
 		if now - lastScore >= 0.25 then
 			lastScore = now
 			self:_score(now)
@@ -873,8 +873,9 @@ function DiceDash:_leave(player: any)
 	end
 end
 
--- Bots stand where the server has them (players' own clients pose their characters; every client
--- draws everyone from the same moves). Racers sharing a tile stand in a ring.
+-- Stands bots where the server has them: at the start and for a new character (from then on every
+-- client draws every racer from the same moves; players' own clients pose their characters).
+-- Racers sharing a tile stand in a ring.
 function DiceDash:_placeBots(now: number, only: any?)
 	local ctx = self.context
 	local rests: { [number]: { Racer } } = {}

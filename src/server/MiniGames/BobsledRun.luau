@@ -391,7 +391,8 @@ function BobsledRun:_seat(player: any): CFrame?
 	return self:_at(sled.D, sled.X) * CFrame.new(0, SEAT_Y, BobsledCourse.SeatZ(index, #sled.Riders))
 end
 
--- Bots ride where the server has their sled (players' own clients seat them).
+-- Seats a bot in its sled where the server has it: at the start and for a new character (every
+-- client keeps every rider in its sled from then on; players' own clients seat them).
 function BobsledRun:_placeBot(player: any)
 	local character, humanoid, root = self.context:GetCharacter(player)
 	local seat = self:_seat(player)
@@ -577,11 +578,10 @@ function BobsledRun:Start()
 			left -= h
 			self:_tick(h, now - left)
 		end
-		for player, rider in self.riders do
-			if BotRegistry.IsBot(player) and self.sleds[rider.Team] then
-				self:_placeBot(player)
-			end
-		end
+		-- (Bots' riders aren't moved here: every client sets every rider into its sled each frame,
+		-- and the server's own moves, a network trip behind, pulled each bot back many times a
+		-- second (owner: "Bots are STILL ruberbanding and floating."). _placeBot seats them at the
+		-- start and for a new character.)
 	end)
 	ctx:Loop(function()
 		self:_share()
