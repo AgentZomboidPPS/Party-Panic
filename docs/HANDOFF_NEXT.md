@@ -1,6 +1,6 @@
-# Handoff for a new window: the second shop pass, then the 👎 downvote
+# Handoff for a new window: the second shop pass, then 👍 / 👎 votes on mini-games
 
-Written 2026-10-22 ~19:10 UTC by the session that shipped versions 37-39. Read `docs/HANDOFF.md` too: its top block
+Written 2026-10-22 ~19:00 UTC by the session that shipped versions 37-39. Read `docs/HANDOFF.md` too: its top block
 lists what is live. This file covers only the two jobs the owner saved for last.
 
 ## Where things stand
@@ -100,32 +100,43 @@ The owner held it "after everything else is finished". Everything else is finish
   - the lobby.
   Then publish, tell the owner, and show them a render of the new shop tab.
 
-## Job 2: a 👎 per mini-game, and a tool to read the totals
+## Job 2: a 👍 and a 👎 per mini-game, and a tool to read the totals
 
 The owner's words: "lets add to the backburner a away for players to downvote a minigame and then we can harvest that
-data to disable minigames in the future." The plan in `docs/MINIGAME_BACKLOG.md` ("On the backburner") was agreed:
+data to disable minigames in the future." Then: "Also while you make the downvote for mini games can you also do an
+upvote one so we can see if players like it". So the 👍 is required, not optional: the owner wants to see which games
+players like as well as which to switch off. The plan in `docs/MINIGAME_BACKLOG.md` ("On the backburner") was agreed:
 
-- **The button:**
-  - A 👎 on the results card ("Not for me"). A 👍 beside it is fine.
-  - One vote per person per round they played, changeable until the results card closes. Never from bots or sit-outs.
+- **The buttons:**
+  - A 👍 ("Loved it") and a 👎 ("Not for me") side by side on the results card, the same size. Both are required.
+  - One vote per person per round they played: a 👍 or a 👎, never both. Until the results card closes, tapping the
+    other one switches it and tapping the lit one again takes it back. Never from bots or sit-outs.
   - Mind phones: 44 pt targets, and the card's layout checks (`ui_render`).
 - **Server:**
   - A remote (append to `src/shared/Remotes.luau`).
   - Check that the voter played that round (RoundContext / RoundManager know who did), and rate limit it
     (`Services/RateLimiter`).
 - **Totals:**
-  - Running totals per game in a DataStore of its own, keyed by game and ISO week: plays, 👎, 👍, unique voters.
+  - Running totals per game in a DataStore of its own, keyed by game and ISO week: plays, 👍, 👎, unique voters.
   - Use UpdateAsync increments, batched per round, not one write per vote.
   - Store next to them the signals the game already has: PLAY AGAIN yes/no (`Services/ReplayService`) and how often
     each game wins the vote (`Services/VotingService`).
   - Never touch the player profile store, and never write per-player keys for real players.
 - **A tool**, e.g. `tools/checks/game_ratings.py`. Model it on `tools/checks/client_reports.py`, which reads a
-  DataStore through an Open Cloud task. It prints a table per game: plays, 👎 rate, 👍 rate, replay yes-rate, vote
-  wins, last 4 weeks. The owner then switches a game off with `Enabled = false` in `src/shared/GameDefinitions.luau`.
+  DataStore through an Open Cloud task. It prints one row per game for the last 4 weeks: plays, 👍 rate, 👎 rate, net
+  score (👍 minus 👎, over all votes), replay yes-rate and vote wins.
+  - Sort it best-liked first: the top shows what players like, the bottom what to switch off. Mark games with too few
+    votes to judge (under ~30).
+  - Under the table, a few plain lines for the owner: the 5 most liked and the 5 least liked games.
+  - The owner switches a game off with `Enabled = false` in `src/shared/GameDefinitions.luau`.
 - **Tests:**
-  - A Lune spec for the pure counting logic: one vote per person per round, changes replace, bots are ignored.
-  - A harness scenario where stand-ins vote on the results card and the totals land.
+  - A Lune spec for the pure counting logic: one vote per person per round, a 👍 switched to a 👎 (or back) replaces
+    it, a take-back removes it, bots and sit-outs are ignored, and the net score sorts right.
+  - A harness scenario where stand-ins tap 👍 and 👎 on the results card and the totals land.
   - Read the totals back with the tool, on test-server data only.
+- **Before publishing:** the code checks, the new spec, the scenario, `client_harness.py --touch` and PC (look at the
+  results card with both buttons on every phone size), and a few modes. Then publish, and tell the owner the votes now
+  collect: in a week or two, any session can run the tool and show them what players like.
 
 ## Smaller things still open (from today)
 

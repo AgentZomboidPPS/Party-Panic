@@ -1,8 +1,12 @@
 # Handoff: Party Panic (for the next Claude)
 
 Last updated: **2026-10-22 19:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
-`claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
-Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
+`claude/quirky-hopper-5yk8zk` at ee14d80). Sections 0-9 are Session A's handoff from 17:40 UTC, still accurate except
+where the Session B block below says otherwise.
+
+> **Next: read [HANDOFF_NEXT.md](HANDOFF_NEXT.md).** The owner saved two jobs for a new window: the second shop pass
+> (cherry-pick from `hold/shop-pass2`, never merge it whole) and 👍 / 👎 votes on mini-games with a tool to read the
+> totals. Session B has handed both over and won't work on them. Start there; this file is the background.
 
 ## Session B in flight (2026-10-22 16:00 UTC)
 

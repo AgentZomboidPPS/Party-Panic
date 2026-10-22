@@ -34,11 +34,14 @@ has none, so those three play "Panic Mode" (`python3 tools/music/modes.py list`)
 
 **On the backburner, after the current fixes** (owner, 2026-10-22: "Once all of these are resolved. lets add to the
 backburner a away for players to downvote a minigame and then we can harvest that data to disable minigames in the
-future."): a 👎 on the results card ("Not for me"; maybe a 👍 too), one per person per round they played, changeable until
-the results end, never from bots. The server keeps running totals per game (plays, 👎, 👍, unique players, by week) in
-a DataStore of its own, alongside the signals it already has (PLAY AGAIN yes/no, how often each game wins the vote). A
-tool (e.g. `tools/checks/game_ratings.py`, reading the totals through Open Cloud) prints each game's downvote rate, so
-the owner can pick games to switch off with `Enabled = false` in `src/shared/GameDefinitions.luau`.
+future."; and later that day: "Also while you make the downvote for mini games can you also do an upvote one so we can
+see if players like it"): a 👍 ("Loved it") and a 👎 ("Not for me") side by side on the results card, both required,
+one vote per person per round they played, changeable until the results end, never from bots. The server keeps running
+totals per game (plays, 👍, 👎, unique players, by week) in a DataStore of its own, alongside the signals it already
+has (PLAY AGAIN yes/no, how often each game wins the vote). A tool (e.g. `tools/checks/game_ratings.py`, reading the
+totals through Open Cloud) prints each game's 👍 rate, 👎 rate and net score, best-liked first, so the owner can see
+what players like and pick games to switch off with `Enabled = false` in `src/shared/GameDefinitions.luau`. The full
+plan is Job 2 in [HANDOFF_NEXT.md](HANDOFF_NEXT.md).
 
 ## 13. Tanks! (`Tanks`, Versus)
 
