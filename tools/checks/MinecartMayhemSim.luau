@@ -90,7 +90,7 @@ for round = 1, ROUNDS do
 		if rider.Back or rider.DownUntil > 0 or now < rider.JumpAt + Track.JUMP_TIME + Track.JUMP_REST then
 			return
 		end
-		rider.JumpAt = now
+		rider.JumpAt = Track.JumpFor(mode.course, rider, now, now) -- (held for a gap, as the server does)
 	end
 	function ctx.BotAction(_self, bot, name, a)
 		local rider = mode.riders[bot]
