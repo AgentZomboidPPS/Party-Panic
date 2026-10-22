@@ -2257,7 +2257,9 @@ end
 -- colour. Snapshots: the lobby with the 👥 PARTY chip and the squad bar ("Party chip"); xX_Speedy_Xx
 -- joining, the PARTY UP! banner ("Party up"); the window as a member ("Party window") and as the
 -- leader with the PARTY LOOK ("Party window leader"); an invite card from Captain Waffles of
--- GALACTIC LLAMAS in the lobby ("Party invite") and during the vote ("Party invite voting"); then a
+-- GALACTIC LLAMAS in the lobby ("Party invite") and during the vote ("Party invite voting": on
+-- phones the card goes to the top while the vote cards are up at the bottom middle, and the squad
+-- bar steps aside for them); then a
 -- team round's rules card with the SQUAD card ("Party squad"), and the next round's on a screen too
 -- narrow for the full card beside the rules card: the compact one, faces only ("Party squad
 -- compact"; the rules card is moved over while the SQUAD card measures its room, then put back);
@@ -2356,6 +2358,7 @@ do
 	task.wait(1)
 	snap("Party invite voting")
 	partyChecks.cardVoting = PartyController.Status()
+	partyChecks.squadVoting = SquadController.Status() -- (phones: the bar steps aside for the vote cards)
 
 	-- A team round: the player, Bubbles and xX_Speedy_Xx on Red; the rules card and the SQUAD card.
 	step = "party squad"

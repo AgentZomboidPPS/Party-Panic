@@ -6,7 +6,10 @@
 --     it, a neon glow breathing round that and a shine sweeping over now and then. A tap opens the
 --     PARTY window. Phones: compact, low in the middle of the gap between the MOVE stick's corner and
 --     the jump button (62% across, like the toasts, which sit above it: NotificationController),
---     clear of the chip row and the menu column up top and of the ☰ in the top bar row. PC: on the
+--     clear of the chip row and the menu column up top and of the ☰ in the top bar row. The vote
+--     cards take that spot while they're up (VoteController's row at the bottom middle), so the bar
+--     steps aside for the vote, as the chip row does on phones; the party still shows in the world
+--     meanwhile (PartyWorldController), and the bar's back in the next lobby. PC: on the
 --     left under the profile chip, its coins and the first-join tip's room, above the vote cards' row
 --     and left of the invite card; the party's name and the streak over the faces.
 --   * PARTY UP! When someone joins (the server's ("PartyUp", userId, name) on the Party remote),
@@ -121,6 +124,7 @@ local slots: { Slot } = {}
 local slotFor: { [number]: Slot } = {} -- UserId -> the slot showing them
 local landing: { [number]: number } = {} -- UserId -> until when their slot waits for their face to land
 local barShown = false
+local voteRow: GuiObject? = nil -- VoteController's row of vote cards
 local moments: { Moment } = {}
 local playing = false
 local squadCard: Frame? = nil
@@ -334,7 +338,12 @@ end
 local function refreshBar()
 	local mine = PartyView.Mine()
 	local members = PartyView.Members(mine)
-	local wanted = mine ~= nil and #members >= 2 and lobbyUp() and hud:GetAttribute("PP_TipsAside") ~= true -- a lobby game has the screen (Skee-Ball)
+	local voting = touch and voteRow ~= nil and voteRow.Visible -- (phones: the vote cards are in its spot)
+	local wanted = mine ~= nil
+		and #members >= 2
+		and lobbyUp()
+		and not voting
+		and hud:GetAttribute("PP_TipsAside") ~= true -- a lobby game has the screen (Skee-Ball)
 	local holder = holderOf()
 	if wanted then
 		layoutBar()
@@ -990,6 +999,13 @@ function SquadController.Start(context)
 	end)
 	GameState.Changed("Replay", refreshBar)
 	context.Hud:GetAttributeChangedSignal("PP_TipsAside"):Connect(refreshBar)
+	PartyKit.WhenChild(context.Hud, "Vote", function(child)
+		if child:IsA("GuiObject") then
+			voteRow = child
+			child:GetPropertyChangedSignal("Visible"):Connect(refreshBar)
+			refreshBar()
+		end
+	end)
 	Remotes.Get("Party").OnClientEvent:Connect(onServer)
 	-- The SQUAD card: once the rules card is up and the round has put everyone on teams.
 	player:GetAttributeChangedSignal("PP_RulesShowing"):Connect(refreshSquad)

@@ -218,6 +218,24 @@ function PartyKit.Halo(frame: GuiObject, color: Color3, layers: number, group: G
 	return strokes
 end
 
+-- Calls `use` with `parent`'s child called `name` (another controller's frame, like VoteController's
+-- row of vote cards) as soon as it's there.
+function PartyKit.WhenChild(parent: Instance, name: string, use: (Instance) -> ())
+	local found = parent:FindFirstChild(name)
+	if found then
+		use(found)
+		return
+	end
+	local connection: RBXScriptConnection? = nil
+	connection = parent.ChildAdded:Connect(function(child)
+		if child.Name == name and connection then
+			connection:Disconnect()
+			connection = nil
+			use(child)
+		end
+	end)
+end
+
 -- Faces -----------------------------------------------------------------------------------------------
 
 local headshots: { [number]: string } = {}

@@ -12,8 +12,9 @@
 --   * An invite comes as a card: "👥 Bubbles invited you to their party!" with JOIN and NO, and a bar
 --     running down its 20 seconds. It shows in the lobby only (its time stops under the rules card
 --     and in the round, and it comes back after), one at a time. Phones: in the middle of the gap
---     between the MOVE stick's corner and the menu column, under the chips and vote cards and above
---     the toasts and the jump button; thumb-sized buttons. PC: in the middle, under the chips.
+--     between the MOVE stick's corner and the menu column, under the chips and above the toasts and
+--     the jump button; while the vote cards are up at the bottom middle, at the top of the screen
+--     instead (placeCard); thumb-sized buttons. PC: in the middle, under the chips.
 --   * Everyone in a party has a 👥 before their name on their name tag (the server's PP_Nameplate),
 --     so friends in the lobby can see who's together.
 -- Bots are never in parties (they aren't Players, so they're never listed).
@@ -87,6 +88,9 @@ local TIMER_COLORS = { Theme.Colors.Yellow, Theme.Colors.Orange, Theme.Colors.Re
 -- zone (its left 40%) and left of the menu column; PC, in the middle of the band between the chips'
 -- row and the vote cards.
 local CARD_AT = { Touch = Vector2.new(0.64, 0.52), Pc = Vector2.new(0.5, 0.46) }
+-- Phones and tablets while the vote cards are up at the bottom middle: the card's top, in pixels under
+-- the top bar (the chips' row is away during the vote there).
+local CARD_TOP = 8
 
 local touch = false
 local remote: RemoteEvent
@@ -108,7 +112,9 @@ local streakPill: Frame
 local streakTint: UIGradient
 local streakNumber: TextLabel
 
+local cardHolder: Frame
 local card: Frame
+local voteRow: GuiObject? = nil -- VoteController's row of vote cards
 local cardKicker: TextLabel
 local cardTitle: TextLabel
 local cardParty: TextLabel
@@ -936,27 +942,47 @@ local function stepCard()
 	end
 end
 
+-- Where the card goes: its spot (CARD_AT), or on phones and tablets while the vote cards are up at the
+-- bottom middle, the top of the screen, which keeps it clear of them, of the toasts over them and of
+-- the jump button on every screen (from its spot, the card would reach the cards on most phones).
+-- It glides there when it's showing.
+local function placeCard(animate: boolean)
+	local vote = voteRow
+	local goal
+	if touch and vote and vote.Visible then
+		goal = { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(CARD_AT.Touch.X, 0, 0, CARD_TOP) }
+	else
+		local at = size(CARD_AT)
+		goal = { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(at.X, at.Y) }
+	end
+	if animate and card.Visible then
+		UIKit.Tween(cardHolder, 0.3, goal)
+	else
+		cardHolder.AnchorPoint = goal.AnchorPoint
+		cardHolder.Position = goal.Position
+	end
+end
+
 local function buildCard(context)
 	local dims = size(CARD)
-	local at = size(CARD_AT)
 	-- (The screen's scale on a holder, the pop-in on the card: one UIScale each.)
-	local holder = UIKit.new("Frame", {
+	cardHolder = UIKit.new("Frame", {
 		Name = "PartyInviteHolder",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(at.X, at.Y),
 		Size = UDim2.fromOffset(dims.X, dims.Y),
 		BackgroundTransparency = 1,
 		ZIndex = 40,
 		Parent = context.Overlay,
 	})
-	UIKit.AutoScale(holder)
+	UIKit.AutoScale(cardHolder)
 	card = UIKit.Panel({
 		Name = "PartyInvite",
+		AnchorPoint = Vector2.new(0.5, 0.5), -- (it pops from its middle)
+		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromScale(1, 1),
 		Visible = false,
 		ZIndex = 40,
 		CornerRadius = 26,
-		Parent = holder,
+		Parent = cardHolder,
 	}, Color3.fromRGB(70, 150, 255), Color3.fromRGB(60, 52, 170))
 	-- A rim of colours turning round the card.
 	cardRim = PartyKit.SpinBorder(card, PartyKit.RimColors(Theme.Colors.Cyan), 5, cardLoops)
@@ -1230,6 +1256,7 @@ function PartyController.Status(): { [string]: any }
 		CardTimer = if card and card.Visible
 			then math.floor(cardTimer.Right.Rotation + cardTimer.Left.Rotation)
 			else nil,
+		CardAtTop = if card and card.Visible then cardHolder.AnchorPoint.Y == 0 else nil,
 		Waiting = #incoming,
 	}
 end
@@ -1275,6 +1302,16 @@ function PartyController.Start(context)
 	end)
 	PartyKit.SetPlaying(loops, false)
 	buildCard(context)
+	placeCard(false)
+	PartyKit.WhenChild(context.Hud, "Vote", function(child)
+		if child:IsA("GuiObject") then
+			voteRow = child
+			child:GetPropertyChangedSignal("Visible"):Connect(function()
+				placeCard(true)
+			end)
+			placeCard(false)
+		end
+	end)
 	refreshChip()
 	task.spawn(function()
 		local ok, result = pcall(SocialService.CanSendGameInviteAsync, SocialService, me())
