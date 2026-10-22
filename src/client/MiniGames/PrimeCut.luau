@@ -9,6 +9,16 @@
 -- exactly where the blade will come down (seen from above at an angle, the blade itself would be a
 -- little off). Nobody sees a percentage before the chop: then each team's steak shows up in the HUD
 -- in its two pieces (the real steak drawn from above, clipped at the cut) with their shares.
+--
+-- Which team you're on (owner: "I couldnt tell what color I was on prime cut."): the camera looks
+-- down at your grill, so the hood in your colour and its "★ RED" sign were off the top of the screen
+-- (under the HUD on phones), and every grill looked the same from there: a steel rim and a black
+-- grate over orange coals. Now the title starts with your team in its colour ("★ RED  •  STEAK 1/3
+-- •  7.3"), and before GO it's the whole title ("YOU'RE ON ★ RED", after the rules card's tab says
+-- the same); a badge floats over your grill on the steak's left (YOU, your shape on a disc in your
+-- colour, your team's name), clear of the steak and of everywhere your knife can go; your card in
+-- the reveal says YOU; and the server paints your grill's rim and side tables and the rug under it in
+-- your colour (MiniGames/PrimeCut).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -21,7 +31,6 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local PrimeCut = {}
 
-local SHAPES = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
 local HOVER = 0.6 -- the edge floats this far over the steak's top while steering
 local LIFT = 2.6 -- the knife rises this much before it comes down
 local CHOP_RISE, CHOP_FALL = 0.16, 0.1
@@ -30,6 +39,10 @@ local REPEAT_RATE, REPEAT_FAST = 12, 20 -- ...this many nudges a second, speedin
 local SEND_GAP = 0.05 -- at most this often a batch goes out
 local CARD_GAP = 0.32 -- the reveal shows one team's pieces after another
 local FRAME_PAD = 0.8 -- studs of grill shown round a steak in a reveal picture
+-- My team's badge: where it floats in my grill's frame (over the coals left of the steak: the knife
+-- stops 1.2 studs past a steak's side, at most 8.5 out) and its size in studs.
+local BADGE_SPOT = Vector3.new(-11.6, 2.2, 2)
+local BADGE_SIZE = Vector2.new(3.4, 4.8)
 
 type Station = {
 	Team: string,
@@ -293,6 +306,76 @@ function PrimeCut.Start(api)
 		end
 	end
 
+	-- My team's badge over my grill: YOU, my shape on a disc in my colour, my team's name. It's in
+	-- the world (a glance at the steak takes it in, on every screen) but never in front of the knife,
+	-- which would hide it if it ever came that far.
+	if myStation and mine then
+		local anchor = UIKit.new("Part", {
+			Name = "TeamBadge",
+			Anchored = true,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+			Transparency = 1,
+			Size = Vector3.one * 0.2,
+			CFrame = myStation.Frame * CFrame.new(BADGE_SPOT),
+			Parent = api.World,
+		})
+		local badge = UIKit.new("BillboardGui", {
+			Name = "Badge",
+			Adornee = anchor,
+			Size = UDim2.fromScale(BADGE_SIZE.X, BADGE_SIZE.Y),
+			LightInfluence = 0,
+			MaxDistance = 150,
+			Parent = anchor,
+		})
+		UIKit.Label({
+			Name = "You",
+			Text = "YOU",
+			Font = Theme.Fonts.Display,
+			TextScaled = true,
+			Size = UDim2.fromScale(1, 0.22),
+			Parent = badge,
+			Children = { UIKit.TextStroke(0) },
+		})
+		local disc = UIKit.new("Frame", {
+			Name = "Disc",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, 0.24),
+			Size = UDim2.fromScale(1, 0.52),
+			BackgroundColor3 = myColor,
+			Parent = badge,
+			Children = {
+				UIKit.Round(),
+				UIKit.Stroke(Color3.new(1, 1, 1), 3, 0),
+				UIKit.new("UIAspectRatioConstraint", { AspectRatio = 1 }),
+			},
+		})
+		UIKit.Label({
+			Name = "Shape",
+			Text = Teams.Shapes[mine] or "",
+			Font = Theme.Fonts.Display,
+			TextScaled = true,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.52),
+			Size = UDim2.fromScale(0.7, 0.7),
+			Parent = disc,
+			Children = { UIKit.TextStroke(0) },
+		})
+		UIKit.Label({
+			Name = "Team",
+			Text = string.upper(mine),
+			Font = Theme.Fonts.Display,
+			TextScaled = true,
+			TextColor3 = myColor,
+			Position = UDim2.fromScale(0, 0.78),
+			Size = UDim2.fromScale(1, 0.22),
+			Parent = badge,
+			Children = { UIKit.TextStroke(0) },
+		})
+	end
+
 	local arena = api:Arena(5)
 	local function findSteaks(now: number)
 		if not arena then
@@ -336,7 +419,10 @@ function PrimeCut.Start(api)
 			camera.CameraType = savedType or Enum.CameraType.Custom
 			camera.FieldOfView = savedFov or 70
 		end
-		-- You stand at your grill: the move controls go away, the screen is for the knife.
+		-- You stand at your grill: the move controls go away, the screen is for the knife. (The UI
+		-- checks then draw no move stick or jump button either, like Skee-Ball's play screen:
+		-- tools/checks/ui_render.py.)
+		api.Gui:SetAttribute("PP_NoTouchControls", if want and touch then true else nil)
 		pcall(function()
 			if not controls then
 				local scripts = me:FindFirstChild("PlayerScripts")
@@ -372,17 +458,23 @@ function PrimeCut.Start(api)
 	end
 
 	-- HUD ------------------------------------------------------------------------------------------
+	-- The title: my team in its colour, then the steak and the clock ("★ RED  •  STEAK 1/3  •  7.3");
+	-- before GO just my team, bigger ("YOU'RE ON ★ RED").
 	local title = UIKit.Label({
 		Name = "Steak",
 		Text = "",
 		Font = Theme.Fonts.Display,
 		TextSize = 30,
+		TextWrapped = false,
+		RichText = true,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, hudY),
-		Size = UDim2.fromOffset(420, 36),
+		Size = UDim2.fromOffset(600, 40),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.15) },
 	})
+	local myTag = if mine then `<font color="#{myColor:ToHex()}">{Teams.Label(mine)}</font>` else nil
+	local titleLead = if myTag then `{myTag}  •  ` else ""
 	local barBack = UIKit.new("Frame", {
 		Name = "Clock",
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -485,7 +577,8 @@ function PrimeCut.Start(api)
 		end
 	end
 	if myStation and not touch then
-		api:Hint("Hold ◀ ▶ (A / D) to slide your knife: cut where the two halves are equal!", hudY + 96)
+		-- (One line: two covered the top of the steak.)
+		api:Hint("Hold ◀ ▶ (A / D) to slide your knife: cut it 50 : 50!", hudY + 96)
 	end
 	local hintShown = myStation ~= nil and not touch
 
@@ -634,7 +727,7 @@ function PrimeCut.Start(api)
 			})
 			UIKit.Label({
 				Name = "Team",
-				Text = `{SHAPES[team] or ""} {string.upper(team)}`,
+				Text = if team == mine then `{Teams.Label(team)} (YOU)` else Teams.Label(team),
 				Font = Theme.Fonts.Display,
 				TextSize = 20,
 				TextColor3 = color,
@@ -970,7 +1063,8 @@ function PrimeCut.Start(api)
 		end
 
 		-- Clock, title and crew.
-		local steakText = if cut.N then `STEAK {cut.N}/{cut.Of or PrimeCutLogic.CUTS}` else ""
+		local steakText = `{titleLead}STEAK {cut.N or 1}/{cut.Of or PrimeCutLogic.CUTS}`
+		title.TextSize = if myTag and phase == "Wait" then 32 else 30
 		if live and type(cut.C) == "number" then
 			local left = math.max(0, cut.C - now)
 			title.Text = `{steakText}  •  {string.format("%.1f", left)}`
@@ -991,6 +1085,8 @@ function PrimeCut.Start(api)
 				title.Text = `{steakText}  •  THE VERDICT`
 			elseif phase == "Ready" then
 				title.Text = `{steakText}  •  NEXT STEAK!`
+			elseif myTag then
+				title.Text = `YOU'RE ON {myTag}`
 			else
 				title.Text = `{steakText}  •  GET READY`
 			end

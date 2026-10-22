@@ -881,7 +881,9 @@ function EatsaPizza:GetResults()
 		local percent = math.floor(self:_teamShare(entry.Team) * 100 + 1e-6)
 		local member = self.members[entry.Player]
 		local bites = if member then member.Bites else 0
-		entry.ScoreText = `{entry.Team} ate {percent}% • you {bites} bites`
+		-- ("◆ YELLOW 100% • 120 bites": the team with its mark, as short as fits the results card's
+		-- result column; "Yellow ate 100% • you 120 bites" ended in "...".)
+		entry.ScoreText = `{Teams.Label(entry.Team)} {percent}% • {bites} bites`
 		entry.BestScore = bites
 	end
 	results.WinningTeam = self:_winner()

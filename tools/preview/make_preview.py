@@ -79,9 +79,9 @@ CAMERAS: dict[str, dict] = {
     # Low in front of the launch line: two wind-up toys just launched, flying toward the camera, the
     # players who wound them behind their pads.
     "MechaMarathon": {"yaw": 200, "pitch": 13, "distance": 26, "fov": 46, "shift": [-3, 4, -15], "raise": 9, "sway": 8},
-    # From the infield at a hurdle row: a rider hopping it on his hobby horse, the pack behind on the
-    # carrot panels, the grandstand beyond.
-    "RockinRaceway": {"yaw": 150, "pitch": 16, "distance": 26, "shift": [25, 0, -22], "raise": 6},
+    # From just past a row of 3D hurdles, looking back down the home straight: the striped standards
+    # and crossbars in front, the pack galloping at them on their hobby horses, the grandstand beyond.
+    "RockinRaceway": {"yaw": 242, "pitch": 15, "distance": 24, "fov": 50, "shift": [-35, -3, 2], "raise": 9},
     # The turning field from a player's corner: lanes, veggies and bombs, the silo in the middle.
     "RakeItIn": {"look_at": "SiloBody", "yaw": 30, "pitch": 30, "distance": 50, "shift": [0, -4, 0], "raise": 2},
     # Across the giant pizza on its pan: teams on their slices, half of them eaten down to the pan, the
@@ -95,6 +95,9 @@ CAMERAS: dict[str, dict] = {
     # Over a team's shoulders at its grill: the giant knife lined up over the steak, the glowing line
     # where it will cut, the coals under the grate.
     "PrimeCut": {"look_at": "CutLine", "yaw": 28, "pitch": 36, "distance": 39, "shift": [-0.5, 0, 10.5], "raise": 4},
+    # Down the row of mills from the first one: its axe biting into a log on the stump, the team beside
+    # it, the next team's mill with its log rack and stump beyond.
+    "LogJam": {"look_at": "Top", "yaw": -110, "pitch": 26, "distance": 32, "shift": [8, 2, 6], "raise": 6},
     # Behind a player at their booth's counter: the mischief's smoke over the cubby shelf, toys
     # tumbling off it onto the counter.
     "MessyMemory": {"look_at": "CounterTop", "yaw": 168, "pitch": 16, "distance": 25, "shift": [0, 2, 0], "raise": 6},
@@ -128,6 +131,9 @@ CAMERAS: dict[str, dict] = {
     # Over the paper pad: stampers on their rubber stamps hopping across a patchwork of everyone's ink,
     # bare ruled paper still to win beyond.
     "StampOut": {"look_at": "Paper", "yaw": 20, "pitch": 50, "distance": 38, "shift": [5, 2, 6], "raise": 6},
+    # Into the first scrum on the sandlot: foam bats swinging, a wind-up's reach on the sand, orbs knocked
+    # loose flying out, the scoreboard over the fence behind.
+    "Struggle": {"look_at": "Sand", "yaw": 10, "pitch": 26, "distance": 20, "shift": [20.5, 2, 7.5], "raise": 9},
     # Chasing two riders down their lanes: their crayons drawing purple and teal lines behind them, the
     # dotted guides curving away ahead.
     "TraceRace": {"look_at": "StartLine", "yaw": 0, "pitch": 45, "distance": 46, "shift": [29, 3, -110], "raise": 6},
@@ -145,17 +151,19 @@ DUMP_AT: dict[str, float] = {
     "EatsaPizza": 15,  # halfway: some slices eaten down to the pan, teams munching on the rest
     "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
+    "LogJam": 10,  # every mill going, an axe coming down on a log
     "MechaMarathon": 12.5,  # a second after lift-off: the toys climbing away from their pads
     "MessyMemory": 8,  # a second into the mischief: smoke puffs, the last toys tumbling onto the counters
     "ParasolPlummet": 7,  # fallers still spread across the sky, a dozen lobs in the air
     "PrimeCut": 9,  # the first steak, a second before the chop: the knives lined up
     "PumpAndPop": 16,  # the balloons are big by now
-    "RockinRaceway": 4,  # the pack galloping down the home straight into the first panel rows
+    "RockinRaceway": 2.2,  # the pack galloping off the line at the first rows (layouts are random: check)
     "SkateEscape": 10,
     "Slaparazzi": 11.7,  # just before the second photo: everyone crowding into the frame's rings
     "SnowballSummit": 25,  # snowballs rolling, someone teetering at the rim, most still on top
     "Spleef": 12,  # holes dug in every floor, players on all three
     "StampOut": 34,  # BIG STAMPS: the pad patched with everyone's ink, stampers mid-hop
+    "Struggle": 4.5,  # the first hits: orbs knocked loose and flying
     "Tanks": 5.5,  # a second after the shields drop: the first tanks blowing up, the rest still rolling
     "TraceRace": 8,  # past the straight start, into the first curves, lines trailing behind
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole

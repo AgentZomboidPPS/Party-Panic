@@ -20,7 +20,13 @@ For each snapshot it:
      is see-through, UNDRAWN-TOP when a drawn part's collision sits over its drawing), every
      invisible collider whose top a character can jump onto (JUMPABLE-INVISIBLE), and every
      collidable mesh or union whose collision (measured by raycasts in its own frame) sticks out of
-     its drawn shape near where people can go (HULL-BIGGER).
+     its drawn shape near where people can go (HULL-BIGGER);
+  4. checks the terrain round the arena (always solid; round runs build the game's environment
+     first, as a real server has it, and sample terrain 1300 studs out, past the map): terrain the
+     flood reaches (TERRAIN-REACHED), terrain within 250 studs across of anywhere people can get,
+     above the KillY and less than 15 over that spot (TERRAIN-NEAR: a fall, a toss or a bounce could
+     land on it), and terrain poking up through a wide, flat part: a floor, a lawn, a sea
+     (TERRAIN-BREAKS).
 Prints one line per kind of part (every instance with --verbose) and writes a top-down PNG per
 snapshot (green: reachable and drawn, red: reachable and invisible, orange: reachable collision
 over a drawing, blue: invisible colliders' footprints, grey: unreachable). Reads the map only:
@@ -657,19 +663,116 @@ def where(part):
     return f"({pos[0]:.1f}, {pos[1]:.1f}, {pos[2]:.1f})"
 
 
+TERRAIN_NEAR = 250  # studs: terrain this close (across) to anywhere people can get is reported ...
+TERRAIN_OVER = 15  # ... unless its top is this far over that spot (out of a jump's or a bounce's reach)
+
+
+def decode_terrain(snapshot):
+    """The terrain sample (colliders.luau): column x, z positions and the top and bottom of the terrain
+    in each column, in world studs (nan where there's none)."""
+    terrain, center = snapshot.get("terrain"), snapshot.get("center")
+    if not terrain or not center:
+        return None
+    n, step = terrain["n"], terrain["step"]
+    raw = np.frombuffer(base64.b64decode(terrain["data"]), dtype="<i2").astype(float).reshape(n, n, 2)
+    top = np.where(raw[..., 0] == -32768, np.nan, raw[..., 0] / 10 + center[1])
+    bottom = np.where(raw[..., 1] == -32768, np.nan, raw[..., 1] / 10 + center[1])
+    xs = terrain["x0"] + np.arange(n) * step
+    zs = terrain["z0"] + np.arange(n) * step
+    return xs, zs, top, bottom, step
+
+
+def terrain_check(snapshot, parts, places, kill_y):
+    """Terrain (always solid: sky islands, hills) near an arena: how close it comes to anywhere people
+    can get (`places`: x, y, z rows), and any that pokes up through a floor or a water surface (a wide,
+    flat part with terrain both above and below its top in the same column)."""
+    lines, flags = [], []
+    decoded = decode_terrain(snapshot)
+    if decoded is None:
+        return lines, flags
+    xs, zs, top, bottom, step = decoded
+    iz, ix = np.nonzero(~np.isnan(top))
+    reach = (len(xs) - 1) * step / 2
+    if len(ix) == 0:
+        lines.append(f"  terrain: none within {reach:.0f} studs")
+        return lines, flags
+    tx, tz, ttop, tbottom = xs[ix], zs[iz], top[iz, ix], bottom[iz, ix]
+    if len(places):
+        from scipy.spatial import cKDTree
+
+        dist, nearest = cKDTree(places[:, [0, 2]]).query(np.c_[tx, tz])
+        rise = ttop - places[nearest, 1]
+        k = int(np.argmin(dist))
+        lines.append(
+            f"  terrain: {len(tx)} columns within {reach:.0f} studs; the nearest is {dist[k]:.0f} studs across from "
+            f"where people can get, its top {rise[k]:+.0f} studs over that spot"
+        )
+        near = (dist < TERRAIN_NEAR) & (rise < TERRAIN_OVER)
+        if kill_y is not None:
+            near &= ttop > kill_y
+        if near.any():
+            flags.append(
+                {
+                    "kind": "TERRAIN-NEAR",
+                    "part": "terrain",
+                    "class": "Terrain",
+                    "area": int(near.sum()) * step * step,
+                    "x": [float(tx[near].min()), float(tx[near].max())],
+                    "z": [float(tz[near].min()), float(tz[near].max())],
+                    "y": [float(ttop[near].min()), float(ttop[near].max())],
+                    "gap": f"{dist[near].min():.0f} studs across from where people can get, top "
+                    f"{rise[near].min():+.0f}..{rise[near].max():+.0f} over it",
+                }
+            )
+    for part in parts.values():
+        pos, rot = cframe(part["cf"])
+        half = np.abs(rot) @ (np.array(part["s"], float) / 2)
+        if min(half[0], half[2]) < 30 or half[1] > 6:
+            continue  # not a wide, flat surface
+        surface = pos[1] + half[1]
+        if part.get("shape") == "Cylinder":
+            radius = min(half[0], half[2])
+            inside = np.hypot(tx - pos[0], tz - pos[2]) <= radius
+        else:
+            inside = (np.abs(tx - pos[0]) <= half[0]) & (np.abs(tz - pos[2]) <= half[2])
+        breaks = inside & (ttop > surface + 0.5) & (np.where(np.isnan(tbottom), -np.inf, tbottom) < surface - 0.5)
+        if breaks.any():
+            flags.append(
+                {
+                    "kind": "TERRAIN-BREAKS",
+                    "part": part["p"],
+                    "class": part["c"],
+                    "size": part["s"],
+                    "at": where(part),
+                    "t": part["t"],
+                    "area": int(breaks.sum()) * step * step,
+                    "x": [float(tx[breaks].min()), float(tx[breaks].max())],
+                    "z": [float(tz[breaks].min()), float(tz[breaks].max())],
+                    "y": [float(ttop[breaks].min()), float(ttop[breaks].max())],
+                    "gap": f"terrain pokes up through its surface (y {surface:.1f})",
+                }
+            )
+    return lines, flags
+
+
 def analyse(snapshot, out_dir: Path | None, name: str, kill_y=None, verbose=False):
     parts = {p["i"]: p for p in snapshot["parts"]}
     grid = snapshot.get("grid")
     lines = []
     flags = []
+    if kill_y is None:
+        kill_y = snapshot.get("killY")
     if not grid:
         lines.append("  (no map)")
-        return lines, flags
+        seeds = np.array([[s[1], s[2], s[3]] for s in snapshot.get("seeds", [])], float).reshape(-1, 3)
+        more_lines, more_flags = terrain_check(snapshot, parts, seeds, kill_y)
+        lines += more_lines
+        for f in more_flags:
+            lines.append(f"  {f['kind']:18s} {f['part']}  area {f['area']:.0f} sq studs; {f['gap']}")
+        return lines, flags + more_flags
     Y, P, H = decode_grid(grid)
     L, N = Y.shape
     nx, nz, step = grid["nx"], grid["nz"], grid["step"]
-    if kill_y is None:
-        kill_y = snapshot.get("killY")
     reach = flood(grid, Y, H, snapshot.get("seeds", []), kill_y)
     lines.append(
         f"  map {nx}x{nz} step {step} ({grid['rays']} rays, {snapshot.get('gridSeconds')}s), "
@@ -867,9 +970,41 @@ def analyse(snapshot, out_dir: Path | None, name: str, kill_y=None, verbose=Fals
                 }
             )
 
+    # Terrain: any the flood reaches on the map, and how near the rest comes (the terrain sample reaches
+    # far past the map).
+    on_terrain = reach & (P == 65535)
+    if on_terrain.any():
+        li, ci = np.nonzero(on_terrain)
+        flags.append(
+            {
+                "kind": "TERRAIN-REACHED",
+                "part": "terrain",
+                "class": "Terrain",
+                "area": int(on_terrain.sum()) * step * step,
+                "x": [float(grid["x0"] + (ci % nx).min() * step), float(grid["x0"] + (ci % nx).max() * step)],
+                "z": [float(grid["z0"] + (ci // nx).min() * step), float(grid["z0"] + (ci // nx).max() * step)],
+                "y": [float(Y[li, ci].min()), float(Y[li, ci].max())],
+                "gap": "people can walk or jump onto terrain",
+            }
+        )
+    li, ci = np.nonzero(reach)
+    places = np.c_[grid["x0"] + (ci % nx) * step, Y[li, ci], grid["z0"] + (ci // nx) * step]
+    seeds = np.array([[s[1], s[2], s[3]] for s in snapshot.get("seeds", [])], float).reshape(-1, 3)
+    more_lines, more_flags = terrain_check(snapshot, parts, np.r_[places, seeds], kill_y)
+    lines += more_lines
+    flags += more_flags
+
     # Print: one line per kind of thing (a prop's piece, or a part's path without its number), the
     # worst case first; every instance with --verbose.
-    order = {"INVISIBLE": 0, "JUMPABLE-INVISIBLE": 1, "UNDRAWN-TOP": 2, "HULL-BIGGER": 3}
+    order = {
+        "TERRAIN-REACHED": 0,
+        "TERRAIN-BREAKS": 0,
+        "TERRAIN-NEAR": 0,
+        "INVISIBLE": 1,
+        "JUMPABLE-INVISIBLE": 2,
+        "UNDRAWN-TOP": 3,
+        "HULL-BIGGER": 4,
+    }
     flags.sort(key=lambda f: (order.get(f["kind"], 9), -f.get("area", 0)))
     groups: dict = {}
     for f in flags:

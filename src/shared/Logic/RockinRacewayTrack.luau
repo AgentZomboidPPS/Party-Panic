@@ -13,12 +13,21 @@
 -- The carrot meter's bottom quarter is the red line: run the meter dry while still galloping and the
 -- horse spins out (SPIN_TIME nearly stopped). So the fastest riders gallop from a full meter all the
 -- way down near the red line; quick taps never build a stride. An orange carrot panel ridden over
--- gives a DASH; a blue hurdle panel slows the horse unless the whole horse hops over it (Clears).
+-- gives a DASH; a hurdle slows the horse unless the whole horse hops over its bar (Clears).
 --
 -- Review pass (the reviewer simulated Ride: every gallop strategy averaged the same speed, so riding
 -- near the red line didn't pay): the stride build-up and the breath before refilling make it pay.
 -- 40 s offline sim: let go at 5 and press at 99 averages 21.8 studs/s (a 34.9 s lap), let go at the
 -- red line 20.7, at 40 19.7, the safe 70/95 18.3, never letting go 10.5, taps 11-17, trotting 14.8.
+--
+-- 3D hurdles (owner: "For rockin raceway can we make the hurdles 3D?"): a hurdle is now a real
+-- striped barrier across every lane, its crossbar's top drawn at CLEAR. A 0.8-stud bar was a curb
+-- next to a 5-stud rider, so the bar and the hop's arc were both doubled (CLEAR 0.8 -> 1.6,
+-- HOP_HEIGHT 2.6 -> 5.2, the same arc as Skate Escape's ollie). Whether a hop clears depends only on
+-- CLEAR / HOP_HEIGHT and the times, so every timing window is exactly what it was: the same press
+-- clears the same hurdle, a hop lasts as long and nothing else changed. Each hurdle has a blue
+-- take-off pad TAKEOFF_NEAR..TAKEOFF_FAR before its bar: a hop pressed with the rider over it
+-- clears at any speed from a trot to a dash (tests/RockinRacewayTrack.spec.luau checks that).
 --
 -- Leaf module: no Roblox services, so Lune tests can load it.
 
@@ -54,7 +63,7 @@ Track.DASH_TIME = 1.2
 Track.DASH_CARROTS = 12 -- a carrot panel also feeds the horse
 Track.SLOW_TIME = 1.1
 Track.HOP_TIME = 0.75 -- seconds in the air
-Track.HOP_HEIGHT = 2.6
+Track.HOP_HEIGHT = 5.2 -- (doubled with CLEAR for the 3D hurdles: the same timing, see the top)
 Track.HOP_REST = 0.2 -- after landing, before the next hop
 Track.PANEL = 4 -- a panel's length along the track
 
@@ -70,7 +79,7 @@ export type Rider = {
 	SlowUntil: number,
 }
 
-export type Panel = { D: number, K: string } -- K: "D" carrot (dash) or "H" hurdle (slow)
+export type Panel = { D: number, K: string } -- K: "D" carrot (dash) or "H" hurdle (slow; D is its bar)
 
 -- Where lane `lane` (1..LANES, inside to outside) runs: studs outward from the centre line.
 function Track.LaneOffset(lane: number): number
@@ -197,19 +206,36 @@ function Track.HopHeight(since: number): number
 	return 4 * t * (1 - t) * Track.HOP_HEIGHT
 end
 
--- A hurdle's bar is CLEAR studs up. The horse reaches NOSE studs ahead of its rider and TAIL behind,
--- so it passes over the bar from NOSE / speed before the rider's own crossing (`at`) until TAIL /
--- speed after. The hurdle is cleared only if the hop is at least CLEAR high that whole time (a hop
--- is highest in its middle, so checking both ends is enough). The server judges by this and the
--- client lights HOP by it.
-Track.CLEAR = 0.8
+-- A hurdle's bar is CLEAR studs up (the crossbar's drawn top). The horse reaches NOSE studs ahead
+-- of its rider and TAIL behind (its wheel), so it passes over the bar from NOSE / speed before the
+-- rider's own crossing (`at`) until TAIL / speed after. The hurdle is cleared only if the hop is at
+-- least CLEAR high that whole time (a hop is highest in its middle, so checking both ends is
+-- enough). The server judges by this and the client lights HOP by it.
+Track.CLEAR = 1.6
 Track.NOSE = 2
 Track.TAIL = 1.75
+-- The blue take-off pad: from TAKEOFF_FAR to TAKEOFF_NEAR studs before a hurdle's bar (the
+-- RockinRacewayHurdleRow mesh draws it there).
+Track.TAKEOFF_NEAR = 4.6
+Track.TAKEOFF_FAR = 8.4
 
 function Track.Clears(hopAt: number, at: number, speed: number): boolean
 	local v = math.max(speed, 1)
 	return Track.HopHeight(at - Track.NOSE / v - hopAt) >= Track.CLEAR
 		and Track.HopHeight(at + Track.TAIL / v - hopAt) >= Track.CLEAR
+end
+
+-- When a horse that doesn't clear (Clears is false) hits the bar, for drawing the knock: as its
+-- nose reaches the bar if the hop is still too low there (late, or no hop), otherwise as its wheel
+-- passes over (it came down too soon). nil when it clears.
+function Track.HitAt(hopAt: number, at: number, speed: number): number?
+	local v = math.max(speed, 1)
+	if Track.HopHeight(at - Track.NOSE / v - hopAt) < Track.CLEAR then
+		return at - Track.NOSE / v
+	elseif Track.HopHeight(at + Track.TAIL / v - hopAt) < Track.CLEAR then
+		return at + Track.TAIL / v
+	end
+	return nil
 end
 
 function Track.Ordinal(place: number): string

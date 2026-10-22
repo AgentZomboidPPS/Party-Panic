@@ -95,8 +95,8 @@ local list: { GameDefinition } = {
 		Category = "Versus",
 		Icon = "⏳",
 		Color = Color3.fromRGB(230, 170, 70),
-		Objective = "Divers grab treasure on the swirling quicksand. Sand Kings SWIRL and PULL to sink it! Bigger haul wins.",
-		Controls = "Divers: run and keep out of the hole (a hop eases the pull). Sand Kings: tap SWIRL (E) and PULL (Q).",
+		Objective = "Divers grab treasure on the swirling quicksand. Sand Kings SWIRL, PULL and BLAST to sink it! Bigger haul wins.",
+		Controls = "Divers: keep out of the hole and out of the rings. Sand Kings: SWIRL (E), PULL (Q), tap or click the sand to BLAST.",
 		Duration = 55,
 		MinPlayers = 1,
 		IsTeam = true,
@@ -136,7 +136,6 @@ local list: { GameDefinition } = {
 		Duration = 55,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "CrazyCutters",
@@ -149,7 +148,6 @@ local list: { GameDefinition } = {
 		Duration = 85,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "BobsledRun",
@@ -162,7 +160,6 @@ local list: { GameDefinition } = {
 		Duration = 55,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "CakeFactory",
@@ -175,7 +172,6 @@ local list: { GameDefinition } = {
 		Duration = 55,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "SharkBait",
@@ -188,7 +184,6 @@ local list: { GameDefinition } = {
 		Duration = 60,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "MechaMarathon",
@@ -201,7 +196,6 @@ local list: { GameDefinition } = {
 		Duration = 30,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "ParasolPlummet",
@@ -222,8 +216,8 @@ local list: { GameDefinition } = {
 		Category = "Survival",
 		Icon = "❄️",
 		Color = Color3.fromRGB(120, 200, 255),
-		Objective = "Break the snow under your rivals! Fall through all 3 floors into the water and you're out. Last one standing wins!",
-		Controls = "Click or tap a block near you to break it. DIG (E) breaks the block under the nearest rival.",
+		Objective = "Snow blocks vanish a second after you step on them! Fall through all 3 floors into the water and you're out. Last one standing wins!",
+		Controls = "Just walk - keep moving onto fresh snow! Standing still drops you through. Jump over gaps.",
 		Duration = 75,
 		MinPlayers = 2,
 		IsTeam = false,
@@ -288,7 +282,7 @@ local list: { GameDefinition } = {
 		Icon = "🐴",
 		Color = Color3.fromRGB(255, 140, 60),
 		Objective = "Race your hobby horse once round the track! Gallop, but let go before your carrots run out, or you spin out.",
-		Controls = "Hold GALLOP (W / left side) to speed up, let go to refill carrots. HOP (Space) blue hurdles, ride over orange carrots!",
+		Controls = "Hold GALLOP (W / left side) to speed up, let go to refill carrots. HOP (Space) hurdles from the blue pads, ride over carrots!",
 		Duration = 60,
 		MinPlayers = 1,
 		IsTeam = false,
@@ -357,6 +351,19 @@ local list: { GameDefinition } = {
 		Duration = 30,
 		MinPlayers = 2,
 		IsTeam = true,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "Struggle",
+		Name = "Struggle",
+		Category = "Versus",
+		Icon = "🏏",
+		Color = Color3.fromRGB(255, 150, 60),
+		Objective = "Bonk rivals to knock their orbs loose, then grab them! Most orbs at the end wins.",
+		Controls = "SWING (E / click) to hit - hold it for a big charged hit. Walk over orbs to grab them.",
+		Duration = 70,
+		MinPlayers = 2,
+		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)

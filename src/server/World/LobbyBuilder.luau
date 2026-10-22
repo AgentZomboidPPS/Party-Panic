@@ -24,7 +24,10 @@ local Lighting = game:GetService("Lighting")
 local Arcade = require(script.Parent.Arcade)
 local Build = require(script.Parent.Build)
 local Environment = require(script.Parent.Environment)
+local EventDecor = require(script.Parent.EventDecor)
+local HallOfFame = require(script.Parent.HallOfFame)
 local LobbyObby = require(script.Parent.LobbyObby)
+local MedalWall = require(script.Parent.MedalWall)
 local MeshLibrary = require(script.Parent.MeshLibrary)
 local Shapes = require(script.Parent.Shapes)
 
@@ -1649,6 +1652,9 @@ function LobbyBuilder.Build(): LobbyRefs
 	buildSkyline(root)
 	buildScenery(root)
 	Arcade.Build(root) -- the Skee-Ball arcade (north-east lawn); clears the scenery in its way
+	HallOfFame.Build(root) -- last week's leaders, by the winner podium (east)
+	MedalWall.Build(root) -- every game's medal, by the shop gallery (west)
+	EventDecor.Build(root) -- the limited-time event's decorations, if one is on
 	softenFoliage(root)
 
 	return {
