@@ -43,6 +43,12 @@
 --     on in several games"): only the sand, the ground and the fence collide; the fence is plank
 --     boards, rails and posts whose collision is their own drawn shape. Everything behind it (tram,
 --     scoreboard, benches, banners) is scenery nobody can reach.
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): the leave hook is set before anyone is
+-- placed. Set after ctx:SpawnAll, it missed anyone the round couldn't place (SpawnAll waits out a
+-- failed spawn, and a failure counts as leaving) or who left meanwhile: they kept their 20 orbs on
+-- the scoreboard, those orbs never reached the sand, and as a second holder they made "holds every
+-- orb" impossible for the rest of the match.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local PhysicsService = game:GetService("PhysicsService")
@@ -169,6 +175,10 @@ function Struggle:Prepare()
 		local spot = origin + Vector3.new(math.cos(angle) * radius * 1.3, 0.5, math.sin(angle) * radius)
 		table.insert(points, CFrame.lookAt(spot, Vector3.new(origin.X, spot.Y, origin.Z)))
 	end
+	-- (Before anyone is placed: someone who can't be, or leaves meanwhile, spills their orbs too.)
+	ctx.Hooks.PlayerLeft = function(player)
+		self:_onLeave(player)
+	end
 	ctx:SpawnAll(points, true)
 	ctx.Hooks.Respawn = function(_player)
 		local spot = origin
@@ -184,9 +194,6 @@ function Struggle:Prepare()
 		if ctx:IsRunning() then
 			ctx:SetWalkSpeed(player, if swing and not swing.StrikeAt then CHARGE_SPEED else ctx.WalkSpeed)
 		end
-	end
-	ctx.Hooks.PlayerLeft = function(player)
-		self:_onLeave(player)
 	end
 
 	for _, slot in Rules.SLOTS do

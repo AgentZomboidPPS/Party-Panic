@@ -24,6 +24,12 @@
 -- slot), place them at a human pace through ctx:BotAction, sometimes peek at an open rival booth and
 -- copy what they see there (right or wrong), then shut their curtain. There are no hazards: the
 -- mischief is a change of the shared positions that the server makes for bots and players alike.
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): the leave hook is set in Prepare,
+-- before anyone is placed, and GO opens only the booths of people still here. Set at GO, it missed
+-- everyone who left during the rules card or couldn't be placed (a failed spawn counts as leaving):
+-- their booths opened at GO with nobody in them, and one that couldn't be placed (still in the
+-- server) kept its curtain open all round, so "everyone's locked in" never came.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -113,6 +119,10 @@ function MessyMemory:Prepare()
 		table.insert(spawns, self:_standFrame(frame))
 		table.insert(layout, { User = player.UserId, I = ring })
 		ctx:SetScoreText(player, "0/8")
+	end
+	-- (Before anyone is placed: a booth whose owner can't be placed or leaves before GO shuts for good.)
+	ctx.Hooks.PlayerLeft = function(player)
+		self:_onLeave(player)
 	end
 	self:_buildArena(center, owners)
 	ctx:SpawnAll(spawns, true)
@@ -331,15 +341,6 @@ function MessyMemory:Start()
 		local booth = self.booths[player]
 		return if booth then self:_standFrame(booth.Frame) else nil
 	end
-	ctx.Hooks.PlayerLeft = function(player)
-		local booth = self.booths[player]
-		if booth then
-			booth.Left = true
-			booth.Open = false
-			self:_shareBooth(player)
-		end
-		self:_checkAllLocked()
-	end
 
 	ctx:OnAction("Move", function(player, seq, toy, target)
 		self:_onMove(player, seq, toy, target)
@@ -351,10 +352,14 @@ function MessyMemory:Start()
 		self:_onPeek(player, userId)
 	end, { Interval = 0.6 })
 
-	-- 1. The curtains open: study the shelf.
+	-- 1. The curtains open: study the shelf (not the booths of anyone who's gone).
 	local now = ctx:Now()
 	for player, booth in self.booths do
-		booth.Open = true
+		if booth.Left or not ctx:State(player) then
+			booth.Left = true
+		else
+			booth.Open = true
+		end
 		self:_shareBooth(player)
 	end
 	self:_setPhase({ N = "Study", T0 = now, T1 = now + Rules.STUDY })
@@ -442,6 +447,17 @@ function MessyMemory:_onMove(player: Player, seq: any, toy: any, target: any)
 	booth.Seq = n
 	Rules.Move(booth.Positions, booth.Homes, t, to)
 	self:_shareBooth(player)
+end
+
+-- Someone left (or couldn't be placed): their booth shuts for good, and the rest may be all locked in.
+function MessyMemory:_onLeave(player: Player)
+	local booth = self.booths[player]
+	if booth then
+		booth.Left = true
+		booth.Open = false
+		self:_shareBooth(player)
+	end
+	self:_checkAllLocked()
 end
 
 function MessyMemory:_onCurtain(player: Player, open: any)

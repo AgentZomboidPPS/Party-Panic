@@ -32,6 +32,11 @@
 --     still teetering past the rim.
 -- Bots (Bots/SnowballSummit.luau) roll balls round the summit, throw at rivals near the edge, and
 -- sidestep or hop over balls coming at them.
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."; "Bots are still rubber banding on
+-- spleef"): a flown bot's root goes straight back to the server when it's let go (landing, a lost
+-- flight, cleanup). Unanchored and left as it was, the engine could hand it to the nearest player's
+-- device for a moment, and the bot snapped when the server took it back.
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
@@ -119,6 +124,16 @@ end
 
 local function flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
+end
+
+-- Lets a flown bot go: unanchored and given straight back to the server (an unanchored root left as
+-- it is can be handed to the nearest player's device until the server takes it back, and the bot
+-- snaps).
+local function release(bot: any, root: BasePart)
+	root.Anchored = false
+	if BotRegistry.IsBot(bot) then
+		pcall(root.SetNetworkOwner, root, nil)
+	end
 end
 
 function SnowballSummit:Prepare()
@@ -492,7 +507,7 @@ function SnowballSummit:_fly(now: number)
 		local root = character and character.Parent and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if not root or bot.Character ~= character or now - flight.Start > 4 then
 			if root then
-				root.Anchored = false
+				release(bot, root)
 			end
 			self.flights[bot] = nil
 			continue
@@ -500,7 +515,7 @@ function SnowballSummit:_fly(now: number)
 		local position = self:FlightAt(flight, now)
 		if not position then
 			-- Landed on the summit: let the bot walk again.
-			root.Anchored = false
+			release(bot, root)
 			self.flights[bot] = nil
 			self:_setSpeed(bot)
 			continue
@@ -811,7 +826,7 @@ function SnowballSummit:Cleanup()
 	for bot, flight in self.flights do
 		local root = flight.Character and flight.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if root then
-			root.Anchored = false
+			release(bot, root)
 		end
 		self.flights[bot] = nil
 	end

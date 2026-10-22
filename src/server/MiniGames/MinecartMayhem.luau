@@ -14,8 +14,8 @@
 -- The course (Track.Generate) is shuffled every round: five junctions, three broken bridges, two
 -- bends and a hill in a new order, and at each junction which side is the long safe way and what the
 -- other way is (a shortcut, a dead end or a TNT track). The server owns the layout and shares it
--- ("Layout"); signs at each switch say what's down each way with an icon AND a word (★ FAST, ● SAFE,
--- ☠ TNT, ✖ DEAD END), never colour alone, and the ways themselves show it too (a light at the far
+-- ("Layout"); signs at each switch say what's down each way with an icon AND a word (⭐ FAST, ● SAFE,
+-- ☠ TNT, ❌ DEAD END), never colour alone, and the ways themselves show it too (a light at the far
 -- end of a shortcut, crates and a skull down a TNT track, a buffer stop and rubble at a dead end).
 --
 -- Fair presses (owner: "the precision games will feel super bad if we dont"): everything a press
@@ -31,6 +31,13 @@
 -- same step take places by the exact moment they crossed; the results leave out riders who left
 -- and renumber the rest. Nothing is solid but the station deck the riders start over: every rail,
 -- trestle, rock and prop is decoration (riders are carried by the game, never by physics).
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): the signs' icons are ones every
+-- device draws. Measured on a real Roblox server, ★ comes out as the missing-glyph box in
+-- FredokaOne and Builder Sans (the same width as an unassigned character), so it showed only where
+-- a device's own fallback fonts had it; ✖ is drawn by the emoji font as a dark grey cross, lost on
+-- the dark signs and HUD panels. FAST is now ⭐ and DEAD END ❌ (emoji every device has); ● measures
+-- as a real glyph and ☠ comes from the emoji font, so they stay.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -68,8 +75,8 @@ local COLORS = {
 -- What each way's sign says (icon and word: never colour alone).
 local HINTS = {
 	Long = { Icon = "●", Word = "SAFE", Color = Color3.fromRGB(120, 200, 255) },
-	Short = { Icon = "★", Word = "FAST", Color = Color3.fromRGB(255, 215, 80) },
-	Dead = { Icon = "✖", Word = "DEAD END", Color = Color3.fromRGB(230, 230, 230) },
+	Short = { Icon = "⭐", Word = "FAST", Color = Color3.fromRGB(255, 215, 80) },
+	Dead = { Icon = "❌", Word = "DEAD END", Color = Color3.fromRGB(230, 230, 230) },
 	TNT = { Icon = "☠", Word = "TNT", Color = Color3.fromRGB(255, 90, 70) },
 }
 

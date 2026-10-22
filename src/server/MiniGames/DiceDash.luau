@@ -24,6 +24,11 @@
 -- server rules move them, so every tile treats bots exactly like players (it's all luck: skill
 -- changes nothing). Tiles and pads collide with their drawn shapes; every other prop on the board
 -- and around it is decoration only.
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): racers who land on FINISH at the same
+-- moment (the same hop count from the same tile, or one cannon shot or ? jump) share their place,
+-- live and on the results card. A 12-racer round showed "2nd · 58.8s", "3rd · 58.8s", "4th · 58.8s":
+-- three racers home together, ranked by their racer numbers, which are random each round.
 
 local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -731,30 +736,24 @@ function DiceDash:_resolve()
 	end
 
 	-- 4. Finishers take their places as they land (counting only those still in the race, so a
-	-- planned winner who leaves before landing hands the win to the next one home).
+	-- planned winner who leaves before landing hands the win to the next one home). Racers who land
+	-- at the same moment share the place.
 	table.sort(finishes, function(a, b)
 		if a.Finish ~= b.Finish then
 			return (a.Finish :: number) < (b.Finish :: number)
 		end
 		return a.Number < b.Number
 	end)
-	for _, racer in finishes do
-		local at = racer.Finish :: number
-		local player = racer.Player
+	local index = 1
+	while finishes[index] do
+		local at = finishes[index].Finish :: number
+		local together = {}
+		while finishes[index] and finishes[index].Finish == at do
+			table.insert(together, finishes[index])
+			index += 1
+		end
 		ctx:Delay(math.max(0, at - now), function()
-			if racer.Gone or racer.Place then
-				return
-			end
-			self.finished += 1
-			racer.Place = self.finished
-			local place = self.finished
-			self:_share()
-			ctx:SetScoreText(player, `{Board.Ordinal(place)} · {string.format("%.1f", at - self.startAt)}s`)
-			ctx:Fire(nil, "Finish", player.UserId, place)
-			if place == 1 then
-				ctx:Announce(`🏁 {player.DisplayName} wins the race!`, "success", 3)
-				ctx:Sound("Victory")
-			end
+			self:_land(together, at)
 		end)
 	end
 
@@ -764,6 +763,37 @@ function DiceDash:_resolve()
 	self:_share()
 	ctx:SetStatus(`🎲 Turn {self.turn}`)
 	self:_checkDone(lastEnd)
+end
+
+-- Racers landing on FINISH at the same moment (still in the race) share the next place.
+function DiceDash:_land(together: { Racer }, at: number)
+	local ctx = self.context
+	local landed = {}
+	for _, racer in together do
+		if not racer.Gone and not racer.Place then
+			table.insert(landed, racer)
+		end
+	end
+	if #landed == 0 then
+		return
+	end
+	local place = self.finished + 1
+	self.finished += #landed
+	for _, racer in landed do
+		racer.Place = place
+	end
+	self:_share()
+	local names = {}
+	for _, racer in landed do
+		ctx:SetScoreText(racer.Player, `{Board.Ordinal(place)} · {string.format("%.1f", at - self.startAt)}s`)
+		ctx:Fire(nil, "Finish", racer.Player.UserId, place)
+		table.insert(names, racer.Player.DisplayName)
+	end
+	if place == 1 then
+		local who = table.concat(names, " & ")
+		ctx:Announce(`🏁 {who} {if #names == 1 then "wins" else "win"} the race!`, "success", 3)
+		ctx:Sound("Victory")
+	end
 end
 
 -- Every racer's tile, roll and this turn's moves for the clients.
@@ -915,7 +945,9 @@ function DiceDash:GetResults()
 	end)
 	local places = {}
 	for index, racer in home do
-		places[racer] = index -- (a finisher who left gives up their place)
+		-- (a finisher who left gives up their place; racers who landed together share theirs)
+		local before = home[index - 1]
+		places[racer] = if before and before.Finish == racer.Finish then places[before] else index
 	end
 	local entries = {}
 	for player in ctx.Participants do
