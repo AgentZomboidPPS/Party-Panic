@@ -1104,19 +1104,34 @@ end
 -- and score: the versus modes' roles and two colour teams (hudChecks.teamPill: what it read and how
 -- wide it was, in its own units), then all four colour teams with 3-digit scores, its widest (the
 -- snapshot). The player is on one of the teams each time (PP_Team), so the pill marks theirs: "YOU"
--- by its mark and a box round it (hudChecks: where the box sat, in the pill's units).
+-- by its mark and a box round its words (hudChecks: each team's words in order, the boxed one in
+-- [brackets]).
 step = "team scores"
 local hudChecks = { teamPill = {} }
 do
 	local function pill()
 		local hud = __playerGui:FindFirstChild("PartyPanicHUD")
 		local frame = hud and hud:FindFirstChild("TeamScores", true)
-		local label = frame and frame:FindFirstChildWhichIsA("TextLabel")
-		local mine = frame and frame:FindFirstChild("Mine")
-		local box = if mine and mine.Visible
-			then `  [you: {mine.Position.X.Offset} to {mine.Position.X.Offset + mine.Size.X.Offset}]`
-			else "  [no you]"
-		return if label and frame.Visible then `{label.Text}  [{frame.Size.X.Offset} wide]{box}` else "hidden"
+		local row = frame and frame:FindFirstChild("Row")
+		if not row or not frame.Visible then
+			return "hidden"
+		end
+		local parts = {}
+		for _, part in row:GetChildren() do
+			local words = part:FindFirstChild("Words")
+			if part:IsA("Frame") and part.Visible and words then
+				table.insert(parts, part)
+			end
+		end
+		table.sort(parts, function(a, b)
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+		local shown = {}
+		for _, part in parts do
+			local text = part.Words.Text
+			table.insert(shown, if part.BackgroundTransparency < 1 then `[{text}]` else text)
+		end
+		return `{table.concat(shown, "  ")}  [{frame.Size.X.Offset} wide]`
 	end
 	for _, case in
 		{

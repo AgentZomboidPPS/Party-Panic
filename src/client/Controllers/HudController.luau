@@ -333,15 +333,15 @@ local function statusLine(phase: string): string
 	return "🎮 You're in the next round!"
 end
 
--- The round's team scores as one line (the team pill under the status line): every team in the round
--- with its mark and score, whatever the mode calls its teams. Colour teams wear their shape in the
--- team's colour (★ Red, ● Blue, ▲ Green, ◆ Yellow: Teams.Shapes), so colour is never the only cue;
--- versus roles their icon (🏹 Archers / 🏃 Runners, 💎 Divers / 👑 SandKings, 🦈 Sharks / 🏊 Swimmers).
--- Two teams read "★ 12   —   9 ●", three or four "★ 12   ● 9   ▲ 7   ◆ 3". The player's own team
--- (`mine`) says so on its outer side: "YOU ★ 12   —   9 ●", "★ 12   —   9 ● YOU". Returns the line
--- (RichText), the same line as plain text (to measure), and the player's team's part of the plain
--- line (nil if they're not on one of these teams).
-local function teamScoreLine(scores: { [string]: any }, mine: string?): (string, string, { string }, number?)
+-- The round's team scores, team by team (the team pill under the status line): every team in the
+-- round with its mark and score, whatever the mode calls its teams. Colour teams wear their shape in
+-- the team's colour (★ Red, ● Blue, ▲ Green, ◆ Yellow: Teams.Shapes), so colour is never the only
+-- cue; versus roles their icon (🏹 Archers / 🏃 Runners, 💎 Divers / 👑 SandKings, 🦈 Sharks /
+-- 🏊 Swimmers). Two teams read "★ 12 — 9 ●", three or four "★ 12  ● 9  ▲ 7  ◆ 3". The player's own
+-- team (`mine`) says so on its outer side: "YOU ★ 12 — 9 ●", "★ 12 — 9 ● YOU". Returns each team's
+-- words in order (RichText, and plain to measure) and whether they're the player's team.
+type TeamPart = { Team: string, Rich: string, Plain: string, Mine: boolean }
+local function teamScoreParts(scores: { [string]: any }, mine: string?): { TeamPart }
 	local names = {}
 	for _, team in Teams.Order do
 		if scores[team] ~= nil then
@@ -358,8 +358,7 @@ local function teamScoreLine(scores: { [string]: any }, mine: string?): (string,
 	for _, name in others do
 		table.insert(names, name)
 	end
-	local rich, plain = {}, {}
-	local own = nil
+	local parts = {}
 	for index, name in names do
 		local value = scores[name]
 		local score = if type(value) == "number" then tostring(value) else "0"
@@ -369,67 +368,84 @@ local function teamScoreLine(scores: { [string]: any }, mine: string?): (string,
 		local shown = if shape and color then `<font color="#{color:ToHex()}">{shape}</font>` else mark
 		local right = #names == 2 and index == 2 -- the second of two reads "9 ●"
 		local you = name == mine
-		if you then
-			own = index
+		local function words(sign: string): string
+			return if right
+				then `{score} {sign}{if you then " YOU" else ""}`
+				else `{if you then "YOU " else ""}{sign} {score}`
 		end
-		table.insert(
-			rich,
-			if right
-				then `{score} {shown}{if you then " YOU" else ""}`
-				else `{if you then "YOU " else ""}{shown} {score}`
-		)
-		table.insert(
-			plain,
-			if right then `{score} {mark}{if you then " YOU" else ""}` else `{if you then "YOU " else ""}{mark} {score}`
-		)
+		table.insert(parts, { Team = name, Rich = words(shown), Plain = words(mark), Mine = you })
 	end
-	local gap = if #names == 2 then "   —   " else "   "
-	return table.concat(rich, gap), table.concat(plain, gap), plain, own
+	return parts
 end
 
--- Keeps a team pill on the round's team scores (both layouts): hidden outside team rounds, and as
--- wide as its line, so four teams with 3-digit scores fit the smallest phone (re-measured every
--- second while it shows, in case the font was still loading). The player's own team (PP_Team) gets a
--- box round its part of the line, a deep shade of its colour with a white rim, besides its "YOU"
--- (owner: "I couldnt tell what color I was on prime cut."), so a glance at the pill says which team
--- you're on (and its shape still stands out on the box). While the rules card is up the pill steps
--- aside: the card's own tab says your team then, and on PC the card covers the pill's lower half.
+-- Keeps a team pill on the round's team scores (both layouts): hidden outside team rounds, each
+-- team's words in their own label side by side, and the pill as wide as they are, so four teams with
+-- 3-digit scores fit the smallest phone (re-measured every second while it shows, in case the font
+-- was still loading). The player's own team (PP_Team) has its "YOU" and a box round its words, a
+-- deep shade of its colour with a white rim (owner: "I couldnt tell what color I was on prime
+-- cut."): the box is that label's own background, so it always sits round its words, and the team's
+-- shape still stands out on it. While the rules card is up the pill steps aside: the card's own tab
+-- says your team then, and on PC the card covers the pill's lower half.
 local TEAM_TEXT, TEAM_PAD, TEAM_MIN, TEAM_MAX = 24, 22, 160, 600
-local MINE_PAD = 8 -- the box reaches this far past its words on either side
-local function followTeamScores(pill: Frame, label: TextLabel)
-	local line, fittedAt = "", 0
-	local parts: { string } = {}
-	local own: number? = nil
-	local box = UIKit.new("Frame", {
-		Name = "Mine",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0, 0.5),
-		Size = UDim2.new(0, 0, 1, -8),
-		BackgroundColor3 = Theme.Colors.PanelDark,
-		BackgroundTransparency = 0.1,
-		Visible = false,
-		ZIndex = label.ZIndex,
+local PART_PAD = 8 -- room round each team's words (the player's box reaches this far past them)
+local PART_GAP = 2 -- between two teams' words (with their room, 18), and round the "—" of two
+local function followTeamScores(pill: Frame)
+	local row = UIKit.new("Frame", {
+		Name = "Row",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
 		Parent = pill,
-		Children = { UIKit.Round(), UIKit.Stroke(Color3.new(1, 1, 1), 2, 0) },
+		Children = {
+			UIKit.List(
+				Enum.FillDirection.Horizontal,
+				PART_GAP,
+				Enum.HorizontalAlignment.Center,
+				Enum.VerticalAlignment.Center
+			),
+		},
 	})
-	label.ZIndex = box.ZIndex + 1
+	type Slot = { Frame: Frame, Words: TextLabel, Rim: UIStroke }
+	local slots: { Slot } = {}
+	local function slotAt(index: number): Slot
+		local existing = slots[index]
+		if existing then
+			return existing
+		end
+		local rim = UIKit.Stroke(Color3.new(1, 1, 1), 2, 0)
+		local frame = UIKit.new("Frame", {
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.new(0, 0, 1, -8),
+			BackgroundColor3 = Theme.Colors.PanelDark,
+			BackgroundTransparency = 1,
+			LayoutOrder = index,
+			Parent = row,
+			Children = { UIKit.Round(), rim, UIKit.Padding(0, PART_PAD) },
+		})
+		local words = UIKit.Label({
+			Name = "Words",
+			Text = "",
+			Font = Theme.Fonts.Display,
+			TextSize = TEAM_TEXT,
+			TextWrapped = false,
+			RichText = true,
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromScale(0, 1),
+			Parent = frame,
+			Children = { UIKit.TextStroke(0.2) },
+		})
+		local made = { Frame = frame, Words = words, Rim = rim }
+		slots[index] = made
+		return made
+	end
+	local shown: { string } = {} -- the plain words of what's in the pill, to measure
+	local fittedAt = 0
 	local function fit()
 		fittedAt = os.clock()
-		local font = Theme.Fonts.Display
-		local lineWidth = UIKit.TextWidth(line, TEAM_TEXT, font)
-		local width = math.clamp(math.ceil(lineWidth) + 2 * TEAM_PAD, TEAM_MIN, TEAM_MAX)
-		pill.Size = UDim2.fromOffset(width, pill.Size.Y.Offset)
-		box.Visible = own ~= nil
-		if own then
-			-- Where its part of the (centred) line ends, less the part's own width: the measure stops
-			-- at its last character, never at a gap's trailing spaces.
-			local gap = if #parts == 2 then "   —   " else "   "
-			local before = table.concat(parts, gap, 1, own)
-			local partWidth = UIKit.TextWidth(parts[own], TEAM_TEXT, font)
-			local left = (width - lineWidth) / 2 + UIKit.TextWidth(before, TEAM_TEXT, font) - partWidth
-			box.Position = UDim2.new(0, math.floor(left - MINE_PAD), 0.5, 0)
-			box.Size = UDim2.new(0, math.ceil(partWidth + 2 * MINE_PAD), 1, -8)
+		local width = 2 * (TEAM_PAD - PART_PAD) + PART_GAP * math.max(#shown - 1, 0)
+		for _, words in shown do
+			width += math.ceil(UIKit.TextWidth(words, TEAM_TEXT, Theme.Fonts.Display)) + 2 * PART_PAD
 		end
+		pill.Size = UDim2.fromOffset(math.clamp(width, TEAM_MIN, TEAM_MAX), pill.Size.Y.Offset)
 	end
 	local function refresh()
 		local scores = GameState.GetJSON("TeamScores")
@@ -439,13 +455,32 @@ local function followTeamScores(pill: Frame, label: TextLabel)
 		end
 		pill.Visible = true
 		local mine = player:GetAttribute("PP_Team")
-		local rich, plain, newParts, newOwn = teamScoreLine(scores, if type(mine) == "string" then mine else nil)
-		label.Text = rich
-		parts, own = newParts, newOwn
-		local color = if own then Teams.Colors[mine] else nil
-		box.BackgroundColor3 = if color then color:Lerp(Color3.new(0, 0, 0), 0.5) else Theme.Colors.PanelDark
-		if plain ~= line then
-			line = plain
+		local parts = teamScoreParts(scores, if type(mine) == "string" then mine else nil)
+		-- (Two teams face each other across a "—".)
+		local items: { TeamPart } = {}
+		for index, part in parts do
+			if #parts == 2 and index == 2 then
+				table.insert(items, { Team = "", Rich = "—", Plain = "—", Mine = false })
+			end
+			table.insert(items, part)
+		end
+		local plain = {}
+		for index, item in items do
+			local slot = slotAt(index)
+			local color = if item.Mine then Teams.Colors[item.Team] else nil
+			slot.Frame.Name = if item.Team ~= "" then `Team_{item.Team}` else "Versus"
+			slot.Frame.Visible = true
+			slot.Frame.BackgroundTransparency = if item.Mine then 0.1 else 1
+			slot.Frame.BackgroundColor3 = if color then color:Lerp(Color3.new(0, 0, 0), 0.5) else Theme.Colors.PanelDark
+			slot.Rim.Enabled = item.Mine
+			slot.Words.Text = item.Rich
+			table.insert(plain, item.Plain)
+		end
+		for index = #items + 1, #slots do
+			slots[index].Frame.Visible = false
+		end
+		if table.concat(plain, "|") ~= table.concat(shown, "|") then
+			shown = plain
 			fit()
 		end
 	end
@@ -544,16 +579,6 @@ local function buildPhaseBanner(parent: Instance)
 		Visible = false,
 		Parent = holder,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
-	local teamsLabel = UIKit.Label({
-		Text = "",
-		Font = Theme.Fonts.Display,
-		TextSize = TEAM_TEXT,
-		TextWrapped = false,
-		RichText = true,
-		Size = UDim2.fromScale(1, 1),
-		Parent = teams,
-		Children = { UIKit.TextStroke(0.2) },
-	})
 
 	followTimer(timerPill, timer)
 	RunService.Heartbeat:Connect(function()
@@ -561,7 +586,7 @@ local function buildPhaseBanner(parent: Instance)
 		title.Text = bannerTitle(false)
 		status.Text = statusLine(phase)
 	end)
-	followTeamScores(teams, teamsLabel)
+	followTeamScores(teams)
 end
 
 -- Phones: the banner sits in Roblox's top bar row (its own ScreenGui inside the device's safe area,
@@ -704,20 +729,10 @@ local function buildTouchStatus(parent: Instance)
 		Visible = false,
 		Parent = holder,
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
-	local teamsLabel = UIKit.Label({
-		Text = "",
-		Font = Theme.Fonts.Display,
-		TextSize = TEAM_TEXT,
-		TextWrapped = false,
-		RichText = true,
-		Size = UDim2.fromScale(1, 1),
-		Parent = teams,
-		Children = { UIKit.TextStroke(0.2) },
-	})
 	RunService.Heartbeat:Connect(function()
 		status.Text = statusLine(GameState.Get("Phase") or "Waiting")
 	end)
-	followTeamScores(teams, teamsLabel)
+	followTeamScores(teams)
 end
 
 local function menuButton(
