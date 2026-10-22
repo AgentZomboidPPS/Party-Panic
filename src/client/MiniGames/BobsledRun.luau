@@ -22,15 +22,23 @@
 -- Sweep pass (owner: "Let's do a full bug and clean sweep."): the team marks are Shared/Teams' own
 -- (Red's ★ draws as a missing-glyph box in the game's fonts; the shared marks get one fix for every
 -- game).
+--
+-- Poses pass (owner: "Bots are STILL ruberbanding and floating."): riders sit in their sleds on R15
+-- bodies now, legs forward and hands on the sides, leaning with the curves. This place's servers
+-- build R15 bodies (every bot's, and players' R15 avatars) with AnimationConstraint joints instead
+-- of Motor6Ds, and the pose only looked for Motor6Ds, so it found none there and no limb moved
+-- (measured on a test server: 0 of a rider's 12 joints; riders stood upright in their sleds). The
+-- pose goes through client/Pose now, which turns either kind of joint; the poses themselves are as
+-- before.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local BobsledCourse = require(ReplicatedStorage.Shared.Logic.BobsledCourse)
 local Teams = require(ReplicatedStorage.Shared.Teams)
 
+local Pose = require(script.Parent.Parent.Pose)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -43,19 +51,20 @@ local LEAN_HOLD = 1.3 -- seconds a lean shows on a rider
 local LEFT_ARROW, RIGHT_ARROW = "◀", "▶"
 local rad = math.rad
 
+-- The joints a rider's pose turns (R15's; client/Pose finds them on either kind of body).
 local JOINTS = {
-	UpperTorso = "Waist",
-	Head = "Neck",
-	LeftUpperArm = "LeftShoulder",
-	RightUpperArm = "RightShoulder",
-	LeftLowerArm = "LeftElbow",
-	RightLowerArm = "RightElbow",
-	LeftUpperLeg = "LeftHip",
-	RightUpperLeg = "RightHip",
-	LeftLowerLeg = "LeftKnee",
-	RightLowerLeg = "RightKnee",
-	LeftFoot = "LeftAnkle",
-	RightFoot = "RightAnkle",
+	"Waist",
+	"Neck",
+	"LeftShoulder",
+	"RightShoulder",
+	"LeftElbow",
+	"RightElbow",
+	"LeftHip",
+	"RightHip",
+	"LeftKnee",
+	"RightKnee",
+	"LeftAnkle",
+	"RightAnkle",
 }
 
 local function angles(x: number, y: number, z: number): CFrame
@@ -622,22 +631,14 @@ function BobsledRun.Start(api)
 
 	-- Posing riders ---------------------------------------------------------------------------------
 
-	local rigs: { [Model]: { [string]: { Motor: Motor6D, Current: CFrame } } } = {}
+	local rigs: { [Model]: { [string]: Pose.Joint } } = {}
 	local leanShown: { [number]: number } = {}
 	local function rigOf(character: Model)
 		local rig = rigs[character]
-		if rig then
-			return rig
+		if not rig then
+			rig = Pose.Rig(character, JOINTS)
+			rigs[character] = rig
 		end
-		rig = {}
-		for partName, motorName in JOINTS do
-			local part = character:FindFirstChild(partName)
-			local motor = part and part:FindFirstChild(motorName)
-			if motor and motor:IsA("Motor6D") then
-				rig[motorName] = { Motor = motor, Current = CFrame.identity }
-			end
-		end
-		rigs[character] = rig
 		return rig
 	end
 	local function leanOf(userId: number, now: number): number
@@ -649,14 +650,13 @@ function BobsledRun.Start(api)
 	end
 
 	local seated: { [Model]: boolean } = {}
-	local poseConnection = (RunService :: any).PreSimulation or RunService.Stepped
-	api:Track(poseConnection:Connect(function(dt)
+	-- Just before physics, every frame: after the Animator, so the pose is what shows.
+	api:Track(Pose.Step(function(dt)
 		if not course then
 			return
 		end
 		local now = api:Now()
-		local step = if type(dt) == "number" then dt else 1 / 60
-		local alpha = 1 - math.exp(-step * 16)
+		local alpha = 1 - math.exp(-dt * 16)
 		for character in seated do
 			if not character.Parent then
 				seated[character] = nil
@@ -668,17 +668,14 @@ function BobsledRun.Start(api)
 			local entry = team and snapshot[team]
 			local target = seatedPose(leanShown[userId] or 0, entry ~= nil and entry.F ~= nil, now)
 			for name, joint in rigOf(character) do
-				joint.Current = joint.Current:Lerp(target[name] or CFrame.identity, alpha)
-				joint.Motor.Transform = joint.Current
+				Pose.Ease(joint, target[name] or CFrame.identity, alpha)
 			end
 		end
 	end))
 	local function unseat(character: Model)
 		local rig = rigs[character]
 		if rig then
-			for _, joint in rig do
-				joint.Motor.Transform = CFrame.identity
-			end
+			Pose.ReleaseAll(rig)
 		end
 		rigs[character] = nil
 		seated[character] = nil

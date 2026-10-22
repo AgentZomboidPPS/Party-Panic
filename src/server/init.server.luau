@@ -18,6 +18,7 @@ local order = {
 	"CosmeticService",
 	"QuestService",
 	"ShopService",
+	"GoldPassService", -- the GOLD PASS: after CosmeticService (a returning owner's rewards come first)
 	"SocialService",
 	"SitOutService",
 	"VotingService",

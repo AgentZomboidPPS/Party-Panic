@@ -61,7 +61,6 @@ export type Profile = {
 	Key: string,
 	Data: ProfileData,
 	CanSave: boolean,
-	IsVip: boolean,
 	Released: boolean,
 	Session: number, -- this visit's number on this server (its lock's Session)
 	Migration: ProfileMigration.Report?, -- what loading changed (this session only, never saved)
@@ -356,7 +355,8 @@ function DataService.BuildSnapshot(profile: Profile)
 		Medals = data.Medals,
 		Weekly = data.Weekly,
 		Events = data.Events,
-		IsVip = profile.IsVip,
+		-- The GOLD PASS (Services/GoldPassService): whether they own it (the old VIP flag's place).
+		GoldPass = { Owned = data.GoldPass.Owned == true },
 		CanSave = profile.CanSave,
 	}
 end
@@ -478,7 +478,6 @@ local function onPlayerAdded(player: Player)
 		Key = key,
 		Data = data,
 		CanSave = canSave,
-		IsVip = false,
 		Released = false,
 		Session = session,
 		Migration = migration,

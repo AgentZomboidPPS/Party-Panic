@@ -31,15 +31,23 @@
 -- fallers' name tags (★ ✚ ☾ ✦) aren't in the tags' font and drew as the same missing-glyph box, so
 -- those fallers had no shape to tell them apart by. They're ⭐ ➕ 🌙 ✨ now (measured on a test
 -- server: drawn, like the ☀ already there).
+--
+-- Poses pass (owner: "Bots are STILL ruberbanding and floating."): fallers hold their umbrella
+-- overhead with both hands on R15 bodies now, legs swinging, arms flailing after a bonk. This
+-- place's servers build R15 bodies (every bot's, and players' R15 avatars) with AnimationConstraint
+-- joints instead of Motor6Ds, and the pose only looked for Motor6Ds, so it found none there and no
+-- limb moved (measured on a test server: 0 of a faller's 10 joints; the umbrella they held overhead
+-- was never in their hands). The pose goes through client/Pose now, which turns either kind of
+-- joint; the poses themselves are as before.
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local Sim = require(ReplicatedStorage.Shared.Logic.ParasolPlummetSim)
 
+local Pose = require(script.Parent.Parent.Pose)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -72,17 +80,18 @@ local COLORS = {
 }
 local SHAPES = { "⭐", "●", "▲", "◆", "■", "♥", "♣", "♠", "➕", "☀", "🌙", "✨" }
 
+-- The joints a faller's pose turns (R15's; client/Pose finds them on either kind of body).
 local JOINTS = {
-	UpperTorso = "Waist",
-	Head = "Neck",
-	LeftUpperArm = "LeftShoulder",
-	RightUpperArm = "RightShoulder",
-	LeftLowerArm = "LeftElbow",
-	RightLowerArm = "RightElbow",
-	LeftUpperLeg = "LeftHip",
-	RightUpperLeg = "RightHip",
-	LeftLowerLeg = "LeftKnee",
-	RightLowerLeg = "RightKnee",
+	"Waist",
+	"Neck",
+	"LeftShoulder",
+	"RightShoulder",
+	"LeftElbow",
+	"RightElbow",
+	"LeftHip",
+	"RightHip",
+	"LeftKnee",
+	"RightKnee",
 }
 
 local function angles(x: number, y: number, z: number): CFrame
@@ -576,30 +585,21 @@ function ParasolPlummet.Start(api)
 
 	-- Characters ------------------------------------------------------------------------------------------
 
-	local rigs: { [Model]: { [string]: { Motor: Motor6D, Current: CFrame } } } = {}
-	local function rigOf(character: Model): { [string]: { Motor: Motor6D, Current: CFrame } }
+	local rigs: { [Model]: { [string]: Pose.Joint } } = {}
+	local function rigOf(character: Model): { [string]: Pose.Joint }
 		local rig = rigs[character]
-		if rig then
-			return rig
+		if not rig then
+			rig = Pose.Rig(character, JOINTS)
+			rigs[character] = rig
 		end
-		rig = {}
-		for partName, jointName in JOINTS do
-			local part = character:FindFirstChild(partName)
-			local motor = part and part:FindFirstChild(jointName)
-			if motor and motor:IsA("Motor6D") then
-				rig[jointName] = { Motor = motor, Current = CFrame.identity }
-			end
-		end
-		rigs[character] = rig
 		return rig
 	end
 	local hiddenNames: { [Humanoid]: Enum.HumanoidDisplayDistanceType } = {}
 	local posed: { [Model]: Visual } = {}
-	local poseConnection = (RunService :: any).PreSimulation or RunService.Stepped
-	api:Track(poseConnection:Connect(function(dt)
+	-- Just before physics, every frame: after the Animator, so the pose is what shows.
+	api:Track(Pose.Step(function(dt)
 		local now = api:Now()
-		local step = if type(dt) == "number" then dt else 1 / 60
-		local alpha = 1 - math.exp(-step * 14)
+		local alpha = 1 - math.exp(-dt * 14)
 		for character, visual in posed do
 			if not character.Parent then
 				posed[character] = nil
@@ -608,8 +608,7 @@ function ParasolPlummet.Start(api)
 			end
 			local target = fallPose(visual.Open, now < visual.StunUntil, now, visual.Index * 1.3)
 			for name, joint in rigOf(character) do
-				joint.Current = joint.Current:Lerp(target[name] or CFrame.identity, alpha)
-				joint.Motor.Transform = joint.Current
+				Pose.Ease(joint, target[name] or CFrame.identity, alpha)
 			end
 		end
 	end))
@@ -636,9 +635,7 @@ function ParasolPlummet.Start(api)
 		for character, visual in posed do
 			local rig = rigs[character]
 			if rig then
-				for _, joint in rig do
-					joint.Motor.Transform = CFrame.identity
-				end
+				Pose.ReleaseAll(rig)
 			end
 			if visual.Fade and visual.Fade ~= 0 then
 				for _, part in character:GetDescendants() do

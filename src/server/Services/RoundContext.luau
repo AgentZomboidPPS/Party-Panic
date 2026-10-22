@@ -765,6 +765,10 @@ end
 
 -- Shares a model the client half copies (fruit, arrows, balloons...): it waits in
 -- ReplicatedStorage.MiniGameAssets, where nothing renders, until the round ends.
+-- PP_Parts says how many parts it holds: a model can reach a device before all of its parts do,
+-- and a copy made in between lacks them for good, so devices copy it only once they're all there
+-- (Kit/Api.Arrived; owner: "Friend cant see the bat.": a phone that copied Struggle's bat before its
+-- barrel and handle had come drew every bat as its tape band alone, all round).
 function RoundContext.ShareTemplate(self: RoundContext, name: string, model: Instance)
 	local folder = ReplicatedStorage:FindFirstChild("MiniGameAssets")
 	if not folder then
@@ -772,6 +776,13 @@ function RoundContext.ShareTemplate(self: RoundContext, name: string, model: Ins
 		folder.Name = "MiniGameAssets"
 		folder.Parent = ReplicatedStorage
 	end
+	local parts = 0
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			parts += 1
+		end
+	end
+	model:SetAttribute("PP_Parts", parts)
 	model.Name = name
 	model.Parent = folder
 	self.Janitor:Add(model)

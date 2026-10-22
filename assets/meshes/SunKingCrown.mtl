@@ -1,0 +1,17 @@
+newmtl SunGold
+Kd 1.000 0.784 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl SunRim
+Kd 0.839 0.502 0.071
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl SunGem
+Kd 1.000 0.965 0.745
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

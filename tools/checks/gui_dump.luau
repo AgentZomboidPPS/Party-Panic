@@ -170,6 +170,32 @@ local function __engineLayout(playerGui, entries)
 	task.wait()
 	task.wait()
 	task.wait()
+	-- A copy's scroll starts at the top (its canvas wasn't laid out when it was made): now that it
+	-- is, each scrolling frame goes to the same place as the original. Scroll positions are screen
+	-- pixels, so they're scaled by the copy's UIScales over the original's (the harness's own GUI is
+	-- never laid out, so its scales are what it has to go by).
+	local function scaleOf(item: Instance): number
+		local k = 1
+		local node: Instance? = item
+		while node and not node:IsA("LayerCollector") do
+			for _, child in node:GetChildren() do
+				if child:IsA("UIScale") then
+					k *= child.Scale -- (UI/Modal's window has two: its screen's scale and the pop-in's)
+				end
+			end
+			node = node.Parent
+		end
+		return k
+	end
+	for _, map in copies do
+		for original, copy in map do
+			if original:IsA("ScrollingFrame") and copy:IsA("ScrollingFrame") then
+				local from = scaleOf(original)
+				copy.CanvasPosition = original.CanvasPosition * (if from > 0 then scaleOf(copy) / from else 1)
+			end
+		end
+	end
+	task.wait()
 
 	local lineHeights = {}
 	local function lineHeight(font)
@@ -427,6 +453,7 @@ function __dumpGui(playerGui, label)
 			e.lines = inst:GetAttribute("PP_Lines") -- text allowed to wrap onto this many lines
 			e.truncOk = inst:GetAttribute("PP_TruncateOk") -- a name that may be shortened with "..."
 			e.popup = inst:GetAttribute("PP_Popup") -- a picker shown on request (may cover the thumbstick)
+			e.glint = inst:GetAttribute("PP_Glint") -- a shine band that slides past now and then (not a fill)
 			local fit = inst:GetAttribute("PP_Fit") -- UI/Modal: a window shrunk to fit the screen
 			if typeof(fit) == "Vector2" then
 				e.fit = { fit.X, fit.Y }

@@ -430,7 +430,6 @@ local function __seedProfiles()
 			Key = "Harness_" .. index,
 			Data = data,
 			CanSave = false,
-			IsVip = false,
 			Released = false,
 			Migration = migration,
 		}
@@ -1515,7 +1514,6 @@ function __checkSitOut(VotingService, BotService)
 				Key = "",
 				Data = TableUtil.DeepCopy(DataService.Template),
 				CanSave = false,
-				IsVip = false,
 				Released = false,
 			}
 			people[name] = person
@@ -1888,7 +1886,6 @@ function __runLobby(botCount, seconds)
 			Key = "",
 			Data = TableUtil.DeepCopy(DataService.Template),
 			CanSave = false,
-			IsVip = false,
 			Released = false,
 		}
 		table.insert(people, person)
@@ -2049,7 +2046,6 @@ function __runReplay(id, botCount, party)
 			Key = "Harness_" .. name,
 			Data = data,
 			CanSave = false,
-			IsVip = false,
 			Released = false,
 		}
 		CosmeticService.CheckUnlocks(who, true)

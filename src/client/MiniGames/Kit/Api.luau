@@ -209,10 +209,34 @@ function Api.IsTouch(_self: Api): boolean
 end
 
 -- A copy of a model the server shared with ctx:ShareTemplate (nil if it doesn't arrive in time).
+-- Whether a shared template has all its parts on this device yet (RoundContext.ShareTemplate's
+-- PP_Parts): a model can arrive before its parts do, and a copy made in between lacks them for good.
+function Api.Arrived(template: Instance): boolean
+	local expected = template:GetAttribute("PP_Parts")
+	if type(expected) ~= "number" then
+		return true
+	end
+	local parts = 0
+	for _, descendant in template:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			parts += 1
+		end
+	end
+	return parts >= expected
+end
+
 function Api.Template(_self: Api, name: string, timeout: number?): Instance?
-	local folder = ReplicatedStorage:WaitForChild("MiniGameAssets", timeout or 10)
-	local template = folder and folder:WaitForChild(name, timeout or 10)
-	return if template then template:Clone() else nil
+	local limit = timeout or 10
+	local folder = ReplicatedStorage:WaitForChild("MiniGameAssets", limit)
+	local template = folder and folder:WaitForChild(name, limit)
+	if not template then
+		return nil
+	end
+	local deadline = os.clock() + limit
+	while not Api.Arrived(template) and os.clock() < deadline do
+		task.wait()
+	end
+	return template:Clone()
 end
 
 -- Plays a sound effect (Shared/Sounds names) or a particle effect (EffectsController names) for

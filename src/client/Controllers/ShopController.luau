@@ -14,6 +14,9 @@
 -- The purchase confirmation's Cancel was a dark purple button on its dark panel (owner: "why are
 -- the close menu buttons and the invite friend button so dark?"): it's Theme's neutral lavender
 -- button now. A locked item's button and the tabs not chosen stay dark on purpose: they say so.
+-- The GOLD PASS's rewards (owner: "the paid one should also be insane") come after the road's and
+-- the career's: never for coins, their button is gold ("👑 GOLD Lv 25") and opens the Rewards screen
+-- on the gold lane, where the pass is.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -52,8 +55,8 @@ local function lockReason(item: Cosmetics.Cosmetic): string?
 		local profile = State.Profile
 		local have = profile and profile.Stats[item.UnlockStat.Stat] or 0
 		return `🔒 {item.UnlockStat.Label} {have}/{item.UnlockStat.Value}`
-	elseif item.Vip then
-		return "💎 VIP pass"
+	elseif item.GoldLevel then
+		return `👑 GOLD Lv {item.GoldLevel}`
 	end
 	return nil
 end
@@ -124,7 +127,7 @@ local function render()
 		end
 	end
 	-- Free items, then what coins buy (cheapest first), then the rewards coins can't buy: the
-	-- Rewards Road by level, career milestones, VIP.
+	-- Rewards Road by level, career milestones, the GOLD PASS's lane by level, then events.
 	local function rank(item: Cosmetics.Cosmetic): (number, number)
 		if item.Default then
 			return 0, 0
@@ -134,6 +137,8 @@ local function render()
 			return 2, item.UnlockLevel
 		elseif item.UnlockStat then
 			return 3, item.UnlockStat.Value
+		elseif item.GoldLevel then
+			return 4, item.GoldLevel
 		elseif item.Event then
 			local event = Events.Get(item.Event)
 			local step = event and EventLogic.Step(event.Track, item.Id)
@@ -224,6 +229,13 @@ local function render()
 				onClick = function()
 					State.OpenScreen:Fire("Event")
 				end
+			end
+		elseif item.GoldLevel then
+			-- A GOLD PASS reward: the gold lane (and the pass) are on the Rewards screen.
+			actionText, top, bottom =
+				lockReason(item) or "GOLD", Color3.fromRGB(255, 214, 90), Color3.fromRGB(214, 132, 18)
+			onClick = function()
+				State.OpenScreen:Fire("Rewards", "Road")
 			end
 		else
 			actionText, top, bottom = lockReason(item) or "Locked", Theme.Colors.PanelLight, Theme.Colors.PanelDark

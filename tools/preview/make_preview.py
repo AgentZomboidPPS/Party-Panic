@@ -137,7 +137,7 @@ CAMERAS: dict[str, dict] = {
     "StampOut": {"look_at": "Paper", "yaw": 20, "pitch": 50, "distance": 38, "shift": [5, 2, 6], "raise": 6},
     # Into the first scrum on the sandlot: foam bats swinging, a wind-up's reach on the sand, orbs knocked
     # loose flying out, the scoreboard over the fence behind.
-    "Struggle": {"look_at": "Sand", "yaw": 10, "pitch": 26, "distance": 20, "shift": [20.5, 2, 7.5], "raise": 9},
+    "Struggle": {"look_at": "Sand", "yaw": 20, "pitch": 22, "distance": 19, "shift": [-15.5, 3, 1], "raise": 8},
     # Chasing two riders down their lanes: their crayons drawing purple and teal lines behind them, the
     # dotted guides curving away ahead.
     "TraceRace": {"look_at": "StartLine", "yaw": 0, "pitch": 45, "distance": 46, "shift": [29, 3, -110], "raise": 6},

@@ -754,6 +754,8 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
             rs, ro = corner["radius"]
             radius = max(0, min(min(w, h) / 2, rs * min(w, h) + ro * k))
         bgt = n.get("bgt", 1)
+        if n.get("glint"):
+            bgt = 1  # a shine band that slides past now and then (GoldPassController.Glint): not drawn
         if bgt < 1:
             gradient = modifier(i, "UIGradient")
             base = n.get("bg", [255, 255, 255])

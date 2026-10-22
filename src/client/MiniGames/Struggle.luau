@@ -25,6 +25,11 @@
 -- back over the shoulder, further while a charge builds, then a level sweep round the front whose tip
 -- follows the rule's reach). Every screen poses everyone from those cues, so all screens agree. A
 -- swoosh follows the barrel through the sweep (not with reduced effects).
+--
+-- Poses pass (owner: "Bots are STILL ruberbanding and floating."): the joint handling this mode
+-- worked out for both kinds of joint (a Motor6D, or the AnimationConstraint this place's servers give
+-- R15 bodies) is the shared client/Pose now, so the six other modes that pose riders find them too.
+-- The swing itself is unchanged.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -33,6 +38,8 @@ local UserInputService = game:GetService("UserInputService")
 local GameState = require(ReplicatedStorage.Shared.GameState)
 local Rules = require(ReplicatedStorage.Shared.Logic.Struggle)
 
+local Api = require(script.Parent.Kit.Api)
+local Pose = require(script.Parent.Parent.Pose)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -47,35 +54,19 @@ local FLY = 0.25 -- seconds a picked-up orb takes to fly to its taker
 local ORB_SCALE = 1.25 -- orbs are drawn a little bigger than their meshes (easy to spot on phones)
 local rad = math.rad
 
--- A joint a pose turns: a Motor6D, or the AnimationConstraint newer R15 bodies have instead (both
--- carry a Transform the Animator writes each frame before PreSimulation, where the pose overwrites
--- it). Base is the joint's own axes in its first part (Motor6D C0, or the first attachment's), so a
--- turn given in that part's axes lands the same on any rig.
-type Joint = { Instance: Instance, Base: CFrame, Written: CFrame?, Under: CFrame? }
-
--- What poses a character: the joints, and the hand (RightHand, or R6's "Right Arm") with the fist in
--- its space, the bat's axis coming out of the fist's front (+Y).
+-- What poses a character: the joints (Pose: a Motor6D, or the AnimationConstraint this place's R15
+-- bodies have instead), and the hand (RightHand, or R6's "Right Arm") with the fist in its space, the
+-- bat's axis coming out of the fist's front (+Y).
 type Rig = {
 	Character: Model,
 	R6: boolean,
 	Hand: BasePart,
 	Fist: CFrame,
-	Turn: { { Joint: Joint, Share: number } },
-	Shoulder: Joint?,
-	Elbow: Joint?,
-	Wrist: Joint?,
+	Turn: { { Joint: Pose.Joint, Share: number } },
+	Shoulder: Pose.Joint?,
+	Elbow: Pose.Joint?,
+	Wrist: Pose.Joint?,
 }
-
-local function jointOf(part: Instance?, name: string): Joint?
-	local joint = part and part:FindFirstChild(name)
-	if joint and joint:IsA("Motor6D") then
-		return { Instance = joint, Base = joint.C0.Rotation }
-	elseif joint and joint:IsA("AnimationConstraint") then
-		local attachment = joint.Attachment0
-		return { Instance = joint, Base = if attachment then attachment.CFrame.Rotation else CFrame.identity }
-	end
-	return nil
-end
 
 -- The fist: where a tool's grip goes (the hand's grip attachment), the bat's axis out of its front.
 local function fistOf(hand: BasePart): CFrame
@@ -89,8 +80,8 @@ end
 local function rigOf(character: Model): Rig?
 	local hand = character:FindFirstChild("RightHand")
 	if hand and hand:IsA("BasePart") then
-		local root = jointOf(character:FindFirstChild("LowerTorso"), "Root")
-		local waist = jointOf(character:FindFirstChild("UpperTorso"), "Waist")
+		local root = Pose.Joint(character, "Root")
+		local waist = Pose.Joint(character, "Waist")
 		local turn = {}
 		if root then
 			table.insert(turn, { Joint = root, Share = if waist then HIPS else 1 })
@@ -104,67 +95,39 @@ local function rigOf(character: Model): Rig?
 			Hand = hand,
 			Fist = fistOf(hand),
 			Turn = turn,
-			Shoulder = jointOf(character:FindFirstChild("RightUpperArm"), "RightShoulder"),
-			Elbow = jointOf(character:FindFirstChild("RightLowerArm"), "RightElbow"),
-			Wrist = jointOf(hand, "RightWrist"),
+			Shoulder = Pose.Joint(character, "RightShoulder"),
+			Elbow = Pose.Joint(character, "RightElbow"),
+			Wrist = Pose.Joint(character, "RightWrist"),
 		}
 	end
 	local arm = character:FindFirstChild("Right Arm")
 	if arm and arm:IsA("BasePart") then
-		local root = jointOf(character:FindFirstChild("HumanoidRootPart"), "RootJoint")
+		local root = Pose.Joint(character, "RootJoint")
 		return {
 			Character = character,
 			R6 = true,
 			Hand = arm,
 			Fist = fistOf(arm),
 			Turn = if root then { { Joint = root, Share = 1 } } else {},
-			Shoulder = jointOf(character:FindFirstChild("Torso"), "Right Shoulder"),
+			Shoulder = Pose.Joint(character, "Right Shoulder"),
 		}
 	end
 	return nil
 end
 
--- Turns a joint by `rotation` (in its first part's axes, about the joint), instead of the Animator.
-local function turn(joint: Joint, rotation: CFrame)
-	local value = joint.Base:Inverse() * rotation * joint.Base;
-	(joint.Instance :: any).Transform = value
-	joint.Written = value
-end
-
--- Turns a joint on top of what the Animator gave it this frame (a walk's bob stays). If nothing
--- wrote it since our last turn, the Animator's last one is used again (so turns never pile up).
-local function turnOver(joint: Joint, rotation: CFrame)
-	local current = (joint.Instance :: any).Transform :: CFrame
-	local written = joint.Written
-	local under = if written and current:FuzzyEq(written, 1e-5) then joint.Under or CFrame.identity else current
-	local value = under * joint.Base:Inverse() * rotation * joint.Base
-	joint.Under = under;
-	(joint.Instance :: any).Transform = value
-	joint.Written = value
-end
-
-local function release(joint: Joint?)
-	if joint and joint.Written then
-		pcall(function()
-			(joint.Instance :: any).Transform = joint.Under or CFrame.identity
-		end)
-		joint.Written, joint.Under = nil, nil
-	end
-end
-
 local function releaseRig(rig: Rig)
 	for _, entry in rig.Turn do
-		release(entry.Joint)
+		Pose.Release(entry.Joint)
 	end
-	release(rig.Shoulder)
-	release(rig.Elbow)
-	release(rig.Wrist)
+	Pose.Release(rig.Shoulder)
+	Pose.Release(rig.Elbow)
+	Pose.Release(rig.Wrist)
 end
 
 -- Poses the body (turn, right arm) and returns the bat's tilt in the fist (degrees).
 local function poseRig(rig: Rig, pose: Rules.Pose): number
 	for _, entry in rig.Turn do
-		turnOver(entry.Joint, CFrame.Angles(0, rad(pose.Twist * entry.Share), 0))
+		Pose.TurnOver(entry.Joint, CFrame.Angles(0, rad(pose.Twist * entry.Share), 0))
 	end
 	local arm = CFrame.Angles(0, rad(pose.Yaw), 0)
 		* CFrame.Angles(rad(pose.Pitch), 0, 0)
@@ -176,14 +139,14 @@ local function poseRig(rig: Rig, pose: Rules.Pose): number
 		tilt += pose.Elbow / 2
 	else
 		if rig.Elbow then
-			turn(rig.Elbow, CFrame.Angles(rad(pose.Elbow), 0, 0))
+			Pose.Turn(rig.Elbow, CFrame.Angles(rad(pose.Elbow), 0, 0))
 		end
 		if rig.Wrist then
-			turn(rig.Wrist, CFrame.identity)
+			Pose.Turn(rig.Wrist, CFrame.identity)
 		end
 	end
 	if rig.Shoulder then
-		turn(rig.Shoulder, arm)
+		Pose.Turn(rig.Shoulder, arm)
 	end
 	return tilt
 end
@@ -322,7 +285,8 @@ function Struggle.Start(api)
 		if not found then
 			local folder = ReplicatedStorage:FindFirstChild("MiniGameAssets")
 			local shared = folder and folder:FindFirstChild(name)
-			if shared then
+			-- (Only once all its parts are here: this copy is kept for the round.)
+			if shared and Api.Arrived(shared) then
 				found = shared:Clone()
 				templates[name] = found :: Instance
 			end
@@ -1022,7 +986,7 @@ function Struggle.Start(api)
 				})
 				local born = os.clock()
 				local connection
-				connection = game:GetService("RunService").RenderStepped:Connect(function()
+				connection = RunService.RenderStepped:Connect(function()
 					local age = os.clock() - born
 					if age > 0.9 or not anchor.Parent then
 						connection:Disconnect()
@@ -1248,8 +1212,7 @@ function Struggle.Start(api)
 	-- Just before physics, every frame (after the Animator): everyone's body in their pose, and the
 	-- bat at its angle in their fist.
 	local ended = false
-	local poseStep = (RunService :: any).PreSimulation or RunService.Stepped
-	api:Track(poseStep:Connect(function()
+	api:Track(Pose.Step(function()
 		if ended then
 			return
 		end

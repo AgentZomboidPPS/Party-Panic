@@ -64,6 +64,15 @@ out the vote and steps aside for a level-up card).
 The results card asks PLAY AGAIN? (Services/ReplayService): "Results" shows the vote open, "Results
 replay" after the player tapped PLAY AGAIN, "Results replay capped" after the most replays in a row;
 the result's "replayChecks" says what the strip showed each time.
+The GOLD PASS (Controllers/GoldPassController, the Rewards screen's gold lane): the screen while the
+pass is off sale on Roblox ("Rewards gold soon": COMING SOON) and on sale ("Rewards gold offer": GET
+GOLD PASS with its price), the UNLOCKED N REWARDS! card a purchase shows ("Gold unlocked"), the screen
+once it's owned ("Rewards gold owned": the gold lane lit, EQUIP on its rewards), a level-up with the
+gold lane's coins and a gold reward ("LevelUp gold"), the Shop's gold hats ("Shop gold") and name tags
+with and without the GOLD badge ("Name tags"). --gold gives the player the pass from the start (the
+HUD's gold level badge, Settings' teaser, the road lit everywhere). Roblox's price and sale state are
+set by the run (GoldPassController.SetOfferForTests). The result's "goldChecks" says what the gold
+button, the tiles and the card read each time, and whether a tap asked the server for the prompt.
 """
 
 import argparse
@@ -498,7 +507,7 @@ local order = {
 	"AudioController", "NotificationController", "EffectsController", "AmbienceController",
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
-	"RewardsController", "CelebrationController",
+	"RewardsController", "CelebrationController", "GoldPassController",
 	"CupController", "InviteController", "PartyController", "SquadController", "PartyWorldController", "MedalController",
 	"HallOfFameController", "EventController",
 	"EmoteController", "SpectateController", "OnboardingController", "SkeeBallController", "AssetReportController",
@@ -566,16 +575,23 @@ for _, item in Cosmetics.List do
 		or (__richMode and item.Slot == "Emote")
 		or (item.UnlockLevel ~= nil and richLevel >= item.UnlockLevel)
 		or (item.UnlockStat ~= nil and (data.Stats[item.UnlockStat.Stat] or 0) >= item.UnlockStat.Value)
+		or (__goldMode and item.GoldLevel ~= nil and richLevel >= item.GoldLevel)
 	if earned then
 		data.Owned[item.Id] = true
 	end
 end
+data.GoldPass = { Owned = __goldMode, Since = 0, CoinsTo = if __goldMode then richLevel else 1 }
 if __richMode then
 	data.Equipped = table.clone(DataService.Template.Equipped)
 	data.Equipped.Title = "Title_Icon"
 	data.Equipped.Trail = "Trail_Starry"
+	if __goldMode then
+		data.Equipped.Title = "Title_GildedLegend"
+		data.Equipped.Trail = "Trail_LiquidSunlight"
+		data.Equipped.Hat = "Hat_GildedTopHat"
+	end
 end
-local profile = { Data = data, IsVip = false, CanSave = not __richMode }
+local profile = { Data = data, CanSave = not __richMode }
 local okSnap, snapshot = pcall(DataService.BuildSnapshot, profile)
 if okSnap then
 	local byPeriod = { Daily = {}, Weekly = {} }
@@ -619,6 +635,224 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Rewards", "Rewards C
 		State.OpenScreen:Fire(screen) -- the emote wheel isn't a modal: its button toggles it shut
 	end
 	task.wait(0.3)
+end
+
+-- 3g. The GOLD PASS (Controllers/GoldPassController, RewardsController's gold lane). Off sale on Roblox
+-- ("Rewards gold soon"), on sale ("Rewards gold offer", and a tap on GET GOLD PASS asks the server for
+-- Roblox's prompt), bought ("Gold unlocked": what buying it at level 26 unlocks), owned ("Rewards gold
+-- owned": a level-26 owner wearing the ROYAL CROWN), a level-up with gold coins and a gold reward
+-- ("LevelUp gold"), the Shop's gold hats ("Shop gold") and name tags ("Name tags"). With --gold the
+-- player owns it from the start, so the off-sale and on-sale screens are left out. The profile is put
+-- back as it was after.
+local goldChecks = {}
+do
+	local Gold = __require("Client/Controllers/GoldPassController")
+	local ModalUI = __require("Client/UI/Modal")
+	local Celebrations = __require("Client/Controllers/CelebrationController")
+	local Progression = require(Shared.Progression)
+	local GoldLane = require(Shared.Logic.GoldLane)
+	local NameTag = require(Shared.NameTag)
+	local LevelCurve = require(Shared.Logic.LevelCurve)
+	-- What the Rewards screen's gold button and the tiles in view read (the road makes a level's
+	-- tiles when it scrolls near: the first eight levels that have them).
+	local function read()
+		local overlay = __playerGui:FindFirstChild("PartyPanicOverlay")
+		local window = overlay and overlay:FindFirstChild("RewardsModal")
+		local button = window and window:FindFirstChild("GoldPass", true)
+		local words = {}
+		if button then
+			for _, item in button:GetDescendants() do
+				if item:IsA("TextLabel") and item.Text ~= "" then
+					table.insert(words, item.Text)
+				end
+			end
+		end
+		local tiles = {}
+		local road = window and window:FindFirstChild("Road", true)
+		if road then
+			local columns = {}
+			for _, column in road:GetChildren() do
+				local level = tonumber(string.match(column.Name, "^Level(%d+)$"))
+				if level and column:FindFirstChild("Status", true) then
+					table.insert(columns, { level, column })
+				end
+			end
+			table.sort(columns, function(a, b)
+				return a[1] < b[1]
+			end)
+			for index = 1, math.min(#columns, 8) do
+				local level, column = columns[index][1], columns[index][2]
+				local lanes = { free = {}, gold = {} }
+				for _, tile in column:GetChildren() do
+					local status = tile:FindFirstChild("Status")
+					if status and status:IsA("TextLabel") and tile:IsA("GuiObject") then
+						local lane = if tile.Position.Y.Offset > column.Size.Y.Offset / 2 - 20 then lanes.gold else lanes.free
+						local lock = if tile:FindFirstChild("Lock", true) then "🔒 " else ""
+						table.insert(lane, `{lock}{tile.Name}: {status.Text}{if tile:IsA("TextButton") then " [tap]" else ""}`)
+					end
+				end
+				table.insert(tiles, `Lv {level}  FREE {table.concat(lanes.free, ", ")}  GOLD {table.concat(lanes.gold, ", ")}`)
+			end
+		end
+		return { button = if button then `{button.ClassName}: {table.concat(words, " | ")}` else "missing", tiles = tiles }
+	end
+	local function openRoad()
+		pcall(ModalUI.CloseAll)
+		task.wait(0.2)
+		State.OpenScreen:Fire("Rewards", "Road")
+		task.wait(1.2)
+	end
+	local before = if okSnap then table.clone(snapshot) else nil
+	if okSnap and not __goldMode then
+		step = "gold: off sale"
+		Gold.SetOfferForTests({ OnSale = false, Price = 399, Known = true })
+		openRoad()
+		goldChecks.offSale = read()
+		snap("Rewards gold soon")
+		step = "gold: on sale"
+		Gold.SetOfferForTests({ OnSale = true, Price = 399, Known = true })
+		task.wait(1.2) -- (the screen redraws when the offer changes)
+		goldChecks.onSale = read()
+		snap("Rewards gold offer")
+		local sentBefore = #__sent
+		Gold.Prompt()
+		goldChecks.promptAsked = __sent[sentBefore + 1] or "nothing"
+	end
+	-- Bought at level 26: the server's grant (Services/GoldPassService) as this device sees it.
+	if okSnap then
+		step = "gold: bought"
+		pcall(ModalUI.CloseAll)
+		local level = 26
+		local bought = table.clone(snapshot)
+		bought.Level = level
+		bought.XP = LevelCurve.TotalXPForLevel(level) + 300
+		bought.LevelXP, bought.LevelNeed = 300, LevelCurve.XPForLevel(level)
+		bought.Owned = table.clone(snapshot.Owned)
+		bought.Equipped = table.clone(snapshot.Equipped)
+		for _, item in Cosmetics.List do
+			if (item.UnlockLevel and item.UnlockLevel <= level) or (item.GoldLevel and item.GoldLevel <= level) then
+				bought.Owned[item.Id] = true
+			end
+		end
+		bought.Equipped.Hat = "Hat_RoyalCrown"
+		bought.Equipped.Title = "Title_Jackpot"
+		bought.GoldPass = { Owned = true }
+		local unlock = GoldLane.Retroactive(Progression.GoldLane, level, 1, snapshot.Owned)
+		Gold.SetOfferForTests({ OnSale = true, Price = 399, Known = true })
+		openRoad()
+		__fire("ProfileData", bought)
+		__fire("GoldPass", "Unlocked", {
+			Level = level,
+			Count = unlock.Count,
+			Coins = unlock.Coins,
+			Items = unlock.Items,
+			Source = "Purchase",
+		})
+		task.wait(2.6) -- the rewards pop in one by one, the count runs up
+		local layer = __playerGui:FindFirstChild("PartyPanicGold")
+		local card = layer and layer:FindFirstChild("Card", true)
+		local headline = card and card:FindFirstChild("Headline")
+		local chips = {}
+		local row = card and card:FindFirstChild("Rewards")
+		if row then
+			for _, slot in row:GetChildren() do
+				local chip = slot:IsA("Frame") and slot:FindFirstChildWhichIsA("Frame")
+				if chip then
+					table.insert(chips, { slot.LayoutOrder, `{chip.Name}{if chip.Visible then "" else " (hidden)"}` })
+				end
+			end
+		end
+		table.sort(chips, function(a, b)
+			return a[1] < b[1]
+		end)
+		local chipNames = {}
+		for _, chip in chips do
+			table.insert(chipNames, chip[2])
+		end
+		goldChecks.unlocked = {
+			payload = `Count {unlock.Count}, Coins {unlock.Coins}, Items {#unlock.Items}`,
+			headline = if headline then headline.Text else "missing",
+			chips = chipNames,
+		}
+		snap("Gold unlocked")
+		Gold.Dismiss()
+		task.wait(0.5)
+		-- (Open again: a screen that redraws keeps its place, here the level-1 start.)
+		openRoad()
+		goldChecks.owned = read()
+		snap("Rewards gold owned")
+		pcall(ModalUI.CloseAll)
+		task.wait(0.4)
+		-- A level-up from 26 to 28 for an owner: the road's coins, the gold lane's coins (27) and
+		-- its reward (28: TREASURE POP).
+		step = "gold: level-up"
+		__fire("Celebrate", {
+			Kind = "LevelUp",
+			Level = 28,
+			From = 26,
+			Coins = Progression.Coins(27) + Progression.Coins(28),
+			GoldCoins = Progression.GoldCoins(27),
+			Items = { "Elim_TreasurePop" },
+		})
+		task.wait(1.6)
+		snap("LevelUp gold")
+		Celebrations.Dismiss()
+		task.wait(0.4)
+		step = "gold: shop"
+		State.OpenScreen:Fire("Shop", "Hat")
+		task.wait(1.2)
+		snap("Shop gold")
+		pcall(ModalUI.CloseAll)
+		task.wait(0.3)
+	end
+	-- Name tags (Shared/NameTag, the server's PP_Nameplate): a player's; an owner's with the GOLD
+	-- badge and VIP Partier shimmering; a long-named top-tier owner wearing THE GOLDEN ONE.
+	step = "gold: name tags"
+	local folder = Instance.new("Folder")
+	local screen = Instance.new("ScreenGui")
+	screen.Name = "NameTags"
+	screen:SetAttribute("PP_Billboards", true) -- ui_render.py: check the text, not where they sit
+	screen.Parent = folder
+	local tags = {
+		{ "Pancake", 12, false, "Title_Pro" },
+		{ "Harness", 26, true, "Title_VIP" },
+		{ "SuperLongDisplayNm20", 100, true, "Title_GoldenOne" },
+	}
+	local nameChecks = {}
+	for index, tag in tags do
+		local okTag, gui = pcall(NameTag.Build, tag[1], tag[2], tag[3], Cosmetics.Get(tag[4]))
+		if not okTag then
+			__note("NameTag.Build failed: " .. tostring(gui))
+			continue
+		end
+		local frame = Instance.new("Frame")
+		frame.Name = `Tag{index}`
+		frame.BackgroundTransparency = 1
+		frame.Size = gui.Size
+		frame.Position = UDim2.fromOffset(60 + (index - 1) * 260, 120)
+		local parts = {}
+		for _, child in gui:GetChildren() do
+			child:Clone().Parent = frame
+		end
+		for _, item in gui:GetDescendants() do
+			if item:IsA("TextLabel") then
+				table.insert(parts, item.Name .. "=" .. item.Text)
+			elseif item:IsA("UIGradient") and item:GetAttribute("PP_Shimmer") then
+				table.insert(parts, `{item.Parent and item.Parent.Name} shimmers ({item:GetAttribute("PP_Shimmer")})`)
+			end
+		end
+		table.insert(nameChecks, `{tag[1]} ({gui.Size.Y.Offset} tall): {table.concat(parts, "; ")}`)
+		frame.Parent = screen
+		gui:Destroy()
+	end
+	goldChecks.nameTags = nameChecks
+	snap("Name tags", folder)
+	-- As it was (in --gold, the owner's profile again).
+	if before then
+		Gold.SetOfferForTests({ OnSale = false, Price = 399, Known = true })
+		__fire("ProfileData", before)
+		task.wait(0.5)
+	end
 end
 
 -- 3a. The HALLOWEEN PARTY (Controllers/EventController): the lobby chip and the event screen ("Event":
@@ -2349,6 +2583,7 @@ return game:GetService("HttpService"):JSONEncode({
 	partyChecks = partyChecks,
 	medalChecks = medalChecks,
 	replayChecks = replayChecks,
+	goldChecks = goldChecks,
 	textReport = __textReport,
 	portals = __portals,
 })
@@ -2373,6 +2608,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--touch", action="store_true", help="the stand-in client is a phone (touch, no keyboard)")
     parser.add_argument("--rich", action="store_true", help="a well-used profile, to check the layouts at their fullest")
+    parser.add_argument("--gold", action="store_true", help="the player owns the GOLD PASS from the start")
     parser.add_argument("--bots", type=int, default=0, help="stand-in bots that play the round with the player")
     parser.add_argument("--sit-out", action="store_true", help="draw the screens of a player sitting out (and the "
                         "playing ones to compare) instead of every screen")
@@ -2386,6 +2622,7 @@ def main():
     flags = (
         f"__touchMode = {'true' if args.touch else 'false'}\n"
         f"__richMode = {'true' if args.rich else 'false'}\n"
+        f"__goldMode = {'true' if args.gold else 'false'}\n"
         f"__botCount = {args.bots}\n"
         f"__sitOutMode = {'true' if args.sit_out else 'false'}\n"
         + (

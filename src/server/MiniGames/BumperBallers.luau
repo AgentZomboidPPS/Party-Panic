@@ -78,11 +78,14 @@ local TUNING = BumperDrive.Tuning
 -- against it), 24 with BIG BUMPS, on an island 44 studs from middle to edge: a ring-out takes a hit
 -- near the edge or a few in a row. (Owner, after playing: "you get bounced off way too quickly" -
 -- it used to be 33 and 46 studs.)
-local BUMP_BASE = 7 -- studs/s a full-speed bump gives on top (less for a gentle touch)
-local BUMP_GAIN = 0.85 -- extra per stud/s of the other ball's speed into you
-local BUMP_SELF = 0.2 -- extra per stud/s of your own speed into them (you bounce back a bit)
-local BUMP_MAX = 42
-local BUMP_LIFT = 5
+-- Then (owner: "Bumper ball increase bounce by 25%") every bump got a quarter stronger: the push, its
+-- cap and the little hop alike.
+local BOUNCE = 1.25
+local BUMP_BASE = 7 * BOUNCE -- studs/s a full-speed bump gives on top (less for a gentle touch)
+local BUMP_GAIN = 0.85 * BOUNCE -- extra per stud/s of the other ball's speed into you
+local BUMP_SELF = 0.2 * BOUNCE -- extra per stud/s of your own speed into them (you bounce back a bit)
+local BUMP_MAX = 42 * BOUNCE
+local BUMP_LIFT = 5 * BOUNCE
 local BIG_BUMPS = 1.4
 local CLOSING_MIN = 4 -- closing speed (studs/s) that counts as a bump
 local TOUCH = BALL_SIZE + 0.5 -- centers this close: the balls touch (the client boings at the same)

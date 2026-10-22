@@ -446,6 +446,14 @@ function Tanks:Start()
 	end
 	for _, player in ctx:GetPlayers() do
 		ctx:SetWalkSpeed(player, 0)
+		-- No jumping out of the hatch either: a character that can't jump has no jump button on phones,
+		-- which sat right beside FIRE doing nothing (owner, on Trace Race's: "Remove the jump button
+		-- for trace race. it was confusing").
+		local _, humanoid = ctx:GetCharacter(player)
+		if humanoid then
+			humanoid.JumpHeight = 0
+			humanoid.JumpPower = 0
+		end
 	end
 
 	ctx:OnAction("In", function(player, seq, mx, mz, aim)

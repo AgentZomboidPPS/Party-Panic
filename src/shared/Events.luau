@@ -74,8 +74,8 @@ Events.List = {
 		-- Dusk in the lobby: warm light, purple shadows (kept bright enough for phones).
 		Look = {
 			Tint = { 255, 238, 232 },
-			Saturation = 0.08,
-			Contrast = 0.06,
+			Saturation = 0, -- (the lobby's own is plenty: owner, "its way to loud")
+			Contrast = 0.03,
 			Brightness = -0.02,
 			OutdoorAmbient = { 146, 124, 182 },
 			ShiftTop = { 90, 46, 14 },

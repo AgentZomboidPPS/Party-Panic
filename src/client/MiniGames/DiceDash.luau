@@ -8,15 +8,23 @@
 -- each effect happens ("Event") and keeps a race strip with every racer's badge from START to
 -- FINISH. ROLL is a button (E), the jump button / Space (jump into your die), or a tap or click
 -- anywhere on the board. The camera follows you along the board (the leader if you're watching).
+--
+-- Poses pass (owner: "Bots are STILL ruberbanding and floating."): a hop's tucked legs and flung-up
+-- arms, and the finish wave, show on R15 bodies now. This place's servers build R15 bodies (every
+-- bot's, and players' R15 avatars) with AnimationConstraint joints instead of Motor6Ds, and the
+-- pose only looked for Motor6Ds, so it found none there and no limb moved (measured on a test
+-- server: 0 of a racer's 6 joints; racers hopped from tile to tile standing stiff). The pose goes
+-- through client/Pose now, which turns either kind of joint; the poses themselves are as before
+-- (R6's too).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local Board = require(ReplicatedStorage.Shared.Logic.DiceDashBoard)
 local RaceBar = require(ReplicatedStorage.Shared.Logic.RaceBar)
 
+local Pose = require(script.Parent.Parent.Pose)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 local State = require(script.Parent.Parent.State)
@@ -49,15 +57,19 @@ local EVENT_STYLE = {
 	LAST = { Color = Color3.fromRGB(200, 160, 255), Effect = "Confetti", Sound = "Boing" },
 }
 
+-- The joints a racer's pose turns: R15's, then R6's (client/Pose finds them on either kind of body).
 local JOINTS = {
-	LeftUpperArm = "LeftShoulder",
-	RightUpperArm = "RightShoulder",
-	LeftUpperLeg = "LeftHip",
-	RightUpperLeg = "RightHip",
-	LeftLowerLeg = "LeftKnee",
-	RightLowerLeg = "RightKnee",
+	"LeftShoulder",
+	"RightShoulder",
+	"LeftHip",
+	"RightHip",
+	"LeftKnee",
+	"RightKnee",
+	"Left Shoulder",
+	"Right Shoulder",
+	"Left Hip",
+	"Right Hip",
 }
-local R6_JOINTS = { "Left Shoulder", "Right Shoulder", "Left Hip", "Right Hip" }
 
 -- A hopping racer tucks its legs and throws its arms up; a finished one waves both arms.
 local function pose(air: number, cheer: boolean, t: number): { [string]: CFrame }
@@ -208,35 +220,19 @@ function DiceDash.Start(api)
 
 	-- Posing ---------------------------------------------------------------------------------------------
 
-	local rigs: { [Model]: { [string]: { Motor: Motor6D, Current: CFrame } } } = {}
+	local rigs: { [Model]: { [string]: Pose.Joint } } = {}
 	local posed: { [Model]: { Air: number, Cheer: boolean } } = {}
 	local function rigOf(character: Model)
 		local rig = rigs[character]
-		if rig then
-			return rig
+		if not rig then
+			rig = Pose.Rig(character, JOINTS)
+			rigs[character] = rig
 		end
-		rig = {}
-		for partName, motorName in JOINTS do
-			local part = character:FindFirstChild(partName)
-			local motor = part and part:FindFirstChild(motorName)
-			if motor and motor:IsA("Motor6D") then
-				rig[motorName] = { Motor = motor, Current = CFrame.identity }
-			end
-		end
-		local torso = character:FindFirstChild("Torso")
-		for _, motorName in R6_JOINTS do
-			local motor = torso and torso:FindFirstChild(motorName)
-			if motor and motor:IsA("Motor6D") then
-				rig[motorName] = { Motor = motor, Current = CFrame.identity }
-			end
-		end
-		rigs[character] = rig
 		return rig
 	end
-	local poseConnection = (RunService :: any).PreSimulation or RunService.Stepped
-	api:Track(poseConnection:Connect(function(dt)
-		local step = if type(dt) == "number" then dt else 1 / 60
-		local alpha = 1 - math.exp(-step * 16)
+	-- Just before physics, every frame: after the Animator, so the pose is what shows.
+	api:Track(Pose.Step(function(dt)
+		local alpha = 1 - math.exp(-dt * 16)
 		local t = os.clock()
 		for character, state in posed do
 			if not character.Parent then
@@ -246,8 +242,7 @@ function DiceDash.Start(api)
 			end
 			local target = pose(state.Air, state.Cheer, t)
 			for name, joint in rigOf(character) do
-				joint.Current = joint.Current:Lerp(target[name] or CFrame.identity, alpha)
-				joint.Motor.Transform = joint.Current
+				Pose.Ease(joint, target[name] or CFrame.identity, alpha)
 			end
 		end
 	end))
@@ -452,9 +447,7 @@ function DiceDash.Start(api)
 		for character in posed do
 			local rig = rigs[character]
 			if rig then
-				for _, joint in rig do
-					joint.Motor.Transform = CFrame.identity
-				end
+				Pose.ReleaseAll(rig)
 			end
 		end
 		table.clear(posed)

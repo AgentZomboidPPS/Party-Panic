@@ -12,9 +12,15 @@
 --     wall) is the same TankField.Path the server judges with, timed on the shared clock. Your own
 --     shot leaves your barrel the moment you press FIRE and takes the server's flight when it comes
 --     back ("Dud": the server said no, it vanishes);
---   * aims at the mouse (a dotted line shows the flight, ricochet included), at the right
---     thumbstick on a gamepad, or on phones where you drag on the right of the screen; on phones
---     the turret also swings to the nearest enemy in front of you whenever you're not dragging.
+--   * aims at the mouse (a dotted line shows the flight, ricochet included) or at the right
+--     thumbstick on a gamepad. Phones (owner: "Aiming and firing on tanks! on mobile is terrible."):
+--     aiming used to point the turret at the ground under a finger, which hid the very tank you aimed
+--     at, and then the thumb had to leave the aim for the FIRE button while the turret swung away.
+--     FIRE is a stick now, as in phone shooters: drag from it to aim (a ring and a knob follow the
+--     thumb, the dotted line shows the flight, with a slight pull toward an enemy near it) and let
+--     go to shoot; a tap shoots along the line as it is. A shot let go during the reload goes the
+--     moment it ends (if that's soon), and the turret keeps a dragged aim a moment before it swings
+--     back to the nearest enemy in front of you.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -34,6 +40,9 @@ local CAMERA_HEIGHT = 60
 local CAMERA_BACK = 33
 local TURRET_PIECES = { Turret = true, Barrel = true, Hatch = true, Badge = true }
 local AIM_DOTS = 34
+local STICK_DEAD = 14 -- points a drag on the FIRE stick must pass to aim (less is a tap)
+local STICK_HOLD = 1.5 -- seconds the turret keeps a dragged aim before the assist takes over
+local STICK_QUEUE = 0.35 -- a shot let go this close to the end of the reload waits for it
 local HIDDEN = CFrame.new(0, -1e4, 0)
 
 local function moveControls(): any
@@ -496,26 +505,11 @@ function Tanks.Start(api)
 		return ray.Origin + ray.Direction * t
 	end
 
-	local aimTouch: InputObject? = nil
+	local stickDrag: Vector2? = nil -- the FIRE stick's drag while it's past the dead zone (phones)
 	local dragUntil = 0
 	local stickAim: Vector3? = nil
 	local reticle: Part? = nil
 
-	api:Track(UserInputService.TouchStarted:Connect(function(input, processed)
-		if processed or not touch then
-			return
-		end
-		if input.Position.X < camera.ViewportSize.X * 0.42 then
-			return -- the thumbstick's side
-		end
-		aimTouch = input
-	end))
-	api:Track(UserInputService.TouchEnded:Connect(function(input)
-		if input == aimTouch then
-			aimTouch = nil
-			dragUntil = os.clock() + 1.5 -- keep the dragged aim a moment before the assist takes over
-		end
-	end))
 	api:Track(UserInputService.InputChanged:Connect(function(input)
 		if input.KeyCode == Enum.KeyCode.Thumbstick2 then
 			local value = input.Position
@@ -555,23 +549,24 @@ function Tanks.Start(api)
 		return best
 	end
 
+	-- Where a drag on the FIRE stick points (up the screen is the camera's forward), pulled a little
+	-- toward an enemy close to that line.
+	local function dragHeading(drag: Vector2): number
+		local forward, right = cameraAxes()
+		local direction = right * drag.X - forward * drag.Y
+		local want = math.atan2(-direction.X, -direction.Z)
+		local magnet = assistTarget(want, math.rad(8), 120)
+		return if magnet then math.atan2(-(magnet.X - me.X), -(magnet.Z - me.Z)) else want
+	end
+
 	local function updateAim(dt: number)
 		local headingTo = function(point: Vector3): number
 			local local_ = point - origin
 			return math.atan2(-(local_.X - me.X), -(local_.Z - me.Z))
 		end
 		if touch then
-			if aimTouch then
-				local point = groundAt(camera:ScreenPointToRay(aimTouch.Position.X, aimTouch.Position.Y))
-				if point then
-					local want = headingTo(point)
-					-- A little magnet toward an enemy close to where the finger points.
-					local magnet = assistTarget(want, math.rad(10), 120)
-					if magnet then
-						want = math.atan2(-(magnet.X - me.X), -(magnet.Z - me.Z))
-					end
-					aim = lerpAngle(aim, want, 1 - math.exp(-dt * 25))
-				end
+			if stickDrag then
+				aim = lerpAngle(aim, dragHeading(stickDrag), 1 - math.exp(-dt * 30))
 			elseif os.clock() > dragUntil then
 				local hullFront = if me.Rev then me.H + math.pi else me.H
 				local target = assistTarget(hullFront, math.rad(75), 95)
@@ -832,14 +827,14 @@ function Tanks.Start(api)
 		end
 	end)
 
-	local function fire()
+	local function fire(): boolean
 		if not canDrive() or not field then
-			return
+			return false
 		end
 		local now = api:Now()
 		local cap, reload = TankField.Limits(aliveCount())
 		if myShells() >= cap or now - lastShot < reload then
-			return
+			return false
 		end
 		lastShot = now
 		token += 1
@@ -872,6 +867,7 @@ function Tanks.Start(api)
 				end
 			end
 		end)
+		return true
 	end
 
 	local function layMine()
@@ -1180,7 +1176,88 @@ function Tanks.Start(api)
 	-- HUD --------------------------------------------------------------------------------------------
 
 	local fireButton = api:Button({ Text = "FIRE", Key = Enum.KeyCode.Space, Color = Theme.Colors.Red })
-	fireButton.Pressed:Connect(fire)
+	local queuedUntil = 0 -- a shot let go during the reload (phones)
+	if not touch then
+		fireButton.Pressed:Connect(fire)
+	else
+		-- The FIRE stick (see the top): the thumb starts on the kit's FIRE button (Kit/Api names it
+		-- Action_FIRE); the drag is followed anywhere on the screen until the thumb lifts.
+		local holder = api.Gui:FindFirstChild("Action_FIRE")
+		local pad = holder and holder:FindFirstChild("Button") :: GuiObject?
+		if not pad then
+			fireButton.Pressed:Connect(fire) -- (no stick to hang it on: a plain FIRE button still shoots)
+		else
+			local ring = UIKit.new("Frame", {
+				Name = "FireStickRing",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundTransparency = 1,
+				Visible = false,
+				ZIndex = 5,
+				Parent = api.Gui,
+				Children = { UIKit.Round(), UIKit.Stroke(Color3.new(1, 1, 1), 3, 0.25) },
+			})
+			local knob = UIKit.new("Frame", {
+				Name = "FireStickKnob",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundColor3 = Theme.Colors.Red,
+				Visible = false,
+				ZIndex = 6,
+				Parent = api.Gui,
+				Children = { UIKit.Round(), UIKit.Stroke(Color3.new(1, 1, 1), 3, 0) },
+			})
+			local held: InputObject? = nil
+			local start = Vector2.zero
+			local function show(drag: Vector2)
+				local size = pad.AbsoluteSize.X
+				local reach = size * 0.85
+				local middle = pad.AbsolutePosition + pad.AbsoluteSize / 2 - api.Gui.AbsolutePosition
+				local offset = if drag.Magnitude > reach then drag.Unit * reach else drag
+				ring.Size = UDim2.fromOffset(reach * 2, reach * 2)
+				ring.Position = UDim2.fromOffset(middle.X, middle.Y)
+				knob.Size = UDim2.fromOffset(size * 0.42, size * 0.42)
+				knob.Position = UDim2.fromOffset(middle.X + offset.X, middle.Y + offset.Y)
+				ring.Visible = true
+				knob.Visible = true
+			end
+			api:Track(pad.InputBegan:Connect(function(input)
+				if input.UserInputType ~= Enum.UserInputType.Touch then
+					return
+				end
+				if held and held.UserInputState ~= Enum.UserInputState.End then
+					return -- (another finger: the first one aims)
+				end
+				held = input
+				start = Vector2.new(input.Position.X, input.Position.Y)
+				stickDrag = nil
+				show(Vector2.zero)
+			end))
+			api:Track(UserInputService.TouchMoved:Connect(function(input)
+				if input ~= held then
+					return
+				end
+				local drag = Vector2.new(input.Position.X, input.Position.Y) - start
+				stickDrag = if drag.Magnitude > STICK_DEAD then drag else nil
+				show(drag)
+			end))
+			api:Track(UserInputService.TouchEnded:Connect(function(input)
+				if input ~= held then
+					return
+				end
+				held = nil
+				ring.Visible = false
+				knob.Visible = false
+				local drag = stickDrag
+				stickDrag = nil
+				if drag then
+					aim = dragHeading(drag) -- exactly where the line pointed when the thumb lifted
+					dragUntil = os.clock() + STICK_HOLD
+				end
+				if not fire() then
+					queuedUntil = os.clock() + STICK_QUEUE
+				end
+			end))
+		end
+	end
 	local mineButton = api:Button({ Text = "MINE", Key = Enum.KeyCode.E, Color = Theme.Colors.Orange, Slot = 2 })
 	mineButton.Pressed:Connect(layMine)
 	api:Track(UserInputService.InputBegan:Connect(function(input, processed)
@@ -1196,7 +1273,7 @@ function Tanks.Start(api)
 	end))
 	api:Hint(
 		if touch
-			then "Stick: drive • Drag right: aim • FIRE!"
+			then "Drag FIRE to aim • let go to shoot!"
 			else "WASD drive • Mouse aim • Click to FIRE • E: mine",
 		hudY + 38
 	)
@@ -1319,6 +1396,9 @@ function Tanks.Start(api)
 		local driving = canDrive()
 		if mine and not mine.Out and meReady then
 			updateAim(dt)
+			if queuedUntil > 0 and (os.clock() > queuedUntil or fire()) then
+				queuedUntil = 0
+			end
 			if driving then
 				local mx, mz = moveInput()
 				mx, mz = round(mx, 0.01), round(mz, 0.01)

@@ -1,18 +1,18 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-22 15:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-22 16:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (2026-10-22 15:00 UTC)
+## Session B in flight (2026-10-22 16:00 UTC)
 
-- **Live version 36** (published ~13:35 UTC on 2026-10-22 from `f288f2f`, on the owner's word; the owner must restart
-  servers after every publish). 30 mini-games. Version 35 (645aff5) added games 27-29 (Hot Potato, Dice Dash, Minecart
+- **Live version 37** (published 15:56 UTC on 2026-10-22 from `7405f0c`, on the owner's "Push when things come back";
+  the owner must restart servers after every publish). Version 36 was published ~13:35 UTC from `f288f2f`. 30 mini-games. Version 35 (645aff5) added games 27-29 (Hot Potato, Dice Dash, Minecart
   Mayhem), the PLAY AGAIN vote, the Spleef rework and server-owned bots. Version 36 added Session A's work (round songs,
   Friends, Party Cups, Medals, the weekly leaderboard and Hall of Fame, the Halloween party with the pumpkin hat, 2x
   coins on Halloween weekends) and the sweep's core, clean-up and group C fixes (brighter buttons among them).
-- **Next update, merged on the branch and not published** (publish only on the owner's word: `python3
-  tools/publish_place.py --universe-id 10772087888 --place-id 78868713931081`; the settings PATCH's 403 is expected):
+- **Version 37 carries** (publish only on the owner's word: `python3 tools/publish_place.py --universe-id 10772087888
+  --place-id 78868713931081` from the main checkout at the release commit; the settings PATCH's 403 is expected):
   - sweep A (37f3813): Crazy Cutters' magnifier bubble on phones, mode fixes;
   - sweep B (a3fe9a1): Prime Cut's floating YOU badge gone, Spleef bot jumps, Shark Bait's stuck watchdog, mode fixes;
   - in-round screen space (81b2e02): the ☰ menu in rounds, compact standings on phones, the players-left pill in the
@@ -28,27 +28,37 @@ Session A's handoff from 17:40 UTC, still accurate except where this block says 
     Plugin capability), so only a live game proves it. Other modes still move anchored bots by CFrame (Snowball
     flights, Stamp Out hops, Parasol, the rides, the Hex drop): watch the counters before touching them;
   - Struggle's bats (685d38f): a bat mesh (asset 103167926267453) held in the right hand by a grip joint, a scripted
-    swing that follows the hit rule's reach (`tests/Struggle.spec.luau`). Its portal preview still shows the old bats:
-    re-render it (`tools/preview/make_preview.py Struggle`) before publishing;
+    swing that follows the hit rule's reach (`tests/Struggle.spec.luau`);
   - parties (7ea6168; owner: "if you party with others for team games you are on the same team"): the 👥 PARTY chip
     and window in the lobby, invite cards, parties of up to 4 that last across rounds (`Logic/PartyLogic`,
     `Services/PartyService`, `Controllers/PartyController`), kept on one team in team games and on one side in the role
     games (`Logic/PartyTeams`, `ctx:PartyGroups()`, `ctx:PartySides(n)`), split as evenly as possible only when a team
-    can't hold them. Open question for the owner: on Halloween the PARTY chip pushes 👋 INVITE off the chip row
-    (or PARTY could go after INVITE);
+    can't hold them. On a phone's full chip row (Halloween) PARTY can push 👋 INVITE off; the PARTY window has its
+    own 👋 INVITE FRIENDS TO THE GAME button, so nothing is lost;
   - marks the fonts draw (dc3358f): FredokaOne and Builder Sans draw ★ ✕ ✚ ☾ ◐ ✦ ☆ ☰ as blanks (measured on a real
     server). Red teams wear ■, Stamp Out's red ink is ♥, close buttons read X; `tests/Marks.spec.luau` checks mark sets.
-  - **Running:** R15 poses. This place's R15 bodies use AnimationConstraint joints, not Motor6D, so the rides' and
-    Struggle's poses need a shared helper (`src/client/Pose.luau`) for Bobsled Run, Dice Dash, Minecart Mayhem, Parasol
-    Plummet, Rockin' Raceway, Skate Escape and Struggle.
-  - **Checks before publishing:** the full regression of all 30 games on 9de5e9d is running; then mode checks on the
-    final tree for Struggle and the party modes (Pump & Pop, Cake Factory, Shark Bait, Arrow Ambush, Sinking Sands, Log
-    Jam, Prime Cut), the lobby, and the client on phone and PC.
-- **Src clean-up candidates (from the clean sweep, not done):** the unused `Kit/Glove.luau` and its README line, unused
-  remotes `EventAction` and `MedalEarned`, preloaded MeshLibrary specs no mode uses (ShoppingCart, YeetGlove, Anvil,
-  MalletHead, Chest, Cone, FireWheel, HoneyTree, Basket), Skate Escape's unused Boost broadcast, shared values no client
-  reads (Arrow Ambush `Tags`, Prime Cut `History`, Rockin' Raceway's and Minecart Mayhem's `CloseAt`). Check the held
-  shop pass before removing a model or kit it might use.
+  - R15 poses (35ae9c7): this place's R15 bodies use AnimationConstraint joints, not Motor6D, so the riding modes'
+    poses never showed. `src/client/Pose.luau` turns either kind (`tests/Pose.spec.luau`); Bobsled Run, Dice Dash,
+    Minecart Mayhem, Parasol Plummet, Rockin' Raceway, Skate Escape and Struggle use it. Only a live game shows the
+    Animator/PreSimulation order on devices;
+  - Struggle's portal preview re-shot with the held bats (62b2e32, image 94727421623197, approved);
+  - the clean-up (9e2824b): `Kit/Glove.luau` and nine MeshLibrary specs no mode used (ShoppingCart, YeetGlove, Anvil,
+    MalletHead, Chest, Cone, FireWheel, HoneyTree, Basket; their meshes stay in assets/), Arrow Ambush's `Tags` and
+    Prime Cut's `History` shares. The remotes `EventAction` and `MedalEarned` are used now (Halloween, medals).
+  - **Checks:** the full regression of all 30 games, the lobby and the client on 9de5e9d (0 errors); on 9e2824b the
+    party team modes, Fire Rope, Honey Trap, the lobby and the phone client; on 35ae9c7 the seven pose modes and the
+    client on phone and PC.
+- **Being built (agents, for the update after this one):**
+  - epic parties (owner: "make the party system insane. I want it to look super epic."): a squad bar, an avatar-card
+    window, a PARTY UP moment, crests, rings, link beams and in-round outlines, party names, colors and emblems, a streak;
+  - the GOLD PASS (owner: "we do need a paid battle pass too. I like the current free one. But the paid one should also
+    be insane."; price "399 is fine."): a gold lane on the Level Road, one permanent game pass that replaces the dormant
+    VIP pass. The game pass exists: **id 2048378768**, "GOLD PASS", 399 Robux, created **off sale** with Roblox's
+    placeholder icon. At publish: upload the agent's icon and set it for sale
+    (`PATCH https://apis.roblox.com/game-passes/v1/universes/10772087888/game-passes/2048378768`, multipart form;
+    the create call took `name`, `description`, `isForSale`, `price`).
+- **Src clean-up left:** Skate Escape's unused Boost broadcast and Rockin' Raceway's and Minecart Mayhem's `CloseAt`
+  shares (no client reads them).
 - **Held until the owner says the bug-fix wave is done ("after everything else is finished"):** the second shop
   pass, 25 coin items and 10 effects, finished on `claude/games-3` at f0cb9da (a copy is in
   `docs/wip/shop-pass2.bundle`). `claude/games-2` and `claude/games-3` carry it, so take only other work from them.

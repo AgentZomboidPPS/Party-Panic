@@ -32,6 +32,7 @@ local NAMES = {
 	"Celebrate", -- (payload) a level up or career milestone to celebrate; see Services/ProgressionService
 	"LevelPop", -- (character: Model, level: number) the "Lv 10!" that pops over a player's head
 	"MedalEarned", -- (medalId: string, earlier: boolean?) a new medal for the collection; see Services/MedalService
+	"GoldPass", -- both ways: "Prompt" (buy the GOLD PASS), "Unlocked" (what it gave); see Services/GoldPassService
 }
 
 local Remotes = {}

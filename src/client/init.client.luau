@@ -61,6 +61,7 @@ local order = {
 	"QuestController",
 	"RewardsController", -- after HudController: it adds to the profile chip
 	"CelebrationController",
+	"GoldPassController", -- the GOLD PASS's UNLOCKED card, and the gold shimmer on name tags
 	-- What keeps players coming back.
 	"CupController",
 	"InviteController",

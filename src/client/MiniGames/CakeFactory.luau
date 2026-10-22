@@ -30,6 +30,7 @@ local RunService = game:GetService("RunService")
 local GameState = require(ReplicatedStorage.Shared.GameState)
 local Teams = require(ReplicatedStorage.Shared.Teams)
 
+local Api = require(script.Parent.Kit.Api)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -110,7 +111,7 @@ end
 local function quickTemplate(name: string): Instance?
 	local folder = ReplicatedStorage:FindFirstChild("MiniGameAssets")
 	local template = folder and folder:FindFirstChild(name)
-	return if template then template:Clone() else nil
+	return if template and Api.Arrived(template) then template:Clone() else nil
 end
 
 -- A layer model (a template copy) with each part's place relative to the model's pivot. `quick`:

@@ -14,6 +14,15 @@
 -- The PUMPKIN HAT (the HALLOWEEN PARTY's headline reward): a carved jack-o'-lantern 1.3 heads wide,
 -- sitting a little down over the top of the head, its face looking where the wearer looks, with a
 -- soft warm light inside.
+--
+-- The GOLD PASS's hats (owner: "Also we do need a paid battle pass too. I like the current free one.
+-- But the paid one should also be insane."; Shared/GoldPass, meshes in World/Props/GoldHats): the
+-- GOLD PARTY HAT, the ROYAL CROWN (its gems glowing, a little gold glitter), the GOLDEN HALO (a
+-- glowing ring that floats above the head: a hat that sits up off it, Sink below 0), the GILDED TOP
+-- HAT and the SUN KING CROWN (a bright gem, a warm light and gold glitter). Glitter is a slow
+-- sparkle emitter on the hat (PP_GoldGlitter: off on a device with reduced effects).
+
+local CollectionService = game:GetService("CollectionService")
 
 local MeshLibrary = require(script.Parent.MeshLibrary)
 
@@ -25,10 +34,13 @@ type Look = {
 	Prop: string, -- World/Props/Hats
 	Handle: string, -- the piece that becomes the Handle (the hat's biggest)
 	Width: number, -- how wide it's worn, in head widths
-	Sink: number, -- how far its bottom sits down over the top of the head, in head widths
+	Sink: number, -- how far its bottom sits down over the top of the head, in head widths (below 0: above it)
 	Glow: string?, -- the piece the light is in
 	Light: { Color: Color3, Brightness: number, Range: number }?, -- Range in head widths
+	Glitter: { Color: Color3, Rate: number }?, -- gold sparkles drifting off it
 }
+
+local GLITTER_TAG = "PP_GoldGlitter" -- (Controllers/GoldPassController switches them off with reduced effects)
 
 local LOOKS: { [string]: Look } = {
 	Hat_Pumpkin = {
@@ -38,6 +50,36 @@ local LOOKS: { [string]: Look } = {
 		Sink = 0.2,
 		Glow = "HatGlow",
 		Light = { Color = Color3.fromRGB(255, 170, 70), Brightness = 0.9, Range = 4.5 },
+	},
+	-- The GOLD PASS's hats.
+	Hat_GoldParty = { Prop = "GoldPartyHat", Handle = "PartyGold", Width = 0.62, Sink = 0.04 },
+	Hat_RoyalCrown = {
+		Prop = "RoyalCrown",
+		Handle = "CrownGold",
+		Width = 0.95,
+		Sink = 0.2,
+		Glow = "CrownRuby",
+		Light = { Color = Color3.fromRGB(255, 205, 120), Brightness = 0.6, Range = 4 },
+		Glitter = { Color = Color3.fromRGB(255, 228, 130), Rate = 4 },
+	},
+	Hat_GoldenHalo = {
+		Prop = "GoldenHalo",
+		Handle = "HaloRing",
+		Width = 0.8,
+		Sink = -0.32,
+		Glow = "HaloRing",
+		Light = { Color = Color3.fromRGB(255, 214, 90), Brightness = 1, Range = 5 },
+		Glitter = { Color = Color3.fromRGB(255, 240, 170), Rate = 3 },
+	},
+	Hat_GildedTopHat = { Prop = "GildedTopHat", Handle = "TopHatBody", Width = 1.1, Sink = 0.1 },
+	Hat_SunKing = {
+		Prop = "SunKingCrown",
+		Handle = "SunGold",
+		Width = 1.3,
+		Sink = 0.16,
+		Glow = "SunGem",
+		Light = { Color = Color3.fromRGB(255, 200, 90), Brightness = 1.2, Range = 6 },
+		Glitter = { Color = Color3.fromRGB(255, 220, 110), Rate = 7 },
 	},
 }
 
@@ -148,6 +190,23 @@ function Hats.Attach(character: Model, itemId: string): Accessory?
 		light.Range = look.Light.Range * width
 		light.Shadows = false
 		light.Parent = glow
+	end
+	if look.Glitter then
+		local glitter = Instance.new("ParticleEmitter")
+		glitter.Name = "Glitter"
+		glitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		glitter.Color = ColorSequence.new(look.Glitter.Color)
+		glitter.LightEmission = 1
+		glitter.Size = NumberSequence.new(0.3 * width, 0)
+		glitter.Transparency = NumberSequence.new(0.1, 1)
+		glitter.Lifetime = NumberRange.new(0.8, 1.4)
+		glitter.Rate = look.Glitter.Rate
+		glitter.Speed = NumberRange.new(0.3, 1)
+		glitter.SpreadAngle = Vector2.new(180, 180)
+		glitter.Acceleration = Vector3.new(0, 0.6, 0)
+		glitter.Drag = 1
+		glitter.Parent = handle
+		CollectionService:AddTag(glitter, GLITTER_TAG)
 	end
 	handle.Name = "Handle"
 	handle.Parent = accessory

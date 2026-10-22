@@ -451,6 +451,16 @@ function TraceRace:Start()
 		self.pending[player] = {}
 	end
 	ctx:SetSharedJSON("Race", { T0 = t0, T1 = self.race.T1 })
+	-- No jumping on a crayon (owner: "Remove the jump button for trace race. it was confusing"): a
+	-- character that can't jump has no jump button on phones. (The round's Begin gave everyone their
+	-- jump back at GO; the next character, back in the lobby, has it again.)
+	for player in self.lanes do
+		local _, humanoid = ctx:GetCharacter(player)
+		if humanoid then
+			humanoid.JumpHeight = 0
+			humanoid.JumpPower = 0
+		end
+	end
 
 	ctx:OnAction("Trace", function(player, data)
 		self:_onTrace(player, data)

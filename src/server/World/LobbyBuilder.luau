@@ -143,22 +143,24 @@ local function setupLighting()
 	atmosphere.Offset = 0.2
 	atmosphere.Color = rgb(255, 236, 214)
 	atmosphere.Decay = rgb(186, 196, 236)
-	atmosphere.Glare = 0.3
+	atmosphere.Glare = 0.15
 	atmosphere.Haze = 0.5
 	atmosphere.Parent = Lighting
 
-	-- Rich, warm color, and enough bloom that neon bulbs and signs glow.
+	-- Warm color, and a soft bloom so neon bulbs and signs still glow (owner: "Can we tone down the
+	-- neon vibrancy effect in the lobby? its way to loud.": saturation was +0.22 and the bloom 0.5 wide
+	-- and bright enough to haze the whole plaza).
 	local correction = Instance.new("ColorCorrectionEffect")
-	correction.Saturation = 0.22
-	correction.Contrast = 0.1
-	correction.TintColor = rgb(255, 247, 236)
+	correction.Saturation = 0.06
+	correction.Contrast = 0.05
+	correction.TintColor = rgb(255, 249, 242)
 	correction.Parent = Lighting
 
 	local bloom = Instance.new("BloomEffect")
 	-- The threshold stays above sunlit white, so only neon glows and pale stone never washes out.
-	bloom.Intensity = 0.5
-	bloom.Size = 28
-	bloom.Threshold = 1.25
+	bloom.Intensity = 0.22
+	bloom.Size = 18
+	bloom.Threshold = 1.5
 	bloom.Parent = Lighting
 end
 
@@ -1232,7 +1234,7 @@ local function buildEmoteStage(root: Model): (ProximityPrompt, Vector3)
 					CFrame = CFrame.new(center + offset + Vector3.new(0, 1.7, 0)),
 					Color = PARTY_COLORS[((gx + gz) % #PARTY_COLORS) + 1],
 					Material = if (gx + gz) % 2 == 0 then Enum.Material.Neon else Enum.Material.SmoothPlastic,
-					Transparency = if (gx + gz) % 2 == 0 then 0.25 else 0,
+					Transparency = if (gx + gz) % 2 == 0 then 0.55 else 0, -- (a soft glow, not a blaze)
 					Parent = stage,
 				})
 			)
