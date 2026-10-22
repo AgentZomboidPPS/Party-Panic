@@ -6,7 +6,7 @@ All art props and audio are **original and generated from code**, so there's not
 | --- | --- | --- |
 | `assets/meshes/*.obj, *.glb` | 15 toy-style props (shopping cart, glove, chest, trophy, trees...) | `python3 tools/meshgen/generate_meshes.py` |
 | `assets/audio/music/*.ogg` | "Party Plaza" + "Sunset Social" (lobby playlist), "Panic Mode" (rounds) | `python3 tools/music/compose.py` |
-| `assets/audio/modes/ModePack*.ogg` | each mini-game's own round song, several to a file | `python3 tools/music/modes.py` |
+| `build/music/packs/ModePack*.ogg` (not in git: rebuilt by `pack`, kept by Roblox once uploaded) | each mini-game's own round song, several to a file | `python3 tools/music/modes.py` |
 | `assets/audio/sfx/*.ogg` | 15 sound effects, plus `SfxSprite.ogg` (all of them in one file) | same |
 
 Requirements for regenerating: Python 3.10+, `numpy`, `scipy`, `scikit-image` (meshes), and
@@ -89,7 +89,7 @@ python3 tools/music/modes.py list                 # which modes have no song yet
 python3 tools/music/modes.py render <ModeId>      # into build/music/<ModeId>.wav
 python3 tools/music/modes.py check                # lengths against the round, loudness, peaks
 python3 tools/music/modes.py preview previews/ <ModeId>   # an MP3 to listen to
-python3 tools/music/modes.py pack                 # assets/audio/modes/ModePack<N>.ogg + src/shared/ModeMusic.luau
+python3 tools/music/modes.py pack                 # build/music/packs/ModePack<N>.ogg + src/shared/ModeMusic.luau
 python3 tools/upload_assets.py --user-id 11690979745 --what modes
 ```
 

@@ -13,7 +13,7 @@ lists the rules every song keeps):
     python3 tools/music/modes.py list                  # the songs, and the modes without one
     python3 tools/music/modes.py render [Id ...]       # render into build/music/<Id>.wav (all if none)
     python3 tools/music/modes.py check                 # lengths against the rounds, loudness, peaks
-    python3 tools/music/modes.py pack                  # assets/audio/modes/ModePack<N>.ogg + src/shared/ModeMusic.luau
+    python3 tools/music/modes.py pack                  # build/music/packs/ModePack<N>.ogg + src/shared/ModeMusic.luau
     python3 tools/music/modes.py preview DIR [Id ...]  # MP3s to listen to
 
 Roblox caps audio uploads per month (10 without ID verification, 100 with) and each file at about
@@ -47,7 +47,7 @@ from score import lufs, true_peak_db  # noqa: E402
 
 SONGS_DIR = HERE / "songs"
 CACHE = ROOT / "build" / "music"
-OUT = ROOT / "assets" / "audio" / "modes"
+OUT = ROOT / "build" / "music" / "packs"  # build output: regenerated from the songs, uploaded to Roblox
 MANIFEST = HERE / "packs.json"
 LUAU = ROOT / "src" / "shared" / "ModeMusic.luau"
 RECORD = ROOT / "assets" / "uploaded.json"
@@ -55,6 +55,12 @@ DEFINITIONS = ROOT / "src" / "shared" / "GameDefinitions.luau"
 
 PACK_SECONDS = 415.0  # each pack stays under Roblox's 7 minute cap
 GAP = 0.5  # silence between songs in a pack
+# The game starts a song 13 s before its drop (Config RulesTime 10 + CountdownTime 3), so a pack keeps
+# only this much of each intro: the rest would never be heard. (If the wait before GO ever grows,
+# SongTiming.Wait holds the song back so its drop still lands on GO.)
+LEAD_IN = 13.5
+LEAD_FADE = 0.3  # a trimmed intro fades in over this
+SEAM = 0.12  # the end of each song blends into the moment before its drop, so the game's loop is seamless
 MIN_INTRO = 13.0  # the rules card and the 3-2-1
 TARGET_LUFS, LUFS_SLACK, MAX_PEAK = -11.0, 1.0, -1.0
 
@@ -195,12 +201,17 @@ def pack(replace: set[str], fresh: bool = False) -> None:
         if name not in frozen:
             manifest[name]["songs"] = [e for e in manifest[name]["songs"] if e["id"] in songs]
     renders = {song_id: wav(song_id) for song_id in songs if placed.get(song_id) not in frozen}
+    def packed_seconds(song_id: str) -> float:
+        song = songs[song_id]
+        intro = seconds_of(song, song.intro)
+        return renders[song_id].shape[1] / s.SR - max(0.0, intro - LEAD_IN)
+
     # First fit, longest songs first: the fewest packs.
-    order = sorted((i for i in songs if i not in placed), key=lambda i: (-renders[i].shape[1], i))
+    order = sorted((i for i in songs if i not in placed), key=lambda i: (-packed_seconds(i), i))
     for song_id in order:
         if placed.get(song_id) in frozen:
             continue
-        seconds = renders[song_id].shape[1] / s.SR
+        seconds = packed_seconds(song_id)
         if seconds > PACK_SECONDS:
             raise SystemExit(f"{song_id} is {seconds:.0f}s, longer than a pack ({PACK_SECONDS:.0f}s)")
         home = placed.get(song_id)
@@ -208,7 +219,7 @@ def pack(replace: set[str], fresh: bool = False) -> None:
             for name in sorted(manifest, key=pack_number):
                 if name in frozen:
                     continue
-                used = sum(renders[e["id"]].shape[1] / s.SR + GAP for e in manifest[name]["songs"])
+                used = sum(packed_seconds(e["id"]) + GAP for e in manifest[name]["songs"])
                 if used + seconds <= PACK_SECONDS:
                     home = name
                     break
@@ -225,13 +236,13 @@ def pack(replace: set[str], fresh: bool = False) -> None:
             continue
         pieces, cursor = [], 0.0
         for entry in manifest[name]["songs"]:
-            audio = renders[entry["id"]]
             song = songs[entry["id"]]
+            audio, intro = for_pack(renders[entry["id"]], song)
             length = audio.shape[1] / s.SR
             entry.update(
                 title=song.title,
                 start=round(cursor, 3),
-                drop=round(cursor + seconds_of(song, song.intro), 3),
+                drop=round(cursor + intro, 3),
                 end=round(cursor + length, 3),
             )
             pieces += [audio, np.zeros((2, s.samples(GAP)))]
@@ -248,6 +259,25 @@ def pack(replace: set[str], fresh: bool = False) -> None:
 
     MANIFEST.write_text(json.dumps(manifest, indent=1) + "\n")
     write_luau(manifest)
+
+
+def for_pack(audio: np.ndarray, song) -> tuple[np.ndarray, float]:
+    """A rendered song as it goes into a pack: its intro trimmed to the LEAD_IN the game plays (faded in),
+    and its last SEAM seconds blended into the moment before its drop, so when the game loops from the
+    end back to the drop the sound carries straight on (the kit wraps a song's tails round to its first
+    bar, not to the drop, so a plain jump can click). Returns the audio and the seconds before the drop."""
+    drop = s.samples(seconds_of(song, song.intro))
+    keep = min(drop, s.samples(LEAD_IN))
+    out = audio[:, drop - keep:].copy()
+    if keep < drop:
+        fade = s.samples(LEAD_FADE)
+        out[:, :fade] *= np.linspace(0.0, 1.0, fade)
+    seam = s.samples(SEAM)
+    if out.shape[1] - keep > 4 * seam:
+        t = np.linspace(0.0, 1.0, seam)
+        before_drop = out[:, keep - seam : keep]
+        out[:, -seam:] = out[:, -seam:] * np.cos(t * np.pi / 2) + before_drop * np.sin(t * np.pi / 2)
+    return out, keep / s.SR
 
 
 def pack_number(name: str) -> int:
@@ -269,7 +299,7 @@ def read_wav(path: Path) -> np.ndarray:
 def write_luau(manifest: dict) -> None:
     lines = [
         "-- GENERATED by tools/music/modes.py - do not edit by hand.",
-        "-- Each mini-game's own round song: which packed file in assets/audio/modes it's in (its asset id is",
+        "-- Each mini-game's own round song: which packed upload it's in (tools/music/modes.py pack; its asset id is",
         "-- AudioAssets.ModeMusic[Pack]) and where, in seconds: the song plays from Start, its intro ends at",
         "-- Drop (timed to land on GO), and the part from Drop to End loops in a longer round.",
         "",

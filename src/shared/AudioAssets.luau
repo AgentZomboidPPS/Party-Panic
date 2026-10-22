@@ -13,6 +13,10 @@ return {
 	-- sits is in ModeMusic.luau). A game whose pack isn't uploaded yet plays "Panic Mode" (Music.Round).
 	ModeMusic = {
 		ModePack1 = 0,
+		ModePack2 = 0,
+		ModePack3 = 0,
+		ModePack4 = 0,
+		ModePack5 = 0,
 	},
 	Sfx = {
 		VoteOpen = 0,

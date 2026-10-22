@@ -16,7 +16,7 @@ models with InsertService, which only works for assets its creator owns.
 
 Limits (Roblox): audio uploads are capped per month (10 without ID verification, 100 with). This
 tool needs 4 audio uploads (3 music tracks + 1 sound-effects sprite), plus one per pack of mini-game
-songs (assets/audio/modes/ModePack<N>.ogg, several songs to a file; tools/music/modes.py). Uploaded assets go through
+songs (build/music/packs/ModePack<N>.ogg, several songs to a file; tools/music/modes.py pack). Uploaded assets go through
 moderation; until approved, the game automatically keeps using its built-in fallbacks.
 Already-uploaded files are recorded in assets/uploaded.json and skipped on re-runs.
 """
@@ -177,7 +177,7 @@ def main():
         jobs.append(("sprite", "SfxSprite", ROOT / "assets" / "audio" / "sfx" / "SfxSprite.ogg", "Audio", "audio/ogg", "Party Panic - sound effects"))
     if args.what in ("all", "audio", "modes"):
         # The mini-games' own round songs, packed several to a file (tools/music/modes.py pack).
-        for pack in sorted((ROOT / "assets" / "audio" / "modes").glob("ModePack*.ogg"), key=lambda p: int(re.sub(r"\D", "", p.stem) or 0)):
+        for pack in sorted((ROOT / "build" / "music" / "packs").glob("ModePack*.ogg"), key=lambda p: int(re.sub(r"\D", "", p.stem) or 0)):
             jobs.append(("modepack", pack.stem, pack, "Audio", "audio/ogg", f"Party Panic - mini-game songs ({pack.stem})"))
 
     record = json.loads(RECORD.read_text()) if RECORD.exists() else {}
