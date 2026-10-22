@@ -52,7 +52,7 @@ def fence():
     pickets = []
     count = 13
     step = width / count
-    w = step - 0.1
+    w = step + 0.02  # planks butt together: no gaps to see (or rays) through
     for i in range(count):
         x = -width / 2 + step * (i + 0.5)
         outline = [(x - w / 2, 0.0), (x + w / 2, 0.0), (x + w / 2, height - 0.45), (x, height), (x - w / 2, height - 0.45)]

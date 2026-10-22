@@ -37,7 +37,7 @@ return function(h)
 		},
 		HotPotatoFence = {
 			Height = 10.5,
-			AssetId = 111732393421284,
+			AssetId = 0,
 			Collide = true,
 			Palette = { Pickets = h.rgb(250, 246, 236), Rails = h.rgb(232, 224, 208), Posts = h.rgb(240, 234, 220) },
 			Materials = { Pickets = Enum.Material.Wood, Rails = Enum.Material.Wood, Posts = Enum.Material.Wood },
