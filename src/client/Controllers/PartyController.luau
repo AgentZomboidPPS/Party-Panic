@@ -17,6 +17,23 @@
 --   * Everyone in a party has a 👥 before their name on their name tag (the server's PP_Nameplate),
 --     so friends in the lobby can see who's together.
 -- Bots are never in parties (they aren't Players, so they're never listed).
+--
+-- The glow-up (owner: "Also make the party system insane. I want it to look super epic."), drawn
+-- with UI/PartyKit in the party's own colour (its look and streak: Client/PartyView):
+--   * The window opens on an animated header in place of its title: the party's emblem on a
+--     glowing medallion, its name in big letters with a shine sweeping across, how many are in it
+--     and its streak (🔥 rounds in a row together). Under it, the squad: four big cards, each a
+--     headshot in a glowing ring with the 👑 on the leader and a level badge in the player's prestige
+--     colours (the leader's card has a gold rim, yours a white one); the empty ones pulse "+ INVITE"
+--     (a tap goes to the people here, or opens Roblox's invite when nobody else is). The leader gets
+--     the PARTY LOOK: 🎲 a new name, and the colour and emblem from 8 each (everyone else is told who
+--     picks). Then the people here, with their faces, their party's emblem and name, and an INVITE
+--     that glows. On your own, the header says NO PARTY YET and your card waits with three empty ones.
+--   * The invite card: PARTY INVITE, the inviter's name and their party's emblem, name and size (or
+--     "wants you on their team!" when they're on their own), with their face inside a ring that runs
+--     down the 20 seconds (gold, orange past half, red at the end), a rim of colours turning round the
+--     card, and a JOIN that glows.
+-- Everything that moves is a looping tween, paused while the window is closed (PartyKit.Group).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,12 +42,16 @@ local SocialService = game:GetService("SocialService") -- Roblox's invites to th
 
 local Shared = ReplicatedStorage.Shared
 local GameState = require(Shared.GameState)
+local PartyIdentity = require(Shared.Logic.PartyIdentity)
 local PartyLogic = require(Shared.Logic.PartyLogic)
+local PartyStreak = require(Shared.Logic.PartyStreak)
 local Remotes = require(Shared.Remotes)
 
 local AudioController = require(script.Parent.AudioController)
+local PartyView = require(script.Parent.Parent.PartyView)
 local LobbyRibbon = require(script.Parent.Parent.UI.LobbyRibbon)
 local Modal = require(script.Parent.Parent.UI.Modal)
+local PartyKit = require(script.Parent.Parent.UI.PartyKit)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
@@ -42,13 +63,26 @@ local LOBBY = { Waiting = true, Intermission = true, Voting = true, Cleanup = tr
 local MARK = "👥 " -- before a party member's name on their name tag
 local SENT_WAIT = 3 -- seconds a tapped INVITE says SENT before the server has said so
 local TAG_SWEEP = 1 -- seconds between name tag checks (a new character brings a new tag)
+local GREEN_DARK = Color3.fromRGB(60, 160, 90)
+local CYAN_DARK = Color3.fromRGB(40, 140, 230)
+-- Before anyone's in a party: the window's header and the empty squad wear the panels' lavender.
+local NO_PARTY = { Color = Theme.Colors.Lavender, Emblem = "👥" }
 
 -- Scaled units (UIKit.AutoScale: phones get 0.62 points per unit).
-local WINDOW = Vector2.new(620, 600)
-local ROW = { Touch = 76, Pc = 50 } -- a player's line in the window: a thumb-sized INVITE on phones
-local BUTTON = { Touch = Vector2.new(176, 72), Pc = Vector2.new(140, 44) }
-local CARD = { Touch = Vector2.new(500, 236), Pc = Vector2.new(500, 196) }
-local CARD_BUTTON = { Touch = Vector2.new(200, 72), Pc = Vector2.new(180, 48) }
+local WINDOW = { Touch = Vector2.new(860, 600), Pc = Vector2.new(820, 660) }
+local HEADER = 112 -- the header card's height (it sits 12 down, inside the window)
+local CLOSE_ROOM = { Touch = 80, Pc = 54 } -- the window's X sits over the header's top right
+local STREAK = Vector2.new(112, 86)
+local ROW = { Touch = 84, Pc = 66 } -- a person's line in the window: a thumb-sized INVITE on phones
+local ROW_FACE = { Touch = 62, Pc = 50 }
+local BUTTON = { Touch = Vector2.new(176, 72), Pc = Vector2.new(150, 46) }
+local MEMBER = { Touch = Vector2.new(190, 216), Pc = Vector2.new(180, 206) }
+local MEMBER_FACE = 112
+local SWATCH = { Touch = 72, Pc = 54 }
+local CARD = { Touch = Vector2.new(500, 244), Pc = Vector2.new(540, 214) }
+local CARD_BUTTON = { Touch = Vector2.new(168, 72), Pc = Vector2.new(170, 52) } -- JOIN; NO is 0.62 of it
+local CARD_RING = { Touch = 150, Pc = 138 }
+local TIMER_COLORS = { Theme.Colors.Yellow, Theme.Colors.Orange, Theme.Colors.Red }
 -- Where the card's middle is, as a share of the screen's safe area: phones, right of the MOVE stick's
 -- zone (its left 40%) and left of the menu column; PC, in the middle of the band between the chips'
 -- row and the vote cards.
@@ -59,9 +93,29 @@ local remote: RemoteEvent
 local chip: LobbyRibbon.Chip
 local window: Modal.Modal
 local list: ScrollingFrame
+local loops = PartyKit.Group() -- the window's animations (paused while it's closed)
+local cardLoops = PartyKit.Group() -- the invite card's
+local peopleHeading: GuiObject? = nil
+local memberFaces: { [number]: Frame } = {} -- UserId -> their face on a squad card (SquadController lands there)
+local lastEdit = -math.huge -- the leader's last change to the look (the server has a cooldown too)
+
+local header: Frame
+local headerTint: UIGradient
+local headerMedallion: PartyKit.Medallion
+local headerName: TextLabel
+local headerLine: TextLabel
+local streakPill: Frame
+local streakTint: UIGradient
+local streakNumber: TextLabel
+
 local card: Frame
+local cardKicker: TextLabel
 local cardTitle: TextLabel
-local cardBar: Frame
+local cardParty: TextLabel
+local cardFace: PartyKit.Face
+local cardTimer: PartyKit.TimerRing
+local cardRim: UIStroke
+local cardUrgency = 0 -- the countdown ring's colour step (TIMER_COLORS)
 local incoming: { Incoming } = {} -- invites waiting for my answer, oldest first
 local shown: Incoming? = nil -- the one on the card
 local asked: { [number]: number } = {} -- UserId -> until when my invite to them says SENT
@@ -75,30 +129,16 @@ local function me(): Player
 end
 
 local function partyOf(player: any): number?
-	local id = player:GetAttribute("PP_Party")
-	return if type(id) == "number" then id else nil
+	return PartyView.PartyOf(player)
 end
 
 local function seatOf(player: any): number
-	local seat = player:GetAttribute("PP_PartySeat")
-	return if type(seat) == "number" then seat else math.huge
+	return PartyView.SeatOf(player)
 end
 
 -- The people in a party, its leader first.
 local function membersOf(id: number?): { Player }
-	local members = {}
-	if id == nil then
-		return members
-	end
-	for _, player in Players:GetPlayers() do
-		if partyOf(player) == id then
-			table.insert(members, player)
-		end
-	end
-	table.sort(members, function(a, b)
-		return seatOf(a) < seatOf(b)
-	end)
-	return members
+	return PartyView.Members(id)
 end
 
 local function lobbyUp(): boolean
@@ -108,6 +148,15 @@ end
 
 local function size(pair: { Touch: any, Pc: any }): any
 	return if touch then pair.Touch else pair.Pc
+end
+
+-- The look the window wears: my party's, or the panels' lavender on my own.
+local function lookOf(id: number?): (Color3, string, PartyView.Info?)
+	if id == nil then
+		return NO_PARTY.Color, NO_PARTY.Emblem, nil
+	end
+	local info = PartyView.Info(id)
+	return info.Color, info.Emblem, info
 end
 
 local queueRefresh: () -> ()
@@ -137,8 +186,8 @@ local function line(order: number, height: number): Frame
 	})
 end
 
--- A heading with an optional button at its right end.
-local function heading(order: number, text: string): Frame
+-- A heading with room for a button (`room` units wide, a pill's by default) at its right end.
+local function heading(order: number, text: string, room: number?): Frame
 	local frame = line(order, size(BUTTON).Y)
 	label({
 		Name = "Heading",
@@ -147,7 +196,7 @@ local function heading(order: number, text: string): Frame
 		TextSize = 26,
 		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -(size(BUTTON).X + 12), 1, 0),
+		Size = UDim2.new(1, -((room or size(BUTTON).X) + 12), 1, 0),
 		Parent = frame,
 		Children = { UIKit.TextStroke(0.2) },
 	})
@@ -159,7 +208,7 @@ local function note(order: number, text: string, color: Color3?)
 	local words = label({
 		Name = "Note",
 		Text = text,
-		TextSize = Theme.Touch.MinText,
+		TextSize = Theme.Touch.MinText + 1,
 		TextColor3 = color or Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Size = UDim2.fromScale(1, 1),
@@ -168,44 +217,43 @@ local function note(order: number, text: string, color: Color3?)
 	words:SetAttribute("PP_Lines", 2)
 end
 
-local function rowFrame(order: number, height: number, mine: boolean): Frame
-	local frame = line(order, height)
-	frame.BackgroundTransparency = if mine then 0.15 else 0.45
-	frame.BackgroundColor3 = Theme.Colors.PanelDark
-	UIKit.Corner(12).Parent = frame
-	return frame
-end
-
-local function nameLabel(frame: Frame, text: string, rightRoom: number, color: Color3?)
-	local name = label({
-		Name = "Name",
-		Text = text,
-		TextSize = 22,
-		TextWrapped = false,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextColor3 = color or Theme.Colors.Text,
-		Position = UDim2.fromOffset(14, 0),
-		Size = UDim2.new(1, -(rightRoom + 24), 1, 0),
-		Parent = frame,
-	})
-	name:SetAttribute("PP_TruncateOk", true) -- a long name may end in "..."
-end
-
-local function pill(frame: Frame, text: string, onClick: (() -> ())?, top: Color3, bottom: Color3): TextButton
-	local button = UIKit.Button({
+local function pill(
+	frame: Frame,
+	text: string,
+	onClick: (() -> ())?,
+	top: Color3,
+	bottom: Color3,
+	width: number?
+): TextButton
+	return UIKit.Button({
 		Name = "Action",
 		Text = text,
 		TextSize = if touch then 26 else 22,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -6, 0.5, 0),
-		Size = UDim2.fromOffset(size(BUTTON).X, size(BUTTON).Y),
+		Size = UDim2.fromOffset(width or size(BUTTON).X, size(BUTTON).Y),
 		CornerRadius = "round",
 		AutoButtonColor = false,
 		Active = onClick ~= nil,
+		ZIndex = 24,
 		Parent = frame,
 	}, onClick, top, bottom)
-	return button
+end
+
+-- A soft glow that breathes round a button (behind it), for the buttons that invite you in.
+local function glowBehind(button: GuiObject, color: Color3, group: PartyKit.Group)
+	local glow = UIKit.new("Frame", {
+		Name = "Glow",
+		AnchorPoint = button.AnchorPoint,
+		Position = button.Position,
+		Size = button.Size,
+		BackgroundTransparency = 1,
+		ZIndex = math.max(1, button.ZIndex - 1),
+		Parent = button.Parent,
+		Children = { UIKit.Round() },
+	})
+	local stroke = UIKit.new("UIStroke", { Color = color, Thickness = 7, Transparency = 0.35, Parent = glow })
+	PartyKit.Loop(stroke, 0.9, { Thickness = 12, Transparency = 0.8 }, group)
 end
 
 local function invite(userId: number)
@@ -237,36 +285,505 @@ local function others(mine: number?): { Player }
 	return people
 end
 
+local function inviteFriendsToGame()
+	window:Close()
+	local ok, err = pcall(SocialService.PromptGameInvite, SocialService, me())
+	if not ok then
+		warn(`[PartyController] the invite prompt didn't open: {err}`)
+	end
+end
+
+-- An empty squad slot's tap: down to the people here, or Roblox's invite when nobody else is.
+local function onEmptySlot()
+	local target = peopleHeading
+	if #others(partyOf(me())) == 0 or not target then
+		if canInviteFriends then
+			inviteFriendsToGame()
+		end
+		return
+	end
+	local goal = target.AbsolutePosition.Y - list.AbsolutePosition.Y + list.CanvasPosition.Y
+	UIKit.Tween(list, 0.35, { CanvasPosition = Vector2.new(0, math.max(0, goal)) })
+end
+
+-- The header -------------------------------------------------------------------------------------------
+
+local function buildHeader()
+	-- The window's own title ("👥 PARTY") makes way for the header; its X stays on top.
+	local titleBar = window.Window:FindFirstChild("TitleBar")
+	if titleBar then
+		for _, item in titleBar:GetChildren() do
+			if item:IsA("TextLabel") then
+				item.Visible = false
+			end
+		end
+	end
+	header = UIKit.Panel({
+		Name = "PartyHeader",
+		Position = UDim2.fromOffset(14, 12),
+		Size = UDim2.new(1, -28, 0, HEADER),
+		CornerRadius = 20,
+		ZIndex = 21, -- under the title bar's X (its sibling at 22)
+		Parent = window.Window,
+	})
+	headerTint = header:FindFirstChildOfClass("UIGradient") :: UIGradient
+	headerTint.Rotation = 20
+	local rim = header:FindFirstChildOfClass("UIStroke") :: UIStroke
+	rim.Thickness = 3
+	rim.Transparency = 0.15
+	PartyKit.Shine(header, loops, { ZIndex = 21, Period = 2.4, Strength = 0.4 })
+	headerMedallion = PartyKit.Medallion({
+		Size = 84,
+		Parent = header,
+		Position = UDim2.fromOffset(16 + 44, HEADER / 2),
+		ZIndex = 23,
+		Group = loops,
+	})
+	local closeRoom = size(CLOSE_ROOM)
+	local rightRoom = closeRoom + STREAK.X + 14
+	headerName = label({
+		Name = "PartyName",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = 40,
+		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(124, 12),
+		Size = UDim2.new(1, -(124 + rightRoom), 0, 50),
+		ZIndex = 23,
+		Parent = header,
+		Children = { UIKit.TextStroke(0.05) },
+	})
+	headerLine = label({
+		Name = "PartyLine",
+		Text = "",
+		TextSize = 21,
+		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Color3.fromRGB(240, 236, 255),
+		Position = UDim2.fromOffset(126, 64),
+		Size = UDim2.new(1, -(126 + rightRoom), 0, 30),
+		ZIndex = 23,
+		Parent = header,
+		Children = { UIKit.TextStroke(0.35) },
+	})
+	-- The streak: a flame pill left of the window's X.
+	streakPill = UIKit.new("Frame", {
+		Name = "Streak",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -closeRoom, 0.5, 0),
+		Size = UDim2.fromOffset(STREAK.X, STREAK.Y),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		ZIndex = 23,
+		Parent = header,
+		Children = { UIKit.Corner(22), UIKit.Stroke(Color3.new(1, 1, 1), 3, 0.1) },
+	})
+	streakTint = UIKit.new("UIGradient", { Rotation = 90, Parent = streakPill })
+	streakNumber = label({
+		Name = "Number",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = 34,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(0, 6),
+		Size = UDim2.new(1, 0, 0, 44),
+		ZIndex = 24,
+		Parent = streakPill,
+		Children = { UIKit.TextStroke(0.05) },
+	})
+	label({
+		Name = "Word",
+		Text = "STREAK",
+		Font = Theme.Fonts.Display,
+		TextSize = Theme.Touch.MinText,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(0, 50),
+		Size = UDim2.new(1, 0, 0, 26),
+		ZIndex = 24,
+		Parent = streakPill,
+		Children = { UIKit.TextStroke(0.2) },
+	})
+	-- The list starts under the header.
+	window.Content.Position = UDim2.fromOffset(20, 12 + HEADER + 10)
+	window.Content.Size = UDim2.new(1, -40, 1, -(12 + HEADER + 10 + 14))
+end
+
+-- Fits the party's name on its line: the biggest size up to `biggest` it fits at (down to
+-- `smallest`), in the room the header leaves it (the window may have been shrunk to fit the screen).
+local function fitName(biggest: number, smallest: number)
+	local width = window.Window.Size.X.Offset - 28 + headerName.Size.X.Offset
+	local textSize = biggest
+	while textSize > smallest and UIKit.TextWidth(headerName.Text, textSize, headerName.Font) > width do
+		textSize -= 2
+	end
+	headerName.TextSize = textSize
+end
+
+local function refreshHeader()
+	local mine = partyOf(me())
+	local color, emblem, info = lookOf(mine)
+	local members = membersOf(mine)
+	headerTint.Color = ColorSequence.new(PartyKit.Darker(color, 0.05), PartyKit.Darker(color, 0.5))
+	PartyKit.SetMedallion(headerMedallion, color, emblem)
+	if info then
+		headerName.Text = string.upper(info.Name)
+		headerLine.Text = `👥 {#members}/{PartyLogic.MaxSize}  ·  same team in team games`
+	else
+		headerName.Text = "NO PARTY YET"
+		headerLine.Text = "Invite people here to team up!"
+	end
+	fitName(40, 26)
+	streakPill.Visible = info ~= nil
+	local streak = if info then info.Streak else 0
+	streakNumber.Text = `🔥 {streak}`
+	streakTint.Color = PartyKit.FlameColors(PartyStreak.Tier(streak))
+end
+
+-- The squad -------------------------------------------------------------------------------------------
+
+local function chipLabel(parent: Instance, text: string, color: Color3, order: number)
+	local width = math.ceil(UIKit.TextWidth(text, 18, Theme.Fonts.Display)) + 20
+	UIKit.Label({
+		Name = "Tag",
+		Text = text,
+		Font = Theme.Fonts.Display,
+		TextSize = Theme.Touch.MinText,
+		TextWrapped = false,
+		BackgroundTransparency = 0,
+		BackgroundColor3 = color,
+		Size = UDim2.fromOffset(width, 28),
+		LayoutOrder = order,
+		ZIndex = 25,
+		Parent = parent,
+		Children = { UIKit.Round(), UIKit.TextStroke(0.2) },
+	})
+end
+
+local function memberCard(row: Frame, slot: number, member: Player?, color: Color3)
+	local dims = size(MEMBER)
+	local mine = member == me()
+	local cardFrame = UIKit.Panel({
+		Name = `Slot{slot}`,
+		Size = UDim2.fromOffset(dims.X, dims.Y),
+		LayoutOrder = slot,
+		CornerRadius = 22,
+		ZIndex = 22,
+		Parent = row,
+	}, PartyKit.Darker(color, if member then 0.35 else 0.7), Theme.Colors.PanelDark)
+	local rim = cardFrame:FindFirstChildOfClass("UIStroke") :: UIStroke
+	if not member then
+		-- An empty slot: a ring with a + that pulses, "INVITE" under it; a tap finds people.
+		cardFrame.BackgroundTransparency = 0.35
+		rim.Transparency = 0.6
+		local tap = UIKit.new("TextButton", {
+			Name = "Tap",
+			Text = "",
+			AutoButtonColor = false,
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 23,
+			Parent = cardFrame,
+		})
+		tap.Activated:Connect(onEmptySlot)
+		local ring = UIKit.new("Frame", {
+			Name = "Empty",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 22),
+			Size = UDim2.fromOffset(MEMBER_FACE, MEMBER_FACE),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.88,
+			ZIndex = 23,
+			Parent = tap,
+			Children = { UIKit.Round() },
+		})
+		local ringStroke = UIKit.new("UIStroke", { Color = color, Thickness = 4, Transparency = 0.35, Parent = ring })
+		local plus = label({
+			Name = "Plus",
+			Text = "+",
+			Font = Theme.Fonts.Display,
+			TextSize = 72,
+			TextWrapped = false,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 24,
+			Parent = ring,
+			Children = { UIKit.TextStroke(0.3) },
+		})
+		local words = label({
+			Name = "Invite",
+			Text = "INVITE",
+			Font = Theme.Fonts.Display,
+			TextSize = 24,
+			TextWrapped = false,
+			TextColor3 = PartyKit.Lighter(color, 0.4),
+			Position = UDim2.fromOffset(0, 146),
+			Size = UDim2.new(1, 0, 0, 32),
+			ZIndex = 24,
+			Parent = tap,
+			Children = { UIKit.TextStroke(0.2) },
+		})
+		local pulse = UIKit.new("UIScale", { Scale = 0.94, Parent = ring })
+		local beat = 0.75 + 0.12 * slot -- the empty slots don't pulse in step
+		PartyKit.Loop(pulse, beat, { Scale = 1.05 }, loops)
+		PartyKit.Loop(ringStroke, beat, { Transparency = 0 }, loops)
+		PartyKit.Loop(plus, beat, { TextTransparency = 0.35 }, loops)
+		PartyKit.Loop(words, beat, { TextTransparency = 0.3 }, loops)
+		return
+	end
+	local leads = seatOf(member) == 1
+	rim.Color = if leads then Theme.Colors.Yellow elseif mine then Color3.new(1, 1, 1) else PartyKit.Lighter(color, 0.3)
+	rim.Thickness = if leads or mine then 4 else 3
+	rim.Transparency = if leads or mine then 0 else 0.25
+	local face = PartyKit.Face({
+		Size = MEMBER_FACE,
+		Parent = cardFrame,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 22),
+		Badge = true,
+		Group = loops,
+		ZIndex = 23,
+	})
+	local leader = seatOf(member) == 1
+	PartyKit.SetFace(face, member, color, leader, PartyKit.LevelOf(member))
+	memberFaces[member.UserId] = face.Frame
+	local name = label({
+		Name = "Name",
+		Text = (member :: Player).DisplayName,
+		Font = Theme.Fonts.Display,
+		TextSize = 22,
+		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.fromOffset(8, 142),
+		Size = UDim2.new(1, -16, 0, 30),
+		ZIndex = 24,
+		Parent = cardFrame,
+		Children = { UIKit.TextStroke(0.15) },
+	})
+	name:SetAttribute("PP_TruncateOk", true) -- a long name may end in "..."
+	local tags = UIKit.new("Frame", {
+		Name = "Tags",
+		Position = UDim2.fromOffset(0, 176),
+		Size = UDim2.new(1, 0, 0, 28),
+		BackgroundTransparency = 1,
+		ZIndex = 24,
+		Parent = cardFrame,
+		Children = { UIKit.List(Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center) },
+	})
+	if leader then
+		chipLabel(tags, "LEADER", Theme.Colors.Orange, 1)
+	end
+	if mine then
+		chipLabel(tags, "YOU", CYAN_DARK, 2)
+	end
+end
+
+local function squadRow(order: number, mine: number?, members: { Player }, color: Color3)
+	local row = line(order, size(MEMBER).Y + 8)
+	row.Name = "Squad"
+	UIKit.List(Enum.FillDirection.Horizontal, 12, Enum.HorizontalAlignment.Center).Parent = row
+	-- On my own, my card first, then the room for a party.
+	local shown = if mine then members else { me() }
+	for slot = 1, PartyLogic.MaxSize do
+		memberCard(row, slot, shown[slot], color)
+	end
+end
+
+-- The leader's PARTY LOOK: a new name, the colour and the emblem (the server checks it's them).
+local function edit(action: string, value: number?)
+	if os.clock() - lastEdit < PartyIdentity.EditCooldown then
+		return
+	end
+	lastEdit = os.clock()
+	remote:FireServer(action, value)
+	AudioController.Play("Click")
+end
+
+local function swatchRow(order: number, count: number, build: (index: number, button: TextButton) -> ())
+	local frame = line(order, size(SWATCH) + 10)
+	frame.Name = "Swatches"
+	UIKit.List(Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center).Parent =
+		frame
+	for index = 1, count do
+		local button = UIKit.new("TextButton", {
+			Name = `Pick{index}`,
+			Text = "",
+			AutoButtonColor = false,
+			Size = UDim2.fromOffset(size(SWATCH), size(SWATCH)),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			LayoutOrder = index,
+			ZIndex = 23,
+			Parent = frame,
+			Children = { UIKit.Round() },
+		})
+		build(index, button)
+	end
+end
+
+local function lookSection(order: () -> number, info: PartyView.Info, members: { Player })
+	if not PartyView.IsLeader(me()) then
+		local leader = members[1]
+		note(
+			order(),
+			`👑 {if leader then leader.DisplayName else "The leader"} picks the party's name, colour and emblem.`
+		)
+		return
+	end
+	local rerollWidth = if touch then 230 else 180
+	local top = heading(order(), "PARTY LOOK", rerollWidth)
+	pill(top, "🎲 NEW NAME", function()
+		edit("Reroll")
+	end, Theme.Colors.Lavender, Theme.Colors.Purple, rerollWidth)
+	swatchRow(order(), #PartyIdentity.Colors, function(index, button)
+		local color = PartyView.ColorAt(index)
+		local picked = index == info.ColorIndex
+		UIKit.Gradient(PartyKit.Lighter(color, 0.25), PartyKit.Darker(color, 0.15)).Parent = button
+		UIKit.new("UIStroke", {
+			Color = if picked then Color3.new(1, 1, 1) else PartyKit.Darker(color, 0.4),
+			Thickness = if picked then 4 else 2,
+			Transparency = 0,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			Parent = button,
+		})
+		if picked then
+			label({
+				Name = "Tick",
+				Text = "✓",
+				Font = Theme.Fonts.Display,
+				TextSize = 32,
+				TextWrapped = false,
+				Size = UDim2.fromScale(1, 1),
+				ZIndex = 24,
+				Parent = button,
+				Children = { UIKit.TextStroke(0.1) },
+			})
+		end
+		button.Activated:Connect(function()
+			edit("Color", index)
+		end)
+	end)
+	swatchRow(order(), #PartyIdentity.Emblems, function(index, button)
+		local picked = index == info.EmblemIndex
+		button.BackgroundColor3 = if picked then info.Color else Theme.Colors.PanelDark
+		button.BackgroundTransparency = if picked then 0 else 0.2
+		UIKit.new("UIStroke", {
+			Color = Color3.new(1, 1, 1),
+			Thickness = if picked then 4 else 2,
+			Transparency = if picked then 0 else 0.6,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			Parent = button,
+		})
+		button.Text = PartyIdentity.Emblems[index].Icon
+		button.TextSize = if touch then 36 else 30
+		button.TextColor3 = Color3.new(1, 1, 1)
+		button.Activated:Connect(function()
+			edit("Emblem", index)
+		end)
+	end)
+end
+
+-- People here -------------------------------------------------------------------------------------------
+
+local function personRow(order: number, player: Player, full: boolean)
+	local theirs = partyOf(player)
+	local theirMembers = membersOf(theirs)
+	local theyreFull = #theirMembers >= PartyLogic.MaxSize
+	local row = line(order, size(ROW))
+	row.BackgroundTransparency = 0.4
+	row.BackgroundColor3 = Theme.Colors.PanelDark
+	UIKit.Corner(16).Parent = row
+	local faceSize = size(ROW_FACE)
+	local info = if theirs then PartyView.Info(theirs) else nil
+	local face = PartyKit.Face({
+		Size = faceSize,
+		Parent = row,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 12, 0.5, 0),
+		Halo = false,
+		ZIndex = 23,
+	})
+	PartyKit.SetFace(face, player, if info then info.Color else Color3.new(1, 1, 1), false, nil)
+	local textLeft = 12 + faceSize + 14
+	local room = size(BUTTON).X + 24
+	local friend = if friends[player.UserId] then "⭐ " else ""
+	local name = label({
+		Name = "Name",
+		Text = `{friend}{player.DisplayName}`,
+		TextSize = 22,
+		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.new(0, textLeft, 0, if info then 4 else 0),
+		Size = UDim2.new(1, -(textLeft + room), if info then 0.5 else 1, if info then -4 else 0),
+		ZIndex = 24,
+		Parent = row,
+	})
+	name:SetAttribute("PP_TruncateOk", true) -- a long name may end in "..."
+	if info then
+		-- Their party: its emblem, name and size, in its colour.
+		local party = label({
+			Name = "Party",
+			Text = `{info.Emblem} {string.upper(info.Name)} · {#theirMembers}/{PartyLogic.MaxSize}`,
+			Font = Theme.Fonts.Display,
+			TextSize = Theme.Touch.MinText,
+			TextWrapped = false,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextColor3 = PartyKit.Lighter(info.Color, 0.25),
+			Position = UDim2.new(0, textLeft, 0.5, 2),
+			Size = UDim2.new(1, -(textLeft + room), 0.5, -8),
+			ZIndex = 24,
+			Parent = row,
+			Children = { UIKit.TextStroke(0.3) },
+		})
+		party:SetAttribute("PP_TruncateOk", true)
+	end
+	-- (FULL and SENT wear the panel's colours: they're not buttons.)
+	if theyreFull then
+		pill(row, "FULL", nil, Theme.Colors.PanelLight, Theme.Colors.Panel)
+	elseif waitingFor(player.UserId) then
+		pill(row, "SENT ✓", nil, Theme.Colors.PanelLight, Theme.Colors.Panel)
+	elseif not full then
+		local userId = player.UserId
+		local button = pill(row, "INVITE", function()
+			invite(userId)
+		end, Theme.Colors.Green, GREEN_DARK)
+		glowBehind(button, Theme.Colors.Green, loops)
+	end
+end
+
 local function fillWindow()
 	clear(list)
+	memberFaces = {}
+	peopleHeading = nil
+	PartyKit.SetPlaying(loops, window.IsOpen) -- (drops the loops of what was just cleared)
 	local mine = partyOf(me())
 	local members = membersOf(mine)
+	local color, _, info = lookOf(mine)
 	local full = #members >= PartyLogic.MaxSize
 	local order = 0
 	local function nextOrder(): number
 		order += 1
 		return order
 	end
+	refreshHeader()
 
-	-- Your party.
+	-- The squad.
 	if mine then
-		local top = heading(nextOrder(), `YOUR PARTY {#members}/{PartyLogic.MaxSize}`)
+		local top = heading(nextOrder(), `YOUR SQUAD {#members}/{PartyLogic.MaxSize}`)
 		pill(top, "LEAVE", function()
 			remote:FireServer("Leave")
 		end, Theme.Colors.Orange, Color3.fromRGB(215, 95, 40))
-		for _, member in members do
-			local row = rowFrame(nextOrder(), 44, member == me())
-			local mark = if seatOf(member) == 1 then "👑" else "👥"
-			nameLabel(row, `{mark} {member.DisplayName}{if member == me() then " (you)" else ""}`, 0)
-		end
-		note(nextOrder(), "Your party plays on one team in team games.")
 	else
-		heading(nextOrder(), "YOUR PARTY")
-		note(nextOrder(), "You're on your own. Invite people below: a party plays on one team in team games!")
+		heading(nextOrder(), "YOUR SQUAD")
+	end
+	squadRow(nextOrder(), mine, members, color)
+	if info then
+		lookSection(nextOrder, info, members)
+	else
+		note(nextOrder(), "A party plays on one team in team games. Invite people below!")
 	end
 
 	-- Everyone else.
-	heading(nextOrder(), "INVITE TO YOUR PARTY")
+	peopleHeading = heading(nextOrder(), "PEOPLE HERE")
 	if full then
 		note(nextOrder(), `Your party is full ({PartyLogic.MaxSize} at most).`, Theme.Colors.Yellow)
 	end
@@ -275,24 +792,7 @@ local function fillWindow()
 		note(nextOrder(), "Nobody else is here yet.")
 	end
 	for _, player in people do
-		local theirs = partyOf(player)
-		local theirSize = #membersOf(theirs)
-		local theyreFull = theirSize >= PartyLogic.MaxSize
-		local row = rowFrame(nextOrder(), size(ROW), false)
-		local status = if theirs then ` · 👥 {theirSize}/{PartyLogic.MaxSize}` else ""
-		local friend = if friends[player.UserId] then "⭐ " else ""
-		nameLabel(row, `{friend}{player.DisplayName}{status}`, size(BUTTON).X)
-		-- (FULL and SENT wear the panel's colours: they're not buttons.)
-		if theyreFull then
-			pill(row, "FULL", nil, Theme.Colors.PanelLight, Theme.Colors.Panel)
-		elseif waitingFor(player.UserId) then
-			pill(row, "SENT ✓", nil, Theme.Colors.PanelLight, Theme.Colors.Panel)
-		elseif not full then
-			local userId = player.UserId
-			pill(row, "INVITE", function()
-				invite(userId)
-			end, Theme.Colors.Green, Color3.fromRGB(60, 160, 90))
-		end
+		personRow(nextOrder(), player, full)
 	end
 
 	-- Friends who aren't here yet: Roblox's invite (the lobby's 👋 INVITE chip does the same, but on
@@ -305,21 +805,25 @@ local function fillWindow()
 			Size = UDim2.new(1, -12, 0, size(BUTTON).Y),
 			CornerRadius = "round",
 			LayoutOrder = nextOrder(),
+			ZIndex = 23,
 			Parent = list,
-		}, function()
-			window:Close()
-			local ok, err = pcall(SocialService.PromptGameInvite, SocialService, me())
-			if not ok then
-				warn(`[PartyController] the invite prompt didn't open: {err}`)
-			end
-		end, Theme.Colors.Green, Color3.fromRGB(60, 160, 90))
+		}, inviteFriendsToGame, Theme.Colors.Green, GREEN_DARK)
 	end
 end
 
 -- Opens the PARTY window (the chip does; so does the client harness).
 function PartyController.Open()
-	fillWindow()
 	window:Open()
+	fillWindow()
+end
+
+-- Where someone's face is on the window's squad while it's open (the PARTY UP! face lands there).
+function PartyController.FaceOf(userId: number): Frame?
+	if not window or not window.IsOpen then
+		return nil
+	end
+	local face = memberFaces[userId]
+	return if face and face.Parent then face else nil
 end
 
 -- The invite card -------------------------------------------------------------------------------------
@@ -347,6 +851,42 @@ function PartyController.Answer(join: boolean)
 	answer(join)
 end
 
+-- Someone here by their UserId.
+local function playerById(userId: number): Player?
+	for _, player in Players:GetPlayers() do
+		if player.UserId == userId then
+			return player
+		end
+	end
+	return nil
+end
+
+-- The inviter's face, party and colours on the card.
+local function dressCard(entry: Incoming)
+	local inviter = playerById(entry.From)
+	local theirs = if inviter then partyOf(inviter) else nil
+	local info = if theirs then PartyView.Info(theirs) else nil
+	local color = if info then info.Color else Theme.Colors.Cyan
+	cardKicker.Text = "👥 PARTY INVITE"
+	cardTitle.Text = entry.Name
+	if info then
+		cardParty.Text = `{info.Emblem} {string.upper(info.Name)} · {#membersOf(theirs)}/{PartyLogic.MaxSize}`
+		cardParty.TextColor3 = PartyKit.Lighter(color, 0.45)
+	else
+		cardParty.Text = "wants you on their team!"
+		cardParty.TextColor3 = Color3.fromRGB(225, 235, 255)
+	end
+	PartyKit.SetFace(cardFace, inviter or { UserId = entry.From, DisplayName = entry.Name }, color, false, nil)
+	local spin = cardRim:FindFirstChild("Spin") :: UIGradient?
+	if spin then
+		spin.Color = PartyKit.RimColors(color)
+	end
+	local tint = card:FindFirstChildOfClass("UIGradient")
+	if tint then
+		tint.Color = ColorSequence.new(PartyKit.Darker(color, 0.15), Color3.fromRGB(60, 40, 150))
+	end
+end
+
 -- Shows the oldest invite when the lobby's up, and hides the card (stopping its time) when not.
 local function refreshCard()
 	local free = lobbyUp()
@@ -360,12 +900,15 @@ local function refreshCard()
 		local entry = incoming[1]
 		entry.Since = os.clock()
 		shown = entry
-		cardTitle.Text = `👥 {entry.Name} invited you to their party!`
+		dressCard(entry)
 		card.Visible = true
 		UIKit.PopIn(card, 0.3)
 		AudioController.Play("Pickup")
+	elseif shown then
+		dressCard(shown :: Incoming) -- (the inviter's party can change while it's up)
 	end
 	card.Visible = shown ~= nil
+	PartyKit.SetPlaying(cardLoops, card.Visible)
 end
 
 local function stepCard()
@@ -374,7 +917,14 @@ local function stepCard()
 		return
 	end
 	local left = timeLeft(entry)
-	cardBar.Size = UDim2.fromScale(math.clamp(left / PartyLogic.InviteSeconds, 0, 1), 1)
+	local share = left / PartyLogic.InviteSeconds
+	PartyKit.TimerSet(cardTimer, share)
+	-- Gold while there's plenty of time, orange past half, red at the end.
+	local urgency = if share > 0.5 then 1 elseif share > 0.25 then 2 else 3
+	if urgency ~= cardUrgency then
+		cardUrgency = urgency
+		PartyKit.TimerColor(cardTimer, TIMER_COLORS[urgency])
+	end
 	if left <= 0 then
 		-- Its time ran out here: the server says so too, a moment later.
 		local index = table.find(incoming, entry)
@@ -389,96 +939,134 @@ end
 local function buildCard(context)
 	local dims = size(CARD)
 	local at = size(CARD_AT)
-	card = UIKit.Panel({
-		Name = "PartyInvite",
+	-- (The screen's scale on a holder, the pop-in on the card: one UIScale each.)
+	local holder = UIKit.new("Frame", {
+		Name = "PartyInviteHolder",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(at.X, at.Y),
 		Size = UDim2.fromOffset(dims.X, dims.Y),
+		BackgroundTransparency = 1,
+		ZIndex = 40,
+		Parent = context.Overlay,
+	})
+	UIKit.AutoScale(holder)
+	card = UIKit.Panel({
+		Name = "PartyInvite",
+		Size = UDim2.fromScale(1, 1),
 		Visible = false,
 		ZIndex = 40,
-		CornerRadius = 22,
-		Parent = context.Overlay,
+		CornerRadius = 26,
+		Parent = holder,
 	}, Color3.fromRGB(70, 150, 255), Color3.fromRGB(60, 52, 170))
-	UIKit.AutoScale(card)
+	-- A rim of colours turning round the card.
+	cardRim = PartyKit.SpinBorder(card, PartyKit.RimColors(Theme.Colors.Cyan), 5, cardLoops)
+	PartyKit.Shine(card, cardLoops, { ZIndex = 40, Period = 2, Strength = 0.3 })
+
+	-- The inviter's face in the ring that runs down their invite's time.
+	local ring = size(CARD_RING)
+	local ringAt = UDim2.fromOffset(20 + ring / 2, dims.Y / 2)
+	cardTimer = PartyKit.TimerRing({
+		Size = ring,
+		Thickness = 10,
+		Color = Theme.Colors.Yellow,
+		Parent = card,
+		Position = ringAt,
+		ZIndex = 41,
+	})
+	cardFace = PartyKit.Face({
+		Size = ring - 34,
+		Parent = card,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = ringAt,
+		Halo = false,
+		ZIndex = 42,
+	})
+	local textLeft = 20 + ring + 18
+	cardKicker = label({
+		Name = "Kicker",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = Theme.Touch.MinText + 1,
+		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Theme.Colors.Yellow,
+		Position = UDim2.fromOffset(textLeft, 14),
+		Size = UDim2.new(1, -(textLeft + 16), 0, 26),
+		ZIndex = 43,
+		Parent = card,
+		Children = { UIKit.TextStroke(0.15) },
+	})
 	cardTitle = label({
 		Name = "Title",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 27,
-		Position = UDim2.fromOffset(18, 12),
-		Size = UDim2.new(1, -36, 0, 70),
-		ZIndex = 41,
+		TextSize = 32,
+		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.fromOffset(textLeft, 40),
+		Size = UDim2.new(1, -(textLeft + 16), 0, 42),
+		ZIndex = 43,
+		Parent = card,
+		Children = { UIKit.TextStroke(0.1) },
+	})
+	cardTitle:SetAttribute("PP_TruncateOk", true) -- a long name may end in "..."
+	-- (A new card starts its ring gold.)
+	card:GetPropertyChangedSignal("Visible"):Connect(function()
+		cardUrgency = 0
+	end)
+	cardParty = label({
+		Name = "Why",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = Theme.Touch.MinText + 3,
+		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.fromOffset(textLeft, 84),
+		Size = UDim2.new(1, -(textLeft + 16), 0, 30),
+		ZIndex = 43,
 		Parent = card,
 		Children = { UIKit.TextStroke(0.15) },
 	})
-	cardTitle:SetAttribute("PP_Lines", 2)
-	label({
-		Name = "Why",
-		Text = "Party up to play on the same team!",
-		TextSize = Theme.Touch.MinText,
-		TextColor3 = Color3.fromRGB(225, 235, 255),
-		Position = UDim2.fromOffset(18, 82),
-		Size = UDim2.new(1, -36, 0, 26),
-		ZIndex = 41,
-		Parent = card,
-	})
+	cardParty:SetAttribute("PP_TruncateOk", true)
+	local buttonSize = size(CARD_BUTTON)
 	local buttons = UIKit.new("Frame", {
 		Name = "Buttons",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -24),
-		Size = UDim2.new(1, -36, 0, size(CARD_BUTTON).Y),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, textLeft, 1, -20),
+		Size = UDim2.new(1, -(textLeft + 16), 0, buttonSize.Y),
 		BackgroundTransparency = 1,
-		ZIndex = 41,
+		ZIndex = 43,
 		Parent = card,
-		Children = { UIKit.List(Enum.FillDirection.Horizontal, 20, Enum.HorizontalAlignment.Center) },
 	})
-	local buttonSize = size(CARD_BUTTON)
-	UIKit.Button({
+	local join = UIKit.Button({
 		Name = "Join",
 		Text = "✓ JOIN",
-		TextSize = if touch then 30 else 26,
+		TextSize = if touch then 30 else 27,
+		Position = UDim2.fromOffset(0, 0),
 		Size = UDim2.fromOffset(buttonSize.X, buttonSize.Y),
 		CornerRadius = "round",
-		LayoutOrder = 1,
-		ZIndex = 42,
+		ZIndex = 45,
 		Parent = buttons,
 	}, function()
 		answer(true)
-	end, Theme.Colors.Green, Color3.fromRGB(60, 160, 90))
+	end, Color3.fromRGB(140, 255, 160), GREEN_DARK)
+	glowBehind(join, Theme.Colors.Green, cardLoops)
+	PartyKit.Shine(join, cardLoops, { ZIndex = 45, Period = 1.4, Strength = 0.5 })
 	UIKit.Button({
 		Name = "No",
 		Text = "NO",
-		TextSize = if touch then 30 else 26,
-		Size = UDim2.fromOffset(buttonSize.X * 0.7, buttonSize.Y),
+		TextSize = if touch then 28 else 25,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0),
+		Size = UDim2.fromOffset(math.floor(buttonSize.X * 0.62), buttonSize.Y),
 		CornerRadius = "round",
-		LayoutOrder = 2,
-		ZIndex = 42,
+		ZIndex = 45,
 		Parent = buttons,
 	}, function()
 		answer(false)
 	end, Theme.Colors.Lavender, Theme.Colors.Purple)
-	-- The time left to answer: a bar along the bottom edge that runs down.
-	local track = UIKit.new("Frame", {
-		Name = "Time",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -9),
-		Size = UDim2.new(1, -44, 0, 8),
-		BackgroundColor3 = Theme.Colors.PanelDark,
-		BackgroundTransparency = 0.3,
-		BorderSizePixel = 0,
-		ZIndex = 41,
-		Parent = card,
-		Children = { UIKit.Round() },
-	})
-	cardBar = UIKit.new("Frame", {
-		Name = "Bar",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Theme.Colors.Yellow,
-		BorderSizePixel = 0,
-		ZIndex = 42,
-		Parent = track,
-		Children = { UIKit.Round() },
-	})
 	RunService.Heartbeat:Connect(stepCard)
 end
 
@@ -558,8 +1146,11 @@ local function watch(player: Player)
 		return
 	end
 	watched[player] = true
-	player:GetAttributeChangedSignal("PP_Party"):Connect(queueRefresh)
-	player:GetAttributeChangedSignal("PP_PartySeat"):Connect(queueRefresh)
+	player:GetAttributeChangedSignal("PP_Level"):Connect(function()
+		if window.IsOpen then
+			queueRefresh()
+		end
+	end)
 	askFriend(player)
 end
 
@@ -606,12 +1197,39 @@ function PartyController.Status(): { [string]: any }
 			end
 		end
 	end
+	local slots = {}
+	local squad = list and list:FindFirstChild("Squad", true)
+	if squad then
+		for slot = 1, PartyLogic.MaxSize do
+			local slotFrame = squad:FindFirstChild(`Slot{slot}`)
+			local name = slotFrame and slotFrame:FindFirstChild("Name")
+			local crown = slotFrame and slotFrame:FindFirstChild("Crown", true)
+			local level = slotFrame and slotFrame:FindFirstChild("Level", true)
+			local levelText = level and level:FindFirstChild("Text")
+			if name and name:IsA("TextLabel") then
+				local extras = (if crown and crown:IsA("GuiObject") and crown.Visible then " 👑" else "")
+					.. (
+						if levelText and levelText:IsA("TextLabel") and level.Visible then ` Lv{levelText.Text}` else ""
+					)
+				table.insert(slots, name.Text .. extras)
+			elseif slotFrame then
+				table.insert(slots, "+ INVITE")
+			end
+		end
+	end
 	return {
 		Chip = if chip then chip.Button.Text else nil,
 		ChipShown = if chip then chip.Button.Visible else nil,
 		WindowOpen = if window then window.IsOpen else nil,
+		Header = if header then `{headerName.Text} | {headerLine.Text}` else nil,
+		Streak = if streakPill and streakPill.Visible then streakNumber.Text else nil,
+		Slots = slots,
 		Window = rows,
-		Card = if card and card.Visible then cardTitle.Text else nil,
+		Card = if card and card.Visible then `{cardKicker.Text} | {cardTitle.Text} | {cardParty.Text}` else nil,
+		CardParty = if card and card.Visible then cardParty.Text else nil,
+		CardTimer = if card and card.Visible
+			then math.floor(cardTimer.Right.Rotation + cardTimer.Left.Rotation)
+			else nil,
 		Waiting = #incoming,
 	}
 end
@@ -619,6 +1237,7 @@ end
 function PartyController.Start(context)
 	touch = UIKit.IsTouch()
 	remote = Remotes.Get("Party")
+	PartyView.Start()
 	chip = LobbyRibbon.Add(context, {
 		Name = "Party",
 		Priority = 2.5,
@@ -630,9 +1249,10 @@ function PartyController.Start(context)
 			end
 		end,
 		Top = Theme.Colors.Cyan,
-		Bottom = Color3.fromRGB(40, 140, 230),
+		Bottom = CYAN_DARK,
 	})
-	window = Modal.new(context.Overlay, "PARTY", "👥", WINDOW)
+	window = Modal.new(context.Overlay, "PARTY", "👥", size(WINDOW))
+	buildHeader()
 	list = UIKit.new("ScrollingFrame", {
 		Name = "Party",
 		Size = UDim2.fromScale(1, 1),
@@ -643,8 +1263,17 @@ function PartyController.Start(context)
 		CanvasSize = UDim2.new(),
 		ZIndex = 22,
 		Parent = window.Content,
-		Children = { UIKit.List(Enum.FillDirection.Vertical, 8), UIKit.Padding(4, 4) },
+		Children = { UIKit.List(Enum.FillDirection.Vertical, 10), UIKit.Padding(6, 4) },
 	})
+	window.Opened:Connect(function()
+		PartyKit.SetPlaying(loops, true)
+	end)
+	window.Closed:Connect(function()
+		PartyKit.SetPlaying(loops, false)
+		clear(list) -- nothing in it animates while it's shut; it's rebuilt when it opens
+		memberFaces = {}
+	end)
+	PartyKit.SetPlaying(loops, false)
 	buildCard(context)
 	refreshChip()
 	task.spawn(function()
@@ -654,6 +1283,7 @@ function PartyController.Start(context)
 	end)
 
 	remote.OnClientEvent:Connect(onServer)
+	PartyView.Changed:Connect(queueRefresh)
 	for _, player in Players:GetPlayers() do
 		watch(player)
 	end

@@ -65,6 +65,8 @@ local order = {
 	"CupController",
 	"InviteController",
 	"PartyController", -- the PARTY chip, its window, the invite card and the 👥 on name tags
+	"SquadController", -- the squad bar, PARTY UP! and the SQUAD card (after PartyController: it opens its window)
+	"PartyWorldController", -- party rings, crests and links in the lobby, mates' outlines in rounds
 	"MedalController",
 	"HallOfFameController",
 	"EventController",
