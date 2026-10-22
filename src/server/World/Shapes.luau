@@ -15,7 +15,7 @@
 -- the floor could reach about 3 studs past every drawn corner; an arch became a slab across its
 -- own doorway. Now a shape built from pieces (Custom, Arch, ArchPanel) is built from those same
 -- pieces as plain parts, so it's exactly its shape, and nothing built without CSG is kept: CSG
--- rests for a few seconds after a failure and is then tried again. Rounded boxes, slabs and
+-- rests for RETRY_AFTER seconds after a failure and is then tried again. Rounded boxes, slabs and
 -- capsules still fall back to one plain box or cylinder their size: that's what's drawn and what
 -- collides (only the rounding is lost).
 
