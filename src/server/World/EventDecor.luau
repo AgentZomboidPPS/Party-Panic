@@ -375,14 +375,16 @@ end
 
 -- The HALLOWEEN PARTY ---------------------------------------------------------------------------------
 
--- The lamp posts on the south lawn (between the quest corner and the arcade range, round behind the
--- emote stage), from the west round to the east. The ones by the shop and the podium stay plain.
+-- The lamp posts on the south lawn round behind the emote stage (between the quest corner and the
+-- arcade range), from the west round to the east. The ones by the shop and the podium stay plain,
+-- and so do the two at the lawn's ends, right by the medal wall (west) and the Hall of Fame (east):
+-- those keep the space round them clear.
 local function southLamps(root: Model): { Vector3 }
 	local list = {}
 	for _, item in root:GetDescendants() do
 		if item:IsA("Model") and item:GetAttribute("PP_Prop") == "LampPost" then
 			local position = item:GetPivot().Position
-			if position.Z > 30 then
+			if position.Z > 30 and math.abs(position.X) < 50 then
 				table.insert(list, position)
 			end
 		end
@@ -419,8 +421,8 @@ local LANTERN_ROOM = Vector3.new(3.6, 2.6, 3.6) -- a scale-1 jack-o'-lantern's f
 local function halloween(root: Model, into: Model)
 	local center = Vector3.zero
 	-- Jack-o'-lanterns at the foot of the south lamp posts (with a little one beside), on the plaza
-	-- side of the pole where there's room (else round it: one lamp stands right behind the arcade
-	-- range's booth), each lamp with a cobweb between its pole and the bunting to the next one.
+	-- side of the pole where there's room (else round it), each lamp with a cobweb between its pole
+	-- and the bunting to the next one.
 	local lamps = southLamps(root)
 	for index, lamp in lamps do
 		local inward = Vector3.new(-lamp.X, 0, -lamp.Z).Unit
