@@ -168,6 +168,9 @@ PRELUDE_RAW = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + 
     Path(__file__).resolve().parent / "harness_prelude.luau"
 ).read_text()
 PRELUDE = slim(PRELUDE_RAW)
+# The collider inventory's Luau (--colliders-at): appended to the prelude when asked for.
+COLLIDERS_RAW = (Path(__file__).resolve().parent / "colliders.luau").read_text()
+COLLIDERS = slim(COLLIDERS_RAW)
 
 
 def reachable_luau(text: str, entry: str) -> str:
@@ -220,12 +223,18 @@ def main():
     parser.add_argument("--spawn-fails", action="store_true", help="the stand-ins have no character, so they can't be placed")
     parser.add_argument("--reset-at", type=float, default=None, help="the last stand-in's character dies this many seconds into the rules card")
     parser.add_argument("--bot", help="stand-in script to use instead of tools/checks/bots/<Id>.luau")
+    parser.add_argument("--colliders-at", help="snapshot every part characters collide with at these round times (0 = after "
+                        "Prepare), e.g. 0,5,80, for tools/checks/colliders.py; with LOBBY: the lobby's")
+    parser.add_argument("--colliders-reach", type=float, default=600, help="with --colliders-at: map this far from the arena's middle")
+    parser.add_argument("--no-csg", action="store_true", help="build as if CSG had failed on this server (Shapes from plain parts)")
     args = parser.parse_args()
 
     header = "__touchMode = true\n" if args.touch else "__touchMode = false\n"
+    header += "__noCsg = true\n" if args.no_csg else "__noCsg = false\n"
     if args.ui_at:
         header += devices_luau(size_names(args.sizes or ("touch" if args.touch else "pc")))
-    out = [header + PRELUDE]
+    prelude = PRELUDE + ("\n" + COLLIDERS if args.colliders_at is not None else "")
+    out = [header + prelude]
     paths = module_paths()
     if args.client:
         paths.update(client_paths())
@@ -245,11 +254,13 @@ def main():
     bot = bot_file.read_text() if bot_file.exists() else "return function() end"
     harness = PRELUDE_RAW
     entry = "__runRound"
+    if args.colliders_at is not None:
+        harness += "\n" + COLLIDERS_RAW
     if args.game == "SKEEBALL":
         harness += "\n" + (Path(__file__).resolve().parent / "skeeball_game.luau").read_text()
         entry = "__runSkeeBall"
     elif args.game == "LOBBY":
-        entry = "__runLobby"
+        entry = "__runLobbyColliders" if args.colliders_at is not None else "__runLobby"
     roots = {"Shared", "Server"} | ({"Client"} if args.client else set())
     try:
         start = bundling.seeds(reachable_luau(harness, entry) + "\n" + bot, args.game, available, roots)
@@ -257,7 +268,7 @@ def main():
     except bundling.BundleError as err:
         sys.exit(f"round_harness: {err}")
     line_map = []  # (first line of the module body in the bundle, module name)
-    line = PRELUDE.count("\n") + header.count("\n") + 1  # the __touchMode (and __devices) lines come first
+    line = prelude.count("\n") + header.count("\n") + 1  # the __touchMode (and __devices) lines come first
     for module, body in available.items():
         if module not in keep:
             continue
@@ -274,7 +285,9 @@ def main():
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)
     ui = "nil" if not args.ui_at else "{" + ", ".join(ui_time(t) for t in args.ui_at.split(",")) + "}"
-    if args.game == "SKEEBALL":
+    if args.game == "LOBBY" and args.colliders_at is not None:
+        out.append(f"return __runLobbyColliders({args.colliders_reach})")
+    elif args.game == "SKEEBALL":
         out.append((Path(__file__).resolve().parent / "skeeball_game.luau").read_text())
         out.append("return __runSkeeBall()")
     elif args.game == "LOBBY":
@@ -290,7 +303,11 @@ def main():
             "true" if args.spawn_fails else "false",
             number(args.reset_at),
         )
-        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots}, {watch})')
+        colliders = "nil"
+        if args.colliders_at is not None:
+            times = ", ".join(str(float(t)) for t in args.colliders_at.split(","))
+            colliders = "{ times = { %s }, reach = %s }" % (times, args.colliders_reach)
+        out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots}, {watch}, {colliders})')
     sys.stdout.write("\n".join(out))
 
 

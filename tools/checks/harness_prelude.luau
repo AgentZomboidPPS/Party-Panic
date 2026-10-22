@@ -646,13 +646,18 @@ end
 
 -- `watch` (round_harness.py --client-sits-out / --client-out-at): the stand-in client sits the round
 -- out ({ sitOut = true }), or is knocked out `outAt` seconds in.
-function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, uiAt, botCount, watch)
+-- `colliders` (round_harness.py --colliders-at, tools/checks/colliders.luau): snapshots of every part
+-- characters collide with, { times = { seconds into the round, 0 = after Prepare } }.
+function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, uiAt, botCount, watch, colliders)
 	local GameDefinitions = __require("Shared/GameDefinitions")
 	local GameState = __require("Shared/GameState")
 	local Config = __require("Shared/Config")
 	GameState.Folder()
 	local RoundContext = __require("Server/Services/RoundContext")
 	__require("Server/World/Shapes").RecordPieces = true
+	if __noCsg then
+		__require("Server/World/Shapes").PauseCsgForTests(1e6) -- as if CSG failed on this server
+	end
 	local module = __require("Server/MiniGames/" .. id)
 	local definition = GameDefinitions.Get(id)
 	assert(definition, "no definition for " .. id)
@@ -797,6 +802,24 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	if okPrepare and not starting then
 		summary.calledOff = __round(os.clock() - t0)
 	end
+	local colliderTimes = if colliders then table.clone(colliders.times) else {}
+	if colliders then
+		summary.rebuildWait, summary.rebuildsLeft, summary.rebuildHitch = __waitForRebuilds(150)
+		summary.rebuildSlowest = __slowestRebuilds(5)
+	end
+	local function snapColliders(label)
+		local okSnap, snapshot = pcall(
+			__colliderSnapshot,
+			label,
+			{ center = ctx.Origin.Position, reach = colliders.reach, killY = ctx.KillY }
+		)
+		summary.colliders = summary.colliders or {}
+		table.insert(summary.colliders, if okSnap then snapshot else { label = label, failed = tostring(snapshot) })
+	end
+	if colliders and colliderTimes[1] == 0 then
+		table.remove(colliderTimes, 1)
+		snapColliders("prepare")
+	end
 
 	local env = {
 		ctx = ctx,
@@ -885,6 +908,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 						summary.ui[key] = __dumpGui(clientGuis)
 					end
 				end
+			end
+			if colliderTimes[1] and now - begin >= colliderTimes[1] then
+				snapColliders(string.format("t%.0f", table.remove(colliderTimes, 1)))
 			end
 			if dumpAt and not summary.dump and now - begin >= dumpAt then
 				local roots = { ctx.Arena }
@@ -1001,6 +1027,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	end
 	summary.notHomeAfterCleanup = notHome
 	summary.arenaLeftovers = if ctx.Arena.Parent then #ctx.Arena:GetDescendants() else 0
+	if colliders then
+		summary.colliderLeftovers = __colliderLeftovers()
+	end
 	if clientGuis then
 		local modeGuis = {}
 		for _, gui in clientGuis:GetChildren() do

@@ -17,6 +17,9 @@ return function(h)
 			Height = 64.189,
 			AssetId = 88558606527722,
 			Collide = true,
+			-- Collision that follows the drawing only for what Honey Trap keeps solid (its OAK_SOLID):
+			-- the canopy alone would keep the server's one rebuild busy for 20 s.
+			Precise = { "Trunk", "Bark", "Door", "Stone" },
 			Palette = {
 				Trunk = h.rgb(139, 94, 62),
 				Leaves = h.rgb(98, 190, 86),
