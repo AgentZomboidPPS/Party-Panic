@@ -53,6 +53,10 @@ PlayerGui folder and attributes) and, without --bots, 11 other fake players for 
 events the harness can fire). The two
 ScreenGuis are made like init.client.luau makes them. Shared modules come from the working tree
 (except Remotes), and so does the profile snapshot (DataService and the two services it needs).
+The result's "effectChecks" plays every effect a cosmetic names, all at once, and says what each made
+(parts, glowing parts and the biggest, particle emitters and their longest lifetime, emoji) and how
+much was left 5 s later (none: everything cleans itself up). "Shop <Tab>" and "Shop <Tab> end" show
+every shop tab at the top and scrolled to the end; "Emotes end" the emote picker's last emotes.
 Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", "Rewards Career")
 and shows a level-up, a career milestone and a returning player's celebration ("LevelUp",
 "LevelUp2", "Milestone", "Welcome"). After the round a level-up card shows while the last
@@ -1667,6 +1671,84 @@ __fire("PlaySound", "Pickup")
 __fire("Knockback", Vector3.new(10, 20, 0), 0.5)
 task.wait(1)
 
+-- Every effect a cosmetic plays (emotes, victory, knockout), all at once, each at its own spot in
+-- front of the camera: what each one made (and how big and how long) at its fullest, and that it
+-- all cleaned itself up ("effectChecks"; the second shop pass's new effects among them).
+step = "cosmetic effects"
+local effectChecks = {}
+do
+	local EffectsController = __require("Client/Controllers/EffectsController")
+	local camera = workspace.CurrentCamera
+	local base = if camera then camera.CFrame.Position + camera.CFrame.LookVector * 40 else Vector3.new(0, 20, 0)
+	local names, colorsFor = {}, {}
+	for _, item in Cosmetics.List do
+		if item.Effect and colorsFor[item.Effect] == nil then
+			colorsFor[item.Effect] = item.Colors or false
+			table.insert(names, item.Effect)
+		end
+	end
+	table.sort(names)
+	local before = workspace:FindFirstChild("LocalEffects")
+	if before then
+		before:ClearAllChildren() -- the remotes' effects just above
+	end
+	-- A grid of spots 30 studs apart, all near enough to the camera to be drawn (Play skips an
+	-- effect over 400 studs away).
+	local SPACING = 30
+	local spots = {}
+	for index, name in names do
+		local column, row = (index - 1) % 5 - 2, math.floor((index - 1) / 5) - 2
+		spots[name] = base + Vector3.new(column * SPACING, 0, row * SPACING)
+		local ok, err = pcall(EffectsController.Play, name, spots[name], colorsFor[name] or nil)
+		effectChecks[name] = {
+			ok = ok,
+			err = if ok then nil else tostring(err),
+			parts = 0,
+			glowing = 0,
+			emitters = 0,
+			emoji = 0,
+			biggest = 0,
+			longest = 0,
+		}
+	end
+	local folder = workspace:FindFirstChild("LocalEffects")
+	local function owner(position: Vector3): string?
+		local best, bestDistance = nil, math.huge
+		for name, spot in spots do
+			local distance = Vector2.new(position.X - spot.X, position.Z - spot.Z).Magnitude
+			if distance < bestDistance then
+				best, bestDistance = name, distance
+			end
+		end
+		return best
+	end
+	task.wait(0.7) -- the fireworks' last burst is 0.5 s in
+	if folder then
+		for _, item in folder:GetDescendants() do
+			local part = if item:IsA("BasePart") then item else item:FindFirstAncestorWhichIsA("BasePart")
+			local name = part and owner(part.Position)
+			local check = name and effectChecks[name]
+			if not check then
+				continue
+			end
+			if item:IsA("BasePart") then
+				check.parts += 1
+				if item.Transparency < 1 then
+					check.glowing += 1
+					check.biggest = math.max(check.biggest, math.floor(item.Size.Magnitude))
+				end
+			elseif item:IsA("ParticleEmitter") then
+				check.emitters += 1
+				check.longest = math.max(check.longest, item.Lifetime.Max)
+			elseif item:IsA("BillboardGui") then
+				check.emoji += 1
+			end
+		end
+	end
+	task.wait(4.5)
+	effectChecks.leftAfter5s = if folder then #folder:GetChildren() else -1
+end
+
 if #bots > 0 then
 	step = "bots"
 	local first = bots[1]
@@ -2630,6 +2712,7 @@ return game:GetService("HttpService"):JSONEncode({
 	botChecks = if #bots > 0 then botChecks else nil,
 	skeeChecks = skeeChecks,
 	eventChecks = eventChecks,
+	effectChecks = effectChecks,
 	hudChecks = hudChecks,
 	sitOutChecks = sitOutChecks,
 	tipChecks = tipChecks,
