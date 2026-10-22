@@ -1024,6 +1024,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	end
 	summary.errors = __errors
 	summary.textReport = if summary.ui then __textReport else nil
+	summary.uiDefaults = if summary.ui then __uiDefaults else nil -- what gui_dump.luau left out of them
 	summary.log = __log
 	summary.eventCounts = __eventCounts
 	summary.events = __events

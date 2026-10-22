@@ -100,12 +100,43 @@ def rewrite(module: str, text: str, is_init: bool) -> str:
     return re.sub(r"^export type", "type", text, flags=re.M)
 
 
+def borrowed_props(game: str) -> set:
+    """The other modes whose props this mode's own code asks for by name (Shark Bait's palms are
+    Bumper Ballers' BumperPalm): their Props files stay in its bundle."""
+    own = ""
+    for path in (SRC / "server" / "MiniGames" / f"{game}.luau", SRC / "client" / "MiniGames" / f"{game}.luau",
+                 SRC / "server" / "MiniGames" / "Bots" / f"{game}.luau"):
+        if path.exists():
+            own += path.read_text()
+    names = set(re.findall(r'"(\w+)"', own))
+    borrowed = set()
+    for path in (SRC / "server" / "World" / "Props").glob("*.luau"):
+        text = path.read_text()
+        # Its prop specs, read like merge_check.sh does: `Name = {` blocks and `Name = helper(` calls
+        # (not palette colours).
+        specs = set(re.findall(r"^\t\t(\w+) = \{$", text, re.M))
+        specs |= {name for name, helper in re.findall(r"^\t\t(\w+) = (\w+)\(", text, re.M)
+                  if helper not in ("rgb", "Color3", "Vector3", "UDim2", "CFrame")}
+        if path.stem != game and specs & names:
+            borrowed.add(path.stem)
+    return borrowed
+
+
+_borrowed: dict = {}
+
+
 def other_mode(module: str, game: str) -> bool:
-    """Another mini-game's rules, brain or client half (a round only needs its own)."""
+    """Another mini-game's rules, brain or client half (a round only needs its own), or its props
+    unless this mode borrows some of them."""
     modes = {path.stem for path in (SRC / "server" / "MiniGames").glob("*.luau")} - {"init"}
     for prefix in ("Server/MiniGames/", "Server/MiniGames/Bots/", "Client/MiniGames/", "Server/World/Props/"):
         name = module[len(prefix):] if module.startswith(prefix) else None
         if name in modes and name != game:
+            if prefix == "Server/World/Props/" and game:
+                if game not in _borrowed:
+                    _borrowed[game] = borrowed_props(game)
+                if name in _borrowed[game]:
+                    return False
             return True
     return False
 
@@ -124,7 +155,18 @@ def ui_time(token: str) -> str:
     return f'"{token}"' if token in UI_SHOTS else str(float(token))
 
 
-PRELUDE = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (Path(__file__).resolve().parent / "harness_prelude.luau").read_text()
+def slim(text: str) -> str:
+    """Comment-only lines blanked and indentation dropped, with every line kept where it is (the line
+    map and error lines stay right): Open Cloud caps a script at 1 MiB, and the biggest mode's
+    bundle (Shark Bait's) is within a few dozen KB of it."""
+    text = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", text)
+    return re.sub(r"(?m)^[ \t]+", "", text)
+
+
+PRELUDE = slim(
+    (Path(__file__).resolve().parent / "gui_dump.luau").read_text()
+    + (Path(__file__).resolve().parent / "harness_prelude.luau").read_text()
+)
 
 
 def main():
@@ -169,9 +211,7 @@ def main():
         if lobby and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES):
             continue  # the lobby keeps LOBBY_MODES only
         is_init = path.name == "init.luau"
-        body = rewrite(module, path.read_text(), is_init)
-        # Blank comment-only lines (line numbers stay put for the map): Open Cloud caps a script at 1 MiB.
-        body = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", body)
+        body = slim(rewrite(module, path.read_text(), is_init))
         out.append(f'__modules["{module}"] = function()')
         line += 1
         line_map.append((line, module))

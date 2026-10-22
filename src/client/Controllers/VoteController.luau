@@ -7,7 +7,7 @@
 -- of four small cards just under the top bar, centered under the "VOTE!" banner: icon, name on one
 -- line, category as just its icon, and the votes. It leaves the middle of the view free and stays
 -- above the thumbstick's corner and away from the jump button (the objective and length are on the
--- rules card).
+-- rules card). A long name (Mecha-Marathon) is drawn a little smaller so it fits its card.
 -- Only people who'll play vote: while you're sitting out (UI/SitOutSwitch) the cards are dimmed and
 -- a note says why (under the cards on phones, over them on PC); tapping one tells you how to jump
 -- back in. The server refuses those votes anyway (VotingService).
@@ -53,6 +53,7 @@ local lastSitOutTip = -math.huge
 local CARDS = 4
 local CARD_W = 228 -- PC
 local TOUCH_W, TOUCH_H, TOUCH_GAP = 150, 94, 10
+local TOUCH_NAME_TEXT = 20 -- a phone card's name (a long one is drawn a little smaller to fit)
 local TOUCH_TOP = 12 -- room above the row for the "YOUR VOTE" tag on a card's top edge
 local PC_TOP = 34 -- PC: the same room above the cards (the sit-out note uses it when there's no vote)
 
@@ -102,7 +103,7 @@ local function buildCard(index: number): Card
 	local name = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = if touch then 20 else 26,
+		TextSize = if touch then TOUCH_NAME_TEXT else 26,
 		TextScaled = not touch,
 		TextWrapped = not touch,
 		TextXAlignment = if touch then Enum.TextXAlignment.Center else Enum.TextXAlignment.Left,
@@ -268,6 +269,18 @@ local function refresh()
 			card.categoryIcon.Text = "❔"
 			card.objective.Text = "Could be any game. Feeling lucky?"
 			card.gradient.Color = ColorSequence.new(Color3.fromRGB(150, 110, 255), Color3.fromRGB(70, 40, 140))
+		end
+		if touch then
+			-- One line under the icon: a long name ("Mecha-Marathon") is drawn a little smaller to fit
+			-- (phones draw small text up to 4% wider than it measures), never under 11 pt.
+			local size = TOUCH_NAME_TEXT
+			while
+				size > Theme.Touch.MinText
+				and UIKit.TextWidth(card.name.Text, size, Theme.Fonts.Display) * 1.06 + 2 > TOUCH_W - 10
+			do
+				size -= 1
+			end
+			card.name.TextSize = size
 		end
 		local votes = counts[index] or 0
 		card.count.Text = `{votes} vote{if votes == 1 then "" else "s"}`
