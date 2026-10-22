@@ -58,10 +58,12 @@ local SEEN_LAG = 0.15 -- other characters are drawn about this far behind the se
 local HISTORY_STEP = 1 / 20
 local HISTORY_KEEP = 1.5
 local CAST_GROUP = "PP_PotatoCast"
+local THROW_FACING = -0.3 -- a throw may go up to about 107 degrees off where the thrower faced
+local REFUSE_LAG = 0.25 -- people's throws are judged up to this long after they arrive (their turn)
 
 local rng = Random.new()
 
-type Sample = { T: number, P: Vector3 }
+type Sample = { T: number, P: Vector3, L: Vector3 }
 type Flight = { From: any?, To: any, T0: number, T1: number, A: Vector3 }
 type Potato = {
 	Id: number,
@@ -168,12 +170,14 @@ function HotPotato:Prepare()
 	ctx.Hooks.PlayerLeft = function(player)
 		self:_letGo(player)
 		self.history[player] = nil
+		self:_trim()
 		self:_publishLeft()
 	end
 	ctx.Hooks.Eliminated = function(player)
 		if not self.exploding[player] then
 			self:_letGo(player) -- out some other way (a reset): the potato moves on
 		end
+		self:_trim()
 		self:_publishLeft()
 	end
 
@@ -215,6 +219,7 @@ function HotPotato:_buildArena()
 
 	-- The fence: panels round the lawn, each facing the middle, with string lights along the top.
 	local panels = math.ceil(2 * math.pi * radius / PANEL_WIDTH)
+	self.panels = panels
 	local fenceAt = radius + 0.7 -- the panels' inside faces on the lawn's edge
 	for index = 0, panels - 1 do
 		local angle = index / panels * math.pi * 2
@@ -428,6 +433,38 @@ function HotPotato:_scheduleTopUp(seconds: number)
 	end)
 end
 
+-- Fewer players left than the potatoes in play are for (someone left): the extra ones fizzle out,
+-- those with the most fuse left first, never one in the air (it lands as usual).
+function HotPotato:_trim()
+	local ctx = self.context
+	if not ctx:IsRunning() then
+		return
+	end
+	local want = Rules.PotatoesFor(ctx:AliveCount())
+	local extra = #self.potatoes - want
+	if extra <= 0 then
+		return
+	end
+	local held = {}
+	for _, potato in self.potatoes do
+		if not potato.Flight then
+			table.insert(held, potato)
+		end
+	end
+	table.sort(held, function(a, b)
+		return a.FuseEnd > b.FuseEnd
+	end)
+	for index = 1, math.min(extra, #held) do
+		local potato = held[index]
+		local holder = potato.Holder
+		self:_remove(potato)
+		if holder then
+			self:_speed(holder)
+		end
+	end
+	self:_publish()
+end
+
 function HotPotato:_remove(potato: Potato)
 	local index = table.find(self.potatoes, potato)
 	if index then
@@ -526,7 +563,7 @@ end
 -- positions as the press arrived are where they were on their screen, and each is matched with where
 -- the target was drawn on that screen then: the passer's round trip plus the drawing delay earlier.
 -- Bots see the server's world as it is, so theirs are judged on current positions.
-function HotPotato:_reached(player: any, target: any, heard: number, reach: number): boolean
+function HotPotato:_reached(player: any, target: any, heard: number, reach: number, facing: boolean): boolean
 	local ctx = self.context
 	local bot = BotRegistry.IsBot(player)
 	local seenLag = pingOf(player) + SEEN_LAG
@@ -545,19 +582,57 @@ function HotPotato:_reached(player: any, target: any, heard: number, reach: numb
 	end
 	local _, _, root = ctx:GetCharacter(player)
 	if root then
-		table.insert(froms, { T = heard, P = root.Position })
+		table.insert(froms, { T = heard, P = root.Position, L = root.CFrame.LookVector })
+	end
+	-- A throw also has to go roughly forward: any way the thrower faced from just before the press
+	-- until now (their client turns them to the target as it throws, and that turn can arrive a
+	-- moment after the press), with a wide margin.
+	local looks: { Vector3 } = {}
+	if facing then
+		local history = self.history[player]
+		if history then
+			for index = #history, 1, -1 do
+				if history[index].T < heard - 0.3 then
+					break
+				end
+				table.insert(looks, history[index].L)
+			end
+		end
+		if root then
+			table.insert(looks, root.CFrame.LookVector)
+		end
+	end
+	local function ahead(from: Vector3, at: Vector3): boolean
+		if not facing then
+			return true
+		end
+		local flat = Vector3.new(at.X - from.X, 0, at.Z - from.Z)
+		if flat.Magnitude < 1 then
+			return true
+		end
+		for _, look in looks do
+			local forward = Vector3.new(look.X, 0, look.Z)
+			if forward.Magnitude > 1e-3 and flat.Unit:Dot(forward.Unit) >= THROW_FACING then
+				return true
+			end
+		end
+		return false
 	end
 	local _, _, targetRoot = ctx:GetCharacter(target)
 	for _, from in froms do
 		if bot then
-			if targetRoot and Rules.Reaches(from.P, targetRoot.Position, reach) then
+			if
+				targetRoot
+				and Rules.Reaches(from.P, targetRoot.Position, reach)
+				and ahead(from.P, targetRoot.Position)
+			then
 				return true
 			end
 			continue
 		end
 		for _, shift in { -0.05, 0, 0.05 } do
 			local at = self:PositionAt(target, from.T - seenLag + shift)
-			if at and Rules.Reaches(from.P, at, reach) then
+			if at and Rules.Reaches(from.P, at, reach) and ahead(from.P, at) then
 				return true
 			end
 		end
@@ -566,27 +641,59 @@ function HotPotato:_reached(player: any, target: any, heard: number, reach: numb
 end
 
 -- A pass the server can't take: the passer's client drops its prediction.
-function HotPotato:_refuse(player: any, potato: Potato?)
-	self.context:Fire(player, "Refused", if potato then potato.Id else 0)
+function HotPotato:_refuse(player: any, potato: Potato?, targetId: any)
+	self.context:Fire(
+		player,
+		"Refused",
+		if potato then potato.Id else 0,
+		if type(targetId) == "number" then targetId else 0
+	)
 end
 
 function HotPotato:_tryPass(player: any, targetId: any, throw: boolean)
 	local ctx = self.context
-	local potato = self:HolderOf(player)
-	if not ctx:IsRunning() or ctx:TimeIsUp() or not potato then
-		self:_refuse(player, potato)
+	local heard = ctx:Now()
+	local held = self:HolderOf(player)
+	if not held then
+		self:_refuse(player, nil, targetId)
 		return
 	end
+	-- Whether the pass is still allowed (checked again when a throw is judged a moment later).
+	local function allowed(): (Potato?, any)
+		local potato = self:HolderOf(player)
+		local target = self:_participant(targetId)
+		if not ctx:IsRunning() or not ctx:InTime(heard) or potato ~= held or potato == nil or target == nil then
+			return nil, nil
+		end
+		if heard < potato.LockUntil - 0.1 or target == player or not self:CanTake(potato, target, ctx:Now()) then
+			return nil, nil
+		end
+		return potato, target
+	end
+	local function judge()
+		local potato, target = allowed()
+		local reach = if throw then Rules.THROW_REACH else Rules.TAG_REACH
+		if not potato or not self:_reached(player, target, heard, reach, throw) then
+			self:_refuse(player, held, targetId)
+			return
+		end
+		self:_pass(potato, player, target, throw)
+	end
+	if throw and not BotRegistry.IsBot(player) then
+		if not allowed() then
+			self:_refuse(player, held, targetId)
+			return
+		end
+		ctx:HoldEnd(REFUSE_LAG)
+		ctx:Delay(math.min(pingOf(player) / 2 + 0.05, REFUSE_LAG), judge)
+	else
+		judge()
+	end
+end
+
+function HotPotato:_pass(potato: Potato, player: any, target: any, throw: boolean)
+	local ctx = self.context
 	local now = ctx:Now()
-	local target = self:_participant(targetId)
-	if now < potato.LockUntil - 0.1 or target == nil or target == player or not self:CanTake(potato, target, now) then
-		self:_refuse(player, potato)
-		return
-	end
-	if not self:_reached(player, target, now, if throw then Rules.THROW_REACH else Rules.TAG_REACH) then
-		self:_refuse(player, potato)
-		return
-	end
 	if not throw then
 		self:_give(potato, target, player, "Tag")
 		return
@@ -636,7 +743,7 @@ function HotPotato:Start()
 					history = {}
 					self.history[player] = history
 				end
-				table.insert(history, { T = now, P = root.Position })
+				table.insert(history, { T = now, P = root.Position, L = root.CFrame.LookVector })
 				self.lastSeen[player] = root.Position
 				while #history > 2 and history[1].T < now - HISTORY_KEEP do
 					table.remove(history, 1)
@@ -687,7 +794,9 @@ end
 function HotPotato:_keepInside()
 	local ctx = self.context
 	local center = self.center
-	local limit = self.radius - 1
+	-- Only someone actually past the fence: its outside face (1.4 studs thick), which is furthest out
+	-- at the panels' ends; walking into the fence never sets this off.
+	local limit = (self.radius + 1.6) / math.cos(math.pi / (self.panels or 16)) + 0.3
 	for _, player in ctx:GetAlivePlayers() do
 		local _, _, root = ctx:GetCharacter(player)
 		if not root or root.Anchored then

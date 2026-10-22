@@ -130,7 +130,7 @@ function Brain.Step(bot, ctx, mode, _dt)
 	local away = Vector3.zero
 	local threat = false
 	for _, other in mode.potatoes do
-		local holder = other.Holder or (other.Flight and other.Flight.From)
+		local holder = other.Holder -- (someone who has just thrown theirs is harmless)
 		if holder == nil or holder == bot then
 			continue
 		end

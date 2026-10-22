@@ -37,8 +37,15 @@ type Entry = {
 	Fl: { A: number, B: number, T0: number, T1: number, P: { number } }?,
 }
 type Guess = { To: number, Until: number, Throw: boolean, T0: number, From: Vector3? }
-type Visual =
-	{ Model: Model, Spud: BasePart?, Spark: BasePart?, Light: PointLight, Marker: TextLabel, Gui: BillboardGui }
+type Visual = {
+	Model: Model,
+	Spud: BasePart?,
+	Spark: BasePart?,
+	Light: PointLight,
+	Marker: TextLabel,
+	Gui: BillboardGui,
+	Fallback: boolean,
+}
 
 local function rootOf(model: Model?): BasePart?
 	return if model then model:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
@@ -61,6 +68,9 @@ function HotPotato.Start(api)
 	end
 	readPotatoes()
 	local guesses: { [number]: Guess } = {} -- passes this client drew before the server answered
+	local backoff: { [number]: number } = {} -- targets a pass was just refused for, until when
+	-- People whose blast this client saw: out, though their character still flies for a moment.
+	local blown: { [number]: boolean } = {}
 	api:OnShared("Potatoes", function()
 		readPotatoes()
 		local alive = {}
@@ -121,7 +131,7 @@ function HotPotato.Start(api)
 			if id == me or person:GetAttribute("PP_Alive") == false then
 				continue
 			end
-			if busy(id, now) or (id == entry.F and now < entry.N) then
+			if busy(id, now) or (id == entry.F and now < entry.N) or blown[id] or (backoff[id] or 0) > now then
 				continue
 			end
 			local root = rootOf(person:Character())
@@ -168,9 +178,20 @@ function HotPotato.Start(api)
 	local bannerScale = Instance.new("UIScale")
 	bannerScale.Parent = banner
 
-	-- The red screen edge while holding a potato (four soft bars, never in the way of a touch).
+	-- The red screen edge while holding a potato: a faint vignette on the sides and bottom (none along
+	-- the top bar), in its own screen layer under the HUD, the menu column and the buttons, so it never
+	-- tints them or the status line and never takes a touch.
+	local vignette = api:Track(UIKit.new("ScreenGui", {
+		Name = "HotPotatoEdge",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ScreenInsets = Enum.ScreenInsets.None,
+		DisplayOrder = 1,
+		Enabled = false,
+		Parent = localPlayer:WaitForChild("PlayerGui"),
+	}))
 	local edges: { Frame } = {}
-	for _, side in { "Top", "Bottom", "Left", "Right" } do
+	for _, side in { "Bottom", "Left", "Right" } do
 		local vertical = side == "Left" or side == "Right"
 		local edge = UIKit.new("Frame", {
 			Name = "Edge" .. side,
@@ -181,12 +202,12 @@ function HotPotato.Start(api)
 			Visible = false,
 			AnchorPoint = Vector2.new(if side == "Right" then 1 else 0, if side == "Bottom" then 1 else 0),
 			Position = UDim2.fromScale(if side == "Right" then 1 else 0, if side == "Bottom" then 1 else 0),
-			Size = if vertical then UDim2.new(0, 44, 1, 0) else UDim2.new(1, 0, 0, 44),
-			Parent = api.Gui,
+			Size = if vertical then UDim2.new(0, 48, 1, 0) else UDim2.new(1, 0, 0, 48),
+			Parent = vignette,
 		})
 		local gradient = Instance.new("UIGradient")
-		gradient.Transparency = NumberSequence.new(0.25, 1)
-		gradient.Rotation = ({ Top = 90, Bottom = -90, Left = 0, Right = 180 })[side]
+		gradient.Transparency = NumberSequence.new(0, 1)
+		gradient.Rotation = ({ Bottom = -90, Left = 0, Right = 180 })[side]
 		gradient.Parent = edge
 		table.insert(edges, edge)
 	end
@@ -223,11 +244,25 @@ function HotPotato.Start(api)
 	end)
 
 	local visuals: { [number]: Visual } = {}
+	-- A potato's model: the shared mesh, or (until it arrives, or if it never does) a plain spud-coloured
+	-- ball, so whoever holds one is always shown, with its marker either way.
 	local function newVisual(): Visual?
-		if not template then
-			return nil
+		local model: Model
+		if template then
+			model = template:Clone() :: Model
+		else
+			model = Instance.new("Model")
+			local ball = Instance.new("Part")
+			ball.Name = "Spud"
+			ball.Shape = Enum.PartType.Ball
+			ball.Size = Vector3.new(2.2, 2.2, 2.2)
+			ball.Color = SPUD
+			ball.Material = Enum.Material.SmoothPlastic
+			ball.CFrame = CFrame.new(0, 1.1, 0)
+			ball.Parent = model
+			model.PrimaryPart = ball
+			model.WorldPivot = CFrame.new()
 		end
-		local model = template:Clone() :: Model
 		for _, part in model:GetDescendants() do
 			if part:IsA("BasePart") then
 				part.Anchored = true
@@ -262,7 +297,15 @@ function HotPotato.Start(api)
 			Parent = gui,
 			Children = { UIKit.TextStroke(0) },
 		})
-		return { Model = model, Spud = spud, Spark = spark, Light = light, Marker = marker, Gui = gui }
+		return {
+			Model = model,
+			Spud = spud,
+			Spark = spark,
+			Light = light,
+			Marker = marker,
+			Gui = gui,
+			Fallback = template == nil,
+		}
 	end
 
 	local function headPoint(userId: number): Vector3?
@@ -319,9 +362,15 @@ function HotPotato.Start(api)
 	end
 
 	-- Cues ----------------------------------------------------------------------------------------------
-	api:OnEvent("Refused", function(id)
+	-- A refused pass: drop the prediction and leave that target alone for a moment, so a press the
+	-- server keeps turning down (a big lag, someone the server already has out) isn't resent every
+	-- frame with the potato flickering between the two.
+	api:OnEvent("Refused", function(id, targetId)
 		if type(id) == "number" then
 			guesses[id] = nil
+		end
+		if type(targetId) == "number" then
+			backoff[targetId] = api:Now() + 0.8
 		end
 	end)
 	api:OnEvent("Pass", function(fromId, toId, _how, id)
@@ -341,7 +390,10 @@ function HotPotato.Start(api)
 			UIKit.PopIn(banner, 0.25)
 		end
 	end)
-	api:OnEvent("Boom", function(_userId, x, y, z)
+	api:OnEvent("Boom", function(userId, x, y, z)
+		if type(userId) == "number" and userId ~= 0 then
+			blown[userId] = true
+		end
 		if type(x) == "number" and type(y) == "number" and type(z) == "number" then
 			blast(Vector3.new(x, y, z))
 		end
@@ -349,6 +401,7 @@ function HotPotato.Start(api)
 
 	-- Passing -------------------------------------------------------------------------------------------
 	local lastSend = 0
+	local lastThrow = 0
 	local function canPass(entry: Entry, now: number): boolean
 		return inRound() and now >= entry.L and guesses[entry.I] == nil and now - lastSend > 0.15
 	end
@@ -364,7 +417,7 @@ function HotPotato.Start(api)
 		for _, taker in takers(entry, now) do
 			local at = taker.Root.Position
 			local distance = flat(at - root.Position).Magnitude
-			if distance > Rules.CLIENT_THROW or math.abs(at.Y - root.Position.Y) > 6 then
+			if distance > Rules.CLIENT_THROW or math.abs(at.Y - root.Position.Y) > Rules.REACH_UP then
 				continue
 			end
 			if not Rules.InFront(root.Position, look, at) and not Rules.InFront(root.Position, cameraLook, at) then
@@ -380,7 +433,8 @@ function HotPotato.Start(api)
 	throw.Pressed:Connect(function()
 		local now = api:Now()
 		local entry = myPotato(now)
-		if not entry or not canPass(entry, now) then
+		-- (the server takes one throw per 0.25 s: a quicker one would be dropped without an answer)
+		if not entry or not canPass(entry, now) or now - lastThrow < 0.27 then
 			return
 		end
 		local target, targetRoot = throwTarget(entry, now)
@@ -393,6 +447,7 @@ function HotPotato.Start(api)
 			root.CFrame = CFrame.lookAt(root.Position, at)
 		end
 		lastSend = now
+		lastThrow = now
 		guesses[entry.I] = {
 			To = target,
 			Until = now + Rules.FLIGHT + 1,
@@ -459,9 +514,11 @@ function HotPotato.Start(api)
 			banner.TextColor3 = if warned then DANGER:Lerp(Color3.new(1, 1, 1), pulse * 0.5) else Theme.Colors.Yellow
 			banner.Text = if warned then "!! IT'S ABOUT TO BLOW! PASS IT !!" else "YOU HAVE THE POTATO! PASS IT!"
 		end
+		vignette.Enabled = holding
 		for _, edge in edges do
 			edge.Visible = holding
-			edge.BackgroundTransparency = if warned then 0.2 + 0.4 * pulse else 0.45 + 0.3 * pulse
+			-- Never more opaque than 0.55 (and the gradient fades it out toward the middle).
+			edge.BackgroundTransparency = if warned then 0.45 + 0.3 * pulse else 0.6 + 0.25 * pulse
 		end
 		local target, targetRoot = nil, nil
 		if holding and mine and now >= mine.L and guesses[mine.I] == nil then
@@ -481,6 +538,11 @@ function HotPotato.Start(api)
 		for _, entry in potatoes do
 			seen[entry.I] = true
 			local visual = visuals[entry.I]
+			if visual and visual.Fallback and template then
+				visual.Model:Destroy() -- the mesh has arrived: swap the stand-in ball for it
+				visual = nil
+				visuals[entry.I] = nil
+			end
 			if not visual then
 				local made = newVisual()
 				if not made then

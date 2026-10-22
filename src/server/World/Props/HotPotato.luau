@@ -64,7 +64,7 @@ return function(h)
 			end,
 		},
 		HotPotatoGrill = {
-			Height = 8,
+			Height = 10, -- its rim 9 studs up: out of a jump's reach from the lawn
 			AssetId = 125271739096064,
 			Collide = true,
 			Palette = {
@@ -84,9 +84,9 @@ return function(h)
 				Foil = Enum.Material.Foil,
 			},
 			Fallback = function(m)
-				h.pillar(m, "Legs", 1, 4.5, Vector3.new(0, 2.25, 0))
-				h.pillar(m, "Bowl", 7, 3, Vector3.new(0, 6, 0))
-				h.pillar(m, "Coals", 6.4, 0.3, Vector3.new(0, 7.55, 0))
+				h.pillar(m, "Legs", 1.2, 5.6, Vector3.new(0, 2.8, 0))
+				h.pillar(m, "Bowl", 9, 3.6, Vector3.new(0, 7.4, 0))
+				h.pillar(m, "Coals", 8, 0.4, Vector3.new(0, 9.4, 0))
 			end,
 		},
 		HotPotatoTable = {
