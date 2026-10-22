@@ -35,6 +35,11 @@
 -- "Respawn", Pump & Pop among them) a fall puts you back where the mode says, and where falling is
 -- part of the game it still puts you out. A floor a device hasn't loaded can't drop anyone there:
 -- that device is holding its character until it has.
+--
+-- A quieter screen in a round (owner: "During the mini games, any way we can save UI space so they
+-- can see more of the game at one time?"): Announce sends its callouts with the toast topic "Round",
+-- so a player's device still shows them mid-round (in a strip under the banner on phones) while the
+-- toasts that aren't about the round wait for the results (client NotificationController).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -599,8 +604,10 @@ function RoundContext.SetStatus(self: RoundContext, text: string)
 	GameState.Set("Status", text)
 end
 
+-- A callout about the round for everyone ("🎃 GOLDEN RUSH! 🎃"): it shows on the screens of the
+-- round's players while they play, when other toasts wait (topic "Round").
 function RoundContext.Announce(self: RoundContext, text: string, kind: string?, duration: number?)
-	Notifier.All(text, kind, duration)
+	Notifier.All(text, kind, duration, Notifier.ROUND)
 end
 
 function RoundContext.Sound(self: RoundContext, soundName: string)
