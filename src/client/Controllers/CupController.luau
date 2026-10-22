@@ -269,7 +269,7 @@ local function fillStandings()
 	})
 	local rules = label({
 		Name = "Rules",
-		Text = `Every round: 10 pts for 1st, 8 for 2nd, 6 for 3rd, then 5, 4, 3... The top 3 win {Theme.CoinIcon} 5 · 3 · 2.`,
+		Text = `Every round: 1st 10 pts, 2nd 8, 3rd 6, then 5, 4, 3, 2, 1.\nThe top 3 win {Theme.CoinIcon} 5 · 3 · 2, and 1st wears the crown 👑`,
 		TextSize = Theme.Touch.MinText,
 		TextColor3 = Theme.Colors.TextDim,
 		Position = UDim2.fromOffset(0, 36),
@@ -531,9 +531,9 @@ local function podiumStep(parent: Instance, row: Row?, slot: number, x: number)
 	local mine = row.UserId == me()
 	local prize = if row.IsBot then 0 else PartyCup.PrizeFor(row.Place)
 	-- From the step up: the prize, the points, the name, the medal (and the crown over a champion).
-	local y = floor - height - 6
+	-- The prize's line is kept for a bot too, so the higher step always has the higher name.
+	local y = floor - height - 6 - 28
 	if prize > 0 then
-		y -= 28
 		label({
 			Name = "Prize",
 			Text = `+{prize} {Theme.CoinIcon}`,
