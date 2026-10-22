@@ -329,13 +329,25 @@ function MessyMemory:_shareBooth(player: Player)
 	})
 end
 
+-- Nobody walks or jumps at a booth: a character that can't jump has no jump button on phones,
+-- which sat by PEEK and CLOSE doing nothing (owner, on Trace Race's: "Remove the jump button for
+-- trace race. it was confusing").
+local function standStill(ctx: any, player: any)
+	ctx:SetWalkSpeed(player, 0)
+	local _, humanoid = ctx:GetCharacter(player)
+	if humanoid then
+		humanoid.JumpHeight = 0
+		humanoid.JumpPower = 0
+	end
+end
+
 function MessyMemory:Start()
 	local ctx = self.context
 	for _, player in ctx:GetPlayers() do
-		ctx:SetWalkSpeed(player, 0)
+		standStill(ctx, player)
 	end
 	ctx.Hooks.CharacterReady = function(player)
-		ctx:SetWalkSpeed(player, 0)
+		standStill(ctx, player)
 	end
 	ctx.Hooks.Respawn = function(player)
 		local booth = self.booths[player]
