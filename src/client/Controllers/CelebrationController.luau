@@ -271,7 +271,7 @@ local function itemChip(parent: Instance, item: Cosmetics.Cosmetic, order: numbe
 		Text = string.upper(Cosmetics.SlotNames[item.Slot] or item.Slot),
 		TextSize = Theme.Touch.MinText,
 		TextWrapped = false,
-		TextColor3 = Theme.Colors.TextDim,
+		TextColor3 = if item.GoldLevel then GoldPass.Colors.Ink else Theme.Colors.TextDim,
 		Position = UDim2.fromOffset(6, 98),
 		Size = UDim2.new(1, -12, 0, 22),
 		ZIndex = 4,

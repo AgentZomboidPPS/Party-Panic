@@ -160,6 +160,7 @@ function GoldPassController.Glint(parent: GuiObject, radius: number?): Frame
 	})
 	gradient:SetAttribute("PP_Shimmer", "Glint")
 	CollectionService:AddTag(gradient, SHIMMER_TAG)
+	band:SetAttribute("PP_Glint", true) -- (tools/checks/ui_render.py: a moving shine, not a fill)
 	return band
 end
 
@@ -316,7 +317,7 @@ local function moreChip(parent: Instance, count: number, order: number): Frame
 	return chip
 end
 
-local function perkChip(parent: Instance, perk: { Icon: string, Text: string }, order: number): Frame
+local function perkChip(parent: Instance, perk: { Icon: string, Text: string, Short: string }, order: number): Frame
 	local chip = goldChip(parent, "Perk", ITEM_CHIP_W - 4, order)
 	label({
 		Text = perk.Icon,
@@ -350,11 +351,12 @@ local function rays(parent: Instance): Frame
 		ZIndex = 1,
 		Parent = parent,
 	})
-	for index = 1, 12 do
-		UIKit.new("Frame", {
+	-- Eight bars through the middle: sixteen rays, far enough apart to read as rays past the card.
+	for index = 1, 8 do
+		local ray = UIKit.new("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Size = UDim2.fromOffset(1500, 70),
-			Rotation = index * 15,
+			Size = UDim2.fromOffset(1600, 60),
+			Rotation = index * 22.5,
 			BackgroundColor3 = GOLD.Light,
 			BorderSizePixel = 0,
 			ZIndex = 1,
@@ -371,6 +373,7 @@ local function rays(parent: Instance): Frame
 				}),
 			},
 		})
+		ray:SetAttribute("PP_Glint", true) -- (tools/checks/ui_render.py: light it can't turn or fade)
 	end
 	return holder
 end
@@ -601,7 +604,7 @@ local function show(payload: any)
 	-- Row 3: the perks (when rewards took row 2), and the buttons on the right half.
 	local perks = {}
 	for _, perk in GoldPass.Perks do
-		table.insert(perks, `{perk.Icon} {perk.Text}`)
+		table.insert(perks, `{perk.Icon} {perk.Short}`)
 	end
 	local note = label({
 		Name = "Perks",

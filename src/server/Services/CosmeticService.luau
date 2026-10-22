@@ -12,8 +12,7 @@
 -- checks it):
 --   * An owner's gold rewards unlock with their level like the road's (CheckUnlocks: GoldLevel).
 --   * An owner's name tag wears a GOLD badge over the name, and the name shimmers in gold; a gold
---     title shimmers in its own colours. The server tags those gradients (PP_GoldShimmer) and each
---     device slides the glint across them (Controllers/GoldPassController), so nothing streams.
+--     title shimmers in its own colours (Shared/NameTag builds the tag; each device moves the glint).
 --   * A gold trail can have a Style (Shared/GoldPass): a texture, more glow, a wider ribbon that
 --     tapers, a longer tail, glitter shed behind it (PP_GoldGlitter: off on a device with reduced
 --     effects) and a soft light.
@@ -24,9 +23,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
 local Cosmetics = require(Shared.Cosmetics)
-local GoldPass = require(Shared.GoldPass)
 local LevelCurve = require(Shared.Logic.LevelCurve)
-local Progression = require(Shared.Progression)
+local NameTag = require(Shared.NameTag)
 local Remotes = require(Shared.Remotes)
 
 local CupCrown = require(script.Parent.Parent.World.CupCrown)
@@ -36,11 +34,10 @@ local Notifier = require(script.Parent.Notifier)
 
 local CosmeticService = {}
 
-local NAMEPLATE = "PP_Nameplate"
+local NAMEPLATE = NameTag.Name
 local TRAIL = "PP_Trail"
 local GLITTER = "PP_TrailGlitter"
 local GLOW = "PP_TrailLight"
-local SHIMMER_TAG = "PP_GoldShimmer" -- gradients each device animates (Controllers/GoldPassController)
 local GLITTER_TAG = "PP_GoldGlitter" -- emitters a device with reduced effects switches off
 local SPARKLE = "rbxasset://textures/particles/sparkles_main.dds"
 
@@ -56,51 +53,6 @@ local function equippedItem(player: Player, slot: string): Cosmetics.Cosmetic?
 	return Cosmetics.Get(id)
 end
 
--- A gradient each device slides a glint across (Controllers/GoldPassController): "Sweep" runs a
--- white glint over gold now and then, "Drift" eases a title's colours back and forth.
-local function shimmer(label: TextLabel, colors: ColorSequence, kind: string)
-	local gradient = Instance.new("UIGradient")
-	gradient.Name = "GoldShimmer"
-	gradient.Color = colors
-	gradient:SetAttribute("PP_Shimmer", kind)
-	gradient.Parent = label
-	CollectionService:AddTag(gradient, SHIMMER_TAG)
-end
-
--- The GOLD badge over an owner's name: a gold pill with a dark rim, "👑 GOLD".
-local function goldBadge(gui: BillboardGui, height: number)
-	local pill = Instance.new("Frame")
-	pill.Name = "GoldBadge"
-	pill.AnchorPoint = Vector2.new(0.5, 0)
-	pill.Position = UDim2.fromScale(0.5, 0)
-	pill.Size = UDim2.new(0, 76, height, 0)
-	pill.BackgroundColor3 = Color3.new(1, 1, 1)
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(1, 0)
-	corner.Parent = pill
-	local fill = Instance.new("UIGradient")
-	fill.Color = ColorSequence.new(GoldPass.Colors.Light, GoldPass.Colors.Deep)
-	fill.Rotation = 90
-	fill.Parent = pill
-	local rim = Instance.new("UIStroke")
-	rim.Color = GoldPass.Colors.Ink
-	rim.Thickness = 1.5
-	rim.Parent = pill
-	local label = Instance.new("TextLabel")
-	label.Name = "Gold"
-	label.BackgroundTransparency = 1
-	label.Position = UDim2.fromScale(0.08, 0.08)
-	label.Size = UDim2.fromScale(0.84, 0.84)
-	label.Font = Enum.Font.FredokaOne
-	label.TextScaled = true
-	label.Text = "👑 GOLD"
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextStrokeColor3 = GoldPass.Colors.Ink
-	label.TextStrokeTransparency = 0.1
-	label.Parent = pill
-	pill.Parent = gui
-end
-
 local function buildNameplate(player: Player, head: BasePart)
 	local existing = head:FindFirstChild(NAMEPLATE)
 	if existing then
@@ -109,66 +61,7 @@ local function buildNameplate(player: Player, head: BasePart)
 	local profile = DataService.Get(player)
 	local level = if profile then LevelCurve.FromTotalXP(profile.Data.XP) else 1
 	local gold = profile ~= nil and (profile.Data :: any).GoldPass.Owned == true
-	local title = equippedItem(player, "Title")
-
-	-- An owner's tag is taller: the GOLD badge, then the name and the title as always.
-	local badgeShare = if gold then 0.27 else 0
-	local nameShare = if gold then 0.42 else 0.55
-	local gui = Instance.new("BillboardGui")
-	gui.Name = NAMEPLATE
-	gui.Size = UDim2.fromOffset(220, if gold then 74 else 54)
-	gui.StudsOffset = Vector3.new(0, if gold then 2.75 else 2.4, 0)
-	gui.MaxDistance = 90
-	gui.LightInfluence = 0
-	gui.ResetOnSpawn = false
-	if gold then
-		goldBadge(gui, badgeShare - 0.02)
-	end
-
-	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Name = "PlayerName"
-	nameLabel.BackgroundTransparency = 1
-	nameLabel.Position = UDim2.fromScale(0, badgeShare)
-	nameLabel.Size = UDim2.new(1, 0, nameShare, 0)
-	nameLabel.Font = Enum.Font.FredokaOne
-	nameLabel.TextScaled = true
-	nameLabel.TextColor3 = Color3.new(1, 1, 1)
-	nameLabel.TextStrokeTransparency = 0.4
-	nameLabel.RichText = true
-	local text, gradient = Progression.NameTag(player.DisplayName, level)
-	nameLabel.Text = text
-	if gold then
-		shimmer(nameLabel, GoldPass.Shimmer, "Sweep") -- the gold name (over the tier's own colours)
-	elseif gradient then
-		local tint = Instance.new("UIGradient")
-		tint.Color = gradient
-		tint.Parent = nameLabel
-	end
-	nameLabel.Parent = gui
-
-	local titleLabel = Instance.new("TextLabel")
-	titleLabel.Name = "Title"
-	titleLabel.BackgroundTransparency = 1
-	titleLabel.Position = UDim2.fromScale(0, badgeShare + nameShare)
-	titleLabel.Size = UDim2.new(1, 0, if gold then 0.3 else 0.42, 0)
-	titleLabel.Font = Enum.Font.GothamBold
-	titleLabel.TextScaled = true
-	titleLabel.TextStrokeTransparency = 0.5
-	titleLabel.Text = if title then `{title.Icon} {title.Name}` else ""
-	titleLabel.TextColor3 = if title and title.Colors then title.Colors[1] else Color3.new(1, 1, 1)
-	if title and title.GoldLevel then
-		-- A gold title shimmers in its own colours (one colour: in gold).
-		local colors = title.Colors or {}
-		titleLabel.TextColor3 = Color3.new(1, 1, 1)
-		shimmer(
-			titleLabel,
-			if #colors > 1 then Cosmetics.ColorSequence(colors) else GoldPass.Shimmer,
-			if #colors > 1 then "Drift" else "Sweep"
-		)
-	end
-	titleLabel.Parent = gui
-
-	gui.Parent = head
+	NameTag.Build(player.DisplayName, level, gold, equippedItem(player, "Title")).Parent = head
 end
 
 local function applyTrail(player: Player, character: Model)

@@ -23,7 +23,8 @@
 --   * A returning owner whose last game was on a server still running older code (it pays no gold
 --     coins) gets the gold coins of the levels reached there when they join.
 --   * Tests: TestGrant gives a stand-in the pass under the check tools' flag (workspace PP_Harness)
---     and nowhere else; no remote reaches it. SetOwnershipCheckForTests stands in for Roblox's answer.
+--     and nowhere else; no remote reaches it. SetRobloxForTests stands in for Roblox (who owns it,
+--     the purchase prompt, the product info) in the check tools' runs, which can't buy anything.
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -59,14 +60,28 @@ export type Unlocked = {
 	Source: string, -- "Purchase" | "Owned" (bought elsewhere) | "Creator" | "Test"
 }
 
--- Roblox's answer to "does this user own the pass?" (tests swap it out).
-local function askRoblox(userId: number, passId: number): boolean
-	return MarketplaceService:UserOwnsGamePassAsync(userId, passId)
-end
-local ownershipCheck: (userId: number, passId: number) -> boolean = askRoblox
+-- Roblox's side of the pass: who owns it, its purchase prompt and its product info (price, for sale).
+export type Roblox = {
+	Owns: (userId: number, passId: number) -> boolean,
+	Prompt: (player: Player, passId: number) -> (),
+	Info: (passId: number) -> any,
+}
+local ROBLOX: Roblox = {
+	Owns = function(userId, passId)
+		return MarketplaceService:UserOwnsGamePassAsync(userId, passId)
+	end,
+	Prompt = function(player, passId)
+		MarketplaceService:PromptGamePassPurchase(player, passId)
+	end,
+	Info = function(passId)
+		return MarketplaceService:GetProductInfo(passId, Enum.InfoType.GamePass)
+	end,
+}
+local roblox = ROBLOX
 
-function GoldPassService.SetOwnershipCheckForTests(check: ((userId: number, passId: number) -> boolean)?)
-	ownershipCheck = check or askRoblox
+-- The check tools' stand-in for Roblox (nil: the real one again).
+function GoldPassService.SetRobloxForTests(standIn: Roblox?)
+	roblox = standIn or ROBLOX
 end
 
 local function passOf(profile: DataService.Profile): { [string]: any }
@@ -187,7 +202,7 @@ end
 -- failed. Nil when it couldn't be asked either time.
 local function ownsOnRoblox(player: Player, passId: number): boolean?
 	for attempt = 1, 2 do
-		local ok, owns = pcall(ownershipCheck, player.UserId, passId)
+		local ok, owns = pcall(roblox.Owns, player.UserId, passId)
 		if ok then
 			return owns == true
 		end
@@ -237,15 +252,16 @@ function GoldPassService.PurchaseFinished(player: Player, passId: number, purcha
 	end
 end
 
--- Asks Roblox whether the pass is for sale (and its price). True when Roblox answered.
-local function askOffer(): boolean
+-- Asks Roblox whether the pass is for sale (and its price). Returns what it learned.
+function GoldPassService.AskOffer(): GoldLane.Offer
 	local id = Config.Monetization.GoldPassId
 	local ok, info = true, nil
 	if id ~= 0 then
-		ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, id, Enum.InfoType.GamePass)
+		ok, info = pcall(roblox.Info, id)
 	end
-	offer = GoldLane.Offer(id, ok, info, Config.Monetization.GoldPassPrice)
-	return (offer :: GoldLane.Offer).Known
+	local answer = GoldLane.Offer(id, ok, info, Config.Monetization.GoldPassPrice)
+	offer = answer
+	return answer
 end
 
 local function prompt(player: Player)
@@ -256,7 +272,7 @@ local function prompt(player: Player)
 	elseif passId == 0 or (known and known.Known and not known.OnSale) then
 		Notifier.Send(player, "👑 The GOLD PASS is coming soon!", "info")
 	else
-		MarketplaceService:PromptGamePassPurchase(player, passId)
+		roblox.Prompt(player, passId)
 	end
 end
 
@@ -284,7 +300,7 @@ end
 
 function GoldPassService.Start()
 	while true do
-		task.wait(if askOffer() then OFFER_EVERY else OFFER_RETRY)
+		task.wait(if GoldPassService.AskOffer().Known then OFFER_EVERY else OFFER_RETRY)
 	end
 end
 

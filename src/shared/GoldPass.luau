@@ -35,14 +35,16 @@ GoldPass.Name = "GOLD PASS"
 GoldPass.Icon = "👑"
 
 -- The pass's colours: the gold UI (Light at the top of a gradient, Deep at the bottom), its dark
--- ink (text strokes on gold) and the shine.
+-- ink (text strokes on gold), the shine, and a reward still locked (LockedTop to LockedBottom: a
+-- softer gold that still looks worth having).
 GoldPass.Colors = {
 	Light = GOLD_LIGHT,
 	Gold = GOLD,
 	Deep = GOLD_DEEP,
 	Ink = rgb(110, 58, 6),
 	Shine = rgb(255, 252, 230),
-	Locked = rgb(150, 112, 60),
+	LockedTop = rgb(250, 224, 156),
+	LockedBottom = rgb(196, 140, 56),
 }
 
 -- The shimmer on an owner's name tag and the gold titles: gold with a white glint that a client
@@ -56,11 +58,12 @@ GoldPass.Shimmer = ColorSequence.new({
 })
 
 -- What owning it does besides the lane (the Rewards screen and the unlock card list these).
+-- (`Short`: the words for a line of them all.)
 GoldPass.Perks = {
-	{ Icon = "👑", Text = "GOLD badge on your name tag" },
-	{ Icon = "✨", Text = "Shimmering gold name" },
-	{ Icon = "🏅", Text = "Gold level badge" },
-	{ Icon = "⚡", Text = "+10% XP from every round" },
+	{ Icon = "👑", Text = "GOLD badge on your name tag", Short = "GOLD name tag badge" },
+	{ Icon = "✨", Text = "Shimmering gold name", Short = "Shimmering name" },
+	{ Icon = "🏅", Text = "Gold level badge", Short = "Gold level badge" },
+	{ Icon = "⚡", Text = "+10% XP from every round", Short = "+10% XP" },
 }
 
 -- The game pass's listing on Roblox (pass 2048378768, Config.Monetization; the owner sets the price
@@ -68,7 +71,7 @@ GoldPass.Perks = {
 -- changes how a mini-game plays.
 GoldPass.Listing = {
 	Name = "GOLD PASS",
-	Description = "Unlock the GOLD lane of the Level Road: 100 gold rewards, one at every level from 2 to 100! "
+	Description = "Unlock the GOLD lane of the Level Road: 100 gold rewards across every level from 2 to 100! "
 		.. "33 exclusive cosmetics you can't get any other way (the Royal Crown, the Sun King Crown, Liquid "
 		.. "Sunlight, the Golden Supernova and more: trails, hats, titles, victory and knockout effects, "
 		.. "emotes), gold coins, a shimmering gold name tag with a GOLD badge, a gold level badge and +10% XP "
@@ -297,7 +300,7 @@ GoldPass.Items = {
 		Slot = "Victory",
 		Name = "Gold Rush",
 		Description = "Gold coins rain on the winner.",
-		Icon = "💰",
+		Icon = "🤑",
 		GoldLevel = 14,
 		Effect = "GoldRush",
 	},
@@ -354,7 +357,7 @@ GoldPass.Items = {
 		Slot = "Elimination",
 		Name = "Treasure Pop",
 		Description = "Burst into a shower of coins.",
-		Icon = "💰",
+		Icon = "🎁",
 		GoldLevel = 28,
 		Effect = "TreasurePop",
 	},
@@ -411,7 +414,7 @@ GoldPass.Items = {
 		Slot = "Emote",
 		Name = "Golden Aura",
 		Description = "Dance in a ring of golden light.",
-		Icon = "🌟",
+		Icon = "🌞",
 		GoldLevel = 65,
 		Animation = 507777268, -- the Disco dance
 		Looped = true,

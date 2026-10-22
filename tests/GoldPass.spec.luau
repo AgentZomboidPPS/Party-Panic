@@ -318,6 +318,8 @@ test("icons and words phones can draw", function()
 	for _, perk in GoldPass.Perks do
 		table.insert(texts, perk.Icon)
 		table.insert(texts, perk.Text)
+		expectTrue(type(perk.Short) == "string" and #perk.Short > 0, `{perk.Text} has its short words`)
+		table.insert(texts, perk.Short)
 	end
 	for _, text in texts do
 		expectTrue(not tooNew(text), `"{text}" uses an emoji phones don't show`)
@@ -412,6 +414,12 @@ test("the offer: Roblox's price and sale state, COMING SOON while off sale", fun
 		GoldLane.Offer(5, true, { IsForSale = false, PriceInRobux = 399 }, fallback),
 		{ OnSale = false, Price = 399, Known = true },
 		"off sale on Roblox: COMING SOON"
+	)
+	-- What a Roblox server got for pass 2048378768 while it was off sale: no price at all.
+	expectEqual(
+		GoldLane.Offer(2048378768, true, { Name = "GOLD PASS", IsForSale = false }, fallback),
+		{ OnSale = false, Price = 399, Known = true },
+		"off sale, no price: COMING SOON"
 	)
 	expectEqual(
 		GoldLane.Offer(5, true, { IsForSale = true, PriceInRobux = 449 }, fallback),

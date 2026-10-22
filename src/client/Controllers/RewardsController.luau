@@ -29,7 +29,7 @@
 -- reward at every level from 2 to 100: a cosmetic, or gold coins; Shared/GoldPass), each lane named
 -- at the road's left. A tile is one reward: its icon, its name, what it is and its state; a tap
 -- equips it (EQUIP / EQUIPPED, like the free lane's). Before the pass is theirs, the gold tiles are a
--- quieter gold with a 🔒 and the header's big shining GET GOLD PASS button (with Roblox's price;
+-- softer gold with a 🔒 and the header's big shining GET GOLD PASS button (with Roblox's price;
 -- "N REWARDS READY" for what buying it unlocks at once) shows Roblox's purchase prompt, as does a
 -- tap on a gold tile; while the pass is off sale on Roblox both say COMING SOON. An owner sees the
 -- gold lane lit, their gold count in the header, a gold level badge (here and on the HUD) and gold
@@ -38,6 +38,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
 local Cosmetics = require(Shared.Cosmetics)
@@ -69,6 +70,8 @@ local currentTab = "Road"
 local TOUCH_TAB_REACH = 208
 local CARD_W, CARD_GAP = 180, 12
 local LANE_W = 60 -- the lanes' names at the road's left (FREE, GOLD)
+-- The road makes a level's content when it scrolls this near the view (scaled units).
+local FILL_BEHIND, FILL_AHEAD = 400, 1500
 local GOLD = GoldPass.Colors
 
 local PINK_DARK = Color3.fromRGB(200, 50, 140)
@@ -298,7 +301,7 @@ type Metrics = {
 }
 
 local function metrics(): Metrics
-	local ribbon, tile, gap = if touch then 28 else 34, if touch then 112 else 190, if touch then 6 else 8
+	local ribbon, tile, gap = if touch then 28 else 34, if touch then 112 else 200, if touch then 6 else 8
 	local laneTop = ribbon + (if touch then 4 else 6)
 	return {
 		Header = if touch then 76 else 64,
@@ -340,11 +343,6 @@ local function goldAction(parent: Instance, m: Metrics)
 	local holder: GuiObject
 	if buy then
 		holder = UIKit.Button(props, GoldPassController.Prompt, GOLD.Gold, GOLD.Deep)
-		local scale = holder:FindFirstChildOfClass("UIScale")
-		if scale and not State.ReducedEffects() then
-			-- It breathes, so the eye finds it.
-			UIKit.Tween(scale, 0.9, { Scale = 1.04 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-		end
 	else
 		props.Text = nil
 		props.CornerRadius = nil
@@ -362,6 +360,16 @@ local function goldAction(parent: Instance, m: Metrics)
 	rim.Thickness = 3
 	rim.Transparency = 0
 	GoldPassController.Glint(holder, 20)
+	if buy and not State.ReducedEffects() then
+		-- Its bright rim breathes, so the eye finds it.
+		TweenService
+			:Create(
+				rim,
+				TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+				{ Thickness = 6 }
+			)
+			:Play()
+	end
 	local title = if owned
 		then `{GoldPass.Icon} GOLD PASS ✓`
 		elseif buy then `{GoldPass.Icon} GET GOLD PASS`
@@ -555,7 +563,7 @@ end
 -- What one tile of a level shows and does.
 type Tile = {
 	Name: string,
-	Icon: string?, -- an emoji, or nil: a drawn coin
+	Icon: string, -- its emoji (coins: 💰)
 	Caption: string, -- what it is ("TRAIL", "COINS")
 	Description: string?, -- PC
 	Status: string, -- the line at its bottom ("EQUIP", "✓ COLLECTED", "🔒 GOLD PASS")
@@ -575,6 +583,7 @@ local function drawTile(parent: Instance, x: number, y: number, w: number, h: nu
 	else
 		top, bottom = if tile.Lit then Theme.Colors.Card else Theme.Colors.PanelLight, Theme.Colors.PanelDark
 	end
+	-- A tile that does something is a button, its whole face (44 pt and more on phones).
 	local props = {
 		Name = tile.Name,
 		Position = UDim2.fromOffset(x, y),
@@ -596,8 +605,8 @@ local function drawTile(parent: Instance, x: number, y: number, w: number, h: nu
 		end
 		local gradient = GoldPassController.Fill()
 		if tile.Locked then
-			-- A locked reward is a deeper, quieter gold: it lights up once it's theirs.
-			gradient.Color = ColorSequence.new(Color3.fromRGB(236, 196, 110), GOLD.Locked)
+			-- A locked reward is a softer gold (no glint): it lights up once it's theirs.
+			gradient.Color = ColorSequence.new(GOLD.LockedTop, GOLD.LockedBottom)
 		end
 		gradient.Parent = frame
 	end
@@ -612,30 +621,34 @@ local function drawTile(parent: Instance, x: number, y: number, w: number, h: nu
 	end
 
 	-- Phones: the icon at the left, the name and what it is beside it, the status underneath. PC:
-	-- the icon on top, then the name, what it is, its description and the status.
-	local iconBox = if touch
-		then { UDim2.fromOffset(4, 8), UDim2.fromOffset(52, 52) }
-		else { UDim2.fromOffset(0, 6), UDim2.new(1, 0, 0, 56) }
-	if tile.Icon then
+	-- the icon on top, then the name, what it is, its description and the status. Text outlines are
+	-- the labels' own, so a tile stays light: the road has dozens.
+	local inkColor = if tile.Gold then GOLD.Ink else Color3.fromRGB(30, 15, 60)
+	local icon = UIKit.Label({
+		Name = "Icon",
+		Text = tile.Icon,
+		TextSize = if touch then 38 else 46,
+		TextWrapped = false,
+		Position = if touch then UDim2.fromOffset(4, 8) else UDim2.fromOffset(0, 6),
+		Size = if touch then UDim2.fromOffset(52, 52) else UDim2.new(1, 0, 0, 56),
+		ZIndex = 2,
+		Parent = frame,
+	})
+	if tile.Locked then
+		-- A padlock on the icon's corner (clear of the words beside it on a phone).
 		UIKit.Label({
-			Name = "Icon",
-			Text = tile.Icon,
-			TextSize = if touch then 38 else 46,
+			Name = "Lock",
+			Text = "🔒",
+			TextSize = if touch then Theme.Touch.MinText else 16,
 			TextWrapped = false,
-			Position = iconBox[1],
-			Size = iconBox[2],
-			ZIndex = 2,
-			Parent = frame,
-		})
-	else
-		local size = if touch then 40 else 46
-		UIKit.Coin({
-			Name = "CoinIcon",
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = if touch then UDim2.fromOffset(30, 34) else UDim2.new(0.5, 0, 0, 34),
-			Size = UDim2.fromOffset(size, size),
-			ZIndex = 2,
-			Parent = frame,
+			Position = if touch then UDim2.new(1, -14, 1, -10) else UDim2.new(0.5, 26, 1, -16),
+			Size = UDim2.fromOffset(if touch then 24 else 28, if touch then 24 else 28),
+			BackgroundColor3 = Color3.fromRGB(70, 36, 6),
+			BackgroundTransparency = 0.15,
+			ZIndex = 3,
+			Parent = icon,
+			Children = { UIKit.Round() },
 		})
 	end
 	local textLeft = if touch then 58 else 8
@@ -647,11 +660,12 @@ local function drawTile(parent: Instance, x: number, y: number, w: number, h: nu
 		Font = Theme.Fonts.Display,
 		TextSize = if touch then 18 else 20,
 		TextXAlignment = align,
-		Position = UDim2.fromOffset(textLeft, if touch then 6 else 62),
-		Size = UDim2.fromOffset(textWidth, if touch then 44 else 46),
+		TextStrokeColor3 = inkColor,
+		TextStrokeTransparency = if tile.Gold then 0.1 else 0.4,
+		Position = UDim2.fromOffset(textLeft, if touch then 6 else 60),
+		Size = UDim2.fromOffset(textWidth, if touch then 44 else 48),
 		ZIndex = 2,
 		Parent = frame,
-		Children = { if tile.Gold then ink() else UIKit.TextStroke(0.25) },
 	})
 	name:SetAttribute("PP_Lines", 2) -- "Rainbow Fireworks" takes two lines on a tile
 	UIKit.Label({
@@ -663,7 +677,7 @@ local function drawTile(parent: Instance, x: number, y: number, w: number, h: nu
 		TextColor3 = if tile.Gold then GOLD.Ink else Theme.Colors.TextDim,
 		TextXAlignment = align,
 		Position = UDim2.fromOffset(textLeft, if touch then 50 else 108),
-		Size = UDim2.fromOffset(textWidth, if touch then 22 else 18),
+		Size = UDim2.fromOffset(textWidth, if touch then 22 else 20),
 		ZIndex = 2,
 		Parent = frame,
 	})
@@ -674,39 +688,23 @@ local function drawTile(parent: Instance, x: number, y: number, w: number, h: nu
 			TextSize = 14,
 			TextColor3 = if tile.Gold then GOLD.Ink else Theme.Colors.TextDim,
 			Position = UDim2.fromOffset(8, 128),
-			Size = UDim2.new(1, -16, 0, 32),
+			Size = UDim2.new(1, -16, 0, 34),
 			ZIndex = 2,
 			Parent = frame,
 		})
 	end
-	if tile.Locked then
-		local lock = UIKit.new("Frame", {
-			Name = "Lock",
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -6, 0, 6),
-			Size = UDim2.fromOffset(30, 30),
-			BackgroundColor3 = Color3.fromRGB(70, 36, 6),
-			BackgroundTransparency = 0.15,
-			ZIndex = 3,
-			Parent = frame,
-			Children = { UIKit.Round(), UIKit.new("UIStroke", { Color = GOLD.Light, Thickness = 1.5 }) },
-		})
-		UIKit.Label({
-			Text = "🔒",
-			TextSize = if touch then Theme.Touch.MinText else 16,
-			TextWrapped = false,
-			Size = UDim2.fromScale(1, 1),
-			ZIndex = 4,
-			Parent = lock,
-		})
-	end
 	-- The status: a filled pill when it's an action (EQUIP), else words on a soft band.
-	local statusHeight = if touch then 28 else 30
-	local pill = UIKit.new("Frame", {
+	local status = UIKit.Label({
 		Name = "Status",
+		Text = tile.Status,
+		Font = Theme.Fonts.Display,
+		TextSize = if touch then Theme.Touch.MinText else 17,
+		TextWrapped = false,
+		TextColor3 = tile.StatusColor,
+		TextStrokeTransparency = 0.5,
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -6),
-		Size = UDim2.new(1, -12, 0, statusHeight),
+		Size = UDim2.new(1, -12, 0, if touch then 28 else 30),
 		BackgroundColor3 = if tile.Pill then Color3.new(1, 1, 1) else Color3.new(0, 0, 0),
 		BackgroundTransparency = if tile.Pill then 0 else (if tile.Gold then 0.72 else 0.6),
 		ZIndex = 2,
@@ -714,19 +712,8 @@ local function drawTile(parent: Instance, x: number, y: number, w: number, h: nu
 		Children = { UIKit.Round() },
 	})
 	if tile.Pill then
-		UIKit.Gradient(tile.Pill[1], tile.Pill[2]).Parent = pill
+		UIKit.Gradient(tile.Pill[1], tile.Pill[2]).Parent = status
 	end
-	UIKit.Label({
-		Text = tile.Status,
-		Font = Theme.Fonts.Display,
-		TextSize = if touch then Theme.Touch.MinText else 17,
-		TextWrapped = false,
-		TextColor3 = tile.StatusColor,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 3,
-		Parent = pill,
-		Children = { UIKit.TextStroke(0.4) },
-	})
 end
 
 -- The status of a reward the player can't have yet: XP TO GO on the next level, else its level.
@@ -746,12 +733,8 @@ local function rewardTile(cardLevel: number, item: Cosmetics.Cosmetic?, coins: n
 	local theirs = reached and (not gold or hasPass)
 	local tile: Tile = {
 		Name = if item then item.Name else `+{coins} coins`,
-		Icon = if item then item.Icon else nil,
-		Caption = if item
-			then slotName(item)
-			elseif gold then "GOLD COINS"
-			elseif cardLevel % 5 == 0 then "BONUS LEVEL!"
-			else "COINS",
+		Icon = if item then item.Icon else Theme.CoinIcon,
+		Caption = if item then slotName(item) elseif gold then "GOLD COINS" else "COINS",
 		Description = if item
 			then item.Description
 			elseif gold then "Gold coins for reaching this level."
@@ -798,8 +781,9 @@ end
 
 -- One level's column: its ribbon (in the colors that level gives your name tag, with the free coins
 -- of a level that has a free reward), the free lane and the gold lane. A lane with two rewards
--- shows both side by side (level 10's trail and title; level 100's crown and title).
-local function levelColumn(parent: Instance, order: number, cardLevel: number, m: Metrics): number
+-- shows both side by side (level 10's trail and title; level 100's crown and title). The column is
+-- made at once (the road's width is right), its content when it scrolls near (`build`).
+local function levelColumn(parent: Instance, order: number, cardLevel: number, m: Metrics): (number, () -> ())
 	local freeItems = Progression.ItemsAt(cardLevel)
 	local goldItems = Progression.GoldItemsAt(cardLevel)
 	local slots = math.max(1, #freeItems, #goldItems)
@@ -811,72 +795,76 @@ local function levelColumn(parent: Instance, order: number, cardLevel: number, m
 		LayoutOrder = order,
 		Parent = parent,
 	})
-	if cardLevel == level() + 1 then
-		-- The next level: a gold-yellow rim round both lanes.
-		UIKit.new("Frame", {
-			Name = "NextRim",
-			Position = UDim2.fromOffset(2, m.LaneTop - 2),
-			Size = UDim2.new(1, -4, 0, m.Card - m.LaneTop + 1),
-			BackgroundTransparency = 1,
-			Parent = column,
-			Children = { UIKit.Corner(18), UIKit.new("UIStroke", { Color = Theme.Colors.Yellow, Thickness = 3 }) },
-		})
-	end
-	local look = Progression.Look(cardLevel)
-	local ribbon = UIKit.new("Frame", {
-		Name = "Ribbon",
-		Size = UDim2.new(1, 0, 0, m.Ribbon),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		Parent = column,
-		Children = { UIKit.Round(), UIKit.new("UIGradient", { Color = look.Gradient, Rotation = 0 }) },
-	})
-	local coins = Progression.Coins(cardLevel)
-	local badge = #freeItems > 0 and coins > 0
-	UIKit.Label({
-		Text = `LEVEL {cardLevel}`,
-		Font = Theme.Fonts.Display,
-		TextSize = if touch then 20 else 21,
-		TextWrapped = false,
-		Position = UDim2.fromOffset(8, 0),
-		Size = UDim2.new(1, if badge then -78 else -16, 1, 0),
-		Parent = ribbon,
-		Children = { UIKit.TextStroke(0.15) },
-	})
-	if badge then
-		-- The free coins this level pays besides its reward.
-		local coin = if touch then 20 else 22
-		UIKit.Coin({
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(1, -70, 0.5, 0),
-			Size = UDim2.fromOffset(coin, coin),
-			Parent = ribbon,
-		})
-		UIKit.Label({
-			Text = `+{coins}`,
+	local function build()
+		if cardLevel == level() + 1 then
+			-- The next level: a gold-yellow rim round both lanes.
+			UIKit.new("Frame", {
+				Name = "NextRim",
+				Position = UDim2.fromOffset(2, m.LaneTop - 2),
+				Size = UDim2.new(1, -4, 0, m.Card - m.LaneTop + 1),
+				BackgroundTransparency = 1,
+				Parent = column,
+				Children = { UIKit.Corner(18), UIKit.new("UIStroke", { Color = Theme.Colors.Yellow, Thickness = 3 }) },
+			})
+		end
+		local coins = Progression.Coins(cardLevel)
+		local badge = #freeItems > 0 and coins > 0
+		local ribbon = UIKit.Label({
+			Name = "Ribbon",
+			Text = `LEVEL {cardLevel}`,
 			Font = Theme.Fonts.Display,
-			TextSize = Theme.Touch.MinText,
+			TextSize = if touch then 20 else 21,
 			TextWrapped = false,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.new(1, -70 + coin + 3, 0, 0),
-			Size = UDim2.new(0, 70 - coin - 3, 1, 0),
-			Parent = ribbon,
-			Children = { UIKit.TextStroke(0.15) },
+			TextXAlignment = if badge then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center,
+			TextStrokeTransparency = 0.3,
+			Size = UDim2.new(1, 0, 0, m.Ribbon),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0,
+			Parent = column,
+			Children = {
+				UIKit.Round(),
+				UIKit.new("UIGradient", { Color = Progression.Look(cardLevel).Gradient, Rotation = 0 }),
+				UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, if badge then 12 else 0) }),
+			},
 		})
-	end
-	local function lane(items: { Cosmetics.Cosmetic }, y: number, gold: boolean)
-		if #items == 0 then
-			local laneCoins = if gold then Progression.GoldCoins(cardLevel) else coins
-			drawTile(column, 0, y, width, m.Tile, rewardTile(cardLevel, nil, laneCoins, gold))
-			return
+		if badge then
+			-- The free coins this level pays besides its reward.
+			UIKit.Label({
+				Name = "Coins",
+				Text = `+{coins} {Theme.CoinIcon}`,
+				Font = Theme.Fonts.Display,
+				TextSize = Theme.Touch.MinText,
+				TextWrapped = false,
+				TextXAlignment = Enum.TextXAlignment.Right,
+				TextStrokeTransparency = 0.3,
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -10, 0, 0),
+				Size = UDim2.new(0, 80, 1, 0),
+				Parent = ribbon,
+			})
 		end
-		local tileW = (width - (#items - 1) * CARD_GAP) / #items
-		for index, item in items do
-			drawTile(column, (index - 1) * (tileW + CARD_GAP), y, tileW, m.Tile, rewardTile(cardLevel, item, 0, gold))
+		local function lane(items: { Cosmetics.Cosmetic }, y: number, gold: boolean)
+			if #items == 0 then
+				local laneCoins = if gold then Progression.GoldCoins(cardLevel) else coins
+				drawTile(column, 0, y, width, m.Tile, rewardTile(cardLevel, nil, laneCoins, gold))
+				return
+			end
+			local tileW = (width - (#items - 1) * CARD_GAP) / #items
+			for index, item in items do
+				drawTile(
+					column,
+					(index - 1) * (tileW + CARD_GAP),
+					y,
+					tileW,
+					m.Tile,
+					rewardTile(cardLevel, item, 0, gold)
+				)
+			end
 		end
+		lane(freeItems, m.LaneTop, false)
+		lane(goldItems, m.LaneTop + m.Tile + m.LaneGap, true)
 	end
-	lane(freeItems, m.LaneTop, false)
-	lane(goldItems, m.LaneTop + m.Tile + m.LaneGap, true)
-	return width
+	return width, build
 end
 
 -- The first column: how each lane works.
@@ -907,19 +895,19 @@ local function introColumn(parent: Instance, m: Metrics): number
 	local total = Progression.GoldTotals
 	local lanes = {
 		{
-			Title = "⭐ FREE ROAD: for everyone",
+			Title = "⭐ FREE ROAD",
 			Lines = {
-				"💰 Every level pays coins, every 5th more",
+				"💰 Coins every level, more every 5th",
 				"🎁 Big levels: rewards nobody can buy",
 				"🎨 Every 10 levels: a new name tag color",
 			},
 		},
 		{
-			Title = `{GoldPass.Icon} GOLD PASS: a reward at EVERY level`,
+			Title = `{GoldPass.Icon} GOLD PASS`,
 			Lines = {
-				`🎁 {total.Items} gold cosmetics + {total.Coins} coins`,
-				"✨ GOLD badge and a shimmering name",
-				"⚡ Gold level badge and +10% XP",
+				"🎁 A gold reward at EVERY level",
+				`✨ {total.Items} cosmetics + {total.Coins} gold coins`,
+				"⚡ GOLD name tag, gold badge, +10% XP",
 			},
 		},
 	}
@@ -1125,16 +1113,64 @@ local function renderRoad(keep: Vector2?)
 			}),
 		},
 	})
-	local x = 2 + introColumn(road, m) + CARD_GAP
+	-- Every level's column is made now (the road is as long as it should be); what's in it is made
+	-- when it scrolls near, so a phone makes the few in view rather than dozens.
+	local introWidth = introColumn(road, m)
+	local x = 2 + introWidth + CARD_GAP
 	local current = level()
 	local target = 0
+	local waiting = {}
 	for order, cardLevel in Progression.RoadLevels(current) do
 		if cardLevel <= current then
 			target = x -- the last level reached starts the view; the next one is beside it
 		end
-		x += levelColumn(road, order, cardLevel, m) + CARD_GAP
+		local width, build = levelColumn(road, order, cardLevel, m)
+		table.insert(waiting, { From = x, To = x + width, Build = build })
+		x += width + CARD_GAP
 	end
-	scrollWhenLaidOut(road, keep or Vector2.new(target, 0))
+	local function fill(at: number)
+		for index = #waiting, 1, -1 do
+			local column = waiting[index]
+			if column.To >= at - FILL_BEHIND and column.From <= at + FILL_AHEAD then
+				table.remove(waiting, index)
+				column.Build()
+			end
+		end
+	end
+	-- Scroll positions are screen pixels, while the road is laid out in units the window's UIScale
+	-- shrinks (0.62 on phones) or grows: pixels per unit are measured on the intro once it's laid out
+	-- (until then, the screen's UI scale).
+	local intro = road:FindFirstChild("Intro") :: GuiObject
+	local function laidOut(): boolean
+		return intro.AbsoluteSize.X > 0 and road.AbsoluteCanvasSize.X > 0
+	end
+	local function perUnit(): number
+		return if intro.AbsoluteSize.X > 0 then intro.AbsoluteSize.X / introWidth else UIKit.CurrentScale()
+	end
+	road:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+		if laidOut() then
+			fill(road.CanvasPosition.X / perUnit())
+		end
+	end)
+	if keep then
+		-- A redraw: the same place (the same window, so the same pixels).
+		fill(keep.X / perUnit())
+		scrollWhenLaidOut(road, keep)
+		return
+	end
+	-- Opening: on the last level reached. The window grows in as it opens, so in pixels that place
+	-- moves: it's set again while the window settles.
+	fill(target)
+	local function open()
+		road.CanvasPosition = Vector2.new(target * perUnit(), 0)
+	end
+	local resized = intro:GetPropertyChangedSignal("AbsoluteSize"):Connect(open)
+	local grown = road:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(open)
+	task.delay(1, function()
+		resized:Disconnect()
+		grown:Disconnect()
+	end)
+	open()
 end
 
 -- The Rewards screen: Career ---------------------------------------------------------------------
@@ -1291,8 +1327,9 @@ function RewardsController.Start(context)
 	buildNextTab(context)
 	followBadge(context)
 
-	-- PC: as tall as the road's two lanes need (phones shrink it to fit anyway).
-	modal = Modal.new(context.Overlay, "Rewards", "🎁", Vector2.new(980, if touch then 620 else 610))
+	-- As tall as the road's two lanes need: on phones that's about the shortest phone's window, so a
+	-- bigger phone doesn't get an empty band under the lanes (Career and Medals scroll).
+	modal = Modal.new(context.Overlay, "Rewards", "🎁", Vector2.new(980, if touch then 470 else 620))
 	local content = modal.Content
 	local title = Modal.TitleHeight()
 	body = UIKit.new("Frame", {
