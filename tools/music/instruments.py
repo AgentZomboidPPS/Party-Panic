@@ -1082,3 +1082,61 @@ def balloon_pop(length: float = 0.35) -> np.ndarray:
     crack = eq(rng.uniform(-1, 1, n), ("hp", 700), ("lp", 7000), ("peak", 2200, 4, 1.0)) * np.exp(-t / 0.012)
     thump = s.sine(150 * (1 + 0.6 * np.exp(-t / 0.01)), n) * np.exp(-t / 0.04) * 0.6
     return _frozen(normalize(crack + thump))
+
+# --- batch B voices
+
+@lru_cache(maxsize=None)
+def harmonica(midi: float, length: float, bend_from: float = 0.0, wah: float = 0.0) -> np.ndarray:
+    """A diatonic harp (blues harmonica): two brassy reeds a hair apart, a nasal mouth formant and a
+    little breath. `bend_from` semitones it bends up into the note from below (a draw bend), `wah`
+    0..1 is the cupped hand's tremolo on long notes."""
+    tone = _voice(midi, length, "square", 0.018, 0.25, 0.82, 0.07, vibrato=0.05, vib_rate=5.6, vib_delay=0.3,
+                  detune=(-0.06, 0.06), width=0.36, scoop=bend_from, scoop_time=0.07)
+    n = tone.shape[-1]
+    t = _t(n)
+    tone = formant(tone, [(950, 7, 1.6), (1850, 5, 2.2), (3300, 2, 2.5)])
+    breath = s.bandpass(_rng("harp", midi, length).uniform(-1, 1, n), 1500, 6000) * env(n, 0.01, 0.06, 0.15, 0.05, gate=length) * 0.06
+    out = eq(tone + breath, ("hp", 260), ("lp", 5200))
+    if wah:
+        out = out * (1 - wah * 0.3 * np.clip((t - 0.25) / 0.2, 0, 1) * (1 + np.sin(2 * np.pi * 4.8 * t)) / 2)
+    return _frozen(normalize(out))
+
+
+@lru_cache(maxsize=None)
+def piano(midi: float, length: float = 0.6, hard: float = 0.7) -> np.ndarray:
+    """An acoustic piano: slightly stretched partials that die faster the higher they are, a hammer
+    knock, and dampers that stop the note when the key is let go."""
+    f = s.midi_hz(midi)
+    ring = 3.5 * np.exp(-(midi - 48) / 22)
+    n = s.samples(length + 0.35)
+    t = _t(n)
+    b = 0.0004 * 2 ** ((midi - 60) / 24)  # inharmonicity
+    tone = np.zeros(n)
+    for k in range(1, 13):
+        fk = f * k * np.sqrt(1 + b * k * k)
+        if fk > 9000:
+            break
+        amp = (1 / k ** (1.25 - 0.35 * hard)) * (1.0 if k > 1 else 0.85)
+        tone += amp * np.sin(2 * np.pi * fk * t + k) * (np.exp(-t / (ring / k ** 0.6)) * 0.7 + 0.3 * np.exp(-t / (0.12 + 0.3 / k)))
+    knock = s.bandpass(_rng("hammer", midi).uniform(-1, 1, n), 300, 3000) * np.exp(-t / 0.006) * 0.12 * hard
+    out = (tone + knock) * np.clip(t / 0.002, 0, 1)
+    out = _gate(out, length, 0.12)
+    return _frozen(normalize(eq(out, ("hp", 60), ("lp", 7000))))
+
+
+@lru_cache(maxsize=None)
+def factory_whistle(notes: tuple, length: float) -> np.ndarray:
+    """A steam whistle (the factory's shift hooter): a chord of breathy pipes that scoop up to pitch
+    as the steam comes through, with a hiss on top."""
+    n = s.samples(length + 0.25)
+    t = _t(n)
+    out = np.zeros(n)
+    for k, midi in enumerate(notes):
+        pitch = midi - 1.2 * np.exp(-t / 0.12) + _vibrato(t, 0.06, 5.0 + k * 0.4, 0.2, 0.3)
+        freq = s.midi_hz(pitch)
+        ph = 2 * np.pi * np.cumsum(freq) / SR
+        out += np.sin(ph) + 0.25 * np.sin(2 * ph) + 0.1 * np.sin(3 * ph)
+    out /= max(1, len(notes)) ** 0.7
+    hiss = eq(_rng("hooter", notes, length).uniform(-1, 1, n), ("hp", 2500), ("lp", 9000)) * 0.12
+    e = env(n, 0.06, 0.3, 0.85, 0.2, gate=length)
+    return _frozen(normalize(eq((out + hiss) * e, ("hp", 200), ("lp", 7000))))
