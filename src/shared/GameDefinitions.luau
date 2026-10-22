@@ -354,6 +354,19 @@ local list: { GameDefinition } = {
 		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "Struggle",
+		Name = "Struggle",
+		Category = "Versus",
+		Icon = "🏏",
+		Color = Color3.fromRGB(255, 150, 60),
+		Objective = "Bonk rivals to knock their orbs loose, then grab them! Most orbs at the end wins.",
+		Controls = "SWING (E / click) to hit - hold it for a big charged hit. Walk over orbs to grab them.",
+		Duration = 70,
+		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 

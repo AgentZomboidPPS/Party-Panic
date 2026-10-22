@@ -1,0 +1,23 @@
+newmtl Pole
+Kd 0.902 0.902 0.902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Finial
+Kd 0.941 0.784 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cloth
+Kd 0.941 0.627 0.196
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Emblem
+Kd 1.000 0.980 0.922
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
