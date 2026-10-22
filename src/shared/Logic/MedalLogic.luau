@@ -74,7 +74,7 @@ local BIG: { { Id: string, Name: string, Icon: string, How: string, Ribbon: { nu
 		Id = "HallOfFame",
 		Name = "Hall of Fame",
 		Icon = "🏛️",
-		How = "Finish a week in the top 3",
+		How = "Make the weekly top 3",
 		Ribbon = { 120, 84, 230 },
 	},
 	{

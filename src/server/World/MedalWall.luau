@@ -76,9 +76,9 @@ local function layout(): MedalLogic.WallLayout
 end
 
 -- The wall's footprint in its own frame (half its length, and its depth from the plinth's front to
--- its back), for clearing the scenery out of its way.
+-- its back: the plinth's gold band), for clearing the scenery out of its way.
 local function footprint(): (number, number, number)
-	local half = layout().Width / 2 + RIM + 0.4
+	local half = layout().Width / 2 + RIM + 0.6
 	return half, PLINTH_FRONT - 0.1, PLINTH_BACK + 0.1
 end
 

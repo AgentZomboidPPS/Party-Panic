@@ -148,7 +148,10 @@ local function medalDisc(parent: Instance, medal: Medals.Medal, size: number, ha
 		TextSize = math.floor(size * 0.52),
 		TextWrapped = false,
 		TextTransparency = if have then 0 else 0.55,
-		Size = UDim2.fromScale(1, 1),
+		-- (Just the icon's own room: the "+2" sits on the disc's edge, clear of it.)
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.64, 0.64),
 		ZIndex = (props.ZIndex or 3) + 1,
 		Parent = disc,
 	})
@@ -278,7 +281,8 @@ local function show(items: { Earned })
 			Name = "Ribbon",
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.fromOffset(24 + DISC / 2 + side * 16, 30 + DISC / 2),
-			Size = UDim2.fromOffset(34, 96),
+			-- (A rotated frame isn't clipped by the card: this reaches just to its top edge.)
+			Size = UDim2.fromOffset(34, 84),
 			Rotation = side * 16,
 			BackgroundColor3 = first.Color,
 			BorderSizePixel = 0,
@@ -296,7 +300,7 @@ local function show(items: { Earned })
 		local more = UIKit.new("Frame", {
 			Name = "More",
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(24 + DISC - 6, 30 + DISC - 10),
+			Position = UDim2.fromOffset(24 + DISC - 8, 30 + DISC - 6),
 			Size = UDim2.fromOffset(52, 40),
 			BackgroundColor3 = Theme.Colors.Pink,
 			ZIndex = 5,
@@ -824,8 +828,13 @@ function MedalController.Start(context)
 			pumpSoon(0.4)
 		end
 	end)
+	-- A lobby game (Skee-Ball) takes the screen: the card steps aside until it's over.
 	hud:GetAttributeChangedSignal("PP_TipsAside"):Connect(function()
-		pumpSoon(0.4)
+		if hud:GetAttribute("PP_TipsAside") == true and closeCurrent then
+			closeCurrent(true)
+		else
+			pumpSoon(0.4)
+		end
 	end)
 
 	-- The medal wall's prompt opens the medal screen.
