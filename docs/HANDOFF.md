@@ -4,6 +4,23 @@ Last updated: **2026-10-22 ~20:05 UTC** by Session C (branch **`claude/friendly-
 from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes from 19:00 UTC and Session A's sections
 0-9, still accurate except where a newer block says otherwise.
 
+## Session C, later still: version 43 (nobody floats over the lobby)
+
+- **Live: version 43** (from `20dff14`, still PRIVATE). Owner: "Friend spawned above the lobby floating. We need to
+  make sure this doesnt happen again." Cause: Roblox drops a respawn on top of whatever stands on the spawn pad (a
+  bot, often), a few studs up; people and bots never collide, so the character should just drop, but
+  `Controllers/ArrivalController` (the hold that stops a phone falling through an arena it hasn't loaded) saw no
+  ground within 3 studs of the soles and held it in mid-air for up to 15 s. Now, away from an arena (not
+  `PP_InRound` + `PP_Alive`), it holds only while nothing at all is under the character for 80 studs, at most 6 s.
+  Belt and braces: `LobbyService` puts any lobby player who stands still with nothing under their footprint for 4 s
+  back on a spawn pad, and records it (`client_reports.py`: a "Lobby Float" report, key m<UserId>, with where). If
+  one ever shows up, there's another cause to find.
+- Checks: `tools/checks/scenarios/LobbyFloat.luau` (the old code held the lobby case, the new one doesn't; arena
+  holds unchanged; the server watch's floating / standing / heel-on-a-ledge), `--late-floor 3` still holds a phone
+  on its spot until its floor arrives, the lobby run, 349 Lune tests.
+- Bot rubber-banding is still in the owner's reports from tonight (21:00 UTC, version 41): Trace Race 565 snaps on
+  the owner's PC, Dice Dash and Stamp Out dozens (anchored bots moved by CFrame). Not touched yet.
+
 ## Session C, later: version 42 (the owner's playtest notes)
 
 - **Live: version 42** (published ~20:55 UTC from `795e965`, still PRIVATE). Four of the owner's notes:
