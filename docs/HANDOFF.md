@@ -8,7 +8,7 @@ from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes fro
 
 `tools/publish_place.py` refuses while it's public (pass `--allow-public` only once the owner says yes).
 
-- **Waiting for the owner's yes:** the analytics funnels (owner: "Can you make me some sick ass funnels to track
+- **Live: version 45** (published 22:55 UTC, owner: "Yes do it"): the analytics funnels (owner: "Can you make me some sick ass funnels to track
   where players leave/complete stuff"). `Services/FunnelService` logs, `Shared/Logic/Funnels` names them (step names
   are pinned by `tests/Funnels.spec.luau`: Roblox keys steps by number, so only ever add steps at the end):
   - Onboarding (new players only, whose first visit is after it ships; the profile's `Funnel.Onboarding` keeps
