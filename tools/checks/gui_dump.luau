@@ -13,6 +13,13 @@
 --     e.L[screen] = { x, y, w, h }  or for text  { x, y, w, h, textW, textH, fits, px, lines, needW, needH }
 -- Fonts are loaded first: a label laid out before its font has loaded keeps a fallback font's
 -- (narrower) measurements for good, which is how text cut off on phones used to pass these checks.
+--
+-- Kept small (Open Cloud refuses a task result over 4 MB, and a phone run of the client harness
+-- reached 6 MB): a snapshot records only what's on screen (a hidden object, a switched-off screen,
+-- stroke or gradient, and everything inside them, are left out: that was most of the UI, every
+-- closed window), numbers are rounded to 3 decimals, and a value most objects of a class share is
+-- left out of their entries (__uiDefaults: the harnesses return it beside the snapshots as
+-- "uiDefaults", and ui_render.py fills those values back in).
 
 local __fontsLoaded = {}
 local function __loadFonts(root)
@@ -263,6 +270,80 @@ local function __engineLayout(playerGui, entries)
 	folder:Destroy()
 end
 
+-- The values left out of snapshot entries, by class (keys as describe() below writes them).
+local __guiDefaults = {
+	vis = true,
+	pos = { 0, 0, 0, 0 },
+	anchor = { 0, 0 },
+	bgt = 1,
+	z = 1,
+	lo = 0,
+	rot = 0,
+	autosize = "None",
+	clip = false,
+}
+local __textDefaults = {
+	tc = { 255, 255, 255 },
+	scaled = false,
+	wrap = false,
+	font = "BuilderSansExtraBold",
+	xa = "Center",
+	ya = "Center",
+	tt = 0,
+	st = 1,
+	trunc = "None",
+}
+local function __merged(...)
+	local out = {}
+	for _, part in { ... } do
+		for key, value in part do
+			out[key] = value
+		end
+	end
+	return out
+end
+__uiDefaults = {
+	ScreenGui = { enabled = true, inset = true, insets = "CoreUISafeInsets", order = 0 },
+	Frame = __guiDefaults,
+	ScrollingFrame = __merged(__guiDefaults, { cpos = { 0, 0 }, autocanvas = "None" }),
+	ImageLabel = __merged(__guiDefaults, { ic = { 255, 255, 255 }, it = 0 }),
+	ImageButton = __merged(__guiDefaults, { ic = { 255, 255, 255 }, it = 0 }),
+	TextLabel = __merged(__guiDefaults, __textDefaults),
+	TextButton = __merged(__guiDefaults, __textDefaults),
+	TextBox = __merged(__guiDefaults, __textDefaults),
+	UIScale = { scale = 1 },
+	UIStroke = { enabled = true, mode = "Contextual", thick = 2 },
+	UIGradient = { rot = 90 },
+	UIListLayout = { dir = "Vertical", ha = "Center", va = "Top", sort = "LayoutOrder" },
+}
+local function __same(a, b)
+	if type(a) == "table" and type(b) == "table" then
+		if #a ~= #b then
+			return false
+		end
+		for index, value in a do
+			if not __same(value, b[index]) then
+				return false
+			end
+		end
+		return true
+	end
+	return a == b
+end
+-- Numbers to 3 decimals (properties are 32-bit floats: 0.62 reads 0.6200000047683716).
+local function __tidy(value)
+	if type(value) == "number" then
+		return math.floor(value * 1000 + 0.5) / 1000
+	elseif type(value) == "table" then
+		local out = {}
+		for key, item in value do
+			out[key] = __tidy(item)
+		end
+		return out
+	end
+	return value
+end
+
 __textReport = {} -- "<snapshot> <screen>: <path> "<text>" <problem>" for every text that doesn't fit
 function __dumpGui(playerGui, label)
 	__dumpLabel = label
@@ -418,24 +499,49 @@ function __dumpGui(playerGui, label)
 		else
 			return nil
 		end
+		-- Rounded, and without the values most objects of its class share (__uiDefaults); a colour
+		-- behind nothing (fully see-through) isn't needed either.
+		for key, value in e do
+			e[key] = __tidy(value)
+		end
+		for key, value in __uiDefaults[e.c] or {} do
+			if __same(e[key], value) then
+				e[key] = nil
+			end
+		end
+		if e.bg and e.bgt == nil then
+			e.bg = nil
+		end
 		return e
 	end
-	local function visit(inst, parentId, visible)
+	-- Only what's on screen: a hidden object, or a screen, stroke or gradient that's switched off,
+	-- draws nothing and neither does anything inside it.
+	local function onScreen(inst)
+		if inst:IsA("GuiObject") then
+			return inst.Visible
+		elseif inst:IsA("ScreenGui") or inst:IsA("UIStroke") or inst:IsA("UIGradient") then
+			return inst.Enabled
+		end
+		return true
+	end
+	local function visit(inst, parentId)
+		if not onScreen(inst) then
+			return
+		end
 		local ok, entry = pcall(describe, inst, parentId)
 		if ok and entry then
 			table.insert(nodes, entry)
 			local id = #nodes
-			local onScreen = visible and entry.vis ~= false and entry.enabled ~= false
-			if onScreen and inst:IsA("GuiObject") then
+			if inst:IsA("GuiObject") then
 				table.insert(shown, { inst, entry })
 			end
 			for _, child in inst:GetChildren() do
-				visit(child, id, onScreen)
+				visit(child, id)
 			end
 		end
 	end
 	for _, gui in playerGui:GetChildren() do
-		visit(gui, 0, true)
+		visit(gui, 0)
 	end
 	if __devices and #__devices > 0 then
 		local ok, err = pcall(__engineLayout, playerGui, shown)

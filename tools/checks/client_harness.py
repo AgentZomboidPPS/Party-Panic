@@ -32,10 +32,11 @@ sitting out. The result's "sitOutChecks" says what the switches, the vote note a
 showed. --sit-out draws those screens ("Intermission sitting out", "Voting sitting out", "Waiting
 everyone on a break", "Preparing sitting out", "InRound sitting out", "InRound back in", "Settings
 sitting out") next to the playing ones to compare (Intermission, Voting, Preparing, InRound,
-Results, Settings), and leaves the rest out. Open Cloud caps the size of a task's result, and every
-screen in one run is over it (about 3 MB of snapshots): Roblox then reports "Task timed out due to
-an internal error" and returns nothing. --shots NAME,... keeps just those snapshots (the run still
-plays everything and reports every error).
+Results, Settings), and leaves the rest out. Open Cloud refuses a task's result over 4 MB
+(OUTPUT_SIZE_LIMIT_EXCEEDED), so a snapshot records only what's on screen and leaves out the values
+most objects share (gui_dump.luau: the result carries them as "uiDefaults" for ui_render.py): a
+whole phone run is about 1 MB. --shots NAME,... keeps just those snapshots (the run still plays
+everything and reports every error).
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
@@ -673,17 +674,17 @@ do
 	machineModel:SetAttribute("SkeeState", "Playing")
 	__fire("SkeeBall", "Start", 1, 240)
 	task.wait(1.2)
-	__ui["SkeeBall"] = __dumpGui(__playerGui, "SkeeBall")
+	snap("SkeeBall")
 	-- The ROLL meter: one press stops the swinging aim, the next starts the power filling.
 	SkeeBallController.PressRoll()
 	task.wait(0.35)
 	SkeeBallController.PressRoll()
 	task.wait(0.45)
-	__ui["SkeeBall meter"] = __dumpGui(__playerGui, "SkeeBall meter")
+	snap("SkeeBall meter")
 	skeeChecks.rolled = SkeeBallController.Roll(0.05, 0.5)
 	__fire("SkeeBall", "Rolled", 1, 1, 1050, 500, "40", 40)
 	task.wait(1.65)
-	__ui["SkeeBall pop"] = __dumpGui(__playerGui, "SkeeBall pop")
+	snap("SkeeBall pop")
 	machineModel:SetAttribute("SkeeScore", 40)
 	machineModel:SetAttribute("SkeeBalls", 1)
 	task.wait(0.6)
@@ -702,7 +703,7 @@ do
 	GameState.Set("Phase", "Voting")
 	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 12)
 	task.wait(1.2)
-	__ui["SkeeBall voting"] = __dumpGui(__playerGui, "SkeeBall voting")
+	snap("SkeeBall voting")
 	local skeeHud = __playerGui:FindFirstChild("PartyPanicHUD")
 	local skeeHolder = skeeHud and skeeHud:FindFirstChild("SkeeBallControls")
 	local skeeTip = skeeHolder and skeeHolder:FindFirstChild("Hint", true)
@@ -714,7 +715,7 @@ do
 	machineModel:SetAttribute("SkeeState", "Over")
 	__fire("SkeeBall", "Over", 1, 1, 310, 240, true, 2)
 	task.wait(1)
-	__ui["SkeeBall over"] = __dumpGui(__playerGui, "SkeeBall over")
+	snap("SkeeBall over")
 	skeeChecks.sentToServer = table.concat(__sent, ",")
 	__fire("SkeeBall", "End", 1, "Left")
 	task.wait(0.5)
@@ -816,7 +817,7 @@ do
 	local rolledBefore = SkeeBallController.Status().Rolled
 	__fire("SkeeBall", "Sync", 1, 0)
 	task.wait(0.3)
-	__ui["SkeeBall roll again"] = __dumpGui(__playerGui, "SkeeBall roll again")
+	snap("SkeeBall roll again")
 	local skeePop = skeeHud and skeeHud:FindFirstChild("SkeeBallPop")
 	skeeChecks.syncPutBack = string.format(
 		"rolled %d -> %d, pop %q",
@@ -852,7 +853,7 @@ do
 	GameState.Set("Phase", "InRound")
 	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 60)
 	task.wait(1.2)
-	__ui["SkeeBall in a round"] = __dumpGui(__playerGui, "SkeeBall in a round")
+	snap("SkeeBall in a round")
 	GameState.Set("Phase", phaseNow)
 	GameState.Set("PhaseEndsAt", 0)
 	__player:SetAttribute("PP_SitOut", nil)
@@ -1536,6 +1537,7 @@ task.wait(0.5)
 local guiCount = #__playerGui:GetDescendants()
 return game:GetService("HttpService"):JSONEncode({
 	ui = __ui,
+	uiDefaults = __uiDefaults, -- the values gui_dump.luau left out of the snapshots
 	errors = __errors,
 	startMs = startTimes,
 	sentToServer = __sent,
