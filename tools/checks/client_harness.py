@@ -1142,6 +1142,22 @@ do
 	pcall(__require("Client/UI/Modal").CloseAll)
 	task.wait(0.3)
 	medalChecks.afterAll = card()
+	-- The PARTY CUP's final podium (PP_CupPodium) and the results card (PP_ResultsShowing) have the
+	-- screen: a medal waits for both to clear.
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 20)
+	__player:SetAttribute("PP_CupPodium", true)
+	__fire("MedalEarned", "CupChampion", false)
+	task.wait(1.2)
+	medalChecks.duringCupPodium = card()
+	__player:SetAttribute("PP_ResultsShowing", true)
+	__player:SetAttribute("PP_CupPodium", nil)
+	task.wait(1)
+	medalChecks.duringResultsCard = card()
+	__player:SetAttribute("PP_ResultsShowing", nil)
+	task.wait(1.2)
+	medalChecks.afterPodiumAndResults = card()
+	MedalCards.Dismiss()
+	task.wait(0.4)
 end
 phase("Voting", 12, function()
 	GameState.SetJSON("VoteOptions", {

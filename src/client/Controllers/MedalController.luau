@@ -16,10 +16,14 @@
 -- A card waits for a calm moment, like the level-up cards (CelebrationController): never during the
 -- vote, the rules card, the round or its results (it shows once everyone's back in the lobby), and
 -- never over a level-up card: that goes first, and a medal card that's up when one comes in steps
--- aside and comes back after. It also waits for a window (the shop, the Rewards screen...) to close
--- and for a lobby game (Skee-Ball) to finish. It closes itself after a few seconds, with its ✕, when
--- a window opens or when the vote starts; one that had barely shown comes back at the next calm
--- moment.
+-- aside and comes back after. It also waits for a window (the shop, the Rewards screen...) to close,
+-- for a lobby game (Skee-Ball) to finish, and for the PARTY CUP's final podium (the player's
+-- PP_CupPodium: the cup's champion gets CupChampion just then) and the results card
+-- (PP_ResultsShowing) to clear; it steps aside if one of them comes up. While either of those two
+-- is up nothing here opens a window (SEE ALL and the wall's prompt do nothing): opening one closes
+-- any other, and would cut the podium short. A card closes itself after a few seconds, with its ✕,
+-- when a window opens or when the vote starts; one that had barely shown comes back at the next
+-- calm moment.
 -- Phones: the card sits at the top middle (the spot the first-join tip, the lobby's chips and the
 -- level-up card share: it sets PP_Celebrating while it's up, so the tip and the chips step aside),
 -- clear of the profile chip, the menu column, the jump button and the toasts; its buttons are on its
@@ -95,6 +99,28 @@ end
 local function progressText(): string
 	local have, total = MedalLogic.Progress(Medals.Catalog, owned())
 	return `{have} / {total}`
+end
+
+-- Moments that have the screen and mustn't be cut short: the PARTY CUP's final podium
+-- (PP_CupPodium) and the round's results card (PP_ResultsShowing). No card shows meanwhile, and
+-- nothing here opens a window then (opening one closes any other, the podium included).
+local SCREEN_TAKEN = { "PP_CupPodium", "PP_ResultsShowing" }
+
+local function screenTaken(): boolean
+	for _, attribute in SCREEN_TAKEN do
+		if player:GetAttribute(attribute) == true then
+			return true
+		end
+	end
+	return false
+end
+
+-- Opens the medal screen (the Rewards screen's MEDALS tab), unless the podium or the results have
+-- the screen.
+local function openScreen()
+	if not screenTaken() then
+		State.OpenScreen:Fire("Rewards", "Medals")
+	end
 end
 
 -- The level-up card (CelebrationController) is on screen, or has the spot.
@@ -388,7 +414,7 @@ local function show(items: { Earned })
 		Parent = card,
 	}, function()
 		close(false)
-		State.OpenScreen:Fire("Rewards", "Medals")
+		openScreen()
 	end, Theme.Colors.Pink, PINK_DARK)
 
 	UIKit.PopIn(card, 0.4)
@@ -413,8 +439,8 @@ function MedalController.Pump()
 	if not State.Profile or celebrationShowing() or player:GetAttribute("PP_Celebrating") == true then
 		return -- a level-up card first (it says when it's done)
 	end
-	if hud:GetAttribute("PP_TipsAside") == true then
-		return -- playing Skee-Ball
+	if screenTaken() or hud:GetAttribute("PP_TipsAside") == true then
+		return -- the PARTY CUP's podium or the results card, or playing Skee-Ball
 	end
 	local items = table.clone(queue)
 	table.clear(queue)
@@ -836,11 +862,21 @@ function MedalController.Start(context)
 			pumpSoon(0.4)
 		end
 	end)
+	-- So do the PARTY CUP's podium and the results card (a card waits for both to clear).
+	for _, attribute in SCREEN_TAKEN do
+		player:GetAttributeChangedSignal(attribute):Connect(function()
+			if player:GetAttribute(attribute) == true and closeCurrent then
+				closeCurrent(true)
+			else
+				pumpSoon(0.4)
+			end
+		end)
+	end
 
 	-- The medal wall's prompt opens the medal screen.
 	ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeringPlayer)
 		if triggeringPlayer == player and prompt:GetAttribute("Action") == "OpenMedals" then
-			State.OpenScreen:Fire("Rewards", "Medals")
+			openScreen()
 		end
 	end)
 	onTag("MedalSlot", bindSlot)
