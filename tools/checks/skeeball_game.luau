@@ -157,6 +157,99 @@ function __runSkeeBall()
 		boardPieces == 5 and boardMeshSolid == 0,
 		`{boardPieces} colliders, {boardMeshSolid} solid mesh pieces`
 	)
+	-- Grass (owner: "This is super flashy. and glitchy"): the lawn's ground (about 2 studs over the
+	-- plaza) buried the back of the patio, and Roblox grew its grass blades up through the lanes.
+	-- Now no Grass terrain is left under the patio's tickets (|x| < 13, -4.5 < z < 16 in the arcade's
+	-- frame), the ground under the machines and at the patio's back is under the tickets (y 0.4), and
+	-- the lawn 5 to 16 studs round it is grass at its old height.
+	do
+		local arcadeFrame = __require("Server/World/Arcade").Frame()
+		local terrain = workspace.Terrain
+		local low, high = Vector3.one * math.huge, -Vector3.one * math.huge
+		for _, x in { -30, 30 } do
+			for _, z in { -21, 33 } do
+				local corner = arcadeFrame:PointToWorldSpace(Vector3.new(x, 0, z))
+				low, high = low:Min(corner), high:Max(corner)
+			end
+		end
+		local region = Region3.new(Vector3.new(low.X, -8, low.Z), Vector3.new(high.X, 8, high.Z)):ExpandToGrid(4)
+		local materials = terrain:ReadVoxels(region, 4)
+		local corner = region.CFrame.Position - region.Size / 2
+		local under, round = {}, {}
+		for ix = 1, materials.Size.X do
+			for iy = 1, materials.Size.Y do
+				for iz = 1, materials.Size.Z do
+					local material = materials[ix][iy][iz]
+					if material == Enum.Material.Air then
+						continue
+					end
+					local world = corner + Vector3.new(ix - 0.5, iy - 0.5, iz - 0.5) * 4
+					local at = arcadeFrame:PointToObjectSpace(world)
+					local out = math.max(math.abs(at.X) - 13, -4.5 - at.Z, at.Z - 16)
+					local tally = if out < 0 then under elseif out >= 5 and out <= 16 then round else nil
+					if tally then
+						tally[material.Name] = (tally[material.Name] or 0) + 1
+					end
+				end
+			end
+		end
+		local function list(tally): string
+			local parts = {}
+			for name, count in tally do
+				table.insert(parts, `{name} {count}`)
+			end
+			table.sort(parts)
+			return table.concat(parts, ", ")
+		end
+		local terrainOnly = rayParams({ terrain })
+		local function groundAt(x: number, z: number): (string, number?)
+			local point = arcadeFrame:PointToWorldSpace(Vector3.new(x, 0, z))
+			local hit = workspace:Raycast(point + Vector3.new(0, 40, 0), Vector3.new(0, -80, 0), terrainOnly)
+			if not hit then
+				return "none", nil
+			end
+			return `{hit.Material.Name} at {math.floor(hit.Position.Y * 100) / 100}`, hit.Position.Y
+		end
+		local ground, lawn = {}, {}
+		local groundOk, lawnOk = true, true
+		for _, spot in
+			{ { 9, 7.3 }, { 3, 7.3 }, { -3, 7.3 }, { -9, 7.3 }, { 0, 15.5 }, { 12.5, 15.5 }, { -12.5, 15.5 } }
+		do
+			local text, y = groundAt(spot[1], spot[2])
+			table.insert(ground, text)
+			groundOk = groundOk and y ~= nil and y < 0.2 and y > -2.5 and string.find(text, "Grass ", 1, true) ~= 1
+		end
+		for _, spot in { { 0, 28 }, { 25, 10 }, { -25, 10 } } do
+			local text, y = groundAt(spot[1], spot[2])
+			table.insert(lawn, text)
+			lawnOk = lawnOk and y ~= nil and y > 1 and string.find(text, "Grass ", 1, true) == 1
+		end
+		-- What the lawn's voxels hold (occupancy, bottom to top: y -8, -4, 0, 4), for the record.
+		local column = arcadeFrame:PointToWorldSpace(Vector3.new(0, 0, 28))
+		local cell =
+			Region3.new(Vector3.new(column.X - 0.5, -8, column.Z - 0.5), Vector3.new(column.X + 0.5, 8, column.Z + 0.5))
+				:ExpandToGrid(4)
+		local _, lawnOccupancy = terrain:ReadVoxels(cell, 4)
+		local occupancy = {}
+		for iy = 1, lawnOccupancy.Size.Y do
+			table.insert(occupancy, math.floor(lawnOccupancy[1][iy][1] * 1000) / 1000)
+		end
+		summary.terrain = {
+			under = under,
+			round = round,
+			ground = ground,
+			lawn = lawn,
+			lawnOccupancy = occupancy,
+		}
+		check(
+			"no grass grows under the arcade",
+			(under.Grass or 0) == 0 and (round.Grass or 0) > 0 and (round.LeafyGrass or 0) == 0 and groundOk and lawnOk,
+			`under the patio: {list(under)}; the lawn round it: {list(round)}; the ground under the machines and the patio's back: {table.concat(
+				ground,
+				", "
+			)}; the lawn: {table.concat(lawn, ", ")}`
+		)
+	end
 	local traps = __require("Server/World/LobbyBuilder").BallTraps
 	local arcadeTrap = traps[#traps]
 	check(

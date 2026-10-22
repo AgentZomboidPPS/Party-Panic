@@ -43,9 +43,9 @@ SandSwirl.FLIP_TIME = 0.5 -- the spin passes through zero over this long when it
 SandSwirl.SURGE = 7 -- extra spin of a SWIRL at its peak
 SandSwirl.SURGE_CAP = 1.5 -- overlapping SWIRLs never spin faster than this many surges
 -- (owner: "lets make it stronger and add another king": a PULL drains 8, was 5, for 2.5 s at its
--- peak, was 1.7. Even on the lip in two PULLs at once, 2.2 + 10 + LIP_PULL = 15.7, a Diver can
--- still just walk out, faster with a hop.)
-SandSwirl.PULL = 8 -- extra drain of a PULL at its peak
+-- peak, was 1.7; then "also increase pull": 9. Even on the lip in two PULLs at once, 2.2 + 10 +
+-- LIP_PULL = 15.7, a Diver can still just walk out, faster with a hop.)
+SandSwirl.PULL = 9 -- extra drain of a PULL at its peak
 SandSwirl.PULL_HOLD = 2.5 -- how long a PULL drains at its peak (it takes hold over 0.25 s, lets go over 0.5 s)
 SandSwirl.PULL_CAP = 10 -- overlapping PULLs never drain faster than this extra
 

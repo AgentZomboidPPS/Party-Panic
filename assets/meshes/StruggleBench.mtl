@@ -1,0 +1,17 @@
+newmtl Seat
+Kd 0.745 0.510 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Back
+Kd 0.745 0.510 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Legs
+Kd 0.431 0.306 0.204
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

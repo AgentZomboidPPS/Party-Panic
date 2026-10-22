@@ -470,6 +470,8 @@ local function __grantRewards(definition, results, before)
 	end
 	local placed = Placement.Assign(entries)
 	local ok, err = pcall(RewardService.GrantRound, definition, placed, results.WinningTeam)
+	-- As RoundManager: the features that hang off rounds (cups, leaderboard, medals...) hear about it.
+	__require("Server/Services/RoundEvents").Finished:Fire(definition, placed, results.WinningTeam)
 	local report = { granted = if ok then "ok" else tostring(err), players = {} }
 	local places = {}
 	for _, item in placed do
@@ -759,6 +761,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	if __noCsg then
 		__require("Server/World/Shapes").PauseCsgForTests(1e6) -- as if CSG failed on this server
 	end
+	if colliders then
+		__buildEnvironment() -- the terrain round the arenas, as on a real server (colliders.luau)
+	end
 	local module = __require("Server/MiniGames/" .. id)
 	local definition = GameDefinitions.Get(id)
 	assert(definition, "no definition for " .. id)
@@ -841,6 +846,33 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	if not okSeed then
 		__note("seeding profiles failed: " .. tostring(seeded))
 		seeded = nil
+	end
+
+	-- A test run: services that keep shared data (the weekly leaderboard's DataStore...) must never
+	-- write it from a test; they check this attribute.
+	workspace:SetAttribute("PP_Harness", true)
+	-- The features that hang off rounds (they hear RoundEvents.Finished from __grantRewards), started
+	-- the way the server starts them.
+	for _, name in { "CupService", "FriendsService", "MedalService", "LeaderboardService", "EventService" } do
+		local okLoad, service = pcall(__require, "Server/Services/" .. name)
+		if not okLoad or type(service) ~= "table" then
+			__note(`{name} failed to load: {service}`)
+			continue
+		end
+		if service.Init then
+			local okInit, initErr = pcall(service.Init)
+			if not okInit then
+				__note(`{name}.Init failed: {initErr}`)
+			end
+		end
+		if service.Start then
+			task.spawn(function()
+				local okStart, startErr = pcall(service.Start)
+				if not okStart then
+					__note(`{name}.Start failed: {startErr}`)
+				end
+			end)
+		end
 	end
 
 	-- Real bots (Services/BotService) driven by the mode's brain, alongside the scripted stand-ins.
@@ -1496,6 +1528,240 @@ function __runLobby(botCount, seconds)
 	for _, bot in BotRegistry.List() do
 		BotService.Remove(bot)
 	end
+	summary.errors = __errors
+	summary.log = __log
+	summary.eventCounts = __eventCounts
+	return game:GetService("HttpService"):JSONEncode(summary)
+end
+
+-- PLAY AGAIN on the results card (round_harness.py <Mode> --replay; owner: "Add a vote at the end of
+-- each minigame to replay the same minigame."): the real RoundManager loop, with the run's mode as the
+-- only game (a stand-in mode registry: in a harness the real one finds no modes), two stand-in people
+-- (Ann, Bo) and `botCount` real bots. The people vote for the mode, play it, and on the results both
+-- say PLAY AGAIN: the same game straight again (no lobby, no vote), while Cy joins during those
+-- results (not a voter; he plays the replay, and a bot makes room) and a bot's answer is refused. On
+-- the replay's results Ann says yes, Bo and Cy no: no replay, so the lobby and a vote follow, where
+-- the picker's recent list and options are recorded (the replayed game is left out). "phases" says
+-- when each phase started, "replayVotes" every state of the vote, "rounds" who played each round and
+-- on which teams, "toasts" what everyone was told.
+function __runReplay(id, botCount)
+	local GameState = __require("Shared/GameState")
+	GameState.Folder()
+	local DataService = __require("Server/Services/DataService")
+	local CosmeticService = __require("Server/Services/CosmeticService")
+	local QuestService = __require("Server/Services/QuestService")
+	local BotService = __require("Server/Services/BotService")
+	local BotRegistry = __require("Server/Services/BotRegistry")
+	local SitOutService = __require("Server/Services/SitOutService")
+	local VotingService = __require("Server/Services/VotingService")
+	local ReplayService = __require("Server/Services/ReplayService")
+	local Notifier = __require("Server/Services/Notifier")
+	local summary = { game = id }
+	local t0 = os.clock()
+	local function at()
+		return __round(os.clock() - t0)
+	end
+
+	-- What everyone is told (a round sends too many events for the harness's event log to keep).
+	local toasts = {}
+	local realAll = Notifier.All
+	Notifier.All = function(text, kind, duration)
+		table.insert(toasts, `{at()} {kind or "info"}: {text}`)
+		return realAll(text, kind, duration)
+	end
+
+	-- The game registry RoundManager asks: just this mode and its bot brain.
+	local mode = __require("Server/MiniGames/" .. id)
+	local okBrain, brain = pcall(__require, "Server/MiniGames/Bots/" .. id)
+	if not okBrain then
+		brain = __require("Server/MiniGames/Bots/Default")
+	end
+	__modules["Server/MiniGames"] = function()
+		return {
+			Get = function(name)
+				return if name == id then mode else nil
+			end,
+			Brain = function()
+				return brain
+			end,
+			Ids = function()
+				return { id }
+			end,
+		}
+	end
+	__cache["Server/MiniGames"] = nil
+
+	-- People with profiles that never save, loaded as DataService loads one.
+	local function person(index, name)
+		local who = __newPlayer(index)
+		who.Name, who.DisplayName = name, name
+		table.insert(__fakePlayers, who)
+		local data = DataService.Migrate({ EconomyVersion = 2 })
+		DataService.All()[who] = {
+			Player = who,
+			Key = "Harness_" .. name,
+			Data = data,
+			CanSave = false,
+			IsVip = false,
+			Released = false,
+		}
+		CosmeticService.CheckUnlocks(who, true)
+		QuestService.Refresh(who)
+		DataService.Changed(who)
+		return who
+	end
+	local ann, bo = person(1, "Ann"), person(2, "Bo")
+	BotService.Setup()
+	local bots = {}
+	for _ = 1, botCount do
+		table.insert(bots, BotService.Add())
+	end
+
+	-- The first vote offers this mode on its first card (it's the only game the run has); later votes
+	-- are the real picker's. Every vote's recent list (RoundManager's memory) and cards are kept.
+	local realBuild = VotingService.BuildOptions
+	local builds = {}
+	VotingService.BuildOptions = function(count, recent, ignoreLimits)
+		local options = realBuild(count, recent, ignoreLimits)
+		local shown = {}
+		for _, option in options do
+			table.insert(shown, if option.Mystery then `Random ({option.Id})` else option.Id)
+		end
+		table.insert(builds, { recent = table.clone(recent), options = shown })
+		if #builds == 1 then
+			for index, option in options do
+				if option.Id == id and index > 1 then
+					option.Id = options[1].Id
+				end
+			end
+			options[1] = { Id = id, Mystery = false }
+		end
+		return options
+	end
+
+	local phases, replayVotes, rounds = {}, {}, {}
+	local done = false
+	local votes, results = 0, 0
+	local function tap(who, again)
+		__remoteObjects.ReplayVote.__bindable:Fire(__playerKey(who), again)
+	end
+	local function teamsNow()
+		local people = {}
+		for _, who in __fakePlayers do
+			people[who.Name] = who:GetAttribute("PP_Team") or ""
+		end
+		local botTeams = {}
+		for _, bot in BotRegistry.List() do
+			if bot:GetAttribute("PP_InRound") then
+				local team = bot:GetAttribute("PP_Team") or ""
+				botTeams[team] = (botTeams[team] or 0) + 1
+			end
+		end
+		return { people = people, bots = botTeams }
+	end
+	GameState.Changed("ReplayVote", function()
+		local vote = GameState.GetJSON("ReplayVote") or {}
+		table.insert(replayVotes, {
+			at = at(),
+			open = vote.Open,
+			capped = vote.Capped,
+			yes = vote.Yes,
+			no = vote.No,
+			voters = if type(vote.Voters) == "table" then #vote.Voters else nil,
+			need = vote.Need,
+		})
+	end)
+	-- RoundManager's setPhase sets the phase, then its end time, then the banner's line: each phase
+	-- takes the first of each that follows it (a vote ending early moves the end time later on).
+	local current = nil
+	GameState.Changed("PhaseEndsAt", function()
+		if current and current.planned == nil then
+			current.planned = __round(GameState.TimeLeft())
+		end
+	end)
+	GameState.Changed("Message", function(message)
+		if current and current.message == nil then
+			current.message = message
+		end
+	end)
+	GameState.Changed("Phase", function(phase)
+		current = { phase = phase, at = at(), game = GameState.Get("GameId"), replay = GameState.Get("Replay") }
+		table.insert(phases, current)
+		if phase == "Voting" then
+			votes += 1
+			if votes == 1 then
+				for index, who in { ann, bo } do
+					task.delay(0.5 * index, function()
+						__remoteObjects.CastVote.__bindable:Fire(__playerKey(who), 1)
+					end)
+				end
+			else
+				task.delay(0.3, function()
+					done = true
+				end)
+			end
+		elseif phase == "Preparing" then
+			local people, inRound = {}, 0
+			for _, who in __fakePlayers do
+				if who:GetAttribute("PP_InRound") then
+					table.insert(people, who.Name)
+				end
+			end
+			for _, bot in BotRegistry.List() do
+				if bot:GetAttribute("PP_InRound") then
+					inRound += 1
+				end
+			end
+			table.insert(rounds, { at = at(), game = GameState.Get("GameId"), people = people, bots = inRound })
+		elseif phase == "InRound" then
+			task.delay(0.5, function()
+				if rounds[#rounds] then
+					rounds[#rounds].teams = teamsNow()
+				end
+			end)
+		elseif phase == "Results" then
+			results += 1
+			if results == 1 then
+				-- Everyone says PLAY AGAIN; a bot can't vote; Cy joins in the middle of the results.
+				task.delay(0.3, function()
+					summary.botReplayRefused = not ReplayService.Cast(bots[1], true)
+				end)
+				task.delay(0.5, tap, ann, true)
+				task.delay(0.8, person, 3, "Cy")
+				task.delay(1, tap, bo, true)
+			elseif results == 2 then
+				-- Cy played this one, so he votes too: 1 of 3 want it, no replay (and everyone answered,
+				-- so the results end early again).
+				task.delay(0.5, tap, ann, true)
+				task.delay(1, tap, bo, false)
+				task.delay(1.5, function()
+					local cy = __fakePlayers[3]
+					if cy then
+						tap(cy, false)
+					end
+				end)
+			end
+		end
+	end)
+
+	SitOutService.Init()
+	VotingService.Init()
+	ReplayService.Init()
+	local RoundManager = __require("Server/Services/RoundManager")
+	RoundManager.Init()
+	local loop = task.spawn(RoundManager.Start)
+	while not done and os.clock() - t0 < 230 do
+		task.wait(0.25)
+	end
+	summary.finished = done
+	summary.seconds = at()
+	summary.phases = phases
+	summary.replayVotes = replayVotes
+	summary.rounds = rounds
+	summary.builds = builds
+	summary.toasts = toasts
+	pcall(task.cancel, loop)
+	Notifier.All = realAll
 	summary.errors = __errors
 	summary.log = __log
 	summary.eventCounts = __eventCounts

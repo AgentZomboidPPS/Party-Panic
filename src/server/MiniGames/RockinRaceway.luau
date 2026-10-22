@@ -2,8 +2,8 @@
 -- hobby-horse race once round a fairground oval. Hold GALLOP to speed up, but galloping eats your
 -- horse's carrots: run the carrot meter dry past the red line and your horse spins out. Let go to
 -- trot and the carrots grow back. Orange carrot panels on the track give a DASH (ride over them);
--- blue hurdle panels slow you down unless you HOP them. First across the finish wins; the rest are
--- ranked by how far they got.
+-- hurdles slow you down unless you HOP them. First across the finish wins; the rest are ranked by
+-- how far they got.
 --
 -- How it works: every rider has a lane (spread over the twelve lanes, in a random order; the lane
 -- number is painted at the start and shown on the race bar, the horse's colour is the second cue).
@@ -28,6 +28,14 @@
 -- Bots press GALLOP and HOP through ctx:BotAction (Bots/RockinRaceway.luau) and are judged by the
 -- same rules, so hurdles slow bots and dry meters spin them out exactly like players. Nothing is
 -- solid on the track but the ground: every prop and painted line is decoration only.
+--
+-- 3D hurdles (owner: "For rockin raceway can we make the hurdles 3D?"): a hurdle row is a real
+-- barrier across the track: red and white striped standards on the lane lines and a crossbar in
+-- every lane, its top at the height the whole horse must clear (Track.CLEAR, doubled with the hop
+-- so every timing window is the same), with a blue take-off pad before it in every lane (a HOP
+-- pressed while you're over the pad clears at any speed). They're judged by the rules above, never
+-- by physics, so they don't collide either. Each crossbar is its own model (Row, Lane), so clients can knock a
+-- lane's bar down when its rider hits it.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -43,6 +51,8 @@ local RockinRaceway = MiniGame.Define("RockinRaceway", { Results = "Score" })
 local FINISH_CLOCK = 10 -- seconds the finish stays open after the first rider is home
 local MAX_LEEWAY = 0.4
 local ROOT_Y = 3 -- a standing character's root above the ground
+local ROW_BACK = 4 -- a hurdle row's pivot (the middle of its footprint) sits this far before its bars
+local SINK = 0.05 -- panels and hurdle rows sit this far into the track (never in its plane)
 
 -- Horse colours, one per lane (the lane number is the second cue).
 local COLORS = {
@@ -295,14 +305,37 @@ function RockinRaceway:_buildArena()
 		tile.CFrame *= CFrame.Angles(0, math.pi / 2, 0)
 	end
 
-	-- Panels: every row in all twelve lanes.
+	-- Panels: every carrot row in all twelve lanes. Every hurdle row: its standards and take-off pads
+	-- across the track, and each lane's crossbar resting on the collars with its top at the judged
+	-- height. (One row model and twelve bars: 28 parts a row, so a dozen rows stay light on phones.)
 	local panels = Build.Folder("Panels", arena)
-	for _, panel in self.panels do
+	for index, panel in self.panels do
+		if panel.K ~= "H" then
+			for lane = 1, Track.LANES do
+				MeshLibrary.Get("RockinRacewayCarrot", {
+					CFrame = self:_frame(panel.D, Track.LaneOffset(lane), -SINK),
+					Parent = panels,
+				})
+			end
+			continue
+		end
+		MeshLibrary.Get("RockinRacewayHurdleRow", {
+			CFrame = self:_frame(panel.D - ROW_BACK, 0, -SINK),
+			Parent = panels,
+		}).Name =
+			"HurdleRow"
 		for lane = 1, Track.LANES do
-			MeshLibrary.Get(if panel.K == "H" then "RockinRacewayHurdle" else "RockinRacewayCarrot", {
-				CFrame = self:_frame(panel.D, Track.LaneOffset(lane), -0.05),
-				Parent = panels,
-			})
+			local bar = MeshLibrary.Get("RockinRacewayHurdleBar")
+			bar:PivotTo(self:_frame(panel.D, Track.LaneOffset(lane), Track.CLEAR - bar:GetExtentsSize().Y))
+			bar.Name = "HurdleBar"
+			bar:SetAttribute("Row", index)
+			bar:SetAttribute("Lane", lane)
+			for _, part in bar:GetDescendants() do
+				if part:IsA("BasePart") then
+					part.CastShadow = true -- (its shadow on the track shows how high it is)
+				end
+			end
+			bar.Parent = panels
 		end
 	end
 
@@ -538,7 +571,7 @@ function RockinRaceway:Start()
 		ctx:SetWalkSpeed(player, 0)
 	end
 	ctx:SetShared("Stage", "Race")
-	ctx:SetStatus("🥕 Hold GALLOP · HOP the blue hurdles!")
+	ctx:SetStatus("🥕 Hold GALLOP · HOP over the hurdles!")
 
 	ctx:OnAction("Gallop", function(player, on)
 		local rider = self.riders[player]

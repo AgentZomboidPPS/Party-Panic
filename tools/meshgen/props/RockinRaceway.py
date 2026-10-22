@@ -1,16 +1,25 @@
-"""Props for Rockin' Raceway: the hobby horse every rider gallops on, the carrot (dash) and hurdle
-(slow) panels on the track, the oval's turns, the finish arch, the white fence and bunting round the
-track, a grandstand of fans, the carousel and striped tents of the infield and a Ferris wheel.
+"""Props for Rockin' Raceway: the hobby horse every rider gallops on, the carrot (dash) panels and
+the rows of 3D hurdles on the track, the oval's turns, the finish arch, the white fence and bunting
+round the track, a grandstand of fans, the carousel and striped tents of the infield and a Ferris
+wheel.
 
-    python3 tools/meshgen/generate_meshes.py --only RockinRacewayHorse,RockinRacewayCarrot,RockinRacewayHurdle,RockinRacewayTurn,RockinRacewayArch,RockinRacewayFence,RockinRacewayBunting,RockinRacewayStand,RockinRacewayCarousel,RockinRacewayTent,RockinRacewayWheel
+    python3 tools/meshgen/generate_meshes.py --only RockinRacewayHorse,RockinRacewayCarrot,RockinRacewayHurdleRow,RockinRacewayHurdleBar,RockinRacewayTurn,RockinRacewayArch,RockinRacewayFence,RockinRacewayBunting,RockinRacewayStand,RockinRacewayCarousel,RockinRacewayTent,RockinRacewayWheel
 
 Units are studs, +Y is up, the base sits on y = 0 and -Z is the front:
   * RockinRacewayHorse: a hobby horse, its head at the front (-Z), the stick running down and back
     between the rider's legs to a little wheel at the back. Its bounding box is centred on z = 0 (the
     rider's root stands over that point). Body takes the rider's colour.
   * RockinRacewayCarrot: an orange track panel (3.8 x 4) with a big carrot and forward arrows on it.
-  * RockinRacewayHurdle: a blue track panel with a low striped hurdle across it; the bar's top is at
-    y = 0.8 (the server's CLEAR height).
+  * RockinRacewayHurdleRow: one row of hurdles across all twelve lanes (owner: "For rockin raceway
+    can we make the hurdles 3D?"): thirteen red and white striped standards on the lane lines
+    (x = -27..27, 4.5 apart) with gold balls on top and gold collars the crossbars rest on, and a
+    blue take-off pad with forward arrows in every lane, 4.6..8.4 studs before the bar line (riders
+    come from +Z, so z = 4.6..8.4). The bar line is z = 0 and the footprint runs z = -0.4..8.4, so
+    the row's pivot (the middle of its footprint) is 4 studs before its bars. The game sets the row
+    0.05 into the track; the collars are built that much higher so they meet the bars.
+  * RockinRacewayHurdleBar: one lane's crossbar along X (blue and white stripes, 0.5 thick, 3.94
+    long). The game rests it on the collars with its top at the server's CLEAR height (1.6): the
+    drawn bar is what the whole horse must hop over. A client knocks it down when its rider hits it.
   * RockinRacewayTurn: half the oval's turn, x >= 0 around the turn's centre: dirt from radius 31 to
     85 (twelve 4.5-stud lanes), lane lines, red and white curbs either side. The dirt's top is at
     y = 0.4 (the game sinks the mesh 0.4 so it's level with the ground).
@@ -164,24 +173,94 @@ def carrot_panel():
     return {"Pad": pad, "Trim": merge(rim, arrows), "Carrot": merge(root, ridges), "Leaves": leaves}
 
 
-def hurdle_panel():
-    """A blue slow panel with a low striped hurdle across it (bar top at y = 0.8)."""
-    pad, rim = panel_base()
-    posts, feet = [], []
-    for side in (-1, 1):
-        x = side * 1.55
-        posts.append(rounded_box(0.18, 0.66, 0.18, 0.05, 3).translate(x, 0.16 + 0.33, 0))
-        feet.append(rounded_box(0.22, 0.12, 0.9, 0.05, 3).translate(x, 0.22, 0))
-    stripes_a, stripes_b = [], []
-    count = 6
-    for k in range(count):
-        x0 = -1.5 + 3.0 * k / count
-        x1 = -1.5 + 3.0 * (k + 1) / count
-        piece = box(x0, x1, 0.6, 0.8, -0.1, 0.1)
-        (stripes_a if k % 2 == 0 else stripes_b).append(piece)
-    ups = merge(*[chevron(z, 0.55, 0.22) for z in (-1.1, 1.45)])
-    return {"Pad": pad, "Trim": merge(rim, ups), "Posts": merge(*posts, *feet), "BarA": merge(*stripes_a),
-            "BarB": merge(*stripes_b)}
+# ------------------------------------------------------------------------------------------ hurdles
+# (owner: "For rockin raceway can we make the hurdles 3D?") A crossbar's top is the server's CLEAR
+# height, so the drawn hurdle is exactly what the whole horse must hop over.
+
+CLEAR = 1.6  # Track.CLEAR: a crossbar's top
+BAR_R = 0.25  # a crossbar's radius
+POST_R = 0.24  # a standard's radius
+POST_TOP = 2.42  # where a standard's stripes end (its gold ball sits there)
+SINK = 0.05  # the game sets a row this far into the track
+LANES = 12  # of LANE (4.5) studs each, as in the turn below
+TAKEOFF = (4.6, 8.4)  # the take-off pad: studs before the bar line
+
+
+def rod(y0: float, y1: float, r: float, round0: float = 0.0, round1: float = 0.0, sides: int = 16) -> Mesh:
+    """A closed rod along Y from y0 to y1, its ends rounded off by round0 and round1."""
+    profile = [(0.0, y0)]
+    if round0 > 0:
+        profile += [(r - round0 + math.sin(math.pi / 8 * i) * round0, y0 + round0 - math.cos(math.pi / 8 * i) * round0)
+                    for i in range(5)]
+    else:
+        profile.append((r, y0))
+    if round1 > 0:
+        profile += [(r - round1 + math.cos(math.pi / 8 * i) * round1, y1 - round1 + math.sin(math.pi / 8 * i) * round1)
+                    for i in range(5)]
+    else:
+        profile.append((r, y1))
+    profile.append((0.0, y1))
+    return lathe(profile, sides)
+
+
+def takeoff_arrow(x: float, z: float, width: float) -> Mesh:
+    """A bold flat arrow on a take-off pad pointing forward (-Z), its tip at z - width * 0.7 (its
+    bottom sunk into the pad, so it never shares the pad's top)."""
+    t = 0.34
+    outline = [(-width, 0.0), (0.0, -width * 0.7), (width, 0.0), (width, t), (0.0, -width * 0.7 + t), (-width, t)]
+    return flat([(x + px, z + pz) for px, pz in outline], 0.12, 0.22)
+
+
+def hurdle_row():
+    """One row of hurdles across the twelve lanes: striped standards with gold balls and collars on
+    the lane lines, and a blue take-off pad in every lane (the crossbars are RockinRacewayHurdleBar).
+    About 9,000 triangles for the whole row: a standard's stripes are open bands (their ends hide in
+    its foot and its ball), so no faces are spent inside it."""
+    red, white, gold, pads, trim = [], [], [], [], []
+    bands = 8
+    foot_top = 0.3
+    band = (POST_TOP - foot_top) / bands
+    collar_top = CLEAR - 2 * BAR_R + SINK  # where the bars' bottoms rest, once the row is sunk
+    for k in range(LANES + 1):
+        x = (k - LANES / 2) * LANE
+        # A bell-shaped white foot, red and white bands up to a gold ball, a gold collar for the bars.
+        foot = lathe([(0.0, 0.0), (0.4, 0.0), (0.4, 0.07), (0.33, 0.16), (0.28, foot_top), (0.0, foot_top)], 16)
+        white.append(foot.translate(x, 0, 0))
+        for i in range(bands):
+            stripe = lathe([(POST_R, foot_top + i * band), (POST_R, foot_top + (i + 1) * band)], 12)
+            (red if i % 2 == 0 else white).append(stripe.translate(x, 0, 0))
+        gold.append(sphere(0.32, 6, 12).translate(x, POST_TOP + 0.22, 0))
+        gold.append(rod(collar_top - 0.13, collar_top, 0.36, sides=12).translate(x, 0, 0))
+    z0, z1 = TAKEOFF
+    length = z1 - z0
+    middle = (z0 + z1) / 2
+    for lane in range(LANES):
+        x = (lane + 0.5 - LANES / 2) * LANE
+        pads.append(rounded_box(PANEL_W, 0.16, length, 0.07, 3).translate(x, 0.08, middle))
+        rim = PANEL_W / 2 - 0.18
+        trim += [
+            box(x - rim, x + rim, 0.13, 0.2, z0 + 0.18, z0 + 0.32),
+            box(x - rim, x + rim, 0.13, 0.2, z1 - 0.32, z1 - 0.18),
+            box(x - rim, x - rim + 0.14, 0.13, 0.2, z0 + 0.32, z1 - 0.32),
+            box(x + rim - 0.14, x + rim, 0.13, 0.2, z0 + 0.32, z1 - 0.32),
+            takeoff_arrow(x, middle - 0.2, 0.95),
+            takeoff_arrow(x, middle + 1.0, 0.95),
+        ]
+    return {"Takeoff": merge(*pads), "Trim": merge(*white, *trim), "Poles": merge(*red), "Gold": merge(*gold)}
+
+
+def hurdle_bar():
+    """One lane's crossbar along X: seven blue and white stripes, rounded off at both ends (12 sides:
+    a corner on top, so its top is exactly the CLEAR height the game rests it at)."""
+    length = LANE - 2 * (POST_R + 0.04)
+    count = 7
+    blue, white = [], []
+    for i in range(count):
+        y0 = -length / 2 + length * i / count
+        y1 = -length / 2 + length * (i + 1) / count
+        piece = rod(y0, y1, BAR_R, 0.08 if i == 0 else 0.0, 0.08 if i == count - 1 else 0.0, 12)
+        (blue if i % 2 == 0 else white).append(piece.rotate("z", -90))
+    return {"BarA": merge(*blue), "BarB": merge(*white)}
 
 
 # ------------------------------------------------------------------------------------------ the track
@@ -453,7 +532,8 @@ def wheel():
 PROPS = {
     "RockinRacewayHorse": horse,
     "RockinRacewayCarrot": carrot_panel,
-    "RockinRacewayHurdle": hurdle_panel,
+    "RockinRacewayHurdleRow": hurdle_row,
+    "RockinRacewayHurdleBar": hurdle_bar,
     "RockinRacewayTurn": turn,
     "RockinRacewayArch": arch,
     "RockinRacewayFence": fence,
@@ -468,7 +548,8 @@ COLORS = {
     "Pupils": (35, 30, 45), "Bridle": (60, 120, 230), "Studs": (255, 205, 50), "Stick": (190, 135, 80),
     "Wheel": (60, 60, 75),
     "Pad": (255, 140, 40), "Trim": (255, 250, 235), "Carrot": (255, 120, 30), "Leaves": (90, 200, 80),
-    "Posts": (250, 250, 250), "BarA": (60, 130, 240), "BarB": (250, 250, 250),
+    "Posts": (250, 250, 250), "BarA": (60, 130, 240), "BarB": (250, 250, 250), "Poles": (230, 60, 70),
+    "Takeoff": (60, 130, 240),
     "Dirt": (214, 160, 104), "Lines": (250, 248, 240), "CurbRed": (235, 60, 60), "CurbWhite": (250, 248, 240),
     "CheckDark": (35, 35, 45), "CheckLight": (250, 250, 250), "Gold": (255, 200, 60), "Beam": (230, 50, 70),
     "Bulbs": (255, 240, 150), "Ropes": (120, 90, 60),

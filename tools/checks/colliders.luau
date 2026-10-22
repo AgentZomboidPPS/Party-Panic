@@ -290,8 +290,8 @@ function __colliderSnapshot(label: string, opts)
 	local maxX, maxY, maxZ = -math.huge, -math.huge, -math.huge
 	local focus = opts.center or Vector3.zero
 	for part, index in indexOf do
-		if not parts[index].cc then
-			continue
+		if not parts[index].cc or __environmentParts[part] then
+			continue -- (the environment's far trees would stretch the map round the arena)
 		end
 		local size = part.Size
 		local cf = part.CFrame
@@ -379,6 +379,51 @@ function __colliderSnapshot(label: string, opts)
 		}
 	end
 	result.gridSeconds = __r2(os.clock() - started)
+
+	-- Terrain round the arena (always solid: the sky islands, the lobby's hills), whether or not the
+	-- map above reaches it: every `terrainStep` studs out to `terrainReach` from the middle, the top
+	-- of the highest terrain in that column and the bottom of the lowest (a ray down and a ray up
+	-- that only see terrain), as int16 tenths of a stud (-32768 = none).
+	result.center = { __r2(focus.X), __r2(focus.Y), __r2(focus.Z) }
+	local terrainReach = opts.terrainReach or 1300
+	local terrainStep = opts.terrainStep or 10
+	local terrainStart = os.clock()
+	local onlyTerrain = RaycastParams.new()
+	onlyTerrain.FilterType = Enum.RaycastFilterType.Include
+	onlyTerrain.FilterDescendantsInstances = { workspace.Terrain }
+	onlyTerrain.IgnoreWater = true
+	local tn = math.floor(terrainReach * 2 / terrainStep) + 1
+	local terrainWriter = __writer()
+	local columns = 0
+	local high, low = focus.Y + 700, focus.Y - 700
+	for iz = 0, tn - 1 do
+		local z = focus.Z - terrainReach + iz * terrainStep
+		for ix = 0, tn - 1 do
+			local x = focus.X - terrainReach + ix * terrainStep
+			local down = workspace:Raycast(Vector3.new(x, high, z), Vector3.new(0, low - high, 0), onlyTerrain)
+			if down then
+				local up = workspace:Raycast(Vector3.new(x, low, z), Vector3.new(0, high - low, 0), onlyTerrain)
+				terrainWriter.i16((down.Position.Y - focus.Y) * 10)
+				terrainWriter.i16(if up then (up.Position.Y - focus.Y) * 10 else -32768)
+				columns += 1
+			else
+				terrainWriter.i16(-32768)
+				terrainWriter.i16(-32768)
+			end
+		end
+		if iz % 10 == 0 then
+			task.wait()
+		end
+	end
+	result.terrain = {
+		x0 = __r2(focus.X - terrainReach),
+		z0 = __r2(focus.Z - terrainReach),
+		step = terrainStep,
+		n = tn,
+		columns = columns,
+		data = terrainWriter.base64(),
+	}
+	result.terrainSeconds = __r2(os.clock() - terrainStart)
 
 	-- Every collidable mesh and union measured in its own frame (one per mesh and size).
 	if opts.probes ~= false then
@@ -478,7 +523,7 @@ function __colliderLeftovers(): { any }
 	local people, bots = __characterGroups()
 	local list = {}
 	for _, item in workspace:GetDescendants() do
-		if not item:IsA("BasePart") or item:IsA("Terrain") or __characterOf(item) then
+		if not item:IsA("BasePart") or item:IsA("Terrain") or __characterOf(item) or __environmentParts[item] then
 			continue
 		end
 		local part = item :: BasePart
@@ -515,6 +560,24 @@ function __waitForRebuilds(limit: number): (number, number, number)
 	end
 	beat:Disconnect()
 	return __r2(os.clock() - start), MeshLibrary.PendingRebuilds(), __r2(longest)
+end
+
+-- The terrain and sky the game builds when it starts (World/Environment: the lobby's lawn and hills,
+-- the sky islands round the arenas), so a round's snapshot has what is really round its arena.
+-- (Its parts, the islands' trees, stay after a round: the leftovers check leaves them out.)
+__environmentParts = {}
+function __buildEnvironment()
+	local ok, err = pcall(function()
+		__require("Server/World/Environment").Build(75) -- (LobbyBuilder's PLAZA_RADIUS)
+	end)
+	if not ok then
+		warn("[colliders] the environment didn't build: " .. tostring(err))
+	end
+	for _, item in workspace:GetDescendants() do
+		if item:IsA("BasePart") then
+			__environmentParts[item] = true
+		end
+	end
 end
 
 -- The slowest collision rebuilds so far ("Prop.Piece seconds"), slowest first.

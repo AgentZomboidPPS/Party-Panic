@@ -1,13 +1,16 @@
 -- Sinking Sands (Versus, 45s, 1 to 12 players). After Mario Party's "Quicksand Cache": a desert
--- mesa whose middle is a giant quicksand funnel draining into a sinkhole. Coins, gems, coin bags and
--- the odd GOLDEN IDOL rain onto the sand and ride the swirl down into the hole.
+-- mesa whose middle is a giant quicksand funnel draining into a sinkhole. Coins, gems, coin bags,
+-- the odd GOLDEN IDOL and a SUNKEN CHEST near the bottom rain onto the sand and ride the swirl down
+-- into the hole.
 --
---   DIVERS (most players) run on the sand and grab treasure (+1 coin, +3 gem, +5 bag, +10 idol). The
---   sand drags them round and in; whoever slips into the sinkhole is spat back out at the rim a
---   moment later (and the Sand Kings score +5).
+--   DIVERS (most players) run on the sand and grab treasure (+1 coin, +3 gem, +5 bag, +8 chest,
+--   +10 idol). The sand drags them round and in; whoever slips into the sinkhole is spat back out
+--   at the rim a moment later (and the Sand Kings score +5).
 --   SAND KINGS (about one in three, on thrones round the rim) steer the swirl: SWIRL flips the spin
---   and whips it faster, PULL drains the funnel hard for three seconds. Every treasure that sinks
---   goes to the Kings. With nobody to be a King (a solo round) the sand plays King by itself.
+--   and whips it faster, PULL drains the funnel hard for three seconds, and a tap on the sand SAND
+--   BLASTs it: a ring, then an eruption that throws any Diver still in it and knocks a gem out of
+--   their haul. Every treasure that sinks goes to the Kings. With nobody to be a King (a solo
+--   round) the sand plays King by itself.
 -- The team with the bigger haul wins.
 --
 -- How it works: the sand is a shared schedule of constant-flow segments (Logic/SandSwirl), and a
@@ -37,6 +40,13 @@
 -- the wall round the mesa's edge was 12 studs high, so from a palm (whose rough collision had a
 -- ledge 5 studs up) you could jump onto it and walk round the arena on nothing. It's EDGE_HEIGHT
 -- now, and the palms, columns, arches and thrones collide as drawn (MeshLibrary: preciseCollision).
+--
+-- Owner, after playing it: "sand king needs to have more interaction, is boring" and "sand one more
+-- valuable stuff near the bottom. also increase pull". Kings get the SAND BLAST, aimed where they
+-- tap (judged the Arrow Ambush way: the ring is where their screen showed it, and a Diver is hit
+-- only if they were in it on their own screen when it erupted, allowing for their ping); Divers
+-- get the SUNKEN CHEST (+8), one at a time near the bottom, so heavy that only a whole PULL sinks
+-- it; and the PULL drains a little harder (SandSwirl.PULL).
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -62,8 +72,13 @@ SinkingSands.Kinds = {
 	{ Name = "Gem", Value = 3, Weight = 27, Factor = 1.4, Reach = 3.4, Prop = "SandGem" },
 	{ Name = "Bag", Value = 5, Weight = 15, Factor = 1.2, Reach = 3.7, Prop = "CoinBag" },
 	{ Name = "Idol", Value = 10, Weight = 0, Factor = 0.95, Reach = 3.9, Prop = "GoldenIdol" },
+	-- The SUNKEN CHEST lands near the bottom and is so heavy it barely slides: only a whole PULL
+	-- sinks it. (Reach: its 2.8 x 1.9 lid plus half a body, as drawn.)
+	{ Name = "Chest", Value = 8, Weight = 0, Factor = 0.03, Reach = 2.9, Prop = "SandChest" },
 }
-local IDOL = 4
+local IDOL, CHEST = 4, 5
+local COIN, GEM = 1, 2
+SinkingSands.CHEST = CHEST -- (for the bots)
 
 local PLAZA = 78 -- radius of the mesa top (the meshes use the same numbers)
 local MESA = 40 -- mesa top above the desert floor
@@ -81,14 +96,45 @@ local SWIRL_COOLDOWN, PULL_COOLDOWN = 3, 5 -- with three Kings; fewer Kings rech
 local FLIP_GAP = 1.4 -- the spin never reverses twice within this long
 local HIP = 3 -- a character's root above the ground
 local HALF_WIDTH = 1 -- half a character's width: the hole takes a Diver whose middle is this far inside it
+-- The SUNKEN CHEST (owner: "sand one more valuable stuff near the bottom"): one at a time, landing
+-- CHEST_R from the middle (the hole's edge is at 5, the wet sand that sucks hardest reaches 11), the
+-- first CHEST_FIRST seconds in, the next one CHEST_GAP after the last is grabbed or sunk.
+local CHEST_R = { 7, 8.5 }
+local CHEST_FIRST = 8
+local CHEST_GAP = { 8, 12 }
+-- SAND BLAST (owner: "sand king needs to have more interaction, is boring"): a King taps the sand,
+-- a ring shows where for BLAST_DELAY, then the sand erupts: a Diver whose middle is within BLAST_HIT
+-- is thrown away from its middle (BLAST_PUSH out, BLAST_LIFT up) and tumbles for BLAST_STUN while
+-- the sand keeps dragging them, and a gem (or a coin) from their haul pops out onto the sand. The
+-- ring is drawn BLAST_RING wide, half a stud more, so a hit is clearly inside it (as Arrow Ambush's
+-- rings). A King's BLAST comes back sooner the more Divers each King has to watch: each Diver faces
+-- one about every BLAST_EVERY seconds (BLAST_COOLDOWN bounds a King's own wait).
+local BLAST_DELAY = 0.75
+local BLAST_HIT = 4
+SinkingSands.BLAST_DELAY = BLAST_DELAY -- (for the bots: when a blast erupts, and the ring to get out of)
+SinkingSands.BLAST_RING = BLAST_HIT + 0.5
+local BLAST_PUSH, BLAST_LIFT = 20, 24
+local BLAST_STUN = 0.7
+local BLAST_SLIDE = 0.3 -- (test servers: about how long the throw carries someone in a real game)
+local BLAST_EVERY = 10
+local BLAST_COOLDOWN = { 5, 8 }
+local JUDGE_SPREAD = 0.1 -- a Diver is looked at twice, this far apart: only in it both times is a hit
 -- Grabs. The client draws each treasure easing after its true spot (1/18 s behind), and a Diver's
 -- position reaches the server up to a ping late, so a grab compares the Diver's path with the
 -- treasure's path from 0 to (ping + EASE) seconds earlier. SWEEP_STEPS slices the time since the
--- last check; MAX_SPEED (studs/s, a coin in a full SWIRL + PULL is ~52) only skips pairs that
--- can't possibly meet.
+-- last check; MAX_SPEED (studs/s: the fastest any treasure goes, the lightest in a full SWIRL and
+-- PULL, plus a little) only skips pairs that can't possibly meet.
 local EASE = 0.06
 local SWEEP_STEPS = 4
-local MAX_SPEED = 55
+local MAX_SPEED = (function()
+	local factor = 0
+	for _, kind in SinkingSands.Kinds do
+		factor = math.max(factor, kind.Factor)
+	end
+	local inward = (SandSwirl.DRAIN[2] + SandSwirl.PULL_CAP) * factor * SandSwirl.TREASURE_DRAIN
+	local around = (SandSwirl.SPIN[2] + SandSwirl.SURGE * SandSwirl.SURGE_CAP) * factor
+	return math.sqrt(inward * inward + around * around) + 3
+end)()
 
 local rng = Random.new()
 
@@ -142,6 +188,12 @@ function SinkingSands:Prepare()
 	self.lastJudge = nil :: number?
 	self.spots = {} :: { [any]: { Position: Vector3, Time: number } } -- each Diver at the last check
 	self.idols = 0
+	self.chestAt = nil :: number? -- when the next SUNKEN CHEST lands (server time; set at GO)
+	-- SAND BLASTs on their way (the bots dodge what they see coming) and, where physics isn't running
+	-- (test servers), the shove a blast gave a bot (physics carries it in a real game).
+	self.blasts = {} :: { [number]: { Id: number, X: number, Z: number, T: number, By: number } }
+	self.nextBlast = 0
+	self.shoves = {} :: { [any]: { Velocity: Vector3, Until: number } }
 
 	-- Teams (SandSwirl.KingCount): 3 Sand Kings of 8 players, 4 of 12, none when playing alone.
 	local players = ctx:GetPlayers()
@@ -684,7 +736,9 @@ function SinkingSands:ItemPosition(item: Item, t: number): Vector3
 	return self.center + Vector3.new(x, SandSwirl.Height(r), z)
 end
 
-function SinkingSands:_spawnItem(kind: number, radius: number?)
+-- A new treasure falling onto the sand: at `radius` and `angle` (random where not given), landing
+-- `fall` seconds from now (FALL_TIME from the sky; a dropped one only pops up a little).
+function SinkingSands:_spawnItem(kind: number, radius: number?, angle: number?, fall: number?)
 	local ctx = self.context
 	self.nextId += 1
 	local now = ctx:Now()
@@ -692,8 +746,8 @@ function SinkingSands:_spawnItem(kind: number, radius: number?)
 		Id = self.nextId,
 		Kind = kind,
 		R = round(radius or rng:NextNumber(11, SandSwirl.RIM - 4), 3),
-		A = round(rng:NextNumber(-math.pi, math.pi), 4),
-		T = round(now + FALL_TIME, 3),
+		A = round(angle or rng:NextNumber(-math.pi, math.pi), 4),
+		T = round(now + (fall or FALL_TIME), 3),
 	}
 	self.items[item.Id] = item
 	self.dirty = true
@@ -778,10 +832,148 @@ function SinkingSands:_pull(byUserId: number?)
 	ctx:Fire(nil, "Power", "PULL", start, byUserId or 0, false)
 end
 
--- Cooldowns for this many Kings: a lone King has to keep the sand busy by themself.
-function SinkingSands:Cooldowns(): (number, number)
-	local share = math.clamp(#self.kings, 1, 3) / 3
-	return SWIRL_COOLDOWN * (0.55 + 0.45 * share), PULL_COOLDOWN * (0.6 + 0.4 * share)
+-- Cooldowns for this many Kings: a lone King has to keep the sand busy by themself. A BLAST is
+-- back sooner the more Divers each King has to watch (BLAST_EVERY).
+function SinkingSands:Cooldowns(): (number, number, number)
+	local kings = #self.kings
+	local share = math.clamp(kings, 1, 3) / 3
+	local divers = math.max(1, #self.context:GetPlayers() - kings)
+	return SWIRL_COOLDOWN * (0.55 + 0.45 * share),
+		PULL_COOLDOWN * (0.6 + 0.4 * share),
+		math.clamp(BLAST_EVERY * math.max(1, kings) / divers, BLAST_COOLDOWN[1], BLAST_COOLDOWN[2])
+end
+
+-- SAND BLAST ---------------------------------------------------------------------------------------
+
+-- A blast where a King tapped (kept on the sand; 0 for the sand playing King by itself), erupting
+-- BLAST_DELAY from now. Everyone sees the ring at once ("Blast"), so a Diver who's quick can get out.
+function SinkingSands:_blast(byUserId: number, x: number, z: number)
+	local ctx = self.context
+	local center = self.center
+	local dx, dz = x - center.X, z - center.Z
+	local r = math.sqrt(dx * dx + dz * dz)
+	if r > SandSwirl.RIM then
+		dx, dz = dx / r * SandSwirl.RIM, dz / r * SandSwirl.RIM
+	end
+	self.nextBlast += 1
+	local blast = {
+		Id = self.nextBlast,
+		X = round(center.X + dx, 2),
+		Z = round(center.Z + dz, 2),
+		T = round(ctx:Now() + BLAST_DELAY, 3),
+		By = byUserId,
+	}
+	self.blasts[blast.Id] = blast
+	ctx:Fire(nil, "Blast", blast.Id, blast.X, blast.Z, blast.T, blast.By, SinkingSands.BLAST_RING)
+	ctx:Delay(BLAST_DELAY, function()
+		self:_erupt(blast)
+	end)
+end
+
+-- The sand playing King by itself: a blast under one of the Divers on the sand.
+function SinkingSands:_autoBlast()
+	local ctx = self.context
+	local spots = {}
+	for _, player in ctx:GetAlivePlayers() do
+		local _, _, root = ctx:GetCharacter(player)
+		if root and not self.gulped[player] and not self:IsKing(player) then
+			local position = root.Position
+			if Vector2.new(position.X - self.center.X, position.Z - self.center.Z).Magnitude < SandSwirl.RIM then
+				table.insert(spots, position)
+			end
+		end
+	end
+	if #spots > 0 then
+		local spot = spots[rng:NextInteger(1, #spots)]
+		self:_blast(0, spot.X, spot.Z)
+	end
+end
+
+-- How far (flat) a Diver's middle is from a blast (math.huge once they're gone or down the hole).
+function SinkingSands:_blastDistance(blast, diver: any): number
+	local _, _, root = self.context:GetCharacter(diver)
+	if not root or self.gulped[diver] then
+		return math.huge
+	end
+	return Vector2.new(root.Position.X - blast.X, root.Position.Z - blast.Z).Magnitude
+end
+
+-- The sand erupts. Each Diver is judged by where they were on their own screen when it did: their
+-- moves reach the server half a ping (a round trip) late, so look then, and again JUDGE_SPREAD
+-- later; only inside BLAST_HIT both times is a hit (a dodge that looked clean on their screen
+-- counts). Something that erupts after the buzzer is too late (RoundContext.InTime / HoldEnd).
+function SinkingSands:_erupt(blast)
+	local ctx = self.context
+	self.blasts[blast.Id] = nil
+	ctx:Fire(nil, "Erupt", blast.Id)
+	if not ctx:InTime(blast.T) then
+		return
+	end
+	for _, diver in ctx:GetAlivePlayers() do
+		if self:IsKing(diver) or self.gulped[diver] then
+			continue
+		end
+		local ok, ping = pcall(function()
+			return (diver :: any):GetNetworkPing()
+		end)
+		local lag = if ok and type(ping) == "number" then math.clamp(ping, 0, 0.4) / 2 else 0.05
+		ctx:HoldEnd(lag + JUDGE_SPREAD + 0.05)
+		local function second(first: number)
+			ctx:Delay(JUDGE_SPREAD, function()
+				self:_blastJudge(blast, diver, first)
+			end)
+		end
+		if lag <= 0.01 then
+			second(self:_blastDistance(blast, diver))
+		else
+			ctx:Delay(lag, function()
+				second(self:_blastDistance(blast, diver))
+			end)
+		end
+	end
+end
+
+-- The second look at a Diver after an eruption (`first` is the distance at the first look). A hit
+-- throws them away from the blast to tumble a moment (the sand drags them meanwhile, the same for
+-- bots and people), and knocks a gem out of their haul (a coin if they have less): it pops out of
+-- the eruption, behind them as they fly, for anyone to grab back before it sinks for the Kings.
+function SinkingSands:_blastJudge(blast, diver: any, first: number)
+	local ctx = self.context
+	if not ctx:IsAlive(diver) or self:IsKing(diver) or self.gulped[diver] then
+		return
+	end
+	local second = self:_blastDistance(blast, diver)
+	if first > BLAST_HIT or second > BLAST_HIT then
+		return
+	end
+	local _, _, root = ctx:GetCharacter(diver)
+	if not root then
+		return
+	end
+	local center = self.center
+	local offset = Vector3.new(root.Position.X - blast.X, 0, root.Position.Z - blast.Z)
+	local outward = Vector3.new(root.Position.X - center.X, 0, root.Position.Z - center.Z)
+	local away = if offset.Magnitude > 0.2
+		then offset.Unit
+		elseif outward.Magnitude > 0.2 then outward.Unit
+		else Vector3.new(1, 0, 0)
+	ctx:Knockback(diver, away * BLAST_PUSH + Vector3.new(0, BLAST_LIFT, 0), BLAST_STUN)
+	if not RunService:IsRunning() then
+		-- (no physics on the test servers: the mode carries a bot's throw itself, see _dragBots, and
+		-- stops its walk while it would be tumbling)
+		ctx:Stun(diver, BLAST_STUN)
+		self.shoves[diver] = { Velocity = away * BLAST_PUSH, Until = ctx:Now() + BLAST_SLIDE }
+	end
+	local state = ctx:State(diver)
+	local haul = if state then state.Score else 0
+	local drop = if haul >= 3 then 3 elseif haul >= 1 then 1 else 0
+	if drop > 0 then
+		ctx:AddScore(diver, -drop)
+		ctx:AddTeamScore(DIVERS, -drop)
+		local r, a = SandSwirl.ToPolar(blast.X - center.X, blast.Z - center.Z)
+		self:_spawnItem(if drop == 3 then GEM else COIN, math.clamp(r, SandSwirl.HOLE + 1, SandSwirl.RIM - 1), a, 0.35)
+	end
+	ctx:Fire(nil, "BlastHit", blast.Id, diver.UserId, drop)
 end
 
 function SinkingSands:IsKing(player: any): boolean
@@ -841,19 +1033,22 @@ function SinkingSands:Stop()
 			humanoid:Move(Vector3.zero)
 		end
 	end
+	table.clear(self.blasts)
+	table.clear(self.shoves)
 end
 
--- Team results with readable names; Kings' personal bests aren't counted (they share one haul).
+-- Team results with readable names and their marks ("👑 SAND KINGS 85", "💎 DIVERS 240 • you 98",
+-- like the team pill); Kings' personal bests aren't counted (they share one haul).
 function SinkingSands:GetResults()
 	local results = self.context:TeamResults()
 	for _, entry in results.Entries do
 		local state = self.context:State(entry.Player)
 		local mine = if state then state.Score else 0
 		if entry.Team == KINGS then
-			entry.ScoreText = `Sand Kings {entry.Rank}`
+			entry.ScoreText = `{Teams.Label(KINGS)} {entry.Rank}`
 			entry.BestScore = nil
 		else
-			entry.ScoreText = `Divers {entry.Rank} • you {mine}`
+			entry.ScoreText = `{Teams.Label(DIVERS)} {entry.Rank} • you {mine}`
 		end
 	end
 	return results
@@ -875,11 +1070,30 @@ function SinkingSands:Start()
 	end
 
 	-- The Kings' powers (cooldowns are the server's; the client only shows them).
-	local ready: { [any]: { Swirl: number, Pull: number } } = {}
+	local ready: { [any]: { Swirl: number, Pull: number, Blast: number } } = {}
 	local function readyFor(player)
-		ready[player] = ready[player] or { Swirl = 0, Pull = 0 }
+		ready[player] = ready[player] or { Swirl = 0, Pull = 0, Blast = 0 }
 		return ready[player]
 	end
+	-- SAND BLAST: where the King tapped on their screen (x, z on the sand).
+	ctx:OnAction("Blast", function(player, x, z)
+		if not self:IsKing(player) or ctx:TimeIsUp() then
+			return -- (once time is up no blast could erupt in time)
+		end
+		if type(x) ~= "number" or type(z) ~= "number" or x ~= x or z ~= z then
+			return
+		end
+		local cool = readyFor(player)
+		local now = ctx:Now()
+		if now < cool.Blast - 0.1 then
+			return
+		end
+		local _, _, length = self:Cooldowns()
+		cool.Blast = now + length
+		ctx:SetPlayerShared(player, "BlastLength", length)
+		ctx:SetPlayerShared(player, "BlastAt", cool.Blast)
+		self:_blast(player.UserId, x, z)
+	end, { Interval = 0.2 })
 	ctx:OnAction("Swirl", function(player)
 		if not self:IsKing(player) then
 			return
@@ -914,6 +1128,7 @@ function SinkingSands:Start()
 	-- With no Kings left the sand plays by itself.
 	local nextAuto = os.clock() + 4
 	local nextAutoPull = os.clock() + 9
+	local nextAutoBlast = os.clock() + 6
 	ctx:Loop(function()
 		self:_keepKingsSeated()
 		if #self.kings == 0 then
@@ -926,8 +1141,30 @@ function SinkingSands:Start()
 				nextAutoPull = now + rng:NextNumber(7, 10)
 				self:_pull(nil)
 			end
+			if now >= nextAutoBlast and not ctx:TimeIsUp() then
+				nextAutoBlast = now + rng:NextNumber(7, 10)
+				self:_autoBlast()
+			end
 		end
 		return 0.5
+	end)
+
+	-- The SUNKEN CHEST: one at a time, landing near the bottom.
+	self.chestAt = ctx:Now() + CHEST_FIRST
+	ctx:Loop(function()
+		local now = ctx:Now()
+		for _, item in self.items do
+			if item.Kind == CHEST then
+				return 0.25
+			end
+		end
+		if not self.chestAt then
+			self.chestAt = now + rng:NextNumber(CHEST_GAP[1], CHEST_GAP[2])
+		elseif now >= self.chestAt then
+			self.chestAt = nil
+			self:_spawnItem(CHEST, rng:NextNumber(CHEST_R[1], CHEST_R[2]))
+		end
+		return 0.25
 	end)
 
 	-- Treasure rains in, quicker with more divers; a GOLDEN IDOL halfway (and late in big games).
@@ -1001,6 +1238,12 @@ function SinkingSands:_dragBots(dt: number, now: number, physics: boolean)
 			local k = if airborne then SandSwirl.AIR_DRAG else 1
 			local u = offset / r
 			move = (-u * inward + Vector3.new(-u.Z, 0, u.X) * spin) * dt * k
+		end
+		local shove = self.shoves[player]
+		if shove and now >= shove.Until then
+			self.shoves[player] = nil
+		elseif shove and not physics then
+			move += shove.Velocity * dt -- (a SAND BLAST's shove; physics carries it in a real game)
 		end
 		if physics then
 			if move.Magnitude > 0 then

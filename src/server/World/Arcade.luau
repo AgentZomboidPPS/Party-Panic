@@ -31,6 +31,17 @@
 -- the marquee), so whatever you can stand on or bump into is something you can see; the cage's
 -- roof keeps everyone out of the rings. The TODAY'S BEST board is solid the same way (its posts
 -- and panel), and both stop the camera, which no longer slides inside them.
+--
+-- Flicker and grass (owner: "This is super flashy. and glitchy"): the padded backstop behind the
+-- rings and the cabinet's back panel were drawn in the same plane, so the screen couldn't tell which
+-- was in front and their colors flickered through each other in streaks across all four machines.
+-- The mesh now keeps every layer at least 0.1 studs off the one under it (Arcade.py), and so do the
+-- parts laid over it here (the score screen, the SKEE-BALL lettering, the ring numbers). Grass
+-- blades grew up through the lanes too: the lawn's ground stands 2 studs over the plaza, so it buried
+-- the back half of the patio and the machines' bases, and Roblox grows blades out of its Grass
+-- terrain whatever stands on it. clearGround lowers the ground under the patio to just under the
+-- tickets, as the plaza's is lowered, with a slope back up to the lawn round it, and makes it leafy
+-- grass, which grows no blades.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -157,8 +168,58 @@ local function clearSite(root: Instance, frame: CFrame)
 	end
 end
 
+-- No lawn over the patio, and no grass blades in the machines. The lawn's ground stands at y 2, 2
+-- studs over the plaza: Roblox draws a terrain voxel's surface at its top face when it's half full,
+-- and 2 studs over it when full, and World/Environment's lawn fills the voxels up to y 0 (the plaza
+-- is carved down to y -2). So the lawn buried the back half of the patio and the machines' bases,
+-- and Roblox grew its grass blades up through the lanes (parts over Grass terrain don't stop them).
+-- Under the patio and a voxel round it, the ground comes down to just under the tickets (inside the
+-- patio's rim, which reaches down to -0.6), as the plaza's is lowered under the plaza, and becomes
+-- leafy grass, which grows no blades. Past that the lawn slopes back up to where it was, like it
+-- does round the plaza.
+local GROUND_MARGIN = 3.5 -- past FOOTPRINT's patio, itself half a stud past the tickets: a voxel
+local GROUND_TOP = -0.3 -- the ground under the patio
+
+local function clearGround(frame: CFrame)
+	local patio = FOOTPRINT[1]
+	local half, z0, z1 = patio.X + GROUND_MARGIN, patio.Z0 - GROUND_MARGIN, patio.Z1 + GROUND_MARGIN
+	local low, high = Vector3.one * math.huge, -Vector3.one * math.huge
+	for _, x in { -half, half } do
+		for _, z in { z0, z1 } do
+			local corner = frame:PointToWorldSpace(Vector3.new(x, 0, z))
+			low, high = low:Min(corner), high:Max(corner)
+		end
+	end
+	local region = Region3.new(Vector3.new(low.X, -8, low.Z), Vector3.new(high.X, 8, high.Z)):ExpandToGrid(4)
+	local terrain = workspace.Terrain
+	local materials, occupancies = terrain:ReadVoxels(region, 4)
+	local corner = region.CFrame.Position - region.Size / 2
+	local size = materials.Size
+	for ix = 1, size.X do
+		for iz = 1, size.Z do
+			local at = frame:PointToObjectSpace(corner + Vector3.new(ix - 0.5, 0, iz - 0.5) * 4)
+			if math.abs(at.X) > half or at.Z < z0 or at.Z > z1 then
+				continue
+			end
+			for iy = 1, size.Y do
+				-- The surface at GROUND_TOP (a voxel's surface is 4 * (occupancy - 0.5) over its top
+				-- face), never higher than it was (the plaza's is lower).
+				local top = corner.Y + iy * 4
+				local occupancy = math.min(occupancies[ix][iy][iz], math.clamp(0.5 + (GROUND_TOP - top) / 4, 0, 1))
+				occupancies[ix][iy][iz] = occupancy
+				if occupancy <= 0 then
+					materials[ix][iy][iz] = Enum.Material.Air
+				elseif materials[ix][iy][iz] == Enum.Material.Grass then
+					materials[ix][iy][iz] = Enum.Material.LeafyGrass
+				end
+			end
+		end
+	end
+	terrain:WriteVoxels(region, 4, materials, occupancies)
+end
+
 -- The numbers on the ring board (10 to 50 either side of each ring's hole, 100 by the cups), on a
--- see-through part lying on the board.
+-- see-through part lying on the board, 0.1 over its holes' tops (so they don't flicker together).
 local function ringLabels(machine: Model, frame: CFrame)
 	local half, length = SkeeBall.BOARD_HALF, SkeeBall.BOARD_LEN
 	local _, y, s = SkeeBall.BoardPoint(0, length / 2)
@@ -168,7 +229,7 @@ local function ringLabels(machine: Model, frame: CFrame)
 	local part = Build.Decor({
 		Name = "RingNumbers",
 		Size = Vector3.new(half * 2, length, 0.02),
-		CFrame = frame * CFrame.fromMatrix(Vector3.new(x, y, z) + normal * 0.075, Vector3.xAxis, up),
+		CFrame = frame * CFrame.fromMatrix(Vector3.new(x, y, z) + normal * 0.19, Vector3.xAxis, up),
 		Transparency = 1,
 		Parent = machine,
 	})
@@ -215,12 +276,12 @@ local function ringLabels(machine: Model, frame: CFrame)
 	end
 end
 
--- The SKEE-BALL lettering on a machine's marquee (bright on the sign's dark face).
+-- The SKEE-BALL lettering on a machine's marquee (bright on the sign's dark face, 0.1 in front of it).
 local function marqueeText(machine: Model, frame: CFrame, color: Color3)
 	local part = Build.Decor({
 		Name = "MarqueeText",
 		Size = Vector3.new(SkeeBall.SIGN_W, SkeeBall.SIGN_H, 0.02),
-		CFrame = frame * CFrame.new(0, SkeeBall.SIGN_Y, SkeeBall.SIGN_Z - 0.08),
+		CFrame = frame * CFrame.new(0, SkeeBall.SIGN_Y, SkeeBall.SIGN_Z - 0.16),
 		Transparency = 1,
 		Parent = machine,
 	})
@@ -374,11 +435,12 @@ local function buildMachine(parent: Instance, index: number): Model
 	machine:SetAttribute("SkeeFrame", frame) -- the frame Shared/Logic/SkeeBall's numbers are in
 	fitColliders(machine, frame)
 
-	-- The score screen in the bezel above the cage (clients draw on it).
+	-- The score screen in the bezel above the cage (clients draw on it): sunk into the bezel, its
+	-- face 0.1 out of the bezel's.
 	local screen = Build.Decor({
 		Name = "Screen",
-		Size = Vector3.new(SkeeBall.SCREEN_W, SkeeBall.SCREEN_H, 0.05),
-		CFrame = frame * CFrame.new(0, SkeeBall.SCREEN_Y, SkeeBall.SCREEN_Z + 0.015),
+		Size = Vector3.new(SkeeBall.SCREEN_W, SkeeBall.SCREEN_H, 0.16),
+		CFrame = frame * CFrame.new(0, SkeeBall.SCREEN_Y, SkeeBall.SCREEN_Z + 0.02),
 		Color = rgb(14, 10, 30),
 		Parent = machine,
 	})
@@ -463,6 +525,7 @@ end
 function Arcade.Build(root: Model): Model
 	local frame = Arcade.Frame()
 	clearSite(root, frame)
+	clearGround(frame)
 	local arcade = Build.Model("Arcade", root)
 	MeshLibrary.Get("ArcadeTicketFloor", { CFrame = frame * FLOOR_PIVOT, Parent = arcade })
 	-- What feet land on: flat invisible floors at the grout's height (0.3) under the patio's
