@@ -63,10 +63,10 @@ function HotPotato.InFront(from: Vector3, look: Vector3, to: Vector3): boolean
 	return flat.Unit:Dot(facing.Unit) >= HotPotato.FACING
 end
 
--- How far apart in height two roots may be for a pass: someone up on the grill (its grate is 8.4
--- studs up, out of a jump's reach from the lawn but not from a table top) can still be tagged from
--- beside it or thrown to.
-HotPotato.REACH_UP = 9.5
+-- How far apart in height two roots may be for a pass: someone up on the grill (out of a jump's reach
+-- from the lawn, but not from a picnic table; its foil potatoes top out 10 studs up) can still be
+-- tagged from beside it or thrown to.
+HotPotato.REACH_UP = 11
 
 -- Whether b is within `reach` of a (flat) and at about the same height.
 function HotPotato.Reaches(a: Vector3, b: Vector3, reach: number): boolean
