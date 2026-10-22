@@ -35,21 +35,15 @@ get the owner's credential injected; no key needed). Test servers have no physic
 
 ## Games already started
 
-Four games were started in the coordinator's container and stopped by a restart; their work is in git bundles here.
-Restore one with `git fetch docs/wip/game-<Id>.bundle mg/<Id>:mg/<Id>` and `git merge mg/<Id>`. Their last commits are
-WIP: read them critically, keep what's good, finish the rest.
-
-| Game | Bundle | State when stopped |
-| --- | --- | --- |
-| Tanks! | `docs/wip/game-Tanks.bundle` | meshes uploaded (tank, shell, mine, blocks, bricks, room toys), shielded spawns |
-| Spleef | `docs/wip/game-Spleef.bundle` | meshes uploaded, a collider dump, no client-side break prediction |
-| Mecha-Marathon | `docs/wip/game-MechaMarathon.bundle` | grandstands, balloons, closer chase camera |
-| Prime Cut | `docs/wip/game-PrimeCut.bundle` | first playable version (server, client, bots, props, meshes) + uncommitted mesh edits |
+Four games, Tanks!, Spleef, Mecha-Marathon and Prime Cut, were started in the coordinator's container and stopped by a
+restart. Their work was saved as git bundles in `docs/wip/`, which the game sessions restored and finished. All four
+are merged, and their bundles were removed.
 
 ## Games 27-29 (2026-10-22)
 
 The owner asked for one more Survival, Luck and Race game and picked these ("Let's add the stars. If you need to hand them
-off do it."). Briefs: [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md) 27-29 and `docs/builds/<Id>.md`.
+off do it."). Briefs: [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md) 27-29 and `docs/builds/<Id>.md`. All three are merged
+since (Dice Dash 51ba233, Hot Potato c153118, Minecart Mayhem 81c0144), each with its portal preview.
 
 | Game | Category | Session |
 | --- | --- | --- |

@@ -10,6 +10,9 @@ sourcemap.json
 /art/
 /art_dumps/
 
+# MP3s to listen to (docs/ASSETS.md: compose.py --preview previews/, modes.py preview previews/ <ModeId>)
+/previews/
+
 # Tooling caches
 roblox.yml
 globalTypes.d.luau

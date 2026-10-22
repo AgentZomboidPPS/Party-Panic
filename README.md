@@ -1,7 +1,8 @@
 # 🎉 Party Panic
 
-> Two Claudes are working on this project: read [docs/HANDOFF.md](docs/HANDOFF.md) first (who works on what, how to
-> test without Studio, what's open). The next games are in [docs/MINIGAME_BACKLOG.md](docs/MINIGAME_BACKLOG.md).
+> Several Claude sessions work on this project: read [docs/HANDOFF.md](docs/HANDOFF.md) first (who works on what, how
+> to test without Studio, what's open). The briefs of games 13-29 (all built now) are in
+> [docs/MINIGAME_BACKLOG.md](docs/MINIGAME_BACKLOG.md).
 
 A Roblox multiplayer party game: hang out in a lively lobby, vote on the next mini-game, compete in
 short chaotic rounds, earn rewards, and do it all again. Built from the *Party Panic Game Design
@@ -16,7 +17,7 @@ Outline*.
 | **Core loop** | A server-authoritative state machine (Waiting → Intermission → Voting → Preparing → In Round → Results → Cleanup) with a watchdog. Every mini-game call runs with a timeout, so a broken mode can't stall the server. |
 | **Sitting out** | A big switch right by the phase banner (and in Settings): 🎮 PLAYING or 💤 SITTING OUT. Sitting out keeps you in the lobby while rounds go on and bots take your spot; you finish a round you're in, don't vote while you're out, and jump back in with one tap. If everyone sits out, rounds wait in the lobby. It resets when you leave. |
 | **Voting** | Four cards: three games and Random (a hidden pick, revealed if it wins), with live counts; change your vote until time runs out; random tie-breaks; recently played modes down-weighted; category mixing. Tap a card to vote. The stage's four portals play a little looping preview of each option (Random's spins through the games like a slot machine and lands on its game if it wins), and take turns showing every game between votes. |
-| **Mini-games** | Fifteen party classics rebuilt for 12 players: 🔥 Fire Rope · ⚡ Hex Meltdown · 🍯 Honey Trap · 🎈 Pump & Pop · 🛹 Skate Escape · 🏹 Arrow Ambush · 🏜️ Sinking Sands · 🔵 Bumper Ballers · 🥕 Rake It In · 🍪 Crazy Cutters · 🎂 Cake Factory · 🛷 Bobsled Run · 🦈 Shark Bait · 🚁 Mecha-Marathon · ❄️ Spleef |
+| **Mini-games** | Thirty party classics rebuilt for 12 players: 🔥 Fire Rope · 🌋 Hex Meltdown · 🍯 Honey Trap · 🎱 Bumper Ballers · 🛹 Skate Escape · ⏳ Sinking Sands · 🏹 Arrow Ambush · 🎈 Pump & Pop · 🥕 Rake It In · 🍪 Crazy Cutters · 🎂 Cake Factory · 🛷 Bobsled Run · 🦈 Shark Bait · 🚁 Mecha-Marathon · ☂️ Parasol Plummet · ❄️ Spleef · 💣 Tanks! · 🥩 Prime Cut · 📸 Slaparazzi · 👣 Stamp Out · 🐴 Rockin' Raceway · 🧸 Messy Memory · ☃️ Snowball Summit · 🖍️ Trace Race · 🍕 Eatsa Pizza · 🪓 Log Jam · 🏏 Struggle · 🥔 Hot Potato · 🎲 Dice Dash · ⛏️ Minecart Mayhem (icons as on the vote cards) |
 | **Bots** | Friendly AI players fill empty spots so every round feels full (8 by default): they fade out when someone joins, fade back in when someone leaves, play every mode with their own brain at varied skill, and are clearly labelled 🤖 with a BOT nameplate. No rewards, no saved data. |
 | **Progression** | Small, easy-to-read coins (a round pays 2-6) and XP, itemized round rewards, personal bests, a first-win-of-the-day bonus, daily and weekly quests, a daily gift with streaks, a hidden daily token. The **Rewards Road**: every level pays coins and most milestone levels unlock a cosmetic you can't buy, always shown on the HUD as the next goal; **career milestones** (rounds, wins, podiums, every game, days played) unlock titles; **prestige colors** on the name tag and level badge every 10 levels; a level-up celebration card in the lobby (with EQUIP for what it unlocked; it never blocks the stick, jump or menu) and, back in the lobby, a "Lv 10!" over your head for everyone to see; returning players get the rewards they had already earned in a "NEW REWARDS!" card. Saved coins moved to the low scale once (divided by 10, rounded up; items kept) |
 | **Cosmetics** | Trails, titles, emotes (dances and effect emotes), victory and knockout effects, a coin shop with confirmation, an optional VIP pass (cosmetic only, never pay-to-win) |
@@ -75,11 +76,11 @@ python3 tools/upload_assets.py --user-id <the game owner's user id>
 ## Adding mini-games
 
 ```sh
-lune run tools/new-minigame HotPotato "Hot Potato" Survival
+lune run tools/new-minigame MyGame "My Game" Survival
 ```
 
 That one command creates a working mode and registers it. Then set
-`Config.Debug.ForceGame = "HotPotato"` to test just that mode in Studio. The full guide is in
+`Config.Debug.ForceGame = "MyGame"` to test just that mode in Studio. The full guide is in
 [docs/ADDING_MINIGAMES.md](docs/ADDING_MINIGAMES.md), and the idea backlog is in
 [docs/MINIGAME_IDEAS.md](docs/MINIGAME_IDEAS.md).
 

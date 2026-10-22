@@ -111,11 +111,11 @@ Honey Trap tutorial). The owner still has to restart servers to get it.
 - **Friends' music:** works now. The friend's device report (version 27) says the lobby music loaded and plays, not
   silent. If the friend still hears nothing, it's their device volume or Roblox music setting. Tell the owner.
 
-### 2.2 Stopped half-way (the owner asked for these; work saved in `docs/wip/`, unmerged and unreviewed)
+### 2.2 Stopped half-way (the owner asked for these; all four lanes were finished and merged since)
 
-Restore one with `git fetch docs/wip/<name>.bundle wip/<name>:wip/<name>` then `git checkout wip/<name>` (or diff it
-against `claude/quirky-hopper-5yk8zk`). Each bundle's last commit, "WIP (stopped)", is the uncommitted state at the
-moment it was stopped, never tested. Read before reusing: continue it, take parts, or redo.
+The lanes were saved as git bundles in `docs/wip/`; each was later merged: payoffs (5286d6a, then 2126271 for saved
+coins), skeeball (a17152f), sinkingsands-bots (its brain is the base of d16dcf8; the shorter hint is 9a14aba) and
+bumper-controls (finished in 8945c14). Their bundles were removed from `docs/wip/`. The table is what was saved.
 
 | Request (owner's words) | Saved as | State when stopped |
 | --- | --- | --- |
@@ -165,8 +165,10 @@ moment it was stopped, never tested. Read before reusing: continue it, take part
 
 ## 3. What's in `docs/wip/`
 
-Git bundles of the stopped lanes (section 2.2). They're only there so the work isn't lost; delete the folder once each
-lane is merged or dropped. `git bundle list-heads docs/wip/<name>.bundle` shows the branch inside.
+Only `shop-pass2.bundle`, a copy of the held second shop pass (see the top). The bundles of the stopped lanes (section
+2.2), of the four games started in Session B's container and of the per-game music were removed once their work was
+merged; they're still in git history (`git show 4117d67:docs/wip/<name>.bundle > <name>.bundle`).
+`git bundle list-heads docs/wip/<name>.bundle` shows the branch inside a bundle.
 
 ## 4. Setting up (a fresh cloud container)
 
@@ -190,9 +192,9 @@ confirmed by the owner in a real game.
   errors. About 5-10 minutes.
 - `tools/checks/client_harness.py [--touch]` + `tools/preview/luau_task.py` + `tools/checks/ui_render.py`: the whole
   client, every screen and phase, drawn at real phone sizes; `textReport` lists any text that doesn't fit. It plays the
-  game with the longest objective (Honey Trap right now), which is how its rules card was checked.
+  game with the longest objective (Spleef now; it was Honey Trap, which is how its rules card was checked).
 - Before committing: `stylua src tools/checks tests`, `selene src`, `luau-lsp analyze` (see `merge_check.sh` for the
-  exact line), `lune run tests/run` (55 tests).
+  exact line), `lune run tests/run`.
 - Meshes: `python3 tools/checks/mesh_orientation.py` (inside-out or half-flipped parts; must report 0),
   `tools/checks/regen_compare.py`, `tools/checks/merge_check.sh <Id>` after `git merge --no-ff --no-commit <branch>`.
 - Assets for other players: `python3 tools/checks/asset_status.py --meshes` and `tools/asset_permissions.py`

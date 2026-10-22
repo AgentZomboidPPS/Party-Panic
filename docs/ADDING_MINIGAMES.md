@@ -7,7 +7,7 @@ manager, voting, rewards, quests, results screen, spectating and cleanup all wor
 ## 1. Scaffold it
 
 ```sh
-lune run tools/new-minigame HotPotato "Hot Potato" Survival
+lune run tools/new-minigame MyGame "My Game" Survival
 lune run tools/new-minigame CaptureTheCake "Capture the Cake" Team --team
 ```
 
@@ -17,12 +17,12 @@ It creates a small but working game you can play right away:
 
 | File | What it is |
 | --- | --- |
-| `src/server/MiniGames/HotPotato.luau` | the rules (server) |
-| `src/client/MiniGames/HotPotato.luau` | the client half: HUD, controls, smooth visuals |
-| `src/server/MiniGames/Bots/HotPotato.luau` | how bots play it |
-| `src/server/World/Props/HotPotato.luau` | the mode's props (mesh specs with primitive fallbacks) |
-| `tools/meshgen/props/HotPotato.py` | the props' meshes |
-| `tools/checks/bots/HotPotato.luau` | a test bot for the real-server round harness |
+| `src/server/MiniGames/MyGame.luau` | the rules (server) |
+| `src/client/MiniGames/MyGame.luau` | the client half: HUD, controls, smooth visuals |
+| `src/server/MiniGames/Bots/MyGame.luau` | how bots play it |
+| `src/server/World/Props/MyGame.luau` | the mode's props (mesh specs with primitive fallbacks) |
+| `tools/meshgen/props/MyGame.py` | the props' meshes |
+| `tools/checks/bots/MyGame.luau` | a test bot for the real-server round harness |
 
 and an entry in `src/shared/GameDefinitions.luau`. Fill in its `Objective` and `Controls`: those
 lines appear on the vote cards and the rules screen.
@@ -32,7 +32,7 @@ lines appear on the vote cards and the rules screen.
 **On a real Roblox server, with 12 bots** (no Studio needed; this is how every mode is tested):
 
 ```sh
-python3 tools/checks/round_harness.py HotPotato --players 12 --client --dump-at 8 --map map.json > round.luau
+python3 tools/checks/round_harness.py MyGame --players 12 --client --dump-at 8 --map map.json > round.luau
 python3 tools/preview/luau_task.py round.luau - round.json
 python3 tools/checks/summarize.py round.json map.json --dump arena.json
 ```
@@ -42,7 +42,7 @@ round ended, the results, and whether the arena and shared state were cleaned up
 has **no physics**: bots move rigs with `PivotTo`, which is one more reason modes check positions
 instead of relying on `Touched`. Try 2 and 5 players too.
 
-**In Studio:** set `Config.Debug.ForceGame = "HotPotato"` in `src/shared/Config.luau`, `rojo serve`,
+**In Studio:** set `Config.Debug.ForceGame = "MyGame"` in `src/shared/Config.luau`, `rojo serve`,
 press Play. With one player Studio ignores minimum player counts. Clear `ForceGame` when done.
 Anything physical (jumping, rolling, steering) and anything on a phone (tilt, touch) has to be
 checked this way.
