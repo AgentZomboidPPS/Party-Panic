@@ -135,7 +135,9 @@ Branch **`claude/quirky-hopper-5yk8zk`**. Session B merges it before publishing 
      `Logic/EventLogic`):
      - runs until 2026-11-02 00:00 UTC (`Ends` in `Events.luau`);
      - candy from rounds and 3 golden pumpkins a day in the lobby;
-     - a free track of 5 limited cosmetics at 10/25/45/70/100 candy, with the Halloween medal at 100;
+     - a free track of 6 limited cosmetics at 10/25/45/55/70/100 candy, with the Halloween medal at 100; the
+       PUMPKIN HAT at 55 is the headline (a new Hat slot: `World/Hats` builds it as an Accessory, worn in the
+       lobby, off in rounds and under the cup crown; mesh `tools/meshgen/props/Hats.py`, model 82691154142514);
      - decorations and a spookier lobby look, drawn per device;
      - double coins only on the party's weekends, 24-25 Oct and 31 Oct-1 Nov UTC (`DoubleCoinsWeekends` on the
        event in `Events.luau`); none after it (owner: "NO" to double coins after Halloween).
