@@ -20,6 +20,7 @@ notation) and played by tools/music/instruments.py:
     StampOut      "Ink Pad Ska"           a two-tone ska band on a giant desk, BIG STAMPS up a step at 30 s
     RockinRaceway "Hobby Horse Hop"       rock'n'roll sax, boogie piano and galloping hooves round the fair
     MessyMemory   "Toy Box Tumble"        a toy-shop jug band (kazoo, uke, tuba) timed to study, mischief, reveal
+    SnowballSummit "Summit Polka"         an alpine polka (alphorn, flugelhorn, accordion, cowbells), BLIZZARD at 43.2 s
 
 Every track opens with an intro of at least 13 seconds (the rules card and the 3-2-1, while the
 game loads its own track), then the band kicks in on GO: AudioController starts the track so its
