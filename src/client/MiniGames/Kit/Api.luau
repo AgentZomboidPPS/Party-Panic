@@ -541,13 +541,21 @@ end
 type HintClock = { Shown: number, Faded: boolean }
 local hintClocks: { [TextLabel]: HintClock } = setmetatable({}, { __mode = "k" }) :: any
 
--- Counts how long a hint is on screen: only while the mode's HUD shows (not behind the rules card,
--- where a hint set in Preparing waits), and fades it out at HINT_FADE seconds.
+-- Counts how long a hint is on screen during the round: from GO at the earliest (a hint set while
+-- the rules card is up waits behind it, then shows through the 3-2-1), only while the mode's HUD
+-- shows, and fades it out at HINT_FADE seconds.
 local function followHint(self: Api, hint: TextLabel)
 	local stroke = hint:FindFirstChildOfClass("UIStroke")
 	self.Janitor:Add(RunService.Heartbeat:Connect(function(dt)
 		local clock = hintClocks[hint]
-		if not clock or clock.Faded or hint.Text == "" or not hint.Visible or not self.Gui.Enabled then
+		if
+			not clock
+			or clock.Faded
+			or hint.Text == ""
+			or not hint.Visible
+			or not self.Gui.Enabled
+			or GameState.Get("Phase") ~= "InRound"
+		then
 			return
 		end
 		clock.Shown += dt
