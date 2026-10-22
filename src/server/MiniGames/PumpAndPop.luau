@@ -35,6 +35,12 @@
 -- waiting out the spring or the cycle) never happened: no air, no pump, and it doesn't start a new
 -- cycle. Before, every Down-Up pair counted as at least a weak puff, so a hacked client firing them
 -- at the server as fast as it takes actions out-pumped perfect timing.
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): the teams' marks were a copy of
+-- Shared/Teams' (the ones the rules card and team pill show), so a change there would leave the
+-- stations, banners and announcements here on the old marks; they are Teams.Shapes now. The meter's
+-- red band and the "over" pop-up showed ✕, and a perfect pump's pop-up ★, which the fonts don't
+-- have (an empty box): they are × and ❌, and ⭐ (client half).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -65,8 +71,8 @@ PumpAndPop.SCREEN_GRACE = 0.07
 PumpAndPop.EMPTY_SCALE = 0.45
 PumpAndPop.FULL_SCALE = 1.12
 
--- A shape for every team, so a team never reads by color alone.
-PumpAndPop.Shapes = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
+-- A shape for every team, so a team never reads by color alone: the same marks as the rules card.
+PumpAndPop.Shapes = Teams.Shapes
 
 local ARC_RADIUS = 38 -- the stations face a point this far in front of them
 local STATION_GAP = 20 -- between neighboring stations (the biggest balloon is ~14 wide)

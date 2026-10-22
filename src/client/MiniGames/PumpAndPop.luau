@@ -1,7 +1,7 @@
 -- Client half of Pump & Pop: grows, wobbles and pops the teams' balloons from the air the server
 -- shares ("Air_<Team>", 0..1), turns the tanks' gauge needles, works everyone's plungers (players'
 -- and bots', from the "Push" and "Pump" events) and gives this player the PUMP button with its
--- timing meter: hold, let go in the green band (✓) for a full pump, not in the red (✕).
+-- timing meter: hold, let go in the green band (✓) for a full pump, not in the red (×).
 --
 -- The carnival's light bulbs (every prop's BulbsA / BulbsB pieces) chase each other round the
 -- stage, faster in the last stretch, and flash in the winners' color when a balloon pops (with
@@ -14,6 +14,10 @@
 -- server's minimum Cycle between presses), so the meter always shows the hold the server judges.
 -- The server lets a release a little past the green's top still count (what you see is a frame or
 -- two old when you let go): the meter keeps drawing the true band, so anything green is perfect.
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): the red band's ✕ and the pop-ups' ★
+-- and ✕ aren't in the fonts (they showed an empty box). The band shows × and the pop-ups ⭐ and ❌,
+-- and the pop-up is wider so "⭐ PERFECT x12!" (231 wide) stays on one line.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -455,7 +459,7 @@ function PumpAndPop.Start(api)
 				})
 			end
 			band("Sweet", sweet, 1, GREEN, "✓")
-			band("Over", 1, METER_TOP, RED, "✕")
+			band("Over", 1, METER_TOP, RED, "×")
 			meterFill = UIKit.new("Frame", {
 				Name = "Fill",
 				AnchorPoint = Vector2.new(0, 1),
@@ -500,14 +504,14 @@ function PumpAndPop.Start(api)
 		local gui = Instance.new("BillboardGui")
 		gui.Name = "Feedback"
 		gui.Adornee = feedbackAnchor
-		gui.Size = UDim2.fromOffset(220, 50)
+		gui.Size = UDim2.fromOffset(260, 50)
 		gui.StudsOffset = Vector3.new(0, 4, 0)
 		gui.MaxDistance = 80
 		gui.LightInfluence = 0
 		gui.AlwaysOnTop = true
 		gui.Parent = api.World
 		local label = UIKit.Label({
-			Text = (if kind == "perfect" then "★ " elseif kind == "over" then "✕ " else "") .. text,
+			Text = (if kind == "perfect" then "⭐ " elseif kind == "over" then "❌ " else "") .. text,
 			Font = Theme.Fonts.Display,
 			TextSize = 34,
 			TextColor3 = color,

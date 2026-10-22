@@ -47,6 +47,11 @@
 -- only if they were in it on their own screen when it erupted, allowing for their ping); Divers
 -- get the SUNKEN CHEST (+8), one at a time near the bottom, so heavy that only a whole PULL sinks
 -- it; and the PULL drains a little harder (SandSwirl.PULL).
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): a SAND BLAST aimed at x = math.huge
+-- (a hacked client; only NaN was turned away) landed at NaN, and every distance to NaN failed the
+-- "too far" test, so one tap threw every Diver on the sand, spilled their treasure and dropped it
+-- at NaN. A blast must now be aimed at finite numbers.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1080,7 +1085,8 @@ function SinkingSands:Start()
 		if not self:IsKing(player) or ctx:TimeIsUp() then
 			return -- (once time is up no blast could erupt in time)
 		end
-		if type(x) ~= "number" or type(z) ~= "number" or x ~= x or z ~= z then
+		-- (Finite numbers only: the NaN check let math.huge through, and a blast there hit everyone.)
+		if type(x) ~= "number" or type(z) ~= "number" or not (math.abs(x) < math.huge and math.abs(z) < math.huge) then
 			return
 		end
 		local cool = readyFor(player)

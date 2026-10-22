@@ -52,6 +52,10 @@
 --     to 4 studs past the drawn plinth under the stage's lip. Now only the drawn stage is solid, and
 --     it is out of bounds: it never sinks, so whoever lands on it (a bounce off a head can carry
 --     that far) is out, as if they had fallen in.
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): YELLOW's shape was ★, which none of the
+-- game's fonts have, so the yellow hexes, the call board and the call banner showed an empty box
+-- where every other colour shows its shape. YELLOW is ♣ now.
 
 local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -109,12 +113,13 @@ local RIM = Color3.fromRGB(255, 244, 226)
 local GOLD = Color3.fromRGB(255, 196, 60)
 local WALL_ROCK = Color3.fromRGB(66, 50, 62)
 
--- Every color comes with a shape so color is never the only cue (design doc §12).
+-- Every color comes with a shape so color is never the only cue (design doc §12). Only shapes the
+-- fonts have (★ is drawn as an empty box).
 HexMeltdown.Palette = {
 	{ Name = "Red", Shape = "●", Color = Color3.fromRGB(255, 70, 70) },
 	{ Name = "Blue", Shape = "■", Color = Color3.fromRGB(60, 140, 255) },
 	{ Name = "Green", Shape = "▲", Color = Color3.fromRGB(70, 210, 90) },
-	{ Name = "Yellow", Shape = "★", Color = Color3.fromRGB(255, 210, 50) },
+	{ Name = "Yellow", Shape = "♣", Color = Color3.fromRGB(255, 210, 50) },
 	{ Name = "Purple", Shape = "♦", Color = Color3.fromRGB(165, 95, 255) },
 	{ Name = "Pink", Shape = "♥", Color = Color3.fromRGB(255, 110, 200) },
 }

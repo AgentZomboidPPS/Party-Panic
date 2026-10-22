@@ -8,6 +8,12 @@
 -- both must get it (RakeItIn.luau, "Two rakes after the same veggie"). The notes count them; a race
 -- where either got less than their lane held is a warning, so it shows among the errors. With 5 or
 -- more stand-ins, the last one leaves 25 s in and then tries to rake: that must change nothing.
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): a staged race counted only the produce
+-- on the field, but a veggie a third player raked a moment before also counts for a press whose lane
+-- held it (the same rule), so the early press now and then got one more than counted and the check
+-- warned (one race in seven in a 12-player mode_check: "got 5 of 4"). Races are staged only when no
+-- such veggie is about.
 return function(env)
 	local ctx = env.ctx
 	local mode = env.game
@@ -56,6 +62,22 @@ return function(env)
 				local takenA, valueA, bombA = mode:LaneHaul(mode.stations[a], early)
 				local takenB, valueB, bombB = mode:LaneHaul(mode.stations[b], late)
 				if bombA or bombB then
+					continue
+				end
+				-- Produce someone else raked a moment ago that these lanes held counts for these presses
+				-- too (the same rule, RakeItIn.luau), and the hauls above can't see it (it's off the
+				-- field): stage only when there's none, or the check below fails on a legal extra veggie.
+				local clash = false
+				for _, raked in mode.raked do
+					if
+						mode:Takes(mode.stations[a], raked.Item, early)
+						or mode:Takes(mode.stations[b], raked.Item, late)
+					then
+						clash = true
+						break
+					end
+				end
+				if clash then
 					continue
 				end
 				for _, item in takenA do
