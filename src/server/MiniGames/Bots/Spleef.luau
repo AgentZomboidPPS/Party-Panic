@@ -1,203 +1,259 @@
--- How bots play Spleef. A bot picks a rival on its own floor, walks over (around the holes: a short
--- path search over the floor's blocks, hopping a one-block gap when it's cut off) to a spot within
--- reach, and digs out the blocks under the rival's feet, the one right under them first. Skilled bots
--- reach further, dig faster, lead a moving rival and keep moving so they're hard to dig under;
--- clumsy ones are slow, sometimes break the block next to the right one, and may not notice a block
--- cracking under them. Every dig goes through ctx:BotAction, the same checks as a player's tap. If a
--- bot is left over a hole, the mode drops it like anyone else (Spleef:_falls).
+-- How bots play Spleef.
+--
+-- First pass: bots picked a rival on their floor, walked around the holes to within reach and dug
+-- out the blocks under the rival's feet.
+--
+-- Second pass (owner: "Bots are awful at spleef. also spleef doesnt require you to dig. It should be
+-- you walk over it and it fades out within like 1 second or so"): there's no digging any more; every
+-- block fades about a second after anyone steps on it, so surviving is all about where you step.
+-- A bot hops from block to block over fresh snow only:
+--   * It stands on its block while it fades and leaves just before it goes (skilled bots cut it
+--     fine, which saves snow; clumsy ones misjudge now and then and drop through). A few restless
+--     bots never wait, which burns through the floor faster.
+--   * Where to: a search over the untouched blocks it can walk to (a few steps out, further for
+--     skilled bots) for the spot with the most fresh snow around it, away from everyone else, a
+--     little noisier for clumsy bots. It only ever walks onto untouched blocks.
+--   * Cornered (hardly any fresh snow left to walk to): skilled bots jump a one-block gap to a
+--     bigger patch; otherwise, above the last floor, it drops on purpose: it walks into the hole (or
+--     waits on its fading block) over the best fresh patch of the floor below, away from others. On
+--     the last floor with nowhere fresh to go it takes the fading block with the most time left.
+-- Bots step on blocks exactly like players (the mode judges everyone's feet the same way), and a
+-- bot left over a hole is dropped by the mode like anyone else (Spleef:_falls).
 
 local Spleef = {}
+
+local ORTHO = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
+local DIRS = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }
 
 local function flat(a: Vector3, b: Vector3): number
 	return Vector2.new(a.X - b.X, a.Z - b.Z).Magnitude
 end
 
--- Whether a bot can stand at `position` on `floor`: a block (cracking ones only if it's not careful)
--- right under its middle.
-local function standable(mode, floor: number, position: Vector3, careful: boolean): boolean
-	local i, j = mode:GridOf(position)
-	local cell = mode:CellAt(floor, i, j)
-	return cell ~= nil and cell.State ~= "Gone" and not (careful and cell.State == "Cracking")
+local function solid(cell): boolean
+	return cell ~= nil and cell.State == "Solid"
 end
 
--- Whether walking straight from `from` to `to` keeps solid snow underfoot.
-local function walkable(mode, floor: number, from: Vector3, to: Vector3, careful: boolean): boolean
-	local delta = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
-	local steps = math.max(1, math.ceil(delta.Magnitude / 1.2))
-	for step = 1, steps do
-		if not standable(mode, floor, from + delta * (step / steps), careful) then
-			return false
+-- Untouched blocks within two of a cell (0-24): how much fresh snow there is around it.
+local function openness(mode, floor: number, i: number, j: number): number
+	local count = 0
+	for di = -2, 2 do
+		for dj = -2, 2 do
+			if (di ~= 0 or dj ~= 0) and solid(mode:CellAt(floor, i + di, j + dj)) then
+				count += 1
+			end
 		end
 	end
-	return true
+	return count
 end
 
--- A short path over the blocks of `floor` from where the bot is to the goal cell (8 directions, no
--- cutting a corner over a hole). Returns the list of cells, or nil if the goal can't be reached.
-local function findPath(mode, floor: number, start, goal, careful: boolean): { any }?
-	local function ok(cell): boolean
-		return cell ~= nil and cell.State ~= "Gone" and not (careful and cell.State == "Cracking")
+-- How crowded a spot is: closer rivals (on this floor) count more.
+local function crowd(position: Vector3, others: { Vector3 }): number
+	local total = 0
+	for _, other in others do
+		local distance = flat(position, other)
+		if distance < 14 then
+			total += (14 - distance) / 14
+		end
 	end
-	if not ok(goal) then
+	return total
+end
+
+-- The block a step from `cell` lands on, if it's untouched and the way there holds (a diagonal
+-- step passes the corner of the two blocks beside it, so neither may be gone).
+local function stepTo(mode, floor: number, cell, di: number, dj: number)
+	local next = mode:CellAt(floor, cell.I + di, cell.J + dj)
+	if not solid(next) then
 		return nil
 	end
+	if di ~= 0 and dj ~= 0 then
+		local a = mode:CellAt(floor, cell.I + di, cell.J)
+		local b = mode:CellAt(floor, cell.I, cell.J + dj)
+		if not a or a.State == "Gone" or not b or b.State == "Gone" then
+			return nil
+		end
+		if mode:TimeLeft(a) < 0.4 or mode:TimeLeft(b) < 0.4 then
+			return nil
+		end
+	end
+	return next
+end
+
+-- Searches the untouched blocks a bot can walk to from `start` (up to `depth` steps) for the best
+-- place to head for. Returns the first step toward it (nil if there's none) and how many fresh
+-- blocks it could reach at all (small: it's cornered).
+local function plan(bot, mode, floor: number, start, others: { Vector3 }, depth: number)
+	local skill = bot.Skill
 	local came = { [start] = start }
+	local steps = { [start] = 0 }
 	local queue = { start }
 	local head = 1
+	local best, bestScore = nil, -math.huge
+	local heading = bot.Memory.Heading
 	while head <= #queue do
 		local cell = queue[head]
 		head += 1
-		if cell == goal then
-			local path = {}
-			while cell ~= start do
-				table.insert(path, 1, cell)
-				cell = came[cell]
-			end
-			return path
-		end
-		for di = -1, 1 do
-			for dj = -1, 1 do
-				if di == 0 and dj == 0 then
-					continue
-				end
-				local next = mode:CellAt(floor, cell.I + di, cell.J + dj)
-				if not ok(next) or came[next] then
-					continue
-				end
-				if di ~= 0 and dj ~= 0 then
-					if
-						not ok(mode:CellAt(floor, cell.I + di, cell.J))
-						or not ok(mode:CellAt(floor, cell.I, cell.J + dj))
-					then
-						continue
-					end
-				end
-				came[next] = cell
-				table.insert(queue, next)
-			end
-		end
-	end
-	return nil
-end
-
--- The closest safe block to stand on, preferring ones with solid neighbors and nearer the middle.
-local function safeCell(mode, floor: number, here: Vector3, careful: boolean)
-	local i0, j0 = mode:GridOf(here)
-	local best, bestScore = nil, math.huge
-	for di = -4, 4 do
-		for dj = -4, 4 do
-			local cell = mode:CellAt(floor, i0 + di, j0 + dj)
-			if not cell or cell.State == "Gone" or (careful and cell.State == "Cracking") then
-				continue
-			end
-			local neighbors = 0
-			for _, offset in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
-				local other = mode:CellAt(floor, cell.I + offset[1], cell.J + offset[2])
-				if other and other.State == "Solid" then
-					neighbors += 1
+		local d = steps[cell]
+		if cell ~= start then
+			local score = openness(mode, floor, cell.I, cell.J)
+				- crowd(cell.Position, others) * (3 + 5 * skill)
+				- d * 0.35
+				- cell.Rim * 2
+				+ bot.Rng:NextNumber(0, 1 + (1 - skill) * 6)
+			if heading then
+				local way = Vector3.new(cell.I - start.I, 0, cell.J - start.J)
+				if way.Magnitude > 0 then
+					score += way.Unit:Dot(heading) * 1.2 -- keep going the same way: smoother paths
 				end
 			end
-			local score = flat(cell.Position, here) - neighbors * 1.5 + cell.Rim * 6
-			if score < bestScore then
+			if score > bestScore then
 				best, bestScore = cell, score
 			end
 		end
+		if d < depth then
+			for _, dir in DIRS do
+				local next = stepTo(mode, floor, cell, dir[1], dir[2])
+				if next and steps[next] == nil then
+					steps[next] = d + 1
+					came[next] = cell
+					table.insert(queue, next)
+				end
+			end
+		end
 	end
-	return best
+	if not best then
+		return nil, 0
+	end
+	local cell = best
+	while came[cell] ~= start do
+		cell = came[cell]
+	end
+	return cell, #queue - 1
 end
 
--- The nearest rival on the same floor (not one the server is dropping).
-local function pickRival(bot, ctx, mode, floor: number, here: Vector3): any
-	local best, bestDistance = nil, math.huge
+-- Every rival's position on this floor (not ones the mode is dropping).
+local function othersOn(bot, ctx, mode, floor: number): { Vector3 }
+	local list = {}
 	for _, player in ctx:GetAlivePlayers() do
 		if player == bot or mode.falling[player] then
 			continue
 		end
 		local _, humanoid, root = ctx:GetCharacter(player)
-		if not humanoid or not root or mode:FloorAt(mode:Feet(humanoid, root)) ~= floor then
-			continue
+		if humanoid and root and mode:FloorAt(mode:Feet(humanoid, root)) == floor then
+			table.insert(list, root.Position)
 		end
-		local distance = flat(root.Position, here) + bot.Rng:NextNumber(0, 6)
-		if distance < bestDistance then
-			best, bestDistance = player, distance
+	end
+	return list
+end
+
+-- The block a bot is standing on: the one under its middle, else the one under its footprint
+-- with the most time left.
+local function cellUnder(mode, floor: number, position: Vector3)
+	local i, j = mode:GridOf(position)
+	local cell = mode:CellAt(floor, i, j)
+	if cell and cell.State ~= "Gone" then
+		return cell
+	end
+	local best, bestLeft = nil, -1
+	for _, other in mode:Supports(floor, position) do
+		local left = mode:TimeLeft(other)
+		if left > bestLeft then
+			best, bestLeft = other, left
 		end
 	end
 	return best
 end
 
--- Walks toward a goal cell: straight if the snow holds all the way, else along the found path, or a
--- hop over a gap when it's cut off.
-local function walkTo(bot, mode, floor: number, root: BasePart, goal, careful: boolean)
-	local here = root.Position
-	local standY = here.Y
-	local target = Vector3.new(goal.Position.X, standY, goal.Position.Z)
-	if walkable(mode, floor, here, target, careful) then
-		bot:MoveTo(target)
-		return
-	end
-	local i, j = mode:GridOf(here)
-	local start = mode:CellAt(floor, i, j)
-	local path = start and findPath(mode, floor, start, goal, careful)
-	if path and #path > 0 then
-		-- The furthest cell along the path that can be walked to in a straight line.
-		local waypoint = path[1]
-		for index = #path, 1, -1 do
-			local cell = path[index]
-			if walkable(mode, floor, here, Vector3.new(cell.Position.X, standY, cell.Position.Z), careful) then
-				waypoint = cell
-				break
+-- Cornered: the way out. A jump over a one-block gap to a bigger patch (skilled bots), else a drop
+-- to the best fresh patch below, else (on the last floor) the neighbor with the most time left.
+local function escape(bot, ctx, mode, floor: number, cur, here: Vector3)
+	local memory = bot.Memory
+	local skill = bot.Skill
+	local below = floor + 1
+	local belowOthers = if below <= mode.Floors then othersOn(bot, ctx, mode, below) else {}
+
+	local hop, hopScore = nil, -math.huge
+	if skill >= 0.5 then
+		for _, dir in ORTHO do
+			local middle = mode:CellAt(floor, cur.I + dir[1], cur.J + dir[2])
+			local far = mode:CellAt(floor, cur.I + dir[1] * 2, cur.J + dir[2] * 2)
+			if solid(far) and not solid(middle) then
+				local score = openness(mode, floor, far.I, far.J)
+				if score > hopScore then
+					hop, hopScore = far, score
+				end
 			end
 		end
-		bot:MoveTo(Vector3.new(waypoint.Position.X, standY, waypoint.Position.Z))
+	end
+
+	local drop, dropScore = nil, -math.huge
+	if below <= mode.Floors then
+		local options = { cur }
+		for _, dir in DIRS do
+			local cell = mode:CellAt(floor, cur.I + dir[1], cur.J + dir[2])
+			if cell then
+				table.insert(options, cell)
+			end
+		end
+		for _, cell in options do
+			local under = mode:CellAt(below, cell.I, cell.J)
+			if solid(under) then
+				local score = openness(mode, below, under.I, under.J)
+					- crowd(under.Position, belowOthers) * 4
+					+ bot.Rng:NextNumber(0, (1 - skill) * 6)
+				if score > dropScore then
+					drop, dropScore = cell, score
+				end
+			end
+		end
+	end
+
+	if hop and hopScore >= 6 and (not drop or hopScore > dropScore + 2) then
+		memory.Target, memory.Kind = hop, "Hop"
+		bot:Jump()
+		bot:MoveTo(Vector3.new(hop.Position.X, here.Y, hop.Position.Z))
 		return
 	end
-	-- Cut off: hop across if the goal is close and the gap is short, else wait for a better goal.
-	if flat(goal.Position, here) < 10 then
-		bot:MoveTo(target)
-		local ahead = here + (target - here).Unit * 2.2
-		if not standable(mode, floor, ahead, false) and os.clock() - (bot.Memory.HoppedAt or 0) > 0.9 then
-			bot.Memory.HoppedAt = os.clock()
-			bot:Jump()
+	if drop then
+		memory.Dropping = true
+		if drop == cur then
+			bot:Stop() -- its block goes soon: down it drops, onto fresh snow
+		else
+			memory.Target, memory.Kind = drop, "Drop"
+			bot:MoveTo(Vector3.new(drop.Position.X, here.Y, drop.Position.Z))
 		end
+		return
+	end
+	-- Nowhere fresh: the neighbor that lasts longest, if it outlasts this block.
+	local best, bestLeft = nil, mode:TimeLeft(cur) + 0.15
+	for _, dir in DIRS do
+		local cell = mode:CellAt(floor, cur.I + dir[1], cur.J + dir[2])
+		if cell and cell.State ~= "Gone" and mode:TimeLeft(cell) > bestLeft then
+			best, bestLeft = cell, mode:TimeLeft(cell)
+		end
+	end
+	if best then
+		memory.Target, memory.Kind = best, "Walk"
+		bot:MoveTo(Vector3.new(best.Position.X, here.Y, best.Position.Z))
+	elseif hop then
+		memory.Target, memory.Kind = hop, "Hop"
+		bot:Jump()
+		bot:MoveTo(Vector3.new(hop.Position.X, here.Y, hop.Position.Z))
 	else
 		bot:Stop()
 	end
 end
 
--- Picks the block to break under a rival (seen at `position`), or nil if none is in reach.
-local function digTarget(bot, mode, floor: number, root: BasePart, feet: number, position: Vector3)
-	local mine = {}
-	for _, cell in mode:Supports(floor, root.Position) do
-		mine[cell] = true
+-- When to leave the block it's on (seconds left on it): skilled bots wait until just before it
+-- goes, clumsy ones are less exact and now and then forget until it's too late.
+local function leaveTime(bot): number
+	local skill = bot.Skill
+	if bot.Memory.Restless then
+		return math.huge
 	end
-	local cells = mode:Supports(floor, position)
-	table.sort(cells, function(a, b)
-		return flat(a.Position, position) < flat(b.Position, position)
-	end)
-	local reach = mode.Reach * (0.72 + 0.28 * bot.Skill)
-	local eye = root.Position + Vector3.new(0, mode.Eye, 0)
-	for _, cell in cells do
-		if mine[cell] then
-			continue
-		end
-		local nearest = Vector3.new(
-			math.clamp(eye.X, cell.Position.X - 2, cell.Position.X + 2),
-			cell.Position.Y,
-			math.clamp(eye.Z, cell.Position.Z - 2, cell.Position.Z + 2)
-		)
-		if (nearest - eye).Magnitude <= reach and mode:CanBreak(root, feet, cell, 0) then
-			-- A clumsy bot sometimes breaks the block beside the right one.
-			if bot:Chance((1 - bot.Skill) * 0.35) then
-				local other =
-					mode:CellAt(floor, cell.I + bot.Rng:NextInteger(-1, 1), cell.J + bot.Rng:NextInteger(-1, 1))
-				if other and not mine[other] and other.State ~= "Gone" and mode:CanBreak(root, feet, other, 0) then
-					return other
-				end
-			end
-			return cell
-		end
+	if bot:Chance((1 - skill) * 0.05) then
+		return 0.03 -- daydreaming
 	end
-	return nil
+	return 0.27 + 0.13 * skill + bot.Rng:NextNumber(-0.1, 0.1) * (1 - skill)
 end
 
 function Spleef.Step(bot, ctx, mode, _dt)
@@ -206,105 +262,86 @@ function Spleef.Step(bot, ctx, mode, _dt)
 		return
 	end
 	local memory = bot.Memory
-	local now = os.clock()
 	local skill = bot.Skill
+	local now = os.clock()
 	local feet = mode:Feet(humanoid, root)
 	local floor = mode:FloorAt(feet)
 	if not floor then
-		return -- in the air: hopping or falling
+		return -- in the air: jumping a gap or dropping down (it keeps heading where it was going)
 	end
 	local here = root.Position
-	memory.Aggression = memory.Aggression or (0.45 + bot.Rng:NextNumber() * 0.55)
-	memory.NextDig = memory.NextDig or now + 0.6 + bot:Reaction()
-	if memory.Careful == nil or now > (memory.CarefulUntil or 0) then
-		memory.Careful = bot:Chance(0.35 + 0.6 * skill)
-		memory.CarefulUntil = now + 2
+	if memory.Restless == nil then
+		memory.Restless = bot:Chance((1 - skill) * 0.45)
 	end
-	local careful = memory.Careful
-
-	-- Rivals: keep one for a few seconds, then look again.
-	local rival = memory.Rival
-	if rival and (not ctx:IsAlive(rival) or mode.falling[rival] or now > (memory.RivalUntil or 0)) then
-		rival = nil
-	end
-	if rival then
-		local _, rivalHumanoid, rivalRoot = ctx:GetCharacter(rival)
-		if not rivalHumanoid or not rivalRoot or mode:FloorAt(mode:Feet(rivalHumanoid, rivalRoot)) ~= floor then
-			rival = nil
-		end
-	end
-	if not rival then
-		rival = pickRival(bot, ctx, mode, floor, here)
-		memory.RivalUntil = now + bot.Rng:NextNumber(2.5, 5)
-		if rival ~= memory.Rival then
-			memory.NextDig = math.max(memory.NextDig, now + bot:Reaction())
-			memory.Seen = nil
-		end
-		memory.Rival = rival
-	end
-	local rivalRoot: BasePart? = nil
-	if rival then
-		local _, _, found = ctx:GetCharacter(rival)
-		rivalRoot = found
+	if memory.Floor ~= floor then
+		-- A new floor (the start, or it just landed): a moment to look around.
+		memory.Floor = floor
+		memory.Target, memory.Dropping, memory.Heading = nil, nil, nil
+		memory.WaitUntil = now + bot:Reaction() * 0.5
+		memory.LeaveAt = leaveTime(bot)
 	end
 
-	-- Dig under the rival's feet (skilled bots aim where it's going).
-	if rivalRoot and now >= memory.NextDig then
-		local position = rivalRoot.Position
-		local seen = memory.Seen
-		local velocity = Vector3.zero
-		if seen and now - seen.Time > 0.05 then
-			velocity = (position - seen.Position) / (now - seen.Time)
+	-- On the way somewhere: keep going until it's there (or the plan went bad).
+	local target = memory.Target
+	if target then
+		local kind = memory.Kind
+		if target.Floor ~= floor or (kind ~= "Drop" and target.State == "Gone") then
+			target = nil
+		elseif flat(target.Position, here) < 0.6 then
+			target = nil
+			memory.LeaveAt = leaveTime(bot)
 		end
-		memory.Seen = { Position = position, Time = now }
-		local lead = position + Vector3.new(velocity.X, 0, velocity.Z) * (0.1 + 0.35 * skill)
-		local cell = digTarget(bot, mode, floor, root, feet, lead)
-		if cell then
-			ctx:BotAction(bot, "Break", cell.Index)
-			local pause = 0.72 - 0.42 * skill
-			memory.NextDig = now + pause * bot.Rng:NextNumber(0.8, 1.35) / (0.7 + 0.3 * memory.Aggression)
-		end
-	end
-
-	-- Where to stand: off a block that's going, else near the rival (moving round it), else
-	-- somewhere solid away from the rim.
-	local i, j = mode:GridOf(here)
-	local under = mode:CellAt(floor, i, j)
-	local danger = not under or under.State == "Gone" or (careful and under.State == "Cracking")
-	local goal = memory.Goal
-	if goal and (goal.State == "Gone" or (careful and goal.State == "Cracking") or goal.Floor ~= floor) then
-		goal = nil
-	end
-	if danger then
-		goal = safeCell(mode, floor, here, careful)
-		memory.GoalUntil = now + 0.6
-	elseif not goal or now > (memory.GoalUntil or 0) then
-		if rivalRoot then
-			-- A spot within reach of the rival, from a new angle every so often.
-			local away = Vector3.new(here.X - rivalRoot.Position.X, 0, here.Z - rivalRoot.Position.Z)
-			local angle = math.atan2(away.Z, away.X) + bot.Rng:NextNumber(-0.9, 0.9)
-			local distance = 9 - 3 * memory.Aggression + bot.Rng:NextNumber(-1, 1)
-			local spot = rivalRoot.Position + Vector3.new(math.cos(angle), 0, math.sin(angle)) * distance
-			local gi, gj = mode:GridOf(spot)
-			goal = mode:CellAt(floor, gi, gj)
-			if not goal or goal.State ~= "Solid" then
-				goal = safeCell(mode, floor, spot, careful)
-			end
-			memory.GoalUntil = now + bot.Rng:NextNumber(0.9, 1.8) - skill * 0.4
-		else
-			local angle = bot.Rng:NextNumber(0, math.pi * 2)
-			local spot = mode.center
-				+ Vector3.new(math.cos(angle), 0, math.sin(angle)) * bot.Rng:NextNumber(0, mode.radius * 2.4)
-			goal = safeCell(mode, floor, spot, careful)
-			memory.GoalUntil = now + bot.Rng:NextNumber(2, 4)
+		memory.Target = target
+		if target then
+			bot:MoveTo(Vector3.new(target.Position.X, here.Y, target.Position.Z))
+			return
 		end
 	end
-	memory.Goal = goal
-	if goal and flat(goal.Position, here) > 1 then
-		walkTo(bot, mode, floor, root, goal, careful)
-	else
+	local cur = cellUnder(mode, floor, here)
+	if not cur then
+		return -- over a hole: the mode drops it in a moment
+	end
+	if memory.Dropping then
 		bot:Stop()
+		return -- waiting for its block to go (or already falling)
 	end
+	if now < (memory.WaitUntil or 0) then
+		bot:Stop()
+		return
+	end
+	-- Stay while the block holds (it fades from the moment it was stepped on).
+	local left = mode:TimeLeft(cur)
+	if left > (memory.LeaveAt or 0.35) then
+		bot:Stop()
+		return
+	end
+
+	local others = othersOn(bot, ctx, mode, floor)
+	local depth = 2 + math.floor(skill * 5 + 0.5)
+	local nextCell, reach = plan(bot, mode, floor, cur, others, depth)
+	if nextCell and reach > 3 then
+		memory.CorneredAt = nil
+		memory.Target, memory.Kind = nextCell, "Walk"
+		local way = Vector3.new(nextCell.I - cur.I, 0, nextCell.J - cur.J)
+		memory.Heading = if way.Magnitude > 0 then way.Unit else nil
+		bot:MoveTo(Vector3.new(nextCell.Position.X, here.Y, nextCell.Position.Z))
+		return
+	end
+	-- Cornered. Skilled bots see it at once; clumsy ones take a moment (and their block keeps going).
+	if not memory.CorneredAt then
+		memory.CorneredAt = now
+	end
+	if now - memory.CorneredAt < bot:Reaction() * 0.4 and left > 0.25 then
+		if nextCell then
+			memory.Target, memory.Kind = nextCell, "Walk"
+			bot:MoveTo(Vector3.new(nextCell.Position.X, here.Y, nextCell.Position.Z))
+		else
+			bot:Stop()
+		end
+		return
+	end
+	memory.CorneredAt = nil
+	escape(bot, ctx, mode, floor, cur, here)
 end
 
 return Spleef
