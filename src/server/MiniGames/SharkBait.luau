@@ -99,7 +99,7 @@ SharkBait.RAFT_MESH_RADIUS = 7 -- SharkBaitRaft's deck at scale 1 (its deck top 
 SharkBait.RAFT_MESH_HEIGHT = 2
 
 SharkBait.SHARK_SPEED = 22
-SharkBait.SWIM_SPEED = 10
+SharkBait.SWIM_SPEED = 7 -- (under half the decks' 16: owner, "In shark bait you should be slowed in water")
 SharkBait.WOBBLE = 1.2 -- warning before a chomped raft flips
 SharkBait.DUNK = 3 -- how long a flipped raft stays under
 SharkBait.SAFE = 2.5 -- a raft that just came up can't be chomped for this long
@@ -1954,14 +1954,17 @@ function SharkBait:_tick(now: number)
 			self.wet[player] = wet
 			self.wetSince[player] = if wet then now else nil
 			ctx:SetPlayerShared(player, "InWater", wet)
-			if not ctx:IsStunned(player) then
-				humanoid.WalkSpeed = if wet then SharkBait.SWIM_SPEED else ctx.WalkSpeed
-			end
 			-- (One splash per dip: bobbing up and down at a raft's side doesn't make a fountain.)
 			if wet and now - (self.splashAt[player] or -math.huge) > 1.5 then
 				self.splashAt[player] = now
 				ctx:Fire(nil, "Splash", player.UserId, round(position.X, 2), round(position.Z, 2))
 			end
+		end
+		-- The water's pace, kept at every check rather than set once on the way in, so nothing that
+		-- resets a character's speed meanwhile leaves a swimmer at full speed in the water.
+		local pace = if wet then SharkBait.SWIM_SPEED else ctx.WalkSpeed
+		if humanoid.WalkSpeed ~= pace and not ctx:IsStunned(player) then
+			humanoid.WalkSpeed = pace
 		end
 		if wet and not physics and now - (self.wetSince[player] or now) >= CLIMB_TIME then
 			-- No physics on the test servers: a swimmer that reaches a raft's side climbs up it (on a
