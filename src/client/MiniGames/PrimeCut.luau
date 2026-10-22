@@ -15,10 +15,13 @@
 -- (under the HUD on phones), and every grill looked the same from there: a steel rim and a black
 -- grate over orange coals. Now the title starts with your team in its colour ("★ RED  •  STEAK 1/3
 -- •  7.3"), and before GO it's the whole title ("YOU'RE ON ★ RED", after the rules card's tab says
--- the same); a badge floats over your grill on the steak's left (YOU, your shape on a disc in your
--- colour, your team's name), clear of the steak and of everywhere your knife can go; your card in
--- the reveal says YOU; and the server paints your grill's rim and side tables and the rug under it in
--- your colour (MiniGames/PrimeCut).
+-- the same); your card in the reveal says YOU; and the server paints your grill's rim and side
+-- tables and the rug under it in your colour (MiniGames/PrimeCut).
+--
+-- Sweep pass (owner, of the top HUD and the team badge that floated over your grill on the steak's
+-- left: "The top circled is fine. we dont need both."): the badge is gone. The HUD's title, the
+-- team pills' YOU mark and the before-GO "YOU'RE ON ..." title still say which team you're on, and
+-- so do your grill's colours.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -39,10 +42,6 @@ local REPEAT_RATE, REPEAT_FAST = 12, 20 -- ...this many nudges a second, speedin
 local SEND_GAP = 0.05 -- at most this often a batch goes out
 local CARD_GAP = 0.32 -- the reveal shows one team's pieces after another
 local FRAME_PAD = 0.8 -- studs of grill shown round a steak in a reveal picture
--- My team's badge: where it floats in my grill's frame (over the coals left of the steak: the knife
--- stops 1.2 studs past a steak's side, at most 8.5 out) and its size in studs.
-local BADGE_SPOT = Vector3.new(-11.6, 2.2, 2)
-local BADGE_SIZE = Vector2.new(3.4, 4.8)
 
 type Station = {
 	Team: string,
@@ -304,76 +303,6 @@ function PrimeCut.Start(api)
 				piece.Color = color
 			end
 		end
-	end
-
-	-- My team's badge over my grill: YOU, my shape on a disc in my colour, my team's name. It's in
-	-- the world (a glance at the steak takes it in, on every screen) but never in front of the knife,
-	-- which would hide it if it ever came that far.
-	if myStation and mine then
-		local anchor = UIKit.new("Part", {
-			Name = "TeamBadge",
-			Anchored = true,
-			CanCollide = false,
-			CanQuery = false,
-			CanTouch = false,
-			CastShadow = false,
-			Transparency = 1,
-			Size = Vector3.one * 0.2,
-			CFrame = myStation.Frame * CFrame.new(BADGE_SPOT),
-			Parent = api.World,
-		})
-		local badge = UIKit.new("BillboardGui", {
-			Name = "Badge",
-			Adornee = anchor,
-			Size = UDim2.fromScale(BADGE_SIZE.X, BADGE_SIZE.Y),
-			LightInfluence = 0,
-			MaxDistance = 150,
-			Parent = anchor,
-		})
-		UIKit.Label({
-			Name = "You",
-			Text = "YOU",
-			Font = Theme.Fonts.Display,
-			TextScaled = true,
-			Size = UDim2.fromScale(1, 0.22),
-			Parent = badge,
-			Children = { UIKit.TextStroke(0) },
-		})
-		local disc = UIKit.new("Frame", {
-			Name = "Disc",
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.fromScale(0.5, 0.24),
-			Size = UDim2.fromScale(1, 0.52),
-			BackgroundColor3 = myColor,
-			Parent = badge,
-			Children = {
-				UIKit.Round(),
-				UIKit.Stroke(Color3.new(1, 1, 1), 3, 0),
-				UIKit.new("UIAspectRatioConstraint", { AspectRatio = 1 }),
-			},
-		})
-		UIKit.Label({
-			Name = "Shape",
-			Text = Teams.Shapes[mine] or "",
-			Font = Theme.Fonts.Display,
-			TextScaled = true,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.52),
-			Size = UDim2.fromScale(0.7, 0.7),
-			Parent = disc,
-			Children = { UIKit.TextStroke(0) },
-		})
-		UIKit.Label({
-			Name = "Team",
-			Text = string.upper(mine),
-			Font = Theme.Fonts.Display,
-			TextScaled = true,
-			TextColor3 = myColor,
-			Position = UDim2.fromScale(0, 0.78),
-			Size = UDim2.fromScale(1, 0.22),
-			Parent = badge,
-			Children = { UIKit.TextStroke(0) },
-		})
 	end
 
 	local arena = api:Arena(5)

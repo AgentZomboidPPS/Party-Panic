@@ -55,6 +55,12 @@
 -- lane showed it done.
 -- When a teammate leaves, the belt's new owners are shared before the player who took over is told,
 -- so their "You now run" hint goes under their new lane instead of over it.
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): a results line like "Yellow 🎂 32 ⭐ 13
+-- • 33 layers" measured wider than the results card's column at its smallest text and ended in "...";
+-- it's "Yellow 🎂32 ⭐13 · 33 layers" now, which fits for any two-digit figures. The team marks are
+-- Shared/Teams' own (Red's ★ draws as a missing-glyph box in the game's fonts; the shared marks get
+-- one fix for every game).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -91,7 +97,7 @@ CakeFactory.BELT_TOP = 3.2 -- height of the belt's surface
 CakeFactory.KINDS = { "Sponge", "Cream", "Berry" }
 CakeFactory.Icons = { Sponge = "🍰", Cream = "🍦", Berry = "🍓" }
 CakeFactory.Machines = { Sponge = "CakePress", Cream = "CakeNozzle", Berry = "CakeHopper" }
-CakeFactory.Shapes = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
+CakeFactory.Shapes = Teams.Shapes -- (every game marks a team the same way)
 
 local LINE_GAP = 64 -- between neighboring lines' middles
 local STAND_Z = -6.4 -- where players stand, in front of their belt
@@ -876,7 +882,7 @@ function CakeFactory:_add(player: Player, sentAt: any)
 	end
 	local now = ctx:Now()
 	if now < worker.JamUntil then
-		return -- the client shows ✕ JAMMED (and holds presses) for as long
+		return -- the client shows × JAMMED (and holds presses) for as long
 	end
 	local line, owned = self:StationsOf(player)
 	if not line or #owned == 0 then
@@ -1111,7 +1117,7 @@ function CakeFactory:Points(team: string): number
 	return if line then line.Done + line.Stars else 0
 end
 
--- "★ RED leads 12–9" or "TIED at 12" (points among teams with players), nil before anyone scores.
+-- "◆ YELLOW leads 12–9" or "TIED at 12" (points among teams with players), nil before anyone scores.
 function CakeFactory:_statusText(): string?
 	local top, second, leader, shared = -1, -1, nil, false
 	for _, team in self.order do
@@ -1188,7 +1194,8 @@ end
 
 -- Team results (most points first, then perfect presses); each player's line shows the team's 🎂 and
 -- ⭐ cakes as its pill showed them and their own good layers, the figure the standings showed all
--- round ("Yellow 🎂 12 ⭐ 3 • 14 layers": short enough to read whole on the results card).
+-- round ("Yellow 🎂32 ⭐13 · 33 layers": measured to fit the results card's column at its smallest
+-- text with two-digit figures for every team).
 function CakeFactory:GetResults()
 	local results = self.context:TeamResults()
 	for _, entry in results.Entries do
@@ -1198,7 +1205,7 @@ function CakeFactory:GetResults()
 		end
 		local worker = self.workers[entry.Player]
 		if worker and line then
-			entry.ScoreText = `{entry.Team} 🎂 {line.Done} ⭐ {line.Stars} • {worker.Good} layers`
+			entry.ScoreText = `{entry.Team} 🎂{line.Done} ⭐{line.Stars} · {worker.Good} layers`
 		end
 	end
 	results.WinningTeam = self:_leader()

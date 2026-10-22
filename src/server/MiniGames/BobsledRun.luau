@@ -38,6 +38,10 @@
 -- (they were cut off), and the server takes presses as fast as the client lets a rider make them,
 -- so a quick change of mind that your screen shows is the lean that counts (a 0.08 s limit by
 -- arrival dropped it when the network bunched two presses together).
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): the team marks are Shared/Teams' own
+-- (Red's ★ draws as a missing-glyph box in the game's fonts; the shared marks get one fix for every
+-- game).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
@@ -52,7 +56,7 @@ local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 
 local BobsledRun = MiniGame.Define("BobsledRun", { Results = "Team" })
 
-BobsledRun.Shapes = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
+BobsledRun.Shapes = Teams.Shapes -- (every game marks a team the same way)
 
 local SEAT_Y = 1.9 -- a seated rider's root above the sled's pivot (runner bottoms)
 local PRE_UNITS = 3 -- straights behind the start line (the start house)

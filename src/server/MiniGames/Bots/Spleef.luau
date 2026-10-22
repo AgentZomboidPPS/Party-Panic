@@ -23,11 +23,22 @@
 -- floor), so it never walks off the floors (owner's report of a bot out on the snowfield).
 -- Bots step on blocks exactly like players (the mode judges everyone's feet the same way), and a
 -- bot left over a hole is dropped by the mode like anyone else (Spleef:_falls).
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): a hop over a one-block gap used to jump
+-- from wherever the bot stood, usually the middle of its block. On a real server a jump at a walk
+-- carries a character about 8.7 studs (JumpHeight 7.2, gravity 196.2, 16 studs/s), and the far
+-- block's edge is 9 studs from that middle, so every such hop fell short into the gap (the test
+-- servers' scripted jump is longer, so only real games showed it). Now the bot runs up first and
+-- jumps once it's RUN_UP past its block's middle toward the gap (at once if it already is), landing
+-- well onto the far block.
 
 local Spleef = {}
 
 local ORTHO = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
 local DIRS = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }
+-- A hop's run-up: how far past the middle of its block (toward the gap) a bot jumps. It's still on
+-- its block until about 3.5 out, and a brain step comes every 0.15 s (2.4 studs at a walk).
+local RUN_UP = 1
 
 local function flat(a: Vector3, b: Vector3): number
 	return Vector2.new(a.X - b.X, a.Z - b.Z).Magnitude
@@ -200,6 +211,27 @@ local function bridge(mode, floor: number, cur)
 	return cell, bestScore
 end
 
+-- How far `here` has run from `from`'s middle toward `to` (studs, flat; negative: the other way).
+local function runUp(from, to, here: Vector3): number
+	local way = Vector3.new(to.Position.X - from.Position.X, 0, to.Position.Z - from.Position.Z)
+	if way.Magnitude < 1e-3 then
+		return 0
+	end
+	return Vector3.new(here.X - from.Position.X, 0, here.Z - from.Position.Z):Dot(way.Unit)
+end
+
+-- A hop from block `cur` over the gap to `hop`: heads for it, and jumps now if it has already run up
+-- toward the gap, else once it has (Spleef.Step).
+local function startHop(bot, cur, hop, here: Vector3)
+	local memory = bot.Memory
+	memory.Target, memory.Kind, memory.HopFrom = hop, "Hop", cur
+	bot:MoveTo(Vector3.new(hop.Position.X, here.Y, hop.Position.Z))
+	if runUp(cur, hop, here) >= RUN_UP then
+		memory.HopFrom = nil
+		bot:Jump()
+	end
+end
+
 -- Cornered: the way out. A jump over a one-block gap to a bigger patch (skilled bots), else a drop
 -- to the best fresh patch below, else (on the last floor) the neighbor with the most time left.
 local function escape(bot, ctx, mode, floor: number, cur, here: Vector3)
@@ -253,9 +285,7 @@ local function escape(bot, ctx, mode, floor: number, cur, here: Vector3)
 	end
 
 	if hop and hopScore >= 5 and (not drop or hopScore > dropScore) then
-		memory.Target, memory.Kind = hop, "Hop"
-		bot:Jump() -- from the middle of its block: the jump carries it over the gap
-		bot:MoveTo(Vector3.new(hop.Position.X, here.Y, hop.Position.Z))
+		startHop(bot, cur, hop, here)
 		return
 	end
 	if drop then
@@ -280,9 +310,7 @@ local function escape(bot, ctx, mode, floor: number, cur, here: Vector3)
 		memory.Target, memory.Kind = best, "Walk"
 		bot:MoveTo(Vector3.new(best.Position.X, here.Y, best.Position.Z))
 	elseif hop then
-		memory.Target, memory.Kind = hop, "Hop"
-		bot:Jump()
-		bot:MoveTo(Vector3.new(hop.Position.X, here.Y, hop.Position.Z))
+		startHop(bot, cur, hop, here)
 	else
 		bot:Stop()
 	end
@@ -321,7 +349,7 @@ function Spleef.Step(bot, ctx, mode, _dt)
 	if memory.Floor ~= floor then
 		-- A new floor (the start, or it just landed): a moment to look around.
 		memory.Floor = floor
-		memory.Target, memory.Dropping, memory.Heading = nil, nil, nil
+		memory.Target, memory.Dropping, memory.Heading, memory.HopFrom = nil, nil, nil, nil
 		memory.WaitUntil = now + bot:Reaction() * 0.5
 		memory.LeaveAt = leaveTime(bot)
 	end
@@ -339,8 +367,15 @@ function Spleef.Step(bot, ctx, mode, _dt)
 		memory.Target = target
 		if target then
 			bot:MoveTo(Vector3.new(target.Position.X, here.Y, target.Position.Z))
+			-- A hop: the jump once it has run up toward the gap (from its block's middle it falls short).
+			local from = memory.HopFrom
+			if kind == "Hop" and from and runUp(from, target, here) >= RUN_UP then
+				memory.HopFrom = nil
+				bot:Jump()
+			end
 			return
 		end
+		memory.HopFrom = nil
 	end
 	local cur = cellUnder(mode, floor, here)
 	if not cur then

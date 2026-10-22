@@ -53,6 +53,17 @@
 -- client report (PP_ClientReports, read with tools/checks/client_reports.py), so the next report
 -- says what held them. Heights are measured from each character's own feet (its hip height), so
 -- tall and short avatars play by the same rules.
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): the watchdog timed "not moving" from
+-- when a bot last got anywhere, including time it stood with nowhere to go (a shark lurking by
+-- bait, a swimmer at the spot it wandered to), and "trying to move" from its goal at that instant.
+-- So a bot handed a new goal after standing still 3 s was moved and logged as stuck if the check
+-- came before it had walked the 0.75 studs that count as getting somewhere (a few frames), on test
+-- and live servers alike: most likely the swimmer bot a test server's bots round once reported
+-- "trying to move, not moving, nothing in the way". It now has to have been trying to go somewhere
+-- for the whole STILL_TIME as well. And a swimmer's results line "🏊 16 coins • never chomped!"
+-- measured wider than the results card's column at its smallest text (it ended in "..."): it says
+-- "no chomps!" now.
 
 local PhysicsService = game:GetService("PhysicsService")
 local RunService = game:GetService("RunService")
@@ -182,6 +193,11 @@ export type Raft = {
 	Collider: BasePart,
 	Neighbours: { number },
 }
+
+-- The watchdog's look at someone (see _watch): where they were when they last got anywhere and
+-- since when, since when they've been in a state they can't walk in, and (bots) since when they've
+-- been trying to go somewhere.
+type Watch = { At: Vector3, Since: number, Odd: number?, Want: number? }
 
 export type Coin = {
 	Id: number,
@@ -328,7 +344,7 @@ function SharkBait:Prepare()
 	-- The watchdog: where each one was when they last got anywhere (and since when), when they went
 	-- into a state they can't walk in, how often a shark was put back lately, when each was last
 	-- freed, and what's been reported about whom this round.
-	self.watch = {} :: { [any]: { At: Vector3, Since: number, Odd: number? } }
+	self.watch = {} :: { [any]: Watch }
 	self.pins = {} :: { [any]: { number } }
 	self.freedAt = {} :: { [any]: number }
 	self.records = {} :: { [any]: { string } }
@@ -1355,10 +1371,10 @@ function SharkBait:_watch(player: any, humanoid: Humanoid, root: BasePart, now: 
 	local position = root.Position
 	local entry = self.watch[player]
 	if not entry or (position - entry.At).Magnitude > 0.75 then
-		entry = { At = position, Since = now, Odd = nil }
+		entry = { At = position, Since = now, Odd = nil, Want = nil }
 		self.watch[player] = entry
 	end
-	local watched = entry :: { At: Vector3, Since: number, Odd: number? }
+	local watched = entry :: Watch
 	-- (Humanoid states only mean something where physics runs: not on the test servers.)
 	watched.Odd = if physics and ODD_STATES[humanoid:GetState()] then watched.Odd or now else nil
 	local still = now - watched.Since
@@ -1366,8 +1382,17 @@ function SharkBait:_watch(player: any, humanoid: Humanoid, root: BasePart, now: 
 		self:_rescue(player, "a state it can't walk in", nil)
 		return
 	end
-	local way = if still >= STILL_TIME then self:_wayOf(player, humanoid, root) else nil
-	if way and not self:_blocked(root, position.Y - legsOf(humanoid, root), way) then
+	-- Stuck only if it has been trying to go somewhere all that time: a bot that stood with nowhere
+	-- to go (lurking by bait, at the spot it wandered to) and has just been given somewhere hasn't
+	-- had a moment to get going yet.
+	local way = self:_wayOf(player, humanoid, root)
+	watched.Want = if way then watched.Want or now else nil
+	if
+		way
+		and still >= STILL_TIME
+		and now - (watched.Want or now) >= STILL_TIME
+		and not self:_blocked(root, position.Y - legsOf(humanoid, root), way)
+	then
 		self:_rescue(player, "trying to move, not moving, nothing in the way", nil)
 	end
 end
@@ -2017,7 +2042,7 @@ function SharkBait:GetResults()
 		else
 			local times = self.chomped[player] or 0
 			text = `🏊 {state.Score} {if state.Score == 1 then "coin" else "coins"} • `
-				.. if times == 0 then "never chomped!" elseif times == 1 then "chomped once" else `chomped {times}x`
+				.. if times == 0 then "no chomps!" elseif times == 1 then "chomped once" else `chomped {times}x`
 		end
 		table.insert(entries, {
 			Player = player,

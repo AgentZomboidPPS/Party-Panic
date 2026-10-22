@@ -21,6 +21,9 @@
 -- Bots mash WIND at their own pace through ctx:BotAction (Bots/MechaMarathon.luau), through the same
 -- counter as players. Nothing on the field can touch anyone (the toys are only animated on clients
 -- and decide nothing), so there's no hazard to apply to bots on the server.
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): the start banner's ★ stars drew as
+-- missing-glyph boxes (the game's fonts don't have ★); they're ⭐ now.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -327,7 +330,7 @@ local function buildField(ctx, origin: Vector3, laneCount: number)
 		Parent = field,
 	})
 	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
-		Build.SurfaceText(banner, face, "★  WIND · FLY · WIN!  ★", {
+		Build.SurfaceText(banner, face, "⭐  WIND · FLY · WIN!  ⭐", {
 			TextColor3 = rgb(255, 250, 235),
 			TextStrokeTransparency = 0.6,
 			PixelsPerStud = 14,

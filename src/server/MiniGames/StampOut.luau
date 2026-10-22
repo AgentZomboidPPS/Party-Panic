@@ -30,6 +30,12 @@
 --   * Bots: Bots/StampOut.luau. Their jumps go through BotService like a player's; their hops are
 --     flown by the server here (the same arc a player's device flies), and the same landing check
 --     stamps for them (hazard parity: nothing here only happens on clients).
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."; the owner's "Bots are still rubber
+-- banding on spleef" was this): a bot's root is anchored for its hop and unanchored at the landing
+-- (and at the end), which put it back to automatic network ownership, so the engine could hand the
+-- bot to the nearest player's device and it snapped about. Each unanchor now gives it straight back
+-- to the server (giveBack).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -54,6 +60,14 @@ local SYNC_EVERY = 0.5
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
+end
+
+-- Lets a bot's root go after a hop the server flew, and keeps the bot the server's: a part that was
+-- anchored goes back to automatic network ownership, and the engine would hand the bot to the
+-- nearest player's device (it snaps about as it hops between devices).
+local function giveBack(root: BasePart)
+	root.Anchored = false
+	pcall(root.SetNetworkOwner, root, nil)
 end
 
 -- How far below the root's center a character's soles are.
@@ -462,7 +476,7 @@ function StampOut:FlyBots(dt: number)
 		if not character or not root or not ctx:IsAlive(bot) then
 			self.Flying[bot] = nil
 			if root then
-				root.Anchored = false
+				giveBack(root)
 			end
 			continue
 		end
@@ -474,7 +488,7 @@ function StampOut:FlyBots(dt: number)
 		character:PivotTo(CFrame.lookAt(position, position + flight.Direction))
 		if flight.T >= flight.Airtime then
 			self.Flying[bot] = nil
-			root.Anchored = false
+			giveBack(root)
 			root.AssemblyLinearVelocity = Vector3.zero
 		end
 	end
@@ -598,7 +612,7 @@ function StampOut:Stop()
 	for bot in self.Flying do
 		local _, _, root = ctx:GetCharacter(bot)
 		if root then
-			root.Anchored = false
+			giveBack(root)
 		end
 	end
 	self.Flying = {}

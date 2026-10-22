@@ -4,7 +4,7 @@
 -- tips ruined ones into the bin and stacks the boxes on each team's shelf.
 --
 -- This player gets the ADD button and a lane per machine they run: cakes slide towards the gate in
--- the middle, each marked ✓ (needs your layer: tap when it's in the gate), ✕ (missing a layer or
+-- the middle, each marked ✓ (needs your layer: tap when it's in the gate), × (missing a layer or
 -- ruined: let it go) or ● (already done). The gate posts over your machine light up and the gate in
 -- the lane grows and says TAP! while a cake that needs you is inside, so the cue is never color
 -- alone. The server judges every press; the words over your machine (and in the lane's gate) are
@@ -12,12 +12,16 @@
 -- belt as your screen showed it; a lit gate is always a good press. The moment you press, the
 -- cake you pressed for stops asking (its gate goes dark, its dot shows ●) until the server's
 -- answer arrives, so the cue never invites a second tap that would ruin it. A press with no cake
--- near jams the machine: ADD turns red and says ✕ JAMMED. The pills show each team's 🎂 cakes and
+-- near jams the machine: ADD turns red and says × JAMMED. The pills show each team's 🎂 cakes and
 -- ⭐ cakes (every layer perfect, worth 2); the camera starts behind you, looking at your machine.
 --
 -- Audit pass (owner: "it just has to work"): when a teammate leaves, the "You now run" hint lands
 -- under the lane you gained (the server sends the new owners first; it used to cover that lane),
 -- and on phones it lists just the machines' icons, short enough to stay clear of the move stick.
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): the ✕ in every verdict (✕ JAMMED,
+-- ✕ SPLAT!...), on the lane dots and over a ruined cake was drawn as a missing-glyph box: the game's
+-- fonts don't have it. The verdicts and dots use × now, and a ruined cake gets a ❌.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -656,19 +660,16 @@ function CakeFactory.Start(api)
 			text, color, short = "GOOD!", Color3.fromRGB(150, 230, 255), "✓ GOOD!"
 		elseif kind == "miss" then
 			streak = 0
-			text, color, short = "✕ NO CAKE!", Theme.Colors.Yellow, "✕ JAMMED"
+			text, color, short = "× NO CAKE!", Theme.Colors.Yellow, "× JAMMED"
 		elseif kind == "ruined" then
-			text, color, short = "✕ ALREADY RUINED", Theme.Colors.Yellow, "✕ RUINED"
+			text, color, short = "× ALREADY RUINED", Theme.Colors.Yellow, "× RUINED"
 		elseif kind == "late" then
 			streak = 0
-			text, color, short = "MISSED ONE!", Theme.Colors.Yellow, "✕ MISSED"
+			text, color, short = "MISSED ONE!", Theme.Colors.Yellow, "× MISSED"
 		else
 			streak = 0
-			text = if kind == "wrong"
-				then "✕ MISSING LAYER!"
-				elseif kind == "double" then "✕ TWICE!"
-				else "✕ SPLAT!"
-			color, short = RED, "✕ RUINED"
+			text = if kind == "wrong" then "× MISSING LAYER!" elseif kind == "double" then "× TWICE!" else "× SPLAT!"
+			color, short = RED, "× RUINED"
 		end
 		popup(world(myLine, machine.X, top + 3, -3.4), text, color)
 		for _, lane in lanes do
@@ -1064,7 +1065,7 @@ function CakeFactory.Start(api)
 						if anchorPart then
 							local gui = billboard(api, anchorPart, Vector2.new(44, 44), Vector3.new(0, 3.6, 0), 80)
 							gui.Name = "Ruined"
-							label(gui, "✕", 36, RED)
+							label(gui, "❌", 36, RED)
 							view.Mark = gui
 						end
 					end
@@ -1191,7 +1192,7 @@ function CakeFactory.Start(api)
 				dot.BackgroundColor3 = if needs then GREEN elseif done then Color3.fromRGB(150, 160, 190) else RED
 				local markLabel = dot:FindFirstChild("Mark") :: TextLabel?
 				if markLabel then
-					markLabel.Text = if needs then "✓" elseif done then "●" else "✕"
+					markLabel.Text = if needs then "✓" elseif done then "●" else "×"
 				end
 				if needs and math.abs(offset) <= window then
 					ready = true
@@ -1241,7 +1242,7 @@ function CakeFactory.Start(api)
 			end
 			if jammed ~= addJammed then
 				addJammed = jammed
-				add:SetText(if jammed then "✕ JAMMED" else "ADD")
+				add:SetText(if jammed then "× JAMMED" else "ADD")
 			end
 		end
 

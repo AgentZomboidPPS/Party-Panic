@@ -18,6 +18,10 @@
 -- seconds after GO. It used to start with the rules card, which hides this HUD, and was gone before
 -- the card was. The sled model waits up to 30 s for its template (it gave up after 5 s, and a slow
 -- phone that got the template later drew no sleds all round).
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): the team marks are Shared/Teams' own
+-- (Red's ★ draws as a missing-glyph box in the game's fonts; the shared marks get one fix for every
+-- game).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,7 +37,7 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local BobsledRun = {}
 
-local SHAPES = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
+local SHAPES = Teams.Shapes -- (every game marks a team the same way)
 local SEAT_Y = 1.9
 local LEAN_HOLD = 1.3 -- seconds a lean shows on a rider
 local LEFT_ARROW, RIGHT_ARROW = "◀", "▶"

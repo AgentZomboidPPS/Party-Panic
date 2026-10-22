@@ -27,7 +27,12 @@
 -- Which grill is whose (owner: "I couldnt tell what color I was on prime cut."): each player's camera
 -- looks straight down at their grate, where only the grill's rim and side tables show, so those are
 -- painted in the team's color as well as the body and hood, and the team's rug lies under its grill.
--- The client half adds YOU and the team to its HUD and a badge over the player's own grill.
+-- The client half adds YOU and the team to its HUD (its badge over the player's own grill went in
+-- the sweep pass, owner: "The top circled is fine. we dont need both.").
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): the team marks on the grills' signs,
+-- the status line and the announcements are Shared/Teams' own, like the client half's (Red's ★
+-- draws as a missing-glyph box in the game's fonts; the shared marks get one fix for every game).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
@@ -42,7 +47,7 @@ local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 
 local PrimeCut = MiniGame.Define("PrimeCut", { Results = "Team" })
 
-PrimeCut.Shapes = { Red = "★", Blue = "●", Green = "▲", Yellow = "◆" }
+PrimeCut.Shapes = Teams.Shapes -- (every game marks a team the same way)
 
 local SPACING = 44 -- between the grills
 local STAND_Z = 17.5 -- where a team stands, in front of its grill (clear of the knife's handle)

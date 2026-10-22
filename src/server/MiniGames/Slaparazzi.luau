@@ -33,6 +33,9 @@
 -- Bots pass (owner: "Bots are terrible at slaparazzi"): the rules are unchanged; the bot brain
 -- (Bots/Slaparazzi) now plays like a decent player, and the mode hands it the backdrop wall
 -- (self.backdrop) so a bot thrown round behind it walks round its end instead of into it.
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): the backdrop's ★ SLAPARAZZI ★ title and
+-- its starry pattern drew missing-glyph boxes (the game's fonts don't have ★); they're ⭐ now.
 
 local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -368,7 +371,7 @@ function Slaparazzi:_buildArena()
 		Parent = arena,
 	})
 	self.backdrop = wall -- bots thrown behind it walk round it (Bots/Slaparazzi)
-	local title = Build.SurfaceText(wall, Enum.NormalId.Back, "★ SLAPARAZZI ★", {
+	local title = Build.SurfaceText(wall, Enum.NormalId.Back, "⭐ SLAPARAZZI ⭐", {
 		TextColor3 = Color3.fromRGB(255, 214, 90),
 		PixelsPerStud = 16,
 		Padding = 0.02,
@@ -391,7 +394,7 @@ function Slaparazzi:_buildArena()
 	for index = 1, 21 do
 		local cell = Instance.new("TextLabel")
 		cell.BackgroundTransparency = 1
-		cell.Text = if index % 2 == 0 then "📸" else "★"
+		cell.Text = if index % 2 == 0 then "📸" else "⭐"
 		cell.TextScaled = true
 		cell.Font = Enum.Font.FredokaOne
 		cell.TextColor3 = if index % 2 == 0 then Color3.new(1, 1, 1) else Color3.fromRGB(255, 120, 190)

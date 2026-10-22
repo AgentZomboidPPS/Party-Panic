@@ -26,6 +26,11 @@
 -- shut the umbrella and drop, let go to float. Only changes are sent ("Input": steer, open).
 -- The falling feel comes from cloud puffs streaming up past the sky at different depths (fewer with
 -- reduced effects).
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): four of the twelve shapes on the
+-- fallers' name tags (★ ✚ ☾ ✦) aren't in the tags' font and drew as the same missing-glyph box, so
+-- those fallers had no shape to tell them apart by. They're ⭐ ➕ 🌙 ✨ now (measured on a test
+-- server: drawn, like the ☀ already there).
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
@@ -65,7 +70,7 @@ local COLORS = {
 	Color3.fromRGB(120, 90, 60),
 	Color3.fromRGB(70, 70, 90),
 }
-local SHAPES = { "★", "●", "▲", "◆", "■", "♥", "♣", "♠", "✚", "☀", "☾", "✦" }
+local SHAPES = { "⭐", "●", "▲", "◆", "■", "♥", "♣", "♠", "➕", "☀", "🌙", "✨" }
 
 local JOINTS = {
 	UpperTorso = "Waist",
