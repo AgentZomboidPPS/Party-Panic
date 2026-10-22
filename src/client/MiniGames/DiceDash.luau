@@ -183,7 +183,7 @@ function DiceDash.Start(api)
 		gui.MaxDistance = 140
 		gui.Enabled = false
 		gui.Adornee = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
-		gui.Parent = model
+		gui.Parent = api.World -- (it stays up while the die is put away during the hops)
 		local label = UIKit.Label({
 			Name = "Value",
 			Text = "",
@@ -551,7 +551,10 @@ function DiceDash.Start(api)
 				local value = tonumber(entry.D)
 				local walking = turn.M ~= nil and value ~= nil and now < turn.M + value * Board.HOP + 0.1
 				local show = rolling or walking
-				die.Model.Parent = if rolling then api.World else nil
+				local parent = if rolling then api.World else nil
+				if die.Model.Parent ~= parent then
+					die.Model.Parent = parent
+				end
 				die.Board.Enabled = show and value ~= nil
 				if rolling then
 					local center = Vector3.new(feet.X, headTop + DIE_LIFT + die.Size / 2, feet.Z)
@@ -620,6 +623,7 @@ function DiceDash.Start(api)
 		for key, die in dice do
 			if not seen[key] then
 				die.Model:Destroy()
+				die.Board:Destroy()
 				dice[key] = nil
 			end
 		end
