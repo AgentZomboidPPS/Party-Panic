@@ -56,7 +56,7 @@ local function hardestPower(): number
 end
 
 local function posesFor(screen): { string }
-	return { "Play", if screen.Touch then "VoteTouch" else "VotePc" }
+	return { "Play", "Vote" }
 end
 
 test("SkeeBallView.Drag: pulling down is power, sideways aims the other way, both clamped", function()
@@ -108,15 +108,21 @@ test("SkeeBallView: the ring board shows, and keeps clear of the vote cards whil
 			local ballBottom = SkeeBallView.Project(pose, aspect, ballPoint(-SkeeBall.BALL_R)) * screen.H
 			expectTrue(ballBottom < screen.H, `{screen.Name} {name}: the ball is off the screen`)
 			if screen.Touch then
-				-- Under Roblox's top bar row; while voting, under the cards' row and its sit-out
-				-- note (VoteController: 2 down, 12 for the tag, 94 cards, 6, a 28 note).
-				local clear = if name == "VoteTouch" then screen.Top + 2 + 140 * scale else screen.Top
-				expectTrue(topY > clear, `{screen.Name} {name}: the board's top at {topY} is under {clear}`)
+				-- Under Roblox's top bar row; while voting, the ball above the cards at the bottom
+				-- middle (VoteController: 10 up, 110 laid out and drawn 1.25 times).
+				expectTrue(topY > screen.Top, `{screen.Name} {name}: the board's top at {topY} is under {screen.Top}`)
+				if name == "Vote" then
+					local cards = screen.H - (10 + 110 * 1.25) * scale
+					expectTrue(
+						ballBottom < cards,
+						`{screen.Name}: the ball at {ballBottom} is behind the cards at {cards}`
+					)
+				end
 			else
 				-- Under the phase banner; while voting, the ball above the cards along the bottom
 				-- (VoteController: 18 up, 214 cards, 34 over them for the tag).
 				expectTrue(topY > 0.19 * screen.H, `{screen.Name} {name}: the board's top at {topY}`)
-				if name == "VotePc" then
+				if name == "Vote" then
 					local cards = screen.H - (18 + 248) * scale
 					expectTrue(
 						ballBottom < cards,

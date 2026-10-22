@@ -111,9 +111,12 @@ local PC_ROLL_HEIGHT = 72
 local PC_HINT_HEIGHT = 66
 local PC_VOTE_ROOM = 18 + 34 + 214 + 10
 local PC_BOTTOM = 24
--- Phones: the room the vote cards take under the top bar (VoteController: 12 over the cards for
--- the tag, 94 tall cards, then the sit-out note under them), so DONE sits below them.
-local TOUCH_VOTE_ROOM = 2 + 12 + 94 + 6 + 28 + 10
+-- Phones: DONE sits under the top bar's row (the vote timer and the sit-out switch). The vote cards
+-- are at the bottom middle now (VoteController: 110 tall, drawn 1.25 times, 10 off the bottom, the
+-- sit-out note over them), and the controls column rises above them while they're up
+-- (placeColumn), so the leftmost card never sits on ROLL.
+local TOUCH_VOTE_ROOM = 96
+local TOUCH_VOTE_ROW = 110 * 1.25 + 10 + 12
 local HINT_TEXT = {
 	Touch = "DRAG DOWN & LET GO\nor tap ROLL",
 	Pc = "DRAG DOWN & LET GO\nor press SPACE",
@@ -1416,7 +1419,7 @@ local function enterPlay(index: number, best: number)
 		if current.CameraType ~= Enum.CameraType.Scriptable then
 			current.CameraType = Enum.CameraType.Scriptable
 		end
-		local pose = if not voteShowing then POSES.Play elseif UIKit.IsTouch() then POSES.VoteTouch else POSES.VotePc
+		local pose = if voteShowing then POSES.Vote else POSES.Play
 		if pose ~= play.Pose then
 			play.Pose = pose
 			play.CameraFrom = current.CFrame
@@ -1511,7 +1514,7 @@ local function buildUi(hud: Instance)
 		Name = "SkeeBallControls",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = if touch then UDim2.new(0, 12, 1, -10) else UDim2.new(0, 24, 1, 0),
-		Size = UDim2.fromOffset(width, hintHeight + controlsHeight + (if touch then 0 else PC_VOTE_ROOM)),
+		Size = UDim2.fromOffset(width, hintHeight + controlsHeight + (if touch then TOUCH_VOTE_ROW else PC_VOTE_ROOM)),
 		BackgroundTransparency = 1,
 		Visible = false,
 		Parent = hud,
@@ -1754,14 +1757,17 @@ local function buildUi(hud: Instance)
 	end
 end
 
--- PC: the controls column rises above the vote cards while they're up, and sits low the rest of the
--- time (under the round's standings on the left). Phones keep it in place.
+-- The controls column rises above the vote cards while they're up, and sits low the rest of the
+-- time (PC: under the round's standings on the left; phones: in the MOVE stick's corner).
 local function placeColumn(animate: boolean)
 	local column = ui.Column
-	if not column or UIKit.IsTouch() then
+	if not column then
 		return
 	end
-	local goal = UDim2.new(0, 0, 1, -(if voteShowing then PC_VOTE_ROOM else PC_BOTTOM))
+	local touch = UIKit.IsTouch()
+	local goal = if touch
+		then UDim2.new(0, 0, 1, if voteShowing then -TOUCH_VOTE_ROW else 0)
+		else UDim2.new(0, 0, 1, -(if voteShowing then PC_VOTE_ROOM else PC_BOTTOM))
 	if animate then
 		UIKit.Tween(column, 0.3, { Position = goal })
 	else

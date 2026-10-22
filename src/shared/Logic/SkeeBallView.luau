@@ -12,10 +12,9 @@
 -- head, and only turns and widens the view; machine 1's eye is about 2.5 studs in front of the
 -- vote stage's light tower, which stays behind the camera.
 --   Play       the ball waits three quarters of the way down the screen, the 100 cups a quarter.
---   VoteTouch  phones while the vote cards (a row under the top bar) are up: the whole ring board
---              sits under the row and its sit-out note, the ball 80% down.
---   VotePc     PC while the vote cards (along the bottom) are up: the ball and the lane stay above
---              them (the ball 60% down), the board's top under the phase banner.
+--   Vote       while the vote cards are up (along the bottom on every screen; phones' moved there,
+--              owner: "Can we make the vote buttons go to the bottom middle"): the ball and the lane
+--              stay above them (the ball 60% down), the board's top under the top bar or banner.
 -- A drag: pull down from anywhere on the lane and let go; sideways aims (the ball goes the other
 -- way, like a slingshot). Full power is a pull of POWER_REACH of the screen's height, or down to
 -- the bottom edge when the drag starts lower than that leaves room for (the waiting ball sits in
@@ -28,8 +27,7 @@ export type Pose = { Eye: { number }, Look: { number }, Fov: number }
 local EYE = { 0, 10, -14.2 }
 SkeeBallView.Poses = {
 	Play = { Eye = EYE, Look = { 0, 2.6, 0.9 }, Fov = 54 },
-	VoteTouch = { Eye = EYE, Look = { 0, 4, 2.5 }, Fov = 66 },
-	VotePc = { Eye = EYE, Look = { 0, 1.25, -1 }, Fov = 66 },
+	Vote = { Eye = EYE, Look = { 0, 1.25, -1 }, Fov = 66 },
 } :: { [string]: Pose }
 
 SkeeBallView.POWER_REACH = 0.32 -- a pull this much of the screen's height is full power
