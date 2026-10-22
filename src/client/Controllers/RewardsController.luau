@@ -14,16 +14,28 @@
 -- State.OpenScreen:Fire("Rewards", "Career") opens it on a tab.
 -- Second pass: CAREER lists the quickest milestones first (5 race podiums before 30 days), the
 -- same order the celebration's "Next:" goal uses (Progression.SortedMilestones).
+-- Medals (owner, asked what keeps players coming back: "Medals: a medal for winning each game and a
+-- few big ones, Roblox badges, a collect-them-all wall in the lobby", then: "Can you work on all of
+-- that? this wont mess with what the other workers are working on right?"): a third tab, MEDALS,
+-- is the collect-them-all screen (Controllers/MedalController draws it); the medal wall's prompt and
+-- the MEDAL EARNED card's SEE ALL open the screen on it (State.OpenScreen:Fire("Rewards", "Medals")).
+-- The PUMPKIN HAT (owner: "do pumpkin hat now"): while a limited-time event is on, its headline
+-- reward (Shared/Events' Headline) stands beside the road on a card of its own, with the candy it
+-- takes (a tap opens the event screen) or EQUIP once it's yours; afterwards it stays for whoever has
+-- it.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage.Shared
 local Cosmetics = require(Shared.Cosmetics)
+local EventLogic = require(Shared.Logic.EventLogic)
+local Events = require(Shared.Events)
 local GameState = require(Shared.GameState)
 local Progression = require(Shared.Progression)
 local Remotes = require(Shared.Remotes)
 
+local MedalController = require(script.Parent.MedalController)
 local State = require(script.Parent.Parent.State)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -474,14 +486,136 @@ local function levelCard(
 	end
 end
 
+-- The limited-time event's headline reward to show beside the road: while its event is on, or for
+-- whoever has it. Also whether the event is on.
+local function headline(): (Cosmetics.Cosmetic?, Events.Event?, boolean)
+	local state = GameState.GetJSON("Event")
+	local profile = State.Profile
+	for _, event in Events.List do
+		local item = event.Headline and Cosmetics.Get(event.Headline)
+		local on = type(state) == "table" and state.Id == event.Id
+		if item and (on or (profile ~= nil and profile.Owned[item.Id] == true)) then
+			return item, event, on
+		end
+	end
+	return nil, nil, false
+end
+
+-- Its card, in the event's colours: where it's from, what it is, and the candy it takes or EQUIP.
+local function headlineCard(parent: Instance, height: number): boolean
+	local item, event, on = headline()
+	if not item or not event then
+		return false
+	end
+	local profile = State.Profile
+	local card = UIKit.Panel({
+		Name = "Headline",
+		Position = UDim2.fromOffset(4, HEADER_H + 12),
+		Size = UDim2.fromOffset(CARD_W, height),
+		CornerRadius = 18,
+		Parent = parent,
+	}, Color3.fromRGB(255, 150, 50), Color3.fromRGB(150, 60, 170))
+	local ribbon = UIKit.new("Frame", {
+		Position = UDim2.fromOffset(8, 8),
+		Size = UDim2.new(1, -16, 0, 34),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Parent = card,
+		Children = { UIKit.Round(), UIKit.Gradient(Color3.fromRGB(70, 40, 110), Color3.fromRGB(40, 20, 70), 0) },
+	})
+	UIKit.Label({
+		Text = `{event.Icon} {event.Short}`,
+		Font = Theme.Fonts.Display,
+		TextSize = 18,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		Parent = ribbon,
+		Children = { UIKit.TextStroke(0.15) },
+	})
+	local iconTop = if touch then 46 else 48
+	local iconHeight = if touch then 56 else 64
+	local nameTop = iconTop + iconHeight + 2
+	UIKit.Label({
+		Text = item.Icon,
+		TextSize = if touch then 46 else 52,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(0, iconTop),
+		Size = UDim2.new(1, 0, 0, iconHeight),
+		Parent = card,
+	})
+	local name = UIKit.Label({
+		Text = item.Name,
+		Font = Theme.Fonts.Display,
+		TextSize = 20,
+		Position = UDim2.fromOffset(8, nameTop),
+		Size = UDim2.new(1, -16, 0, 44),
+		Parent = card,
+		Children = { UIKit.TextStroke(0.25) },
+	})
+	name:SetAttribute("PP_Lines", 2)
+	local step = EventLogic.Step(event.Track, item.Id)
+	local owned = profile ~= nil and profile.Owned[item.Id] == true
+	local lines = { { slotName(item), Color3.fromRGB(255, 236, 210) } }
+	if on and step and not owned then
+		table.insert(lines, { "FREE WITH CANDY", Theme.Colors.Yellow })
+	end
+	for index, line in lines do
+		UIKit.Label({
+			Text = line[1],
+			TextSize = Theme.Touch.MinText,
+			TextWrapped = false,
+			TextColor3 = line[2],
+			Position = UDim2.fromOffset(8, nameTop + 44 + (index - 1) * 22),
+			Size = UDim2.new(1, -16, 0, 22),
+			Parent = card,
+			Children = { UIKit.TextStroke(0.4) },
+		})
+	end
+	if not touch then
+		UIKit.Label({
+			Text = item.Description,
+			TextSize = 16,
+			Position = UDim2.fromOffset(8, nameTop + 92),
+			Size = UDim2.new(1, -16, 0, 62),
+			Parent = card,
+			Children = { UIKit.TextStroke(0.5) },
+		})
+	end
+	local props = {
+		Name = "Action",
+		TextSize = if touch then 20 else 18,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -8),
+		Size = UDim2.new(1, -16, 0, if touch then Theme.Touch.Target else 48),
+		CornerRadius = 14,
+	}
+	if owned then
+		ownedAction(card, item, props)
+	else
+		-- The candy so far toward it, or CLAIM IT! once there's enough: both open the event screen.
+		local saved = profile and profile.Events and profile.Events[event.Id]
+		local candy = if type(saved) == "table" and type(saved.Candy) == "number" then saved.Candy else 0
+		props.Text = if not step
+			then "GET IT"
+			elseif candy >= step.Candy then "CLAIM IT!"
+			else `🍬 {candy}/{step.Candy}`
+		props.Parent = card
+		UIKit.Button(props, function()
+			State.OpenScreen:Fire("Event")
+		end, Theme.Colors.Yellow, Theme.Colors.Orange)
+	end
+	return true
+end
+
 -- `keep`: where to scroll (a redraw keeps the place); else the next level.
 local function renderRoad(keep: Vector2?)
 	header(body)
 	local height = if touch then CARD_H else PC_CARD_H
+	-- An event's headline reward stands at the road's left, where it stays in view.
+	local left = if headlineCard(body, height) then CARD_W + CARD_GAP + 4 else 0
 	local road = UIKit.new("ScrollingFrame", {
 		Name = "Road",
-		Position = UDim2.fromOffset(0, HEADER_H + 8),
-		Size = UDim2.new(1, 0, 1, -(HEADER_H + 8)),
+		Position = UDim2.fromOffset(left, HEADER_H + 8),
+		Size = UDim2.new(1, -left, 1, -(HEADER_H + 8)),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = if touch then 6 else 8,
@@ -672,6 +806,8 @@ local function render(keep: Vector2?)
 	end
 	if currentTab == "Career" then
 		renderCareer(keep)
+	elseif currentTab == "Medals" then
+		MedalController.Render(body, keep)
 	else
 		renderRoad(keep)
 	end
@@ -692,9 +828,14 @@ function RewardsController.Start(context)
 		BackgroundTransparency = 1,
 		Parent = content,
 	})
-	-- The tabs, in the title bar after the title.
+	-- The tabs, in the title bar after the title (the third ends 50 units short of the ✕ on phones).
 	local tabHeight = if touch then Theme.Touch.Target else 50
-	for index, tab in { { Key = "Road", Text = "⭐ Level Road" }, { Key = "Career", Text = "🏅 Career" } } do
+	local tabs = {
+		{ Key = "Road", Text = "⭐ Level Road" },
+		{ Key = "Career", Text = "🏅 Career" },
+		{ Key = "Medals", Text = "🥇 Medals" },
+	}
+	for index, tab in tabs do
 		tabButtons[tab.Key] = UIKit.Button({
 			Name = tab.Key .. "Tab",
 			Text = tab.Text,

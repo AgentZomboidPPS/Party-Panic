@@ -12,11 +12,11 @@ return {
 	-- The mini-games' own round songs, packed several to a file (tools/music/modes.py; where each song
 	-- sits is in ModeMusic.luau). A game whose pack isn't uploaded yet plays "Panic Mode" (Music.Round).
 	ModeMusic = {
-		ModePack1 = 0,
-		ModePack2 = 0,
-		ModePack3 = 0,
-		ModePack4 = 0,
-		ModePack5 = 0,
+		ModePack1 = 133632130255608,
+		ModePack2 = 117185721710928,
+		ModePack3 = 96432706159875,
+		ModePack4 = 91819577463974,
+		ModePack5 = 111855655225102,
 	},
 	Sfx = {
 		VoteOpen = 0,

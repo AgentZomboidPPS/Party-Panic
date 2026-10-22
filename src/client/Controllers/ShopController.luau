@@ -6,6 +6,10 @@
 -- State.OpenScreen:Fire("Shop", "Emote") opens it on a tab (the emote picker's "Get more").
 -- Prices are low (owner: "Also lets balance the shop down. I want low currency not high."); what
 -- coins buy comes first, then the Rewards Road and career rewards, which say how to unlock them.
+-- A limited-time event's free rewards come last (owner: "Can you work on all of that? this wont
+-- mess with what the other workers are working on right?"): never for sale, and the card says which
+-- event it came from; during the event its button says the candy it takes and opens the event
+-- screen.
 --
 -- The purchase confirmation's Cancel was a dark purple button on its dark panel (owner: "why are
 -- the close menu buttons and the invite friend button so dark?"): it's Theme's neutral lavender
@@ -15,6 +19,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
 local Cosmetics = require(Shared.Cosmetics)
+local EventLogic = require(Shared.Logic.EventLogic)
+local Events = require(Shared.Events)
+local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 
 local State = require(script.Parent.Parent.State)
@@ -49,6 +56,21 @@ local function lockReason(item: Cosmetics.Cosmetic): string?
 		return "💎 VIP pass"
 	end
 	return nil
+end
+
+-- An event's reward: during its event, the candy it takes on the track (true: on now, a tap opens
+-- the event screen); after it, that it can't be had any more.
+local function eventSource(item: Cosmetics.Cosmetic): (string?, boolean)
+	local event = item.Event and Events.Get(item.Event)
+	if not event then
+		return nil, false
+	end
+	local state = GameState.GetJSON("Event")
+	local step = EventLogic.Step(event.Track, item.Id)
+	if type(state) == "table" and state.Id == event.Id and step then
+		return `🍬 {step.Candy} CANDY`, true
+	end
+	return "🔒 EVENT OVER", false
 end
 
 local function preview(card: Frame, item: Cosmetics.Cosmetic)
@@ -112,6 +134,10 @@ local function render()
 			return 2, item.UnlockLevel
 		elseif item.UnlockStat then
 			return 3, item.UnlockStat.Value
+		elseif item.Event then
+			local event = Events.Get(item.Event)
+			local step = event and EventLogic.Step(event.Track, item.Id)
+			return 5, if step then step.Candy else 0
 		end
 		return 4, 0
 	end
@@ -150,8 +176,10 @@ local function render()
 				then {}
 				else { UIKit.new("UITextSizeConstraint", { MaxTextSize = 20, MinTextSize = 15 }) },
 		})
+		local event = item.Event and Events.Get(item.Event)
 		UIKit.Label({
-			Text = item.Description,
+			-- An event's reward says where it came from, owned or not ("🎃 HALLOWEEN 2026").
+			Text = if event then `{event.Icon} {event.Label}` else item.Description,
 			TextSize = if touch then Theme.Touch.MinText else 17,
 			TextColor3 = Theme.Colors.TextDim,
 			Position = UDim2.fromOffset(8, if touch then 126 else 132),
@@ -186,6 +214,16 @@ local function render()
 				)}?\nYou have {Theme.CoinIcon} {UIKit.FormatNumber(profile.Coins)}.`
 				confirm.Visible = true
 				UIKit.PopIn(confirm, 0.25)
+			end
+		elseif item.Event then
+			local source, on = eventSource(item)
+			actionText = source or "Locked"
+			top = if on then Theme.Colors.Orange else Theme.Colors.PanelLight
+			bottom = if on then Color3.fromRGB(205, 92, 24) else Theme.Colors.PanelDark
+			if on then
+				onClick = function()
+					State.OpenScreen:Fire("Event")
+				end
 			end
 		else
 			actionText, top, bottom = lockReason(item) or "Locked", Theme.Colors.PanelLight, Theme.Colors.PanelDark

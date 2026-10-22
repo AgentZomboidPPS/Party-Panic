@@ -5,12 +5,19 @@
 -- dozen. Level and stat items can't be bought: they are the Rewards Road (one at most milestone
 -- levels) and the career milestones (owner: "Also we need cool payoffs for players that keep
 -- playing the game."). Every UnlockStat must be a stat Logic/ProgressionLogic.RecordRound keeps.
+-- Event rewards (owner, asked what keeps players coming back: "Can you work on all of that? this
+-- wont mess with what the other workers are working on right?"): an item with Event = "<event id>"
+-- is a step of that limited-time event's free reward track (Shared/Events), claimed with candy in the
+-- event screen and never sold; the shop's card says which event it came from (Shared/Events' Label).
+-- Hats (owner: "do pumpkin hat now"): the Hat slot is worn on the head in the lobby (World/Hats builds
+-- each as an Accessory; Services/CosmeticService puts it on and takes it off). The PUMPKIN HAT is the
+-- HALLOWEEN PARTY's headline reward.
 
 local GameDefinitions = require(script.Parent.GameDefinitions)
 
 export type Cosmetic = {
 	Id: string,
-	Slot: string, -- "Trail" | "Title" | "Emote" | "Victory" | "Elimination"
+	Slot: string, -- "Trail" | "Hat" | "Title" | "Emote" | "Victory" | "Elimination"
 	Name: string,
 	Description: string,
 	Icon: string,
@@ -19,6 +26,7 @@ export type Cosmetic = {
 	UnlockLevel: number?,
 	UnlockStat: { Stat: string, Value: number, Label: string }?,
 	Vip: boolean?,
+	Event: string?, -- a limited-time event's reward (Shared/Events id): claimed on its track, never sold
 	Colors: { Color3 }?, -- trails, title accents and effect tints
 	Animation: number?, -- emote animation asset id (Roblox default R15 emotes)
 	Looped: boolean?,
@@ -565,16 +573,75 @@ local list: { Cosmetic } = {
 		UnlockLevel = 40,
 		Effect = "Fireworks",
 	},
+
+	-- The HALLOWEEN PARTY's free reward track (Shared/Events), in track order: claimed with candy in
+	-- the event screen, never sold.
+	{
+		Id = "Emote_CandyToss",
+		Slot = "Emote",
+		Name = "Candy Toss",
+		Description = "Throw a handful of candy.",
+		Icon = "🍭",
+		Event = "Halloween2026",
+		Effect = "Candy",
+	},
+	{
+		Id = "Title_PumpkinKing",
+		Slot = "Title",
+		Name = "Pumpkin King",
+		Description = "Ruler of the pumpkin patch.",
+		Icon = "👑",
+		Event = "Halloween2026",
+		Colors = { rgb(255, 150, 40) },
+	},
+	{
+		Id = "Elim_Spooked",
+		Slot = "Elimination",
+		Name = "Spooked",
+		Description = "Vanish in purple smoke.",
+		Icon = "🕸️",
+		Event = "Halloween2026",
+		Effect = "Spooky",
+	},
+	{
+		Id = "Hat_Pumpkin",
+		Slot = "Hat",
+		Name = "Pumpkin Hat",
+		Description = "A glowing jack-o'-lantern.",
+		Icon = "🎃",
+		Event = "Halloween2026",
+		Colors = { rgb(255, 128, 24), rgb(255, 186, 64) },
+	},
+	{
+		Id = "Victory_BatBurst",
+		Slot = "Victory",
+		Name = "Bat Burst",
+		Description = "A swarm of bats takes off.",
+		Icon = "🦇",
+		Event = "Halloween2026",
+		Effect = "Bats",
+		Colors = { rgb(160, 90, 255), rgb(255, 140, 40), rgb(255, 214, 90) },
+	},
+	{
+		Id = "Trail_CandyCorn",
+		Slot = "Trail",
+		Name = "Candy Corn",
+		Description = "Sweet candy-corn stripes.",
+		Icon = "🍬",
+		Event = "Halloween2026",
+		Colors = { rgb(255, 250, 236), rgb(255, 146, 34), rgb(255, 212, 58) },
+	},
 }
 
 local Cosmetics = {
 	List = list,
 	ById = {} :: { [string]: Cosmetic },
 	-- Slots a player equips one item into (emotes are not equipped; every owned emote is usable).
-	EquipSlots = { "Trail", "Title", "Victory", "Elimination" },
+	EquipSlots = { "Trail", "Hat", "Title", "Victory", "Elimination" },
 	-- What each slot is called on reward cards ("TRAIL", "KNOCKOUT").
 	SlotNames = {
 		Trail = "Trail",
+		Hat = "Hat",
 		Title = "Title",
 		Emote = "Emote",
 		Victory = "Victory",
@@ -582,6 +649,7 @@ local Cosmetics = {
 	} :: { [string]: string },
 	ShopTabs = {
 		{ Slot = "Trail", Label = "Trails", Icon = "🌈" },
+		{ Slot = "Hat", Label = "Hats", Icon = "🎩" },
 		{ Slot = "Title", Label = "Titles", Icon = "🏷️" },
 		{ Slot = "Emote", Label = "Emotes", Icon = "🕺" },
 		{ Slot = "Victory", Label = "Victory", Icon = "🏆" },

@@ -48,6 +48,10 @@ Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", 
 and shows a level-up, a career milestone and a returning player's celebration ("LevelUp",
 "LevelUp2", "Milestone", "Welcome"). After the round a level-up card shows while the last
 first-join tip is due; the result's "tipChecks" says what was on screen while it was up and after.
+Medals (MedalController): a MEDAL EARNED card ("Medal"), the medals a returning player had already
+earned as one card ("Medals earlier"), the Rewards screen's MEDALS tab ("Rewards Medals"), and the
+medal wall lit up for the player; the result's "medalChecks" says what showed when (a card waits
+out the vote and steps aside for a level-up card).
 The results card asks PLAY AGAIN? (Services/ReplayService): "Results" shows the vote open, "Results
 replay" after the player tapped PLAY AGAIN, "Results replay capped" after the most replays in a row;
 the result's "replayChecks" says what the strip showed each time.
@@ -603,6 +607,104 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Rewards", "Rewards C
 	task.wait(0.3)
 end
 
+-- 3a. The HALLOWEEN PARTY (Controllers/EventController): the lobby chip and the event screen ("Event":
+-- 62 candy, the first reward and the PUMPKIN HAT claimed (its EQUIP), the two between them ready),
+-- then one of its double coins weekends ("Event double"), the hat in the Shop's Hats tab ("Shop hats")
+-- and beside the Rewards screen's road ("Rewards hat"), then the party over (nothing on: the chip
+-- leaves the row, the light goes back). Then the candy a round pays pops on the chip back in the
+-- lobby. The result's "eventChecks" says what the chip read each time. The party stays on after.
+local eventChecks = {}
+do
+	local function chipText()
+		local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+		local chip = hud and hud:FindFirstChild("Event", true)
+		local badge = chip and chip:FindFirstChild("Ready")
+		local row = chip and chip.Parent
+		local up = row ~= nil and row:IsA("GuiObject") and row.Visible and chip.Visible
+		return if chip and chip:IsA("TextButton")
+			then `{chip.Text} [{if up then "on screen" else "off screen"}{if badge and badge.Visible then ", !" else ""}]`
+			else "missing"
+	end
+	-- The lobby's look for the event (this server's Lighting stands in for a device's): its colour
+	-- correction while the party is on, and Lighting exactly as it was once it's over.
+	local Lighting = game:GetService("Lighting")
+	local function look()
+		local effect = Lighting:FindFirstChild("PP_EventLook")
+		return `{if effect then "on" else "off"}, outdoor ambient {Lighting.OutdoorAmbient:ToHex()}, shift top {Lighting.ColorShift_Top:ToHex()}`
+	end
+	eventChecks.lookBefore = look()
+	local now = workspace:GetServerTimeNow()
+	local party = { Id = "Halloween2026", Name = "HALLOWEEN PARTY", EndsAt = now + 9.5 * 86400, DoubleCoins = false, DoubleEndsAt = 0 }
+	local today = math.floor(now / 86400)
+	if okSnap then
+		snapshot.Events = {
+			Halloween2026 = {
+				Candy = 62,
+				Claimed = { Emote_CandyToss = true, Hat_Pumpkin = true },
+				Found = { Day = today, Spots = { 3 } },
+			},
+		}
+		snapshot.Owned = snapshot.Owned or {}
+		snapshot.Owned.Emote_CandyToss = true
+		snapshot.Owned.Hat_Pumpkin = true
+		snapshot.Equipped = snapshot.Equipped or {}
+		snapshot.Equipped.Hat = ""
+		__fire("ProfileData", snapshot)
+	end
+	GameState.SetJSON("Event", party)
+	task.wait(1.2)
+	eventChecks.chip = chipText()
+	eventChecks.lookDuring = look()
+	step = "Event screen"
+	State.OpenScreen:Fire("Event")
+	task.wait(1.2)
+	snap("Event")
+	party.DoubleCoins, party.DoubleEndsAt = true, now + 86400 + 4 * 3600 + 120
+	GameState.SetJSON("Event", party)
+	task.wait(1.2)
+	snap("Event double")
+	eventChecks.chipDouble = chipText()
+	-- The Shop's Victory tab: the event's BAT BURST card says where it's from and the candy it takes.
+	State.OpenScreen:Fire("Shop", "Victory")
+	task.wait(1.2)
+	snap("Shop event")
+	-- The Hats tab: the PUMPKIN HAT, owned, with its Equip.
+	State.OpenScreen:Fire("Shop", "Hat")
+	task.wait(1.2)
+	snap("Shop hats")
+	pcall(__require("Client/UI/Modal").CloseAll)
+	-- The Rewards screen: the hat beside the road, with EQUIP.
+	State.OpenScreen:Fire("Rewards", "Road")
+	task.wait(1.2)
+	snap("Rewards hat")
+	pcall(__require("Client/UI/Modal").CloseAll)
+	-- The party over: nothing on (double coins never come on their own), so no chip and the lobby's
+	-- light exactly as it was.
+	GameState.Set("Event", "")
+	task.wait(1.2)
+	eventChecks.chipAfterParty = chipText()
+	eventChecks.lookAfter = look()
+	party.DoubleCoins, party.DoubleEndsAt = false, 0
+	GameState.SetJSON("Event", party)
+	-- A round pays 2 candy (the profile comes with its results): nothing on the results card, then
+	-- "+2 CANDY" on the chip once back in the lobby.
+	local phaseBefore = GameState.Get("Phase")
+	GameState.Set("Phase", "Results")
+	if okSnap then
+		snapshot.Events.Halloween2026.Candy = 64
+		__fire("ProfileData", snapshot)
+	end
+	task.wait(0.5)
+	eventChecks.chipDuringResults = chipText()
+	GameState.Set("Phase", "Cleanup")
+	task.wait(1.6)
+	eventChecks.chipBackInLobby = chipText()
+	task.wait(3.2)
+	eventChecks.chipAfterPop = chipText()
+	GameState.Set("Phase", phaseBefore)
+	task.wait(0.3)
+end
+
 -- 3b. Skee-Ball in the lobby's arcade (SkeeBallController): the player takes machine 1, charges the
 -- ROLL meter, rolls a ball (its score pops), sees the vote open ("SkeeBall voting"), finishes a
 -- game (PLAY AGAIN / DONE) and leaves; then starts again and is taken into a round. A stand-in
@@ -878,6 +980,47 @@ do
 	end
 end
 
+-- 3c. The weekly leaderboard (HallOfFameController): this week's board and last week's top three
+-- with long names, the player 14th with 35 points, so its chip is in the lobby's row from here on,
+-- and the THIS WEEK window the chip opens ("Weekly").
+do
+	local week = __require("Shared/Logic/DailyLogic").WeekNumber(os.time())
+	local top, last = {}, {}
+	for index = 1, 10 do
+		local name = if index % 2 == 1 then "SuperLongDisplayNm20" else "Captain Waffles"
+		table.insert(top, { UserId = 200 + index, Name = name, Points = 1250 - index * 37 })
+	end
+	for index = 1, 3 do
+		table.insert(last, { UserId = 300 + index, Name = "SuperLongDisplayNm20", Points = 2400 - index * 300 })
+	end
+	GameState.SetJSON("HallOfFame", { Week = week, LastWeek = last, Top = top })
+	__player:SetAttribute("PP_WeeklyRank", 14)
+	if okSnap then
+		snapshot.Weekly = { Week = week, Points = 35 }
+		__fire("ProfileData", snapshot)
+	end
+	task.wait(0.5)
+	-- Phones: the row as a player who has finished the first-join tips sees it (this run's player is
+	-- new, so everywhere else the tip has the row's spot): the tip put away for one snapshot.
+	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+	local tip = hud and hud:FindFirstChild("Onboarding", true)
+	if __touchMode and tip and tip.Visible then
+		tip.Visible = false
+		hud:SetAttribute("PP_TipShowing", false)
+		task.wait(1)
+		snap("Weekly row")
+		tip.Visible = true
+		hud:SetAttribute("PP_TipShowing", true)
+		task.wait(0.3)
+	end
+	step = "OpenScreen Weekly"
+	State.OpenScreen:Fire("Weekly")
+	task.wait(1)
+	snap("Weekly")
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
+end
+
 -- 4. A whole round, phase by phase, with three toasts on screen in the lobby. The vote shows the
 -- fullest cards: the two longest names and the longest objective (that game is the one played).
 -- The stand-in players play it (round attributes, as RoundContext sets them), with the stand-in
@@ -1037,6 +1180,135 @@ do
 		__fire("LevelPop", bots[1].rig, 12)
 	end
 	__fire("LevelPop", workspace, 3) -- no head: nothing happens
+end
+-- Medals (MedalController): the player has a few; a medal won just before the vote waits it out,
+-- shows in the lobby ("Medal"), steps aside for a level-up card and comes back; several make one
+-- card; the ones a returning player had already earned make one card ("Medals earlier"); the
+-- Rewards screen's MEDALS tab ("Rewards Medals"); the medal wall lit for this player (stand-in
+-- slots when the place's lobby is older than this client).
+local medalChecks = {}
+do
+	local CollectionService = game:GetService("CollectionService")
+	local MedalCards = __require("Client/Controllers/MedalController")
+	local Celebrations = __require("Client/Controllers/CelebrationController")
+	local function card()
+		local layer = __playerGui:FindFirstChild("PartyPanicMedals")
+		local shown = layer and layer:FindFirstChild("MedalCard")
+		local texts = {}
+		for _, item in if shown then shown:GetDescendants() else {} do
+			if (item:IsA("TextLabel") or item:IsA("TextButton")) and item.Text ~= "" then
+				table.insert(texts, item.Text)
+			end
+		end
+		return if shown then table.concat(texts, " | ") else "none"
+	end
+	if #CollectionService:GetTagged("MedalSlot") == 0 then
+		medalChecks.wallStandIn = true
+		for index, id in { "FirstWin", "WinSpleef" } do
+			local model = Instance.new("Model")
+			model.Name = "Medal_" .. id
+			local disc = Instance.new("Part")
+			disc.Name = "Disc"
+			disc.Shape = Enum.PartType.Cylinder
+			disc.Anchored = true
+			disc.Size = Vector3.new(0.24, 1.44, 1.44)
+			disc.CFrame = CFrame.new(-60 + index * 2, 6, 24)
+			disc.Parent = model
+			local ribbon = disc:Clone()
+			ribbon.Name = "Ribbon"
+			ribbon.Shape = Enum.PartType.Block
+			ribbon.Size = Vector3.new(0.5, 0.9, 0.05)
+			ribbon.Parent = model
+			model:SetAttribute("MedalId", id)
+			model.Parent = workspace
+			model:AddTag("MedalSlot")
+		end
+		local plaque = Instance.new("Part")
+		plaque.Name = "MedalCount"
+		plaque.Anchored = true
+		plaque.Size = Vector3.new(9, 0.7, 0.1)
+		plaque.Parent = workspace
+		plaque:AddTag("MedalCount")
+	end
+	local today = math.floor(os.time() / 86400)
+	snapshot.Medals = { FirstWin = today - 40, TenWins = today - 3, CupChampion = today, WinSpleef = nil, WinFireRope = today - 400, WinHexMeltdown = today }
+	__fire("ProfileData", snapshot)
+	task.wait(0.8)
+	local lit = {}
+	for _, model in CollectionService:GetTagged("MedalSlot") do
+		local disc = model:FindFirstChild("Disc")
+		local id = model:GetAttribute("MedalId")
+		if disc and (id == "FirstWin" or id == "WinSpleef") then
+			table.insert(lit, `{id}: {disc.Material.Name} {disc.Color:ToHex()}`)
+		end
+	end
+	table.sort(lit)
+	medalChecks.wall = table.concat(lit, "; ")
+	local plaques = {}
+	for _, gui in __playerGui:GetChildren() do
+		if gui.Name == "MedalCount" then
+			local text = gui:FindFirstChildWhichIsA("TextLabel", true)
+			table.insert(plaques, if text then text.Text else "?")
+		end
+	end
+	medalChecks.plaque = table.concat(plaques, " / ")
+	step = "medal card"
+	GameState.Set("Phase", "Voting")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 12)
+	__fire("MedalEarned", "WinFireRope", false)
+	task.wait(1.2)
+	medalChecks.duringVote = card()
+	GameState.Set("Phase", "Intermission")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 20)
+	task.wait(1.6)
+	medalChecks.backInLobby = card()
+	snap("Medal")
+	__fire("Celebrate", { Kind = "Milestone", Coins = 0, Items = { "Title_Veteran" } })
+	task.wait(0.6)
+	medalChecks.levelUpCard = card()
+	Celebrations.Dismiss()
+	task.wait(1.4)
+	medalChecks.afterLevelUpCard = card()
+	MedalCards.Dismiss()
+	task.wait(0.6)
+	for _, id in { "WinHexMeltdown", "EveryGame", "WinSpleef" } do
+		__fire("MedalEarned", id, false)
+	end
+	task.wait(1.2)
+	medalChecks.several = card()
+	MedalCards.Dismiss()
+	task.wait(0.6)
+	for _, id in { "FirstWin", "TenWins", "FiftyWins" } do
+		__fire("MedalEarned", id, true)
+	end
+	task.wait(1.2)
+	medalChecks.earlier = card()
+	snap("Medals earlier")
+	MedalCards.Dismiss()
+	task.wait(0.4)
+	step = "OpenScreen Rewards Medals"
+	State.OpenScreen:Fire("Rewards", "Medals")
+	task.wait(1)
+	snap("Rewards Medals")
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
+	medalChecks.afterAll = card()
+	-- The PARTY CUP's final podium (PP_CupPodium) and the results card (PP_ResultsShowing) have the
+	-- screen: a medal waits for both to clear.
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 20)
+	__player:SetAttribute("PP_CupPodium", true)
+	__fire("MedalEarned", "CupChampion", false)
+	task.wait(1.2)
+	medalChecks.duringCupPodium = card()
+	__player:SetAttribute("PP_ResultsShowing", true)
+	__player:SetAttribute("PP_CupPodium", nil)
+	task.wait(1)
+	medalChecks.duringResultsCard = card()
+	__player:SetAttribute("PP_ResultsShowing", nil)
+	task.wait(1.2)
+	medalChecks.afterPodiumAndResults = card()
+	MedalCards.Dismiss()
+	task.wait(0.4)
 end
 phase("Voting", 12, function()
 	GameState.SetJSON("VoteOptions", {
@@ -1504,6 +1776,116 @@ end
 phase("Waiting", 0)
 task.wait(1)
 
+-- 4b. The PARTY CUP (CupController), from the server's attribute (GameState "Cup", as
+-- Services/CupService writes it): after round 2 of 5 with the player 5th of eight, the standings
+-- for a moment back in the lobby ("Cup moment": the top three and you), the chip in the lobby's row
+-- ("Cup chip"), the standings window it opens ("Cup standings"), then a cup's final standings and
+-- its podium as the results card's time runs out ("Cup podium": a bot champion with --bots, else
+-- the player), closed by the vote. cupChecks: what the chip and the screens showed.
+local cupChecks = {}
+do
+	local CupController = __require("Client/Controllers/CupController")
+	-- On phones the lobby's chips and the moment give way to the first-join tip: let it finish.
+	for _ = 1, 40 do
+		if table.find(__sent, "TutorialDone") then
+			break
+		end
+		task.wait(0.25)
+	end
+	cupChecks.tutorialDone = table.find(__sent, "TutorialDone") ~= nil
+	local others = {}
+	for index, other in __players do
+		if index > 1 then
+			table.insert(others, { other.DisplayName, other.UserId, false })
+		end
+	end
+	for _, bot in bots do
+		if bot.info.Parent then
+			table.insert(others, { bot.display, bot.userId, true })
+		end
+	end
+	local function standings(myPlace, points)
+		local rows, nextOther = {}, 0
+		for place = 1, 8 do
+			local gain = ({ 10, 8, 6, 5, 4, 3, 2, 1 })[place]
+			local who = if place == myPlace then { __player.DisplayName, __player.UserId, false } else nil
+			if not who then
+				nextOther += 1
+				who = others[nextOther]
+			end
+			if who then
+				table.insert(rows, { UserId = who[2], Name = who[1], Points = points[place], IsBot = who[3], Place = place, Gain = gain })
+			end
+		end
+		return rows
+	end
+	local lastPodium = { Number = 2, Podium = standings(if #bots > 0 then 1 else 3, { 44, 40, 37 }) }
+	-- Who wears the crown (a person: with --bots the player won last cup, and loses it to a bot now).
+	local champion = if #bots > 0
+		then { UserId = __player.UserId, Name = __player.DisplayName, Cup = 2 }
+		else { UserId = others[1][2], Name = others[1][1], Cup = 2 }
+	local function setPhase(name, seconds)
+		GameState.Set("Phase", name)
+		GameState.Set("PhaseEndsAt", if seconds > 0 then workspace:GetServerTimeNow() + seconds else 0)
+	end
+	step = "cup moment"
+	setPhase("Results", 3)
+	GameState.SetJSON("Cup", {
+		Number = 3, Round = 3, Of = 5, Played = 2, Done = false, EndedAt = workspace:GetServerTimeNow(),
+		Standings = standings(5, { 18, 16, 14, 12, 11, 9, 6, 4 }), Champion = champion, Last = lastPodium,
+	})
+	task.wait(1)
+	setPhase("Cleanup", 0)
+	task.wait(1.4) -- a beat for a level-up card to go first, then it pops in
+	snap("Cup moment")
+	cupChecks.moment = CupController.Status()
+	setPhase("Intermission", 20)
+	task.wait(4.6) -- the moment's time
+	cupChecks.afterMoment = CupController.Status()
+	snap("Cup chip")
+	step = "cup standings"
+	CupController.OpenStandings()
+	task.wait(1)
+	snap("Cup standings")
+	cupChecks.standings = CupController.Status()
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
+	-- The cup's last round: its final standings come with the results, the podium takes over as the
+	-- results card's time runs out, the new cup arrives as it's paid, and the vote closes it.
+	step = "cup podium"
+	setPhase("InRound", 30)
+	local myFinal = if #bots > 0 then 2 else 1
+	local final = standings(myFinal, { 46, 41, 37, 30, 26, 21, 17, 12 })
+	GameState.SetJSON("Cup", {
+		Number = 3, Round = 5, Of = 5, Played = 5, Done = true, EndedAt = workspace:GetServerTimeNow(),
+		Standings = final, Champion = champion, Last = lastPodium,
+	})
+	task.wait(0.5)
+	cupChecks.podiumBeforeResults = CupController.Status().Podium
+	setPhase("Results", 1.5)
+	task.wait(1.7)
+	snap("Cup podium")
+	cupChecks.podium = CupController.Status()
+	setPhase("Cleanup", 0)
+	task.wait(0.4)
+	local podiumRows = {}
+	for index = 1, 3 do
+		table.insert(podiumRows, final[index])
+	end
+	GameState.SetJSON("Cup", {
+		Number = 4, Round = 1, Of = 5, Played = 0, Done = false, EndedAt = workspace:GetServerTimeNow(),
+		Standings = {}, Champion = if final[1].IsBot then nil else { UserId = final[1].UserId, Name = final[1].Name, Cup = 3 },
+		Last = { Number = 3, Podium = podiumRows },
+	})
+	task.wait(0.5)
+	cupChecks.newCup = CupController.Status()
+	setPhase("Voting", 12)
+	task.wait(0.5)
+	cupChecks.atTheVote = CupController.Status()
+	setPhase("Waiting", 0)
+	task.wait(0.5)
+end
+
 -- 5. Sitting out (UI/SitOutSwitch: by the banner, and in Settings). A tap flips the switches at
 -- once and asks the server; with no answer they slide back. Then the server's answer (PP_SitOut,
 -- as Services/SitOutService sets it) and the screens that change for someone sitting out.
@@ -1645,9 +2027,12 @@ return game:GetService("HttpService"):JSONEncode({
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
 	skeeChecks = skeeChecks,
+	eventChecks = eventChecks,
 	hudChecks = hudChecks,
 	sitOutChecks = sitOutChecks,
 	tipChecks = tipChecks,
+	cupChecks = cupChecks,
+	medalChecks = medalChecks,
 	replayChecks = replayChecks,
 	textReport = __textReport,
 	portals = __portals,

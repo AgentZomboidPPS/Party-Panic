@@ -15,6 +15,7 @@ return {
 	Owned = {} :: { [string]: boolean },
 	Equipped = {
 		Trail = "",
+		Hat = "", -- the Hat slot (World/Hats), worn in the lobby
 		Title = "Title_Rookie",
 		Victory = "Victory_Confetti",
 		Elimination = "Elim_Poof",

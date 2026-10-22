@@ -30,7 +30,7 @@ local NAMES = {
 	"MiniGameEvent", -- (event: string, ...) mini-game specific cue for the client half of a mode
 	"Celebrate", -- (payload) a level up or career milestone to celebrate; see Services/ProgressionService
 	"LevelPop", -- (character: Model, level: number) the "Lv 10!" that pops over a player's head
-	"MedalEarned", -- (medalId: string) a new medal for the collection; see Services/MedalService
+	"MedalEarned", -- (medalId: string, earlier: boolean?) a new medal for the collection; see Services/MedalService
 }
 
 local Remotes = {}

@@ -40,6 +40,10 @@ With --client, the summary's "clientHolds" lists every time the stand-in client'
 character (Controllers/ArrivalController): never, once it's on a floor that's there. --late-floor T
 gives that device the arena T seconds late (its ground probe finds nothing until then, like a phone
 still loading a big arena): it must be held where the round put it until then.
+
+CUP plays a whole PARTY CUP and the next cup's first round (tools/checks/cup_rounds.luau): --rounds
+real rounds of the --modes in turn, with --players stand-ins and --bots real bots, then the rest of
+cup 2 made up, to check the standings, the podium, the prizes, the medal and the crown.
 """
 
 import argparse
@@ -160,6 +164,26 @@ def other_mode(module: str, game: str) -> bool:
 # would go over Luau execution's 1 MB script limit as the game list grows.
 LOBBY_MODES = {"FireRope", "HexMeltdown", "HoneyTrap", "BumperBallers"}
 
+# CUP: the modes a cup's rounds play by default (a survival, a team, a score and a versus mode).
+CUP_MODES = "FireRope,PumpAndPop,CrazyCutters,ArrowAmbush,HexMeltdown"
+
+
+def cup_table(modes: list) -> str:
+    """CUP: each mode's server half, bot brain and stand-in script (tools/checks/bots/<Id>.luau),
+    named in full so the bundler takes them (cup_rounds.luau plays them in turn)."""
+    rows = []
+    for mode in modes:
+        bot_path = BOTS / f"{mode}.luau"
+        script = bot_path.read_text() if bot_path.exists() else "return function() end"
+        brain = mode if (SRC / "server" / "MiniGames" / "Bots" / f"{mode}.luau").exists() else "Default"
+        rows.append(
+            f'\t{mode} = {{ Mode = function() return __require("Server/MiniGames/{mode}") end, '
+            f'Brain = function() return __require("Server/MiniGames/Bots/{brain}") end, '
+            f"Script = (function()\n{script}\nend)() }},"
+        )
+    return "__cupModes = {\n" + "\n".join(rows) + "\n}\n"
+
+
 # --ui-at snapshots that aren't round times (tools/checks/harness_prelude.luau, __rulesShots).
 UI_SHOTS = ("rules", "closed")
 
@@ -243,6 +267,8 @@ def main():
                         "Prepare), e.g. 0,5,80, for tools/checks/colliders.py; with LOBBY: the lobby's")
     parser.add_argument("--colliders-reach", type=float, default=600, help="with --colliders-at: map this far from the arena's middle")
     parser.add_argument("--no-csg", action="store_true", help="build as if CSG had failed on this server (Shapes from plain parts)")
+    parser.add_argument("--modes", default=CUP_MODES, help="CUP: the modes its rounds play, in turn")
+    parser.add_argument("--rounds", type=int, default=6, help="CUP: real rounds to play (a cup is 5)")
     parser.add_argument("--replay", action="store_true", help="the real round loop with this mode as the only game: a "
                         "vote, the round, PLAY AGAIN passing, the replay, PLAY AGAIN failing, the lobby and a vote")
     args = parser.parse_args()
@@ -257,11 +283,14 @@ def main():
     if args.client:
         paths.update(client_paths())
     lobby = args.game in ("LOBBY", "SKEEBALL")
+    cup_modes = args.modes.split(",") if args.game == "CUP" else []
     available = {}
     for module, path in paths.items():
         if module == "Shared/Remotes":
             continue  # replaced by the harness's recording stand-in
-        if not lobby and other_mode(module, args.game):
+        if cup_modes and other_mode(module, "") and all(other_mode(module, mode) for mode in cup_modes):
+            continue  # CUP: not one of its modes'
+        if not lobby and not cup_modes and other_mode(module, args.game):
             continue  # another mode's
         if lobby and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES):
             continue  # the lobby keeps LOBBY_MODES only
@@ -279,6 +308,10 @@ def main():
         entry = "__runSkeeBall"
     elif args.game == "LOBBY":
         entry = "__runLobbyColliders" if args.colliders_at is not None else "__runLobby"
+    elif cup_modes:
+        cup_luau = (Path(__file__).resolve().parent / "cup_rounds.luau").read_text()
+        harness += "\n" + cup_luau + "\n" + cup_table(cup_modes)  # (the modes it names, for the bundler)
+        entry = "__runCup"
     elif args.replay:
         entry = "__runReplay"
     roots = {"Shared", "Server"} | ({"Client"} if args.client else set())
@@ -305,7 +338,12 @@ def main():
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)
     ui = "nil" if not args.ui_at else "{" + ", ".join(ui_time(t) for t in args.ui_at.split(",")) + "}"
-    if args.game == "LOBBY" and args.colliders_at is not None:
+    if cup_modes:
+        out.append(cup_table(cup_modes))
+        out.append(cup_luau)
+        modes = ", ".join(json.dumps(mode) for mode in cup_modes)
+        out.append(f"return __runCup({{ {modes} }}, {args.players}, {args.bots}, {args.seconds or 12}, {args.rounds})")
+    elif args.game == "LOBBY" and args.colliders_at is not None:
         out.append(f"return __runLobbyColliders({args.colliders_reach})")
     elif args.game == "SKEEBALL":
         out.append((Path(__file__).resolve().parent / "skeeball_game.luau").read_text())
