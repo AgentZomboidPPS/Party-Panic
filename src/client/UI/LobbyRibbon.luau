@@ -15,7 +15,9 @@
 --   chip:Set("🏆", "CUP 3/5")   -- icon and words; empty words take the chip off the row
 --   chip.Button                 -- the chip itself, for extras (a "!" badge, a pulse)
 --
--- Priorities: 1 Event (Halloween, double coins), 2 Party Cup, 3 Invite, 4 Weekly leaderboard.
+-- Priorities: 1 Event (Halloween, double coins), 2 Party Cup, 2.5 Party (owner: "stuff to work on
+-- right now is parties."), 3 Invite, 4 Weekly leaderboard. A priority can be a fraction (one between
+-- two others): the chips line up by it in tenths.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -164,7 +166,7 @@ function LobbyRibbon.Add(
 		TextWrapped = false,
 		Size = UDim2.fromOffset(0, s.Height),
 		CornerRadius = "round",
-		LayoutOrder = options.Priority,
+		LayoutOrder = math.round(options.Priority * 10),
 		Visible = false,
 		Parent = row,
 	}, options.OnClick, options.Top or Theme.Colors.PanelLight, options.Bottom or Theme.Colors.PanelDark)
