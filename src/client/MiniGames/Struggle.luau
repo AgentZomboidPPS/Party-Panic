@@ -257,6 +257,9 @@ function Struggle.Start(api)
 		end
 		local copy = fanTemplate:Clone() :: Model
 		quiet(copy)
+		-- Its radius as shared (MeshLibrary may have rescaled the thin mesh), to scale it exactly.
+		local _, size = copy:GetBoundingBox()
+		copy:SetAttribute("PP_Radius", math.max(size.Z, 0.01))
 		for _, part in partsOf(copy) do
 			part.Color = (Rules.SLOTS[slotIndex] or Rules.SLOTS[1]).Color
 			part.Material = Enum.Material.Neon
@@ -874,7 +877,9 @@ function Struggle.Start(api)
 			end
 			if reach > 0 then
 				local flat = Vector3.new(rootCF.LookVector.X, 0, rootCF.LookVector.Z)
-				local ground = root.Position - Vector3.new(0, 2.9, 0)
+				-- On the sand (its top is the field's centre height), under the swinger.
+				local sandY = if center then (center :: Vector3).Y else root.Position.Y - 3
+				local ground = Vector3.new(root.Position.X, sandY, root.Position.Z)
 				local facing = CFrame.lookAt(ground, ground + (if flat.Magnitude > 0.01 then flat else Vector3.zAxis))
 				local size = Rules.CLOSE * 2
 				g.Disc.Size = Vector3.new(0.05, size, size)
@@ -882,7 +887,7 @@ function Struggle.Start(api)
 				g.Disc.Transparency = if glow then 0.62 else 0.8
 				local fan = g.Fan
 				if fan then
-					scaleBy(fan, reach)
+					scaleBy(fan, reach / (fan:GetAttribute("PP_Radius") or 1))
 					fan:PivotTo(facing * CFrame.new(0, 0.08, -reach / 2))
 					for _, part in partsOf(fan) do
 						part.Transparency = if glow then 0.62 else 0.8
