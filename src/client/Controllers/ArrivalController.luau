@@ -7,7 +7,7 @@
 -- than 5), and the move doesn't wait for it. Each device moves its own character, so one that got
 -- there before its floor dropped straight through and out of the world. Under each Pump & Pop pump
 -- there are three solid layers (the pad, the hidden stage and the grass), all built before anyone
--- is moved: the friend's phone had none of them yet. Being "frozen until GO" only stops walking and
+-- is moved: the friend's device had none of them yet. Being "frozen until GO" only stops walking and
 -- jumping, not falling.
 --
 -- So whenever this character arrives somewhere (a new character, or the server moving it: onto its
