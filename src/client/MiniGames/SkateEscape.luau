@@ -214,6 +214,32 @@ function SkateEscape.Start(api)
 	local hudY = api:HudY()
 	-- Phones draw the HUD at 75%: bigger dots, numbers and icons there keep them readable (11 pt+).
 	local touch = api:IsTouch()
+	-- Phones: half the torch lights and slower torch flames (~16 dynamic lights and ~450 fire
+	-- particles a second along the bridge were a big cost on their GPUs; PC keeps them all).
+	if touch then
+		api:Track(task.spawn(function()
+			local arena = api:Arena(10)
+			if not arena then
+				return
+			end
+			local lit = 0
+			for _, item in arena:GetDescendants() do
+				if item.Name == "Flame" and item:IsA("BasePart") then
+					local light = item:FindFirstChildOfClass("PointLight")
+					if light then
+						lit += 1
+						if lit % 2 == 0 then
+							light.Enabled = false
+						end
+					end
+					local fire = item:FindFirstChildOfClass("ParticleEmitter")
+					if fire then
+						fire.Rate = math.min(fire.Rate, 8)
+					end
+				end
+			end
+		end))
+	end
 	local barWidth = 560
 	local trackLength = barWidth - 64
 	local DOT = if touch then 30 else 18 -- a rider's dot (yours is MY_DOT)
@@ -797,8 +823,12 @@ function SkateEscape.Start(api)
 				local heat = 1 - (piece.D0 - front) / 32
 				local jitter = heat * heat * 0.18
 				model:PivotTo(piece.Base * CFrame.new(math.sin(now * 53) * jitter, math.sin(now * 61) * jitter, 0))
-				for _, plank in piece.Planks do
-					plank.Part.Color = plank.Color:Lerp(hot, heat * 0.6)
+				-- (Recoloured in small steps, not every frame: a piece has many planks.)
+				if math.abs(heat - (piece.Heat or -1)) > 0.04 then
+					piece.Heat = heat
+					for _, plank in piece.Planks do
+						plank.Part.Color = plank.Color:Lerp(hot, heat * 0.6)
+					end
 				end
 				piece.State = "Warn"
 			elseif front < piece.D1 then
@@ -834,8 +864,9 @@ function SkateEscape.Start(api)
 					end
 				end
 				-- Gone once even its pier's tower tops are under the lava.
+				-- (Taken out of this device's scene rather than parked under the lava: nothing left to draw.)
 				if drop > LAVA_DEPTH + 80 then
-					model:PivotTo(piece.Base - Vector3.new(0, 400, 0))
+					model.Parent = nil
 					piece.State = "Gone"
 				end
 			end

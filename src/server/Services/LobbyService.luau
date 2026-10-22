@@ -72,6 +72,7 @@ local function setupSecretToken()
 		Parent = refs.Root,
 	})
 	token:SetAttribute("Day", today)
+	token:SetAttribute("Spot", spot) -- where it bobs and spins (on each client: WorldScreensController)
 	local sparkles = Instance.new("Sparkles")
 	sparkles.SparkleColor = Color3.fromRGB(255, 240, 150)
 	sparkles.Parent = token
@@ -85,6 +86,8 @@ local function setupSecretToken()
 		today = now
 		spot = spots[(today % #spots) + 1]
 		token:SetAttribute("Day", today)
+		token:SetAttribute("Spot", spot)
+		token.CFrame = CFrame.new(spot)
 		return true
 	end
 
@@ -107,18 +110,15 @@ local function setupSecretToken()
 		debounce[player] = nil
 	end)
 
-	-- Gentle spin (server-side CFrame on one anchored part is cheap), and a look at the date now
-	-- and then.
-	local angle = 0
+	-- A look at the date now and then. (The token's gentle spin is drawn by each client: spinning it
+	-- here sent every phone a new position 60 times a second, all game long.)
 	local sinceCheck = 0
 	RunService.Heartbeat:Connect(function(dt)
-		angle += dt * 1.5
 		sinceCheck += dt
 		if sinceCheck >= 5 then
 			sinceCheck = 0
 			rollOver()
 		end
-		token.CFrame = CFrame.new(spot + Vector3.new(0, math.sin(angle * 2) * 0.3, 0)) * CFrame.Angles(0, angle, 0)
 	end)
 end
 
