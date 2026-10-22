@@ -4,6 +4,25 @@ Last updated: **2026-10-22 ~20:05 UTC** by Session C (branch **`claude/friendly-
 from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes from 19:00 UTC and Session A's sections
 0-9, still accurate except where a newer block says otherwise.
 
+## Session C, later: version 42 (the owner's playtest notes)
+
+- **Live: version 42** (published ~21:30 UTC from `795e965`, still PRIVATE). Four of the owner's notes:
+  - Results card (owner: "I don't like how clicking skips the ending screen. I clicked and I couldn't vote."): only
+    its X closes it (`Modal.CloseOnBackdrop`), a click on any window stays on it (the window is Active), and the
+    results end early only once everyone has answered PLAY AGAIN *and* given a 👍 or 👎 (`ReplayService.Wait` asks
+    `RatingService.Rated`); otherwise they run their 6 s.
+  - 👍 / 👎 in their usual yellow (owner: "why are the thumbs up and down black?"): a UIGradient on a button tints
+    the button's own text, emoji included, so each thumb is a child label. Worth knowing for any emoji on a button.
+  - Cake Factory (owner: "I cant even see the cakes because its blocking it."): the per-team 🎂 / ⭐ pills are gone
+    (they repeated the team scores); on PC your lanes sit at the bottom beside ADD.
+  - Minecart Mayhem (owner: "I cant see when to jump."): the clear window was ~0.34 s at cruise and the gap hides
+    behind your own cart. A JUMP up to `Track.HOLD` (1.2 s) early is now held to the best moment (`Track.JumpFor`,
+    server, client and the sim alike); the cue reads GAP AHEAD, then JUMP! for that whole time, then ✓ GOT IT.
+    `tests/MinecartJump.spec.luau`; bots' falls per round unchanged in `tools/checks/MinecartMayhemSim.luau`.
+- Checks: 349 Lune tests, both full client runs (same two pre-existing phone notes), Cake Factory, Minecart Mayhem
+  (a press 0.9 s early clears the gap on phone and PC), the PLAY AGAIN run (results 3 s when all answered and rated,
+  6 s when one took their vote back).
+
 ## Session C: the two saved jobs are done (versions 40 and 41)
 
 Both jobs in [HANDOFF_NEXT.md](HANDOFF_NEXT.md) are live. Start new work from the tip of
