@@ -108,6 +108,8 @@ return function(h)
 			AssetId = 78887571401658,
 			Palette = {
 				Enamel = h.rgb(220, 60, 60), -- recolored per team
+				-- Recolored per team too, a lighter coat (MiniGames/PrimeCut): the rim round the grate
+				-- and the side tables are what a player's camera sees of their grill.
 				Steel = h.rgb(178, 184, 194),
 				Grate = h.rgb(44, 44, 48),
 				Coals = h.rgb(255, 112, 32),

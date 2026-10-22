@@ -16,6 +16,8 @@
 -- wide as its line: colour teams by the shape they wear in the team modes, in their colour, versus
 -- roles by their icon. On phones it used to read Red and Blue whatever the teams were, so SHARK
 -- BAIT, SINKING SANDS and ARROW AMBUSH showed 0 — 0 all round and Green and Yellow never showed.
+-- It marks the player's own team too (owner: "I couldnt tell what color I was on prime cut."): a
+-- "YOU" beside its mark and a white-rimmed box round it, in every team game.
 
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -335,9 +337,11 @@ end
 -- with its mark and score, whatever the mode calls its teams. Colour teams wear their shape in the
 -- team's colour (★ Red, ● Blue, ▲ Green, ◆ Yellow: Teams.Shapes), so colour is never the only cue;
 -- versus roles their icon (🏹 Archers / 🏃 Runners, 💎 Divers / 👑 SandKings, 🦈 Sharks / 🏊 Swimmers).
--- Two teams read "★ 12   —   9 ●", three or four "★ 12   ● 9   ▲ 7   ◆ 3". Returns the line
--- (RichText) and the same line as plain text, to measure.
-local function teamScoreLine(scores: { [string]: any }): (string, string)
+-- Two teams read "★ 12   —   9 ●", three or four "★ 12   ● 9   ▲ 7   ◆ 3". The player's own team
+-- (`mine`) says so on its outer side: "YOU ★ 12   —   9 ●", "★ 12   —   9 ● YOU". Returns the line
+-- (RichText), the same line as plain text (to measure), and the player's team's part of the plain
+-- line (nil if they're not on one of these teams).
+local function teamScoreLine(scores: { [string]: any }, mine: string?): (string, string, { string }, number?)
 	local names = {}
 	for _, team in Teams.Order do
 		if scores[team] ~= nil then
@@ -355,6 +359,7 @@ local function teamScoreLine(scores: { [string]: any }): (string, string)
 		table.insert(names, name)
 	end
 	local rich, plain = {}, {}
+	local own = nil
 	for index, name in names do
 		local value = scores[name]
 		local score = if type(value) == "number" then tostring(value) else "0"
@@ -363,39 +368,90 @@ local function teamScoreLine(scores: { [string]: any }): (string, string)
 		local mark = shape or Teams.Icons[name] or string.upper(name)
 		local shown = if shape and color then `<font color="#{color:ToHex()}">{shape}</font>` else mark
 		local right = #names == 2 and index == 2 -- the second of two reads "9 ●"
-		table.insert(rich, if right then `{score} {shown}` else `{shown} {score}`)
-		table.insert(plain, if right then `{score} {mark}` else `{mark} {score}`)
+		local you = name == mine
+		if you then
+			own = index
+		end
+		table.insert(
+			rich,
+			if right
+				then `{score} {shown}{if you then " YOU" else ""}`
+				else `{if you then "YOU " else ""}{shown} {score}`
+		)
+		table.insert(
+			plain,
+			if right then `{score} {mark}{if you then " YOU" else ""}` else `{if you then "YOU " else ""}{mark} {score}`
+		)
 	end
 	local gap = if #names == 2 then "   —   " else "   "
-	return table.concat(rich, gap), table.concat(plain, gap)
+	return table.concat(rich, gap), table.concat(plain, gap), plain, own
 end
 
 -- Keeps a team pill on the round's team scores (both layouts): hidden outside team rounds, and as
 -- wide as its line, so four teams with 3-digit scores fit the smallest phone (re-measured every
--- second while it shows, in case the font was still loading).
+-- second while it shows, in case the font was still loading). The player's own team (PP_Team) gets a
+-- box round its part of the line, a deep shade of its colour with a white rim, besides its "YOU"
+-- (owner: "I couldnt tell what color I was on prime cut."), so a glance at the pill says which team
+-- you're on (and its shape still stands out on the box). While the rules card is up the pill steps
+-- aside: the card's own tab says your team then, and on PC the card covers the pill's lower half.
 local TEAM_TEXT, TEAM_PAD, TEAM_MIN, TEAM_MAX = 24, 22, 160, 600
+local MINE_PAD = 8 -- the box reaches this far past its words on either side
 local function followTeamScores(pill: Frame, label: TextLabel)
 	local line, fittedAt = "", 0
+	local parts: { string } = {}
+	local own: number? = nil
+	local box = UIKit.new("Frame", {
+		Name = "Mine",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromScale(0, 0.5),
+		Size = UDim2.new(0, 0, 1, -8),
+		BackgroundColor3 = Theme.Colors.PanelDark,
+		BackgroundTransparency = 0.1,
+		Visible = false,
+		ZIndex = label.ZIndex,
+		Parent = pill,
+		Children = { UIKit.Round(), UIKit.Stroke(Color3.new(1, 1, 1), 2, 0) },
+	})
+	label.ZIndex = box.ZIndex + 1
 	local function fit()
 		fittedAt = os.clock()
-		local width = math.ceil(UIKit.TextWidth(line, TEAM_TEXT, Theme.Fonts.Display)) + 2 * TEAM_PAD
-		pill.Size = UDim2.fromOffset(math.clamp(width, TEAM_MIN, TEAM_MAX), pill.Size.Y.Offset)
+		local font = Theme.Fonts.Display
+		local lineWidth = UIKit.TextWidth(line, TEAM_TEXT, font)
+		local width = math.clamp(math.ceil(lineWidth) + 2 * TEAM_PAD, TEAM_MIN, TEAM_MAX)
+		pill.Size = UDim2.fromOffset(width, pill.Size.Y.Offset)
+		box.Visible = own ~= nil
+		if own then
+			-- Where its part of the (centred) line ends, less the part's own width: the measure stops
+			-- at its last character, never at a gap's trailing spaces.
+			local gap = if #parts == 2 then "   —   " else "   "
+			local before = table.concat(parts, gap, 1, own)
+			local partWidth = UIKit.TextWidth(parts[own], TEAM_TEXT, font)
+			local left = (width - lineWidth) / 2 + UIKit.TextWidth(before, TEAM_TEXT, font) - partWidth
+			box.Position = UDim2.new(0, math.floor(left - MINE_PAD), 0.5, 0)
+			box.Size = UDim2.new(0, math.ceil(partWidth + 2 * MINE_PAD), 1, -8)
+		end
 	end
 	local function refresh()
 		local scores = GameState.GetJSON("TeamScores")
-		if type(scores) ~= "table" or next(scores) == nil then
+		if type(scores) ~= "table" or next(scores) == nil or player:GetAttribute("PP_RulesShowing") == true then
 			pill.Visible = false
 			return
 		end
 		pill.Visible = true
-		local rich, plain = teamScoreLine(scores)
+		local mine = player:GetAttribute("PP_Team")
+		local rich, plain, newParts, newOwn = teamScoreLine(scores, if type(mine) == "string" then mine else nil)
 		label.Text = rich
+		parts, own = newParts, newOwn
+		local color = if own then Teams.Colors[mine] else nil
+		box.BackgroundColor3 = if color then color:Lerp(Color3.new(0, 0, 0), 0.5) else Theme.Colors.PanelDark
 		if plain ~= line then
 			line = plain
 			fit()
 		end
 	end
 	GameState.Changed("TeamScores", refresh)
+	player:GetAttributeChangedSignal("PP_Team"):Connect(refresh)
+	player:GetAttributeChangedSignal("PP_RulesShowing"):Connect(refresh)
 	refresh()
 	RunService.Heartbeat:Connect(function()
 		if pill.Visible and os.clock() - fittedAt > 1 then
