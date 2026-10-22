@@ -1,4 +1,7 @@
 -- Party Panic client entry point: builds the UI root and starts every controller.
+--
+-- ArrivalController keeps a character the server has just placed where it was put until this device
+-- has the floor under it (owner: "Friend fell through the floor while loading into pump and pop.").
 
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
@@ -44,6 +47,7 @@ local order = {
 	"EffectsController",
 	"AmbienceController",
 	"MovementController",
+	"ArrivalController",
 	"SceneryCameraController",
 	"WorldScreensController",
 	"HudController",
@@ -54,6 +58,12 @@ local order = {
 	"QuestController",
 	"RewardsController", -- after HudController: it adds to the profile chip
 	"CelebrationController",
+	-- What keeps players coming back.
+	"CupController",
+	"InviteController",
+	"MedalController",
+	"HallOfFameController",
+	"EventController",
 	"EmoteController",
 	"SpectateController",
 	"OnboardingController",

@@ -1,0 +1,11 @@
+newmtl Sawdust
+Kd 0.925 0.808 0.588
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Chips
+Kd 0.839 0.667 0.431
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

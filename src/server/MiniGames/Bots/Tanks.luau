@@ -301,7 +301,22 @@ function Brain.Step(bot, ctx, mode, dt)
 			continue
 		end
 		local d2 = (mine.X - tank.X) ^ 2 + (mine.Z - tank.Z) ^ 2
-		if d2 < (TankField.MINE_BLAST + 4) ^ 2 and mine.BlowAt - now < 2.5 then
+		if d2 >= (TankField.MINE_BLAST + 4) ^ 2 then
+			continue
+		end
+		-- About to blow: its fuse is nearly out, or another tank is about to drive onto it once
+		-- it's armed (bots used to sit beside a mine a rival was rolling onto and go up with it).
+		local soon = mine.BlowAt - now < 2.5
+		if not soon and now >= mine.ArmAt - 0.8 then
+			for _, other in enemies do
+				local o2 = (other.X - mine.X) ^ 2 + (other.Z - mine.Z) ^ 2
+				if o2 < (TankField.MINE_TRIGGER + TankField.HALF_LENGTH + 5) ^ 2 then
+					soon = true
+					break
+				end
+			end
+		end
+		if soon then
 			danger = mine
 			break
 		end
@@ -458,7 +473,9 @@ function Brain.Step(bot, ctx, mode, dt)
 		for _, other in enemies do
 			close = math.min(close, math.sqrt((other.X - tank.X) ^ 2 + (other.Z - tank.Z) ^ 2))
 		end
-		if close < 24 and bot:Chance(0.06 + 0.12 * skill) then
+		-- Close enough to matter, but not so close the enemy rolls onto it before this bot is clear
+		-- of the blast (it needs about a second at full speed).
+		if close < 24 and close > TankField.MINE_BLAST + 4 and bot:Chance(0.06 + 0.12 * skill) then
 			ctx:BotAction(bot, "Mine")
 			m.Flee = { X = tank.X, Z = tank.Z, Until = now + 1.8 }
 			m.NextMine = now + rng:NextNumber(4, 8)

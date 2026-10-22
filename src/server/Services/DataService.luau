@@ -350,6 +350,12 @@ function DataService.BuildSnapshot(profile: Profile)
 		},
 		TutorialDone = data.Tutorial.Done,
 		Settings = data.Settings,
+		-- What keeps players coming back: each feature's save field, as saved (Party Cups, medals,
+		-- this week's leaderboard points, events).
+		Cups = data.Cups,
+		Medals = data.Medals,
+		Weekly = data.Weekly,
+		Events = data.Events,
 		IsVip = profile.IsVip,
 		CanSave = profile.CanSave,
 	}

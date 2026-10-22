@@ -470,6 +470,8 @@ local function __grantRewards(definition, results, before)
 	end
 	local placed = Placement.Assign(entries)
 	local ok, err = pcall(RewardService.GrantRound, definition, placed, results.WinningTeam)
+	-- As RoundManager: the features that hang off rounds (cups, leaderboard, medals...) hear about it.
+	__require("Server/Services/RoundEvents").Finished:Fire(definition, placed, results.WinningTeam)
 	local report = { granted = if ok then "ok" else tostring(err), players = {} }
 	local places = {}
 	for _, item in placed do
@@ -509,11 +511,51 @@ local function __grantRewards(definition, results, before)
 	return report
 end
 
--- What happens to the stand-ins during the rules card (round_harness.py --leave-at / --reset-at):
--- every one of them leaves `leaveAt` seconds in (only real bots stay), or the last one's character
--- dies `resetAt` seconds in, like a reset from the Roblox menu; the report says where it is at GO
--- and after (it should be back on its spot, or where a respawn mode's Respawn hook puts it, and
--- still in).
+-- round_harness.py --drop-at T: T seconds into the rules card the last stand-in drops straight
+-- through its floor to under KillY, as on a device that hadn't loaded the floor yet (owner: "Friend
+-- fell through the floor while loading into pump and pop."). Before GO that isn't a fall: the round
+-- puts the same character straight back on its spot (RoundContext._putBack), alive and still in.
+-- The report says where it is a moment later, just before GO and after.
+local function __dropThrough(ctx, player, at, summary, prepStart, prepDeadline)
+	task.delay(math.max(0, prepStart + at - os.clock()), function()
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not character or not root then
+			summary.drop = "no character to drop"
+			return
+		end
+		local spot = root.Position
+		local report = { who = player.Name, at = at, checks = {} }
+		summary.drop = report
+		character:PivotTo(character:GetPivot() - Vector3.new(0, spot.Y - ctx.KillY + 20, 0))
+		report.droppedTo = `{__round(ctx.KillY - root.Position.Y)} under KillY`
+		local function check(label)
+			local _, _, rootNow = ctx:GetCharacter(player)
+			table.insert(report.checks, {
+				label = label,
+				alive = ctx:IsAlive(player),
+				sameCharacter = player.Character == character,
+				fromSpot = if rootNow then __round((rootNow.Position - spot).Magnitude) else "no character",
+			})
+		end
+		task.wait(0.5)
+		check("0.5s later")
+		task.wait(math.max(0, prepDeadline - 0.3 - os.clock()))
+		check("just before GO")
+		while not ctx.Started and ctx.Active do
+			task.wait(0.05)
+		end
+		task.wait(1)
+		check("1s after GO")
+		report.putBacks = __require("Server/Services/Telemetry").Counters.PutBack or 0
+	end)
+end
+
+-- What happens to the stand-ins during the rules card (round_harness.py --leave-at / --reset-at /
+-- --drop-at): every one of them leaves `leaveAt` seconds in (only real bots stay), or the last one's
+-- character dies `resetAt` seconds in, like a reset from the Roblox menu, or drops through its floor
+-- `dropAt` seconds in (__dropThrough); the report says where it is at GO and after (it should be
+-- back on its spot, or where a respawn mode's Respawn hook puts it, and still in).
 function __prepEvents(ctx, roundPlayers, watch, summary, leave, prepStart, prepDeadline)
 	if watch.leaveAt then
 		task.delay(math.max(0, prepStart + watch.leaveAt - os.clock()), function()
@@ -524,6 +566,9 @@ function __prepEvents(ctx, roundPlayers, watch, summary, leave, prepStart, prepD
 		end)
 	end
 	local player = roundPlayers[#roundPlayers]
+	if watch.dropAt and player then
+		__dropThrough(ctx, player, watch.dropAt, summary, prepStart, prepDeadline)
+	end
 	if not watch.resetAt or not player then
 		return
 	end
@@ -581,15 +626,141 @@ function __prepEvents(ctx, roundPlayers, watch, summary, leave, prepStart, prepD
 	end)
 end
 
+-- The stand-in client's ArrivalController (owner: "Friend fell through the floor while loading into
+-- pump and pop."): every hold of the stand-in's character goes in summary.clientHolds (from and to,
+-- in seconds since the rules card came up, and how far from the spot the round gave it: 0 is on it,
+-- "not placed yet" is before, at its start in the empty test world). Placed on a floor that's there,
+-- it's never held. With round_harness.py --late-floor T its ground probe finds nothing for the first
+-- T seconds, like a phone still loading the arena: it must be held on its spot until then, and let go
+-- then. Returns a function that stops watching.
+function __watchHolds(ctx, summary, prepStart, lateFloor)
+	local ok, arrival = pcall(__require, "Client/Controllers/ArrivalController")
+	if not ok then
+		summary.clientHolds = "no ArrivalController: " .. tostring(arrival)
+		return nil
+	end
+	if lateFloor then
+		local probe = arrival.GroundUnder
+		local floorAt = prepStart + lateFloor
+		arrival.GroundUnder = function(...)
+			if os.clock() < floorAt then
+				return false -- this device hasn't got the arena yet
+			end
+			return probe(...)
+		end
+		summary.lateFloor = lateFloor
+	end
+	local RunService = game:GetService("RunService")
+	local holds = {}
+	summary.clientHolds = holds
+	local open, at = nil, nil
+	local function close()
+		if open then
+			open.to = __round(os.clock() - prepStart)
+			table.insert(holds, open)
+			open, at = nil, nil
+		end
+	end
+	local watching = RunService.Heartbeat:Connect(function()
+		local heldAt = arrival.HeldAt()
+		if at and (not heldAt or (heldAt - at).Magnitude > 1) then
+			close()
+		end
+		if heldAt and not open then
+			-- Where it's held, against where the round put it (its spot, root 3 studs up).
+			local spot = ctx._spots[__localPlayer]
+			open = {
+				from = __round(os.clock() - prepStart),
+				offSpot = if spot
+					then __round((heldAt - (spot.CFrame.Position + Vector3.yAxis * 3)).Magnitude)
+					else "not placed yet",
+			}
+			at = heldAt
+		end
+	end)
+	return function()
+		watching:Disconnect()
+		close()
+	end
+end
+
+-- The stand-in client's rules card (round_harness.py --client --ui-at rules,closed): "rules" is a
+-- snapshot of the screen once the card has popped up, "closed" one just after the player closed it
+-- with its ✕ (RoundController.CloseRules). summary.rulesCard says what was up each time (the card,
+-- PP_RulesShowing, the mode's HUD), whether the card came back before GO, and what the 3-2-1 showed.
+function __rulesShots(uiAt, clientGuis, summary, prepDeadline)
+	local wanted = {}
+	for _, at in uiAt or {} do
+		wanted[at] = true
+	end
+	if not clientGuis or not (wanted.rules or wanted.closed) then
+		return
+	end
+	local countdownAt = prepDeadline - __require("Shared/Config").Session.CountdownTime
+	task.spawn(function()
+		local report = {}
+		summary.rulesCard = report
+		while __localPlayer:GetAttribute("PP_RulesShowing") ~= true and os.clock() < countdownAt do
+			task.wait(0.05)
+		end
+		local hud = clientGuis:FindFirstChild("PartyPanicHUD")
+		local card = hud and hud:FindFirstChild("Rules")
+		local function look()
+			local modeHud = "none"
+			for _, gui in clientGuis:GetChildren() do
+				if gui:IsA("ScreenGui") and string.sub(gui.Name, 1, 9) == "MiniGame_" then
+					modeHud = if gui.Enabled then "shown" else "waiting"
+				end
+			end
+			return {
+				card = if card then (if card.Visible then "up" else "down") else "missing",
+				showing = __localPlayer:GetAttribute("PP_RulesShowing") == true,
+				modeHud = modeHud,
+				left = __round(countdownAt - os.clock()), -- seconds to the 3-2-1
+			}
+		end
+		task.wait(1.5) -- it pops in
+		report.up = look()
+		summary.ui = summary.ui or {}
+		if wanted.rules then
+			summary.ui.rules = __dumpGui(clientGuis, "rules")
+		end
+		if not wanted.closed or os.clock() > countdownAt - 1 then
+			return
+		end
+		__require("Client/Controllers/RoundController").CloseRules()
+		task.wait(0.5)
+		report.closed = look()
+		summary.ui.closed = __dumpGui(clientGuis, "closed")
+		-- It stays closed, and the 3-2-1 and GO come at their times.
+		local countdown = hud and hud:FindFirstChild("Countdown")
+		local seen, cameBack = {}, false
+		while os.clock() < prepDeadline + 1.5 do
+			cameBack = cameBack or (card ~= nil and card.Visible)
+			if countdown and countdown.Visible and seen[#seen] ~= countdown.Text then
+				table.insert(seen, countdown.Text)
+			end
+			task.wait(0.03)
+		end
+		report.cameBack = cameBack
+		report.countdown = table.concat(seen, " ")
+	end)
+end
+
 -- `watch` (round_harness.py --client-sits-out / --client-out-at): the stand-in client sits the round
 -- out ({ sitOut = true }), or is knocked out `outAt` seconds in.
-function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, uiAt, botCount, watch)
+-- `colliders` (round_harness.py --colliders-at, tools/checks/colliders.luau): snapshots of every part
+-- characters collide with, { times = { seconds into the round, 0 = after Prepare } }.
+function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, uiAt, botCount, watch, colliders)
 	local GameDefinitions = __require("Shared/GameDefinitions")
 	local GameState = __require("Shared/GameState")
 	local Config = __require("Shared/Config")
 	GameState.Folder()
 	local RoundContext = __require("Server/Services/RoundContext")
 	__require("Server/World/Shapes").RecordPieces = true
+	if __noCsg then
+		__require("Server/World/Shapes").PauseCsgForTests(1e6) -- as if CSG failed on this server
+	end
 	local module = __require("Server/MiniGames/" .. id)
 	local definition = GameDefinitions.Get(id)
 	assert(definition, "no definition for " .. id)
@@ -630,6 +801,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 				"RewardsController",
 				"CelebrationController",
 				"MiniGameController",
+				"ArrivalController",
 			}
 		do
 			local okLoad, controller = pcall(__require, "Client/Controllers/" .. name)
@@ -637,12 +809,30 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 				__note(`client {name} failed to load: {controller}`)
 				continue
 			end
+			-- No physics here, so PreSimulation and PostSimulation never fire: ArrivalController steps on
+			-- Heartbeat instead, its "after the physics step" deferred to the end of the frame. (Only for
+			-- it, while it starts: the modes' own pose loops stay as they always ran here.)
+			local physicsShim = name == "ArrivalController"
+			if physicsShim then
+				rawset(__clientShims.RunService, "PreSimulation", __realRun.Heartbeat)
+				rawset(__clientShims.RunService, "PostSimulation", {
+					Connect = function(_, fn)
+						return __realRun.Heartbeat:Connect(function(...)
+							task.defer(fn, ...)
+						end)
+					end,
+				})
+			end
 			task.spawn(function()
 				local okStart, err = pcall(controller.Start, context)
 				if not okStart then
 					__note(`client {name} failed to start: {err}`)
 				end
 			end)
+			if physicsShim then
+				rawset(__clientShims.RunService, "PreSimulation", nil)
+				rawset(__clientShims.RunService, "PostSimulation", nil)
+			end
 		end
 		clientGuis = __localPlayer.PlayerGui
 		__uiScaleFor = __require("Client/UI/UIKit").ScaleFor -- gui_dump.luau: the scale per screen
@@ -653,6 +843,33 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	if not okSeed then
 		__note("seeding profiles failed: " .. tostring(seeded))
 		seeded = nil
+	end
+
+	-- A test run: services that keep shared data (the weekly leaderboard's DataStore...) must never
+	-- write it from a test; they check this attribute.
+	workspace:SetAttribute("PP_Harness", true)
+	-- The features that hang off rounds (they hear RoundEvents.Finished from __grantRewards), started
+	-- the way the server starts them.
+	for _, name in { "CupService", "FriendsService", "MedalService", "LeaderboardService", "EventService" } do
+		local okLoad, service = pcall(__require, "Server/Services/" .. name)
+		if not okLoad or type(service) ~= "table" then
+			__note(`{name} failed to load: {service}`)
+			continue
+		end
+		if service.Init then
+			local okInit, initErr = pcall(service.Init)
+			if not okInit then
+				__note(`{name}.Init failed: {initErr}`)
+			end
+		end
+		if service.Start then
+			task.spawn(function()
+				local okStart, startErr = pcall(service.Start)
+				if not okStart then
+					__note(`{name}.Start failed: {startErr}`)
+				end
+			end)
+		end
 	end
 
 	-- Real bots (Services/BotService) driven by the mode's brain, alongside the scripted stand-ins.
@@ -698,6 +915,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	local prepTime = Config.Session.RulesTime + Config.Session.CountdownTime
 	local prepDeadline = os.clock() + prepTime
 	setPhase("Preparing", prepTime)
+	__rulesShots(uiAt, clientGuis, summary, prepDeadline)
 
 	local function leave(player)
 		local index = table.find(__fakePlayers, player)
@@ -714,6 +932,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	end
 
 	local t0 = os.clock()
+	local stopWatchingHolds = if clientMode and not watcher
+		then __watchHolds(ctx, summary, t0, watch and watch.lateFloor)
+		else nil
 	local okPrepare, prepareErr = pcall(miniGame.Prepare, miniGame)
 	summary.prepare = if okPrepare then "ok" else tostring(prepareErr)
 	summary.prepareSeconds = __round(os.clock() - t0)
@@ -732,6 +953,24 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	end
 	if okPrepare and not starting then
 		summary.calledOff = __round(os.clock() - t0)
+	end
+	local colliderTimes = if colliders then table.clone(colliders.times) else {}
+	if colliders then
+		summary.rebuildWait, summary.rebuildsLeft, summary.rebuildHitch = __waitForRebuilds(150)
+		summary.rebuildSlowest = __slowestRebuilds(5)
+	end
+	local function snapColliders(label)
+		local okSnap, snapshot = pcall(
+			__colliderSnapshot,
+			label,
+			{ center = ctx.Origin.Position, reach = colliders.reach, killY = ctx.KillY }
+		)
+		summary.colliders = summary.colliders or {}
+		table.insert(summary.colliders, if okSnap then snapshot else { label = label, failed = tostring(snapshot) })
+	end
+	if colliders and colliderTimes[1] == 0 then
+		table.remove(colliderTimes, 1)
+		snapColliders("prepare")
 	end
 
 	local env = {
@@ -817,10 +1056,13 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 				summary.ui = summary.ui or {}
 				for _, at in uiAt do
 					local key = tostring(at)
-					if not summary.ui[key] and now - begin >= at then
+					if type(at) == "number" and not summary.ui[key] and now - begin >= at then
 						summary.ui[key] = __dumpGui(clientGuis)
 					end
 				end
+			end
+			if colliderTimes[1] and now - begin >= colliderTimes[1] then
+				snapColliders(string.format("t%.0f", table.remove(colliderTimes, 1)))
 			end
 			if dumpAt and not summary.dump and now - begin >= dumpAt then
 				local roots = { ctx.Arena }
@@ -937,6 +1179,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	end
 	summary.notHomeAfterCleanup = notHome
 	summary.arenaLeftovers = if ctx.Arena.Parent then #ctx.Arena:GetDescendants() else 0
+	if colliders then
+		summary.colliderLeftovers = __colliderLeftovers()
+	end
 	if clientGuis then
 		local modeGuis = {}
 		for _, gui in clientGuis:GetChildren() do
@@ -957,6 +1202,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		for _, bot in bots do
 			BotService.Remove(bot)
 		end
+	end
+	if stopWatchingHolds then
+		stopWatchingHolds()
 	end
 	summary.errors = __errors
 	summary.textReport = if summary.ui then __textReport else nil
@@ -1092,16 +1340,31 @@ function __checkSitOut(VotingService, BotService)
 	return result
 end
 
--- The lobby with bots (round_harness.py LOBBY): builds the lobby, adds bots, and plays an
--- intermission and a vote, to check their wandering and that they never vote (people pick games).
--- Then people sit out (__checkSitOut).
-function __runLobby(botCount, intermission, voteTime)
+-- The lobby with bots (round_harness.py LOBBY): builds the lobby, adds bots, and plays the time
+-- between rounds three times with Config.Session's times (owner: "Less time sitting in the lobby.
+-- total of 20 seconds instead of 40."): a round's results, back to the lobby, then the vote, with
+-- two stand-in people who'll play the next round. Bots wander and never vote (people pick games).
+-- First both people vote (two games: a tie, broken at random), so the vote ends a beat after the
+-- last vote (VotingService.Wait); then Bo doesn't vote (Ann picks Random), so it runs its full time;
+-- then Bo sits out instead of voting, which leaves nobody to wait for. "phases" says when each phase
+-- started (seconds into the run), "votes" how each vote went (when it closed, what the banner's
+-- timer said just after each vote, the winner). Then people sit out (__checkSitOut). The run lasts
+-- at least `seconds` (the bots keep wandering).
+function __runLobby(botCount, seconds)
+	local Config = __require("Shared/Config")
 	local GameState = __require("Shared/GameState")
 	GameState.Folder()
 	local LobbyBuilder = __require("Server/World/LobbyBuilder")
 	local VotingService = __require("Server/Services/VotingService")
 	local BotService = __require("Server/Services/BotService")
 	local BotRegistry = __require("Server/Services/BotRegistry")
+	local SitOutService = __require("Server/Services/SitOutService")
+	local DataService = __require("Server/Services/DataService")
+	local Notifier = __require("Server/Services/Notifier")
+	local Telemetry = __require("Server/Services/Telemetry")
+	local Roster = __require("Shared/Logic/Roster")
+	local TableUtil = __require("Shared/Logic/TableUtil")
+	local session = Config.Session
 	local summary = {}
 	local okLobby, refs = pcall(LobbyBuilder.Build)
 	summary.lobby = if okLobby then "ok" else tostring(refs)
@@ -1139,7 +1402,6 @@ function __runLobby(botCount, intermission, voteTime)
 		return list
 	end
 	summary.spawned = positions()
-	GameState.Set("Phase", "Intermission")
 	local stepper = task.spawn(function()
 		while true do
 			for _, bot in BotRegistry.List() do
@@ -1148,21 +1410,112 @@ function __runLobby(botCount, intermission, voteTime)
 			task.wait(0.4)
 		end
 	end)
-	task.wait(intermission)
-	summary.afterIntermission = positions()
-	GameState.Set("Phase", "Voting")
-	VotingService.Begin({
-		{ Id = "FireRope", Mystery = false },
-		{ Id = "HexMeltdown", Mystery = false },
-		{ Id = "HoneyTrap", Mystery = false },
-		{ Id = "PumpAndPop", Mystery = true },
-	})
-	summary.botVoteRefused = not VotingService.Cast(bots[1], 1)
-	task.wait(voteTime)
-	summary.voteCounts = GameState.GetJSON("VoteCounts")
+
+	-- The phases as RoundManager sets them, and when each started.
+	local t0 = os.clock()
+	local phases = {}
+	local function setPhase(phase, duration, message)
+		GameState.Set("Phase", phase)
+		GameState.Set("PhaseEndsAt", if duration then workspace:GetServerTimeNow() + duration else 0)
+		GameState.Set("Message", message or "")
+		table.insert(phases, { phase = phase, at = __round(os.clock() - t0), planned = duration })
+	end
+
+	-- Two people who'll play the next round, with profiles that never save. Stand-ins aren't real
+	-- Players: their notifications stay here (Notifier only sends to real ones) and they're left out
+	-- of AnalyticsService.
+	local told = {}
+	local realSend, realEvent = Notifier.Send, Telemetry.PlayerEvent
+	Notifier.Send = function(player, text)
+		table.insert(told, `{player.Name}: {text}`)
+	end
+	Telemetry.PlayerEvent = function() end
+	local people = {}
+	for index, name in { "Ann", "Bo" } do
+		local person = __newPlayer(100 + index)
+		person.Name, person.DisplayName = name, name
+		table.insert(__fakePlayers, person)
+		DataService.All()[person] = {
+			Player = person,
+			Key = "",
+			Data = TableUtil.DeepCopy(DataService.Template),
+			CanSave = false,
+			IsVip = false,
+			Released = false,
+		}
+		table.insert(people, person)
+	end
+	local ann, bo = people[1], people[2]
+	local function everyoneOnBreak() -- RoundManager's abort for the vote
+		return (Roster.Blocker(SitOutService.Lineup(), session.MinPlayers)) == "Break"
+	end
+
+	-- A round's results, back to the lobby, then the vote; `casts` are { seconds into the vote, who,
+	-- the card they tap (or "sitOut") }.
+	local votes = {}
+	local function betweenRounds(label, casts)
+		setPhase("Results", session.ResultsTime, "Results")
+		task.wait(session.ResultsTime)
+		setPhase("Cleanup", nil, "Back to the lobby!")
+		task.wait(0.3)
+		setPhase("Intermission", session.IntermissionTime, "Next vote soon!")
+		task.wait(session.IntermissionTime)
+		summary.afterIntermission = summary.afterIntermission or positions()
+		local lineup = SitOutService.Lineup()
+		local options = VotingService.BuildOptions(#lineup.Participants, {}, false)
+		setPhase("Voting", session.VoteTime, "Vote for the next game!")
+		VotingService.Begin(options)
+		local opened = os.clock()
+		local report = { label = label, options = {}, casts = {}, timerAfter = {}, voters = lineup.Playing }
+		for index, option in options do
+			report.options[index] = if option.Mystery then `Random ({option.Id})` else option.Id
+		end
+		for _, cast in casts do
+			task.delay(cast[1], function()
+				local who, card = cast[2], cast[3]
+				local when = __round(os.clock() - opened)
+				if card == "sitOut" then
+					SitOutService.Set(who, true)
+					table.insert(report.casts, `{who.Name} sat out at {when}`)
+				else
+					local ok = VotingService.Cast(who, card)
+					table.insert(report.casts, `{who.Name} tapped {card} at {when}{if ok then "" else " (refused)"}`)
+					if BotRegistry.IsBot(who) then
+						summary.botVoteRefused = not ok
+					end
+				end
+				task.wait(0.3) -- what everyone's banner says just after
+				table.insert(report.timerAfter, __round(GameState.TimeLeft()))
+			end)
+		end
+		report.voted = VotingService.Wait(session.VoteTime, everyoneOnBreak)
+		report.closedAfter = __round(os.clock() - opened)
+		local winner, counts, tie = VotingService.End()
+		report.counts = counts
+		report.winner = winner and (if winner.Mystery then `Random: {winner.Id}` else winner.Id)
+		report.tie = tie
+		table.insert(votes, report)
+	end
+	betweenRounds("everyone votes", { { 0.5, bots[1], 1 }, { 1, ann, 2 }, { 2, bo, 3 } })
 	summary.afterVote = positions()
-	local winner = VotingService.End()
-	summary.winner = winner and winner.Id
+	betweenRounds("Bo doesn't vote", { { 1, ann, 4 } })
+	betweenRounds("Bo sits out", { { 1, ann, 1 }, { 3, bo, "sitOut" } })
+	summary.phases = phases
+	summary.votes = votes
+	-- Ann and Bo leave before the sit-out check (it brings its own people).
+	SitOutService.Set(bo, false)
+	for _, person in people do
+		table.remove(__fakePlayers, table.find(__fakePlayers, person))
+		DataService.All()[person] = nil
+		person.Parent = nil
+		if person.Character then
+			person.Character:Destroy()
+		end
+	end
+	Notifier.Send, Telemetry.PlayerEvent = realSend, realEvent
+	summary.told = told
+	task.wait(math.max(0, seconds - (os.clock() - t0)))
+
 	summary.sitOut = __checkSitOut(VotingService, BotService)
 	task.cancel(stepper)
 	-- One leaves (as if a player joined), to see the fade-out.

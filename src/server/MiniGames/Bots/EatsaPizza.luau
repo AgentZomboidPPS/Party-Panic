@@ -1,7 +1,7 @@
 -- How bots play Eatsa Pizza (contract in Bots/Default.luau). A bot walks to a slice of its team that
 -- still has food on it (the nearest one, but it spreads out: a slice a teammate is already chewing
 -- costs extra), stands on what's left of it and mashes EAT through ctx:BotAction, exactly like a
--- player's button. How fast it mashes depends on its skill (about 4 to 8 bites a second, under the
+-- player's button. How fast it mashes depends on its skill (about 4.5 to 7 bites a second, under the
 -- server's cap), it stops for a breath now and then, and it takes a moment to notice its slice is
 -- gone before it walks on. A bot that stops moving short of its slice (the step up from an eaten
 -- slice) hops.
@@ -24,7 +24,7 @@ function Brain.Step(bot, ctx, mode, dt)
 	local skill = bot.Skill
 	if not memory.Side then
 		memory.Side = bot.Rng:NextNumber(-0.8, 0.8)
-		memory.Rate = 3.6 + 4.6 * skill
+		memory.Rate = 3.2 + 4.0 * skill
 		memory.Acc = 0
 		memory.WaitUntil = now + bot:Reaction()
 	end

@@ -24,7 +24,10 @@ local Lighting = game:GetService("Lighting")
 local Arcade = require(script.Parent.Arcade)
 local Build = require(script.Parent.Build)
 local Environment = require(script.Parent.Environment)
+local EventDecor = require(script.Parent.EventDecor)
+local HallOfFame = require(script.Parent.HallOfFame)
 local LobbyObby = require(script.Parent.LobbyObby)
+local MedalWall = require(script.Parent.MedalWall)
 local MeshLibrary = require(script.Parent.MeshLibrary)
 local Shapes = require(script.Parent.Shapes)
 
@@ -453,7 +456,8 @@ local function buildFountain(root: Model)
 		(upperWater :: any)[key] = value
 	end
 	local colliders = Build.Model("Colliders", center)
-	disc("PoolFloor", 22.6, 1, Vector3.new(0, 0.6, 0), { Transparency = 1, Parent = colliders })
+	-- (Its top is the mesh's pool floor, 0.55: at 1.1 waders stood half a stud over it.)
+	disc("PoolFloor", 22.6, 1, Vector3.new(0, 0.05, 0), { Transparency = 1, Parent = colliders })
 	disc("ColumnCollider", 3.6, 8.6, Vector3.new(0, 4.5, 0), { Transparency = 1, Parent = colliders })
 	for _, point in Build.Ring(Vector3.new(0, 1.6, 0), 12.1, 24) do
 		Build.Part({
@@ -1648,6 +1652,9 @@ function LobbyBuilder.Build(): LobbyRefs
 	buildSkyline(root)
 	buildScenery(root)
 	Arcade.Build(root) -- the Skee-Ball arcade (north-east lawn); clears the scenery in its way
+	HallOfFame.Build(root) -- last week's leaders, by the winner podium (east)
+	MedalWall.Build(root) -- every game's medal, by the shop gallery (west)
+	EventDecor.Build(root) -- the limited-time event's decorations, if one is on
 	softenFoliage(root)
 
 	return {

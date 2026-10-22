@@ -1,31 +1,45 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-21 21:58 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-22 02:40 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (21:58 UTC)
+## Session B in flight (2026-10-22 02:40 UTC)
 
-- **Live version 32** (published 21:55 UTC from `claude/upbeat-galileo-gvwq66` at `6e0029b`, on the owner's "Push right
-  now"; the owner must restart servers).
-  - **What it adds over version 31:**
-    - the Fire Rope "chair" camera fix;
-    - audits of Hex Meltdown, Rake It In, Bobsled Run, Skate Escape, Pump & Pop, Arrow Ambush, Cake Factory and Crazy
-      Cutters;
-    - Bumper Ballers phone controls and Sinking Sands bots;
-    - payoffs and low coins: Rewards Road, career milestones, celebration cards, the one-time saved-coin conversion;
-    - DataService saves that survive shutdowns and never lock for a player who left mid-load;
-    - mode client start-ups cancelled with their round, and Honey Trap's hint on one line.
-  - **Full regression on that exact commit:**
+- **Live version 34** (published 02:38 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `1f08776`, on the
+  owner's "merge my branch claude/quirky-hopper-5yk8zk" and that window's "merge my branch ... and publish"; the owner
+  must restart servers).
+  - **Quick check on that exact commit:**
     - code checks;
-    - every mode's 12-player, bots and phone rounds: 0 errors, 0 phone-UI problems;
+    - the 12-player, bots and phone rounds of SinkingSands, PrimeCut, RockinRaceway, PumpAndPop, LogJam, Struggle,
+      ArrowAmbush and HoneyTrap;
     - a lobby round with 8 bots;
-    - the whole client on phone and PC: 0 errors, empty text report, ui_render 0 problems.
-  - **The whole-client harness can't run in one task any more.** Its result (3.4 MB raw) comes back from Open Cloud at
-    about 4 MiB, where it fails as "INTERNAL_ERROR Task timed out due to an internal error" after 600 s (v33's 6 MB
-    fails as `OUTPUT_SIZE_LIMIT_EXCEEDED`). For v32 it was run as two tasks, each returning half of the snapshots (by
-    sorted name), then merged for ui_render. The client-UI helper is slimming the harness output for v33.
-- **v33 candidate: local branch `integrate-v33` in `/home/user/pp-v33`, pushed to `claude/upbeat-galileo-gvwq66`.**
+    - the whole client on phone and PC.
+
+    All had 0 errors and 0 render problems. The full regression of v33 (all 25 games) was clean.
+  - **What it adds to v33:**
+    - the invisible-collision sweep: precise mesh collision, no reachable invisible walls, and the CSG fallback from
+      pieces;
+    - no falling through floors on load-in (`ArrivalController`, plus a put-back before GO);
+    - the lobby at 20 s, with the vote ending 1 s after the last person votes;
+    - the rules card's ✕;
+    - the Sand King rework (BLAST, SUNKEN CHEST, stronger PULL);
+    - team identity (Prime Cut's grills, the YOU'RE ON tab, the YOU mark on the pill);
+    - Rockin' Raceway's 3D hurdles;
+    - Log Jam and Struggle (27 games);
+    - Tanks! and Snowball Summit bot fixes;
+    - the vote-variety spec;
+    - all 27 portal previews;
+    - Stamp Out's 👣 icon;
+    - the Skee-Ball flicker and grass fix;
+    - from the owner's other window's branch `claude/quirky-hopper-5yk8zk`: per-game round songs (5 packs, NOT
+      uploaded yet, so every game plays Panic Mode until `AudioAssets` gets the ids) and Friends (invite chip, +1 coin
+      with a friend, beat-a-friend moments).
+  - **Store description:** `docs/STORE_DESCRIPTION.txt` lists 27 games. The owner pastes it in Creator Hub, because
+    publish_place can't set it (403).
+- Version 33 was published 00:58 UTC from `d10b635` after a quick check; its full regression was clean afterwards.
+- Version 32 was published 21:55 UTC from `6e0029b` after a full regression.
+- **Merged since v32 (live in v33):**
   It's v32 plus:
   - the Skee-Ball arcade;
   - the client UI batch: the team pill shows the real teams, toasts rise above action buttons, AutoScale listeners are
@@ -154,9 +168,33 @@ moment it was stopped, never tested. Read before reusing: continue it, take part
 - **Known phone-HUD nits:** Skate Escape's race-bar racer dots overlap when riders are side by side; Bumper Ballers' "X"
   sits over a knocked-out rider's icon; Sinking Sands' Sand King hint wraps to two lines; mode buttons (`Api.Button`) still
   show for spectators.
-- **Backlog, after everything above** (owner: "dont start on game 13+ untill everything else is finished"): games 13-25
-  ([MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md): 13 briefs in the owner's order with categories; category counts are in
-  that file) and **custom music for each mini-game** (pipeline in `tools/music`, see `docs/ASSETS.md`).
+- **Backlog, after everything above** (owner: "dont start on game 13+ untill everything else is finished"): the owner's
+  13 back-burner games, in the owner's order. Each has a full brief (controls, rules, bots, props) in
+  [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md), which also has the category table and the build steps
+  (`tools/workflows/build-minigame.js`, `merge_check.sh`, `mode_check.sh`, `make_preview.py`, publish). None is started.
+
+  | # | Game | Category | After |
+  | --- | --- | --- | --- |
+  | 13 | Tanks! | Versus | Wii Play |
+  | 14 | Spleef | Survival | Minecraft |
+  | 15 | Mecha-Marathon | Reaction | Mario Party 2 |
+  | 16 | Prime Cut | Team | Super Mario Party Jamboree |
+  | 17 | Stamp Out | Versus | Mario Party 4 / Jamboree |
+  | 18 | Messy Memory | Reaction | Mario Party 3 / Superstars |
+  | 19 | Parasol Plummet | Luck | Mario Party 3 / Superstars |
+  | 20 | Trace Race | Reaction | Mario Party 4 / Top 100 / Superstars |
+  | 21 | Eatsa Pizza | Team | Mario Party 3 / Top 100 / Superstars |
+  | 22 | Snowball Summit | Knockback | Mario Party 3 / Top 100 / Superstars |
+  | 23 | Rockin' Raceway | Race | Mario Party 3 / Top 100 / Superstars |
+  | 24 | Slaparazzi | Knockback | Super Mario Party |
+  | 25 | Log Jam | Team | Mario Party 3 |
+
+  With these, the 25 games split Team 6, Reaction 6, Versus 4, Knockback 3, Survival 2, Luck 2, Race 2 (suggested to the
+  owner: Messy Memory as Luck and Tanks! as Knockback would even it out).
+- **Also on the back burner:** custom music for each mini-game (owner: "put in the backlog custom music for each mini
+  game"; pipeline in `tools/music`, see `docs/ASSETS.md`; friends can hear our music now, so it's no longer blocked).
+- **Not the owner's list:** `docs/MINIGAME_IDEAS.md` holds ten original ideas from the project's first day (Piñata
+  Plungers, Captain Copycat, Fuse Frenzy...). The owner never picked them; only bring them up as suggestions.
 
 ## 3. What's in `docs/wip/`
 

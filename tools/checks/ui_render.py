@@ -11,6 +11,10 @@ and emoji phones don't show, so layouts can be checked without a device.
     python3 tools/checks/round_harness.py HoneyTrap --client --touch --ui-at 2,12 ... > run.luau
     python3 tools/checks/ui_render.py run.json /tmp/honey_ui --sizes phone
 
+--backdrop phone-small=view.png draws that size's UI over a picture of the player's view (a
+tools/preview/render.py render of a --dump-at world dump, from the mode's camera) instead of the
+plain sky and grass, to see what the HUD covers.
+
 The harness lays the UI out with the ENGINE for each screen size it was asked for (--sizes on the
 harness, default: the touch sizes with --touch, else the PC ones; tools/checks/gui_dump.luau): real
 positions, sizes, text measurements, wrapping and whether each text fits, with the fonts loaded.
@@ -292,7 +296,7 @@ def area_of(box) -> float:
     return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
 
 
-def render(nodes: list, size_name: str, out: Path):
+def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None):
     dev = SIZES[size_name]
     vw, vh, touch = dev["w"], dev["h"], dev["touch"]
     engine = any(size_name in (n.get("L") or {}) for n in nodes)
@@ -637,11 +641,16 @@ def render(nodes: list, size_name: str, out: Path):
 
     # Paint.
     image = Image.new("RGBA", (vw, vh), (120, 170, 120, 255))
-    backdrop = ImageDraw.Draw(image)
-    for row in range(vh):  # a sky-and-grass backdrop so the HUD reads like it does in game
-        t = row / vh
-        color = (140, 190, 240) if t < 0.45 else (110, 175, 95)
-        backdrop.line([(0, row), (vw, row)], fill=color)
+    if backdrop:
+        # A picture of the player's view (a tools/preview/render.py render from the same camera),
+        # stretched to the screen, so the HUD can be judged against what it covers.
+        image = Image.open(backdrop).convert("RGBA").resize((vw, vh), Image.LANCZOS)
+    else:
+        painter = ImageDraw.Draw(image)
+        for row in range(vh):  # a sky-and-grass backdrop so the HUD reads like it does in game
+            t = row / vh
+            color = (140, 190, 240) if t < 0.45 else (110, 175, 95)
+            painter.line([(0, row), (vw, row)], fill=color)
     draws.sort(key=lambda d: d[0])
     for _, i, (x0, y0, x1, y1), k, clip, layout in draws:
         n = node(i)
@@ -834,7 +843,17 @@ def main():
     parser.add_argument("--sizes", default="measured", help="measured (the sizes the harness laid out with the engine), "
                         "all, pc, phone, touch, or comma-separated names: " + ", ".join(SIZES))
     parser.add_argument("--only", help="comma-separated snapshot names to draw (default: all of them)")
+    parser.add_argument("--backdrop", action="append", default=[], metavar="SIZE=PNG",
+                        help="draw that screen size's UI over this picture of the player's view instead of "
+                        "the sky-and-grass backdrop (e.g. phone-small=view.png, from tools/preview/render.py "
+                        "with the mode's camera); repeat for more sizes")
     args = parser.parse_args()
+    backdrops = {}
+    for item in args.backdrop:
+        size_name, _, path = item.partition("=")
+        if size_name not in SIZES or not path:
+            raise SystemExit(f"--backdrop wants SIZE=PNG with a size from: {', '.join(SIZES)}")
+        backdrops[size_name] = Path(path)
     data = json.load(open(args.results))
     data = data[0] if isinstance(data, list) else data
     data = json.loads(data) if isinstance(data, str) else data
@@ -871,7 +890,7 @@ def main():
         label = f"{float(at):g}s" if order(at)[0] == 0 else at
         for size_name in names:
             out = Path(f"{args.out}_{label.replace(' ', '-')}_{size_name}.png")
-            problems = render(json.loads(json.dumps(nodes)), size_name, out)
+            problems = render(json.loads(json.dumps(nodes)), size_name, out, backdrops.get(size_name))
             engine = any(size_name in (n.get("L") or {}) for n in nodes)
             total += len(problems)
             print(f"wrote {out}" + ("" if engine else "   (no engine layout for this size: estimated)"))

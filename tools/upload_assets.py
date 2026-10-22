@@ -5,6 +5,7 @@ resulting asset ids into the game config, so the next build uses the real meshes
     python3 tools/upload_assets.py --group-id 7654321 --what audio
     python3 tools/upload_assets.py --user-id 12345678 --dry-run  # show what would happen
     python3 tools/upload_assets.py --user-id 12345678 --what meshes --only Pump,Balloon
+    python3 tools/upload_assets.py --user-id 12345678 --what modes   # the mini-game song packs
 
 A mini-game's own props (defined in src/server/World/Props/<Game>.luau) get their asset id written
 into that file's spec (AssetId = ...); older props use assets/uploaded.json and MeshAssets.luau.
@@ -14,7 +15,8 @@ permission. Upload under the same user or group that owns the game, because the 
 models with InsertService, which only works for assets its creator owns.
 
 Limits (Roblox): audio uploads are capped per month (10 without ID verification, 100 with). This
-tool needs 4 audio uploads (3 music tracks + 1 sound-effects sprite). Uploaded assets go through
+tool needs 4 audio uploads (3 music tracks + 1 sound-effects sprite), plus one per pack of mini-game
+songs (build/music/packs/ModePack<N>.ogg, several songs to a file; tools/music/modes.py pack). Uploaded assets go through
 moderation; until approved, the game automatically keeps using its built-in fallbacks.
 Already-uploaded files are recorded in assets/uploaded.json and skipped on re-runs.
 """
@@ -156,7 +158,7 @@ def main():
     who = parser.add_mutually_exclusive_group(required=True)
     who.add_argument("--user-id", help="upload as this Roblox user (must own the game)")
     who.add_argument("--group-id", help="upload as this group (must own the game)")
-    parser.add_argument("--what", choices=["all", "meshes", "audio"], default="all")
+    parser.add_argument("--what", choices=["all", "meshes", "audio", "modes"], default="all")
     parser.add_argument("--only", help="comma-separated mesh names (default: every mesh)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -173,6 +175,10 @@ def main():
         for name, title in MUSIC.items():
             jobs.append(("music", name, ROOT / "assets" / "audio" / "music" / f"{name}.ogg", "Audio", "audio/ogg", f"Party Panic - {title} (original soundtrack)"))
         jobs.append(("sprite", "SfxSprite", ROOT / "assets" / "audio" / "sfx" / "SfxSprite.ogg", "Audio", "audio/ogg", "Party Panic - sound effects"))
+    if args.what in ("all", "audio", "modes"):
+        # The mini-games' own round songs, packed several to a file (tools/music/modes.py pack).
+        for pack in sorted((ROOT / "build" / "music" / "packs").glob("ModePack*.ogg"), key=lambda p: int(re.sub(r"\D", "", p.stem) or 0)):
+            jobs.append(("modepack", pack.stem, pack, "Audio", "audio/ogg", f"Party Panic - mini-game songs ({pack.stem})"))
 
     record = json.loads(RECORD.read_text()) if RECORD.exists() else {}
     for kind, name, path, asset_type, content_type, display in jobs:
@@ -209,6 +215,8 @@ def main():
             set_luau_value(MESH_CONFIG, [name], asset_id)
         elif kind == "music":
             set_luau_value(AUDIO_CONFIG, ["Music", name], asset_id)
+        elif kind == "modepack":
+            set_luau_value(AUDIO_CONFIG, ["ModeMusic", name], asset_id)
         else:
             set_luau_value(AUDIO_CONFIG, ["SfxSprite"], asset_id)
 

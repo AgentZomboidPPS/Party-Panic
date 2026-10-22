@@ -11,13 +11,30 @@
 -- Phone pass (handoff: "Sinking Sands' Sand King hint wraps to two lines"): the role hints are
 -- short enough for one line on the smallest phone, "👑 SAND KING: SWIRL & PULL!" and "💎 DIVER: grab
 -- the treasure!" (the status line above them says the rest).
+--
+-- Owner, after playing it: "sand king needs to have more interaction, is boring" and "sand one more
+-- valuable stuff near the bottom". A Sand King SAND BLASTs a spot by tapping it on the sand (a click
+-- on PC, where a faint ring under the pointer shows where), or with BLAST (R) beside the jump
+-- button, which blasts the Diver nearest the middle of their view. Kings sit on their thrones, so
+-- their move stick is put away and the whole screen is theirs to tap; dragging still turns the view.
+-- Everyone sees a blast's ring on the sand with a second ring closing in on it until it erupts, a
+-- Diver standing in a new one is told to MOVE!, and a Diver it catches is BLASTED! (the King who
+-- threw it sees HIT!). The King's hint is now how to blast ("👑 Tap the sand to BLAST it!"; SWIRL,
+-- PULL and BLAST are on the buttons). The SUNKEN CHEST (+8) sits heavy on the slope near the bottom.
+--
+-- Your role all round, not just in the hint's first seconds (after "I couldnt tell what color I was
+-- on prime cut."): a chip like Arrow Ambush's under the sand panel, "💎 DIVER" or "👑 SAND KING" in
+-- the role's colours, with the hint and the flashes just under it, clear of the buttons beside
+-- JUMP, the move stick and the menu column on every phone.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local GameState = require(ReplicatedStorage.Shared.GameState)
 local SandSwirl = require(ReplicatedStorage.Shared.Logic.SandSwirl)
+local Teams = require(ReplicatedStorage.Shared.Teams)
 
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -32,14 +49,24 @@ local KINDS = {
 	{ Prop = "SandGem", Value = 3, Factor = 1.4, Lift = 0.5, Reach = 3.4, Mark = Color3.fromRGB(70, 200, 255) },
 	{ Prop = "CoinBag", Value = 5, Factor = 1.2, Lift = 0, Reach = 3.7, Mark = Color3.fromRGB(255, 170, 30) },
 	{ Prop = "GoldenIdol", Value = 10, Factor = 0.95, Lift = 0, Reach = 3.9, Mark = Color3.fromRGB(255, 170, 30) },
+	{ Prop = "SandChest", Value = 8, Factor = 0.03, Lift = 0, Reach = 2.9, Mark = Color3.fromRGB(255, 110, 60) },
 }
+local IDOL, CHEST = 4, 5 -- (the CHEST sits on the slope: no spin, no bob; a "+8" floats over it)
 local GEM_COLOR = Color3.fromRGB(70, 200, 255) -- every gem is worth the same, so they all look alike
 local MARK_RING = Color3.fromRGB(90, 55, 30)
 local PENDING_TIME = 0.6 -- a predicted grab the server hasn't confirmed by then comes back
 local ALARM_GAP = 2.5 -- Divers hear the sand's alarm at most this often
 local FALL_TIME = 1.1
 local FALL_HEIGHT = 26
-local SWIRL_COOLDOWN, PULL_COOLDOWN = 3, 5
+local SWIRL_COOLDOWN, PULL_COOLDOWN, BLAST_COOLDOWN = 3, 5, 6 -- (only until the server says)
+-- SAND BLAST rings: the server sends each one's size; this is for a King's own tap until its echo.
+local BLAST_RING, BLAST_DELAY = 4.5, 0.75
+local RING_BARS, FUSE_BARS = 28, 20 -- bars in a blast's ring and in the ring closing in on it
+local BLAST_COLOR, FUSE_COLOR = Color3.fromRGB(255, 70, 50), Color3.fromRGB(255, 240, 200)
+-- The HUD under the sand panel (TopHud units below api:HudY()): the role chip, then the hint's and
+-- the flashes' line.
+local CHIP_Y, CHIP_SIZE = 64, Vector2.new(240, 44)
+local HINT_Y = CHIP_Y + CHIP_SIZE.Y + 8
 
 type Treasure = {
 	Id: number,
@@ -140,7 +167,7 @@ function SinkingSands.Start(api)
 			part.CanTouch = false
 			part.CastShadow = false
 		end
-		if kind ~= 4 and not State.ReducedEffects() then
+		if kind ~= IDOL and not State.ReducedEffects() then
 			-- Treasure twinkles in its own color, so it catches the eye on the pale sand.
 			local primary = built.PrimaryPart or partsOf(built)[1]
 			if primary then
@@ -165,7 +192,7 @@ function SinkingSands.Start(api)
 			for _, part in partsOf(built) do
 				part.Color = GEM_COLOR
 			end
-		elseif kind == 4 then
+		elseif kind == IDOL or kind == CHEST then
 			local primary = built.PrimaryPart or partsOf(built)[1]
 			if primary then
 				local light = Instance.new("PointLight")
@@ -173,6 +200,24 @@ function SinkingSands.Start(api)
 				light.Range = 14
 				light.Brightness = 2
 				light.Parent = primary
+				if kind == CHEST then
+					-- What it's worth, over it (it lies down near the hole: worth the risk?).
+					local tag = Instance.new("BillboardGui")
+					tag.Name = "Worth"
+					tag.Size = UDim2.fromOffset(80, 40)
+					tag.StudsOffsetWorldSpace = Vector3.new(0, 4, 0)
+					tag.MaxDistance = 150
+					tag.Parent = primary
+					UIKit.Label({
+						Text = `+{KINDS[kind].Value}`,
+						Font = Theme.Fonts.Display,
+						TextSize = 30,
+						TextColor3 = Theme.Colors.Coin,
+						Size = UDim2.fromScale(1, 1),
+						Parent = tag,
+						Children = { UIKit.TextStroke(0.1) },
+					})
+				end
 				if not State.ReducedEffects() then
 					local sparkle = Instance.new("ParticleEmitter")
 					sparkle.Texture = "rbxasset://textures/particles/sparkles_main.dds"
@@ -352,6 +397,37 @@ function SinkingSands.Start(api)
 	api:Track(api.Player:GetAttributeChangedSignal("PP_Score"):Connect(refreshHaul))
 	refreshHaul()
 
+	-- The role chip (like Arrow Ambush's): "💎 DIVER" or "👑 SAND KING" in the role's colours, all
+	-- round, centred under the panel (it shows once the server gives this player a role).
+	local roleChip = UIKit.Panel({
+		Name = "Role",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + CHIP_Y),
+		Size = UDim2.fromOffset(CHIP_SIZE.X, CHIP_SIZE.Y),
+		Visible = false,
+		Parent = hud,
+	}, Teams.Colors.Divers, Teams.Colors.Divers)
+	local roleText = UIKit.Label({
+		Name = "Text",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextScaled = true,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -20, 1, -12),
+		Parent = roleChip,
+		Children = { UIKit.TextStroke(0.2) },
+	})
+	local function showRole(king: boolean)
+		local color = Teams.Colors[if king then "SandKings" else "Divers"] or Theme.Colors.Panel
+		roleText.Text = if king then "👑 SAND KING" else "💎 DIVER"
+		local gradient = roleChip:FindFirstChildOfClass("UIGradient")
+		if gradient then
+			gradient.Color = ColorSequence.new(color, color:Lerp(Color3.new(0, 0, 0), 0.4))
+		end
+		roleChip.Visible = true
+	end
+
 	-- The role hint: narrower than api:Hint so it clears the standings on small phones.
 	local hint = UIKit.Label({
 		Name = "RoleHint",
@@ -359,7 +435,7 @@ function SinkingSands.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 26,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, api:HudY() + 66),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + HINT_Y),
 		Size = UDim2.fromOffset(400, 66),
 		TextYAlignment = Enum.TextYAlignment.Top,
 		Visible = false,
@@ -374,7 +450,7 @@ function SinkingSands.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 54,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, api:HudY() + 66),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + HINT_Y),
 		Size = UDim2.fromOffset(400, 64),
 		Visible = false,
 		Parent = hud,
@@ -390,8 +466,244 @@ function SinkingSands.Start(api)
 		UIKit.PopIn(flash, 0.25)
 	end
 
+	-- SAND BLAST ----------------------------------------------------------------------------------
+
+	-- A ring lying on the sand: a loop of short bars, each laid on the funnel's slope where it is.
+	local function sandAt(x: number, z: number): Vector3
+		local r = Vector2.new(x - center.X, z - center.Z).Magnitude
+		return Vector3.new(x, center.Y + SandSwirl.Height(r) + 0.18, z)
+	end
+	local function newRing(count: number, color: Color3, width: number): { BasePart }
+		local bars = {}
+		for _ = 1, count do
+			local bar = Instance.new("Part")
+			bar.Name = "BlastRing"
+			bar.Anchored = true
+			bar.CanCollide = false
+			bar.CanQuery = false
+			bar.CanTouch = false
+			bar.CastShadow = false
+			bar.Material = Enum.Material.Neon
+			bar.Color = color
+			bar.Size = Vector3.new(width, 0.14, 1)
+			bar.Parent = api.World
+			table.insert(bars, bar)
+		end
+		return bars
+	end
+	local function placeRing(bars: { BasePart }, x: number, z: number, radius: number)
+		local count = #bars
+		local previous = sandAt(x + radius, z)
+		for index, bar in bars do
+			local angle = index / count * math.pi * 2
+			local point = sandAt(x + math.cos(angle) * radius, z + math.sin(angle) * radius)
+			local along = point - previous
+			local mid = (point + previous) / 2
+			local out = Vector3.new(mid.X - center.X, 0, mid.Z - center.Z)
+			local r = out.Magnitude
+			local slope = SandSwirl.Height(r + 0.25) - SandSwirl.Height(r - 0.25)
+			local up = if r > 0.01
+				then Vector3.new(-out.X / r * slope * 2, 1, -out.Z / r * slope * 2)
+				else Vector3.yAxis
+			if along.Magnitude > 1e-3 then
+				bar.Size = Vector3.new(bar.Size.X, bar.Size.Y, along.Magnitude + 0.1)
+				bar.CFrame = CFrame.lookAt(mid, point, up)
+			end
+			previous = point
+		end
+	end
+	local function dropRing(bars: { BasePart }?)
+		if bars then
+			for _, bar in bars do
+				bar:Destroy()
+			end
+		end
+	end
+
+	-- The blasts on their way: a ring where it will erupt and a second one closing in on it, so the
+	-- moment it erupts reads without a number. Blasts[0] is this King's own tap, drawn at once until
+	-- the server's ring for it arrives.
+	type Blast = {
+		X: number,
+		Z: number,
+		T: number,
+		Start: number,
+		Radius: number,
+		Ring: { BasePart },
+		Fuse: { BasePart },
+		Born: number,
+	}
+	local blasts: { [number]: Blast } = {}
+	local throwers: { [number]: number } = {} -- who threw each blast (for HIT! on their screen)
+	local function addBlast(id: number, x: number, z: number, t: number, radius: number)
+		local blast = blasts[id]
+		if not blast then
+			blast = {
+				X = x,
+				Z = z,
+				T = t,
+				Start = api:Now(),
+				Radius = radius,
+				Ring = newRing(RING_BARS, BLAST_COLOR, 0.5),
+				Fuse = newRing(FUSE_BARS, FUSE_COLOR, 0.3),
+				Born = os.clock(),
+			}
+			blasts[id] = blast
+		end
+		blast.X, blast.Z, blast.T, blast.Radius = x, z, t, radius
+		placeRing(blast.Ring, x, z, radius)
+	end
+	local function removeBlast(id: number)
+		local blast = blasts[id]
+		if blast then
+			blasts[id] = nil
+			dropRing(blast.Ring)
+			dropRing(blast.Fuse)
+		end
+	end
+	api:Track(function()
+		for id in blasts do
+			removeBlast(id)
+		end
+	end)
+
+	-- Where on the sand a ray from the camera lands (the funnel's own shape, so thrones and people
+	-- in the way don't matter); nil for the sky or the far mesa.
+	local function sandPoint(ray: Ray): Vector3?
+		local origin, direction = ray.Origin, ray.Direction.Unit
+		if direction.Y > -1e-3 then
+			return nil -- (the King looks down on the funnel: this is the sky)
+		end
+		local function above(t: number): number
+			local p = origin + direction * t
+			return p.Y - center.Y - SandSwirl.Height(Vector2.new(p.X - center.X, p.Z - center.Z).Magnitude)
+		end
+		if above(0) <= 0 then
+			return nil
+		end
+		local step = 1
+		for t = step, 300, step do
+			if above(t) <= 0 then
+				local low, high = t - step, t
+				for _ = 1, 14 do
+					local middle = (low + high) / 2
+					if above(middle) > 0 then
+						low = middle
+					else
+						high = middle
+					end
+				end
+				local hit = origin + direction * high
+				local r = Vector2.new(hit.X - center.X, hit.Z - center.Z).Magnitude
+				return if r <= SandSwirl.RIM + 3 then hit else nil
+			end
+		end
+		return nil
+	end
+
+	-- The Diver nearest the middle of this King's view (for BLAST without aiming): someone on the sand.
+	local function diverInView(): Vector3?
+		local camera = workspace.CurrentCamera
+		local eye, look = camera.CFrame.Position, camera.CFrame.LookVector
+		local best, bestDot = nil, -math.huge
+		for _, participant in api:Participants() do
+			if participant.IsLocal or participant:GetAttribute("MG_Role") == "King" then
+				continue
+			end
+			local character = participant:Character()
+			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if not root then
+				continue
+			end
+			local p = root.Position
+			if
+				Vector2.new(p.X - center.X, p.Z - center.Z).Magnitude > SandSwirl.RIM
+				or p.Y < center.Y - SandSwirl.DEPTH - 2
+			then
+				continue -- off the sand, or down the hole
+			end
+			local dot = (p - eye).Unit:Dot(look)
+			if dot > bestDot then
+				best, bestDot = p, dot
+			end
+		end
+		return best
+	end
+
+	-- A King's blast: at once on their own screen (the click, the ring, the empty button), the server
+	-- judges it where they tapped.
+	local blastReadyAt = 0 -- (predicted on a tap; the server's BlastAt arrives a moment later)
+	local function blastReady(): boolean
+		return math.max(api:Mine("BlastAt") or 0, blastReadyAt) <= api:Now()
+	end
+	local function blast(point: Vector3?)
+		if not point or GameState.Get("Phase") ~= "InRound" or not api:Alive() then
+			return
+		end
+		if not blastReady() then
+			api:Sound("Countdown") -- (not back yet: the button is still filling)
+			return
+		end
+		blastReadyAt = api:Now() + (api:Mine("BlastLength") or BLAST_COOLDOWN)
+		api:Action("Blast", point.X, point.Z)
+		api:Sound("Click")
+		removeBlast(0)
+		addBlast(0, point.X, point.Z, api:Now() + BLAST_DELAY, BLAST_RING)
+	end
+	local hover: { BasePart }? = nil -- PC: where a click would blast
+	local aimingSet = false
+	local function startAiming()
+		if aimingSet then
+			return
+		end
+		aimingSet = true
+		-- Kings sit on their thrones: the move stick and jump button go away so a tap anywhere on the
+		-- sand blasts it (dragging still turns the view), and come back when the round is over. (The
+		-- UI checks then draw no stick or jump button either: tools/checks/ui_render.py.)
+		api.Gui:SetAttribute("PP_NoTouchControls", if api:IsTouch() then true else nil)
+		pcall(function()
+			local scripts = api.Player:FindFirstChild("PlayerScripts")
+			local module = scripts and scripts:FindFirstChild("PlayerModule")
+			if module then
+				local controls = (require(module :: any) :: any):GetControls()
+				controls:Disable()
+				api:Track(function()
+					pcall(function()
+						controls:Enable()
+					end)
+				end)
+			end
+		end)
+		local camera = workspace.CurrentCamera
+		api:Track(UserInputService.TouchTap:Connect(function(positions, processed)
+			if not processed and positions[1] then
+				blast(sandPoint(camera:ScreenPointToRay(positions[1].X, positions[1].Y)))
+			end
+		end))
+		api:Track(UserInputService.InputBegan:Connect(function(input, processed)
+			if not processed and input.UserInputType == Enum.UserInputType.MouseButton1 then
+				blast(sandPoint(camera:ScreenPointToRay(input.Position.X, input.Position.Y)))
+			end
+		end))
+		if not api:IsTouch() then
+			hover = newRing(RING_BARS, Color3.new(1, 1, 1), 0.3)
+			api:Track(function()
+				dropRing(hover)
+			end)
+		end
+	end
+	-- BLAST (R): at the pointer on PC, else at the Diver nearest the middle of the view.
+	local function blastButtonPressed()
+		local point = nil
+		if not api:IsTouch() then
+			local mouse = UserInputService:GetMouseLocation()
+			point = sandPoint(workspace.CurrentCamera:ViewportPointToRay(mouse.X, mouse.Y))
+		end
+		blast(point or diverInView())
+	end
+
 	local hintUntil = 0
-	local swirlButton, pullButton = nil, nil
+	local swirlButton, pullButton, blastButton = nil, nil, nil
 	local function refreshRole()
 		local role = api:Mine("Role")
 		if role == nil then
@@ -399,16 +711,21 @@ function SinkingSands.Start(api)
 		end
 		isKing = role == "King"
 		refreshHaul()
+		showRole(isKing)
 		-- (short enough for one line in the hint's 400 points: the longer ones wrapped onto two on
-		-- phones; the status line above says the rest, "Divers: grab the treasure! Sand Kings: sink it!")
+		-- phones; the status line above says the rest, "Divers: grab the treasure! Sand Kings: sink it!",
+		-- and a King's buttons say SWIRL, PULL and BLAST)
 		if isKing then
-			hint.Text = "👑 SAND KING: SWIRL & PULL!"
+			hint.Text = if api:IsTouch() then "👑 Tap the sand to BLAST it!" else "👑 Click the sand to BLAST it!"
 		else
 			hint.Text = "💎 DIVER: grab the treasure!"
 		end
 		hint.Visible = true
 		hintUntil = math.huge -- counted from GO (below)
 		if isKing and not swirlButton then
+			startAiming()
+			blastButton = api:Button({ Text = "BLAST", Key = Enum.KeyCode.R, Color = Theme.Colors.Red, Slot = 3 })
+			blastButton.Pressed:Connect(blastButtonPressed)
 			local swirl = api:Button({ Text = "SWIRL", Key = Enum.KeyCode.E, Color = Theme.Colors.Orange })
 			local pull = api:Button({ Text = "PULL", Key = Enum.KeyCode.Q, Color = Theme.Colors.Pink, Slot = 2 })
 			-- Instant feedback for the King's own press (the server's echo is then ignored).
@@ -554,6 +871,73 @@ function SinkingSands.Start(api)
 			api:Effect("Poof", root.Position + Vector3.new(0, 3, 0))
 		end
 	end)
+	-- SAND BLAST: the ring (a King's own tap is already drawn: it becomes this one), the eruption,
+	-- and who it caught.
+	api:OnEvent("Blast", function(id: number, x: number, z: number, t: number, by: number, radius: number?)
+		throwers[id] = by
+		local mine = blasts[0]
+		if by == api.Player.UserId and mine then
+			blasts[0] = nil
+			blasts[id] = mine
+		end
+		addBlast(id, x, z, t, radius or BLAST_RING)
+		local _, _, root = api:Character()
+		if not isKing and root and api:Alive() then
+			local gap = Vector2.new(root.Position.X - x, root.Position.Z - z).Magnitude
+			if gap < (radius or BLAST_RING) + 1.5 then
+				showFlash("💥 MOVE!", Theme.Colors.Red, 0.6)
+				api:Sound("HazardWarning")
+			end
+		end
+	end)
+	local sandBurst = { Color3.fromRGB(240, 204, 140), Color3.fromRGB(200, 150, 96) }
+	api:OnEvent("Erupt", function(id: number)
+		local blast = blasts[id]
+		if not blast then
+			return
+		end
+		removeBlast(id)
+		-- A geyser of sand where it was.
+		local anchor = Instance.new("Part")
+		anchor.Anchored = true
+		anchor.CanCollide = false
+		anchor.CanQuery = false
+		anchor.CanTouch = false
+		anchor.Transparency = 1
+		anchor.Size = Vector3.new(blast.Radius * 1.4, 0.2, blast.Radius * 1.4)
+		anchor.CFrame = CFrame.new(sandAt(blast.X, blast.Z))
+		anchor.Parent = api.World
+		local burst = Instance.new("ParticleEmitter")
+		burst.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		burst.Color = ColorSequence.new(sandBurst[1], sandBurst[2])
+		burst.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.5), NumberSequenceKeypoint.new(1, 4.5) })
+		burst.Transparency = NumberSequence.new(0.1, 1)
+		burst.Lifetime = NumberRange.new(0.6, 1.1)
+		burst.Speed = NumberRange.new(16, 28)
+		burst.SpreadAngle = Vector2.new(22, 22)
+		burst.Acceleration = Vector3.new(0, -40, 0)
+		burst.EmissionDirection = Enum.NormalId.Top
+		burst.Rate = 0
+		burst.Parent = anchor
+		burst:Emit(if State.ReducedEffects() then 8 else 26)
+		task.delay(2, function()
+			anchor:Destroy()
+		end)
+	end)
+	api:OnEvent("BlastHit", function(id: number, userId: number, dropped: number)
+		local root = rootOf(api, userId)
+		if userId == api.Player.UserId then
+			showFlash("💥 BLASTED!", Theme.Colors.Red, 1.2)
+			api:Sound("Hit")
+		elseif throwers[id] == api.Player.UserId and root then
+			floatText(root.Position + Vector3.new(0, 2, 0), "💥 HIT!", Theme.Colors.Orange)
+			api:Sound("Hit")
+			return
+		end
+		if root and dropped > 0 then
+			floatText(root.Position, `-{dropped}`, Theme.Colors.Red)
+		end
+	end)
 
 	-- Dragging this player's character with the sand (Heartbeat: after the humanoid moved) ----------
 
@@ -680,7 +1064,7 @@ function SinkingSands.Start(api)
 					local flatOn = CFrame.lookAt(ground, ground + Vector3.new(x, 0, z))
 						* CFrame.Angles(math.atan(slope), 0, 0)
 						* CFrame.Angles(0, 0, math.rad(90))
-					local size = 1.6 + 1.8 * k + (if item.Kind >= 3 then 0.8 else 0)
+					local size = 1.6 + 1.8 * k + (if item.Kind == CHEST then 1.6 elseif item.Kind >= 3 then 0.8 else 0)
 					item.Marker.Size = Vector3.new(0.06, size, size)
 					item.Marker.CFrame = flatOn * CFrame.new(0.08, 0, 0)
 					item.Dot.CFrame = flatOn * CFrame.new(0.2, 0, 0) -- clear of the ring (no flicker)
@@ -695,11 +1079,19 @@ function SinkingSands.Start(api)
 					item.Dot = nil
 				end
 				local sinking = if sunk then math.clamp((now - sunk) / 0.6, 0, 1) else 0
-				-- Treasure bobs on the sand and slowly turns; it tips into the hole at the end.
-				local bob = math.sin(now * 3 + item.Spin) * 0.12
-				target = ground + Vector3.new(0, kind.Lift + bob - sinking * 5, 0)
-				turn = CFrame.Angles(0, item.Spin + a + now * 1.4, 0)
-					* CFrame.Angles(math.sin(now * 2 + item.Spin) * 0.12, 0, 0)
+				if item.Kind == CHEST then
+					-- Too heavy to bob: it lies on the slope, its front (and padlock) facing up it.
+					local slope = SandSwirl.Height(r + 0.5) - SandSwirl.Height(r - 0.5)
+					local x, z = SandSwirl.ToXZ(1, a)
+					target = ground + Vector3.new(0, kind.Lift - sinking * 5, 0)
+					turn = CFrame.lookAt(Vector3.zero, Vector3.new(x, slope, z), Vector3.new(-x * slope, 1, -z * slope))
+				else
+					-- Treasure bobs on the sand and slowly turns; it tips into the hole at the end.
+					local bob = math.sin(now * 3 + item.Spin) * 0.12
+					target = ground + Vector3.new(0, kind.Lift + bob - sinking * 5, 0)
+					turn = CFrame.Angles(0, item.Spin + a + now * 1.4, 0)
+						* CFrame.Angles(math.sin(now * 2 + item.Spin) * 0.12, 0, 0)
+				end
 			end
 			local shown = item.Shown
 			if shown and (shown - target).Magnitude < 6 then
@@ -771,6 +1163,40 @@ function SinkingSands.Start(api)
 			pullButton:SetFill(1 - pullLeft / (api:Mine("PullLength") or PULL_COOLDOWN))
 			swirlButton:SetEnabled(swirlLeft <= 0)
 			pullButton:SetEnabled(pullLeft <= 0)
+		end
+		if blastButton then
+			local blastLeft = math.max(0, math.max(api:Mine("BlastAt") or 0, blastReadyAt) - now)
+			blastButton:SetFill(1 - blastLeft / (api:Mine("BlastLength") or BLAST_COOLDOWN))
+			blastButton:SetEnabled(blastLeft <= 0)
+		end
+
+		-- The blasts' rings, each with its fuse closing in until it erupts (one whose eruption never
+		-- came goes a moment later, and a King's own tap if the server turned it away).
+		for id, blast in blasts do
+			if now > blast.T + 1 or (id == 0 and os.clock() - blast.Born > 1.5) then
+				removeBlast(id)
+				continue
+			end
+			local k = math.clamp((now - blast.Start) / math.max(0.05, blast.T - blast.Start), 0, 1)
+			placeRing(blast.Fuse, blast.X, blast.Z, 0.4 + (blast.Radius - 0.4) * k)
+			local pulse = 0.1 + 0.25 * (0.5 + 0.5 * math.sin(os.clock() * 20))
+			for _, bar in blast.Ring do
+				bar.Transparency = pulse
+			end
+		end
+		-- PC Kings: a faint ring under the pointer, where a click would blast, while BLAST is ready.
+		if hover then
+			local point = nil
+			if inRound and api:Alive() and blastReady() then
+				local mouse = UserInputService:GetMouseLocation()
+				point = sandPoint(workspace.CurrentCamera:ViewportPointToRay(mouse.X, mouse.Y))
+			end
+			for _, bar in hover do
+				bar.Transparency = if point then 0.55 else 1
+			end
+			if point then
+				placeRing(hover, point.X, point.Z, BLAST_RING)
+			end
 		end
 	end)
 

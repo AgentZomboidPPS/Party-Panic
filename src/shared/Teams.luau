@@ -1,5 +1,9 @@
 -- Team names and colors for team and versus mini-games. Team names double as HUD labels, so
 -- versus roles ("Archers", "Runners") live here too.
+--
+-- Which team you're on, in words (owner: "I couldnt tell what color I was on prime cut."): Label
+-- names a team with its mark ("★ RED", "🦈 SHARKS") and YouAre says it to its players ("YOU'RE ON
+-- ★ RED", "YOU'RE A 🦈 SHARK"), for the rules card, the team pill and the modes' own HUDs.
 
 local Teams = {}
 
@@ -41,8 +45,40 @@ Teams.Shapes = {
 	Yellow = "◆",
 } :: { [string]: string }
 
+-- What one player of each versus role is ("YOU'RE A 🦈 SHARK"), and the roles whose name isn't just
+-- the key in capitals.
+Teams.Roles = {
+	Archers = "AN 🏹 ARCHER",
+	Runners = "A 🏃 RUNNER",
+	SandKings = "A 👑 SAND KING",
+	Divers = "A 💎 DIVER",
+	Sharks = "A 🦈 SHARK",
+	Swimmers = "A 🏊 SWIMMER",
+} :: { [string]: string }
+local NAMES = { SandKings = "SAND KINGS" }
+
 function Teams.Color(name: string?): Color3?
 	return if name then Teams.Colors[name] else nil
+end
+
+-- A team's name on screen with its mark: "★ RED" for a colour team, "🦈 SHARKS" for a role.
+function Teams.Label(name: string): string
+	local mark = Teams.Shapes[name] or Teams.Icons[name]
+	local shown = NAMES[name] or string.upper(name)
+	return if mark then `{mark} {shown}` else shown
+end
+
+-- What the rules card tells a player on this team ("YOU'RE ON ★ RED", "YOU'RE AN 🏹 ARCHER"), or
+-- nil for no team (a free-for-all round, or between rounds).
+function Teams.YouAre(name: any): string?
+	if type(name) ~= "string" or name == "" then
+		return nil
+	elseif Teams.Roles[name] then
+		return `YOU'RE {Teams.Roles[name]}`
+	elseif Teams.Colors[name] then
+		return `YOU'RE ON {Teams.Label(name)}`
+	end
+	return nil
 end
 
 -- How many teams to make for `playerCount` players with about `perTeam` in each (2 to 4 teams).

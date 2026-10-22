@@ -11,7 +11,16 @@
 -- the tip popped in).
 -- On phones it also steps aside while a level-up or milestone celebration uses its spot
 -- (CelebrationController sets PP_Celebrating; owner: "cool payoffs for players that keep playing").
--- The last tip's 8 seconds only count while it's on screen, so stepping aside never uses it up.
+-- The lobby's chips (UI/LobbyRibbon: events, the Party Cup, invites) use that spot too and give way
+-- to the tip: it sets the HUD's PP_TipShowing while it's up on a phone.
+-- The last tip's 5 seconds only count while it's on screen, so stepping aside never uses it up.
+--
+-- With the shorter lobby (owner: "Less time sitting in the lobby. total of 20 seconds instead of
+-- 40.") the last tip has 5 seconds, not 8: on phones it gets the 6 seconds between the results and
+-- the vote (the vote cards take its spot), and 8 only fitted over the next round's rules card. And
+-- since players can close the rules card (owner: "Let players close the instructions if they
+-- want."), the "Read the rules card" tip is only up while their card is (PP_RulesShowing,
+-- RoundController): it goes when they close the card or the 3-2-1 starts.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -46,7 +55,7 @@ local stepLabel: TextLabel?
 local step = 0
 local finished = false
 local rewardTipDue = false -- the last tip, once the results are over
-local LAST_TIP_TIME = 8 -- seconds the last tip stays on screen before the tips are done
+local LAST_TIP_TIME = 5 -- seconds the last tip stays on screen before the tips are done
 local lastTipTimer: { any }? = nil -- the running countdown (a new one replaces it)
 local finish: () -> () -- ends the tips for good (below)
 
@@ -54,17 +63,25 @@ local function refreshVisible()
 	local phase = GameState.Get("Phase") or "Waiting"
 	local celebrating = touch and State.LocalPlayer:GetAttribute("PP_Celebrating") == true
 	local aside = hud ~= nil and hud:GetAttribute("PP_TipsAside") == true
+	-- Before a round you're in, only alongside your rules card (closed, or the 3-2-1: aside).
+	local rulesDown = phase == "Preparing"
+		and State.InRound()
+		and State.LocalPlayer:GetAttribute("PP_RulesShowing") ~= true
 	local visible = not finished
 		and step > 0
 		and not aside
 		and not HIDDEN_IN[phase]
 		and not (touch and HIDDEN_ON_PHONES[phase])
 		and not celebrating
+		and not rulesDown
 	if visible and not panel.Visible then
 		panel.Visible = true
 		UIKit.PopIn(panel, 0.35)
 	else
 		panel.Visible = visible
+	end
+	if touch and hud then
+		hud:SetAttribute("PP_TipShowing", visible) -- the lobby's chips (UI/LobbyRibbon) share the spot
 	end
 	-- The last tip finishes the tips after it has been on screen for LAST_TIP_TIME (the countdown
 	-- starts over whenever it comes back after stepping aside).
@@ -87,6 +104,9 @@ function finish()
 	end
 	finished = true
 	panel.Visible = false
+	if hud then
+		hud:SetAttribute("PP_TipShowing", nil)
+	end
 	Remotes.Get("TutorialDone"):FireServer()
 end
 
@@ -255,6 +275,11 @@ function OnboardingController.Start(context)
 		end
 	end)
 	State.LocalPlayer:GetAttributeChangedSignal("PP_Celebrating"):Connect(function()
+		if not finished and step > 0 then
+			refreshVisible()
+		end
+	end)
+	State.LocalPlayer:GetAttributeChangedSignal("PP_RulesShowing"):Connect(function()
 		if not finished and step > 0 then
 			refreshVisible()
 		end
