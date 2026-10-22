@@ -1,0 +1,17 @@
+newmtl Body
+Kd 0.918 0.737 0.439
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Beak
+Kd 1.000 0.549 0.118
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Face
+Kd 0.157 0.118 0.118
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

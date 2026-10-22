@@ -1,0 +1,23 @@
+newmtl Envelope
+Kd 1.000 0.471 0.353
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Stripe
+Kd 0.871 0.588 0.463
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Basket
+Kd 0.588 0.392 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rope
+Kd 0.871 0.745 0.518
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

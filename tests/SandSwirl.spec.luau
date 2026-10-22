@@ -170,3 +170,30 @@ test("SandSwirl.Detour walks round the hole, never across it", function()
 	near(wx, 6 / wr * keepOut, 1e-9, "edge spot x")
 	near(wz, 0.5 / wr * keepOut, 1e-9, "edge spot z")
 end)
+
+test("SandSwirl.KingCount: one more Sand King than one per four, never all Kings", function()
+	local expected = {
+		[1] = 0,
+		[2] = 1,
+		[3] = 1,
+		[4] = 1,
+		[5] = 2,
+		[6] = 2,
+		[7] = 3,
+		[8] = 3,
+		[9] = 3,
+		[10] = 4,
+		[11] = 4,
+		[12] = 4,
+	}
+	for count = 1, 12 do
+		local kings = SandSwirl.KingCount(count)
+		expectTrue(kings == expected[count], `{count} players: {kings} Kings, expected {expected[count]}`)
+		if count >= 2 then
+			expectTrue(kings >= 1 and kings < count, `{count} players: someone Dives, someone is King`)
+		end
+		if count >= 3 then
+			expectTrue(kings < count - kings, `{count} players: fewer Kings than Divers`)
+		end
+	end
+end)
