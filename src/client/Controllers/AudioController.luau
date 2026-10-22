@@ -4,7 +4,14 @@
 --   * Lobby plays "Party Plaza" then "Sunset Social" (~4 minutes before anything repeats), and
 --     each lobby visit RESUMES where the last one stopped, so short lobby stints don't replay the
 --     same opening over and over.
---   * Rounds play "Panic Mode", which speeds up for the final 10 seconds ("hurry up!").
+--   * Rounds play the mini-game's own track (owner: "put in the backlog custom music for each mini
+--     game"; tools/music/round_music.py, Shared/RoundMusic.luau). Its intro covers the rules card
+--     and the 3-2-1 and its drop lands on GO: the track's position is always worked out from the
+--     round clock, so it lines up however late it loaded, and everyone hears the same part.
+--     A track lives in a packed file with others (Roblox limits audio uploads) and plays as a
+--     PlaybackRegion + LoopRegion of it. A mini-game without one (not uploaded, not approved
+--     yet, or still loading) plays "Panic Mode", which speeds up for the final 10 seconds
+--     ("hurry up!"), and switches to its own track as soon as that has loaded.
 -- Comfort: music starts quiet on first launch and fades in slowly, ducks while a menu is open,
 -- and the player picks Off / Low / Medium / High in Settings.
 
@@ -14,8 +21,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 
+local ContentProvider = game:GetService("ContentProvider")
+
 local Shared = ReplicatedStorage.Shared
+local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
+local RoundMusic = require(Shared.RoundMusic)
 local Remotes = require(Shared.Remotes)
 local Sounds = require(Shared.Sounds)
 
@@ -47,6 +58,8 @@ local currentSound: Sound? = nil
 local menuOpen = false
 local warmup = 0 -- 0..1 during the first-launch fade-in
 local fades: { [Sound]: Tween } = {} -- one fade per sound so a crossfade never cancels itself
+local packSounds: { [string]: Sound } = {} -- one Sound per packed round-music file
+local preloading: { [string]: boolean } = {}
 
 local function makeSound(name: string, id: string, volume: number, looped: boolean): Sound
 	local sound = Instance.new("Sound")
@@ -99,7 +112,11 @@ local function pauseCurrent()
 	if not sound or not list then
 		return
 	end
-	list.positions[sound] = sound.TimePosition
+	if sound.PlaybackRegionsEnabled then
+		list.positions[sound] = nil -- a mini-game's track always starts from the round clock
+	else
+		list.positions[sound] = sound.TimePosition
+	end
 	local tween = fadeTo(sound, 0, SWITCH_FADE_TIME)
 	tween.Completed:Once(function(state)
 		if state == Enum.PlaybackState.Completed and currentSound ~= sound then
@@ -108,15 +125,97 @@ local function pauseCurrent()
 	end)
 end
 
+type ModeTrack = { Pack: string, Start: number, Length: number, Intro: number, Title: string }
+
+-- The mini-game's own track and its pack's Sound (nil if it has none uploaded).
+local function modeTrack(gameId: any): (ModeTrack?, Sound?)
+	local info = type(gameId) == "string" and (RoundMusic.Tracks :: any)[gameId] or nil
+	if not info then
+		return nil, nil
+	end
+	local id = (RoundMusic.Packs :: any)[info.Pack]
+	if type(id) ~= "number" or id <= 0 then
+		return nil, nil
+	end
+	local sound = packSounds[info.Pack]
+	if not sound then
+		sound = makeSound("RoundMusic_" .. info.Pack, "rbxassetid://" .. id, 0, true)
+		sound.PlaybackRegionsEnabled = true
+		packSounds[info.Pack] = sound
+	end
+	return info, sound
+end
+
+-- Starts downloading the packs of the mini-games that may come next (the vote's cards), so the
+-- track is usually ready by GO.
+local function preload(gameIds: { string })
+	local sounds = {}
+	for _, gameId in gameIds do
+		local info, sound = modeTrack(gameId)
+		if info and sound and not sound.IsLoaded and not preloading[info.Pack] then
+			preloading[info.Pack] = true
+			table.insert(sounds, sound)
+		end
+	end
+	if #sounds > 0 then
+		task.spawn(function()
+			pcall(ContentProvider.PreloadAsync, ContentProvider, sounds)
+		end)
+	end
+end
+
+-- Where the mini-game's track should be right now (seconds into the track): the intro ends on GO.
+local function modePosition(info: ModeTrack): number
+	local phase = GameState.Get("Phase")
+	local left = GameState.TimeLeft()
+	local into
+	if phase == "Preparing" then
+		into = info.Intro - left
+	else
+		local definition = GameDefinitions.Get(GameState.Get("GameId"))
+		local duration = if definition then definition.Duration else 0
+		into = info.Intro + math.max(duration - left, 0)
+	end
+	return math.max(into, 0) % info.Length
+end
+
+-- The Sound playing this round's music: the mini-game's own track once it has loaded, else
+-- Panic Mode.
+local function roundSound(list: Playlist): Sound?
+	local info, sound = modeTrack(GameState.Get("GameId"))
+	if info and sound and sound.IsLoaded then
+		local region = NumberRange.new(info.Start, info.Start + info.Length)
+		if sound.PlaybackRegion ~= region then
+			sound.PlaybackRegion = region
+			sound.LoopRegion = region
+		end
+		sound.TimePosition = info.Start + modePosition(info)
+		return sound
+	end
+	return list.tracks[1]
+end
+
 local function startCurrent()
 	local list = currentList and playlists[currentList]
-	if not list or #list.tracks == 0 then
+	if not list or (#list.tracks == 0 and currentList ~= "Round") then
 		currentSound = nil
 		return
 	end
 	local sound = list.tracks[list.index]
+	local mode = false
+	if currentList == "Round" then
+		local picked = roundSound(list)
+		if not picked then
+			currentSound = nil
+			return
+		end
+		mode = picked ~= list.tracks[1]
+		sound = picked
+	end
 	currentSound = sound
-	if not sound.IsPlaying then
+	if mode then
+		sound:Resume() -- at the position roundSound set
+	elseif not sound.IsPlaying then
 		sound.Volume = 0
 		local resumeAt = list.positions[sound]
 		if resumeAt and resumeAt > 0 then
@@ -220,6 +319,20 @@ function AudioController.Start(_context)
 	end)
 
 	GameState.Changed("Phase", function(phase)
+		if phase == "Voting" then
+			local options = GameState.GetJSON("VoteOptions")
+			local ids = {}
+			if type(options) == "table" then
+				for _, option in options do
+					if type(option) == "table" and type(option.Id) == "string" and not option.Mystery then
+						table.insert(ids, option.Id)
+					end
+				end
+			end
+			preload(ids)
+		elseif phase == "Preparing" then
+			preload({ GameState.Get("GameId") })
+		end
 		switchTo(listForPhase(phase))
 	end)
 	switchTo(listForPhase(GameState.Get("Phase")))
@@ -270,6 +383,14 @@ function AudioController.Start(_context)
 			end
 		else
 			lastBeep = -1
+		end
+		-- The mini-game's track finished loading after the round's music started: switch over.
+		if currentList == "Round" and currentSound == roundTrack then
+			local info, sound = modeTrack(GameState.Get("GameId"))
+			if info and sound and sound.IsLoaded then
+				pauseCurrent()
+				startCurrent()
+			end
 		end
 		if roundTrack then
 			local speed = if phase == "InRound" and left > 0 and left <= HURRY_TIME then 1.12 else 1

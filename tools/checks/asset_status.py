@@ -46,6 +46,13 @@ def collect() -> dict[str, int]:
     for name, value in re.findall(r"(\w+) = (\d+),", audio):
         if int(value) > 0:
             ids[f"audio:{name}"] = int(value)
+    # The mini-games' own round tracks, packed a few to a file (tools/music/round_music.py).
+    round_music = ROOT / "src" / "shared" / "RoundMusic.luau"
+    if round_music.exists():
+        packs = re.search(r"\tPacks = \{(.*?)\n\t\}", round_music.read_text(), re.S)
+        for name, value in re.findall(r"(\w+) = (\d+),", packs.group(1) if packs else ""):
+            if int(value) > 0:
+                ids[f"audio:{name}"] = int(value)
     return ids
 
 
