@@ -1,31 +1,27 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-21 21:58 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-22 01:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (21:58 UTC)
+## Session B in flight (2026-10-22 01:00 UTC)
 
-- **Live version 32** (published 21:55 UTC from `claude/upbeat-galileo-gvwq66` at `6e0029b`, on the owner's "Push right
-  now"; the owner must restart servers).
-  - **What it adds over version 31:**
-    - the Fire Rope "chair" camera fix;
-    - audits of Hex Meltdown, Rake It In, Bobsled Run, Skate Escape, Pump & Pop, Arrow Ambush, Cake Factory and Crazy
-      Cutters;
-    - Bumper Ballers phone controls and Sinking Sands bots;
-    - payoffs and low coins: Rewards Road, career milestones, celebration cards, the one-time saved-coin conversion;
-    - DataService saves that survive shutdowns and never lock for a player who left mid-load;
-    - mode client start-ups cancelled with their round, and Honey Trap's hint on one line.
-  - **Full regression on that exact commit:**
+- **Live version 33** (published 00:58 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `d10b635`, on the
+  owner's "Can we push V33 out and then you keep working on everything?"; the owner must restart servers).
+  - **It was shipped after a quick check, not the full regression:**
     - code checks;
-    - every mode's 12-player, bots and phone rounds: 0 errors, 0 phone-UI problems;
+    - FireRope, SharkBait and EatsaPizza's 12-player, bots and phone rounds;
     - a lobby round with 8 bots;
-    - the whole client on phone and PC: 0 errors, empty text report, ui_render 0 problems.
-  - **The whole-client harness can't run in one task any more.** Its result (3.4 MB raw) comes back from Open Cloud at
-    about 4 MiB, where it fails as "INTERNAL_ERROR Task timed out due to an internal error" after 600 s (v33's 6 MB
-    fails as `OUTPUT_SIZE_LIMIT_EXCEEDED`). For v32 it was run as two tasks, each returning half of the snapshots (by
-    sorted name), then merged for ui_render. The client-UI helper is slimming the harness output for v33.
-- **v33 candidate: local branch `integrate-v33` in `/home/user/pp-v33`, pushed to `claude/upbeat-galileo-gvwq66`.**
+    - the whole client on phone and PC.
+
+    All passed with 0 errors and 0 render problems. One EatsaPizza bots run hit Roblox's transient "INTERNAL_ERROR Task
+    timed out" and passed on the re-run. **Run the full regression on it next** and fix anything it finds in v34.
+  - **What it adds to v32:** everything in the v33 candidate below, plus Messy Memory, Snowball Summit, Trace Race and
+    Eatsa Pizza: 25 games in all, 13 classics and 12 new.
+  - The store description (`docs/STORE_DESCRIPTION.txt`, updated after the publish) has to be pasted in Creator Hub by
+    the owner: `publish_place.py` can't set it (its settings PATCH gets a 403).
+- Version 32 was published 21:55 UTC from `6e0029b` after a full regression.
+- **Merged since v32 (live in v33):**
   It's v32 plus:
   - the Skee-Ball arcade;
   - the client UI batch: the team pill shows the real teams, toasts rise above action buttons, AutoScale listeners are

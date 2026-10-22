@@ -9,6 +9,11 @@
 -- aren't counted; when everyone here is on a break, rounds wait in the lobby ("Everyone's taking a
 -- break!") instead of running with bots only. For the same reason a round whose people all leave or
 -- can't be placed during the rules card is called off before GO (RoundContext.WaitForStart).
+--
+-- Between two rounds the results, the lobby and the vote take 20 seconds at most (owner: "Less time
+-- sitting in the lobby. total of 20 seconds instead of 40."; Config.Session's ResultsTime,
+-- IntermissionTime and VoteTime), and the vote ends early once every person playing has voted
+-- (VotingService.Wait).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -298,8 +303,9 @@ local function runCycle()
 	end
 	setPhase("Voting", session.VoteTime, "Vote for the next game!")
 	VotingService.Begin(options)
-	-- Nobody can vote once everyone is sitting out: back to the lobby to wait for them.
-	local voted = waitFor(session.VoteTime, everyoneOnBreak)
+	-- Nobody can vote once everyone is sitting out: back to the lobby to wait for them. Once every
+	-- person playing has voted, it ends a moment after the last vote instead of running its time.
+	local voted = VotingService.Wait(session.VoteTime, everyoneOnBreak)
 	local winner, _, wasTie = VotingService.End()
 	if not voted or not winner then
 		return

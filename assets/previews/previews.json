@@ -49,6 +49,16 @@
     "made": "2026-10-21",
     "width": 168
   },
+  "EatsaPizza": {
+    "columns": 6,
+    "decal": 107858445020587,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 117491605847791,
+    "made": "2026-10-22",
+    "width": 168
+  },
   "FireRope": {
     "columns": 6,
     "decal": 103117985170046,
@@ -89,6 +99,26 @@
     "made": "2026-10-21",
     "width": 168
   },
+  "MessyMemory": {
+    "columns": 6,
+    "decal": 77202002542929,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 96045274126772,
+    "made": "2026-10-22",
+    "width": 168
+  },
+  "ParasolPlummet": {
+    "columns": 6,
+    "decal": 132602602885616,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 118573541606477,
+    "made": "2026-10-22",
+    "width": 168
+  },
   "PrimeCut": {
     "columns": 6,
     "decal": 105578987646904,
@@ -117,6 +147,16 @@
     "height": 240,
     "image": 100111796043651,
     "made": "2026-10-21",
+    "width": 168
+  },
+  "RockinRaceway": {
+    "columns": 6,
+    "decal": 130564954510610,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 133114200071093,
+    "made": "2026-10-22",
     "width": 168
   },
   "SharkBait": {
@@ -149,14 +189,64 @@
     "made": "2026-10-21",
     "width": 168
   },
-  "Spleef": {
+  "Slaparazzi": {
     "columns": 6,
-    "decal": 126594845713611,
+    "decal": 80551575106010,
     "fps": 8,
     "frames": 24,
     "height": 240,
-    "image": 107314965132268,
+    "image": 71326423554345,
+    "made": "2026-10-22",
+    "width": 168
+  },
+  "SnowballSummit": {
+    "columns": 6,
+    "decal": 87312134786695,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 130632184848528,
+    "made": "2026-10-22",
+    "width": 168
+  },
+  "Spleef": {
+    "columns": 6,
+    "decal": 133584856902710,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 101432860004608,
+    "made": "2026-10-22",
+    "width": 168
+  },
+  "StampOut": {
+    "columns": 6,
+    "decal": 74311557489612,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 95835920095105,
+    "made": "2026-10-22",
+    "width": 168
+  },
+  "Tanks": {
+    "columns": 6,
+    "decal": 123393163096992,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 117323000590750,
     "made": "2026-10-21",
+    "width": 168
+  },
+  "TraceRace": {
+    "columns": 6,
+    "decal": 116795144507468,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 74203977748994,
+    "made": "2026-10-22",
     "width": 168
   }
 }

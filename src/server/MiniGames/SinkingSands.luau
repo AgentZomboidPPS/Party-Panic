@@ -32,6 +32,11 @@
 -- Stronger Kings (owner, told the Divers now won almost every round: "lets make it stronger and add
 -- another king"): one more King per round (SandSwirl.KingCount: 3 of 8 players, 4 of 12, never all
 -- Kings) and a stronger, longer PULL (SandSwirl.PULL, PULL_HOLD).
+--
+-- Invisible walls (owner: "Theres invisible stuff you can jump on and hang on in several games"):
+-- the wall round the mesa's edge was 12 studs high, so from a palm (whose rough collision had a
+-- ledge 5 studs up) you could jump onto it and walk round the arena on nothing. It's EDGE_HEIGHT
+-- now, and the palms, columns, arches and thrones collide as drawn (MeshLibrary: preciseCollision).
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -62,6 +67,9 @@ local IDOL = 4
 
 local PLAZA = 78 -- radius of the mesa top (the meshes use the same numbers)
 local MESA = 40 -- mesa top above the desert floor
+-- The invisible wall round the mesa's edge: well over anything you could climb and jump from (the
+-- arches are 33 high), so nobody walks round on top of it.
+local EDGE_HEIGHT = 60
 local THRONE_R = SandSwirl.RIM + 9
 local DIVER_R = SandSwirl.RIM + 3.5
 local HOLD_DEPTH = 22 -- the dark pocket down the sinkhole where gulped divers wait
@@ -304,11 +312,11 @@ function SinkingSands:_buildArena(kingCount: number)
 			CFrame.new(mid - Vector3.new(0, 0.5 + (sector % 2) * 0.06, 0)) * look.Rotation,
 			Vector3.new(width, 1, PLAZA - SandSwirl.RIM + 0.4)
 		)
-		-- An invisible wall at the cliff edge so nobody walks off the mesa.
+		-- An invisible wall at the cliff edge so nobody walks off the mesa, its top out of reach.
 		Build.Barrier({
 			Name = "Edge",
-			Size = Vector3.new(width, 12, 1),
-			CFrame = CFrame.new(center + outward * (PLAZA - 1.5) + Vector3.new(0, 6, 0)) * look.Rotation,
+			Size = Vector3.new(width, EDGE_HEIGHT, 1),
+			CFrame = CFrame.new(center + outward * (PLAZA - 1.5) + Vector3.new(0, EDGE_HEIGHT / 2, 0)) * look.Rotation,
 			Parent = floor,
 		})
 	end

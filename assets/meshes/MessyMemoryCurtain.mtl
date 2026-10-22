@@ -1,0 +1,11 @@
+newmtl Cloth
+Kd 0.808 0.157 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 0.518 0.455 0.439
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

@@ -791,6 +791,17 @@ def render(nodes: list, size_name: str, out: Path):
     return problems
 
 
+def expand(nodes: list, defaults: dict) -> list:
+    """A snapshot's entries with the values gui_dump.luau left out of them filled back in (the
+    result's "uiDefaults", by class; an older result has every value in every entry)."""
+    full = []
+    for n in nodes:
+        entry = json.loads(json.dumps(defaults.get(n["c"]) or {}))
+        entry.update(n)
+        full.append(entry)
+    return full
+
+
 def draw_line(layer, x, center_y, text, name, size, measured, fill, stroke):
     """Draws one line of text with the stand-in fonts, squeezed to the engine's width for it."""
     natural = text_width(text, name, size)
@@ -828,6 +839,8 @@ def main():
     snapshots = (data or {}).get("ui") or {}
     if not snapshots:
         raise SystemExit("No UI snapshots: run round_harness.py with --client --ui-at <seconds>")
+    defaults = data.get("uiDefaults") or {}
+    snapshots = {at: expand(nodes, defaults) for at, nodes in snapshots.items()}
     if args.sizes == "measured":
         measured = {name for nodes in snapshots.values() for n in nodes for name in (n.get("L") or {})}
         names = [name for name in SIZES if name in measured] or SIZE_GROUPS["all"]

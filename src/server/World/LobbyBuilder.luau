@@ -453,7 +453,8 @@ local function buildFountain(root: Model)
 		(upperWater :: any)[key] = value
 	end
 	local colliders = Build.Model("Colliders", center)
-	disc("PoolFloor", 22.6, 1, Vector3.new(0, 0.6, 0), { Transparency = 1, Parent = colliders })
+	-- (Its top is the mesh's pool floor, 0.55: at 1.1 waders stood half a stud over it.)
+	disc("PoolFloor", 22.6, 1, Vector3.new(0, 0.05, 0), { Transparency = 1, Parent = colliders })
 	disc("ColumnCollider", 3.6, 8.6, Vector3.new(0, 4.5, 0), { Transparency = 1, Parent = colliders })
 	for _, point in Build.Ring(Vector3.new(0, 1.6, 0), 12.1, 24) do
 		Build.Part({
