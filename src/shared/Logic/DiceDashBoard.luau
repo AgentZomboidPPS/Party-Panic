@@ -234,6 +234,22 @@ function Board.Sample(moves: { Move }?, final: number, now: number): Sample
 	return { Position = Board.Spot(final), Yaw = yaw, Air = 0, Rest = final, Progress = 1 }
 end
 
+-- The tile a racer stood on at `now`: where its last move that had landed by then put it.
+function Board.TileAt(moves: { Move }?, final: number, now: number): number
+	if not moves or #moves == 0 then
+		return final
+	end
+	local tile = moves[1].f
+	for _, move in moves do
+		if now >= move.a + Board.Duration(move) then
+			tile = move.t
+		else
+			break
+		end
+	end
+	return tile
+end
+
 -- When the last of a racer's moves ends (or `fallback` if it has none).
 function Board.MovesEnd(moves: { Move }?, fallback: number): number
 	local last = fallback

@@ -25,6 +25,7 @@
 -- changes nothing). Tiles and pads collide with their drawn shapes; every other prop on the board
 -- and around it is decoration only.
 
+local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Board = require(ReplicatedStorage.Shared.Logic.DiceDashBoard)
@@ -41,6 +42,7 @@ local GROUND = -34 -- the meadow under the table, below the tabletop
 local TILE_BASE = 0.1 -- tiles sit this far up in the felt (their top is Board.TOP)
 local STAGGER = 0.45 -- seconds at least between one SWAP / ? effect and the next
 local ROLL_INTERVAL = 0.15
+local RACER_GROUP = "DiceDashRacers" -- racers pass through each other (crowded tiles never shove)
 
 -- Racer colours, one per racer number (the number on the badge is the second cue).
 local COLORS = {
@@ -89,6 +91,48 @@ end
 
 function DiceDash:_at(offset: Vector3, yaw: number?): CFrame
 	return CFrame.new(self.origin + offset) * CFrame.Angles(0, yaw or 0, 0)
+end
+
+-- Racers pass through each other (a crowded tile never shoves anyone), restored after the round.
+local function setupGroup(): boolean
+	return pcall(function()
+		if not PhysicsService:IsCollisionGroupRegistered(RACER_GROUP) then
+			PhysicsService:RegisterCollisionGroup(RACER_GROUP)
+		end
+		PhysicsService:CollisionGroupSetCollidable(RACER_GROUP, RACER_GROUP, false)
+	end)
+end
+
+function DiceDash:_ghost(player: any)
+	local character = self.context:GetCharacter(player)
+	if not self.groupReady or not character or self.ghosted[character] then
+		return
+	end
+	local saved = {}
+	self.ghosted[character] = saved
+	local function apply(part: Instance)
+		if part:IsA("BasePart") then
+			if saved[part] == nil then
+				saved[part] = part.CollisionGroup
+			end
+			part.CollisionGroup = RACER_GROUP
+		end
+	end
+	for _, part in character:GetDescendants() do
+		apply(part)
+	end
+	self.context:Track(character.DescendantAdded:Connect(apply))
+end
+
+function DiceDash:Cleanup()
+	for character, saved in self.ghosted or {} do
+		for part, group in saved do
+			if part.Parent then
+				part.CollisionGroup = group
+			end
+		end
+		self.ghosted[character] = nil
+	end
 end
 
 -- A tile's raised icon is too low to stand on: only its plate is solid.
@@ -334,6 +378,8 @@ function DiceDash:Prepare()
 	self.turnAt = 0
 	self.rollEnd = 0
 	self.turnTime = Board.TurnTime(1)
+	self.ghosted = {}
+	self.groupReady = setupGroup()
 
 	local players = table.clone(ctx:GetPlayers())
 	for index = #players, 2, -1 do -- racer numbers in a random order
@@ -370,6 +416,7 @@ function DiceDash:Prepare()
 	self:_share()
 
 	ctx.Hooks.CharacterReady = function(player)
+		self:_ghost(player)
 		if self.racing then
 			ctx:Freeze(player, true)
 		end
@@ -394,6 +441,9 @@ function DiceDash:Prepare()
 		table.insert(points, self:_at(Board.Spot(0) + Board.Ring(slot, count, true), startYaw))
 	end
 	ctx:SpawnAll(points, true)
+	for _, player in ctx:GetPlayers() do
+		self:_ghost(player)
+	end
 	self:_placeBots(ctx:Now())
 	ctx:SetStatus("🎲 Roll the dice and race to the FINISH!")
 end
@@ -550,7 +600,10 @@ function DiceDash:_resolve()
 	-- 2. Lone effects (they only move the racer who landed), all at once.
 	local landers = unfinished()
 	table.sort(landers, function(a, b)
-		return a.Pos > b.Pos
+		if a.Pos ~= b.Pos then
+			return a.Pos > b.Pos
+		end
+		return a.Number < b.Number
 	end)
 	local beatAt = effectAt
 	local interactive = {}
@@ -576,7 +629,7 @@ function DiceDash:_resolve()
 			move(racer, effectAt, 0, "d")
 			event(effectAt, "TRAP", `TRAPDOOR! {name} back to START`, { id }, from)
 		elseif kind == Board.SWAP or kind == Board.EVENT then
-			table.insert(interactive, racer)
+			table.insert(interactive, { Racer = racer, Tile = from, Moves = #racer.Moves })
 		end
 	end
 	-- (an effect waits for everyone it moves to finish what they're doing; others run alongside)
@@ -589,27 +642,45 @@ function DiceDash:_resolve()
 		return start
 	end
 
+	-- The leader / last place among `list` (ties go to the lower racer number, so it's deterministic).
+	local function pick(list: { Racer }, best: (a: Racer, b: Racer) -> boolean): Racer?
+		local chosen: Racer? = nil
+		for _, other in list do
+			if chosen == nil or best(other, chosen) or (other.Pos == chosen.Pos and other.Number < chosen.Number) then
+				chosen = other
+			end
+		end
+		return chosen
+	end
+
 	-- 3. SWAP and ? tiles in turn (each depends on where everyone is by then), alongside the rest.
-	for _, racer in interactive do
-		if racer.Finish ~= nil or racer.Gone then
+	-- A tile fires only for the racer who walked onto it and is still standing there untouched (an
+	-- earlier effect that moved them cancels it, and never fires a tile they were moved onto); a
+	-- racer swapped once this turn isn't swapped again (a second SWAP never undoes the first).
+	local swapped: { [Racer]: boolean } = {}
+	for _, item in interactive do
+		local racer: Racer = item.Racer
+		if racer.Finish ~= nil or racer.Gone or racer.Pos ~= item.Tile or #racer.Moves ~= item.Moves then
 			continue
 		end
 		local from = racer.Pos
 		local kind = Board.KindAt(kinds, from)
-		if kind ~= Board.SWAP and kind ~= Board.EVENT then
-			continue -- (an earlier effect moved them off their tile)
-		end
 		local name = racer.Player.DisplayName
 		local id = racer.Player.UserId
 		local others = unfinished()
 		if kind == Board.SWAP then
-			local leader: Racer? = nil
+			local ahead = {}
 			for _, other in others do
-				if other ~= racer and other.Pos > from and (leader == nil or other.Pos > leader.Pos) then
-					leader = other
+				if other ~= racer and other.Pos > from and not swapped[other] then
+					table.insert(ahead, other)
 				end
 			end
+			local leader = pick(ahead, function(a, b)
+				return a.Pos > b.Pos
+			end)
 			if leader then
+				swapped[racer] = true
+				swapped[leader] = true
 				local theirs = leader.Pos
 				local at = startFor({ racer, leader })
 				move(racer, at, theirs, "x")
@@ -636,12 +707,9 @@ function DiceDash:_resolve()
 				local text = if #moved > 0 then `? Everyone behind {name} +2` else `? Nobody behind {name}`
 				event(at, "EVENT", text, moved, from)
 			elseif roll == 2 then
-				local leader: Racer? = nil
-				for _, other in others do
-					if leader == nil or other.Pos > leader.Pos then
-						leader = other
-					end
-				end
+				local leader = pick(others, function(a, b)
+					return a.Pos > b.Pos
+				end)
 				if leader then
 					local leaderName = leader.Player.DisplayName
 					local at = startFor({ leader })
@@ -649,12 +717,9 @@ function DiceDash:_resolve()
 					event(at, "GUST", `? GUST! {leaderName} blown back 3`, { leader.Player.UserId }, from)
 				end
 			else
-				local last: Racer? = nil
-				for _, other in others do
-					if last == nil or other.Pos < last.Pos then
-						last = other
-					end
-				end
+				local last = pick(others, function(a, b)
+					return a.Pos < b.Pos
+				end)
 				if last then
 					local lastName = last.Player.DisplayName
 					local at = startFor({ last })
@@ -665,20 +730,25 @@ function DiceDash:_resolve()
 		end
 	end
 
-	-- 4. Finishers take their places in the order they arrive.
+	-- 4. Finishers take their places as they land (counting only those still in the race, so a
+	-- planned winner who leaves before landing hands the win to the next one home).
 	table.sort(finishes, function(a, b)
-		return (a.Finish :: number) < (b.Finish :: number)
+		if a.Finish ~= b.Finish then
+			return (a.Finish :: number) < (b.Finish :: number)
+		end
+		return a.Number < b.Number
 	end)
 	for _, racer in finishes do
-		self.finished += 1
-		racer.Place = self.finished
-		local place = self.finished
 		local at = racer.Finish :: number
 		local player = racer.Player
 		ctx:Delay(math.max(0, at - now), function()
-			if racer.Gone then
+			if racer.Gone or racer.Place then
 				return
 			end
+			self.finished += 1
+			racer.Place = self.finished
+			local place = self.finished
+			self:_share()
 			ctx:SetScoreText(player, `{Board.Ordinal(place)} · {string.format("%.1f", at - self.startAt)}s`)
 			ctx:Fire(nil, "Finish", player.UserId, place)
 			if place == 1 then
@@ -839,7 +909,7 @@ function DiceDash:GetResults()
 	end
 	table.sort(home, function(a, b)
 		if a.Finish == b.Finish then
-			return (a.Place or 0) < (b.Place or 0)
+			return a.Number < b.Number
 		end
 		return (a.Finish :: number) < (b.Finish :: number)
 	end)
@@ -868,7 +938,9 @@ function DiceDash:GetResults()
 				BestScore = 100,
 			})
 		else
-			local tile = math.min(racer.Pos, Board.LAST - 1)
+			-- (where they stood at the buzzer: the last move that had landed by then)
+			local at = ctx.TimeUpAt or ctx:Now()
+			local tile = math.min(Board.TileAt(racer.Moves, racer.Pos, at), Board.LAST - 1)
 			table.insert(entries, {
 				Player = player,
 				Rank = tile,

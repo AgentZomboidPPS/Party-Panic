@@ -19,6 +19,7 @@ local RaceBar = require(ReplicatedStorage.Shared.Logic.RaceBar)
 
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
+local State = require(script.Parent.Parent.State)
 
 local DiceDash = {}
 
@@ -501,7 +502,6 @@ function DiceDash.Start(api)
 		end
 
 		local focus: Vector3? = nil
-		local leaderKey, leaderScore = nil, -math.huge
 		local dots = {}
 		local seen = {}
 		for key, entry in racers do
@@ -592,12 +592,6 @@ function DiceDash.Start(api)
 
 			if key == myKey then
 				focus = feet
-			end
-			local progress = if entry.F
-				then Board.LAST + 1 - (tonumber(entry.F) or 0) * 0.01
-				else (sample.Rest or entry.P)
-			if progress > leaderScore then
-				leaderKey, leaderScore = key, progress
 			end
 
 			-- The race strip badge (between tiles it slides along with the hop).
@@ -693,13 +687,16 @@ function DiceDash.Start(api)
 			callout.Visible = false
 		end
 
-		-- The camera follows me along the board (the leader if I'm watching), from the south side.
-		if stage ~= "Done" then
+		-- The camera follows me along the board, from the south side (only racers: anyone else keeps
+		-- their own camera, and the race strip is for racers too).
+		local inRace = State.InRound() and racers[myKey] ~= nil
+		bar.Visible = inRace
+		prompt.Visible = inRace
+		if not inRace then
+			callout.Visible = false
+		end
+		if stage ~= "Done" and inRace then
 			local target = focus
-			if not target and leaderKey and racers[leaderKey] then
-				local sample = samples[leaderKey]
-				target = base + sample.Position
-			end
 			if target then
 				local flat = Vector3.new(target.X, base.Y + Board.TOP + math.min(4, target.Y - base.Y), target.Z)
 				cameraFocus = if cameraFocus then cameraFocus:Lerp(flat, 1 - math.exp(-dt * 4)) else flat
