@@ -214,6 +214,32 @@ function SkateEscape.Start(api)
 	local hudY = api:HudY()
 	-- Phones draw the HUD at 75%: bigger dots, numbers and icons there keep them readable (11 pt+).
 	local touch = api:IsTouch()
+	-- Phones: half the torch lights and slower torch flames (~16 dynamic lights and ~450 fire
+	-- particles a second along the bridge were a big cost on their GPUs; PC keeps them all).
+	if touch then
+		api:Track(task.spawn(function()
+			local arena = api:Arena(10)
+			if not arena then
+				return
+			end
+			local lit = 0
+			for _, item in arena:GetDescendants() do
+				if item.Name == "Flame" and item:IsA("BasePart") then
+					local light = item:FindFirstChildOfClass("PointLight")
+					if light then
+						lit += 1
+						if lit % 2 == 0 then
+							light.Enabled = false
+						end
+					end
+					local fire = item:FindFirstChildOfClass("ParticleEmitter")
+					if fire then
+						fire.Rate = math.min(fire.Rate, 8)
+					end
+				end
+			end
+		end))
+	end
 	local barWidth = 560
 	local trackLength = barWidth - 64
 	local DOT = if touch then 30 else 18 -- a rider's dot (yours is MY_DOT)
