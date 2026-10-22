@@ -1040,3 +1040,94 @@ def orchestra_hit(notes: tuple, length: float = 0.5) -> np.ndarray:
     tp = np.asarray(timpani(min(notes) - 12, 1.0))
     stack[:, : tp.shape[0]] += s.pan(tp)[:, : stack.shape[1]] * 0.5
     return _frozen(normalize(stack))
+
+
+# --- batch C voices
+
+@lru_cache(maxsize=None)
+def snow_crunch(length: float = 0.14, variant: int = 0) -> np.ndarray:
+    """A boot or a shovel biting into packed snow: a quick cluster of soft, papery grains."""
+    n = s.samples(length)
+    rng = _rng("crunch", length, variant)
+    out = np.zeros(n)
+    for _ in range(14):
+        start = int(rng.uniform(0, 0.6) * n)
+        m = min(n - start, s.samples(0.012))
+        grain = rng.uniform(-1, 1, m) * np.exp(-np.arange(m) / (SR * 0.002)) * rng.uniform(0.3, 1.0)
+        out[start:start + m] += grain
+    t = _t(n)
+    out *= np.exp(-t / (length * 0.45))
+    return _frozen(normalize(eq(out, ("hp", 700), ("peak", 1800, 4, 1.0), ("lp", 5500))))
+
+
+@lru_cache(maxsize=None)
+def plunge(length: float = 0.6) -> np.ndarray:
+    """Someone dropping into icy water: a short splash and a cartoon 'bloop' falling away."""
+    n = s.samples(length)
+    t = _t(n)
+    splash_ = eq(_rng("plunge", length).uniform(-1, 1, n), ("hp", 500), ("lp", 4000)) * np.clip(t / 0.005, 0, 1) * np.exp(-t / 0.08)
+    f = 700 * 0.35 ** np.clip(t / 0.25, 0, 1)
+    drop = s.sine(f, n) * np.sin(np.pi * np.clip(t / 0.3, 0, 1)) * 0.8
+    return _frozen(normalize(splash_ * 0.7 + drop))
+
+
+@lru_cache(maxsize=None)
+def chip(midi: float, length: float, duty: float = 0.25, vibrato: float = 0.0, slide: float = 0.0) -> np.ndarray:
+    """An 8-bit console's pulse channel: a pulse wave with a hard on-off envelope, optional
+    delayed vibrato and a slide into the note, softened just enough for small speakers."""
+    n = s.samples(length + 0.03)
+    t = _t(n)
+    pitch = midi + _vibrato(t, vibrato, 6.0, 0.15, 0.1)
+    if slide:
+        pitch = pitch - slide * np.exp(-t / 0.03)
+    tone = s.square(s.midi_hz(pitch), n, duty)
+    e = env(n, 0.003, 0.25, 0.75, 0.02, gate=length)
+    return _frozen(normalize(eq(tone * e, ("lp", 6000), ("hp", 120))))
+
+
+@lru_cache(maxsize=None)
+def chip_tri(midi: float, length: float) -> np.ndarray:
+    """The console's triangle channel, used for the bass: a stepped triangle (its 4-bit staircase
+    adds the upper harmonics a phone needs to hear it) with a little square on top."""
+    n = s.samples(length + 0.02)
+    phase, _ = s.phase_of(s.midi_hz(midi), n)
+    tri = 2 * np.abs(2 * phase - 1) - 1
+    tri = np.round(tri * 7.5) / 7.5
+    tone = tri + 0.18 * s.square(s.midi_hz(midi), n, 0.5)
+    e = env(n, 0.002, 0.3, 0.85, 0.015, gate=length)
+    return _frozen(normalize(eq(tone * e, ("lp", 4000))))
+
+
+@lru_cache(maxsize=None)
+def chip_noise(length: float = 0.08, tone: float = 1.0, variant: int = 0) -> np.ndarray:
+    """The console's noise channel: a sample-and-hold noise (a snare at tone ~1, a hat at 2)."""
+    n = s.samples(length)
+    rng = _rng("chipnoise", length, tone, variant)
+    hold = max(1, int(6 / tone))
+    raw = np.repeat(rng.choice((-1.0, 1.0), n // hold + 1), hold)[:n]
+    t = _t(n)
+    return _frozen(normalize(eq(raw * np.exp(-t / (length * 0.3)), ("hp", 400 * tone), ("lp", 9000))))
+
+
+@lru_cache(maxsize=None)
+def piano(midi: float, length: float = 0.8, bright: float = 0.6) -> np.ndarray:
+    """An acoustic piano: struck, slightly stretched partials that die faster the higher they are,
+    a felt hammer's thump and two strings beating a little against each other. Stereo."""
+    n = s.samples(length + 0.6)
+    t = _t(n)
+    f = s.midi_hz(midi)
+    decay = 2.2 * (261.6 / f) ** 0.45
+    out = np.zeros(n)
+    for k in range(1, 13):
+        fk = f * k * (1 + 0.0004 * k * k)
+        if fk > 12000:
+            break
+        amp = (1 / k ** (1.4 - 0.5 * bright)) * (1 if k != 7 else 0.3)
+        for d in (-0.6, 0.6):
+            out += amp * 0.5 * np.sin(2 * np.pi * fk * (1 + d / 1200) * t + k) * np.exp(-t * k ** 0.6 / decay)
+    hammer = s.lowpass(_rng("hammer", midi).uniform(-1, 1, n), 1200 + 2500 * bright) * np.exp(-t / 0.008) * 0.25
+    tone = (out + hammer) * np.clip(t / 0.002, 0, 1)
+    tone = tone * np.where(t < length, 1.0, np.exp(-(t - length) / 0.09))
+    tone = normalize(eq(tone, ("hp", 60)))
+    pan_pos = float(np.clip((midi - 64) / 30, -0.5, 0.5))
+    return _frozen(s.pan(tone, pan_pos))
