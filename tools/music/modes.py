@@ -17,6 +17,7 @@ notation) and played by tools/music/instruments.py:
     CakeFactory   "Conveyor Belt Boogie"  a toy factory's clanks, hisses and music box
     BobsledRun    "Ice Chute Rush"        sleigh bells and heroic brass down the ice
     SharkBait     "Shark Surf Panic"      surf guitar, spring reverb and a lurking shark riff
+    MechaMarathon "Clockwork Air Show"    a village brass band and ticking clockwork at a sunny fete
 
 Every track opens with an intro of at least 13 seconds (the rules card and the 3-2-1, while the
 game loads its own track), then the band kicks in on GO: AudioController starts the track so its
