@@ -263,7 +263,7 @@ function Spleef.Start(api)
 		freeCracks(block)
 		local part = block.Part
 		if part.Parent then
-			part.LocalTransparencyModifier = 1
+			part.Transparency = 1 -- (not LocalTransparencyModifier: the Invisicam camera resets that)
 			part.CanCollide = false
 			part.CanQuery = false
 			part.CFrame = block.Base
@@ -319,6 +319,26 @@ function Spleef.Start(api)
 			end))
 		end
 	end)
+
+	-- The round's end: blocks due from StopAt on stay (the server keeps them for the results), so
+	-- their countdown stops and they go back to plain snow.
+	local stopAt: number? = nil
+	local function freeze(block: Block)
+		fading[block] = nil
+		freeCracks(block)
+		local part = block.Part
+		if part.Parent then
+			part.CFrame = block.Base
+			part.Color = FLOOR_COLORS[block.Floor] or part.Color
+			part.Transparency = 0
+		end
+	end
+	local function refreshStop()
+		local value = api:Shared("StopAt")
+		stopAt = if type(value) == "number" then value else nil
+	end
+	refreshStop()
+	api:OnShared("StopAt", refreshStop)
 
 	api:OnEvent("Fade", function(indices, dropAt)
 		if type(indices) ~= "table" or type(dropAt) ~= "number" then
@@ -490,6 +510,10 @@ function Spleef.Start(api)
 			local part = block.Part
 			local dropAt = block.DropAt or 0
 			local left = dropAt - serverNow
+			if stopAt and dropAt >= stopAt then
+				freeze(block)
+				continue
+			end
 			if left <= 0 or not part.Parent then
 				vanish(block)
 				continue
@@ -502,7 +526,7 @@ function Spleef.Start(api)
 			local offset = Vector3.new(rng:NextNumber(-amount, amount), 0, rng:NextNumber(-amount, amount))
 			part.CFrame = block.Base + offset
 			part.Color = (FLOOR_COLORS[block.Floor] or Color3.new(1, 1, 1)):Lerp(WARN_COLOR, 0.3 + 0.55 * p)
-			part.LocalTransparencyModifier = 0.7 * q
+			part.Transparency = 0.7 * q
 			if block.Cracks then
 				local top = block.Top + offset + Vector3.new(0, 0.03, 0)
 				for index, crack in block.Cracks do

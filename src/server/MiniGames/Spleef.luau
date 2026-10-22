@@ -1,8 +1,10 @@
--- Spleef (Survival, 75s, 2-12 players). After Minecraft's Spleef: everyone stands on three floors
--- of snow blocks stacked over an icy pool, with a shovel in hand. Click or tap a block within reach
--- and it breaks, so rivals drop through the hole to the floor below. Fall through all three floors
--- into the water and you're out; last one standing wins. Later in the round the floors crack on
--- their own, from the rim inward (the blocks shake and glow, then drop), so every round ends.
+-- Spleef (Survival, 75s, 2-12 players). After Minecraft's Spleef.
+--
+-- First pass: everyone stood on three floors of snow blocks stacked over an icy pool, with a shovel
+-- in hand. Click or tap a block within reach and it broke, so rivals dropped through the hole to the
+-- floor below. Fall through all three floors into the water and you're out; last one standing wins.
+-- Later in the round the floors cracked on their own, from the rim inward (the blocks shook and
+-- glowed, then dropped), so every round ended.
 --
 -- Second pass, after the owner played it: "Bots are awful at spleef. also spleef doesnt require you
 -- to dig. It should be you walk over it and it fades out within like 1 second or so". No more
@@ -35,6 +37,9 @@
 --     grace (longer by its ping for people) is dropped by the server until it lands on a block of a
 --     lower floor. Below the last floor it is out at once. Everyone a single step drops out is
 --     eliminated in that same step.
+--   * At the round's end (Stop) the floors freeze for the results: blocks due within FREEZE_AFTER
+--     still go, later ones stay ("StopAt"), so survivors keep standing; anyone mid-drop is let go and
+--     ranked out at the moment they were dropped (GetResults).
 --   * The crumble (from 42% of the round with 2 players, 52% with 12) uses the same Fade schedule
 --     with a longer warning, rim first; the upper floors go completely and the last floor shrinks to a small core.
 -- Bots (Bots/Spleef.luau) plan their steps over the fresh blocks and drop down when cornered.
@@ -56,8 +61,10 @@ local STAND_BAND = 1 -- feet this close to a floor's top count as standing on it
 local WARN = 0.7 -- a stepped-on block shakes, cracks and tints this long...
 local FADE = 0.3 -- ...then fades this long, then it's gone (it holds you up until then)
 local STEP_TIME = WARN + FADE
+local FREEZE_AFTER = 0.5 -- at the round's end, blocks due this soon still go; later ones freeze
 local GRACE = 0.25 -- standing over a hole this long drops a character (people add their ping)
 local AIR_MAX = 1.4 -- hanging above the floors longer than this counts as standing on the one below
+local NEAR_FLOOR = 3 -- feet this little above a block in the air: still stepping on it (hops)
 local PING_MAX = 0.3 -- the most of anyone's ping that is made up for
 local SWEEP_MAX = 14 -- a jump between two samples longer than this isn't a walk (a put-back, a drop)
 local WATER_BELOW = 47 -- the pool's surface under the top floor
@@ -90,8 +97,7 @@ Spleef.FloorColors = {
 	Color3.fromRGB(84, 148, 222), -- 3: blue ice, the last floor
 }
 Spleef.FloorMaterials = { Enum.Material.Snow, Enum.Material.Snow, Enum.Material.Glacier }
-Spleef.Block, Spleef.BlockHeight, Spleef.Floors, Spleef.FloorGap = BLOCK, BLOCK_H, FLOORS, FLOOR_GAP
-Spleef.Foot, Spleef.StepTime = FOOT, STEP_TIME
+Spleef.Block, Spleef.Floors = BLOCK, FLOORS
 
 -- The floor's radius in blocks for a number of players: about 140 blocks a floor for two, 225 for
 -- five, about 490 for twelve (75 studs; under 1500 blocks in all). Everyone has to keep moving and
@@ -308,7 +314,7 @@ function Spleef:Prepare()
 	self.grid = {} :: { [number]: { [number]: Cell } }
 	self.floorCount = {} :: { number }
 	self.fading = {} :: { Cell }
-	self.falling = {} :: { [any]: { Character: Model, Speed: number, Out: boolean } }
+	self.falling = {} :: { [any]: { Character: Model, Speed: number, Out: boolean, At: number } }
 	self.unsupported = {} :: { [any]: number }
 	self.airborne = {} :: { [any]: number }
 	self.track = {} :: { [any]: { Floor: number, Position: Vector3 } }
@@ -321,8 +327,6 @@ function Spleef:Prepare()
 	self:_buildScenery()
 	self:_buildFloors(radius)
 	ctx:SetSharedJSON("Layout", {
-		Block = BLOCK,
-		Height = BLOCK_H,
 		Tops = self.tops,
 		X = origin.X,
 		Z = origin.Z,
@@ -382,22 +386,23 @@ function Spleef:GridOf(position: Vector3): (number, number)
 		math.floor((position.Z - self.center.Z) / BLOCK + 0.5)
 end
 
--- The blocks of `floor` (not gone) under a character whose middle is at `position`: any part of its
--- footprint over the block. These hold it up, and these are the ones it steps on.
+-- The blocks of `floor` (not gone) under a character whose middle is at `position`: any block whose
+-- top comes within FOOT of its middle (a round footprint, the body's width). These hold it up, and
+-- these are the ones it steps on: the same rule for both, so nobody stands on a block without
+-- starting it, and a block nothing of the body is over is never started.
 function Spleef:Supports(floor: number, position: Vector3): { Cell }
 	local found = {}
 	local i0, j0 = self:GridOf(position)
-	local reach = BLOCK / 2 + FOOT
+	local half = BLOCK / 2
 	for i = i0 - 1, i0 + 1 do
 		for j = j0 - 1, j0 + 1 do
 			local cell = self:CellAt(floor, i, j)
-			if
-				cell
-				and cell.State ~= "Gone"
-				and math.abs(position.X - cell.Position.X) <= reach
-				and math.abs(position.Z - cell.Position.Z) <= reach
-			then
-				table.insert(found, cell)
+			if cell and cell.State ~= "Gone" then
+				local dx = math.max(math.abs(position.X - cell.Position.X) - half, 0)
+				local dz = math.max(math.abs(position.Z - cell.Position.Z) - half, 0)
+				if dx * dx + dz * dz <= FOOT * FOOT then
+					table.insert(found, cell)
+				end
 			end
 		end
 	end
@@ -529,7 +534,9 @@ function Spleef:_crumble(progress: number)
 		end
 		local core = if floor == FLOORS then LAST_CORE else 0
 		local want = math.max(core, math.ceil(self.floorCount[floor] * keep))
-		local extra = math.clamp(#solid - want, 0, 8)
+		-- (Up to a fortieth of the floor a wave: with the waves every 0.45-0.9 s that keeps even the
+		-- biggest floor on schedule.)
+		local extra = math.clamp(#solid - want, 0, math.max(8, math.ceil(self.floorCount[floor] / 40)))
 		if extra == 0 and #solid > core and rng:NextNumber() < 0.3 then
 			extra = 1
 		end
@@ -647,11 +654,24 @@ function Spleef:_falls(dt: number)
 			-- someone's head, on the crater rim, a device that hovers): it counts as standing on the
 			-- floor under them.
 			self.track[player] = nil
+			local below = self:FloorBelow(feet)
+			if below and feet - self.tops[below] <= NEAR_FLOOR and self:Supported(below, position) then
+				-- Just above a block (hopping, or the server missed a landing between updates): the
+				-- block under them counts as stepped on, and the air timer starts over.
+				for _, cell in self:Supports(below, position) do
+					if self:_fade(cell, dropAt) then
+						table.insert(fresh, cell.Index)
+					end
+				end
+				self.airborne[player] = now
+				self.unsupported[player] = nil
+				continue
+			end
 			local since = self.airborne[player]
 			if not since then
 				self.airborne[player] = now
 			elseif now - since > AIR_MAX + ping then
-				floor = self:FloorBelow(feet)
+				floor = below
 			end
 			if not floor then
 				self.unsupported[player] = nil
@@ -686,6 +706,7 @@ function Spleef:_falls(dt: number)
 				Character = character,
 				Speed = math.max(0, -root.AssemblyLinearVelocity.Y),
 				Out = false,
+				At = ctx:Elapsed(),
 			}
 		end
 	end
@@ -708,6 +729,62 @@ function Spleef:_falls(dt: number)
 		ctx.EndWhenOneLeft = endWhenOneLeft
 		ctx:_checkAutoEnd()
 	end
+end
+
+-- The round is over (time up, a winner, or the last person out). The server's heartbeat stops with
+-- it, so the floors freeze for the results: blocks due by FREEZE_AFTER from now still go (every
+-- client may already be hiding those), every later one stays solid and drawn ("StopAt": clients stop
+-- its countdown). Anyone the server was dropping is let go (unanchored, back to its own device).
+function Spleef:Stop()
+	local ctx = self.context
+	if self.stopAt or not self.fading then
+		return
+	end
+	local stopAt = ctx:Now() + FREEZE_AFTER
+	self.stopAt = stopAt
+	ctx:SetShared("StopAt", stopAt)
+	local due = {}
+	for _, cell in self.fading do
+		if cell.State == "Fading" and (cell.DropAt or 0) < stopAt then
+			table.insert(due, cell)
+		end
+	end
+	task.delay(FREEZE_AFTER, function()
+		for _, cell in due do
+			if cell.State == "Fading" then
+				cell.State = "Gone"
+				if cell.Part then
+					cell.Part:Destroy()
+					cell.Part = nil
+				end
+			end
+		end
+	end)
+	for player, fall in self.falling do
+		local root = fall.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if root and root.Anchored and player.Character == fall.Character then
+			root.Anchored = false
+			pcall(ctx.GiveOwnership, ctx, root, player)
+		end
+	end
+end
+
+-- Survivors share first place, except anyone the server was already dropping when the round ended
+-- (over a hole with nothing under them: out, they just hadn't got through yet), ranked by when
+-- they were dropped.
+function Spleef:GetResults()
+	local ctx = self.context
+	local results = ctx:SurvivalResults()
+	for _, entry in results.Entries do
+		local fall = self.falling and self.falling[entry.Player]
+		if fall and fall.Character == entry.Player.Character and ctx:IsAlive(entry.Player) then
+			entry.Rank = math.floor(fall.At * 10) / 10
+			entry.ScoreText = string.format("Lasted %ds", math.floor(fall.At))
+			entry.BestScore = math.floor(fall.At)
+			entry.Survived = fall.At
+		end
+	end
+	return results
 end
 
 -- A safety net under the bots: whatever shoves one, it goes no faster than walking or jumping would.

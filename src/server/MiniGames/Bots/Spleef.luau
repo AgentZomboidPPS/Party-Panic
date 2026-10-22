@@ -12,7 +12,8 @@
 --     bots never wait, which burns through the floor faster.
 --   * Where to: a search over the untouched blocks it can walk to (a few steps out, further for
 --     skilled bots) for the spot with the most fresh snow around it, away from everyone else, a
---     little noisier for clumsy bots. It only ever walks onto untouched blocks.
+--     little noisier for clumsy bots. It only ever walks onto untouched blocks, in straight steps
+--     (a diagonal step would use up the two blocks beside it too).
 --   * Cornered (hardly any fresh snow left to walk to): first a short way over fading blocks that
 --     will still hold long enough, to a good fresh patch; else skilled bots jump a one-block gap to a
 --     bigger patch; otherwise, above the last floor, it drops on purpose: it walks into the hole (or
@@ -61,24 +62,11 @@ local function crowd(position: Vector3, others: { Vector3 }): number
 	return total
 end
 
--- The block a step from `cell` lands on, if it's untouched and the way there holds (a diagonal
--- step passes the corner of the two blocks beside it, so neither may be gone).
+-- The block a straight step from `cell` lands on, if it's untouched. (Only straight steps: a
+-- diagonal one passes the corner of the two blocks beside it and uses them up as well.)
 local function stepTo(mode, floor: number, cell, di: number, dj: number)
 	local next = mode:CellAt(floor, cell.I + di, cell.J + dj)
-	if not solid(next) then
-		return nil
-	end
-	if di ~= 0 and dj ~= 0 then
-		local a = mode:CellAt(floor, cell.I + di, cell.J)
-		local b = mode:CellAt(floor, cell.I, cell.J + dj)
-		if not a or a.State == "Gone" or not b or b.State == "Gone" then
-			return nil
-		end
-		if mode:TimeLeft(a) < 0.4 or mode:TimeLeft(b) < 0.4 then
-			return nil
-		end
-	end
-	return next
+	return if solid(next) then next else nil
 end
 
 -- Searches the untouched blocks a bot can walk to from `start` (up to `depth` steps) for the best
@@ -113,7 +101,7 @@ local function plan(bot, mode, floor: number, start, others: { Vector3 }, depth:
 			end
 		end
 		if d < depth then
-			for _, dir in DIRS do
+			for _, dir in ORTHO do
 				local next = stepTo(mode, floor, cell, dir[1], dir[2])
 				if next and steps[next] == nil then
 					steps[next] = d + 1
