@@ -1070,6 +1070,72 @@ def lead_guitar(midi: float, length: float, bend_from: float | None = None, vari
     tone = bend(tone, shift_)
     tone = drive(tone * 4.0, 3.0)
     tone = eq(tone, ("hp", 180), ("peak", 900, 3, 1.0), ("peak", 2600, -2, 1.0), ("lp", 4200), ("lp", 5500))
+
+# --- batch D voices
+
+@lru_cache(maxsize=None)
+def sax(midi: float, length: float, growl: float = 0.0, glide_from: float | None = None) -> np.ndarray:
+    """Alto / tenor sax: a reedy saw-and-pulse through a horn's formants, a lip scoop, late vibrato,
+    and `growl` (0..1) for a honking rock'n'roll edge."""
+    common = dict(vibrato=0.1, vib_rate=5.4, vib_delay=0.22, scoop=0.6, scoop_time=0.035, glide_from=glide_from, glide_time=0.05)
+    tone = _voice(midi, length, "saw", 0.025, 0.3, 0.85, 0.08, detune=(-0.02, 0.02), **common)
+    reed = _voice(midi, length, "square", 0.02, 0.3, 0.85, 0.08, width=0.35, **common)
+    n = tone.shape[-1]
+    t = _t(n)
+    tone = tone * 0.7 + reed * 0.4
+    if growl:
+        tone = tone * (1 + growl * 0.35 * np.sin(2 * np.pi * 31 * t))
+        tone = drive(tone * (1 + 2 * growl), 1.5)
+    tone = formant(tone, [(520, 6, 1.4), (1450, 5, 1.8), (2700, 3, 2.2), (5000, -8, 0.8)])
+    breath = s.bandpass(_rng("sax", midi, length).uniform(-1, 1, n), 1800, 6000) * env(n, 0.01, 0.06, 0.15, 0.05, gate=length) * 0.06
+    return _frozen(normalize(eq(tone + breath, ("hp", 160), ("lp", 6500))))
+
+
+@lru_cache(maxsize=None)
+def honky_piano(midi: float, length: float, detune: float = 0.12, variant: int = 0) -> np.ndarray:
+    """An upright saloon piano: hammered, slightly inharmonic partials on two strings a few cents
+    apart (the honky-tonk beat), dying faster up high, with the felt hammer's knock."""
+    f = s.midi_hz(midi)
+    ring = float(np.clip(3.2 - (midi - 48) * 0.05, 0.6, 3.5))
+    n = s.samples(length + 0.35)
+    t = _t(n)
+    out = np.zeros(n)
+    rng = _rng("piano", midi, variant)
+    for k in range(1, 13):
+        fk = f * k * np.sqrt(1 + 0.0004 * k * k)
+        if fk > 12000:
+            break
+        amp = (1.0 / k ** 1.1) * (1.0 if k < 7 else 0.6)
+        dec = ring / (1 + 0.35 * k)
+        for d in (-detune, detune):
+            out += amp * np.sin(2 * np.pi * fk * 2 ** (d / 12) * t + rng.uniform(0, 6)) * np.exp(-t / dec)
+    knock = s.bandpass(rng.uniform(-1, 1, n), 400, 3500) * np.exp(-t / 0.008) * 0.35
+    out = out / 2 + knock
+    out = eq(out, ("peak", 2500, 3, 1.2), ("hp", 60))
+    return _frozen(normalize(_gate(out, length, 0.12)))
+
+
+@lru_cache(maxsize=None)
+def kazoo(midi: float, length: float) -> np.ndarray:
+    """A kazoo: a hummed note buzzing a paper membrane: nasal, rasping, a bit silly, never shrill."""
+    n = s.samples(length + 0.06)
+    t = _t(n)
+    pitch = midi + _vibrato(t, 0.18, 5.8, 0.12, 0.2) - 0.4 * np.exp(-t / 0.04)
+    hum = s.saw(s.midi_hz(pitch), n)
+    buzz = drive(hum * 3.0 + 0.4 * s.square(s.midi_hz(pitch), n, 0.18), 2.0)
+    rasp = s.bandpass(_rng("kazoo", midi).uniform(-1, 1, n), 2000, 5000) * (0.5 + 0.5 * np.sin(2 * np.pi * s.midi_hz(pitch) * t)) * 0.08
+    tone = formant(buzz + rasp, [(650, 8, 2.0), (1300, 6, 2.5), (2600, 4, 3.0)])
+    tone = eq(tone, ("hp", 300), ("lp", 4200), ("lp", 5200))
+    return _frozen(normalize(tone * env(n, 0.015, 0.1, 0.85, 0.04, gate=length)))
+
+
+@lru_cache(maxsize=None)
+def mandolin(midi: float, length: float, variant: int = 0) -> np.ndarray:
+    """Mandolin: two steel strings a course, picked near the bridge: bright, short and sweet."""
+    a = ks(midi, min(length, 1.2) + 0.3, bright=0.78, decay=0.9, pick=0.11, soft=0.1, variant=variant)
+    b = ks(midi + 0.06, min(length, 1.2) + 0.3, bright=0.78, decay=0.85, pick=0.13, soft=0.1, variant=variant + 70)
+    tone = formant(np.asarray(a) + np.asarray(b) * 0.8, [(420, 4, 1.2), (1800, 4, 1.8), (4200, -3, 1.0)])
+    tone = eq(tone, ("hp", 200), ("lp", 8000))
     return _frozen(normalize(_gate(tone, length, 0.06)))
 
 
@@ -1231,3 +1297,39 @@ def piano(midi: float, length: float = 0.8, bright: float = 0.6) -> np.ndarray:
     tone = normalize(eq(tone, ("hp", 60)))
     pan_pos = float(np.clip((midi - 64) / 30, -0.5, 0.5))
     return _frozen(s.pan(tone, pan_pos))
+
+def alpine_bell(midi: float = 74.0, length: float = 1.2, variant: int = 0) -> np.ndarray:
+    """A cow's bell on an alpine meadow: a hammered sheet-metal bell, hollow and clanky, ringing on."""
+    f = s.midi_hz(midi)
+    n = s.samples(length)
+    t = _t(n)
+    rng = _rng("alpbell", midi, variant)
+    out = np.zeros(n)
+    for ratio, amp, dec in ((1.0, 1.0, 0.45), (1.83, 0.7, 0.3), (2.62, 0.5, 0.22), (3.71, 0.35, 0.14), (5.02, 0.2, 0.08)):
+        out += amp * np.sin(2 * np.pi * f * ratio * (1 + rng.uniform(-0.004, 0.004)) * t + rng.uniform(0, 6)) * np.exp(-t / (dec * length / 1.2))
+    clonk = s.bandpass(rng.uniform(-1, 1, n), 800, 3500) * np.exp(-t / 0.006) * 0.5
+    return _frozen(normalize(eq(out + clonk, ("hp", 250), ("lp", 7000))))
+
+
+@lru_cache(maxsize=None)
+def rubber_stamp(pitch: float = 95.0, length: float = 0.35) -> np.ndarray:
+    """A big rubber stamp hitting paper on a wooden desk: a rubbery 'thup' and the desk's knock."""
+    n = s.samples(length)
+    t = _t(n)
+    f = pitch * (1 + 0.8 * np.exp(-t / 0.012))
+    thup = s.sine(f, n) * np.exp(-t / 0.07) + 0.5 * s.sine(f * 2.3, n) * np.exp(-t / 0.03)
+    desk = s.sine(np.full(n, pitch * 4.1), n) * np.exp(-t / 0.025) * 0.35
+    slap = s.bandpass(_rng("stamp", pitch).uniform(-1, 1, n), 300, 2500) * np.exp(-t / 0.01) * 0.5
+    return _frozen(normalize(drive(thup + desk + slap, 1.4)))
+
+
+@lru_cache(maxsize=None)
+def chomp(pitch: float = 220.0, variant: int = 0) -> np.ndarray:
+    """A cartoon bite: a quick 'nom' (a closing mouth's formant drop) with a crunchy crust."""
+    n = s.samples(0.16)
+    t = _t(n)
+    rng = _rng("chomp", pitch, variant)
+    voice = s.saw(pitch * (1.2 - 0.4 * np.clip(t / 0.12, 0, 1)), n)
+    voice = tv_lowpass(voice, 2200 * np.exp(-t / 0.05) + 300, q=2.5) * np.sin(np.pi * np.clip(t / 0.15, 0, 1))
+    crunch = s.bandpass(rng.uniform(-1, 1, n), 1500, 6000) * (rng.uniform(0, 1, n) > 0.7) * np.exp(-t / 0.04) * 0.6
+    return _frozen(normalize(voice * 0.8 + crunch))
