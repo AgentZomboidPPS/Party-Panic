@@ -167,9 +167,9 @@ Branch **`claude/quirky-hopper-5yk8zk`**. Session B merges it before publishing 
   - no Roblox badges (the `BADGE_IDS` stay 0);
   - the event's end date and candy amounts stay;
   - the cup values stay;
-  - no double coins after Halloween: only on the weekends during the HALLOWEEN PARTY (being changed with the hat);
-  - the pumpkin hat now: a new Hat cosmetic slot, the jack-o'-lantern hat as a step on the Halloween track
-    (in progress).
+  - no double coins after Halloween: only on the weekends during the HALLOWEEN PARTY (24-25 Oct, 31 Oct-1 Nov UTC;
+    done, 6d89d31);
+  - the pumpkin hat now: done (see the HALLOWEEN line above; mesh model 82691154142514, approved).
 - **Songs for games 27-29** (Hot Potato, Dice Dash, Minecart Mayhem): being written. They'll go up as a 6th pack
   (one more audio upload, which needs the owner's OK; 5 left this month). Until then those games play Panic Mode.
 
