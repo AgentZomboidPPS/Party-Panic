@@ -226,9 +226,9 @@ confirmed by the owner in a real game.
   errors. About 5-10 minutes.
 - `tools/checks/client_harness.py [--touch]` + `tools/preview/luau_task.py` + `tools/checks/ui_render.py`: the whole
   client, every screen and phase, drawn at real phone sizes; `textReport` lists any text that doesn't fit. It plays the
-  game with the longest objective (Honey Trap right now), which is how its rules card was checked.
+  game with the longest objective (Spleef now; it was Honey Trap, which is how its rules card was checked).
 - Before committing: `stylua src tools/checks tests`, `selene src`, `luau-lsp analyze` (see `merge_check.sh` for the
-  exact line), `lune run tests/run` (55 tests).
+  exact line), `lune run tests/run`.
 - Meshes: `python3 tools/checks/mesh_orientation.py` (inside-out or half-flipped parts; must report 0),
   `tools/checks/regen_compare.py`, `tools/checks/merge_check.sh <Id>` after `git merge --no-ff --no-commit <branch>`.
 - Assets for other players: `python3 tools/checks/asset_status.py --meshes` and `tools/asset_permissions.py`
