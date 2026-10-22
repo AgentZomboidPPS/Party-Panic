@@ -68,9 +68,13 @@ local function pop(player: Player, level: number)
 end
 
 -- The pops held through a round, once everyone is back in the lobby (a character still spawning
--- gets a moment).
+-- gets a moment). After a PLAY AGAIN vote the next round is already on by then (owner: "Add a vote
+-- at the end of each minigame to replay the same minigame."): they wait for its end instead.
 local function flushHeldPops()
 	flushQueued = false
+	if HOLD_IN[GameState.Get("Phase") or "Waiting"] then
+		return -- the next phase change out of a round flushes them
+	end
 	for player, level in heldPops do
 		heldPops[player] = nil
 		task.spawn(function()

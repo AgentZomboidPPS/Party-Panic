@@ -85,20 +85,34 @@ local function lobbyTerrain(plazaRadius: number)
 end
 
 -- Floating islands around (never under) the arena area, so rounds happen up in the sky.
+--
+-- Out of every arena's reach (the owner's screenshot from SPLEEF: a bot standing on the tree of a
+-- floating island past the ice cliff; owner: "Theres invisible stuff you can jump on and hang on in
+-- several games"). Terrain is always solid, and every arena is built round Config.ArenaOrigin, where
+-- these were 260 to 570 studs out at -125 to +65: inside the arenas' own worlds (Shark Bait's and
+-- Bumper Ballers' seas reach 1024 studs, Spleef's snowfield 800, the meadows, fields and the desk
+-- 300 to 700), poking up through their sea, lawn and desk, standing in Stamp Out's room, and close
+-- enough to stand on for anyone who got off an arena whose fall check only looks at height. Now each
+-- is 700 to 1200 studs out, where it shows about as big as before from the lobby, and its lowest
+-- point is 25 studs over the highest thing any arena has under or round it (every arena measured
+-- with tools/checks/colliders.py, which also checks the terrain near each arena): nothing an arena
+-- builds reaches one, and no sea, lawn or floor has one in it. An arena that grows past 700 studs
+-- out, or builds tall scenery out there, must stay clear of these.
+Environment.SkyIslands = {
+	{ Vector3.new(-1068, 95, -118), 45 },
+	{ Vector3.new(-688, 76, 541), 33 },
+	{ Vector3.new(806, 99, 269), 48 },
+	{ Vector3.new(342, 76, 611), 32 },
+	{ Vector3.new(-216, 87, 692), 40 },
+	{ Vector3.new(1109, 72, -458), 30 },
+	{ Vector3.new(-741, 59, 225), 22 },
+	{ Vector3.new(1114, 62, -159), 24 },
+} -- { offset from Config.ArenaOrigin, radius }
+
 local function skyIslands()
 	local terrain = workspace.Terrain
 	local origin = Config.ArenaOrigin
-	local islands = {
-		{ Vector3.new(-230, -40, -140), 34 },
-		{ Vector3.new(-280, 10, 220), 26 },
-		{ Vector3.new(360, -60, 120), 40 },
-		{ Vector3.new(320, 15, 470), 30 },
-		{ Vector3.new(-150, -70, 480), 36 },
-		{ Vector3.new(120, 30, -230), 24 },
-		{ Vector3.new(-330, 60, 40), 18 },
-		{ Vector3.new(420, 40, -60), 20 },
-	}
-	for _, island in islands do
+	for _, island in Environment.SkyIslands do
 		local center = origin + island[1]
 		local radius = island[2]
 		-- Rocky cone underneath, grassy cap on top.

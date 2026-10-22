@@ -41,15 +41,34 @@ for key in ["bots", "brain", "prepare", "prepareSeconds", "arenaParts", "spawnFa
             "drop", "lateFloor", "clientHolds",
             "rulesCard", "start", "endReason", "endHeld", "roundSeconds", "stop", "cleanup",
             "destroy", "arenaLeftovers", "sharedLeftovers", "winningTeam", "clientGuiDuringResults",
-            "clientModeGuisAfterCleanup", "lobby", "portalScreens", "votePads", "botVoteRefused"]:
+            "clientModeGuisAfterCleanup", "lobby", "portalScreens", "votePads", "botVoteRefused",
+            "finished", "seconds", "botReplayRefused"]:
     if key in d:
         print(f"{key:28s}", fix(str(d.get(key))))
-# The lobby run (round_harness.py LOBBY): each phase between rounds, and how each vote went.
+# The lobby run (round_harness.py LOBBY) and the replay run (<Mode> --replay): each phase, and how
+# each vote went.
 if d.get("phases"):
     print("phases (seconds into the run, and how long each was set for):")
     for phase in d["phases"]:
         planned = f" ({phase['planned']:g} s)" if phase.get("planned") else ""
-        print(f"    {phase['at']:7.2f}  {phase['phase']}{planned}")
+        extra = ""
+        if "game" in phase:  # the replay run: the round's game, the banner's line, a replay coming
+            extra = f"  game={phase.get('game') or '-'}"
+            if phase.get("message") is not None:
+                extra += f"  \"{phase['message']}\""
+            if phase.get("replay"):
+                extra += f"  Replay={phase['replay']}"
+        print(f"    {phase['at']:7.2f}  {phase['phase']}{planned}{extra}")
+for state in d.get("replayVotes") or []:
+    print(f"replay vote at {state.get('at')}: open={state.get('open')} capped={state.get('capped')} "
+          f"{state.get('yes')}/{state.get('voters')} want a replay, {state.get('no')} no (needs {state.get('need')})")
+for played in d.get("rounds") or []:
+    print(f"round at {played.get('at')}: {played.get('game')} with {', '.join(played.get('people') or [])} "
+          f"and {played.get('bots')} bots; teams {json.dumps(played.get('teams'))}")
+for build in d.get("builds") or []:
+    print(f"vote cards {build.get('options')} (recent games {build.get('recent')})")
+for toast in d.get("toasts") or []:
+    print(f"toast {toast}")
 for vote in d.get("votes") or []:
     print(f"vote '{vote.get('label')}': {vote.get('voters')} people playing; closed after {vote.get('closedAfter')} s"
           f"; winner {vote.get('winner')}{' (tie broken at random)' if vote.get('tie') else ''}; counts {vote.get('counts')}")

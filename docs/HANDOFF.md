@@ -1,10 +1,10 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-22 03:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-22 03:15 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (2026-10-22 03:00 UTC)
+## Session B in flight (2026-10-22 03:15 UTC)
 
 - **Live version 34** (published 02:38 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `1f08776`, on the
   owner's "merge my branch claude/quirky-hopper-5yk8zk" and that window's "merge my branch ... and publish"; the owner
@@ -45,23 +45,30 @@ Session A's handoff from 17:40 UTC, still accurate except where this block says 
   - Slaparazzi bots (owner: "Bots are terrible at slaparazzi");
   - the Spleef rework from games-2 (owner: "spleef doesnt require you to dig. It should be you walk over it and it
     fades out within like 1 second or so", "Bots are awful at spleef", "make the spleef arena larger"), squashed
-    from `claude/games-2` 7073f05..1c0d206 without that branch's held shop commits.
-- **In progress for version 35:**
-  - the replay vote (owner: "Add a vote at the end of each minigame to replay the same minigame."): 🔁 PLAY AGAIN?
-    on the results card; a majority of people plays the same game again, with a cap on back-to-back replays;
-  - the lobby's Terrain sky islands are solid and within reach of some arenas (games-2 found a Spleef bot standing on
-    one): Terrain joins the collider inventory, the escape audit is re-run, and the islands move out of reach;
+    from `claude/games-2` 7073f05..1c0d206 without that branch's held shop commits;
+  - the PLAY AGAIN replay vote (owner: "Add a vote at the end of each minigame to replay the same minigame."):
+    `Services/ReplayService`, `Logic/ReplayVote`, the results card's PLAY AGAIN? / NO THANKS; more than half of the
+    round's people (never bots or anyone sitting out) replays the same game straight away, at most 3 plays in a row;
+  - the lobby's sky islands moved 700-1200 studs out, clear of every arena (they broke through the floor or sea of 21
+    arenas; games-2 saw a Spleef bot standing on one), and `tools/checks/colliders.py` now flags terrain near arenas.
+- **Still to come for version 35:**
   - games-4's phone performance audit (`claude/games-4`: the round harness's `perf` line, cached participant lookups,
     fewer per-frame writes in Trace Race, Skate Escape, Tanks!, Crazy Cutters and others);
   - the round songs: the owner's other window uploads the 5 packs and pushes their ids to
     `claude/quirky-hopper-5yk8zk`; until then every game plays Panic Mode.
-  Then a quick check (code checks, the changed games' rounds, the lobby and the client) and publish on the owner's
-  word.
+  A quick check of 7d3137b (code checks; SinkingSands, Slaparazzi, Spleef and PumpAndPop rounds; the lobby; the client
+  on phone and PC) is running. Publish on the owner's word.
+- **Games 27-29, building** (owner: "Let's add the stars. If you need to hand them off do it."): Hot Potato (Survival,
+  games-1), Dice Dash (Luck, games-2) and Minecart Mayhem (Race, games-3), each on its session's `claude/games-N` branch
+  (sessions can only push their own branch; games-2's and games-3's also carry the held shop pass, so take only the
+  game's changes from them). Briefs: `docs/MINIGAME_BACKLOG.md` 27-29 and `docs/builds/`. On merge: keep
+  IsNew within the vote's cap (`tests/VoteFairness.spec.luau`: at most half of the games), make portal previews, add
+  them to `docs/STORE_DESCRIPTION.txt` and the lineup doc.
 - **Held until the owner says the bug-fix wave is done ("after everything else is finished"):** the second shop
   pass, 25 coin items and 10 effects, finished on `claude/games-3` at f0cb9da (reviewed; its client checks are in
-  the same branch). `claude/games-2` also carries the earlier shop commits, so don't merge that branch whole.
-- **Game sessions** (see [HANDOFF_GAMES.md](HANDOFF_GAMES.md)): all 14 backlog games are merged (27 games). games-1,
-  games-2 and games-3 are idle; games-4 is on the performance audit.
+  the same branch; a copy is in `docs/wip/shop-pass2.bundle`). `claude/games-2` also carries the earlier shop commits, so don't merge that branch whole.
+- **Game sessions** (see [HANDOFF_GAMES.md](HANDOFF_GAMES.md)): all 14 backlog games are merged (27 games); games-1
+  to games-3 are building games 27-29 and games-4 is on the performance audit.
 - **Later (owner):** the owner's call on rebalancing thin categories (Messy Memory to Luck, Tanks! to Knockback).
 - **Toolchain in a fresh container (GitHub downloads are blocked here):** `cargo install --locked stylua@2.6.0 --features
   luau`, `selene@0.31.0`, `rojo@7.7.1`, `lune@0.11.0` (crates.io works); luau-lsp from source: `git clone --depth 1
