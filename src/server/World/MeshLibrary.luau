@@ -37,7 +37,10 @@
 --
 -- No seats (owner: "Also theres times where I will sit on invisible shit in game. NO mini game
 -- should require you to sit."): every lobby bench used to carry an invisible Seat ("SeatSpot") that
--- sat down anyone who brushed it. It's gone: a bench is a plain prop you can stand on.
+-- sat down anyone who brushed it. It's gone: a bench is a plain prop you can stand on, and no
+-- template here makes a Seat (tests/NoSeats.spec.luau keeps it that way; Shared/NoSitting turns
+-- sitting off for every character as well). A Seat that comes in with a Studio template or an
+-- uploaded model is switched off (Disabled): drawn as it was, it never sits anyone down.
 
 local AssetService = game:GetService("AssetService")
 local CollectionService = game:GetService("CollectionService")
@@ -782,6 +785,9 @@ local function normalize(name: string, model: Model, spec: Spec)
 			continue
 		end
 		local part = descendant :: BasePart
+		if part:IsA("Seat") or part:IsA("VehicleSeat") then
+			(part :: any).Disabled = true -- no prop sits anyone down (see the top)
+		end
 		part.Anchored = true
 		part.CanCollide = spec.Collide == true
 		part.CanQuery = spec.Collide == true or spec.Touch == true

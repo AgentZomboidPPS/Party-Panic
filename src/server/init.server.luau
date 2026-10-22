@@ -1,4 +1,7 @@
 -- Party Panic server entry point: initializes every service, then starts their loops.
+--
+-- NoSitService (owner: "Also theres times where I will sit on invisible shit in game. NO mini game
+-- should require you to sit.") starts before the bots, so every bot's first character can't sit.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -27,6 +30,7 @@ local order = {
 	"MedalService",
 	"LeaderboardService",
 	"EventService",
+	"NoSitService", -- before the bots arrive: no character sits (Shared/NoSitting)
 	"BotService", -- after the lobby exists (spawns, vote pads)
 	"RoundManager",
 }
