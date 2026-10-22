@@ -4,6 +4,10 @@
 -- you vote is dumb. maybe we make the portal do a little video of what the game actually is?").
 -- Only people who'll play the next round vote: someone sitting out (SitOutService) can't, and the
 -- vote they had goes when they sit out; the vote cards say why (VoteController).
+-- The vote doesn't keep anyone waiting (owner: "Less time sitting in the lobby. total of 20
+-- seconds instead of 40."): once every person who'll play has voted (bots and people sitting out
+-- don't), it ends Config.Session.VoteLastBeat after the last vote, so that voter sees their tick
+-- before the winner shows (Wait, Logic/VoteLogic.ClosesAt), and the phase timer says so.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,6 +37,7 @@ local active = false
 local options: { VoteOption } = {}
 local votes: { [Player]: number } = {}
 local votedThisRound: { [Player]: boolean } = {}
+local lastVoteAt = 0 -- os.clock() of the latest vote cast or changed
 
 local function publishCounts()
 	local counts = VoteLogic.Tally(votes, #options)
@@ -92,6 +97,7 @@ function VotingService.Begin(newOptions: { VoteOption })
 	options = newOptions
 	votes = {}
 	votedThisRound = {}
+	lastVoteAt = 0
 	active = true
 	for _, player in Players:GetPlayers() do
 		player:SetAttribute("PP_Vote", 0)
@@ -126,6 +132,7 @@ function VotingService.Cast(player: Player, index: any): boolean
 	end
 	local changed = votes[player] ~= nil
 	votes[player] = index
+	lastVoteAt = os.clock()
 	player:SetAttribute("PP_Vote", index)
 	publishCounts()
 	Notifier.Sound({ player }, "VoteClick")
@@ -140,6 +147,42 @@ function VotingService.Cast(player: Player, index: any): boolean
 	end
 	Telemetry.PlayerEvent(player, if changed then "VoteChanged" else "VoteCast", index)
 	return true
+end
+
+-- Who votes on the next game: the people who'll play it (SitOutService's lineup, without its
+-- bots; people sitting out or still loading aren't in it).
+local function voters(): { Player }
+	local list = {}
+	for _, who in SitOutService.Lineup().Participants do
+		if not BotRegistry.IsBot(who) then
+			table.insert(list, who)
+		end
+	end
+	return list
+end
+
+-- Waits out the open vote: `duration` seconds, or until VoteLastBeat after the last vote once every
+-- person who'll play has voted (VoteLogic.ClosesAt; someone arriving puts the full time back). The
+-- phase timer (PhaseEndsAt) follows, so everyone's banner shows the vote closing. Returns false at
+-- once if `abort` says so (RoundManager: everyone went on a break, so nobody can vote).
+function VotingService.Wait(duration: number, abort: (() -> boolean)?): boolean
+	local deadline = os.clock() + duration
+	local closesAt = deadline
+	while true do
+		if abort and abort() then
+			return false
+		end
+		local now = os.clock()
+		local due = VoteLogic.ClosesAt(deadline, voters(), votes, lastVoteAt, Config.Session.VoteLastBeat)
+		if due ~= closesAt then
+			closesAt = due
+			GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + math.max(0, due - now))
+		end
+		if now >= closesAt then
+			return true
+		end
+		task.wait(0.1)
+	end
 end
 
 -- Ends voting and returns the winning option (ties broken randomly between tied options).

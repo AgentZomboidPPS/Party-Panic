@@ -1,6 +1,8 @@
 --!strict
 -- Pure vote tallying and tie resolution (design doc §4 "Voting and tie resolution").
 -- Leaf module: no requires, no Roblox APIs, so it can be unit tested under Lune.
+-- When a vote closes (owner: "Less time sitting in the lobby. total of 20 seconds instead of 40."):
+-- at its deadline, or a beat after the last vote once everyone who votes has (ClosesAt).
 
 local VoteLogic = {}
 
@@ -38,6 +40,27 @@ function VoteLogic.ResolveWinner(counts: { number }, pickIndex: PickIndex): (num
 	local choice = pickIndex(#candidates)
 	choice = math.clamp(math.floor(choice), 1, #candidates)
 	return candidates[choice], true
+end
+
+-- When the vote closes: at `deadline`, or `beat` seconds after the latest vote (`lastVoteAt`) once
+-- every one of `voters` has a vote in `votes`, whichever is sooner (a time already past means now).
+-- With nobody to vote it runs to the deadline. Times are on any one clock (the server's os.clock()).
+function VoteLogic.ClosesAt(
+	deadline: number,
+	voters: { any },
+	votes: { [any]: number },
+	lastVoteAt: number,
+	beat: number
+): number
+	if #voters == 0 then
+		return deadline
+	end
+	for _, voter in voters do
+		if votes[voter] == nil then
+			return deadline
+		end
+	end
+	return math.min(deadline, lastVoteAt + beat)
 end
 
 -- Validates a client supplied vote index.

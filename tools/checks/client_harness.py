@@ -59,6 +59,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import bundling  # noqa: E402  (only the modules the run needs: Open Cloud's 1 MiB script cap)
 from ui_render import devices_luau, size_names  # noqa: E402  (the screens the engine lays the UI out on)
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -1730,14 +1731,25 @@ def main():
         + (devices_luau(size_names(sizes)) if sizes != "none" else "")
     )
     out = [flags + gui_dump + PRELUDE + screen_guis()]
+    available = {}
     for module, path in module_paths().items():
         body = rewrite(module, path.read_text())
         # Blank comment-only lines (line numbers stay put): Open Cloud caps a script at 1 MiB.
-        body = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", body)
-        out.append(f'__modules["{module}"] = function()')
-        out.append(body)
-        out.append("end")
-    out.append(shared_requires(MAIN))
+        available[module] = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", body)
+    main_luau = shared_requires(MAIN)
+    # Only what the run can load (tools/checks/bundling.py): the modules this script asks for and
+    # everything they reach. A require the bundler can't follow stops the build here.
+    try:
+        start = bundling.seeds(PRELUDE + "\n" + main_luau, played_game(), available, {"Shared", "Client", "Server"})
+        keep = bundling.closure(available, start)
+    except bundling.BundleError as err:
+        sys.exit(f"client_harness: {err}")
+    for module, body in available.items():
+        if module in keep:
+            out.append(f'__modules["{module}"] = function()')
+            out.append(body)
+            out.append("end")
+    out.append(main_luau)
     sys.stdout.write("\n".join(out))
 
 
