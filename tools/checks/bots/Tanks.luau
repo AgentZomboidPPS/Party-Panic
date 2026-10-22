@@ -65,6 +65,15 @@ return function(env)
 			env.Action(player, "In", seqs[player], mx, mz, aim)
 			-- Only with a clear line (a shot into a brick would bounce straight back at it).
 			local clear = best and mode.Field.Clear(mode.field, tank.X, tank.Z, best.X, best.Z, 0.6)
+			if clear then
+				-- Not a shot whose ricochet would come straight back (a player would see that coming).
+				local back = mode.Field.Path(mode.field, tank.X, tank.Z, aim).Segments[2]
+				local tx, tz = tank.X - back.X, tank.Z - back.Z
+				local along = tx * back.DX + tz * back.DZ
+				if along > 0 and along < back.Length and math.abs(tx * back.DZ - tz * back.DX) < 6 then
+					clear = false
+				end
+			end
 			if clear and now >= (nextFire[player] or 0) and tank.Shells < 2 then
 				nextFire[player] = now + env.rng:NextNumber(1, 2.4)
 				env.Action(player, "Fire", aim, now)

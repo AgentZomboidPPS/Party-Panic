@@ -58,8 +58,8 @@ local CLIFF_TOP = 22 -- the rim's top above the water
 -- Each floor has its own snow (number and color both shown on the HUD).
 Spleef.FloorColors = {
 	Color3.fromRGB(248, 251, 255), -- 1: fresh powder
-	Color3.fromRGB(186, 222, 252), -- 2: packed snow
-	Color3.fromRGB(120, 188, 246), -- 3: blue ice, the last floor
+	Color3.fromRGB(150, 194, 238), -- 2: packed snow
+	Color3.fromRGB(84, 148, 222), -- 3: blue ice, the last floor
 }
 Spleef.FloorMaterials = { Enum.Material.Snow, Enum.Material.Snow, Enum.Material.Glacier }
 Spleef.Block, Spleef.BlockHeight, Spleef.Floors, Spleef.FloorGap = BLOCK, BLOCK_H, FLOORS, FLOOR_GAP
@@ -225,7 +225,7 @@ function Spleef:_buildFloors(radius: number)
 				part.CanCollide = true
 				part.CanQuery = true
 				part.CanTouch = false
-				part.CastShadow = false
+				part.CastShadow = true -- the floors shade the ones below, so each floor reads apart
 				part.Color = Spleef.FloorColors[floor]
 				part.Material = Spleef.FloorMaterials[floor]
 				part.CFrame = CFrame.new(position - Vector3.new(0, BLOCK_H / 2, 0))
