@@ -57,18 +57,8 @@ end
 local spriteId = idFor(AudioAssets.SfxSprite)
 local sprite = if spriteId then { Id = spriteId, Regions = SfxSprite } else nil
 
--- Each mini-game's own round track (mode id -> sound id), for the ones uploaded.
-local rounds = {}
-for modeId, value in (AudioAssets :: any).Rounds or {} do
-	local id = idFor(value)
-	if id then
-		rounds[modeId] = id
-	end
-end
-
 return {
 	Music = defaults.Music,
 	Sfx = defaults.Sfx,
 	Sprite = sprite,
-	Rounds = rounds,
 }

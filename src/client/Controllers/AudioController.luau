@@ -7,13 +7,6 @@
 --   * Rounds play "Panic Mode", which speeds up for the final 10 seconds ("hurry up!").
 -- Comfort: music starts quiet on first launch and fades in slowly, ducks while a menu is open,
 -- and the player picks Off / Low / Medium / High in Settings.
---
--- Every mini-game has its own round track (owner: "put in the backlog custom music for each mini
--- game"; tools/music/rounds.py). It starts with the rules card, and its intro is timed so the band
--- drops in exactly on GO: during Preparing it plays from (drop - time left), and at GO it snaps to
--- the drop if loading made it drift. It loops for a long round and speeds up for the final 10
--- seconds like "Panic Mode". A mode without its own track, or whose track hasn't loaded within a few
--- seconds (not uploaded, still in moderation, a slow connection), plays "Panic Mode" for that round.
 
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
@@ -24,7 +17,6 @@ local SoundService = game:GetService("SoundService")
 local Shared = ReplicatedStorage.Shared
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
-local RoundMusic = require(Shared.RoundMusic)
 local Sounds = require(Shared.Sounds)
 
 local State = require(script.Parent.Parent.State)
@@ -40,8 +32,6 @@ local FIRST_FADE_DELAY = 2
 local FIRST_FADE_TIME = 6
 local SWITCH_FADE_TIME = 1.2
 local HURRY_TIME = 10
-local MODE_TRACK_WAIT = 4 -- seconds a mode's own track may take to load before "Panic Mode" stands in
-local GO_DRIFT = 0.3 -- at GO, a mode track further than this from its drop jumps to it
 
 local PLAYLISTS = {
 	Lobby = { "Lobby", "Lobby2" },
@@ -57,10 +47,6 @@ local currentSound: Sound? = nil
 local menuOpen = false
 local warmup = 0 -- 0..1 during the first-launch fade-in
 local fades: { [Sound]: Tween } = {} -- one fade per sound so a crossfade never cancels itself
-local modeTracks: { [string]: Sound } = {} -- each mini-game's own round track, made when first needed
-local modeStart = {} -- the latest mode-track start (a newer one cancels a start still loading)
-local fallbackRound: number? = nil -- the round whose mode track didn't load: it plays "Panic Mode"
-local goAt: number? = nil -- os.clock() at this round's GO
 
 local function makeSound(name: string, id: string, volume: number, looped: boolean): Sound
 	local sound = Instance.new("Sound")
@@ -122,92 +108,7 @@ local function pauseCurrent()
 	end)
 end
 
--- This round's mini-game's own track, if it has one (made, and so starting to load, on first use).
-local function modeTrack(): (Sound?, any)
-	local gameId = GameState.Get("GameId")
-	if type(gameId) ~= "string" or gameId == "" then
-		return nil, nil
-	end
-	local id = Sounds.Rounds[gameId]
-	local timing = (RoundMusic :: any)[gameId]
-	if not id or not timing then
-		return nil, nil
-	end
-	local sound = modeTracks[gameId]
-	if not sound then
-		sound = makeSound("Music_Round_" .. gameId, id, 0, true)
-		modeTracks[gameId] = sound
-	end
-	return sound, timing
-end
-
--- Where a mode track should be right now: its drop lands on GO.
-local function modePosition(timing: any): number
-	local at
-	if GameState.Get("Phase") == "Preparing" then
-		at = timing.Drop - GameState.TimeLeft()
-	else
-		at = timing.Drop + (if goAt then os.clock() - goAt else 0)
-	end
-	return math.max(0, at) % timing.Length
-end
-
-local startPlaylist
-
--- Starts this round's own track once it has loaded (true), or returns false to use "Panic Mode".
-local function startModeTrack(): boolean
-	local roundId = GameState.Get("RoundId")
-	if fallbackRound ~= nil and fallbackRound == roundId then
-		return false
-	end
-	local sound, timing = modeTrack()
-	if not sound then
-		return false
-	end
-	currentSound = sound
-	local token = {}
-	modeStart = token
-	task.spawn(function()
-		local waited = 0
-		while not sound.IsLoaded and waited < MODE_TRACK_WAIT do
-			waited += task.wait(0.1)
-		end
-		if modeStart ~= token or currentSound ~= sound then
-			return
-		end
-		if not sound.IsLoaded then
-			fallbackRound = roundId
-			startPlaylist()
-			return
-		end
-		sound.PlaybackSpeed = 1
-		sound.Volume = 0
-		sound.TimePosition = modePosition(timing)
-		sound:Play()
-		fadeTo(sound, targetVolume(), SWITCH_FADE_TIME)
-	end)
-	return true
-end
-
--- At GO: a mode track that drifted (it loaded late, or the arena took longer to build) jumps to its drop.
-local function syncAtGo()
-	goAt = os.clock()
-	local sound, timing = modeTrack()
-	if sound and sound == currentSound and sound.IsPlaying then
-		if math.abs(sound.TimePosition - timing.Drop) > GO_DRIFT then
-			sound.TimePosition = timing.Drop
-		end
-	end
-end
-
 local function startCurrent()
-	if currentList == "Round" and startModeTrack() then
-		return
-	end
-	startPlaylist()
-end
-
-function startPlaylist()
 	local list = currentList and playlists[currentList]
 	if not list or #list.tracks == 0 then
 		currentSound = nil
@@ -319,16 +220,7 @@ function AudioController.Start(_context)
 	end)
 
 	GameState.Changed("Phase", function(phase)
-		if phase == "InRound" then
-			syncAtGo()
-		elseif phase ~= "Preparing" then
-			goAt = nil
-		end
 		switchTo(listForPhase(phase))
-	end)
-	-- The vote's winner starts loading its own track straight away.
-	GameState.Changed("GameId", function()
-		modeTrack()
 	end)
 	switchTo(listForPhase(GameState.Get("Phase")))
 
@@ -364,6 +256,7 @@ function AudioController.Start(_context)
 	-- sitting it out in the lobby), and the hurry-up speed-up.
 	local localPlayer = Players.LocalPlayer
 	local lastBeep = -1
+	local roundTrack = playlists.Round.tracks[1]
 	RunService.Heartbeat:Connect(function()
 		local phase = GameState.Get("Phase")
 		local left = GameState.TimeLeft()
@@ -378,7 +271,6 @@ function AudioController.Start(_context)
 		else
 			lastBeep = -1
 		end
-		local roundTrack = if currentList == "Round" then currentSound else nil
 		if roundTrack then
 			local speed = if phase == "InRound" and left > 0 and left <= HURRY_TIME then 1.12 else 1
 			if math.abs(roundTrack.PlaybackSpeed - speed) > 0.001 then
