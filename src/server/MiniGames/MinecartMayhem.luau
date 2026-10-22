@@ -306,7 +306,8 @@ function MinecartMayhem:_buildArena()
 	for _, tile in course.Tiles do
 		total += tile.Len
 	end
-	local startF, endF = 70, total - (last.Len - Track.FINISH_AT) - 16
+	-- (from just inside the entrance to just inside the way out: never through the portals' cliffs)
+	local startF, endF = 58 + 9 + 29, total - (last.Len - Track.FINISH_AT - 2) - 9 - 28
 	local f = startF
 	local flip = false
 	while f < endF do
@@ -389,12 +390,13 @@ function MinecartMayhem:_buildArena()
 		local kinds = { [longSide] = "Long", [-longSide] = tile.O or "Short" }
 		local signAt = self:_tilePoint(tile, Track.SPLIT - 30, 0, 0)
 		local sign = Build.Folder("JunctionSign" .. tile.Index, props)
-		MeshLibrary.Get("MinecartMayhemSign", { CFrame = signAt * CFrame.new(0, -24, 0), Parent = sign })
+		-- (the gantry raised 4 studs, so its boards hang clear above the chase camera)
+		MeshLibrary.Get("MinecartMayhemSign", { CFrame = signAt * CFrame.new(0, -20, 0), Parent = sign })
 		for _, side in { -1, 1 } do
 			local hint = HINTS[kinds[side]]
 			local arrow = if side < 0 then "◀" else "▶"
 			local text = if side < 0 then `{arrow} {hint.Icon} {hint.Word}` else `{hint.Icon} {hint.Word} {arrow}`
-			self:_board(sign, signAt * CFrame.new(side * 3.6, 8.2, 0), 7, text, hint.Color)
+			self:_board(sign, signAt * CFrame.new(side * 3.6, 12.2, 0), 7, text, hint.Color)
 		end
 		-- (the board at the start of each way, and its tell-tale)
 		for _, side in { -1, 1 } do
