@@ -308,6 +308,19 @@ local list: { GameDefinition } = {
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
+		Id = "SnowballSummit",
+		Name = "Snowball Summit",
+		Category = "Knockback",
+		Icon = "☃️",
+		Color = Color3.fromRGB(90, 170, 240),
+		Objective = "Roll snowballs and knock rivals off the mountain top. Stay on the summit to win!",
+		Controls = "Hold ROLL (E) and walk to grow a snowball, let go to throw it. Jump over small ones!",
+		Duration = 60,
+		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
 		Id = "TraceRace",
 		Name = "Trace Race",
 		Category = "Reaction",
@@ -331,6 +344,7 @@ local list: { GameDefinition } = {
 		Duration = 30,
 		MinPlayers = 2,
 		IsTeam = true,
+		Enabled = false, -- in its review-fix pass (games-4 session); that session turns it on when it's done
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
