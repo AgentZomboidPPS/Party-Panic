@@ -55,6 +55,13 @@ return function(env)
 				presses += 1
 			end
 		end
+		-- In a bigger race one player leaves mid-round (the race goes on without them).
+		if #env.players >= 5 and elapsed > 18 and not env.left then
+			env.left = true
+			local leaver = env.players[#env.players]
+			env.note(`{leaver.Name} leaves at {string.format("%.1f", elapsed)}s`)
+			env.Leave(leaver)
+		end
 		if elapsed > 20 and not env.reported then
 			env.reported = true
 			env.note(`by 20s: {presses} presses, {autos} auto rolls, {finishes} home`)
