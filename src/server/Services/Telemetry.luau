@@ -33,6 +33,34 @@ function Telemetry.PlayerEvent(player: Player, name: string, value: number?, det
 	end
 end
 
+-- A step of a funnel (Creator Hub > Analytics > Funnels; Shared/Logic/Funnels names them): the
+-- new-player funnel when `funnel` is nil, else a funnel that runs again and again, `session` telling
+-- one run from the next. `detail` goes into the first custom field (the game, the item).
+function Telemetry.FunnelStep(
+	player: Player,
+	funnel: string?,
+	session: string?,
+	step: number,
+	name: string,
+	detail: string?
+)
+	bump(`Funnel:{funnel or "Onboarding"}:{step}`)
+	if RunService:IsStudio() or typeof(player) ~= "Instance" then
+		return
+	end
+	local fields = if detail then { [Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = detail } else nil
+	local ok, err = pcall(function()
+		if funnel then
+			AnalyticsService:LogFunnelStepEvent(player, funnel, session, step, name, fields)
+		else
+			AnalyticsService:LogOnboardingFunnelStepEvent(player, step, name, fields)
+		end
+	end)
+	if not ok then
+		warn(`[Telemetry] funnel {funnel or "Onboarding"} step {step} failed: {err}`)
+	end
+end
+
 -- Server-level event, e.g. "RoundStarted", "RoundEnded", "TieResolved".
 function Telemetry.ServerEvent(name: string, details: { [string]: any }?)
 	bump(name)

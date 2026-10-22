@@ -63,6 +63,9 @@ return {
 	-- and the last level whose gold coins were paid (Logic/GoldLane: each level pays once).
 	GoldPass = { Owned = false, Since = 0, CoinsTo = 1 },
 	Tutorial = { Done = false },
+	-- The new-player funnel (Services/FunnelService): the last step logged for this player, -1 for
+	-- someone who had played before it shipped (never logged), 0 before their first load decides.
+	Funnel = { Onboarding = 0 },
 	Settings = {
 		ReducedEffects = false,
 		MusicVolume = 0.5, -- 0 = off; the client also starts quiet and fades in

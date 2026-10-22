@@ -225,6 +225,7 @@ local function render()
 					item.Price :: number
 				)}?\nYou have {Theme.CoinIcon} {UIKit.FormatNumber(profile.Coins)}.`
 				confirm.Visible = true
+				Remotes.Get("Funnel"):FireServer("ShopPick", item.Id) -- (the Shop funnel: Services/FunnelService)
 				UIKit.PopIn(confirm, 0.25)
 			end
 		elseif item.Event then
@@ -423,6 +424,9 @@ function ShopController.Start(context)
 		modal:Toggle()
 	end)
 	modal.Opened:Connect(render)
+	modal.Opened:Connect(function()
+		Remotes.Get("Funnel"):FireServer("ShopOpen", currentSlot) -- (the Shop funnel's first step)
+	end)
 	modal.Closed:Connect(function()
 		confirm.Visible = false
 	end)

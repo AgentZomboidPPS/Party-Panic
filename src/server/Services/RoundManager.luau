@@ -43,6 +43,7 @@ local Roster = require(Shared.Logic.Roster)
 
 local BotRegistry = require(script.Parent.BotRegistry)
 local BotService = require(script.Parent.BotService)
+local FunnelService = require(script.Parent.FunnelService)
 local LobbyService = require(script.Parent.LobbyService)
 local Notifier = require(script.Parent.Notifier)
 local ReplayService = require(script.Parent.ReplayService)
@@ -182,6 +183,7 @@ local function runRound(definition, participants: { Player })
 	GameState.Set("GameId", definition.Id)
 
 	local context = RoundContext.new(roundId, definition, participants)
+	FunnelService.RoundJoined(definition.Id, roundId, participants) -- (the analytics funnels)
 	currentContext = context
 	local miniGame = module.new(context)
 
@@ -207,6 +209,7 @@ local function runRound(definition, participants: { Player })
 
 	-- InRound
 	context:Begin()
+	FunnelService.RoundStarted(definition.Id, roundId, context:GetPlayers())
 	setPhase("InRound", definition.Duration, definition.Name)
 	Telemetry.ServerEvent("RoundStarted", { round = roundId, game = definition.Id, players = context.StartCount })
 	local started = guarded("Start:" .. definition.Id, 5, miniGame.Start, miniGame)

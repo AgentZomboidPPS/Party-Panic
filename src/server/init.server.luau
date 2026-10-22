@@ -15,6 +15,7 @@ local Services = script.Services
 local order = {
 	"DataService",
 	"ClientReports",
+	"FunnelService", -- the analytics funnels: early, so it hears every profile load
 	"CosmeticService",
 	"QuestService",
 	"ShopService",

@@ -1378,6 +1378,10 @@ function RewardsController.Start(context)
 	end)
 	modal.Opened:Connect(function()
 		render()
+		-- (the GOLD PASS funnel's first step: the screen with GET GOLD PASS on it; FunnelService)
+		if not GoldPassController.Owned() and GoldPassController.OnSale() then
+			Remotes.Get("Funnel"):FireServer("GoldSeen")
+		end
 	end)
 	-- Built fresh on every open; nothing is kept around while the screen is closed.
 	modal.Closed:Connect(function()

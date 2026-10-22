@@ -2008,6 +2008,7 @@ function __runReplay(id, botCount, party)
 	local VotingService = __require("Server/Services/VotingService")
 	local ReplayService = __require("Server/Services/ReplayService")
 	local RatingService = __require("Server/Services/RatingService")
+	local FunnelService = __require("Server/Services/FunnelService")
 	local Notifier = __require("Server/Services/Notifier")
 	local summary = { game = id }
 	local t0 = os.clock()
@@ -2060,6 +2061,7 @@ function __runReplay(id, botCount, party)
 		CosmeticService.CheckUnlocks(who, true)
 		QuestService.Refresh(who)
 		DataService.Changed(who)
+		FunnelService.Joined(who, DataService.All()[who]) -- (the analytics funnels: a new player's first load)
 		return who
 	end
 	local ann, bo = person(1, "Ann"), person(2, "Bo")
@@ -2242,6 +2244,7 @@ function __runReplay(id, botCount, party)
 	VotingService.Init()
 	ReplayService.Init()
 	RatingService.Init()
+	FunnelService.Init()
 	-- This game's week in the test store (PP_GameRatings_Test) before the run, to tell what it added.
 	local GameRatings = __require("Shared/Logic/GameRatings")
 	local ratingKey = `{GameRatings.Week(os.time())}/{id}`
@@ -2255,6 +2258,26 @@ function __runReplay(id, botCount, party)
 	end
 	summary.finished = done
 	summary.seconds = at()
+	-- The funnels: Ann visits the shop and buys (through the real ShopService and the screens'
+	-- remote), looks at the GOLD PASS, presses GET GOLD PASS and buys it (MarketplaceService stands in
+	-- for that: the service's hooks are called), then Bo leaves. summary.funnels: every step logged.
+	pcall(function()
+		local ShopService = __require("Server/Services/ShopService")
+		ShopService.Init()
+		local profile = DataService.Get(ann)
+		profile.Data.Coins = 100
+		local funnel = __remoteObjects.Funnel.__bindable
+		funnel:Fire(__playerKey(ann), "ShopOpen", "Trail")
+		funnel:Fire(__playerKey(ann), "ShopPick", "Trail_Bubbles")
+		funnel:Fire(__playerKey(ann), "Hacked", "nope") -- (not a step: ignored)
+		__remoteObjects.ShopPurchase.__bindable:Fire(__playerKey(ann), "Trail_Bubbles")
+		task.wait(0.2)
+		funnel:Fire(__playerKey(ann), "GoldSeen")
+		FunnelService.GoldPrompted(ann)
+		FunnelService.GoldBought(ann)
+		FunnelService.Left(bo)
+	end)
+	summary.funnels = FunnelService.Log()
 	-- The ratings: the taps, every write (the record after it), and what the run added to this game's
 	-- week (read back from the store).
 	task.wait(3) -- the last round's write

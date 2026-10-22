@@ -22,6 +22,7 @@ local NAMES = {
 	"EventAction", -- (action: string, ...) the limited-time event (claim a reward...); see Services/EventService
 	"Party", -- both ways: invites, JOIN / NO and LEAVE for parties; see Services/PartyService
 	"RateGame", -- (choice: "Up" | "Down" | "None") 👍 / 👎 on the results card; see Services/RatingService
+	"Funnel", -- (step: string, detail: string?) a funnel step only the screen sees; see Services/FunnelService
 	-- server -> client
 	"ProfileData", -- (snapshot)
 	"Notify", -- (text, kind?, duration?, topic?) a toast; topic "Round" is a callout about the round (Services/Notifier)

@@ -11,6 +11,7 @@ local Remotes = require(Shared.Remotes)
 local CosmeticService = require(script.Parent.CosmeticService)
 local DataService = require(script.Parent.DataService)
 local Economy = require(script.Parent.Economy)
+local FunnelService = require(script.Parent.FunnelService)
 local Notifier = require(script.Parent.Notifier)
 local RateLimiter = require(script.Parent.RateLimiter)
 local Telemetry = require(script.Parent.Telemetry)
@@ -52,6 +53,7 @@ local function purchase(player: Player, itemId: any)
 	Notifier.Send(player, `Purchased {item.Icon} {item.Name}!`, "success")
 	Notifier.Sound({ player }, "Purchase")
 	Telemetry.PlayerEvent(player, "ShopPurchase", price, itemId)
+	FunnelService.ShopBought(player, itemId) -- the Shop funnel's last step
 	DataService.Changed(player)
 end
 

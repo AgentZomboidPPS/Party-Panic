@@ -40,6 +40,7 @@ local Remotes = require(Shared.Remotes)
 local Boosts = require(script.Parent.Boosts)
 local CosmeticService = require(script.Parent.CosmeticService)
 local DataService = require(script.Parent.DataService)
+local FunnelService = require(script.Parent.FunnelService)
 local Notifier = require(script.Parent.Notifier)
 local RateLimiter = require(script.Parent.RateLimiter)
 local Telemetry = require(script.Parent.Telemetry)
@@ -247,6 +248,7 @@ function GoldPassService.PurchaseFinished(player: Player, passId: number, purcha
 		return
 	end
 	Telemetry.PlayerEvent(player, "GoldPassBought", 1)
+	FunnelService.GoldBought(player)
 	if DataService.WaitFor(player, 30) then
 		GoldPassService.Grant(player, "Purchase")
 	end
@@ -272,6 +274,7 @@ local function prompt(player: Player)
 	elseif passId == 0 or (known and known.Known and not known.OnSale) then
 		Notifier.Send(player, "👑 The GOLD PASS is coming soon!", "info")
 	else
+		FunnelService.GoldPrompted(player) -- the GOLD PASS funnel's middle step
 		roblox.Prompt(player, passId)
 	end
 end
