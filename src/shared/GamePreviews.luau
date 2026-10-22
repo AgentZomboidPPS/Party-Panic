@@ -78,6 +78,13 @@ local previews: { [string]: Preview } = {
 		FrameSize = Vector2.new(168, 240),
 		Fps = 8,
 	},
+	LogJam = {
+		Image = "rbxassetid://135440319616290",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
 	MechaMarathon = {
 		Image = "rbxassetid://87302706174193",
 		Frames = 24,
@@ -121,7 +128,7 @@ local previews: { [string]: Preview } = {
 		Fps = 8,
 	},
 	RockinRaceway = {
-		Image = "rbxassetid://133114200071093",
+		Image = "rbxassetid://94756854657658",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),
@@ -171,6 +178,13 @@ local previews: { [string]: Preview } = {
 	},
 	StampOut = {
 		Image = "rbxassetid://95835920095105",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
+	Struggle = {
+		Image = "rbxassetid://104109564808610",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),

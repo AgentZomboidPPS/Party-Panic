@@ -13,6 +13,16 @@
 -- Every rider's character (players and bots, via api:CharacterOf) is set onto its horse here each
 -- frame and posed galloping (legs swinging with the pace, hands on the stick); your own is moved
 -- for real, so the server and everyone else see you where you ride.
+--
+-- 3D hurdles (owner: "For rockin raceway can we make the hurdles 3D?"): a hurdle is a row of
+-- striped standards across the track with a crossbar in every lane, its top at the height the
+-- server judges (Track.CLEAR), and a blue take-off pad before it. Every hop is drawn on the arc the
+-- server judges by, nose up off the ground and nose down onto it (turning about the wheel, so the
+-- wheel never dips under the arc), so a cleared bar passes under the whole horse. A horse that hits
+-- one knocks its lane's bar off the collars onto the track and stumbles while the server slows it:
+-- your own the moment it hits on your screen (Track.HitAt: the server's rule with your own press,
+-- which is what the server judges), everyone else's when the server says so. The chase camera rises
+-- a little with your hop so you stay in view.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,6 +40,12 @@ local RockinRaceway = {}
 
 local ROOT_Y = 3 -- a standing character's root above the ground
 local COAST = 14 -- how far a finished rider rolls on past the line
+local WHEEL = Vector3.new(0, 0.42, 1.82) -- the horse's wheel axle from its pivot (bottom middle)
+local HOP_PITCH = 0.22 -- how far a hopping horse tips nose up at take-off (and nose down to land)
+local STUMBLE = 0.6 -- seconds a horse wobbles after knocking a bar
+local KNOCK_TIME = 0.7 -- seconds a knocked bar takes to tumble onto the track
+local CAMERA_RISE = 0.5 -- how much of your hop the chase camera rises with (the top of the hop then
+-- sits where the old, half-as-high hop's did: under the carrot meter on phones)
 local rad = math.rad
 
 local JOINTS = {
@@ -466,7 +482,7 @@ function RockinRaceway.Start(api)
 	-- corner and under the race bar), in two short lines.
 	local startHint = UIKit.Label({
 		Name = "StartHint",
-		Text = "◀ Hold left side: GALLOP\nTap HOP over hurdles",
+		Text = "◀ Hold left side: GALLOP\nTap HOP on the blue pads",
 		Font = Theme.Fonts.Display,
 		TextSize = 26,
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -635,9 +651,132 @@ function RockinRaceway.Start(api)
 		end
 	end)
 
+	-- Hurdle bars --------------------------------------------------------------------------------------
+	-- Every lane's crossbar is its own model the server built (attributes Row and Lane). A horse that
+	-- hits one knocks it: it tumbles forward off its collars onto the track, one end first, and lies
+	-- there for the rest of the race (only drawn here: the bump itself is the server's).
+
+	type Knock = { Bar: Model, Home: CFrame, At: number, Side: number, Drop: number, Length: number }
+	local bars: { [string]: Model } = {}
+	local knocks: { [string]: Knock } = {}
+	local tumbling: { [string]: boolean } = {} -- knocked bars still falling
+	local stumbles: { [string]: number } = {} -- rider key -> when its horse hit a bar
+	task.spawn(function()
+		local arena = api:Arena(15)
+		local folder = arena and arena:WaitForChild("Panels", 15)
+		if not folder then
+			return
+		end
+		local function add(child: Instance)
+			local row, lane = child:GetAttribute("Row"), child:GetAttribute("Lane")
+			if child:IsA("Model") and type(row) == "number" and type(lane) == "number" then
+				bars[`{row}:{lane}`] = child
+			end
+		end
+		for _, child in folder:GetChildren() do
+			add(child)
+		end
+		api:Track(folder.ChildAdded:Connect(add))
+	end)
+
+	-- The hurdle row whose bar is at distance `d` (the server's Panel events name rows by distance).
+	local function rowAt(d: any): number?
+		if type(d) ~= "number" then
+			return nil
+		end
+		for index, panel in panels do
+			if panel.K == "H" and math.abs(panel.D - d) < 0.05 then
+				return index
+			end
+		end
+		return nil
+	end
+
+	local function knock(row: number, lane: number, now: number)
+		local key = `{row}:{lane}`
+		local bar = bars[key]
+		local origin = originCF
+		if not bar or not bar.Parent or knocks[key] or not origin then
+			return
+		end
+		local home = bar:GetPivot()
+		knocks[key] = {
+			Bar = bar,
+			Home = home,
+			At = now,
+			Side = if math.random() < 0.5 then -1 else 1, -- the end that falls first
+			Drop = math.max(0, home.Position.Y - origin.Position.Y), -- its bottom above the track
+			Length = bar:GetExtentsSize().X,
+		}
+		tumbling[key] = true
+		api:Effect("Poof", (home * CFrame.new(0, 0.3, 0)).Position)
+	end
+
+	-- My own horse's verdict at each hurdle row as shown ("bump" or "clear"), so the server's word
+	-- only adds a callout when it differs.
+	local called: { [number]: string } = {}
+	local function sayClear(row: number?)
+		if row and called[row] == "clear" then
+			return
+		end
+		if row then
+			called[row] = "clear"
+		end
+		say("✔ CLEAR!", Theme.Colors.Green, 0.8)
+	end
+
+	-- A horse hits row `row`'s bar: the bar is knocked down and the horse stumbles. For my own, the
+	-- callout says why (`why`: "late", "early", or nil for no hop or the server's word alone).
+	local function hitHurdle(key: string, row: number, now: number, why: string?)
+		local info = riders[key]
+		if not info then
+			return
+		end
+		knock(row, info.L, now)
+		stumbles[key] = now
+		if key == myKey and called[row] ~= "bump" then
+			called[row] = "bump"
+			say(
+				if why == "late"
+					then "💥 BUMP! Hop sooner!"
+					elseif why == "early" then "💥 BUMP! Hop later!"
+					else "💥 BUMP! HOP the hurdles!",
+				Theme.Colors.Cyan,
+				1.3
+			)
+			api:Sound("Hit")
+			shake = math.max(shake, 0.25)
+		end
+	end
+
+	-- My own horse at each hurdle, decided the moment its nose reaches the bar on my screen (the
+	-- server's rule with my own press): the knock, or the CLEAR, shows when it happens there instead
+	-- of when the server's word arrives.
+	local reached: { [number]: boolean } = {}
+	local upcoming: { [number]: { At: number, Hit: boolean, Why: string? } } = {}
+
 	-- Events -------------------------------------------------------------------------------------------
 
-	api:OnEvent("Panel", function(userId, _d, result)
+	api:OnEvent("Panel", function(userId, d, result)
+		local key = tostring(userId)
+		local row = rowAt(d)
+		local info = riders[key]
+		if row and info and (result == "bump" or result == "clear") then
+			local barKey = `{row}:{info.L}`
+			if userId == myId then
+				upcoming[row] = nil -- (the server's word stands from here)
+			end
+			if result == "bump" then
+				if not knocks[barKey] then
+					hitHurdle(key, row, api:Now(), nil)
+				end
+			elseif knocks[barKey] then
+				-- (the server saw a clear where this screen showed a knock: put the bar back)
+				knocks[barKey].Bar:PivotTo(knocks[barKey].Home)
+				knocks[barKey] = nil
+				tumbling[barKey] = nil
+			end
+		end
 		if userId ~= myId then
 			return
 		end
@@ -648,12 +787,8 @@ function RockinRaceway.Start(api)
 			if entry and entry.Frame then
 				api:Effect("Sparkles", entry.Frame.Position + Vector3.new(0, 3, 0))
 			end
-		elseif result == "bump" then
-			say("💥 BUMP! HOP the hurdles!", Theme.Colors.Cyan, 1.3)
-			api:Sound("Hit")
-			shake = math.max(shake, 0.25)
 		elseif result == "clear" then
-			say("✔ CLEAR!", Theme.Colors.Green, 0.8)
+			sayClear(row)
 		elseif result == "miss" then
 			say("Missed the carrot!", Theme.Colors.TextDim, 1)
 		end
@@ -686,6 +821,7 @@ function RockinRaceway.Start(api)
 	-- Camera ---------------------------------------------------------------------------------------------
 
 	local cameraPosition: Vector3? = nil
+	local cameraRise = 0
 	local cameraTaken = false
 	local function releaseCamera()
 		if cameraTaken then
@@ -792,7 +928,9 @@ function RockinRaceway.Start(api)
 			end
 			shownEntry.Phase += dt * (2 + shownEntry.V * 0.42)
 
-			-- The horse and its rider.
+			-- The horse and its rider. A hop tips the horse nose up off the ground and nose down onto
+			-- it, turning about the wheel while the nose is up so the wheel never dips under the arc (a
+			-- cleared bar passes under the whole horse). A horse that just hit a bar wobbles.
 			local offset = Track.LaneOffset(info.L)
 			local x, z, fx, fz = Track.At(shownEntry.D, offset)
 			local hopAt = if key == myKey then myHopAt else (data.H or -math.huge)
@@ -806,11 +944,20 @@ function RockinRaceway.Start(api)
 			local frame = CFrame.lookAt(position, position + Vector3.new(fx, 0, fz)) * CFrame.Angles(0, yaw, 0)
 			shownEntry.Frame = frame
 			local pitch = if lift > 0
-				then -0.25 * (1 - 2 * math.clamp((now - hopAt) / Track.HOP_TIME, 0, 1))
-				else math.sin(shownEntry.Phase * 1) * 0.07
+				then HOP_PITCH * (1 - 2 * math.clamp((now - hopAt) / Track.HOP_TIME, 0, 1))
+				else math.sin(shownEntry.Phase) * 0.07
+			local stumble = now - (stumbles[key] or -math.huge)
+			if stumble < STUMBLE then
+				local fade = 1 - stumble / STUMBLE
+				frame *= CFrame.Angles(0, 0, 0.3 * math.sin(stumble * 24) * fade) -- (the rider rocks with it)
+				pitch -= 0.25 * math.sin(math.pi * stumble / STUMBLE)
+			end
+			local tilt = if pitch > 0
+				then CFrame.new(WHEEL) * CFrame.Angles(pitch, 0, 0) * CFrame.new(-WHEEL)
+				else CFrame.Angles(pitch, 0, 0)
 			local horse = horseFor(key, info)
 			if horse then
-				horse:PivotTo(frame * CFrame.new(0, lift + bounce, 0) * CFrame.Angles(pitch, 0, 0))
+				horse:PivotTo(frame * CFrame.new(0, lift + bounce, 0) * tilt)
 			end
 			local character = api:CharacterOf(tonumber(key))
 			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -959,7 +1106,7 @@ function RockinRaceway.Start(api)
 			hintUntil = os.clock() + 6
 			if not touch then
 				api:Hint(
-					"Hold W to GALLOP · let go in the red! SPACE hops the blue hurdles",
+					"Hold W to GALLOP · let go in the red! SPACE hops hurdles from the blue pads",
 					meterY + meterHeight + 92 -- (under the race bar, the meter and the callout)
 				)
 			end
@@ -977,8 +1124,78 @@ function RockinRaceway.Start(api)
 			carousel:PivotTo(carouselPivot * CFrame.Angles(0, now * 0.35, 0))
 		end
 
-		-- Chase camera behind my horse.
+		-- My own horse at each hurdle: decided as its nose reaches the bar (Track.HitAt, the rule the
+		-- server judges my press by), shown when it hits the bar or its wheel is over it.
 		local me = shown[myKey]
+		if me and myData and not myData.F and stage == "Race" then
+			local v = math.max(me.V, 1)
+			for index, panel in panels do
+				if panel.K ~= "H" or reached[index] then
+					continue
+				end
+				local crossAt = now + (panel.D - me.D) / v -- when I'm over the bar
+				local noseAt = crossAt - Track.NOSE / v
+				if noseAt > now then
+					break -- not there yet
+				end
+				reached[index] = true
+				if crossAt + Track.TAIL / v < now - 0.25 or called[index] then
+					continue -- long past (a jump ahead) or already settled by the server
+				end
+				local hitAt = Track.HitAt(myHopAt, crossAt, v)
+				if hitAt then
+					-- Why, for the callout: down too soon (the wheel hit it, or the hop was over before
+					-- the nose got there), still rising (pressed too late), or no hop at all.
+					local into = (noseAt - myHopAt) / Track.HOP_TIME
+					local why = if hitAt > noseAt or (into >= 0.5 and into < 1.6)
+						then "early"
+						elseif into > -0.3 and into < 0.5 then "late"
+						else nil
+					upcoming[index] = { At = hitAt, Hit = true, Why = why }
+				else
+					upcoming[index] = { At = crossAt + Track.TAIL / v, Hit = false }
+				end
+			end
+		end
+		for index, item in upcoming do
+			if now >= item.At then
+				upcoming[index] = nil
+				if item.Hit then
+					hitHurdle(myKey, index, now, item.Why)
+				else
+					sayClear(index)
+				end
+			end
+		end
+
+		-- Knocked bars tumbling onto the track: each end falls on its own (the knocked one first) and
+		-- bounces a little where it lands, while the bar slides forward and slews.
+		for key in tumbling do
+			local item = knocks[key]
+			if not item or not item.Bar.Parent then
+				tumbling[key] = nil
+				continue
+			end
+			local t = math.clamp((now - item.At) / KNOCK_TIME, 0, 1)
+			local function fall(start: number, land: number): number
+				local s = math.clamp((t - start) / (land - start), 0, 1)
+				local bounce = (t - land) / 0.25
+				return item.Drop * (1 - s * s)
+					+ (if bounce > 0 and bounce < 1 then 0.15 * math.sin(math.pi * bounce) else 0)
+			end
+			local first, second = fall(0, 0.4), fall(0.15, 0.75) -- (tipping up to 13 degrees; never into the track)
+			local slide = 1 - (1 - t) ^ 2
+			item.Bar:PivotTo(
+				item.Home
+					* CFrame.new(0, (first + second) / 2 - item.Drop, -1.5 * slide)
+					* CFrame.Angles(0, item.Side * 0.3 * slide, math.atan2(first - second, item.Length) * item.Side)
+			)
+			if t >= 1 then
+				tumbling[key] = nil
+			end
+		end
+
+		-- Chase camera behind my horse (rising a little with my hop, so I stay in view).
 		if me and me.Frame and myData and api:Alive() then
 			local x, z, fx, fz = Track.At(me.D, Track.LaneOffset(me.Lane))
 			local position = origin.Position + Vector3.new(x, 0, z)
@@ -993,7 +1210,10 @@ function RockinRaceway.Start(api)
 			local jolt = if shake > 0
 				then Vector3.new(math.sin(now * 61), math.sin(now * 73), 0) * shake
 				else Vector3.zero
-			camera.CFrame = CFrame.lookAt((cameraPosition :: Vector3) + jolt, (flat * CFrame.new(0, 3, -14)).Position)
+			cameraRise += (Track.HopHeight(now - myHopAt) * CAMERA_RISE - cameraRise) * (1 - math.exp(-dt * 10))
+			local up = Vector3.new(0, cameraRise, 0)
+			camera.CFrame =
+				CFrame.lookAt((cameraPosition :: Vector3) + up + jolt, (flat * CFrame.new(0, 3, -14)).Position + up)
 			camera.FieldOfView = 64 + 14 * math.clamp((me.V - Track.TROT) / (Track.DASH - Track.TROT), 0, 1)
 		else
 			releaseCamera()

@@ -9,6 +9,11 @@ The machine is built from the numbers in src/shared/Logic/SkeeBall.luau (the bal
 lane, the hop and the rings the ball follows are the ones you see: change them there.
 Units are studs, +Y is up, the base sits on y = 0 and -Z is the front (the player's side). Names
 start with "Arcade" so they never clash with another set of props.
+
+Flicker (owner: "This is super flashy. and glitchy"): the padded backstop and the cabinet's back
+panel shared a plane, and the screen showed both at once, in streaks. No two faces that face the
+same way may lie within 0.1 studs of each other where they overlap: every layer (a stripe on a side,
+a hole on the board, a sign on its panel) stands at least 0.1 proud of the one under it.
 """
 
 import math
@@ -237,29 +242,34 @@ def machine_cabinet():
         cap = prism_x([(z0 - 0.05, rail_y(s_front - 0.7)), (Z_LIP + 0.02, rail_y(s_lip)),
                        (Z_LIP + 0.02, rail_y(s_lip) + 0.14), (z0 - 0.05, rail_y(s_front - 0.7) + 0.14)],
                       LANE_HALF - 0.08, SIDE + 0.08)
-        wall_cap = box(BOX_HALF - 0.06, SIDE + 0.08, WALL_TOP, WALL_TOP + 0.14, Z_LIP + 1.05, BACK - 0.05)
+        wall_cap = box(BOX_HALF - 0.06, SIDE + 0.1, WALL_TOP, WALL_TOP + 0.14, Z_LIP + 1.05, BACK)
         slope_cap = prism_x([(Z_LIP - 0.02, rail_y(s_lip)), (Z_LIP + 1.1, WALL_TOP), (Z_LIP + 1.1, WALL_TOP + 0.14),
                              (Z_LIP - 0.02, rail_y(s_lip) + 0.14)], BOX_HALF - 0.06, SIDE + 0.08)
         if side < 0:
             lane_side, box_side, cap, wall_cap, slope_cap = (mirror_x(m) for m in (lane_side, box_side, cap, wall_cap, slope_cap))
         body += [lane_side, box_side]
         trim += [cap, wall_cap, slope_cap]
-        # A racing stripe down each side along the rail, and stars on the box's walls.
-        x = side * (SIDE + 0.02)
+        # A racing stripe down each side along the rail, and stars on the box's walls (each sunk
+        # into the side and standing 0.1 proud of it, so their faces never share its plane).
+        x = side * SIDE
         band = prism_x([(z0 + 0.4, rail_y(s_front) - 0.75), (Z_LIP + 0.6, rail_y(s_lip) - 0.75),
-                        (Z_LIP + 0.6, rail_y(s_lip) - 0.4), (z0 + 0.4, rail_y(s_front) - 0.4)], -0.03, 0.03)
+                        (Z_LIP + 0.6, rail_y(s_lip) - 0.4), (z0 + 0.4, rail_y(s_front) - 0.4)], -0.1, 0.1)
         stripes.append(band.translate(x, 0, 0))
         for z, y, size in ((3.6, 3.7, 0.7), (5.4, 4.7, 0.5), (6.4, 3.3, 0.38)):
-            stars.append(star_plate(size, 0.06).rotate("y", 90).translate(x, y, z))
-    # The front panel, its bumper and a coin door with a big star (nothing sticks out past FRONT).
+            stars.append(star_plate(size, 0.2).rotate("y", 90).translate(x, y, z))
+    # The front panel, its bumper and a coin door with a big star (nothing sticks out past FRONT):
+    # each layer stands 0.1 out of the one behind it (the panel; the door, and the sides either side
+    # of it; the slot, the star and the stripe), so no two faces share a plane.
     body.append(box(-SIDE, SIDE, PLINTH, 2.62, FRONT + 0.2, Z_LANE0 + 0.02, 0.12))
     trim.append(capsule(2 * SIDE + 0.1, 0.17, 16).rotate("z", 90).translate(0, 2.66, FRONT + 0.4))
-    trim.append(box(-0.75, 0.75, 0.75, 1.75, FRONT + 0.08, FRONT + 0.24, 0.07))
-    dark.append(box(-0.32, 0.32, 1.32, 1.48, FRONT + 0.02, FRONT + 0.12, 0.04))
-    stars.append(star_plate(0.36, 0.06).translate(0, 1.04, FRONT + 0.06))
-    stripes.append(box(-SIDE + 0.25, SIDE - 0.25, 2.12, 2.36, FRONT + 0.12, FRONT + 0.22))
-    # The back panel behind the backstop, up to the screen.
-    body.append(box(-SIDE, SIDE, PLINTH, 9.15, Z_BACKSTOP, BACK - 0.1, 0.1))
+    trim.append(box(-0.75, 0.75, 0.75, 1.75, FRONT + 0.1, FRONT + 0.3, 0.07))
+    dark.append(box(-0.32, 0.32, 1.4, 1.56, FRONT, FRONT + 0.16, 0.04))
+    stars.append(star_plate(0.34, 0.16).translate(0, 1.02, FRONT + 0.08))
+    stripes.append(box(-SIDE + 0.25, SIDE - 0.25, 2.12, 2.36, FRONT, FRONT + 0.3))
+    # The back panel behind the backstop, up to the screen: its face 0.1 behind the backstop's (the
+    # two used to share a plane, and the backstop's purple and the cabinet's color flickered through
+    # each other across every machine).
+    body.append(box(-SIDE, SIDE, PLINTH, 9.15, Z_BACKSTOP + 0.1, BACK - 0.1, 0.1))
     # The chute along the right-hand rail (x < 0) where the balls wait, the next one at the front.
     cx = K["CHUTE_X"]
     z_first = K["CHUTE_Z"]
@@ -318,30 +328,32 @@ def machine_target():
         pieces[f"Band{points}"] = on_board(band.translate(0, 0, center))
         inner = radius
     lips = [on_board(torus(radius, 0.055, 72, 8).translate(0, 0.03, center)) for radius in radii]
-    # Holes: each ring's drain at the bottom of its channel (one above the other up the middle).
+    # Holes: each ring's drain at the bottom of its channel (one above the other up the middle). Every
+    # detail on the board stands 0.1 proud of what it lies on, so the two never flicker.
     holes = []
     inner = 0.0
     for index, radius in enumerate(radii):
         w = center if index == 0 else center - (inner + radius) / 2
-        holes.append(on_board(disc(0.15 if index > 0 else 0.2, 0.0, 0.05, 20).translate(0, 0, w)))
+        holes.append(on_board(disc(0.15 if index > 0 else 0.2, 0.0, 0.1, 20).translate(0, 0, w)))
         inner = radius
-    # The 100 cups in the top corners: a gold rim, a gold dish and a dark hole.
+    # The 100 cups in the top corners: a gold rim, a gold dish and a dark hole (the dish a ring round
+    # the hole, both 0.1 proud of the board).
     cup_rims = []
     for name, x in (("Cup100L", K["CUP_U"]), ("Cup100R", -K["CUP_U"])):  # x = -u: the player's left is +x
-        dish = disc(K["CUP_R"] + 0.08, 0.0, 0.05, 32).translate(x, 0, K["CUP_W"])
+        dish = flat_ring(0.17, K["CUP_R"] + 0.08, 0.0, 0.1, 32).translate(x, 0, K["CUP_W"])
         pieces[name] = on_board(dish)
-        cup_rims.append(on_board(torus(K["CUP_R"] + 0.09, 0.07, 32, 8).translate(x, 0.06, K["CUP_W"])))
-        holes.append(on_board(disc(0.17, 0.05, 0.1, 20).translate(x, 0, K["CUP_W"])))
+        cup_rims.append(on_board(torus(K["CUP_R"] + 0.09, 0.07, 32, 8).translate(x, 0.08, K["CUP_W"])))
+        holes.append(on_board(disc(0.17, 0.0, 0.1, 32).translate(x, 0, K["CUP_W"])))
     # The gutters: the trough between the hop and the board, and the slot behind the board.
     gutter = [
         box(-BOX_HALF - 0.02, BOX_HALF + 0.02, 1.6, K["TROUGH_Y"], Z_LIP - 0.05, Z_BOARD + 0.3),
-        box(-BOX_HALF - 0.02, BOX_HALF + 0.02, K["BACK_TROUGH_Y"] - 1.0, K["BACK_TROUGH_Y"], Z_BOARD_TOP - 0.2, Z_BACKSTOP + 0.02),
+        box(-BOX_HALF - 0.02, BOX_HALF + 0.02, K["BACK_TROUGH_Y"] - 1.0, K["BACK_TROUGH_Y"], Z_BOARD_TOP - 0.2, Z_BACKSTOP + 0.15),
         box(-BOX_HALF - 0.02, BOX_HALF + 0.02, PLINTH, K["BACK_TROUGH_Y"] - 1.0, Z_BOARD_TOP - 0.2, Z_BOARD_TOP + 0.6),
     ]
-    holes.append(box(-0.5, 0.5, K["TROUGH_Y"] - 0.02, K["TROUGH_Y"] + 0.03, (Z_LIP + Z_BOARD) / 2 - 0.15, (Z_LIP + Z_BOARD) / 2 + 0.15, 0.04))
-    holes.append(box(-0.5, 0.5, K["BACK_TROUGH_Y"] - 0.02, K["BACK_TROUGH_Y"] + 0.03, (Z_BOARD_TOP + Z_BACKSTOP) / 2 - 0.15,
+    holes.append(box(-0.5, 0.5, K["TROUGH_Y"] - 0.02, K["TROUGH_Y"] + 0.1, (Z_LIP + Z_BOARD) / 2 - 0.15, (Z_LIP + Z_BOARD) / 2 + 0.15, 0.04))
+    holes.append(box(-0.5, 0.5, K["BACK_TROUGH_Y"] - 0.02, K["BACK_TROUGH_Y"] + 0.1, (Z_BOARD_TOP + Z_BACKSTOP) / 2 - 0.15,
                      (Z_BOARD_TOP + Z_BACKSTOP) / 2 + 0.15, 0.04))
-    # The padded backstop (the board's top edge to the cage roof).
+    # The padded backstop (the board's top edge to the cage roof), 0.1 in front of the back panel.
     backstop = box(-BOX_HALF - 0.02, BOX_HALF + 0.02, K["BACK_TROUGH_Y"] - 0.05, K["TOP_Y"] + 0.05, Z_BACKSTOP - 0.0, Z_BACKSTOP + 0.3, 0.06)
     tufts = [icosphere(0.09, 1).scale(1, 1, 0.5).translate(x, y, Z_BACKSTOP - 0.01)
              for x in (-1.2, -0.4, 0.4, 1.2) for y in (5.3, 6.1, 6.9)]
@@ -350,7 +362,7 @@ def machine_target():
     top_y = K["TOP_Y"] + 0.05
     for side in (-1, 1):
         x = side * (BOX_HALF + 0.38)
-        cage.append(tube([(x, top_y, Z_LIP + 1.2), (x, top_y, Z_BACKSTOP + 0.1)], 0.07, 8))
+        cage.append(tube([(x, top_y, Z_LIP + 1.2), (x, top_y, Z_BACKSTOP + 0.2)], 0.07, 8))
         for z in np.linspace(Z_LIP + 1.2, Z_BACKSTOP - 0.05, 5):
             cage.append(tube([(x, WALL_TOP + 0.1, z), (x, top_y, z)], 0.05, 6))
     for z in np.linspace(Z_LIP + 1.2, Z_BACKSTOP - 0.05, 4):
@@ -371,24 +383,27 @@ def machine_crown():
     """The score screen's bezel above the cage, and the marquee on top: an arched sign with bulbs
     round it (two alternating sets, so the game can chase them)."""
     sy, sz, sw, sh = K["SCREEN_Y"], K["SCREEN_Z"], K["SCREEN_W"], K["SCREEN_H"]
-    bezel = box(-sw / 2 - 0.25, sw / 2 + 0.25, sy - sh / 2 - 0.22, sy + sh / 2 + 0.22, sz + 0.05, BACK - 0.1, 0.12)
+    # The bezel's back sits inside the back panel (sharing the panel's back plane, it flickered there).
+    bezel = box(-sw / 2 - 0.25, sw / 2 + 0.25, sy - sh / 2 - 0.22, sy + sh / 2 + 0.22, sz + 0.05, BACK - 0.15, 0.12)
     x0, x1 = -sw / 2 - 0.27, sw / 2 + 0.27
     y0, y1 = sy - sh / 2 - 0.24, sy + sh / 2 + 0.24
     frame = [tube([(x0, y0, sz + 0.02), (x1, y0, sz + 0.02), (x1, y1, sz + 0.02), (x0, y1, sz + 0.02), (x0, y0, sz + 0.02)], 0.06, 6)]
-    # The marquee: an arched panel whose face holds the sign, on a gold frame.
+    # The marquee: an arched panel whose face holds the sign, on a gold frame. The sign is sunk into
+    # the panel and stands 0.1 out of its face.
     gy, gz, gw, gh = K["SIGN_Y"], K["SIGN_Z"], K["SIGN_W"], K["SIGN_H"]
     base_y = y1 + 0.05
     half = SIDE + 0.05
     rise = 1.0
     shoulder = gy + gh / 2 - 0.15
-    outline = [(-half, base_y), (half, base_y), (half, shoulder)]
+    # The panel reaches down into the bezel, so the sign's bottom edge never meets its underside.
+    outline = [(-half, y1 - 0.08), (half, y1 - 0.08), (half, shoulder)]
     for k in range(1, 16):
         a = math.pi * k / 16
         outline.append((math.cos(a) * half, shoulder + math.sin(a) * rise))
     outline.append((-half, shoulder))
-    panel = extrude([(x, y) for x, y in outline], BACK - 0.1 - gz)
-    panel = panel.translate(0, 0, (BACK - 0.1 + gz) / 2)
-    face = box(-gw / 2 - 0.08, gw / 2 + 0.08, gy - gh / 2 - 0.08, gy + gh / 2 + 0.08, gz - 0.06, gz + 0.02, 0.06)
+    panel = extrude([(x, y) for x, y in outline], BACK - 0.1 - (gz + 0.04))
+    panel = panel.translate(0, 0, (BACK - 0.1 + gz + 0.04) / 2)
+    face = box(-gw / 2 - 0.08, gw / 2 + 0.08, gy - gh / 2 - 0.08, gy + gh / 2 + 0.08, gz - 0.06, gz + 0.1, 0.06)
     arch = [(math.cos(math.pi * k / 24) * (half + 0.02), shoulder + math.sin(math.pi * k / 24) * (rise + 0.02), gz - 0.04) for k in range(25)]
     frame.append(tube([(half + 0.02, base_y, gz - 0.04)] + arch + [(-half - 0.02, base_y, gz - 0.04)], 0.09, 8))
     frame.append(icosphere(0.24, 2).translate(0, shoulder + rise + 0.3, gz + 0.1))
@@ -530,9 +545,10 @@ def arcade_ticket_floor():
     for k in range(count):
         z = WALK_START + 0.3 + length / 2 + k * (length + gap)
         pieces[keys[k % 3]].append(slab_xz(ticket_outline(2 * WALK_HALF - 1.0, length, 0.45, 5), 0.3, 0.4).translate(0, 0, z))
-        pieces["Stars"].append(star_xz(0.55, 0.4, 0.45).translate(0, 0, z))
-        for side in (-1, 1):  # the ticket's punched holes
-            pieces["Stars"].append(cylinder(0.12, 0.05, 10).translate(side * (WALK_HALF - 1.05), 0.4, z))
+        # The star and the punched holes: 0.1 thick on the ticket (any thinner flickers).
+        pieces["Stars"].append(star_xz(0.55, 0.4, 0.5).translate(0, 0, z))
+        for side in (-1, 1):
+            pieces["Stars"].append(cylinder(0.12, 0.1, 10).translate(side * (WALK_HALF - 1.05), 0.4, z))
     return recenter({name: merge(*meshes) for name, meshes in pieces.items()}, "ArcadeTicketFloor")
 
 

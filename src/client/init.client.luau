@@ -58,6 +58,12 @@ local order = {
 	"QuestController",
 	"RewardsController", -- after HudController: it adds to the profile chip
 	"CelebrationController",
+	-- What keeps players coming back.
+	"CupController",
+	"InviteController",
+	"MedalController",
+	"HallOfFameController",
+	"EventController",
 	"EmoteController",
 	"SpectateController",
 	"OnboardingController",

@@ -42,6 +42,7 @@ local LobbyService = require(script.Parent.LobbyService)
 local Notifier = require(script.Parent.Notifier)
 local ReplayService = require(script.Parent.ReplayService)
 local RewardService = require(script.Parent.RewardService)
+local RoundEvents = require(script.Parent.RoundEvents)
 local RoundContext = require(script.Parent.RoundContext)
 local SitOutService = require(script.Parent.SitOutService)
 local Telemetry = require(script.Parent.Telemetry)
@@ -254,6 +255,7 @@ local function runRound(definition, participants: { Player })
 			if not granted then
 				Telemetry.Error("Rewards", definition.Id)
 			end
+			RoundEvents.Finished:Fire(definition, placed, results.WinningTeam) -- cups, leaderboard, medals...
 			for index = 1, math.min(3, #placed) do
 				local entry = placed[index].Entry :: any
 				table.insert(

@@ -40,7 +40,8 @@ everything and reports every error).
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
-(Heartbeat), StarterGui:SetCore, and the remotes (bindable events the harness can fire). The two
+(Heartbeat), StarterGui:SetCore, SocialService's invites (the invite chip) and the remotes (bindable
+events the harness can fire). The two
 ScreenGuis are made like init.client.luau makes them. Shared modules come from the working tree
 (except Remotes), and so does the profile snapshot (DataService and the two services it needs).
 Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", "Rewards Career")
@@ -63,7 +64,7 @@ from ui_render import devices_luau, size_names  # noqa: E402  (the screens the e
 
 ROOT = Path(__file__).resolve().parents[2]
 CLIENT = ROOT / "src" / "client"
-SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService")
+SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService", "SocialService")
 # Server modules bundled from the working tree: the profile snapshot the client is sent.
 SERVER_MODULES = ("DataService", "Notifier", "Telemetry")
 
@@ -290,6 +291,14 @@ local __shims = {
 		end,
 	}),
 }
+-- Roblox's SocialService (InviteController's invite chip): the stand-in player isn't a real one to
+-- ask about, so the stand-in service says it can send invites, and its prompt opens nothing.
+__shims.SocialService = __wrap(game:GetService("SocialService"), {
+	CanSendGameInviteAsync = function()
+		return true
+	end,
+	PromptGameInvite = function() end,
+})
 local function __service(name)
 	return __shims[name] or game:GetService(name)
 end
@@ -474,6 +483,7 @@ local order = {
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
 	"RewardsController", "CelebrationController",
+	"CupController", "InviteController", "MedalController", "HallOfFameController", "EventController",
 	"EmoteController", "SpectateController", "OnboardingController", "SkeeBallController", "AssetReportController",
 }
 -- The ScreenGuis, made with init.client.luau's own properties (see screen_guis() in the script).
@@ -1048,6 +1058,12 @@ phase("Preparing", 6, function()
 		who:SetAttribute("PP_ScoreText", "")
 		who:SetAttribute("PP_Team", "")
 	end
+	-- In a team game the server puts the player on a team while the card is up: the card's tab says
+	-- which ("YOU'RE ON ◆ YELLOW", the widest colour team).
+	local played = GameDefinitions.Get(ids[1])
+	if played and played.IsTeam then
+		__player:SetAttribute("PP_Team", "Yellow")
+	end
 end)
 task.wait(2) -- Random's reel lands on the game that won
 __portals["Preparing, 3s in"] = portalReport()
@@ -1100,32 +1116,54 @@ end
 -- The team pill under the status line (HudController) shows every team in the round with its mark
 -- and score: the versus modes' roles and two colour teams (hudChecks.teamPill: what it read and how
 -- wide it was, in its own units), then all four colour teams with 3-digit scores, its widest (the
--- snapshot).
+-- snapshot). The player is on one of the teams each time (PP_Team), so the pill marks theirs: "YOU"
+-- by its mark and a box round its words (hudChecks: each team's words in order, the boxed one in
+-- [brackets]).
 step = "team scores"
 local hudChecks = { teamPill = {} }
 do
 	local function pill()
 		local hud = __playerGui:FindFirstChild("PartyPanicHUD")
 		local frame = hud and hud:FindFirstChild("TeamScores", true)
-		local label = frame and frame:FindFirstChildWhichIsA("TextLabel")
-		return if label and frame.Visible then `{label.Text}  [{frame.Size.X.Offset} wide]` else "hidden"
+		local row = frame and frame:FindFirstChild("Row")
+		if not row or not frame.Visible then
+			return "hidden"
+		end
+		local parts = {}
+		for _, part in row:GetChildren() do
+			local words = part:FindFirstChild("Words")
+			if part:IsA("Frame") and part.Visible and words then
+				table.insert(parts, part)
+			end
+		end
+		table.sort(parts, function(a, b)
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+		local shown = {}
+		for _, part in parts do
+			local text = part.Words.Text
+			table.insert(shown, if part.BackgroundTransparency < 1 then `[{text}]` else text)
+		end
+		return `{table.concat(shown, "  ")}  [{frame.Size.X.Offset} wide]`
 	end
-	for _, scores in
+	for _, case in
 		{
-			{ Sharks = 3, Swimmers = 120 },
-			{ SandKings = 85, Divers = 240 },
-			{ Archers = 4, Runners = 7 },
-			{ Red = 12, Blue = 9 },
-			{ Red = 100, Blue = 64, Green = 109, Yellow = 7 },
+			{ { Sharks = 3, Swimmers = 120 }, "Swimmers" },
+			{ { SandKings = 85, Divers = 240 }, "SandKings" },
+			{ { Archers = 4, Runners = 7 }, "Archers" },
+			{ { Red = 12, Blue = 9 }, "Blue" },
+			{ { Red = 100, Blue = 64, Green = 109, Yellow = 7 }, "Green" },
 		}
 	do
-		GameState.SetJSON("TeamScores", scores)
+		__player:SetAttribute("PP_Team", case[2])
+		GameState.SetJSON("TeamScores", case[1])
 		task.wait(0.3)
 		table.insert(hudChecks.teamPill, pill())
 	end
 	task.wait(0.5)
 	snap("InRound teams")
 	GameState.SetJSON("TeamScores", {})
+	__player:SetAttribute("PP_Team", "")
 	task.wait(0.1)
 	table.insert(hudChecks.teamPill, "after the round: " .. pill())
 end
@@ -1287,9 +1325,9 @@ phase("Results", 8, function()
 			"Yellow 97% • 14/15 leans", -- BOBSLED RUN
 			"Yellow 100% • 22 perfect", -- PUMP & POP
 			"Lasted 54s • 120 jumps", -- FIRE ROPE
-			"🦈 11 chomps • 22 dunked", -- SHARK BAIT
+			"◆ YELLOW 100% • 132 bites", -- EATSA PIZZA
 			"🏹 12 tags • +12 boards", -- ARROW AMBUSH
-			"Divers 1200 • you 450", -- SINKING SANDS
+			"💎 DIVERS 1200 • you 450", -- SINKING SANDS
 		}
 		for index = 1, 8 do
 			local other = __players[index]

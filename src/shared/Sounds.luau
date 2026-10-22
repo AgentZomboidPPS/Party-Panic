@@ -1,12 +1,14 @@
 -- Audio cues (design doc §13 "Audio plan").
 --
--- Music and most effects are ORIGINAL audio rendered by tools/music (see docs/AUDIO.md).
+-- Music and most effects are ORIGINAL audio rendered by tools/music (see docs/ASSETS.md); every
+-- mini-game also has its own round song (tools/music/modes.py), packed several to an upload.
 -- tools/upload_assets.py uploads them and writes their asset ids into AudioAssets.luau, which
 -- overrides the defaults below. Until then, effects fall back to sounds that ship with the Roblox
 -- client and music stays silent. To use a track from the Roblox audio library instead, paste its
 -- id ("rbxassetid://123") into AudioAssets.luau.
 
 local AudioAssets = require(script.Parent.AudioAssets)
+local ModeMusic = require(script.Parent.ModeMusic)
 local SfxSprite = require(script.Parent.SfxSprite)
 
 local defaults = {
@@ -57,8 +59,21 @@ end
 local spriteId = idFor(AudioAssets.SfxSprite)
 local sprite = if spriteId then { Id = spriteId, Regions = SfxSprite } else nil
 
+-- Each mini-game's own round song (owner: "custom music for each mini game"), once its pack is
+-- uploaded: the pack's id and where the song sits in it (Logic/SongTiming says how they're played).
+export type ModeSong = { Id: string, Title: string, Start: number, Drop: number, End: number }
+local modeSongs: { [string]: ModeSong } = {}
+local packs = (AudioAssets :: any).ModeMusic or {}
+for modeId, song in ModeMusic :: { [string]: any } do
+	local id = idFor(packs[song.Pack])
+	if id then
+		modeSongs[modeId] = { Id = id, Title = song.Title, Start = song.Start, Drop = song.Drop, End = song.End }
+	end
+end
+
 return {
 	Music = defaults.Music,
 	Sfx = defaults.Sfx,
 	Sprite = sprite,
+	ModeSongs = modeSongs,
 }

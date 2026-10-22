@@ -21,7 +21,7 @@ Planned categories once all 25 exist (the brief leaves some open; these are the 
 (Suggested to the owner: Messy Memory as Luck and Tanks! as Knockback would even the thin categories.)
 
 Also on the backlog: **custom music for each mini-game** (owner: "put in the backlog custom music for each mini game").
-Blocked on the audio problem first: other players' devices can't load our uploaded audio yet (see docs/HANDOFF.md).
+No longer blocked: other players' devices load and play our uploaded music now (their reports from version 27).
 
 ## 13. Tanks! (`Tanks`, Versus)
 

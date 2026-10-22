@@ -470,6 +470,8 @@ local function __grantRewards(definition, results, before)
 	end
 	local placed = Placement.Assign(entries)
 	local ok, err = pcall(RewardService.GrantRound, definition, placed, results.WinningTeam)
+	-- As RoundManager: the features that hang off rounds (cups, leaderboard, medals...) hear about it.
+	__require("Server/Services/RoundEvents").Finished:Fire(definition, placed, results.WinningTeam)
 	local report = { granted = if ok then "ok" else tostring(err), players = {} }
 	local places = {}
 	for _, item in placed do
@@ -841,6 +843,33 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	if not okSeed then
 		__note("seeding profiles failed: " .. tostring(seeded))
 		seeded = nil
+	end
+
+	-- A test run: services that keep shared data (the weekly leaderboard's DataStore...) must never
+	-- write it from a test; they check this attribute.
+	workspace:SetAttribute("PP_Harness", true)
+	-- The features that hang off rounds (they hear RoundEvents.Finished from __grantRewards), started
+	-- the way the server starts them.
+	for _, name in { "CupService", "FriendsService", "MedalService", "LeaderboardService", "EventService" } do
+		local okLoad, service = pcall(__require, "Server/Services/" .. name)
+		if not okLoad or type(service) ~= "table" then
+			__note(`{name} failed to load: {service}`)
+			continue
+		end
+		if service.Init then
+			local okInit, initErr = pcall(service.Init)
+			if not okInit then
+				__note(`{name}.Init failed: {initErr}`)
+			end
+		end
+		if service.Start then
+			task.spawn(function()
+				local okStart, startErr = pcall(service.Start)
+				if not okStart then
+					__note(`{name}.Start failed: {startErr}`)
+				end
+			end)
+		end
 	end
 
 	-- Real bots (Services/BotService) driven by the mode's brain, alongside the scripted stand-ins.

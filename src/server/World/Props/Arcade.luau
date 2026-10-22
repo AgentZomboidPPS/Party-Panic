@@ -16,6 +16,11 @@
 -- these meshes collides (a mesh's own collision is a guess at its shape); World/Arcade fits
 -- invisible colliders to the machine and the board, and the floor's are flat under its tickets. The
 -- machine and the board stop the camera, so it never slides inside them.
+--
+-- Flicker (owner: "This is super flashy. and glitchy"): two faces in one plane flicker, the screen
+-- unable to tell which is in front (the backstop and the cabinet's back panel did, in streaks across
+-- every machine). Every layer, in the meshes and in the fallbacks here, now stands at least 0.1
+-- studs off the one under it.
 return function(h)
 	local rgb = h.rgb
 	local Build = h.Build
@@ -41,14 +46,14 @@ return function(h)
 	end
 
 	-- A disc lying on the ring board (which rises 0.75 per stud, about 36.9 degrees), centered
-	-- `w` up it from its bottom edge, `lift` out of it.
-	local function onBoard(m: Model, name: string, diameter: number, u: number, w: number, lift: number)
+	-- `w` up it from its bottom edge, from `bottom` to `top` out of its face.
+	local function onBoard(m: Model, name: string, diameter: number, u: number, w: number, bottom: number, top: number)
 		local normal = Vector3.new(0, 0.8, -0.6)
-		local position = Vector3.new(-u, 3.15 + w * 0.6, 2.65 + w * 0.8) + normal * lift
+		local position = Vector3.new(-u, 3.15 + w * 0.6, 2.65 + w * 0.8) + normal * (bottom + top) / 2
 		return Build.Part({
 			Name = name,
 			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.1, diameter, diameter),
+			Size = Vector3.new(top - bottom, diameter, diameter),
 			CFrame = CFrame.fromMatrix(position, normal, Vector3.xAxis),
 			Parent = m,
 		})
@@ -57,7 +62,7 @@ return function(h)
 	return {
 		ArcadeSkeeMachine = {
 			Height = 12.09,
-			AssetId = 115646710351906,
+			AssetId = 73784669582654,
 			-- Doesn't collide: World/Arcade fits invisible colliders to its shape. It stops the
 			-- camera, which would otherwise slide inside the cabinet.
 			BlocksCamera = true,
@@ -109,29 +114,31 @@ return function(h)
 				h.block(m, "Base", Vector3.new(5.4, 0.32, 14.6), Vector3.new(0, 0.16, 0))
 				for _, side in { -1, 1 } do
 					h.block(m, "Cabinet", Vector3.new(0.98, 3.3, 9.1), Vector3.new(side * 2.11, 1.95, -2.6))
-					h.block(m, "Cabinet", Vector3.new(0.73, 5.7, 4.65), Vector3.new(side * 2.24, 3.15, 4.28))
+					h.block(m, "Cabinet", Vector3.new(0.73, 5.7, 4.75), Vector3.new(side * 2.24, 3.15, 4.33))
 					h.block(m, "Trim", Vector3.new(1.2, 0.14, 9.2), Vector3.new(side * 2.1, 3.67, -2.6))
 					h.block(m, "Glow", Vector3.new(0.1, 0.1, 8.6), Vector3.new(side * 1.62, 3.8, -2.6)).Material = neon
 				end
 				h.block(m, "Cabinet", Vector3.new(5.2, 2.32, 0.5), Vector3.new(0, 1.46, -6.85))
-				h.block(m, "Cabinet", Vector3.new(5.2, 8.85, 0.6), Vector3.new(0, 4.73, 6.9))
+				-- The back panel, 0.1 behind the backstop's face (Back).
+				h.block(m, "Cabinet", Vector3.new(5.2, 8.85, 0.5), Vector3.new(0, 4.725, 6.95))
 				tilted(m, "Lane", Vector3.new(3.24, 0.6, 8.05), Vector3.new(0, 2.33, -2.6), 4)
 				tilted(m, "Hop", Vector3.new(3.24, 0.5, 0.65), Vector3.new(0, 2.85, 1.66), 28)
 				h.block(m, "Gutter", Vector3.new(3.74, 0.9, 0.95), Vector3.new(0, 2.25, 2.3))
 				tilted(m, "Board", Vector3.new(3.74, 0.3, 3.9), Vector3.new(0, 4.2, 4.3), 36.87)
+				-- The rings stacked in 0.1 steps toward the middle, each disc sunk into the one under it.
 				for index, ring in { { 10, 3.2 }, { 20, 2.54 }, { 30, 1.94 }, { 40, 1.36 }, { 50, 0.8 } } do
-					onBoard(m, "Band" .. ring[1], ring[2], 0, 1.85, 0.02 * index)
+					onBoard(m, "Band" .. ring[1], ring[2], 0, 1.85, 0.1 * index - 0.15, 0.1 * index)
 				end
-				onBoard(m, "Cup100L", 0.75, -1.36, 3.4, 0.02)
-				onBoard(m, "Cup100R", 0.75, 1.36, 3.4, 0.02)
+				onBoard(m, "Cup100L", 0.75, -1.36, 3.4, -0.15, 0.1)
+				onBoard(m, "Cup100R", 0.75, 1.36, 3.4, -0.15, 0.1)
 				h.block(m, "Back", Vector3.new(3.74, 2.8, 0.3), Vector3.new(0, 6.05, 6.75))
 				h.block(m, "Cage", Vector3.new(4.5, 0.1, 0.1), Vector3.new(0, 7.45, 3.2))
 				h.block(m, "Cage", Vector3.new(4.5, 0.1, 0.1), Vector3.new(0, 7.45, 5.4))
-				h.block(m, "Chute", Vector3.new(0.12, 0.12, 7), Vector3.new(-2.48, 3.9, -3.6))
-				h.block(m, "Chute", Vector3.new(0.12, 0.12, 7), Vector3.new(-1.68, 3.9, -3.6))
-				h.block(m, "Display", Vector3.new(4.8, 1.95, 0.5), Vector3.new(0, 8.3, 6.65))
+				h.block(m, "Chute", Vector3.new(0.12, 0.12, 7), Vector3.new(-2.48, 3.95, -3.6))
+				h.block(m, "Chute", Vector3.new(0.12, 0.12, 7), Vector3.new(-1.68, 3.95, -3.6))
+				h.block(m, "Display", Vector3.new(4.8, 1.95, 0.6), Vector3.new(0, 8.3, 6.7))
 				h.block(m, "Marquee", Vector3.new(5.2, 2.5, 0.6), Vector3.new(0, 10.4, 6.9))
-				h.block(m, "Sign", Vector3.new(4.86, 1.46, 0.08), Vector3.new(0, 10.05, 6.48))
+				h.block(m, "Sign", Vector3.new(4.86, 1.46, 0.2), Vector3.new(0, 10.05, 6.54))
 				for index = 0, 5 do
 					local part = h.ball(
 						m,
@@ -155,8 +162,8 @@ return function(h)
 		-- Walked on through invisible floors World/Arcade lays under its tickets (the mesh's own
 		-- collision would be a guess at its slabs, tickets and stars).
 		ArcadeTicketFloor = {
-			Height = 1.05,
-			AssetId = 111736912425418,
+			Height = 1.1,
+			AssetId = 84338547803551,
 			Shadow = false,
 			Palette = {
 				Rim = rgb(255, 255, 255),
