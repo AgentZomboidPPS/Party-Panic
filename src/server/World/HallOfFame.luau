@@ -133,7 +133,6 @@ type Spot = {
 	Top: CFrame, -- the plinth's top middle, facing the fountain
 	Plate: TextLabel,
 	PlatePoints: TextLabel,
-	Tag: BillboardGui,
 	TagName: TextLabel,
 	TagPoints: TextLabel,
 	Holder: Model, -- what stands on the plinth: the statue or the stand-in
@@ -576,7 +575,6 @@ local function buildPlinth(parent: Model, frame: CFrame, spec: PlaceSpec): Spot
 		Top = top,
 		Plate = plateName,
 		PlatePoints = platePoints,
-		Tag = tag,
 		TagName = tagName,
 		TagPoints = tagPoints,
 		Holder = holder,
