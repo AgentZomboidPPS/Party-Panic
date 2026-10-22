@@ -22,7 +22,7 @@ local NAMES = {
 	"EventAction", -- (action: string, ...) the limited-time event (claim a reward...); see Services/EventService
 	-- server -> client
 	"ProfileData", -- (snapshot)
-	"Notify", -- (text, kind?, duration?)
+	"Notify", -- (text, kind?, duration?, topic?) a toast; topic "Round" is a callout about the round (Services/Notifier)
 	"RoundResults", -- (results payload)
 	"PlayEffect", -- (effectName, position, colors?)
 	"Knockback", -- (velocity: Vector3, stunTime: number)

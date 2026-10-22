@@ -15,12 +15,24 @@
 -- beside the jump button, right in that low gap, and the toasts drew over them just when an
 -- announcement told players to press ("GOLDEN RUSH!"). While any is showing, the toasts sit above
 -- the buttons' row instead (still clear of the thumbstick's corner and the menu column).
+--
+-- A quieter round (owner: "During the mini games, any way we can save UI space so they can see more
+-- of the game at one time?"): while the player is playing a round (State.PlayingRound: from its
+-- rules card to its end, still in), toasts that aren't about the round (quests, who joined or left,
+-- coin tips, friends) wait like they do under the results card, and show once the round is over for
+-- them (the results, or knocked out and watching); a window opened mid-round (the menu's ☰) gets its
+-- answers at once. The round's own callouts (the server's topic "Round": RoundContext.Announce, "🎃
+-- GOLDEN RUSH! 🎃") still show: on phones one at a time in a strip under the banner
+-- (HudController), not over the middle of the play area; on PC in the top right corner as before.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local GameState = require(ReplicatedStorage.Shared.GameState)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local State = require(script.Parent.Parent.State)
+local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
@@ -44,7 +56,9 @@ local TOUCH_WIDTH, TOUCH_TEXT, TOUCH_PAD_X, TOUCH_PAD_Y = 440, 19, 16, 8
 local MAX_TOASTS = 2
 -- Windows that draw over the toasts while they're up (attributes on the local player).
 local COVERS = { "PP_ResultsShowing", "PP_CupPodium" }
-local MAX_WAITING = 6 -- toasts kept while covered (the oldest go first past this)
+local MAX_WAITING = 6 -- toasts kept while covered or held for the round (the oldest go first past this)
+local ROUND = "Round" -- the topic of a callout about the round (Services/Notifier.ROUND)
+local PLAYING_GAP = 0.4 -- seconds after the round is over for the player before held toasts show
 local RELEASE_GAP = 1.6 -- seconds between waiting toasts once the window closes, after the first two
 local ACTION_GAP = 8 -- phones: between the toasts and the mode's action buttons under them (pixels)
 local touch = false
@@ -52,8 +66,9 @@ local newestLast = false -- phones: the newest toast sits at the bottom of the s
 local stack: Frame
 local active: { Frame } = {}
 local order = 0
-local waiting: { { Text: string, Kind: string?, Duration: number? } } = {}
+local waiting: { { Text: string, Kind: string?, Duration: number?, Topic: string? } } = {}
 local releasing = false
+local windowOpen = false -- a window (shop, quests, settings...) is open: Modal.AnyOpenChanged
 
 local function covered(): boolean
 	for _, name in COVERS do
@@ -64,16 +79,26 @@ local function covered(): boolean
 	return false
 end
 
+-- Whether a toast waits for now: under a window that covers the toasts, or, if it isn't about the
+-- round, while the player is playing one (unless they're in a window: then it's the answer to
+-- something they did there, like a purchase).
+local function held(topic: string?): boolean
+	if covered() then
+		return true
+	end
+	return topic ~= ROUND and State.PlayingRound() and not windowOpen
+end
+
 local show: (text: string, kind: string?, duration: number?) -> ()
 
--- The toasts that waited out a window: two at once (as many as show), the rest one by one.
+-- The toasts that waited: two at once (as many as show), the rest one by one, oldest first.
 local function release()
 	if releasing then
 		return
 	end
 	releasing = true
 	local shown = 0
-	while #waiting > 0 and not covered() do
+	while #waiting > 0 and not held(waiting[1].Topic) do
 		local nextToast = table.remove(waiting, 1)
 		if nextToast then
 			show(nextToast.Text, nextToast.Kind, nextToast.Duration)
@@ -86,12 +111,19 @@ local function release()
 	releasing = false
 end
 
-function NotificationController.Show(text: string, kind: string?, duration: number?)
-	if covered() then
-		table.insert(waiting, { Text = text, Kind = kind, Duration = duration })
+-- `topic` is the server's (Services/Notifier): "Round" for a callout about the round.
+function NotificationController.Show(text: string, kind: string?, duration: number?, topic: string?)
+	if held(topic) then
+		table.insert(waiting, { Text = text, Kind = kind, Duration = duration, Topic = topic })
 		while #waiting > MAX_WAITING do
 			table.remove(waiting, 1)
 		end
+		return
+	end
+	-- Phones in a round: its callouts go to the strip under the banner, one at a time.
+	if topic == ROUND and touch and GameState.Get("Phase") == "InRound" and State.InRound() then
+		local style = KINDS[kind or "info"] or KINDS.info
+		State.RoundCallout:Fire(`{style.Icon}  {text}`, style.Color, duration or 3.5)
 		return
 	end
 	show(text, kind, duration)
@@ -268,9 +300,9 @@ function NotificationController.Start(context)
 		UIKit.AutoScale(stack, 0.95)
 	end
 
-	Remotes.Get("Notify").OnClientEvent:Connect(function(text, kind, duration)
+	Remotes.Get("Notify").OnClientEvent:Connect(function(text, kind, duration, topic)
 		if type(text) == "string" then
-			NotificationController.Show(text, kind, duration)
+			NotificationController.Show(text, kind, duration, if type(topic) == "string" then topic else nil)
 		end
 	end)
 	for _, name in COVERS do
@@ -280,6 +312,16 @@ function NotificationController.Start(context)
 			end
 		end)
 	end
+	Modal.AnyOpenChanged:Connect(function(open)
+		windowOpen = open
+	end)
+	-- The round is over for the player (its results, or knocked out): what waited shows, a moment
+	-- later (the results card opens as the round ends and holds them on until it closes).
+	State.OnPlayingChanged(function()
+		if not State.PlayingRound() and #waiting > 0 then
+			task.delay(PLAYING_GAP, release)
+		end
+	end)
 end
 
 return NotificationController
