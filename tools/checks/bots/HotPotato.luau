@@ -39,6 +39,7 @@ return function(env)
 	end
 
 	local handed = false
+	env.leaveTest = if #env.players >= 4 then {} else nil
 	return function(elapsed)
 		local dt = 0.05
 		if not mode.center or not mode.potatoes then
@@ -55,6 +56,30 @@ return function(env)
 					potato.FuseEnd = math.max(potato.FuseEnd, now + 6)
 					mode:_give(potato, person, nil, "Drop")
 					break
+				end
+			end
+		end
+		-- Once, a stand-in holding a potato leaves (not the client's player): the potato must go on to
+		-- someone, not vanish. The note says where it went.
+		if env.leaveTest and elapsed > 20 then
+			if env.leaveTest.Id and env.leaveTest.Checked == nil then
+				env.leaveTest.Checked = true
+				local holder = "nobody"
+				for _, potato in mode.potatoes do
+					if potato.Id == env.leaveTest.Id then
+						holder = if potato.Holder then potato.Holder.Name else "in the air"
+					end
+				end
+				env.note(`holder left: potato {env.leaveTest.Id} now with {holder}, {#mode.potatoes} in play`)
+			elseif not env.leaveTest.Id then
+				for _, potato in mode.potatoes do
+					local holder = potato.Holder
+					if holder and holder ~= env.players[1] and not potato.Flight then
+						env.leaveTest.Id = potato.Id
+						env.note(`{holder.Name} leaves holding potato {potato.Id}`)
+						env.Leave(holder)
+						break
+					end
 				end
 			end
 		end
