@@ -640,7 +640,13 @@ local function refreshHighlights()
 		local color = TEAM_COLORS[team]
 		local character = other:Character()
 		local existing = highlights[other]
-		if color and character and GameState.Get("Phase") == "InRound" then
+		-- (A party mate's own outline, PartyWorldController's, keeps their team colour inside it.)
+		if
+			color
+			and character
+			and GameState.Get("Phase") == "InRound"
+			and not character:FindFirstChild("PP_PartyHighlight")
+		then
 			if not existing or existing.Adornee ~= character then
 				if existing then
 					existing:Destroy()

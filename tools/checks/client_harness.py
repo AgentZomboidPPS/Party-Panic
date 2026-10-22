@@ -499,7 +499,8 @@ local order = {
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
 	"RewardsController", "CelebrationController",
-	"CupController", "InviteController", "PartyController", "MedalController", "HallOfFameController", "EventController",
+	"CupController", "InviteController", "PartyController", "SquadController", "PartyWorldController", "MedalController",
+	"HallOfFameController", "EventController",
 	"EmoteController", "SpectateController", "OnboardingController", "SkeeBallController", "AssetReportController",
 	"BotWatchController",
 }
@@ -2015,15 +2016,23 @@ do
 end
 
 -- 4c. Parties (PartyController; owner: "stuff to work on right now is parties."), from the
--- server's attributes (PP_Party, PP_PartySeat, as Services/PartyService sets them): the 👥 PARTY chip
--- in the lobby's row ("Party chip"); its window with the player in Bubbles's party (Bubbles leads),
--- another party of two, a full one and an invite already sent ("Party window"); then an invite card
--- from Captain Waffles in the lobby ("Party invite") and during the vote ("Party invite voting"). The
--- card goes under the rules card and comes back with the time the server says it has left; JOIN asks
--- the server and the card goes. partyChecks: what the chip, the window and the card showed each time.
+-- server's attributes (PP_Party, PP_PartySeat, as Services/PartyService sets them) and its GameState
+-- "Parties" (each party's name, colour, emblem and streak). The glow-up (owner: "Also make the party
+-- system insane. I want it to look super epic."): the player is in Bubbles's TURBO PANCAKES (🔥 4),
+-- with another party of two and a full one (the longest name) here, and levels in every prestige
+-- colour. Snapshots: the lobby with the 👥 PARTY chip and the squad bar ("Party chip"); xX_Speedy_Xx
+-- joining, the PARTY UP! banner ("Party up"); the window as a member ("Party window") and as the
+-- leader with the PARTY LOOK ("Party window leader"); an invite card from Captain Waffles of
+-- GALACTIC LLAMAS in the lobby ("Party invite") and during the vote ("Party invite voting"); then a
+-- team round's rules card with the SQUAD card ("Party squad"); last, the window for someone on their
+-- own ("Party window alone"). The card goes under the rules card
+-- and comes back with the time the server says it has left; JOIN asks the server and the card goes.
+-- partyChecks: what the chip, the window, the squad bar, the banner, the card and the SQUAD card
+-- showed each time, and what the leader's PARTY LOOK asked the server.
 local partyChecks = {}
 do
 	local PartyController = __require("Client/Controllers/PartyController")
+	local SquadController = __require("Client/Controllers/SquadController")
 	local function setPhase(name, seconds)
 		GameState.Set("Phase", name)
 		GameState.Set("PhaseEndsAt", if seconds > 0 then workspace:GetServerTimeNow() + seconds else 0)
@@ -2038,12 +2047,32 @@ do
 	for _, other in __players do
 		byName[other.Name] = other
 	end
+	local speedy, waffles = byName["xX_Speedy_Xx"], byName["Captain Waffles"]
+	if not (byName.Bubbles and speedy and waffles) then
+		__note("party checks need the stand-in players (run without --bots)")
+	end
+	-- Levels in every prestige colour (DataService's PP_Level).
+	local levels = { Bubbles = 42, ["xX_Speedy_Xx"] = 55, Pancake = 12, NoodleArms = 3, ["Captain Waffles"] = 27,
+		Zoomer = 31, Mochi = 8, LavaLarry = 19, SirHopsALot = 64 }
+	for name, level in levels do
+		if byName[name] then
+			byName[name]:SetAttribute("PP_Level", level)
+		end
+	end
+	__player:SetAttribute("PP_Level", 7)
+	__player:SetAttribute("PP_Celebrating", false)
 	step = "party chip"
 	setPhase("Intermission", 20)
+	GameState.SetJSON("Parties", {
+		["7"] = { Name = "Turbo Pancakes", Color = 1, Emblem = 1, Streak = 4 },
+		["8"] = { Name = "Galactic Llamas", Color = 2, Emblem = 3, Streak = 0 },
+		["9"] = { Name = "Electric Raccoons", Color = 3, Emblem = 6, Streak = 12 },
+	})
 	party(byName.Bubbles, 7, 1)
 	party(__player, 7, 2)
 	party(byName.Pancake, 8, 1)
 	party(byName.NoodleArms, 8, 2)
+	party(waffles, 8, 3)
 	for seat, name in { "Zoomer", "Mochi", "LavaLarry", "SirHopsALot" } do
 		party(byName[name], 9, seat)
 	end
@@ -2055,27 +2084,72 @@ do
 	task.wait(0.5)
 	snap("Party chip")
 	partyChecks.chip = PartyController.Status()
+	partyChecks.squad = SquadController.Status()
+
+	-- xX_Speedy_Xx joins: the server marks them, then says PARTY UP! to everyone in the party.
+	step = "party up"
+	party(speedy, 7, 3)
+	task.wait(0.1)
+	__fire("Party", "PartyUp", speedy and speedy.UserId or 102, "xX_Speedy_Xx")
+	task.wait(0.9)
+	snap("Party up")
+	partyChecks.partyUp = SquadController.Status()
+	task.wait(3.6)
+	partyChecks.afterPartyUp = SquadController.Status()
+
 	step = "party window"
 	PartyController.Open()
-	task.wait(1)
+	task.wait(1.2)
 	snap("Party window")
 	partyChecks.window = PartyController.Status()
+	-- Bubbles hands over: the player leads, with the PARTY LOOK to change.
+	party(byName.Bubbles, 7, 2)
+	party(__player, 7, 1)
+	task.wait(1)
+	snap("Party window leader")
+	partyChecks.windowLeader = PartyController.Status()
 	pcall(__require("Client/UI/Modal").CloseAll)
 	task.wait(0.3)
+
 	step = "party invite"
-	__fire("Party", "Invited", 105, "Captain Waffles", 20)
-	task.wait(1)
+	__fire("Party", "Invited", waffles and waffles.UserId or 105, "Captain Waffles", 20)
+	task.wait(1.4)
 	snap("Party invite")
 	partyChecks.card = PartyController.Status()
 	setPhase("Voting", 12)
 	task.wait(1)
 	snap("Party invite voting")
 	partyChecks.cardVoting = PartyController.Status()
+
+	-- A team round: the player, Bubbles and xX_Speedy_Xx on Red; the rules card and the SQUAD card.
+	step = "party squad"
+	local gameBefore = GameState.Get("GameId")
+	GameState.Set("GameId", "PumpAndPop")
+	GameState.Set("RoundId", (GameState.Get("RoundId") or 0) + 1)
+	for _, who in __players do
+		who:SetAttribute("PP_InRound", true)
+		who:SetAttribute("PP_Alive", true)
+		who:SetAttribute("PP_Team", "")
+	end
 	setPhase("Preparing", 13)
-	task.wait(0.6)
+	task.wait(0.4)
+	for index, who in __players do
+		local team = if who == __player or who == byName.Bubbles or who == speedy then "Red"
+			else (if index % 2 == 0 then "Blue" else "Red")
+		who:SetAttribute("PP_Team", team)
+	end
+	task.wait(1.2)
+	snap("Party squad")
+	partyChecks.squadCard = SquadController.Status()
 	partyChecks.underRulesCard = PartyController.Status()
+	for _, who in __players do
+		who:SetAttribute("PP_InRound", false)
+		who:SetAttribute("PP_Alive", false)
+		who:SetAttribute("PP_Team", "")
+	end
+	GameState.Set("GameId", gameBefore or "")
 	setPhase("Cleanup", 0)
-	__fire("Party", "Invited", 105, "Captain Waffles", 12) -- the server: back in the lobby, 12 s left
+	__fire("Party", "Invited", waffles and waffles.UserId or 105, "Captain Waffles", 12) -- back in the lobby, 12 s left
 	task.wait(0.6)
 	partyChecks.backInLobby = PartyController.Status()
 	local sentBefore = #__sent
@@ -2086,8 +2160,18 @@ do
 	for _, other in __players do
 		party(other, nil, nil)
 	end
+	GameState.Set("Parties", "")
 	setPhase("Waiting", 0)
 	task.wait(0.5)
+	partyChecks.squadAfter = SquadController.Status()
+	-- On your own: the window before any party ("Party window alone").
+	step = "party window alone"
+	PartyController.Open()
+	task.wait(1.2)
+	snap("Party window alone")
+	partyChecks.windowAlone = PartyController.Status()
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
 end
 
 -- 5. Sitting out (UI/SitOutSwitch: by the banner, and in Settings). A tap flips the switches at

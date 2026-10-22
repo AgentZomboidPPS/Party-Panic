@@ -23,7 +23,13 @@ redone here following Roblox's rules (UDim2, AutomaticSize, UIScale with the UIK
 recomputed for the screen, UIListLayout, UIGridLayout, UIPadding, UIAspectRatioConstraint,
 ScrollingFrame canvases, ZIndex order, text with the engine's word widths), which can be off by a
 few points: trust the engine sizes. Text is drawn with stand-in fonts squeezed to the engine's
-widths; images are placeholders.
+widths; images are placeholders (a Roblox headshot, rbxthumb://, is a drawn stand-in face).
+Gradients are drawn as Roblox draws them: every colour keypoint, see-through keypoints, turned by
+their Rotation and moved by their Offset, on fills, on strokes (a rim of colours, a shine, a
+countdown ring's hard edge) and on the words of a label without a background (gold words, a name
+tag's prestige colours). A frame's stroke is drawn outside its edge, as
+Roblox does (a glow ring round a button shows). An object's own Rotation turns it about its middle
+(a tilted crown, a sunburst's rays); the turn of an object it sits in isn't applied to it.
 """
 
 from __future__ import annotations
@@ -35,7 +41,8 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+import numpy as np
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
 FONTS = ROOT / "tools" / "art" / "fonts"
@@ -296,6 +303,66 @@ def area_of(box) -> float:
     return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
 
 
+def gradient_layer(size: tuple, box: list, grad: dict, base: list, transparency: float) -> Image.Image:
+    """A UIGradient over `box` in a layer of `size`: its colours (every keypoint) times the object's
+    `base` colour, its see-through keypoints over the object's own `transparency`, turned by its
+    Rotation (clockwise, 0 = left to right) about the box's middle and moved by its Offset, in the
+    box's own 0-1 space as Roblox does."""
+    width, height = size
+    x0, y0, x1, y1 = box
+    bw, bh = max(1e-6, x1 - x0), max(1e-6, y1 - y0)
+    xs = (np.arange(width) + 0.5 - x0) / bw
+    ys = (np.arange(height) + 0.5 - y0) / bh
+    u, v = np.meshgrid(xs, ys)
+    angle = math.radians(grad.get("rot", 0))
+    ox, oy = grad.get("off", [0, 0])
+    t = 0.5 + (u - 0.5 - ox) * math.cos(angle) + (v - 0.5 - oy) * math.sin(angle)
+    t = np.clip(t, 0, 1)
+    stops = grad.get("cs") or [[0, *grad.get("c0", [255, 255, 255])], [1, *grad.get("c1", [255, 255, 255])]]
+    times = [stop[0] for stop in stops]
+    rgb = np.stack([np.interp(t, times, [stop[1 + j] for stop in stops]) * base[j] / 255 for j in range(3)], axis=-1)
+    fades = grad.get("ts") or [[0, 0], [1, 0]]
+    seen = (1 - np.interp(t, [f[0] for f in fades], [f[1] for f in fades])) * (1 - transparency)
+    pixels = np.dstack([rgb, seen * 255]).clip(0, 255).astype(np.uint8)
+    return Image.fromarray(pixels, "RGBA")
+
+
+FACE_SKINS = [(255, 214, 170), (240, 190, 140), (200, 140, 95), (140, 95, 60), (255, 224, 140)]
+FACE_HAIR = [(70, 45, 30), (30, 25, 25), (230, 180, 70), (190, 80, 40), (90, 60, 160), (40, 120, 200)]
+
+
+def draw_face(layer: Image.Image, box: list, radius: float, image: str, transparency: float):
+    """A stand-in for a Roblox headshot (rbxthumb://...&id=N): a cartoon head on a soft backdrop,
+    its colours picked by the user id, inside the image's own corners."""
+    x0, y0, x1, y1 = box
+    w, h = x1 - x0, y1 - y0
+    if w < 3 or h < 3:
+        return
+    found = re.search(r"id=(-?\d+)", image)
+    seed = abs(int(found.group(1))) if found else 7
+    skin = FACE_SKINS[seed % len(FACE_SKINS)]
+    hair = FACE_HAIR[(seed // 3) % len(FACE_HAIR)]
+    alpha = int(255 * (1 - transparency))
+    face = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    fd = ImageDraw.Draw(face)
+    fd.rectangle(box, fill=(150, 200, 235, alpha))
+    fd.rectangle([x0, y0 + h * 0.62, x1, y1], fill=(110, 160, 215, alpha))
+    cx, cy, r = x0 + w / 2, y0 + h * 0.56, min(w, h) * 0.36
+    fd.ellipse([cx - r * 1.25, y1 - h * 0.12, cx + r * 1.25, y1 + h * 0.5], fill=(*hair, alpha))  # shoulders
+    fd.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(*skin, alpha))
+    fd.chord([cx - r * 1.08, cy - r * 1.18, cx + r * 1.08, cy + r * 0.55], 180, 360, fill=(*hair, alpha))
+    eye = max(1.0, r * 0.13)
+    for side in (-1, 1):
+        ex, ey = cx + side * r * 0.36, cy + r * 0.12
+        fd.ellipse([ex - eye, ey - eye * 1.5, ex + eye, ey + eye * 1.5], fill=(30, 25, 30, alpha))
+    fd.arc([cx - r * 0.45, cy + r * 0.05, cx + r * 0.45, cy + r * 0.62], 20, 160, fill=(30, 25, 30, alpha),
+           width=max(1, int(r * 0.09)))
+    mask = Image.new("L", layer.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle(box, radius=radius, fill=255)
+    face.putalpha(ImageChops.multiply(face.getchannel("A"), mask))
+    layer.alpha_composite(face)
+
+
 def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None):
     dev = SIZES[size_name]
     vw, vh, touch = dev["w"], dev["h"], dev["touch"]
@@ -311,6 +378,12 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
         for c in children[i]:
             if node(c)["c"] == cls:
                 return node(c)
+        return None
+
+    def modifier_index(i, cls):
+        for c in children[i]:
+            if node(c)["c"] == cls:
+                return c
         return None
 
     def gui_kids(i):
@@ -655,7 +728,14 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
         w, h = x1 - x0, y1 - y0
         if w <= 0 or h <= 0:
             continue
-        margin = 8
+        stroke = modifier(i, "UIStroke")
+        is_text = "text" in n
+        border = stroke is not None and stroke.get("enabled", True) and (stroke.get("mode") == "Border" or not is_text)
+        thick = max(1, int(round(stroke["thick"] * k))) if border else 0
+        turn = n.get("rot", 0) or 0
+        margin = 8 + thick  # Roblox draws a frame's stroke outside its edge
+        if abs(turn) > 0.01:
+            margin = max(margin, int(math.ceil(max(w, h) / 2)) + 8 + thick)  # room to turn it
         if w * h > 2 * vw * vh and not n.get("text") and not modifier(i, "UICorner"):
             # A plain frame much bigger than the screen (a modal's dim backdrop): paint what's on it.
             x0, y0, x1, y1 = max(x0, -margin), max(y0, -margin), min(x1, vw + margin), min(y1, vh + margin)
@@ -678,24 +758,35 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
             gradient = modifier(i, "UIGradient")
             base = n.get("bg", [255, 255, 255])
             if gradient:
-                fill_layer = Image.new("RGBA", layer.size, (0, 0, 0, 0))
-                fd = ImageDraw.Draw(fill_layer)
-                steps = max(2, int(h))
-                for s in range(steps):
-                    t = s / (steps - 1)
-                    c = [base[j] * (gradient["c0"][j] + (gradient["c1"][j] - gradient["c0"][j]) * t) / 255 for j in range(3)]
-                    fd.line([(box[0], box[1] + s), (box[2], box[1] + s)], fill=rgba(c, bgt))
+                fill_layer = gradient_layer(layer.size, box, gradient, base, bgt)
                 mask = Image.new("L", layer.size, 0)
                 ImageDraw.Draw(mask).rounded_rectangle(box, radius=radius, fill=255)
-                layer.paste(fill_layer, (0, 0), mask)
+                fill_layer.putalpha(ImageChops.multiply(fill_layer.getchannel("A"), mask))
+                layer.alpha_composite(fill_layer)
             else:
                 d.rounded_rectangle(box, radius=radius, fill=rgba(base, bgt))
-        stroke = modifier(i, "UIStroke")
-        is_text = "text" in n
-        if stroke and stroke.get("enabled", True) and (stroke.get("mode") == "Border" or not is_text):
-            d.rounded_rectangle(box, radius=radius, outline=rgba(stroke["color"], stroke["t"]), width=max(1, int(round(stroke["thick"] * k))))
         if n.get("img"):
-            d.rounded_rectangle(box, radius=radius, outline=rgba(n.get("ic", [255, 255, 255]), 0.4), width=1)
+            if str(n["img"]).startswith("rbxthumb://"):
+                draw_face(layer, box, radius, n["img"], n.get("it", 0))
+            else:
+                d.rounded_rectangle(box, radius=radius, outline=rgba(n.get("ic", [255, 255, 255]), 0.4), width=1)
+        if border:
+            # Outside the edge: from the object's own box out by the stroke's thickness.
+            outer = [box[0] - thick, box[1] - thick, box[2] + thick, box[3] + thick]
+            outer_radius = radius + thick if radius > 0 else 0
+            stroke_at = modifier_index(i, "UIStroke")
+            stroke_gradient = modifier(stroke_at, "UIGradient") if stroke_at else None
+            if stroke_gradient:
+                ring = Image.new("L", layer.size, 0)
+                ring_draw = ImageDraw.Draw(ring)
+                ring_draw.rounded_rectangle(outer, radius=outer_radius, fill=255)
+                ring_draw.rounded_rectangle(box, radius=radius, fill=0)
+                rim = gradient_layer(layer.size, outer, stroke_gradient, stroke["color"], stroke["t"])
+                rim.putalpha(ImageChops.multiply(rim.getchannel("A"), ring))
+                layer.alpha_composite(rim)
+            else:
+                d.rounded_rectangle(outer, radius=outer_radius, outline=rgba(stroke["color"], stroke["t"]), width=thick)
+        center = ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
         if is_text and layout and n.get("text") and n.get("tt", 0) < 1:
             size, lines, line_h, _ = layout
             name = n.get("font", "")
@@ -710,10 +801,24 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
             elif n.get("st", 1) < 1:
                 text_stroke = ((0, 0, 0, int(255 * (1 - n["st"]))), 1)
             fill = rgba(n.get("tc", [255, 255, 255]), n.get("tt", 0))
+            # A gradient on a label without a background colours its words (its text stroke keeps its
+            # own colour).
+            words_gradient = modifier(i, "UIGradient") if n.get("bgt", 1) >= 1 else None
+            target = Image.new("RGBA", layer.size, (0, 0, 0, 0)) if words_gradient else layer
+            fills = Image.new("RGBA", layer.size, (0, 0, 0, 0)) if words_gradient else None
             for line, measured in lines:
                 tx = {"Left": box[0], "Center": box[0] + (w - measured) / 2, "Right": box[2] - measured}.get(n.get("xa", "Center"), box[0])
-                draw_line(layer, tx, ty + line_h / 2, line, name, size, measured, fill, text_stroke)
+                draw_line(target, tx, ty + line_h / 2, line, name, size, measured, fill, text_stroke)
+                if fills is not None:
+                    draw_line(fills, tx, ty + line_h / 2, line, name, size, measured, (255, 255, 255, 255), None)
                 ty += line_h
+            if words_gradient and fills is not None:
+                tint = gradient_layer(layer.size, box, words_gradient, n.get("tc", [255, 255, 255]), n.get("tt", 0))
+                target.paste(tint, (0, 0), fills.getchannel("A"))
+                layer.alpha_composite(target)
+        if abs(turn) > 0.01:
+            # Its own Rotation: clockwise about its middle.
+            layer = layer.rotate(-turn, resample=Image.BICUBIC, center=center)
         visible_box = intersect((0, 0, vw, vh), clip)
         crop = (int(max(0, math.floor(visible_box[0]) - ox)), int(max(0, math.floor(visible_box[1]) - oy)),
                 int(min(lw_, math.ceil(visible_box[2]) - ox)), int(min(lh_, math.ceil(visible_box[3]) - oy)))

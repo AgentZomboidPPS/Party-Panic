@@ -472,6 +472,31 @@ function __dumpGui(playerGui, label)
 			e.c0 = color(keys[1].Value)
 			e.c1 = color(keys[#keys].Value)
 			e.rot = inst.Rotation
+			-- More than two colours (a rainbow), see-through parts (a shine, a countdown ring's hard
+			-- edge) and a moved gradient (a sweeping shine), when there are any.
+			if #keys > 2 then
+				local list = {}
+				for _, key in keys do
+					local rgb = color(key.Value)
+					table.insert(list, { key.Time, rgb[1], rgb[2], rgb[3] })
+				end
+				e.cs = list
+			end
+			local fades = inst.Transparency.Keypoints
+			local seeThrough = false
+			for _, key in fades do
+				seeThrough = seeThrough or key.Value > 0.001
+			end
+			if seeThrough then
+				local list = {}
+				for _, key in fades do
+					table.insert(list, { key.Time, key.Value })
+				end
+				e.ts = list
+			end
+			if inst.Offset.Magnitude > 0.0001 then
+				e.off = { inst.Offset.X, inst.Offset.Y }
+			end
 		elseif inst:IsA("UIListLayout") then
 			e.dir = inst.FillDirection.Name
 			e.pad = udim(inst.Padding)
