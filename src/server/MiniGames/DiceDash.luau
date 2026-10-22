@@ -164,7 +164,12 @@ function DiceDash:_buildArena()
 			Name = "Hill",
 			Size = size,
 			CFrame = CFrame.new(
-				origin + Vector3.new(math.cos(angle) * distance, GROUND - size.Y * 0.2, math.sin(angle) * distance)
+				origin
+					+ Vector3.new(
+						math.cos(angle) * distance,
+						GROUND - size.Y * 0.2 - index * 0.13,
+						math.sin(angle) * distance
+					)
 			) * CFrame.Angles(0, -angle + math.pi / 2, 0),
 			Color = Color3.fromRGB(96, 176, 86):Lerp(Color3.fromRGB(70, 140, 90), rng:NextNumber(0, 1)),
 			Material = Enum.Material.Grass,
