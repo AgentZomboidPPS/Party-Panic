@@ -139,8 +139,7 @@ Branch **`claude/quirky-hopper-5yk8zk`**. Session B merges it before publishing 
        PUMPKIN HAT at 55 is the headline (a new Hat slot: `World/Hats` builds it as an Accessory, worn in the
        lobby, off in rounds and under the cup crown; mesh `tools/meshgen/props/Hats.py`, model 82691154142514);
      - decorations and a spookier lobby look, drawn per device;
-     - double coins only on the party's weekends, 24-25 Oct and 31 Oct-1 Nov UTC (`DoubleCoinsWeekends` on the
-       event in `Events.luau`); none after it (owner: "NO" to double coins after Halloween).
+     - double coins on the Saturdays and Sundays during the event (UTC; owner: not after Halloween).
 - **Shared screen rules added for them:**
   - Toasts wait while the results card or the cup podium is up (`PP_ResultsShowing`, `PP_CupPodium`;
     NotificationController).
@@ -164,13 +163,15 @@ Branch **`claude/quirky-hopper-5yk8zk`**. Session B merges it before publishing 
   - the lobby look;
   - touching a pumpkin;
   - the crown on a moving character.
-- **The owner decides:**
-  - which badges to make (Creator Hub; a few free per day, then Robux);
-  - the event's end date;
-  - candy amounts;
-  - cup values;
-  - whether 2× weekends stay all year;
-  - a pumpkin hat later (needs a new Hat slot).
+- **The owner decided** (05:40 UTC, "No yes yes no do pumpkin hat now"):
+  - no Roblox badges (the `BADGE_IDS` stay 0);
+  - the event's end date and candy amounts stay;
+  - the cup values stay;
+  - no double coins after Halloween: only on the weekends during the HALLOWEEN PARTY (being changed with the hat);
+  - the pumpkin hat now: a new Hat cosmetic slot, the jack-o'-lantern hat as a step on the Halloween track
+    (in progress).
+- **Songs for games 27-29** (Hot Potato, Dice Dash, Minecart Mayhem): being written. They'll go up as a 6th pack
+  (one more audio upload, which needs the owner's OK; 5 left this month). Until then those games play Panic Mode.
 
 ## 0. Start here (the first 10 minutes)
 
