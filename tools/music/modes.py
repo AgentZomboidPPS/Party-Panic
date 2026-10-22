@@ -53,7 +53,7 @@ LUAU = ROOT / "src" / "shared" / "ModeMusic.luau"
 RECORD = ROOT / "assets" / "uploaded.json"
 DEFINITIONS = ROOT / "src" / "shared" / "GameDefinitions.luau"
 
-PACK_SECONDS = 400.0  # each pack stays under Roblox's 7 minute cap
+PACK_SECONDS = 415.0  # each pack stays under Roblox's 7 minute cap
 GAP = 0.5  # silence between songs in a pack
 MIN_INTRO = 13.0  # the rules card and the 3-2-1
 TARGET_LUFS, LUFS_SLACK, MAX_PEAK = -11.0, 1.0, -1.0
@@ -159,11 +159,15 @@ def uploaded_packs() -> set[str]:
     return {key.split(":", 1)[1] for key in record if key.startswith("modepack:")}
 
 
-def pack(replace: set[str]) -> None:
-    """Fills packs with the rendered songs, builds every pack that isn't uploaded, writes the Luau table."""
+def pack(replace: set[str], fresh: bool = False) -> None:
+    """Fills packs with the rendered songs, builds every pack that isn't uploaded, writes the Luau table.
+    With `fresh`, every pack that isn't uploaded is filled again from scratch (longest songs first), so
+    the songs take as few packs, and uploads, as possible."""
     songs = load_songs()
     manifest = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
     frozen = uploaded_packs() - replace
+    if fresh:
+        manifest = {name: p for name, p in manifest.items() if name in frozen}
     placed = {entry["id"]: name for name, p in manifest.items() for entry in p["songs"]}
 
     def wav(song_id: str) -> np.ndarray:
@@ -178,7 +182,8 @@ def pack(replace: set[str]) -> None:
         if name not in frozen:
             manifest[name]["songs"] = [e for e in manifest[name]["songs"] if e["id"] in songs]
     renders = {song_id: wav(song_id) for song_id in songs if placed.get(song_id) not in frozen}
-    order = [i for i in sorted(songs) if i not in placed] + [i for i in sorted(songs) if i in placed]
+    # First fit, longest songs first: the fewest packs.
+    order = sorted((i for i in songs if i not in placed), key=lambda i: (-renders[i].shape[1], i))
     for song_id in order:
         if placed.get(song_id) in frozen:
             continue
@@ -309,6 +314,7 @@ def main() -> int:
     sub.add_parser("check")
     p = sub.add_parser("pack")
     p.add_argument("--replace", default="", help="comma-separated uploaded packs to rebuild anyway (needs a new upload)")
+    p.add_argument("--fresh", action="store_true", help="fill every pack that isn't uploaded again, longest songs first")
     v = sub.add_parser("preview")
     v.add_argument("folder", type=Path)
     v.add_argument("ids", nargs="*")
@@ -323,7 +329,7 @@ def main() -> int:
     elif args.command == "check":
         return 1 if check() else 0
     elif args.command == "pack":
-        pack({name for name in args.replace.split(",") if name})
+        pack({name for name in args.replace.split(",") if name}, args.fresh)
     elif args.command == "preview":
         preview(args.folder, args.ids)
     return 0
