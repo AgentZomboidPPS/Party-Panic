@@ -4,8 +4,15 @@
 --   RockinRacewayHorse     the hobby horse every rider gallops on; Body takes the rider's colour.
 --                          Its head is at the front (-Z); the rider's root stands over its middle.
 --   RockinRacewayCarrot    an orange dash panel on the track (3.8 x 4) with a big carrot and arrows.
---   RockinRacewayHurdle    a blue slow panel with a low striped hurdle (bar top 0.8 studs up).
---   RockinRacewayTurn      half of one of the oval's turns (dirt, lane lines, curbs); dirt top at 0.4.
+--   RockinRacewayHurdleRow a row of 3D hurdles across all twelve lanes (owner: "For rockin raceway
+--                          can we make the hurdles 3D?"): thirteen red and white striped standards
+--                          on the lane lines with gold balls and collars, and a blue take-off pad with
+--                          arrows in every lane, 4.6 to 8.4 studs before the bars. Its bar line is
+--                          its front (-Z) edge's middle; its pivot sits 4 studs before that.
+--   RockinRacewayHurdleBar one lane's blue and white crossbar (0.5 thick, 3.94 long along X), rested
+--                          on the collars with its top at the judged height (Track.CLEAR); clients
+--                          knock it down when its rider hits it.
+--   RockinRacewayTurn     half of one of the oval's turns (dirt, lane lines, curbs); dirt top at 0.4.
 --   RockinRacewayArch      the finish arch (pillars 63 studs apart along X); the game hangs the banner.
 --   RockinRacewayFence     10 studs of white fence along X.
 --   RockinRacewayBunting   two striped poles 20 studs apart with pennants strung between.
@@ -74,23 +81,40 @@ return function(h)
 				h.block(m, "Trim", Vector3.new(1.4, 0.08, 0.28), Vector3.new(0, 0.21, -1.5))
 			end,
 		},
-		RockinRacewayHurdle = {
-			Height = 0.8,
-			AssetId = 121724237313910,
+		RockinRacewayHurdleRow = {
+			Height = 2.96,
+			AssetId = 130563388975616,
 			Collide = false, -- riders hop it; the game judges the bump, nothing physical
-			Shadow = false,
 			Palette = {
-				Pad = rgb(60, 130, 240),
-				Trim = rgb(235, 245, 255),
-				Posts = rgb(250, 250, 250),
-				BarA = rgb(40, 100, 220),
-				BarB = rgb(250, 250, 250),
+				Takeoff = rgb(60, 130, 240),
+				Trim = rgb(250, 250, 250),
+				Poles = rgb(230, 60, 70),
+				Gold = rgb(255, 200, 60),
 			},
+			Materials = { Takeoff = Enum.Material.SmoothPlastic, Gold = metal },
 			Fallback = function(m)
-				h.block(m, "Pad", Vector3.new(3.8, 0.16, 4), Vector3.new(0, 0.08, 0))
-				h.block(m, "Posts", Vector3.new(0.18, 0.64, 0.18), Vector3.new(-1.55, 0.48, 0))
-				h.block(m, "Posts", Vector3.new(0.18, 0.64, 0.18), Vector3.new(1.55, 0.48, 0))
-				h.block(m, "BarA", Vector3.new(3.0, 0.2, 0.2), Vector3.new(0, 0.7, 0))
+				-- (the same footprint as the mesh, z = -0.4 to 8.4, so the pivot sits 4 studs before the bars)
+				for k = 0, 12 do
+					local x = (k - 6) * 4.5
+					h.pillar(m, "Trim", 0.8, 0.3, Vector3.new(x, 0.15, 0))
+					h.pillar(m, "Poles", 0.48, 2.12, Vector3.new(x, 1.36, 0))
+					h.ball(m, "Gold", 0.64, Vector3.new(x, 2.64, 0))
+				end
+				for lane = 1, 12 do
+					h.block(m, "Takeoff", Vector3.new(3.8, 0.16, 3.8), Vector3.new((lane - 6.5) * 4.5, 0.08, 6.5))
+				end
+			end,
+		},
+		RockinRacewayHurdleBar = {
+			Height = 0.5,
+			AssetId = 136795441744553,
+			Collide = false, -- riders hop it; the game judges the bump, nothing physical
+			Palette = { BarA = rgb(60, 130, 240), BarB = rgb(250, 250, 250) },
+			Fallback = function(m)
+				for k = 0, 6 do
+					local x = -1.97 + (k + 0.5) * 3.94 / 7
+					h.roller(m, if k % 2 == 0 then "BarA" else "BarB", 0.5, 3.94 / 7, Vector3.new(x, 0.25, 0))
+				end
 			end,
 		},
 		RockinRacewayTurn = {

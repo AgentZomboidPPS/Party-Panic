@@ -79,9 +79,9 @@ CAMERAS: dict[str, dict] = {
     # Low in front of the launch line: two wind-up toys just launched, flying toward the camera, the
     # players who wound them behind their pads.
     "MechaMarathon": {"yaw": 200, "pitch": 13, "distance": 26, "fov": 46, "shift": [-3, 4, -15], "raise": 9, "sway": 8},
-    # From the infield at a hurdle row: a rider hopping it on his hobby horse, the pack behind on the
-    # carrot panels, the grandstand beyond.
-    "RockinRaceway": {"yaw": 150, "pitch": 16, "distance": 26, "shift": [25, 0, -22], "raise": 6},
+    # From just past a row of 3D hurdles, looking back down the home straight: the striped standards
+    # and crossbars in front, the pack galloping at them on their hobby horses, the grandstand beyond.
+    "RockinRaceway": {"yaw": 242, "pitch": 15, "distance": 24, "fov": 50, "shift": [-35, -3, 2], "raise": 9},
     # The turning field from a player's corner: lanes, veggies and bombs, the silo in the middle.
     "RakeItIn": {"look_at": "SiloBody", "yaw": 30, "pitch": 30, "distance": 50, "shift": [0, -4, 0], "raise": 2},
     # Across the giant pizza on its pan: teams on their slices, half of them eaten down to the pan, the
@@ -157,7 +157,7 @@ DUMP_AT: dict[str, float] = {
     "ParasolPlummet": 7,  # fallers still spread across the sky, a dozen lobs in the air
     "PrimeCut": 9,  # the first steak, a second before the chop: the knives lined up
     "PumpAndPop": 16,  # the balloons are big by now
-    "RockinRaceway": 4,  # the pack galloping down the home straight into the first panel rows
+    "RockinRaceway": 2.2,  # the pack galloping off the line at the first rows (layouts are random: check)
     "SkateEscape": 10,
     "Slaparazzi": 11.7,  # just before the second photo: everyone crowding into the frame's rings
     "SnowballSummit": 25,  # snowballs rolling, someone teetering at the rim, most still on top
