@@ -1,0 +1,23 @@
+newmtl Tin
+Kd 0.784 0.196 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Lid
+Kd 0.784 0.196 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Hinge
+Kd 0.784 0.784 0.824
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Felt
+Kd 0.275 0.157 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

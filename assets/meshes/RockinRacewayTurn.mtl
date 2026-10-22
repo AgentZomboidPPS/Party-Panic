@@ -1,0 +1,23 @@
+newmtl Dirt
+Kd 0.839 0.627 0.408
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Lines
+Kd 0.980 0.973 0.941
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl CurbRed
+Kd 0.910 0.251 0.204
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl CurbWhite
+Kd 0.980 0.965 0.925
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
