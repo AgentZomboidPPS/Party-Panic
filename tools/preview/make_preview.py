@@ -131,6 +131,9 @@ CAMERAS: dict[str, dict] = {
     # Over the paper pad: stampers on their rubber stamps hopping across a patchwork of everyone's ink,
     # bare ruled paper still to win beyond.
     "StampOut": {"look_at": "Paper", "yaw": 20, "pitch": 50, "distance": 38, "shift": [5, 2, 6], "raise": 6},
+    # Into the first scrum on the sandlot: foam bats swinging, a wind-up's reach on the sand, orbs knocked
+    # loose flying out, the scoreboard over the fence behind.
+    "Struggle": {"look_at": "Sand", "yaw": 10, "pitch": 26, "distance": 20, "shift": [20.5, 2, 7.5], "raise": 9},
     # Chasing two riders down their lanes: their crayons drawing purple and teal lines behind them, the
     # dotted guides curving away ahead.
     "TraceRace": {"look_at": "StartLine", "yaw": 0, "pitch": 45, "distance": 46, "shift": [29, 3, -110], "raise": 6},
@@ -160,6 +163,7 @@ DUMP_AT: dict[str, float] = {
     "SnowballSummit": 25,  # snowballs rolling, someone teetering at the rim, most still on top
     "Spleef": 12,  # holes dug in every floor, players on all three
     "StampOut": 34,  # BIG STAMPS: the pad patched with everyone's ink, stampers mid-hop
+    "Struggle": 4.5,  # the first hits: orbs knocked loose and flying
     "Tanks": 5.5,  # a second after the shields drop: the first tanks blowing up, the rest still rolling
     "TraceRace": 8,  # past the straight start, into the first curves, lines trailing behind
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole

@@ -183,6 +183,13 @@ local previews: { [string]: Preview } = {
 		FrameSize = Vector2.new(168, 240),
 		Fps = 8,
 	},
+	Struggle = {
+		Image = "rbxassetid://104109564808610",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
 	Tanks = {
 		Image = "rbxassetid://117323000590750",
 		Frames = 24,
