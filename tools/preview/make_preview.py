@@ -101,6 +101,10 @@ CAMERAS: dict[str, dict] = {
     "ArrowAmbush": {"yaw": 15, "pitch": 22, "distance": 40, "shift": [0, -3, 2], "raise": 12},
     # Behind the pack, down the bridge: crates ahead, the viaduct towers and the canyon either side.
     "SkateEscape": {"yaw": 12, "pitch": 15, "distance": 30, "shift": [0, 2, 0], "raise": 5, "sway": 8},
+    # From over the backdrop: everyone crowding into the photo frame's gold ring, the paparazzi on
+    # their tripods down the red carpet and the fans' stand beyond.
+    "Slaparazzi": {"look_at": "Gold", "yaw": 180, "pitch": 34, "distance": 36, "fov": 55, "shift": [0, 3, 4],
+                   "raise": 11},
     # Low through the gaps between the floors: rivals around a fresh hole in the packed snow, one
     # dropping through, two more on the blue ice below (no dolly, so they stay in sight under it).
     "Spleef": {"look_at": "Water", "yaw": 210, "pitch": 8, "distance": 49, "fov": 44, "shift": [2, 27.5, -1],
@@ -126,6 +130,7 @@ DUMP_AT: dict[str, float] = {
     "PrimeCut": 9,  # the first steak, a second before the chop: the knives lined up
     "PumpAndPop": 16,  # the balloons are big by now
     "SkateEscape": 10,
+    "Slaparazzi": 11.7,  # just before the second photo: everyone crowding into the frame's rings
     "Spleef": 12,  # holes dug in every floor, players on all three
     "Tanks": 5.5,  # a second after the shields drop: the first tanks blowing up, the rest still rolling
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole
