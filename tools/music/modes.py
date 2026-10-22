@@ -423,14 +423,15 @@ def hex_meltdown():
 def honey_trap():
     """Honeycomb Hush (104 bpm shuffle, F major): the storybook meadow under the honey oak. A tiptoeing
     bassoon over pizzicato, a clarinet that takes the tune, a glockenspiel melody as sweet as honey, and
-    a buzzing bee chase in D minor. Light enough to think over for a 150-second game of turns."""
-    tr = Track(bpm=104, bars=44, spb=12)
+    a buzzing bee chase in D minor, then the tiptoe climbs back home. Light enough to think over for a 150-second game of turns."""
+    tr = Track(bpm=104, bars=48, spb=12)
     parts = plan(tr, [
         ("intro", 8, "F | Dm | Bb | C | F | Dm | Gm7 | C7"),
         ("A1", 8, "F | F | Bb | F | Gm7 | C7 | F | C7"),
         ("A2", 8, "F | F | Bb | F | Gm7 | C7 | F | C7"),
         ("B", 8, "Bb | C | Am7 | Dm7 | Gm7 | C7 | F | F"),
         ("C", 8, "Dm | A7 | Dm | A7 | Gm | C7 | F | C7"),
+        ("D", 4, "Bb | C7 | Am7 D7 | Gm7 C7"),
         ("tag", 4, "F | Bb | F C7 | F"),
     ])
     tiptoe = melody("""F3:2 A3:1 C4:3 A3:2 F3:1 C3:3 | F3:2 G3:1 A3:2 Bb3:1 C4:6 | D4:2 C4:1 Bb3:3 F3:2 D3:1 Bb2:3 | A3:2 Ab3:1 G3:2 Gb3:1 F3:6 |
@@ -441,6 +442,8 @@ def honey_trap():
                       Bb4:1 A4:1 Bb4:1 D5:1 C5:1 Bb4:1 G5:6 | G5:1 F#5:1 G5:1 Bb5:1 A5:1 G5:1 E5:6 | F5:3 A5:3 C6:3 A5:3 | G5:6 r:6""", 12)
     box = melody("E6:6 G6:6 | A6:6 F6:6 | D6:3 F6:3 A6:6 | G6:6 F6:3 D6:3", 12)
     counter = melody("""F2:6 C3:6 | A2:6 F2:6 | Bb2:6 D3:6 | C3:6 A2:6 | G2:6 Bb2:6 | C3:6 E3:6 | F3:6 C3:6 | C3:3 D3:3 E3:3 G3:3""", 12)
+    climb = melody("Bb3:2 D4:1 F4:3 D4:2 Bb3:1 F3:3 | C4:2 E4:1 G4:3 Bb4:2 G4:1 E4:3 | A4:2 G4:1 E4:3 F#4:2 A4:1 C5:3 | Bb4:2 A4:1 G4:3 E4:2 D4:1 C4:3", 12)
+    echo = melody("r:6 F5:3 r:3 | r:6 G5:3 r:3 | r:6 A5:3 r:3 | r:6 E5:3 C5:3", 12)
     tag_tune = melody("F3:2 A3:1 C4:3 A3:2 F3:1 C3:3 | D4:2 C4:1 Bb3:3 F3:2 D3:1 Bb2:3 | A3:2 Ab3:1 G3:2 Gb3:1 F3:3 E3:3 | F3:12", 12)
 
     tick, tock = ins.woodblock(1250.0), ins.woodblock(880.0)
@@ -469,7 +472,7 @@ def honey_trap():
                     for k, m in enumerate((43, 44, 45, 46)):
                         tr.add("pizz", bar, 6 + k * 1.5, ins.pizz(m, 0.2), 0.8 + 0.05 * k)
                 continue
-            if name in ("A1", "A2", "tag"):
+            if name in ("A1", "A2", "D", "tag"):
                 halves = [(step, root), (step + length / 2, fifth)] if length >= 12 else [(step, root)]
                 for st, bass in halves:
                     tr.add("pizz", bar, st, ins.pizz(bass, 0.3), 1.0)
@@ -515,8 +518,11 @@ def honey_trap():
     tr.play("lead2", 24, shift(sweet, -12), ins.celesta)
     tr.play("lead", 32, chase, ins.bee)
     tr.play("lead2", 32, shift(chase, -12), ins.clarinet)
-    tr.play("lead", 40, tag_tune, ins.bassoon)
-    tr.play("lead2", 40, shift(tag_tune, 12), ins.clarinet)
+    tr.play("lead", 40, climb, ins.clarinet)
+    tr.play("lead2", 40, shift(climb, -12), ins.bassoon)
+    tr.play("sparkle", 40, echo, ins.glock)
+    tr.play("lead", 44, tag_tune, ins.bassoon)
+    tr.play("lead2", 44, shift(tag_tune, 12), ins.clarinet)
 
     mix = Mix(buses={
         "lead": Bus(-6, reverb=0.2),
@@ -537,5 +543,5 @@ def honey_trap():
 SONGS = [
     Song("FireRope", "Dragon Temple Drums", 126, 8, 52, fire_rope),
     Song("HexMeltdown", "Molten Showdown", 124, 8, 56, hex_meltdown),
-    Song("HoneyTrap", "Honeycomb Hush", 104, 8, 44, honey_trap),
+    Song("HoneyTrap", "Honeycomb Hush", 104, 8, 48, honey_trap),
 ]
