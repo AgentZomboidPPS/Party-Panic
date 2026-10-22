@@ -27,7 +27,7 @@ Board.LAST = 1 + Board.COLUMNS * Board.ROWS + (Board.ROWS - 1) -- FINISH's index
 
 Board.HOP = 0.3 -- seconds per tile walked
 Board.ROLL_WINDOW = 3 -- seconds to press ROLL before the die stops by itself
-Board.SHOW = 0.55 -- seconds the rolled numbers show before everyone hops
+Board.SHOW = 0.45 -- seconds the rolled numbers show before everyone hops
 Board.TIMES = { b = 0.85, l = 0.75, c = 1.3, x = 0.95, g = 0.9, j = 0.85, d = 1.25 }
 Board.HEIGHTS = { b = 9, c = 22, x = 8, g = 5, j = 7 }
 
@@ -305,7 +305,7 @@ end
 -- since more racers mean more effects to watch and a faster first finisher: tuned so the first
 -- one home usually arrives about 45-55 s in).
 function Board.TurnTime(racers: number): number
-	return math.min(8.4, 4.6 + 0.5 * (math.max(racers, 1) - 1))
+	return math.min(7.6, 4.6 + 0.4 * (math.max(racers, 1) - 1))
 end
 
 function Board.Ordinal(n: number): string

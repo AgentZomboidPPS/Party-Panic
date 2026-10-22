@@ -39,7 +39,7 @@ local DiceDash = MiniGame.Define("DiceDash", { Results = "Score" })
 
 local GROUND = -34 -- the meadow under the table, below the tabletop
 local TILE_BASE = 0.1 -- tiles sit this far up in the felt (their top is Board.TOP)
-local BEAT = 1.35 -- seconds between SWAP / ? effects in a turn
+local STAGGER = 0.45 -- seconds at least between one SWAP / ? effect and the next
 local ROLL_INTERVAL = 0.15
 
 -- Racer colours, one per racer number (the number on the badge is the second cue).
@@ -554,38 +554,46 @@ function DiceDash:_resolve()
 		local kind = Board.KindAt(kinds, from)
 		local name = racer.Player.DisplayName
 		local id = racer.Player.UserId
-		local ends = nil
 		if kind == Board.BOOST then
-			ends = move(racer, effectAt, math.min(from + 3, Board.LAST), "b")
+			move(racer, effectAt, math.min(from + 3, Board.LAST), "b")
 			event(effectAt, "BOOST", `BOOST! {name} +3`, { id }, from)
 		elseif kind == Board.SLIP then
-			ends = move(racer, effectAt, math.max(from - 2, 0), "l")
+			move(racer, effectAt, math.max(from - 2, 0), "l")
 			event(effectAt, "SLIP", `SLIP! {name} -2`, { id }, from)
 		elseif kind == Board.CANNON then
 			local target = Board.NextCannon(kinds, from)
-			ends = move(racer, effectAt, target, "c")
+			move(racer, effectAt, target, "c")
 			local text = if target >= Board.LAST
 				then `CANNON! {name} to the FINISH!`
 				else `CANNON! {name} +{target - from}`
 			event(effectAt, "CANNON", text, { id }, from)
 		elseif kind == Board.TRAP then
-			ends = move(racer, effectAt, 0, "d")
+			move(racer, effectAt, 0, "d")
 			event(effectAt, "TRAP", `TRAPDOOR! {name} back to START`, { id }, from)
 		elseif kind == Board.SWAP or kind == Board.EVENT then
 			table.insert(interactive, racer)
 		end
-		if ends then
-			beatAt = math.max(beatAt, ends + 0.15)
+	end
+	-- (an effect waits for everyone it moves to finish what they're doing; others run alongside)
+	local function startFor(list: { Racer }): number
+		local start = beatAt
+		for _, other in list do
+			start = math.max(start, Board.MovesEnd(other.Moves, 0) + 0.1)
 		end
+		beatAt = start + STAGGER
+		return start
 	end
 
-	-- 3. SWAP and ? tiles, one at a time (they depend on where everyone is by then).
+	-- 3. SWAP and ? tiles in turn (each depends on where everyone is by then), alongside the rest.
 	for _, racer in interactive do
 		if racer.Finish ~= nil or racer.Gone then
 			continue
 		end
 		local from = racer.Pos
 		local kind = Board.KindAt(kinds, from)
+		if kind ~= Board.SWAP and kind ~= Board.EVENT then
+			continue -- (an earlier effect moved them off their tile)
+		end
 		local name = racer.Player.DisplayName
 		local id = racer.Player.UserId
 		local others = unfinished()
@@ -598,30 +606,30 @@ function DiceDash:_resolve()
 			end
 			if leader then
 				local theirs = leader.Pos
-				move(racer, beatAt, theirs, "x")
-				move(leader, beatAt, from, "x")
-				event(
-					beatAt,
-					"SWAP",
-					`SWAP! {name} ↔ {leader.Player.DisplayName}`,
-					{ id, leader.Player.UserId },
-					from
-				)
+				local at = startFor({ racer, leader })
+				move(racer, at, theirs, "x")
+				move(leader, at, from, "x")
+				event(at, "SWAP", `SWAP! {name} ↔ {leader.Player.DisplayName}`, { id, leader.Player.UserId }, from)
 			else
-				event(beatAt, "SWAP", `SWAP! {name} is already in front`, { id }, from)
+				event(startFor({ racer }), "SWAP", `SWAP! {name} is already in front`, { id }, from)
 			end
 		else
 			local roll = rng:NextInteger(1, 3)
 			if roll == 1 then
-				local moved = {}
+				local behind = {}
 				for _, other in others do
 					if other.Pos < from then
-						move(other, beatAt, math.min(other.Pos + 2, Board.LAST), "j")
-						table.insert(moved, other.Player.UserId)
+						table.insert(behind, other)
 					end
 				end
+				local at = startFor(behind)
+				local moved = {}
+				for _, other in behind do
+					move(other, at, math.min(other.Pos + 2, Board.LAST), "j")
+					table.insert(moved, other.Player.UserId)
+				end
 				local text = if #moved > 0 then `? Everyone behind {name} +2` else `? Nobody behind {name}`
-				event(beatAt, "EVENT", text, moved, from)
+				event(at, "EVENT", text, moved, from)
 			elseif roll == 2 then
 				local leader: Racer? = nil
 				for _, other in others do
@@ -631,8 +639,9 @@ function DiceDash:_resolve()
 				end
 				if leader then
 					local leaderName = leader.Player.DisplayName
-					move(leader, beatAt, math.max(leader.Pos - 3, 0), "g")
-					event(beatAt, "GUST", `? GUST! {leaderName} blown back 3`, { leader.Player.UserId }, from)
+					local at = startFor({ leader })
+					move(leader, at, math.max(leader.Pos - 3, 0), "g")
+					event(at, "GUST", `? GUST! {leaderName} blown back 3`, { leader.Player.UserId }, from)
 				end
 			else
 				local last: Racer? = nil
@@ -643,12 +652,12 @@ function DiceDash:_resolve()
 				end
 				if last then
 					local lastName = last.Player.DisplayName
-					move(last, beatAt, math.min(last.Pos + 5, Board.LAST), "j")
-					event(beatAt, "LAST", `? Last place {lastName} +5`, { last.Player.UserId }, from)
+					local at = startFor({ last })
+					move(last, at, math.min(last.Pos + 5, Board.LAST), "j")
+					event(at, "LAST", `? Last place {lastName} +5`, { last.Player.UserId }, from)
 				end
 			end
 		end
-		beatAt += BEAT
 	end
 
 	-- 4. Finishers take their places in the order they arrive.
