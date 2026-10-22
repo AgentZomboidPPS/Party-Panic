@@ -1322,9 +1322,9 @@ phase("Results", 8, function()
 			"Yellow 97% • 14/15 leans", -- BOBSLED RUN
 			"Yellow 100% • 22 perfect", -- PUMP & POP
 			"Lasted 54s • 120 jumps", -- FIRE ROPE
-			"🦈 11 chomps • 22 dunked", -- SHARK BAIT
+			"◆ YELLOW 100% • 132 bites", -- EATSA PIZZA
 			"🏹 12 tags • +12 boards", -- ARROW AMBUSH
-			"Divers 1200 • you 450", -- SINKING SANDS
+			"💎 DIVERS 1200 • you 450", -- SINKING SANDS
 		}
 		for index = 1, 8 do
 			local other = __players[index]

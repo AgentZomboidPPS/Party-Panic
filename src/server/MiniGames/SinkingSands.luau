@@ -1037,17 +1037,18 @@ function SinkingSands:Stop()
 	table.clear(self.shoves)
 end
 
--- Team results with readable names; Kings' personal bests aren't counted (they share one haul).
+-- Team results with readable names and their marks ("👑 SAND KINGS 85", "💎 DIVERS 240 • you 98",
+-- like the team pill); Kings' personal bests aren't counted (they share one haul).
 function SinkingSands:GetResults()
 	local results = self.context:TeamResults()
 	for _, entry in results.Entries do
 		local state = self.context:State(entry.Player)
 		local mine = if state then state.Score else 0
 		if entry.Team == KINGS then
-			entry.ScoreText = `Sand Kings {entry.Rank}`
+			entry.ScoreText = `{Teams.Label(KINGS)} {entry.Rank}`
 			entry.BestScore = nil
 		else
-			entry.ScoreText = `Divers {entry.Rank} • you {mine}`
+			entry.ScoreText = `{Teams.Label(DIVERS)} {entry.Rank} • you {mine}`
 		end
 	end
 	return results
