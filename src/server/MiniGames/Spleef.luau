@@ -640,7 +640,8 @@ function Spleef:_falls(dt: number)
 	end
 
 	for _, player in ctx:GetAlivePlayers() do
-		if self.falling[player] then
+		-- (A new character the round is still putting back on its spot isn't standing anywhere yet.)
+		if self.falling[player] or ctx._placing[player] then
 			continue
 		end
 		local character, humanoid, root = ctx:GetCharacter(player)
