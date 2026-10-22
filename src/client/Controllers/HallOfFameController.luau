@@ -300,6 +300,11 @@ local function renderWindow()
 		order += 1
 		return order
 	end
+	-- The player's own line first (on a phone the list scrolls), and when the board starts afresh.
+	note(nextOrder(), WeeklyLogic.YouLine(rank, points), Theme.Colors.Yellow, if UIKit.IsTouch() then 26 else 24)
+	if data then
+		note(nextOrder(), resetsIn(data.Week), Theme.Colors.Text)
+	end
 	local top = if data then data.Top else {}
 	if #top == 0 then
 		note(nextOrder(), "Nobody's on the board yet this week: play a round!", Theme.Colors.TextDim)
@@ -314,10 +319,6 @@ local function renderWindow()
 			if isMe then Theme.Colors.Yellow else Theme.Colors.Text,
 			true
 		)
-	end
-	note(nextOrder(), WeeklyLogic.YouLine(rank, points), Theme.Colors.Yellow, if UIKit.IsTouch() then 26 else 24)
-	if data then
-		note(nextOrder(), resetsIn(data.Week), Theme.Colors.Text)
 	end
 	note(nextOrder(), WeeklyLogic.RulesText(), Theme.Colors.TextDim)
 	note(nextOrder(), "The TOP 3 on Monday get a statue in the HALL OF FAME!", Theme.Colors.TextDim)

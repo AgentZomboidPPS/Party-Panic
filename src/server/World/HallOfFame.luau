@@ -5,10 +5,12 @@
 -- "Can you work on all of that? this wont mess with what the other workers are working on right?".
 --
 -- Where: the lawn between the winner podium and the shooting gallery (east-south-east), facing the
--- fountain, with the garden's flower bed in front of it and the hedge behind. The balloons of the
--- podium and of the gallery stand either side of its front. Whatever of the plaza's scenery stood
--- in its spot (two trees, two bushes, the bunting across it) is cleared, like the Skee-Ball arcade
--- clears its own; the flower bed, the lamps and the hedge stay.
+-- fountain, with the garden's flower bed in front of it, the hedge behind and the podium's balloons
+-- beside it; about a stud and a half clear of the podium's arch on one side and of the gallery's end
+-- on the other. Whatever of the plaza's scenery stood in its spot (two trees, two bushes, the bunting
+-- across it) is cleared, like the Skee-Ball arcade clears its own, and so is the gallery's cluster of
+-- balloons that stood right in front of 3rd place (it hid that statue from the spawn and the
+-- fountain). The flower bed, the lamps and the hedge stay.
 --
 -- What it's made of (frame space: the middle plinth's foot at the origin, -Z toward the fountain,
 -- +X toward the podium; 2nd place stands on the podium's side, as on the podium):
@@ -41,10 +43,10 @@ end
 
 -- Where it stands (see the top): the middle plinth this far out from the plaza's middle, at this
 -- angle (radians, from +X toward +Z), looking back at the fountain.
-local ANGLE = math.rad(21)
+local ANGLE = math.rad(21.5)
 local RADIUS = 67.5
-local SPACING = 4.6 -- plinth to plinth
-local DAIS = Vector3.new(14.6, 0.4, 6.4) -- the floor under the plinths (its middle 0.4 behind them)
+local SPACING = 4.3 -- plinth to plinth
+local DAIS = Vector3.new(13.4, 0.4, 5.8) -- the floor under the plinths (its middle 0.4 behind them)
 local BOARD_Z = 6.6 -- the board's face, behind the plinths
 local BOARD_SIZE = Vector2.new(14.4, 11.2) -- the screen inside its gold bezel
 local BOARD_Y = 19 -- the screen's middle (its bottom clears the statues' raised arms and tags)
@@ -78,7 +80,7 @@ local PLACES: { PlaceSpec } = {
 		Place = 1,
 		X = 0,
 		Height = 3.4,
-		Width = 4,
+		Width = 3.8,
 		Metal = { Color = rgb(255, 196, 46), Material = Enum.Material.Metal, Reflectance = 0.12 },
 		Tall = 6.9,
 		Pose = "Victory",
@@ -89,7 +91,7 @@ local PLACES: { PlaceSpec } = {
 		Place = 2,
 		X = SPACING,
 		Height = 2.8,
-		Width = 3.8,
+		Width = 3.6,
 		Metal = { Color = rgb(206, 214, 228), Material = Enum.Material.Metal, Reflectance = 0.12 },
 		Tall = 6.4,
 		Pose = "Point",
@@ -100,7 +102,7 @@ local PLACES: { PlaceSpec } = {
 		Place = 3,
 		X = -SPACING,
 		Height = 2.2,
-		Width = 3.8,
+		Width = 3.6,
 		Metal = { Color = rgb(214, 130, 62), Material = Enum.Material.Metal, Reflectance = 0.1 },
 		Tall = 6.4,
 		Pose = "Wave",
@@ -149,20 +151,33 @@ function HallOfFame.Frame(): CFrame
 	return CFrame.lookAt(position, Vector3.zero)
 end
 
--- The Hall's footprint in its own frame (X across, Z outward), for clearing the scenery: the dais
--- and plinths, and the board's posts behind them (whose backs reach into the hedge's leaves, which
--- stays: it's walked through).
-local FOOTPRINT = {
-	{ X0 = -7.9, X1 = 7.9, Z0 = -3.4, Z1 = 4.4 },
-	{ X0 = -POST_X - 1, X1 = POST_X + 1, Z0 = 4.4, Z1 = BOARD_Z + 0.4 },
+-- The Hall's footprint in its own frame (X across, Z outward), for clearing the scenery, with how
+-- much of a prop's spread may not reach into it: the dais and plinths (no leaf may), and the board's
+-- posts behind them (their backs may stand in the hedge's leaves, which stays: it's walked through).
+-- Bunting is strung lamp to lamp: only its middle has to be clear.
+type Area = { X0: number, X1: number, Z0: number, Z1: number, Slack: { [string]: number } }
+local FOOTPRINT: { Area } = {
+	{ X0 = -7.2, X1 = 7.2, Z0 = -3, Z1 = 3.8, Slack = { Tree = 1, Bush = 1, LobbyBunting = 0.15 } },
+	{
+		X0 = -POST_X - 1,
+		X1 = POST_X + 1,
+		Z0 = 3.8,
+		Z1 = BOARD_Z + 0.4,
+		Slack = { Tree = 0.7, Bush = 0.8, LobbyBunting = 0.15 },
+	},
 }
+-- In front of the statues, between them and the plaza: no balloons float here.
+local VIEW = { X0 = -7, X1 = 7, Z0 = -10.5, Z1 = -2.5 }
 
-local function inFootprint(frame: CFrame, box: CFrame, size: Vector3, slack: number): boolean
+-- Whether a prop (its name, and its bounding box `box` / `size`) would poke into the footprint.
+local function inFootprint(frame: CFrame, name: string, box: CFrame, size: Vector3): boolean
 	local position = frame:PointToObjectSpace(box.Position)
-	local reach = math.max(size.X, size.Z) / 2 * slack
 	for _, area in FOOTPRINT do
+		local slack = area.Slack[name]
+		local reach = if slack then math.max(size.X, size.Z) / 2 * slack else nil
 		if
-			position.X > area.X0 - reach
+			reach
+			and position.X > area.X0 - reach
 			and position.X < area.X1 + reach
 			and position.Z > area.Z0 - reach
 			and position.Z < area.Z1 + reach
@@ -173,24 +188,24 @@ local function inFootprint(frame: CFrame, box: CFrame, size: Vector3, slack: num
 	return false
 end
 
--- Clears the plaza's scenery out of the Hall's way: trees and bushes that would poke into it, and
--- bunting strung across it. (The flower bed in front and the lamps either side stay.)
+-- Clears the plaza's scenery out of the Hall's way: trees and bushes that would poke into it,
+-- bunting strung across it, and balloons tied in front of the statues. (The flower bed in front and
+-- the lamps either side stay.)
 local function clearSite(root: Instance, frame: CFrame)
-	local scenery = { Tree = 0.7, Bush = 0.8 }
 	for _, model in root:GetDescendants() do
 		if not model:IsA("Model") or not model.Parent then
 			continue
 		end
-		local slack = scenery[model.Name]
-		if model.Name == "LobbyBunting" then
-			slack = 0.15 -- strung lamp to lamp: only its middle has to be clear
-		end
-		if not slack then
-			continue
-		end
-		local box, size = model:GetBoundingBox()
-		if inFootprint(frame, box, size, slack) then
-			model:Destroy()
+		if model.Name == "Balloon" then
+			local spot = frame:PointToObjectSpace(model:GetPivot().Position)
+			if spot.X > VIEW.X0 and spot.X < VIEW.X1 and spot.Z > VIEW.Z0 and spot.Z < VIEW.Z1 then
+				model:Destroy()
+			end
+		elseif model.Name == "Tree" or model.Name == "Bush" or model.Name == "LobbyBunting" then
+			local box, size = model:GetBoundingBox()
+			if inFootprint(frame, model.Name, box, size) then
+				model:Destroy()
+			end
 		end
 	end
 end
