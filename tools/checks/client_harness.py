@@ -579,12 +579,63 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Rewards", "Rewards C
 	end
 	task.wait(1)
 	snap(screen)
+	if screen == "Emotes" then
+		-- The picker scrolled to its last emotes ("Emotes end": with --rich, every emote is owned).
+		local list = nil
+		for _, item in __playerGui:GetDescendants() do
+			if item.Name == "Emotes" and item:GetAttribute("PP_Popup") then
+				list = item:FindFirstChildOfClass("ScrollingFrame")
+			end
+		end
+		if list then
+			list.CanvasPosition = Vector2.new(0, 100000)
+			list:SetAttribute("PP_ScrollToEnd", true)
+			task.wait(0.3)
+			snap("Emotes end")
+			list:SetAttribute("PP_ScrollToEnd", nil)
+		end
+	end
 	local Modal = __require("Client/UI/Modal")
 	if Modal.CloseAll then
 		pcall(Modal.CloseAll)
 	end
 	if screen == "Emotes" then
 		State.OpenScreen:Fire(screen) -- the emote wheel isn't a modal: its button toggles it shut
+	end
+	task.wait(0.3)
+end
+
+-- 3a. Every shop tab, at the top and scrolled to the end, where the dearest items are ("Shop
+-- Trail", "Shop Trail end", ...; the second shop pass, owner: "Yes lets add more items after
+-- everything else is finished").
+for _, tab in Cosmetics.ShopTabs do
+	step = "Shop tab " .. tab.Slot
+	State.OpenScreen:Fire("Shop", tab.Slot)
+	task.wait(1)
+	snap("Shop " .. tab.Slot)
+	local shopModal = __playerGui:FindFirstChild("ShopModal", true)
+	local grid = nil
+	if shopModal then
+		for _, descendant in shopModal:GetDescendants() do
+			if descendant:IsA("ScrollingFrame") and descendant:FindFirstChildOfClass("UIGridLayout") then
+				grid = descendant
+			end
+		end
+	end
+	if grid then
+		-- Off the end: Roblox (and ui_render.py) keep it inside the canvas, so this is the bottom
+		-- whatever size the snapshot is laid out at.
+		grid.CanvasPosition = Vector2.new(0, 100000)
+		grid:SetAttribute("PP_ScrollToEnd", true) -- gui_dump.luau: the end on every screen size
+		task.wait(0.3)
+		snap("Shop " .. tab.Slot .. " end")
+		grid:SetAttribute("PP_ScrollToEnd", nil)
+	else
+		__note("Shop tab " .. tab.Slot .. ": no item grid found")
+	end
+	local Modal = __require("Client/UI/Modal")
+	if Modal.CloseAll then
+		pcall(Modal.CloseAll)
 	end
 	task.wait(0.3)
 end
