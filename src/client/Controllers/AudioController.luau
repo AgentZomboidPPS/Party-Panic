@@ -262,11 +262,13 @@ end
 -- What this device's music is doing right now, for the sound report (AssetReportController).
 function AudioController.Status(): { [string]: any }
 	local sound = currentSound
+	local modeId = if sound and sound.PlaybackRegionsEnabled then GameState.Get("GameId") else nil
 	return {
-		Track = if sound then sound.Name else "none",
+		Track = if modeId then `{sound.Name}:{modeId}` elseif sound then sound.Name else "none",
 		Loaded = sound ~= nil and sound.IsLoaded,
 		Playing = sound ~= nil and sound.IsPlaying,
-		Time = if sound then sound.TimePosition else 0,
+		-- Seconds into the track (a mini-game's track: from the start of its region in the pack).
+		Time = if sound then sound.TimePosition - (if modeId then sound.PlaybackRegion.Min else 0) else 0,
 		Volume = if sound then sound.Volume else 0,
 		Loudness = if sound then sound.PlaybackLoudness else 0,
 		Level = playerLevel(),
