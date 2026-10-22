@@ -6,6 +6,13 @@
 -- Player 3 sends like the real client: every batch carries the positions the server hasn't taken
 -- yet, and a quarter of its batches are lost on the way. It keeps its own live score (the one its
 -- screen shows) and notes it next to the server's: they must match.
+--
+-- On a phone run (--client --touch) the stand-in client cuts with a finger: player 1's own client
+-- half moves its wheel and sends its positions, as on a phone, while this bot holds the finger down
+-- along its path through the client's test seam (PP_TestFinger, the board point under the finger,
+-- and PP_TestFingerAt, its spot on the screen: client MiniGames/CrazyCutters). So the phone checks
+-- show the magnifier as a finger cutting sees it, and the client's touch steering and sending are
+-- checked too: the bot notes that client's score next to the server's.
 return function(env)
 	local Rules = __require("Shared/Logic/CrazyCutters") -- the harness bundle's module loader
 	local ctx = env.ctx
@@ -23,6 +30,28 @@ return function(env)
 	local live = nil -- the resender's own tracker (what its screen shows)
 	local liveIndex = 0
 	local compared = {}
+	local finger = if env.client and __touchMode == true then env.players[1] else nil
+	local fingerDown = false
+	local lastSpot: Vector2? = nil -- where the finger was put last (the client has drawn that by now)
+	-- What the finger's client showed of its magnifier, measured on the stand-in's screen as the client
+	-- measures it: how often it was up, how near the finger its middle came (it keeps 96 away), and how
+	-- far its top stayed under the cookie panel and its right edge left of the menu column (6 at least).
+	local function freshLens()
+		return { Seen = 0, Nearest = math.huge, Below = math.huge, Left = math.huge, Screen = Vector2.zero }
+	end
+	local lens = freshLens()
+	-- Where the finger touches the screen for a board point (about where a small phone draws it).
+	local function screenSpot(u: number, v: number): Vector2
+		return Vector2.new(math.clamp(333 + u * 19, 40, 590), math.clamp(190 - v * 19, 150, 320))
+	end
+	local function lift()
+		if fingerDown and finger then
+			fingerDown = false
+			lastSpot = nil
+			finger:SetAttribute("PP_TestFinger", nil)
+			finger:SetAttribute("PP_TestFingerAt", nil)
+		end
+	end
 	return function(elapsed)
 		local round = mode.round
 		if not round then
@@ -39,6 +68,28 @@ return function(env)
 			end
 			-- (The scores are final 0.6 s after the cut ends; this may print before some are in.)
 			env.note(`shape {round.Index} {round.Shape}: sent {sent} batches, {junk} junk; {table.concat(line, " ")}`)
+		end
+		-- The finger's client: the score its panel shows for this cookie, next to the server's.
+		local fingerScores = finger and mode.scores and mode.scores[finger]
+		if fingerScores and fingerScores[round.Index] and not compared["finger" .. round.Index] then
+			compared["finger" .. round.Index] = true
+			local gui = env.localPlayer and env.localPlayer.PlayerGui:FindFirstChild("MiniGame_CrazyCutters")
+			local label = gui and gui:FindFirstChild("Score", true)
+			env.note(
+				`{finger.Name} cuts with a finger: its panel says {if label then label.Text else "?"}, the server {fingerScores[round.Index]}%`
+			)
+			env.note(
+				string.format(
+					"its magnifier: up at %d checks on a %dx%d screen, middle >= %.0f from the finger, top >= %.0f under the panel, right edge >= %.0f left of the menu",
+					lens.Seen,
+					lens.Screen.X,
+					lens.Screen.Y,
+					lens.Nearest,
+					lens.Below,
+					lens.Left
+				)
+			)
+			lens = freshLens()
 		end
 		if resender and live and liveIndex == round.Index and not compared[round.Index] then
 			local scores = mode.scores and mode.scores[resender]
@@ -72,13 +123,48 @@ return function(env)
 			end
 		end
 		if round.Phase ~= "Cut" then
+			lift()
 			return
 		end
 		for index, player in env.players do
 			if not player.Parent then
 				continue
 			end
-			if player == resender then
+			if player == finger then
+				-- The finger follows this player's path (its client's wheel copies its moves); it
+				-- lifts once the server has the whole cut.
+				local playerGui = env.localPlayer and env.localPlayer.PlayerGui
+				local gui = playerGui and playerGui:FindFirstChild("MiniGame_CrazyCutters")
+				local bubble = gui and gui:FindFirstChild("Magnifier")
+				if gui and bubble and bubble.Visible and lastSpot then
+					local origin = gui.AbsolutePosition
+					local middle = Vector2.new(bubble.Position.X.Offset, bubble.Position.Y.Offset)
+					local half = bubble.Size.X.Offset / 2
+					lens.Seen += 1
+					lens.Screen = gui.AbsoluteSize
+					lens.Nearest = math.min(lens.Nearest, (middle - lastSpot).Magnitude)
+					local panel = gui:FindFirstChild("CutPanel", true)
+					if panel then
+						local bottom = panel.AbsolutePosition.Y + panel.AbsoluteSize.Y - origin.Y
+						lens.Below = math.min(lens.Below, middle.Y - half - bottom)
+					end
+					local main = playerGui:FindFirstChild("PartyPanicHUD")
+					local menu = main and main:FindFirstChild("Menu")
+					if menu then
+						lens.Left = math.min(lens.Left, menu.AbsolutePosition.X - origin.X - (middle.X + half))
+					end
+				end
+				local samples = mode:BotSamples(player, skills[player], env.rng, now)
+				if samples then
+					local u, v = samples[#samples - 1], samples[#samples]
+					fingerDown = true
+					lastSpot = screenSpot(u, v)
+					player:SetAttribute("PP_TestFinger", Vector2.new(u, v))
+					player:SetAttribute("PP_TestFingerAt", lastSpot)
+				elseif mode.tracks[player] and mode.tracks[player].Done then
+					lift()
+				end
+			elseif player == resender then
 				if liveIndex ~= round.Index then
 					liveIndex = round.Index
 					live = Rules.Tracker(Rules.Get(round.Shape) :: Rules.Shape)

@@ -26,6 +26,19 @@
 -- board's name tag no longer sits behind the round banner on phones; and someone who rejoins
 -- mid-round watches instead of getting their old board under a camera they can't leave, with their
 -- character stuck in the lobby and a cut that can't count.
+--
+-- The magnifier (owner: "For the drawing mini games it's hard to draw since your finger is in the way
+-- and you can't see behind it.", then, of the ideas offered: "Let's do the magnifier bubble but only
+-- for mobile."): on a touch screen, while your finger cuts, a round bubble floats by it with the board
+-- round your wheel 2.25 times bigger, flat from above: the dough, your dots just as your board shows
+-- them, the start, your cut and the wheel, with a ring on the point it cuts. It magnifies the wheel,
+-- not the finger (the wheel copies the finger's moves, so it's often elsewhere), floats above the
+-- finger and towards the middle of the screen (beside or below it when the finger is near the top),
+-- clear of the cookie panel, the hints, the menu column and the jump button, and fades in and out with
+-- the finger. It's plain 2D drawn from the board's own dots, stretches and wheel position each frame
+-- (no 3D copy), so it costs little on a phone. PCs see nothing new. The move stick and jump button,
+-- put away for the cutting, are now put away for the phone checks too (PP_NoTouchControls), and a
+-- test seam lets the checks' stand-in client cut with a finger (see testFinger).
 
 local ContextActionService = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -67,6 +80,18 @@ local HINT_GAP = 68 -- hints sit just under the panel (clear of the start, at th
 local SHOUT_GAP = 106 -- big messages under the hints (a phone hint is one 36-tall line)
 local KEY_SPEED = 5.5 -- studs/s with keys or a stick
 local FOLLOW_SPEED = Rules.MAX_SPEED * 0.85 -- the cutter chases a finger this fast
+-- The magnifier (phones): the board round the wheel this many times bigger than the screen shows it,
+-- in a bubble this big (points) that floats this far from the finger (to its edge), above it and this
+-- far over towards the middle of the screen, never coming within FINGERTIP of the finger's spot.
+local LENS_ZOOM = 2.25
+local LENS_SIZE = 132
+local LENS_GAP = 40
+local LENS_SIDE = 30
+local FINGERTIP = 30
+local LENS_FADE = 10 -- dots and the start fade out over this much before the bubble's rim (points)
+local DOUGH_COLOR = rgb(250, 228, 190) -- the dough sheet's (World/Props/CrazyCutters)
+local WHEEL_COLOR = rgb(215, 220, 230) -- the pastry wheel's steel
+local WHEEL_SIZE = Vector2.new(0.25, 1.7) -- your wheel seen from above (studs): a blade up the board
 local SHAPE_ICONS = {
 	Star = "⭐",
 	Heart = "❤️",
@@ -302,6 +327,10 @@ function CrazyCutters.Start(api)
 	local shape: Rules.Shape? = nil
 	local tracker: Rules.Tracker? = nil
 	local startMarkers = {}
+	-- Your cut as your board draws it (each stretch's ends and colour) and the start's spot, for the
+	-- magnifier.
+	local myCuts: { { A: Vector2, B: Vector2, Color: Color3 } } = {}
+	local shapeStart = Vector2.zero
 
 	local function clearTrail(board: Board)
 		for index = 1, board.TrailUsed do
@@ -322,6 +351,7 @@ function CrazyCutters.Start(api)
 		end
 		table.clear(startMarkers)
 		local su, sv, du, dv = Rules.PointAt(current, 0)
+		shapeStart = Vector2.new(su, sv)
 		for _, board in boards do
 			for _, dot in board.Dots do
 				dot:Destroy()
@@ -449,6 +479,7 @@ function CrazyCutters.Start(api)
 		segment.Parent = api.World
 		board.TrailFrom = position
 		if board.Mine then
+			myCuts[index] = { A = from, B = position, Color = segment.Color }
 			return -- your own dots follow your tracker (paleDots)
 		end
 		-- Dots the cutter has passed turn pale (cut).
@@ -594,7 +625,9 @@ function CrazyCutters.Start(api)
 			camera.CameraType = savedType
 			camera.FieldOfView = savedFov
 		end)
-		-- The move controls go away: you stand at your board, and the screen is for cutting.
+		-- The move controls go away: you stand at your board, and the screen is for cutting. (The UI
+		-- checks then draw no move stick or jump button either: tools/checks/ui_render.py.)
+		api.Gui:SetAttribute("PP_NoTouchControls", if touch then true else nil)
 		local controls = nil
 		pcall(function()
 			local scripts = me:FindFirstChild("PlayerScripts")
@@ -632,6 +665,8 @@ function CrazyCutters.Start(api)
 	local dragFrom: Vector2? = nil -- touch: the finger's board point when the wheel was last at wheelFrom
 	local wheelFrom = Vector2.zero
 	local fingerAt: Vector2? = nil
+	local fingerScreen: Vector2? = nil -- touch: the finger's spot on the screen (the magnifier floats by it)
+	local testTouch: any = { Position = Vector3.zero } -- the checks' stand-in finger (the test seam below)
 	local recent = {} -- your last positions, flat { t, u, v, ... } (the server skips ones it has)
 	local sentUpTo = 0 -- the newest position's time sent so far
 	local confirmed = 0 -- the newest position's time the server took (it relays every one it takes)
@@ -671,7 +706,10 @@ function CrazyCutters.Start(api)
 	local function regrip()
 		local held = activeTouch
 		if mine and held then
-			fingerAt = boardPoint(held.Position, true) or fingerAt
+			local point = if held == testTouch
+				then me:GetAttribute("PP_TestFinger")
+				else boardPoint(held.Position, true)
+			fingerAt = if typeof(point) == "Vector2" then point else fingerAt
 		end
 		if mine and fingerAt then
 			dragFrom = fingerAt
@@ -710,6 +748,7 @@ function CrazyCutters.Start(api)
 					activeTouch = input
 					pointerDown = true
 					fingerAt = point
+					fingerScreen = Vector2.new(input.Position.X, input.Position.Y)
 					regrip()
 				end
 			end
@@ -718,6 +757,7 @@ function CrazyCutters.Start(api)
 			if input.UserInputType == Enum.UserInputType.MouseMovement then
 				pointer = boardPoint(input.Position)
 			elseif input == activeTouch then
+				fingerScreen = Vector2.new(input.Position.X, input.Position.Y)
 				local point = boardPoint(input.Position, true)
 				if point and dragFrom then
 					fingerAt = point
@@ -731,6 +771,7 @@ function CrazyCutters.Start(api)
 				activeTouch = nil
 				dragFrom = nil
 				fingerAt = nil
+				fingerScreen = nil
 			end
 		end))
 		-- Shift slows the wheel; keep it from also toggling Roblox's Shift Lock.
@@ -1004,16 +1045,423 @@ function CrazyCutters.Start(api)
 		end
 	end)
 
+	-- The magnifier (phones) ----------------------------------------------------------------------
+	-- While a finger cuts on your board, a round bubble floats by it with the board round the wheel
+	-- LENS_ZOOM times bigger, flat from above: the dough, your dots as your board shows them (pale once
+	-- cut, big after "Missed a spot!"), the green start, your cut in its colours and the wheel, with a
+	-- yellow ring on the very point it cuts. It shows where the wheel is, not where the finger is (the
+	-- wheel copies the finger's moves, so it's often somewhere else). It's drawn from the same dots,
+	-- stretches and wheel position as the board, so the two always agree; stretches are cut off at its
+	-- rim, and dots and the start fade out just inside it.
+	local lens: Frame? = nil
+	local lensEdge: Frame? = nil
+	local lensWheel: Frame? = nil
+	local lensStart: Frame? = nil
+	local lensTail: Frame? = nil
+	local lensDots: { Frame } = {}
+	local lensCuts: { Frame } = {}
+	local lensFades: { { Item: Instance, Key: string, Base: number } } = {} -- what fades in and out with it
+	local lensShown = 0 -- how far it has faded in (0..1)
+	local lensSpot: Vector2? = nil -- where it floats (its middle, in this mode's screen's points)
+	local lensPlace = "Above" -- which side of the finger: "Above", "Aside", "Across" or "Below"
+	local lensSide = 1 -- towards the middle of the screen from the finger: 1 right, -1 left
+	local function fades(item: Instance, key: string, base: number): any
+		table.insert(lensFades, { Item = item, Key = key, Base = base })
+		return item
+	end
+	local function lensPiece(props: { [string]: any }): Frame
+		props.AnchorPoint = Vector2.new(0.5, 0.5)
+		props.Parent = lens
+		return UIKit.new("Frame", props)
+	end
+	if touch and mine then
+		local ring = fades(UIKit.Stroke(Color3.new(1, 1, 1), 4, 0), "Transparency", 0)
+		lens = fades(
+			UIKit.new("Frame", {
+				Name = "Magnifier",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Size = UDim2.fromOffset(LENS_SIZE, LENS_SIZE),
+				BackgroundColor3 = DOUGH_COLOR,
+				Visible = false,
+				ZIndex = 21,
+				Parent = api.Gui,
+				Children = { UIKit.Round(), ring },
+			}),
+			"BackgroundTransparency",
+			0
+		)
+		-- A dark line round the white ring, so it stands out on the light dough of the board under it.
+		lensEdge = UIKit.new("Frame", {
+			Name = "MagnifierEdge",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromOffset(LENS_SIZE + 8, LENS_SIZE + 8),
+			BackgroundTransparency = 1,
+			Visible = false,
+			ZIndex = 20,
+			Parent = api.Gui,
+			Children = { UIKit.Round(), fades(UIKit.Stroke(PANEL, 2, 0.2), "Transparency", 0.2) },
+		})
+		-- The wheel, a see-through steel blade (the line under it shows), and the cutting point: a ring
+		-- in the board's bead yellow, open in the middle, between four little ticks.
+		lensWheel = fades(
+			lensPiece({
+				Name = "Wheel",
+				Position = UDim2.fromScale(0.5, 0.5),
+				BackgroundColor3 = WHEEL_COLOR,
+				ZIndex = 4,
+				Children = { UIKit.Round(), fades(UIKit.Stroke(PANEL, 1, 0.5), "Transparency", 0.5) },
+			}),
+			"BackgroundTransparency",
+			0.7
+		)
+		for _, tick in { Vector2.new(-11, 0), Vector2.new(11, 0), Vector2.new(0, -11), Vector2.new(0, 11) } do
+			fades(
+				lensPiece({
+					Name = "Tick",
+					Position = UDim2.new(0.5, tick.X, 0.5, tick.Y),
+					Size = if tick.X ~= 0 then UDim2.fromOffset(6, 2) else UDim2.fromOffset(2, 6),
+					BackgroundColor3 = PANEL,
+					ZIndex = 5,
+				}),
+				"BackgroundTransparency",
+				0
+			)
+		end
+		lensPiece({
+			Name = "CutPoint",
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(12, 12),
+			BackgroundTransparency = 1,
+			ZIndex = 6,
+			Children = { UIKit.Round(), fades(UIKit.Stroke(Theme.Colors.Yellow, 2.5, 0), "Transparency", 0) },
+		})
+	end
+
+	-- Screen points a stud of your board spans by the wheel (across the board).
+	local function screenPerStud(point: Vector2): number
+		local board = mine :: Board
+		local a = camera:WorldToViewportPoint(at(board, point.X, point.Y, 0))
+		local b = camera:WorldToViewportPoint(at(board, point.X + 1, point.Y, 0))
+		local per = Vector2.new(b.X - a.X, b.Y - a.Y).Magnitude
+		-- (A camera that can't measure it, like the checks' stand-in client's: a small phone's.)
+		return if per > 4 and per < 400 then per else 19
+	end
+
+	-- Where the bubble floats (its middle, in this mode's screen's points) for a finger at `finger`:
+	-- above it and a little towards the middle of the screen (the thumb comes from below); beside it,
+	-- either side, when that's too near the top; below it as a last resort. Always on the screen (the
+	-- safe area), under the cookie panel and any hint under it, left of the menu column and the jump
+	-- button, and never within FINGERTIP of the finger. It keeps its side until one before it in that
+	-- order fits with room to spare, so it doesn't hop about.
+	local function placeLens(finger: Vector2): Vector2
+		local gui = api.Gui
+		local origin = gui.AbsolutePosition
+		local size = gui.AbsoluteSize
+		local radius = LENS_SIZE / 2
+		-- (A screen not laid out yet: the smallest phone's numbers.)
+		local measured = size.X > 200 and size.Y > 150
+		local width = if measured then size.X else 667
+		local height = if measured then size.Y else 319
+		local top = if measured then panel.AbsolutePosition.Y + panel.AbsoluteSize.Y - origin.Y else 60
+		local right = if measured then width else width - 70
+		if measured then
+			local hint = hud:FindFirstChild("Hint")
+			if hint and hint:IsA("TextLabel") and hint.Visible and hint.Text ~= "" then
+				top = math.max(top, hint.AbsolutePosition.Y + hint.AbsoluteSize.Y - origin.Y)
+			end
+			local playerGui = gui.Parent
+			local main = playerGui and playerGui:FindFirstChild("PartyPanicHUD")
+			local menu = main and main:FindFirstChild("Menu")
+			if menu and menu:IsA("GuiObject") and menu.Visible and menu.AbsoluteSize.X > 0 then
+				right = math.min(right, menu.AbsolutePosition.X - origin.X)
+			end
+			local controls = playerGui and playerGui:FindFirstChild("TouchGui")
+			local frame = controls and controls:FindFirstChild("TouchControlFrame")
+			local jump = frame and frame:FindFirstChild("JumpButton")
+			if
+				controls
+				and controls:IsA("ScreenGui")
+				and controls.Enabled
+				and jump
+				and jump:IsA("GuiObject")
+				and jump.Visible
+				and jump.AbsoluteSize.X > 0
+			then
+				right = math.min(right, jump.AbsolutePosition.X - origin.X)
+			end
+		end
+		local margin = 6
+		local function fit(spot: Vector2): Vector2
+			local lowX, lowY = radius + margin, top + radius + margin
+			return Vector2.new(
+				math.clamp(spot.X, lowX, math.max(lowX, right - radius - margin)),
+				math.clamp(spot.Y, lowY, math.max(lowY, height - radius - margin))
+			)
+		end
+		-- (It changes sides only once the finger is well past the middle.)
+		if finger.X > width / 2 + 40 then
+			lensSide = -1
+		elseif finger.X < width / 2 - 40 then
+			lensSide = 1
+		end
+		local lift = LENS_GAP + radius
+		local spots = {
+			Above = Vector2.new(finger.X + lensSide * LENS_SIDE, finger.Y - lift),
+			Aside = Vector2.new(finger.X + lensSide * lift, finger.Y - LENS_SIDE),
+			Across = Vector2.new(finger.X - lensSide * lift, finger.Y - LENS_SIDE),
+			Below = Vector2.new(finger.X + lensSide * LENS_SIDE, finger.Y + lift),
+		}
+		local order = { "Above", "Aside", "Across", "Below" }
+		local clear = radius + FINGERTIP
+		local current = false
+		local far, farGap = nil, -1
+		for _, place in order do
+			local spot = fit(spots[place])
+			local gap = (spot - finger).Magnitude
+			current = current or place == lensPlace
+			if gap >= clear + (if current then 0 else 12) then
+				lensPlace = place
+				return spot
+			end
+			if gap > farGap then
+				far, farGap = spot, gap
+			end
+		end
+		return far :: Vector2 -- (nowhere clear on a tiny screen: as far from the finger as it gets)
+	end
+
+	-- Where a stretch of board (points a to b, studs; the wheel at `wheel`) lies in the bubble, cut
+	-- off at `clip` points from its middle: its middle, length and angle, or nil if none of it is inside.
+	local function lensStretch(
+		a: Vector2,
+		b: Vector2,
+		wheel: Vector2,
+		zoom: number,
+		clip: number
+	): (Vector2?, number, number)
+		local p = Vector2.new((a.X - wheel.X) * zoom, (wheel.Y - a.Y) * zoom)
+		local q = Vector2.new((b.X - wheel.X) * zoom, (wheel.Y - b.Y) * zoom)
+		local length = (q - p).Magnitude
+		if length < 0.5 then
+			return nil, 0, 0
+		end
+		local unit = (q - p) / length
+		-- (Each end reaches a little past its point, as the board's stretches do.)
+		local over = 0.06 * zoom
+		p -= unit * over
+		length += 2 * over
+		-- Where the line crosses the rim: p + unit * t, t from first to last.
+		local along = p:Dot(unit)
+		local room = along * along - (p:Dot(p) - clip * clip)
+		if room <= 0 then
+			return nil, 0, 0
+		end
+		local first = math.max(0, -along - math.sqrt(room))
+		local last = math.min(length, -along + math.sqrt(room))
+		if last - first < 0.5 then
+			return nil, 0, 0
+		end
+		return p + unit * ((first + last) / 2), last - first, math.deg(math.atan2(unit.Y, unit.X))
+	end
+
+	local function lensCutPiece(): Frame
+		return lensPiece({ Name = "Cut", ZIndex = 3, Children = { UIKit.Round() } })
+	end
+
+	-- Draws the bubble for this frame (`wanted`: a finger is cutting on your board).
+	local function updateLens(dt: number, wanted: boolean)
+		local frame, edge, board = lens, lensEdge, mine
+		if not frame or not edge or not board or (not wanted and lensShown <= 0) then
+			return
+		end
+		local step = if effects then dt / (if wanted then 0.12 else 0.18) else 1
+		lensShown = math.clamp(lensShown + (if wanted then step else -step), 0, 1)
+		if lensShown <= 0 then
+			frame.Visible = false
+			edge.Visible = false
+			lensSpot = nil
+			return
+		end
+		local finger = fingerScreen
+		if finger then
+			local spot = placeLens(finger - api.Gui.AbsolutePosition)
+			lensSpot = if lensSpot then lensSpot:Lerp(spot, math.clamp(dt * 25, 0, 1)) else spot
+		end
+		local spot = lensSpot
+		if not spot then
+			return
+		end
+		frame.Position = UDim2.fromOffset(spot.X, spot.Y)
+		edge.Position = frame.Position
+		frame.Visible = true
+		edge.Visible = true
+		local alpha = lensShown
+		for _, fade in lensFades do
+			(fade.Item :: any)[fade.Key] = 1 - (1 - fade.Base) * alpha
+		end
+
+		local radius = LENS_SIZE / 2
+		local wheel = board.Pos
+		local zoom = LENS_ZOOM * screenPerStud(wheel)
+		local function inLens(point: Vector2): Vector2
+			return Vector2.new(radius + (point.X - wheel.X) * zoom, radius + (wheel.Y - point.Y) * zoom)
+		end
+		-- How much of something round of `size` at `where` is inside the rim's fade (0 gone, 1 all there).
+		local function shown(where: Vector2, size: number): number
+			local inside = radius - ((where - Vector2.new(radius, radius)).Magnitude + size / 2)
+			return math.clamp(inside / LENS_FADE, 0, 1)
+		end
+
+		-- The dots.
+		for index, dot in board.Dots do
+			local where = inLens(board.DotAt[index])
+			local size = dot.Size.Y * zoom
+			local seen = shown(where, size)
+			local view = lensDots[index]
+			if seen <= 0 then
+				if view and view.Visible then
+					view.Visible = false
+				end
+				continue
+			end
+			if not view then
+				view = lensPiece({ Name = "Dot", ZIndex = 1, Children = { UIKit.Round() } })
+				lensDots[index] = view
+			end
+			local piece = view :: Frame
+			piece.Position = UDim2.fromOffset(where.X, where.Y)
+			piece.Size = UDim2.fromOffset(size, size)
+			piece.BackgroundColor3 = dot.Color
+			piece.BackgroundTransparency = 1 - (1 - dot.Transparency) * seen * alpha
+			piece.Visible = true
+		end
+		for index = #board.Dots + 1, #lensDots do
+			lensDots[index].Visible = false
+		end
+
+		-- The green start.
+		local disc = board.StartDisc
+		local where = inLens(shapeStart)
+		local size = if disc then disc.Size.Y * zoom else 0
+		local seen = if disc and disc.Parent then shown(where, size) else 0
+		if seen > 0 and not lensStart then
+			lensStart =
+				lensPiece({ Name = "Start", BackgroundColor3 = START_COLOR, ZIndex = 2, Children = { UIKit.Round() } })
+		end
+		local start = lensStart
+		if start then
+			start.Visible = seen > 0
+			if seen > 0 then
+				start.Position = UDim2.fromOffset(where.X, where.Y)
+				start.Size = UDim2.fromOffset(size, size)
+				start.BackgroundTransparency = 1 - (1 - (disc :: Part).Transparency) * seen * alpha
+			end
+		end
+
+		-- Your cut, and the stretch the wheel is cutting now (on the board it's under the wheel).
+		local width = Rules.CUT_WIDTH * zoom
+		local clip = radius - width / 2 - 1
+		local used = board.TrailUsed
+		for index = 1, math.max(used, #lensCuts) do
+			local cut = if index <= used then myCuts[index] else nil
+			local middle, length, angle = nil :: Vector2?, 0, 0
+			if cut then
+				middle, length, angle = lensStretch(cut.A, cut.B, wheel, zoom, clip)
+			end
+			local view = lensCuts[index]
+			if not middle then
+				if view and view.Visible then
+					view.Visible = false
+				end
+				continue
+			end
+			if not view then
+				view = lensCutPiece()
+				lensCuts[index] = view
+			end
+			local piece = view :: Frame
+			piece.Position = UDim2.fromOffset(radius + middle.X, radius + middle.Y)
+			piece.Size = UDim2.fromOffset(length, width)
+			piece.Rotation = angle
+			piece.BackgroundColor3 = (cut :: any).Color
+			piece.BackgroundTransparency = 1 - alpha
+			piece.Visible = true
+		end
+		local middle, length, angle = lensStretch(board.TrailFrom, wheel, wheel, zoom, clip)
+		if middle and not lensTail then
+			lensTail = lensCutPiece()
+		end
+		local tail = lensTail
+		if tail then
+			tail.Visible = middle ~= nil
+			if middle then
+				local distance = if shape then Rules.Distance(shape, wheel.X, wheel.Y) else 0
+				tail.Position = UDim2.fromOffset(radius + middle.X, radius + middle.Y)
+				tail.Size = UDim2.fromOffset(length, width)
+				tail.Rotation = angle
+				tail.BackgroundColor3 =
+					GOOD:Lerp(BAD, math.clamp((distance - Rules.FULL) / (Rules.ZERO - Rules.FULL), 0, 1))
+				tail.BackgroundTransparency = 1 - alpha
+			end
+		end
+
+		-- The wheel.
+		local blade = lensWheel :: Frame
+		blade.Size = UDim2.fromOffset(WHEEL_SIZE.X * zoom, WHEEL_SIZE.Y * zoom)
+	end
+
+	-- Test seam (a harness run only: workspace PP_Harness). The checks' stand-in client has no fingers,
+	-- so its bot (tools/checks/bots/CrazyCutters.luau) puts one down with this player's attributes:
+	-- PP_TestFinger, the board point under the finger, and PP_TestFingerAt, its spot on this mode's
+	-- screen. It goes through the same steps as a real touch (down, moves, up), so the checks cut with
+	-- it, and their phone pictures show the magnifier as a finger cutting sees it.
+	local harness = touch and mine ~= nil and workspace:GetAttribute("PP_Harness") == true
+	local function testFinger()
+		local point = me:GetAttribute("PP_TestFinger")
+		local spot = me:GetAttribute("PP_TestFingerAt")
+		if typeof(point) == "Vector2" and typeof(spot) == "Vector2" then
+			if activeTouch == nil then
+				activeTouch = testTouch
+				pointerDown = true
+				fingerAt = point
+				fingerScreen = spot
+				regrip()
+			elseif activeTouch == testTouch then
+				fingerScreen = spot
+				if dragFrom then
+					fingerAt = point
+					pointer = wheelFrom + (point - dragFrom)
+				end
+			end
+		elseif activeTouch == testTouch then
+			pointerDown = false
+			activeTouch = nil
+			dragFrom = nil
+			fingerAt = nil
+			fingerScreen = nil
+		end
+	end
+
 	-- Every frame --------------------------------------------------------------------------------
 	local lastCount = -1
 	api:RenderStep(function(dt)
 		local now = api:Now()
 		local clock = os.clock()
 		dt = math.min(dt, 0.1)
+		if harness then
+			testFinger()
+		end
+		local lensWanted = false -- a finger is cutting on your board: the magnifier shows
 
 		-- HUD: countdown, time left, your live score.
 		if round then
 			local cutting = round.Phase == "Cut" and now >= round.T0 and now < round.T1
+			lensWanted = cutting
+				and fingerScreen ~= nil
+				and mine ~= nil
+				and not mine.Done
+				and tracker ~= nil
+				and not tracker.Done
 			if round.Phase == "Cut" and now < round.T0 then
 				local count = math.ceil(round.T0 - now)
 				if count ~= lastCount then
@@ -1208,6 +1656,7 @@ function CrazyCutters.Start(api)
 			local target = cameraTarget(mine)
 			camera.CFrame = camera.CFrame:Lerp(target, math.clamp(dt * 4, 0, 1))
 		end
+		updateLens(dt, lensWanted) -- (last: the wheel has moved and the camera is set for this frame)
 	end)
 end
 
