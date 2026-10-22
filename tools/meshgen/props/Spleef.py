@@ -1,11 +1,10 @@
 """Props for Spleef: a frozen crater with three floors of snow blocks over an icy pool.
 
-    python3 tools/meshgen/generate_meshes.py --only SpleefBlock,SpleefShovel,SpleefCliff,SpleefPine,SpleefCrystal,SpleefFloe,SpleefPeak
+    python3 tools/meshgen/generate_meshes.py --only SpleefBlock,SpleefCliff,SpleefPine,SpleefCrystal,SpleefFloe,SpleefPeak
 
 Units are studs, +Y is up, the base sits on y = 0 and -Z is the front:
   * SpleefBlock: one snow block of a floor, exactly 4 x 3 x 4 so the floor is seamless: two courses of
     packed snow bricks (offset joints) under a pillowy cap. One piece ("Snow"): one part per block.
-  * SpleefShovel: blade at the bottom (scooped toward -Z), socket, wooden shaft, red D-grip on top.
   * SpleefCliff: a 60 degree arc of the crater rim swept around the crater's middle (the origin),
     centered on -Z: faceted ice cliff rising out of the water (mesh y = 6 is the waterline), a snowy
     crest, the outer slope down to the snowfield. The ends match the next arc exactly. Its pivot (the
@@ -21,7 +20,7 @@ import math
 
 import numpy as np
 
-from generate_meshes import Mesh, capsule, cylinder, extrude, icosphere, lathe, merge, organic_lathe, rounded_box, tube
+from generate_meshes import Mesh, extrude, icosphere, lathe, merge, organic_lathe, rounded_box
 
 CLIFF_ARC = math.radians(60)
 
@@ -57,30 +56,6 @@ def block():
     cap.v[top, 1] -= dent
     parts.append(cap)
     return {"Snow": merge(*parts)}
-
-
-# ------------------------------------------------------------------ the shovel
-
-def shovel():
-    # Blade: a spade outline (pointed bottom), scooped toward the front (-Z).
-    half = [(0.0, 0.0), (0.3, 0.1), (0.5, 0.34), (0.58, 0.68), (0.58, 1.16), (0.5, 1.29), (0.16, 1.34)]
-    outline = half + [(-x, y) for x, y in reversed(half[1:])]
-    blade = extrude([(x, y) for x, y in outline], 0.11)
-    blade.v[:, 2] -= 0.2 * (blade.v[:, 0] / 0.58) ** 2  # the scoop: edges curl forward
-    blade.v[:, 2] += 0.06 * (1 - blade.v[:, 1] / 1.34)  # the tip leans out a touch
-    socket = lathe([(0.0, 1.2), (0.2, 1.2), (0.16, 1.5), (0.13, 1.78), (0.0, 1.78)], 14)
-    rivet = cylinder(0.05, 0.36, 8).rotate("x", 90).translate(0, 1.5, 0.18)
-    shaft = cylinder(0.1, 1.5, 12).translate(0, 1.7, 0)
-    collar = lathe([(0.0, 3.0), (0.13, 3.0), (0.13, 3.14), (0.0, 3.14)], 12)
-    loop = tube([(0.0, 3.05, 0.0), (0.27, 3.22, 0.0), (0.33, 3.48, 0.0), (0.0, 3.5, 0.0)], 0.06, 8)
-    loop2 = tube([(0.0, 3.05, 0.0), (-0.27, 3.22, 0.0), (-0.33, 3.48, 0.0), (0.0, 3.5, 0.0)], 0.06, 8)
-    grip = capsule(0.5, 0.1, 12).rotate("z", 90).translate(0, 3.5, 0)
-    return {
-        "Blade": blade,
-        "Collar": merge(socket, rivet, collar),
-        "Shaft": shaft,
-        "Grip": merge(loop, loop2, grip),
-    }
 
 
 # ------------------------------------------------------------------ the crater rim
@@ -207,7 +182,6 @@ def peak():
 
 PROPS = {
     "SpleefBlock": block,
-    "SpleefShovel": shovel,
     "SpleefCliff": cliff,
     "SpleefPine": pine,
     "SpleefCrystal": crystal,
@@ -216,10 +190,6 @@ PROPS = {
 }
 COLORS = {
     "Snow": (244, 249, 255),
-    "Blade": (196, 206, 222),
-    "Collar": (92, 98, 116),
-    "Shaft": (168, 112, 64),
-    "Grip": (232, 64, 72),
     "Ice": (150, 206, 242),
     "Rock": (104, 118, 146),
     "Trunk": (112, 76, 52),
