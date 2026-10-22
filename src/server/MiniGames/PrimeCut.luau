@@ -23,6 +23,11 @@
 -- Bots nudge through ctx:BotAction like a player's client (Bots/PrimeCut.luau), aiming for where they
 -- think the middle is (off by more for clumsier bots). There's nothing a client animates that touches
 -- anyone: every knife is judged on the server from the same nudges.
+--
+-- Which grill is whose (owner: "I couldnt tell what color I was on prime cut."): each player's camera
+-- looks straight down at their grate, where only the grill's rim and side tables show, so those are
+-- painted in the team's color as well as the body and hood, and the team's rug lies under its grill.
+-- The client half adds YOU and the team to its HUD and a badge over the player's own grill.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
@@ -246,15 +251,36 @@ function PrimeCut:_buildArena()
 		})
 	end
 
-	-- The grills, one per team, in the team's color with its sign on the hood.
+	-- The grills, one per team, in the team's color with its sign on the hood. Seen from a player's
+	-- camera (straight down at the grate) the hood is off the top of the screen, so the rim round
+	-- the grate and the side tables are in the team's color too (its own color, not a lighter coat:
+	-- a light red reads as pink), and the team's rug lies under its grill: every grill reads as its
+	-- team's from above.
 	local grate, grateTop = self.grate, self.grateTop
 	for _, team in self.order do
 		local station = self.stations[team]
 		local frame = station.Frame
+		local color = Teams.Colors[team]
+		Build.Decor({
+			Name = `Rug_{team}`,
+			Size = Vector3.new(40, 0.1, 34),
+			CFrame = CFrame.new(frame.Position.X, self.origin.Y + 0.05, frame.Position.Z + 5),
+			Color = color:Lerp(Color3.new(0, 0, 0), 0.35),
+			Material = Enum.Material.Fabric,
+			Parent = arena,
+		})
+		Build.Decor({
+			Name = `RugMiddle_{team}`,
+			Size = Vector3.new(37, 0.1, 31),
+			CFrame = CFrame.new(frame.Position.X, self.origin.Y + 0.08, frame.Position.Z + 5),
+			Color = color:Lerp(Color3.new(0, 0, 0), 0.1),
+			Material = Enum.Material.Fabric,
+			Parent = arena,
+		})
 		-- The grill's front (its -Z) faces the team (+Z); its grate's middle under the steak's spot.
 		local base = frame * CFrame.new(0, -grateTop, 0) * CFrame.Angles(0, math.pi, 0)
 		MeshLibrary.Get("PrimeCutGrill", {
-			Colors = { Enamel = Teams.Colors[team] },
+			Colors = { Enamel = color, Steel = color },
 			CFrame = base * CFrame.new(-grate.X, 0, -grate.Z),
 			Parent = arena,
 		})
