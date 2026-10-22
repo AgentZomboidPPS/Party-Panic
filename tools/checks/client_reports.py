@@ -50,7 +50,8 @@ def print_bots(key: str, entry: dict):
     """A device's bot reports, newest first: one block per round (BotWatchController's kinds: snap =
     drawn position jumped over 5 studs in a frame, jerk = over 2 (counted only), hover = feet over 2
     studs above anything under it for 0.5 s while not rising or falling, head = standing on someone,
-    me* = the player's own character, invisible = the player stood on a nearly invisible part;
+    seat = somebody sat (with the seat's name), me* = the player's own character, invisible = the
+    player stood on a nearly invisible part, bots = bot characters seen, watched = bot-seconds watched;
     Server = the server's counts on each body that round: Retakes = taken back from a player's device,
     Drops = dropped by the server (Spleef's net), Clamps = speed clamped after a shove)."""
     for report in entry.get("Reports") or []:

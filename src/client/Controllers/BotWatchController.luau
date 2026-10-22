@@ -15,7 +15,9 @@
 -- And the same for this player's own character ("me"; owner: "Theres still invisible stuff I latched
 -- onto on spleef."): its snaps (the server moving it), hovers ("mehover": held up by something no
 -- ray can find), standing on something nearly invisible ("invisible", with its name), anchored time
--- and server drops.
+-- and server drops. Anyone sitting ("seat", with the seat's name): the lobby benches' invisible
+-- seats were carried into arenas by whoever sat on one when a round began, and caught people there
+-- (now gone, and Shared/NoSitting stops anyone sitting), so a seat in a report is a new one.
 -- One report per round (kind "Bots"), a few seconds into the results, through the client-report
 -- remote: Services/ClientReports keeps each player's last few, tools/checks/client_reports.py prints
 -- them. Light on phones: a few sums per body a frame, and one or two short rays per body ten times a
@@ -73,6 +75,8 @@ type Tally = {
 local localPlayer = Players.LocalPlayer
 local watches: { [Instance]: Watch } = {}
 local tally: Tally? = nil
+-- What it has done this session (BotWatchController.Status, for the check tools).
+local status = { Rounds = 0, Reports = 0, Problem = "" }
 local rays = RaycastParams.new()
 rays.FilterType = Enum.RaycastFilterType.Exclude
 rays.RespectCanCollide = true
@@ -192,8 +196,15 @@ local function look(
 		t.Anchored[who] = (t.Anchored[who] or 0) + span
 		return
 	end
-	if humanoid.Sit or humanoid.PlatformStand or root.AssemblyRootPart ~= root then
-		watch.HoverFor = 0 -- riding something (a ball, a board, a seat): not standing anywhere
+	local seat = humanoid.SeatPart
+	if humanoid.Sit or seat then
+		-- Nothing should sit anyone down any more (Shared/NoSitting): say which seat did.
+		watch.HoverFor = 0
+		note(t, watch, who, "seat", `on={if seat then seat:GetFullName() else "?"}`)
+		return
+	end
+	if humanoid.PlatformStand or root.AssemblyRootPart ~= root then
+		watch.HoverFor = 0 -- riding something (a ball, a board, a sled): not standing anywhere
 		return
 	end
 	local feet = feetOf(humanoid, root)
@@ -265,6 +276,9 @@ local function step(dt: number)
 				Noted = {},
 			}
 			watches[entry.Instance] = watch :: Watch
+			if entry.IsBot then
+				t.Counts.bots = (t.Counts.bots or 0) + 1 -- (characters seen this round)
+			end
 		end
 		local who = if entry.IsLocal then "me" else (string.gsub(entry.Name, "^Bot_", ""))
 		look(t, watch :: Watch, who, entry.IsLocal, humanoid, root, dt, everyone)
@@ -280,6 +294,7 @@ local function counts(instance: Instance): { [string]: number }
 end
 
 local function begin()
+	status.Rounds += 1
 	local start = {}
 	for _, entry in Participants.All() do
 		if entry.IsBot or entry.IsLocal then
@@ -304,14 +319,14 @@ local function finish(t: Tally)
 	if tally == t then
 		tally = nil
 	end
-	if (t.Counts.watched or 0) <= 0 then
+	if (t.Counts.bots or 0) == 0 and (t.Counts.errors or 0) == 0 then
 		return -- no bots seen this round
 	end
 	-- The server's own counts on each one this round.
 	local server = {}
 	for instance, before in t.Start do
-		if not instance.Parent then
-			continue
+		if instance ~= localPlayer and not instance.Parent then
+			continue -- (a bot that left)
 		end
 		local now = counts(instance)
 		local parts = {}
@@ -335,6 +350,7 @@ local function finish(t: Tally)
 		end
 	end
 	t.Counts.watched = round1(t.Counts.watched or 0)
+	status.Reports += 1
 	Remotes.Get("ClientReport"):FireServer({
 		Kind = "Bots",
 		Where = t.Game,
@@ -346,6 +362,18 @@ local function finish(t: Tally)
 		Server = server,
 		Anchored = anchored,
 	})
+end
+
+-- Finishes a round's tally (and says what went wrong, if anything did).
+local function close(t: Tally)
+	local ok, err = pcall(finish, t)
+	if not ok then
+		status.Problem = string.sub(tostring(err), 1, 200)
+	end
+end
+
+function BotWatchController.Status(): { [string]: any }
+	return table.clone(status)
 end
 
 function BotWatchController.Start()
@@ -363,15 +391,16 @@ function BotWatchController.Start()
 		local t = tally
 		if phase == "InRound" then
 			if t then
-				pcall(finish, t)
+				close(t)
 			end
-			begin()
+			local ok, err = pcall(begin)
+			if not ok then
+				status.Problem = string.sub(tostring(err), 1, 200)
+			end
 		elseif t and not t.Closed then
 			-- The round is over: stop watching, report a moment into the results.
 			t.Closed = true
-			task.delay(if phase == "Results" then REPORT_AFTER else 0, function()
-				pcall(finish, t)
-			end)
+			task.delay(if phase == "Results" then REPORT_AFTER else 0, close, t)
 		end
 	end)
 	if GameState.Get("Phase") == "InRound" then

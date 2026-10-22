@@ -2152,6 +2152,10 @@ return game:GetService("HttpService"):JSONEncode({
 	sentToServer = __sent,
 	soundReports = __soundReports,
 	botReports = __botReports,
+	botWatch = (function() -- what Controllers/BotWatchController did (rounds watched, reports, a problem)
+		local ok, watcher = pcall(__require, "Client/Controllers/BotWatchController")
+		return if ok and watcher.Status then watcher.Status() else tostring(watcher)
+	end)(),
 	guiInstances = guiCount,
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
