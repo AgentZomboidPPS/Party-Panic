@@ -24,6 +24,13 @@ In the round, the team pill under the status line shows every kind of team ("hud
 read and how wide it was; "InRound teams": four teams, its widest), and a mode's two action buttons
 show with two toasts up ("InRound buttons": on phones the toasts sit above the buttons; "hudChecks"
 says whether they did and came back down after, and whether the mode HUD's scales let go).
+A quieter round (owner: "During the mini games, any way we can save UI space so they can see more of
+the game at one time?"): while the player plays, the menu column waits behind the ☰ and the phone
+standings show the player and the leader; "InRound menu" is the screen with both tapped open, and
+"hudChecks.quiet" says what showed before, then, and 5.5 seconds later (the banner's players-left
+pill, the status line, the mode HUDs' shift). Of the two toasts in "InRound buttons", the round's
+callout (topic "Round") shows (on phones in the strip under the banner) and the quest waits until
+the player is out ("hudChecks.toasts"); the mode's hint has faded 7 seconds after it was set.
 The result's "portals" says what each of the vote stage's portals shows in each phase (its game,
 "✓ YOUR VOTE", Random's spinning reel, the winner), as text.
 After the round the player sits out (the sit-out switch by the banner): a tap with no answer from
@@ -1121,7 +1128,9 @@ end
 -- The standings rows as they read on screen (a row is a title label, or a name and a score).
 local function boardRows()
 	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
-	local board = hud and hud:FindFirstChild("Leaderboard")
+	-- (Phones: inside its tap area, RoundController's "Standings".)
+	local tapArea = hud and hud:FindFirstChild("Standings")
+	local board = hud and (hud:FindFirstChild("Leaderboard") or (tapArea and tapArea:FindFirstChild("Leaderboard")))
 	local rows = {}
 	for _, child in if board then board:GetChildren() else {} do
 		if child:IsA("TextLabel") or child:IsA("Frame") then
@@ -1454,6 +1463,80 @@ if #bots > 0 then
 	task.wait(0.5)
 end
 
+-- A quieter round: the menu column behind the ☰ (HudController), the phone standings with just the
+-- player and the leader (RoundController), the players-left pill in the banner, the empty status
+-- line's room given to the mode HUDs (State.TopHudShift), and the toasts that aren't about the round
+-- held back while the player plays (NotificationController). Then the ☰ and the standings tapped
+-- ("InRound menu"), and both back as they were 5.5 seconds later.
+step = "quiet round"
+local okQuiet, quietErr = pcall(function()
+	local okHud, Hud = pcall(__require, "Client/Controllers/HudController")
+	local okRound, Round = pcall(__require, "Client/Controllers/RoundController")
+	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+	local menu = hud and hud:FindFirstChild("Menu")
+	local function find(name)
+		for _, gui in __playerGui:GetChildren() do
+			local found = gui:FindFirstChild(name, true)
+			if found then
+				return found
+			end
+		end
+		return nil
+	end
+	local function menuState()
+		local toggle = find("MenuToggle")
+		local badge = toggle and toggle:FindFirstChild("Badge", true)
+		return `column {if menu and menu.Visible then "shown" else "away"}, ☰ {if toggle and toggle.Visible
+			then "shown" .. (if badge and badge.Visible then " with !" else "")
+			else "hidden"}`
+	end
+	local function line()
+		local row = hud and (hud:FindFirstChild("RoundStatus") or hud:FindFirstChild("PhaseBanner"))
+		local status = row and row:FindFirstChild("Status")
+		return if status and status:IsA("TextLabel") and status.Visible then `'{status.Text}'` else "hidden"
+	end
+	local function toastsUp()
+		local toasts = __playerGui:FindFirstChild("PartyPanicToasts")
+		local texts = {}
+		for _, item in if toasts then toasts:GetDescendants() else {} do
+			if item.Name == "Toast" and item:IsA("GuiObject") then
+				local words = item:FindFirstChildOfClass("TextLabel")
+				table.insert(texts, if words then words.Text else "?")
+			end
+		end
+		return texts
+	end
+	-- The banner's players-left pill (phones: in the top bar row; PC: in the HUD).
+	local banner = find("PhaseBanner")
+	local count = banner and banner:FindFirstChild("Count", true)
+	local countWords = count and count:FindFirstChild("Text")
+	local quiet = {
+		playing = menuState(),
+		countPill = if count and count.Visible and countWords then countWords.Text else "hidden",
+		statusLine = line(),
+		topHudShift = State.TopHudShift,
+		board = boardRows(),
+		toastsUp = toastsUp(),
+	}
+	if okHud and okRound then
+		Hud.ToggleMenu()
+		Round.ToggleStandings()
+		task.wait(0.8)
+		quiet.tapped = menuState()
+		quiet.boardTapped = boardRows()
+		snap("InRound menu")
+		task.wait(5.5)
+		quiet.later = menuState()
+		quiet.boardLater = boardRows()
+	else
+		__note("quiet round: " .. tostring(Hud) .. " / " .. tostring(Round))
+	end
+	hudChecks.quiet = quiet
+end)
+if not okQuiet then
+	__note("quiet round checks failed: " .. tostring(quietErr))
+end
+
 -- A mode's two action buttons (Kit/Api: beside the jump button on phones) with two toasts up, the
 -- first on two lines: on phones the toasts sit above the buttons' row (NotificationController), and
 -- back down once the round's HUD is gone (hudChecks.toastsAboveButtons). That HUD's UIKit.AutoScale
@@ -1466,16 +1549,40 @@ do
 		api:Button({ Text = "HIT!", Key = Enum.KeyCode.E })
 		api:Button({ Text = "PULL", Key = Enum.KeyCode.Q, Color = Color3.fromRGB(255, 92, 170), Slot = 2 })
 		api:Hint("Tap HIT! when the bees come")
-		__fire("Notify", "🎃 GOLDEN RUSH! Every veggie counts double for the next ten seconds!", "success", 4)
+		local hintSetAt = os.clock()
+		__fire("Notify", "🎃 GOLDEN RUSH! Every veggie counts double for the next ten seconds!", "success", 4, "Round")
 		__fire("Notify", "Quest complete: Play 3 rounds", "reward", 4)
 		task.wait(0.8)
 		snap("InRound buttons")
+		do
+			local hudGui = __playerGui:FindFirstChild("PartyPanicHUD")
+			local row = hudGui and hudGui:FindFirstChild("RoundStatus")
+			local strip = row and row:FindFirstChild("Callout")
+			local stripWords = strip and strip:FindFirstChild("Text")
+			local toasts = __playerGui:FindFirstChild("PartyPanicToasts")
+			local stack = {}
+			for _, item in if toasts then toasts:GetDescendants() else {} do
+				if item.Name == "Toast" and item:IsA("GuiObject") then
+					local words = item:FindFirstChildOfClass("TextLabel")
+					table.insert(stack, if words then words.Text else "?")
+				end
+			end
+			hudChecks.toasts = {
+				strip = if strip and strip.Visible and stripWords then stripWords.Text else "hidden",
+				stack = stack,
+				topHudShift = State.TopHudShift,
+			}
+		end
 		local toasts = __playerGui:FindFirstChild("PartyPanicToasts")
 		local area = toasts and toasts:FindFirstChild("ToastArea")
 		local function lifted()
 			return if area then area:GetAttribute("PP_AboveActions") == true else "no phone toast area (PC)"
 		end
 		hudChecks.toastsAboveButtons = { whileShown = lifted() }
+		-- The hint fades once it has been up 6 seconds.
+		task.wait(math.max(0, hintSetAt + 7 - os.clock()))
+		local hintLabel = api.Gui:FindFirstChild("Hint", true)
+		hudChecks.hintAfter7s = if hintLabel and hintLabel.Visible then "still shown" else "faded"
 		local scales, released = 0, 0
 		for _, item in api.Gui:GetDescendants() do
 			if item:IsA("UIScale") and item:GetAttribute("AutoScale") then
@@ -1499,6 +1606,21 @@ step = "Out"
 __player:SetAttribute("PP_Alive", false)
 task.wait(1.2)
 snap("Out")
+do
+	local toasts = __playerGui:FindFirstChild("PartyPanicToasts")
+	local stack = {}
+	for _, item in if toasts then toasts:GetDescendants() else {} do
+		if item.Name == "Toast" and item:IsA("GuiObject") then
+			local words = item:FindFirstChildOfClass("TextLabel")
+			table.insert(stack, if words then words.Text else "?")
+		end
+	end
+	local menuFrame = __playerGui.PartyPanicHUD:FindFirstChild("Menu")
+	hudChecks.out = {
+		toasts = stack,
+		menu = if menuFrame and menuFrame.Visible then "column shown" else "column away",
+	}
+end
 local outPanel = __playerGui.PartyPanicHUD:FindFirstChild("OutPanel")
 if outPanel then
 	outPanel.Visible = false -- what its 👀 Spectate button does
