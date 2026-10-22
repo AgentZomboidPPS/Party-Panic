@@ -40,16 +40,19 @@ LogJam.FIRST = 0.3 -- after GO, until the first prompt
 
 -- Station geometry (studs, in the station's own frame: right = the players' right, up, toward = towards
 -- the players). The meshes are made for these numbers (tools/meshgen/props/LogJam.py).
-LogJam.HINGE = Vector3.new(4.6, 5.2, 0) -- the axe's hinge
-LogJam.LOG_REST = Vector3.new(-3.5, 2.45, 0) -- the waiting log's middle, lying on the rack
-LogJam.LOG_UP = Vector3.new(0, 3.56, 0) -- the log's middle standing on the stump
+-- The station props are drawn this much bigger than their meshes (the numbers below include it).
+LogJam.SIZE = 1.35
+local SIZE = LogJam.SIZE
+LogJam.HINGE = Vector3.new(4.6, 5.2, 0) * SIZE -- the axe's hinge
+LogJam.LOG_REST = Vector3.new(-3.5, 2.45, 0) * SIZE -- the waiting log's middle, lying on the rack
+LogJam.LOG_UP = Vector3.new(0, 3.56, 0) * SIZE -- the log's middle standing on the stump
 LogJam.AXE_REST = -70 -- the axe's resting angle (degrees; + is the head going down)
 LogJam.AXE_BITE = 17.3 -- the axe stuck in the stump after a chop
-local PEG = Vector3.new(-2.75, 1.6, 0) -- the rack's stop peg
-local STUMP_TOP = 2.39 -- the stump's "Top" piece centre
-local STAND = 6.8 -- the players' line, in front of the stump
-local SPACING = 3.2 -- between neighbours in that line
-local STATION_GAP = 26
+local PEG = Vector3.new(-2.75, 1.6, 0) * SIZE -- the rack's stop peg
+local STUMP_TOP = 2.39 * SIZE -- the stump's "Top" piece centre
+local STAND = 7.6 -- the players' line, in front of the stump
+local SPACING = 3.4 -- between neighbours in that line
+local STATION_GAP = 30
 local DECK = 0.6 -- the decks' top above the ground
 
 type Station = {
@@ -124,7 +127,7 @@ local function buildYard(ctx, origin: Vector3, frames: { CFrame })
 		Name = "Yard",
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(0.3, 150, 150),
-		CFrame = upright(origin + Vector3.new(0, -0.1, -8)),
+		CFrame = upright(origin + Vector3.new(0, -0.03, -8)),
 		Color = rgb(170, 126, 84),
 		Material = Enum.Material.Ground,
 		Parent = arena,
@@ -206,40 +209,40 @@ local function buildStation(ctx, team: string, frame: CFrame)
 	end
 	local ground = frame - Vector3.new(0, DECK, 0)
 	-- The deck: real planks to stand on (solid, and drawn), its edge trimmed in the team's colour.
-	local deckCenter = LogJam.Point(ground, Vector3.new(-0.5, (DECK - 0.4) / 2, 2.5))
+	local deckCenter = LogJam.Point(ground, Vector3.new(-1.2, (DECK - 0.4) / 2, 2.6))
 	Build.Part({
 		Name = "Deck_" .. team,
-		Size = Vector3.new(19, DECK + 0.4, 16),
+		Size = Vector3.new(23, DECK + 0.4, 18),
 		CFrame = CFrame.lookAt(deckCenter, deckCenter + frame.LookVector),
 		Color = rgb(196, 150, 100),
 		Material = Enum.Material.WoodPlanks,
 		Parent = arena,
 	})
-	local trimCenter = deckCenter - Vector3.new(0, 0.12, 0)
+	local trimCenter = deckCenter - Vector3.new(0, 0.42, 0)
 	Build.Decor({
 		Name = "DeckTrim_" .. team,
-		Size = Vector3.new(19.8, DECK + 0.4 - 0.12, 16.8),
+		Size = Vector3.new(23.8, DECK + 0.4 + 0.36, 18.8),
 		CFrame = CFrame.lookAt(trimCenter, trimCenter + frame.LookVector),
 		Color = color,
 		Material = Enum.Material.SmoothPlastic,
 		Parent = arena,
 	})
 
-	local stump = MeshLibrary.Get("LogJamStump", { CFrame = frame, Parent = arena })
+	local stump = MeshLibrary.Get("LogJamStump", { Scale = SIZE, CFrame = frame, Parent = arena })
 	centre(stump, "Top", at(Vector3.new(0, STUMP_TOP, 0)))
 	stump.Name = "Stump_" .. team
 
-	local rack = MeshLibrary.Get("LogJamRack", { CFrame = frame, Parent = arena })
+	local rack = MeshLibrary.Get("LogJamRack", { Scale = SIZE, CFrame = frame, Parent = arena })
 	centre(rack, "Peg", at(PEG))
 	rack.Name = "Rack_" .. team
 
 	local hinge = LogJam.HingeFrame(frame)
-	local post = MeshLibrary.Get("LogJamAxeFrame", { CFrame = frame, Parent = arena })
+	local post = MeshLibrary.Get("LogJamAxeFrame", { Scale = SIZE, CFrame = frame, Parent = arena })
 	centre(post, "Bolt", hinge.Position)
 	post.Name = "Post_" .. team
 
 	-- The axe, raised: placed level on its hinge, then turned up about it.
-	local axe = MeshLibrary.Get("LogJamAxe", { CFrame = hinge, Parent = arena })
+	local axe = MeshLibrary.Get("LogJamAxe", { Scale = SIZE, CFrame = hinge, Parent = arena })
 	centre(axe, "Collar", hinge.Position)
 	local relative = hinge:ToObjectSpace(axe:GetPivot())
 	axe:PivotTo(hinge * CFrame.Angles(0, 0, math.rad(LogJam.AXE_REST)) * relative)
@@ -248,6 +251,7 @@ local function buildStation(ctx, team: string, frame: CFrame)
 	-- The log waiting on the rack (lying along the players' line of sight).
 	local rest = at(LogJam.LOG_REST)
 	local log = MeshLibrary.Get("LogJamLog", {
+		Scale = SIZE,
 		CFrame = CFrame.fromMatrix(rest, frame.RightVector, frame.LookVector),
 		Parent = arena,
 	})
@@ -259,10 +263,11 @@ local function buildStation(ctx, team: string, frame: CFrame)
 	for index, side in { 1, -1 } do
 		local right = -frame.RightVector * side
 		local half = MeshLibrary.Get("LogJamHalf", {
+			Scale = SIZE,
 			CFrame = CFrame.fromMatrix(up, -right, Vector3.yAxis),
 			Parent = arena,
 		})
-		centre(half, "Wood", up + frame.LookVector * side * 0.4)
+		centre(half, "Wood", up + frame.LookVector * side * 0.4 * SIZE)
 		half.Name = `Half_{team}_{index}`
 		for _, part in half:GetDescendants() do
 			if part:IsA("BasePart") then
@@ -282,7 +287,7 @@ local function buildStation(ctx, team: string, frame: CFrame)
 		Build.Billboard(top, `{string.upper(team)} MILL`, {
 			Name = "TeamLabel",
 			Size = UDim2.fromOffset(200, 50),
-			StudsOffset = Vector3.new(0, 7.6, 0),
+			StudsOffset = Vector3.new(0, 9.5, 0),
 			MaxDistance = 300,
 			TextColor3 = color,
 		})
@@ -343,7 +348,9 @@ function LogJam:Prepare()
 		for slot, player in members do
 			self.teamOf[player] = team
 			self.stats[player] = { Placed = 0, Chopped = 0, Jams = 0 }
-			local stand = LogJam.Point(frame, Vector3.new((slot - (#members + 1) / 2) * SPACING, 0, STAND))
+			-- Nobody stands right in front of the stump (their own body would hide it from their camera).
+			local across = (slot - (#members + 1) / 2) * SPACING + (if #members % 2 == 1 then SPACING / 2 else 0)
+			local stand = LogJam.Point(frame, Vector3.new(across, 0, STAND))
 			self.spots[player] = CFrame.lookAt(stand, stand - frame.LookVector)
 		end
 		local p, look = frame.Position, frame.LookVector
