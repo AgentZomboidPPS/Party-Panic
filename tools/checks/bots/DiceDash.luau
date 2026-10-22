@@ -43,7 +43,13 @@ return function(env)
 				finishes += 1
 				env.note(`{player.Name} finishes {mine.F} at {string.format("%.1f", elapsed)}s`)
 			end
-			if mine and mine.D == nil and not mine.F and turn.M == nil and ctx:Now() >= (pressAt[player] or math.huge) then
+			if
+				mine
+				and mine.D == nil
+				and not mine.F
+				and turn.M == nil
+				and ctx:Now() >= (pressAt[player] or math.huge)
+			then
 				pressAt[player] = math.huge
 				env.Action(player, "Roll")
 				presses += 1

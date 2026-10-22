@@ -202,7 +202,7 @@ function DiceDash:_buildArena()
 		})
 		tile.Name = `Tile{index}`
 		-- (springboards and cannons stand beside their tiles, on the outside of the path)
-		local side = if z > 0 == (x > 0) then 1 else -1
+		local side = if (z > 0) == (x > 0) then 1 else -1
 		if kind == Board.BOOST then
 			MeshLibrary.Get("DiceDashSpring", {
 				CFrame = self:_at(Vector3.new(x, 0, z), yaw) * CFrame.new(side * (Board.TILE / 2 + 2), 0, 0),
@@ -234,11 +234,9 @@ function DiceDash:_buildArena()
 		local x, z, yaw = Board.Tile(Board.LAST)
 		MeshLibrary.Get("DiceDashCannon", {
 			Scale = 1.3,
-			CFrame = self:_at(Vector3.new(x, 0, z), yaw) * CFrame.new(0, 0, -Board.PAD / 2 - 3.5) * CFrame.Angles(
-				0,
-				math.pi,
-				0
-			),
+			CFrame = self:_at(Vector3.new(x, 0, z), yaw)
+				* CFrame.new(0, 0, -Board.PAD / 2 - 3.5)
+				* CFrame.Angles(0, math.pi, 0),
 			Parent = arena,
 		})
 	end
@@ -257,7 +255,14 @@ function DiceDash:_buildArena()
 	prop("DiceDashCards", 72, 32, 0.5)
 	prop("DiceDashCards", -78, -44, 2.4, 0.8)
 	prop("DiceDashDie", 62, -48, 0.6, 1.4, { Body = Color3.fromRGB(250, 248, 240), Pips = Color3.fromRGB(40, 36, 60) })
-	prop("DiceDashDie", -76, 44, 1.9, 1.2, { Body = Color3.fromRGB(255, 90, 100), Pips = Color3.fromRGB(255, 255, 255) })
+	prop(
+		"DiceDashDie",
+		-76,
+		44,
+		1.9,
+		1.2,
+		{ Body = Color3.fromRGB(255, 90, 100), Pips = Color3.fromRGB(255, 255, 255) }
+	)
 	local pawnSpots = {
 		{ 40, 50, 0.2 },
 		{ -10, 51, 1.2 },
@@ -562,7 +567,13 @@ function DiceDash:_resolve()
 				local theirs = leader.Pos
 				move(racer, beatAt, theirs, "x")
 				move(leader, beatAt, from, "x")
-				event(beatAt, "SWAP", `SWAP! {name} ↔ {leader.Player.DisplayName}`, { id, leader.Player.UserId }, from)
+				event(
+					beatAt,
+					"SWAP",
+					`SWAP! {name} ↔ {leader.Player.DisplayName}`,
+					{ id, leader.Player.UserId },
+					from
+				)
 			else
 				event(beatAt, "SWAP", `SWAP! {name} is already in front`, { id }, from)
 			end
@@ -760,9 +771,7 @@ function DiceDash:_placeBots(now: number, only: any?)
 			local list = rests[rest]
 			offset = Board.Ring(table.find(list, racer) or 1, #list, rest == 0 or rest == Board.LAST)
 		end
-		local rootY = if humanoid.RigType == Enum.HumanoidRigType.R15
-			then humanoid.HipHeight + root.Size.Y / 2
-			else 3
+		local rootY = if humanoid.RigType == Enum.HumanoidRigType.R15 then humanoid.HipHeight + root.Size.Y / 2 else 3
 		local position = sample.Position + offset + Vector3.new(0, rootY, 0)
 		if sample.Hidden then
 			position -= Vector3.new(0, 4, 0)
@@ -805,7 +814,10 @@ function DiceDash:GetResults()
 			table.insert(entries, {
 				Player = player,
 				Rank = 1e6 - place,
-				ScoreText = `{Board.Ordinal(place)} · {string.format("%.1f", (racer.Finish or 0) - (self.startAt or 0))}s`,
+				ScoreText = `{Board.Ordinal(place)} · {string.format(
+					"%.1f",
+					(racer.Finish or 0) - (self.startAt or 0)
+				)}s`,
 				BestScore = 100,
 			})
 		else
