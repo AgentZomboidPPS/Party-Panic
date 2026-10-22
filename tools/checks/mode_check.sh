@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks one mini-game end to end: code checks, a 12-player round with the client half, a round
-# with real bots, and its HUD on phones. Prints a short report; output files go to $OUT (default
-# /tmp/mode_check/<Id>).
+# with real bots, and its HUD on phones (the rules card, the card just after its ✕ closed it, and the
+# round). Prints a short report; output files go to $OUT (default /tmp/mode_check/<Id>).
 #
 #   tools/checks/mode_check.sh FireRope
 #   SKIP_CODE=1 tools/checks/mode_check.sh FireRope     # just the rounds
@@ -30,13 +30,13 @@ run() { # name, harness args...
 	grep -v "^LOG" "$OUT/$name.task.log" | grep -q "state COMPLETE" || { echo "!! $name: task failed:"; grep -v "^LOG" "$OUT/$name.task.log" | tail -3; return; }
 	python3 tools/checks/summarize.py "$OUT/$name.json" "$OUT/$name.map.json" >"$OUT/$name.summary.txt" 2>&1
 	echo "== $name"
-	grep -E "^(bots|brain|prepare |start |endReason|roundSeconds|arenaLeftovers|sharedLeftovers|clientModeGuisAfterCleanup)" "$OUT/$name.summary.txt"
+	grep -E "^(bots|brain|prepare |rulesCard|start |endReason|roundSeconds|arenaLeftovers|sharedLeftovers|clientModeGuisAfterCleanup)" "$OUT/$name.summary.txt"
 	sed -n '/^results:/,/^errors/p' "$OUT/$name.summary.txt" | head -8
 	sed -n '/^errors/,/^log/p' "$OUT/$name.summary.txt" | head -12
 }
 
 run players12 --players 12 --client --dump-at 8
 run bots --players 2 --bots 10 --client
-run phone --players 6 --client --touch --seconds 20 --ui-at 5,15
+run phone --players 6 --client --touch --seconds 20 --ui-at rules,closed,5,15
 python3 tools/checks/ui_render.py "$OUT/phone.json" "$OUT/ui" 2>&1 | grep -v "^wrote" | sed 's/^ */   ui: /' | sort | uniq -c | head -20
 echo "files in $OUT"

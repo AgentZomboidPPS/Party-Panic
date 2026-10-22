@@ -272,7 +272,7 @@ local list: { GameDefinition } = {
 		Id = "StampOut",
 		Name = "Stamp Out",
 		Category = "Versus",
-		Icon = "🖍️",
+		Icon = "👣", -- Trace Race has the crayon
 		Color = Color3.fromRGB(235, 90, 120),
 		Objective = "Bounce your rubber stamp around the paper and ink it with your colour. Cover the most paper to win!",
 		Controls = "Steer with the stick or WASD. Tap STAMP (E) to hop, hold it for a long jump. Land on rivals' ink to take it!",
@@ -305,6 +305,45 @@ local list: { GameDefinition } = {
 		Duration = 52,
 		MinPlayers = 1,
 		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "SnowballSummit",
+		Name = "Snowball Summit",
+		Category = "Knockback",
+		Icon = "☃️",
+		Color = Color3.fromRGB(90, 170, 240),
+		Objective = "Roll snowballs and knock rivals off the mountain top. Stay on the summit to win!",
+		Controls = "Hold ROLL (E) and walk to grow a snowball, let go to throw it. Jump over small ones!",
+		Duration = 60,
+		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "TraceRace",
+		Name = "Trace Race",
+		Category = "Reaction",
+		Icon = "🖍️",
+		Color = Color3.fromRGB(120, 170, 255),
+		Objective = "Ride your giant crayon down the dotted line. The most accurate line wins!",
+		Controls = "Steer left and right with the MOVE stick, A / D or the arrow keys. The crayon goes forward by itself.",
+		Duration = 45,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "EatsaPizza",
+		Name = "Eatsa Pizza",
+		Category = "Team",
+		Icon = "🍕",
+		Color = Color3.fromRGB(240, 120, 50),
+		Objective = "Eat your team's part of the giant pizza first! Pepperoni slices take more bites.",
+		Controls = "Stand on your team's slice and mash EAT (E). Slice gone? Walk to the next one!",
+		Duration = 30,
+		MinPlayers = 2,
+		IsTeam = true,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)

@@ -25,7 +25,17 @@
 -- and everything else a mode sets up) passes through. Here on the server they stay non-colliding,
 -- so bots and anything else the server moves never touch them. Only for props that stay still or
 -- turn in place: a moving part would push the camera around.
+--
+-- Collision that follows the drawing (owner: "Theres invisible stuff you can jump on and hang on in
+-- several games"): an uploaded mesh comes with Roblox's Default collision, a rough handful of convex
+-- hulls that fills hollows and bulges past what's drawn (a palm's trunk and fronds, a broken
+-- column's top, a tree's branches, an arch's gold sun: up to 5 studs of invisible ledge to stand or
+-- hang on). Scripts can't set a MeshPart's CollisionFidelity, so every piece of a template that
+-- collides gets its collision rebuilt once as PreciseConvexDecomposition (see preciseCollision).
+-- Pieces that only stop the camera keep the rough hull: the camera stopping a little early is
+-- harmless, and one piece of Fire Rope's temple alone took 142 s to rebuild on a test server.
 
+local AssetService = game:GetService("AssetService")
 local CollectionService = game:GetService("CollectionService")
 local InsertService = game:GetService("InsertService")
 local PhysicsService = game:GetService("PhysicsService")
@@ -43,6 +53,10 @@ type Spec = {
 	Collide: boolean?,
 	Touch: boolean?,
 	BlocksCamera: (boolean | { string })?, -- solid to the camera only (see the top): all pieces, or these
+	-- Collision that follows the drawing (see preciseCollision): nil = for the pieces that collide,
+	-- true = every piece (a client makes it solid itself), false = none (the rough hull is better), or
+	-- the names of the pieces that get it (the mode keeps only those solid)
+	Precise: (boolean | { string })?,
 	Shadow: boolean?,
 	Palette: { [string]: Color3 },
 	Materials: { [string]: Enum.Material }?,
@@ -584,6 +598,173 @@ local function setPivot(model: Model, pivot: CFrame)
 	end
 end
 
+-- Rebuilds these mesh pieces' collision to follow their drawn shape: AssetService makes a MeshPart
+-- from the same mesh with PreciseConvexDecomposition and ApplyMesh copies its collision over.
+-- Measured on a test server, a palm's, a column's, an arch's and a tree's collision then sits within
+-- half a stud of the drawing. A piece whose rebuild fails twice keeps its rough Default collision,
+-- and the output says so. Once per template, in the background: copies made meanwhile are patched
+-- as each piece is done, and later copies share the template's.
+--
+-- One piece at a time across the server. Measured on test servers: a piece takes 0.02 to 15 s (a
+-- mallet's head 14.6 s, the honey oak's canopy 8.7 s) and, one at a time, never held the server up
+-- (the longest gap between Heartbeats stayed under 60 ms, CSG unions beside it took their usual
+-- 0.02 s). Two at once held it up for 8 s, and twelve at once, as at first, for up to 3.9 s at a
+-- time, made asset loads ten times slower and stretched rounds' setup (Cake Factory's from 3.5 s to
+-- 66 s, Honey Trap's from 2.3 s to 22 s). The prop put to use most recently goes first, so a
+-- round's arena is done before props nothing has used yet: at a server's start the lobby's are done
+-- in about 30 s, and everything Preload asks for (about 230 pieces) in about four and a half minutes.
+local PRECISE = { CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition }
+local KEPT = {
+	"Size",
+	"CFrame",
+	"Anchored",
+	"CanCollide",
+	"CanQuery",
+	"CanTouch",
+	"CollisionGroup",
+	"CastShadow",
+	"Color",
+	"Material",
+	"MaterialVariant",
+	"Reflectance",
+	"Transparency",
+	"TextureID",
+	"Massless",
+	"CustomPhysicalProperties",
+}
+
+-- Templates still being rebuilt: the pieces (where they are among the template's descendants, as
+-- a copy's descendants come in the same order), which of them are left, those pieces of every copy
+-- made meanwhile, and when the prop was last put to use.
+type Rebuild = {
+	Name: string,
+	Model: Model,
+	Pieces: { MeshPart },
+	Indices: { number },
+	Todo: { number },
+	Copies: { { MeshPart } },
+	UsedAt: number,
+}
+local rebuilds: { [Model]: Rebuild } = {}
+local working = false
+local inFlight = 0
+-- For tools: what each rebuild took ({ "Prop.Piece", seconds }, in the order done) and the one
+-- being done now ({ "Prop.Piece", os.clock() it started }).
+MeshLibrary.RebuildLog = {} :: { { any } }
+MeshLibrary.Rebuilding = nil :: { any }?
+
+-- Gives `part` the collision of `fresh`; everything else on it (size, place, flags, looks) stays.
+local function applyCollision(part: MeshPart, fresh: MeshPart): boolean
+	local kept = {}
+	for _, property in KEPT do
+		pcall(function()
+			kept[property] = (part :: any)[property]
+		end)
+	end
+	local ok = pcall(part.ApplyMesh, part, fresh)
+	for property, value in kept do
+		pcall(function()
+			(part :: any)[property] = value
+		end)
+	end
+	return ok
+end
+
+local function rebuildPiece(rebuild: Rebuild, index: number)
+	local part = rebuild.Pieces[index]
+	local fresh: MeshPart? = nil
+	local err: any = "ApplyMesh failed"
+	for attempt = 1, 2 do
+		local ok, result = pcall(AssetService.CreateMeshPartAsync, AssetService, Content.fromUri(part.MeshId), PRECISE)
+		if ok then
+			fresh = result
+			break
+		end
+		err = result
+		if attempt == 1 then
+			task.wait(1)
+		end
+	end
+	if fresh and applyCollision(part, fresh) then
+		for _, copy in rebuild.Copies do
+			local piece = copy[index]
+			if piece and piece.Parent then -- (not destroyed since)
+				applyCollision(piece, fresh)
+			end
+		end
+	else
+		warn(`[MeshLibrary] {rebuild.Name}.{part.Name} keeps its rough collision: {err}`)
+	end
+	if fresh then
+		fresh:Destroy()
+	end
+end
+
+-- The one worker: the most recently used prop's next piece, until none are left.
+local function work()
+	if working then
+		return
+	end
+	working = true
+	task.spawn(function()
+		while true do
+			local best: Rebuild? = nil
+			for _, rebuild in rebuilds do
+				if not best or rebuild.UsedAt > best.UsedAt then
+					best = rebuild
+				end
+			end
+			if not best then
+				break
+			end
+			local rebuild = best :: Rebuild
+			local index = table.remove(rebuild.Todo, 1) :: number
+			local label = `{rebuild.Name}.{rebuild.Pieces[index].Name}`
+			local started = os.clock()
+			MeshLibrary.Rebuilding = { label, started }
+			inFlight = 1
+			local ok, err = pcall(rebuildPiece, rebuild, index)
+			inFlight = 0
+			MeshLibrary.Rebuilding = nil
+			if #MeshLibrary.RebuildLog < 1000 then
+				table.insert(MeshLibrary.RebuildLog, { label, os.clock() - started })
+			end
+			if not ok then
+				warn(`[MeshLibrary] {rebuild.Name}: {err}`)
+			end
+			if #rebuild.Todo == 0 then
+				rebuilds[rebuild.Model] = nil
+			end
+		end
+		working = false
+	end)
+end
+
+-- `first`: a prop that players' devices make solid themselves (Precise = true) goes before every
+-- other, so it's done long before a round shares it with them: copies they cloned before it was
+-- done would keep the rough hull (Arrow Ambush's target boards).
+local function preciseCollision(name: string, model: Model, pieces: { MeshPart }, first: boolean)
+	if #pieces == 0 then
+		return
+	end
+	local descendants = model:GetDescendants()
+	local rebuild: Rebuild = {
+		Name = name,
+		Model = model,
+		Pieces = pieces,
+		Indices = {},
+		Todo = {},
+		Copies = {},
+		UsedAt = if first then math.huge else 0,
+	}
+	for index, part in pieces do
+		rebuild.Indices[index] = table.find(descendants, part) :: number
+		rebuild.Todo[index] = index
+	end
+	rebuilds[model] = rebuild
+	work()
+end
+
 -- Moves the pivot to the bottom center of the model's bounding box.
 local function pivotAtBottom(model: Model)
 	local box, size = model:GetBoundingBox()
@@ -603,6 +784,7 @@ local function normalize(name: string, model: Model, spec: Spec)
 	local camera = spec.BlocksCamera ~= nil and spec.Collide ~= true and setupCameraSolid()
 	local largest: BasePart? = nil
 	local largestVolume = -1
+	local solidMeshes: { MeshPart } = {}
 	for _, descendant in model:GetDescendants() do
 		if not descendant:IsA("BasePart") then
 			continue
@@ -616,6 +798,13 @@ local function normalize(name: string, model: Model, spec: Spec)
 			part.CollisionGroup = CAMERA_SOLID
 			CollectionService:AddTag(part, CAMERA_SOLID)
 			cameraSolid[name] = true
+		end
+		local precise = spec.Precise
+		local wanted = if type(precise) == "table"
+			then table.find(precise, part.Name) ~= nil
+			else precise == true or (precise == nil and part.CanCollide)
+		if part:IsA("MeshPart") and wanted then
+			table.insert(solidMeshes, part)
 		end
 		local volume = part.Size.X * part.Size.Y * part.Size.Z
 		part.CastShadow = spec.Shadow ~= false and volume > 8
@@ -638,16 +827,10 @@ local function normalize(name: string, model: Model, spec: Spec)
 	if spec.PostProcess then
 		spec.PostProcess(model)
 	end
+	preciseCollision(name, model, solidMeshes, spec.Precise == true)
 end
 
-local function resolve(name: string): Model
-	local cached = templates[name]
-	if cached then
-		return cached
-	end
-	local spec = SPECS[name]
-	assert(spec, `MeshLibrary has no prop named {name}`)
-
+local function build(name: string, spec: Spec): Model
 	local model = fromStudioTemplate(name)
 	local source = "Template"
 	if not model then
@@ -666,6 +849,31 @@ local function resolve(name: string): Model
 	return model :: Model
 end
 
+local building: { [string]: boolean } = {} -- templates being made right now (it takes seconds)
+
+local function resolve(name: string): Model
+	local cached = templates[name]
+	if cached then
+		return cached
+	end
+	local spec = SPECS[name]
+	assert(spec, `MeshLibrary has no prop named {name}`)
+	-- Someone else (Preload, a round) is making it already: wait for theirs instead of making two.
+	while building[name] do
+		task.wait()
+	end
+	if templates[name] then
+		return templates[name]
+	end
+	building[name] = true
+	local ok, result = pcall(build, name, spec)
+	building[name] = nil
+	if not ok then
+		error(result, 0)
+	end
+	return result
+end
+
 export type GetOptions = {
 	Scale: number?,
 	Colors: { [string]: Color3 }?,
@@ -675,7 +883,18 @@ export type GetOptions = {
 
 -- Returns a fresh copy of a prop. Options can rescale, recolor pieces, place and parent it.
 function MeshLibrary.Get(name: string, options: GetOptions?): Model
-	local model = resolve(name):Clone()
+	local template = resolve(name)
+	local model = template:Clone()
+	local rebuild = rebuilds[template]
+	if rebuild then -- its collision is still being made precise: this copy gets it too, and it goes next
+		local descendants = model:GetDescendants()
+		local copy = {}
+		for index, at in rebuild.Indices do
+			copy[index] = descendants[at] :: MeshPart
+		end
+		table.insert(rebuild.Copies, copy)
+		rebuild.UsedAt = os.clock()
+	end
 	if cameraSolid[name] then
 		setupCameraSolid() -- keeps groups registered since the template was made out of it
 	end
@@ -738,6 +957,16 @@ function MeshLibrary.Names(): { string }
 	end
 	table.sort(names)
 	return names
+end
+
+-- How many pieces still wait for their collision rebuild, the one being done included (tools wait
+-- for none before measuring collision).
+function MeshLibrary.PendingRebuilds(): number
+	local count = inFlight
+	for _, rebuild in rebuilds do
+		count += #rebuild.Todo
+	end
+	return count
 end
 
 -- Resolves every prop up front (in parallel, since asset loads yield) and reports the sources.

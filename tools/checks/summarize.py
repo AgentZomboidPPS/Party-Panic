@@ -39,11 +39,22 @@ def fix(text: str) -> str:
 
 for key in ["bots", "brain", "prepare", "prepareSeconds", "arenaParts", "spawnFails", "peopleLeftAt", "calledOff", "reset",
             "drop", "lateFloor", "clientHolds",
-            "start", "endReason", "endHeld", "roundSeconds", "stop", "cleanup",
+            "rulesCard", "start", "endReason", "endHeld", "roundSeconds", "stop", "cleanup",
             "destroy", "arenaLeftovers", "sharedLeftovers", "winningTeam", "clientGuiDuringResults",
-            "clientModeGuisAfterCleanup"]:
+            "clientModeGuisAfterCleanup", "lobby", "portalScreens", "votePads", "botVoteRefused"]:
     if key in d:
         print(f"{key:28s}", fix(str(d.get(key))))
+# The lobby run (round_harness.py LOBBY): each phase between rounds, and how each vote went.
+if d.get("phases"):
+    print("phases (seconds into the run, and how long each was set for):")
+    for phase in d["phases"]:
+        planned = f" ({phase['planned']:g} s)" if phase.get("planned") else ""
+        print(f"    {phase['at']:7.2f}  {phase['phase']}{planned}")
+for vote in d.get("votes") or []:
+    print(f"vote '{vote.get('label')}': {vote.get('voters')} people playing; closed after {vote.get('closedAfter')} s"
+          f"; winner {vote.get('winner')}{' (tie broken at random)' if vote.get('tie') else ''}; counts {vote.get('counts')}")
+    print(f"    cards {vote.get('options')}")
+    print(f"    {'; '.join(vote.get('casts') or [])}; the banner's timer just after each: {vote.get('timerAfter')}")
 results = d.get("results")
 if isinstance(results, list):
     print("results:")
