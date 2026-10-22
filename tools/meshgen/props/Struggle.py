@@ -6,9 +6,16 @@ Original designs (no Kingdom Hearts branding): a padded foam bat, twelve orb sha
 so colour is never the only cue), and a sunset sandlot's fence, scoreboard, tram yard, benches and
 banners. The fence panel is 12 studs wide (the server lays whole panels along each side) and carries
 its post at its left end. The scoreboard's lit face matches SIGN in src/server/MiniGames/Struggle.luau
-(15.5 x 6.2, centred 10.6 up, its front 0.55 in front of the pivot)."""
+(15.5 x 6.2, centred 10.6 up, its front 0.55 in front of the pivot).
+
+The bat (owner: "they dont even look like bats"; it was a capsule on a stick) has the classic
+baseball-bat silhouette: a knob, a thin taped handle, a smooth flare and a long thick barrel. Its
+length and grip are BAT_LENGTH / BAT_GRIP in src/shared/Logic/Struggle.luau (the client holds it
+there, in the right hand; tests/Struggle.spec.luau checks the two agree)."""
 
 import math
+
+import numpy as np
 
 from generate_meshes import capsule, cylinder, extrude, lathe, merge, rounded_box, sphere, star, torus
 
@@ -31,21 +38,79 @@ def ball(radius, x=0.0, y=0.0, z=0.0, rings=10, segments=16):
 
 # ------------------------------------------------------------------ the bat
 
+# The bat along +Y, its knob's bottom at y = 0 (the prop's pivot). The hand holds it at BAT_GRIP
+# (src/shared/Logic/Struggle.luau BAT_GRIP: a fist is about a stud deep, so the knob stays outside it).
+BAT_LENGTH = 4.4
+HANDLE_R = 0.155  # the taped handle: thin, so the flare into the barrel reads at a glance
+BARREL_R = 0.5  # the barrel: a stud thick, chunky enough to read on a phone
+TAPE_TOP = 1.74  # the tape ends here; the flare starts under its lip
+BARREL_FROM = 2.8  # the flare reaches the barrel's full thickness here
+DOME_FROM = 4.05  # the barrel's rounded end starts here
+
+
+def flare(t):
+    """The taper from the handle (0) to the barrel (1): it starts growing at once, like a real bat's
+    (an S-curve looked like a bottle's neck), and eases into the barrel without a crease."""
+    return 0.6 * t + 1.8 * t * t - 1.4 * t * t * t
+
+
+def taped(profile, segments, y0, pitch, depth):
+    """A lathe wrapped in grip tape: the radius steps out a little along a helix (each wrap
+    overlapping the last), so the handle shows a spiral of tape edges."""
+    mesh = lathe(profile, segments)
+    v = mesh.v
+    radius = np.hypot(v[:, 0], v[:, 2])
+    side = radius > 1e-6
+    angle = np.arctan2(v[:, 2], v[:, 0])
+    phase = (v[:, 1] - y0) / pitch + angle / (2 * math.pi)
+    grow = np.where(side, 1 + depth * (phase - np.floor(phase)) / np.maximum(radius, 1e-6), 1)
+    v[:, 0] *= grow
+    v[:, 2] *= grow
+    return mesh
+
+
 def bat():
-    """A padded foam bat along +Y: taped grip and knob below, a fat rounded foam barrel above."""
-    knob = lathe([(0.0, 0.0), (0.26, 0.02), (0.3, 0.12), (0.24, 0.24), (0.15, 0.3), (0.0, 0.3)], 20)
-    grip = lathe([(0.0, 0.25), (0.16, 0.25), (0.17, 0.7), (0.17, 1.2), (0.19, 1.45), (0.0, 1.45)], 16)
-    foam_profile = [(0.0, 1.35), (0.3, 1.36), (0.38, 1.6)]
-    for i in range(8):
-        y = 1.6 + 2.3 * i / 7
-        foam_profile.append((0.38 + 0.08 * math.sin(math.pi * i / 7 * 0.9), y))
-    for i in range(1, 7):
-        a = math.pi / 2 * i / 6
-        foam_profile.append((0.43 * math.cos(a), 3.9 + 0.36 * math.sin(a)))
-    foam = lathe(foam_profile, 24)
-    band = torus(0.37, 0.08, 24, 8).translate(0, 1.62, 0)
-    stripe = torus(0.455, 0.05, 24, 8).translate(0, 3.25, 0)
-    return {"Grip": merge(knob, grip), "Foam": foam, "Band": merge(band, stripe)}
+    """A padded party bat along +Y, the classic baseball-bat silhouette: a knob at the end of a thin
+    taped handle that flares smoothly into a long, thick, rounded barrel, a white band near its end.
+    The knob and the barrel are foam in the player's colour (the game colours the Foam piece)."""
+    knob = lathe(
+        [(0.0, 0.0), (0.15, 0.0), (0.225, 0.014), (0.265, 0.045), (0.282, 0.09), (0.275, 0.135),
+         (0.245, 0.178), (0.2, 0.212), (0.16, 0.235), (0.0, 0.235)],
+        32,
+    )
+    # The tape: from inside the knob to its lip at TAPE_TOP (the flare starts under the lip).
+    tape_profile = [(0.0, 0.2), (HANDLE_R, 0.2)]
+    rows = 44
+    for i in range(rows + 1):
+        tape_profile.append((HANDLE_R, 0.22 + (TAPE_TOP - 0.08 - 0.22) * i / rows))
+    tape_profile += [(HANDLE_R + 0.02, TAPE_TOP - 0.05), (HANDLE_R + 0.026, TAPE_TOP - 0.02),
+                     (HANDLE_R + 0.02, TAPE_TOP), (0.0, TAPE_TOP)]
+    tape = taped(tape_profile, 28, 0.22, 0.16, 0.014)
+    # The foam: the flare (smooth, like a real bat's) into the barrel, which bulges a little and
+    # ends in a soft dome.
+    foam_profile = [(0.0, TAPE_TOP - 0.06), (HANDLE_R - 0.005, TAPE_TOP - 0.06)]
+    steps = 24
+    for i in range(steps + 1):
+        t = i / steps
+        y = TAPE_TOP - 0.03 + (BARREL_FROM - TAPE_TOP + 0.03) * t
+        foam_profile.append((HANDLE_R + (BARREL_R - HANDLE_R) * flare(t), y))
+    steps = 10
+    for i in range(1, steps + 1):
+        t = i / steps
+        y = BARREL_FROM + (DOME_FROM - BARREL_FROM) * t
+        foam_profile.append((BARREL_R + 0.022 * math.sin(math.pi * t * 0.85), y))
+    end_r = foam_profile[-1][0]
+    steps = 9
+    for i in range(1, steps + 1):
+        a = math.pi / 2 * i / steps
+        foam_profile.append((end_r * math.cos(a), DOME_FROM + (BAT_LENGTH - DOME_FROM) * math.sin(a)))
+    foam = merge(knob, lathe(foam_profile, 32))
+    # A raised white band round the barrel near its end (a closed ring: its inside is in the foam).
+    band_profile = [(BARREL_R - 0.06, 3.66), (BARREL_R + 0.02, 3.66), (BARREL_R + 0.042, 3.68),
+                    (BARREL_R + 0.05, 3.71), (BARREL_R + 0.05, 3.83), (BARREL_R + 0.042, 3.86),
+                    (BARREL_R + 0.02, 3.88), (BARREL_R - 0.06, 3.88), (BARREL_R - 0.06, 3.66)]
+    band = lathe(band_profile, 32)
+    return {"Grip": tape, "Foam": foam, "Band": band}
 
 
 # ------------------------------------------------------------------ orbs (about 1.6 studs, face -Z)

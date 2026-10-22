@@ -9,16 +9,21 @@ return function(h)
 	local orbPalette = { Orb = h.rgb(120, 220, 255) }
 	local orbMaterials = { Orb = Enum.Material.Neon }
 	return {
+		-- The bat (owner: "they dont even look like bats"): a knob, a thin taped handle, a smooth flare
+		-- and a long thick barrel. The client colours the knob and barrel (Foam) in the player's colour
+		-- and holds it in the right hand at the shared rules' BAT_GRIP (its pivot is the knob's end).
 		StruggleBat = {
-			Height = 4.3,
-			AssetId = 138874005117270,
-			Palette = { Grip = h.rgb(40, 40, 48), Foam = h.rgb(255, 120, 60), Band = h.rgb(250, 250, 250) },
+			Height = 4.4,
+			AssetId = 103167926267453,
+			Palette = { Grip = h.rgb(44, 44, 52), Foam = h.rgb(255, 120, 60), Band = h.rgb(250, 250, 250) },
 			Materials = { Grip = Enum.Material.Fabric, Foam = Enum.Material.SmoothPlastic },
 			Shadow = false,
 			Fallback = function(m)
-				h.pillar(m, "Grip", 0.35, 1.45, Vector3.new(0, 0.72, 0))
-				h.capsule(m, "Foam", 3.0, 0.85, CFrame.new(0, 2.8, 0))
-				h.pillar(m, "Band", 0.8, 0.15, Vector3.new(0, 1.6, 0))
+				h.pillar(m, "Foam", 0.56, 0.22, Vector3.new(0, 0.11, 0))
+				h.pillar(m, "Grip", 0.31, 1.56, Vector3.new(0, 0.98, 0))
+				h.pillar(m, "Foam", 0.6, 0.9, Vector3.new(0, 2.15, 0))
+				h.capsule(m, "Foam", 2.0, 1.0, CFrame.new(0, 3.4, 0))
+				h.pillar(m, "Band", 1.08, 0.22, Vector3.new(0, 3.77, 0))
 			end,
 		},
 		StruggleOrbBall = {
