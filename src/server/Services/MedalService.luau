@@ -15,7 +15,7 @@
 --   * other features give theirs with MedalService.Award(player, id):
 --       "CupChampion"   CupService: won a Party Cup
 --       "HallOfFame"    LeaderboardService: finished a week in the top three
---       "Halloween2026" EventService: took part in the Halloween 2026 party
+--       "Halloween2026" EventService: finished the Halloween 2026 party's candy track
 --       "FriendsParty"  FriendsService: played a round with a friend
 --     An award for someone whose profile is still loading is given once it has loaded.
 -- Real players only, and once each: bots (BotRegistry) never get medals, saves or badges.

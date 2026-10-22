@@ -607,6 +607,80 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Rewards", "Rewards C
 	task.wait(0.3)
 end
 
+-- 3a. The HALLOWEEN PARTY (Controllers/EventController): the lobby chip and the event screen ("Event":
+-- 31 candy, the first reward claimed, the next two ready), then a double coins weekend during it
+-- ("Event double") and one on its own. Then the candy a round pays pops on the chip back in the
+-- lobby. The result's "eventChecks" says what the chip read each time. The party stays on after.
+local eventChecks = {}
+do
+	local function chipText()
+		local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+		local chip = hud and hud:FindFirstChild("Event", true)
+		local badge = chip and chip:FindFirstChild("Ready")
+		local row = chip and chip.Parent
+		local up = row ~= nil and row:IsA("GuiObject") and row.Visible and chip.Visible
+		return if chip and chip:IsA("TextButton")
+			then `{chip.Text} [{if up then "on screen" else "off screen"}{if badge and badge.Visible then ", !" else ""}]`
+			else "missing"
+	end
+	-- The lobby's look for the event (this server's Lighting stands in for a device's): its colour
+	-- correction while the party is on, and Lighting exactly as it was once it's over.
+	local Lighting = game:GetService("Lighting")
+	local function look()
+		local effect = Lighting:FindFirstChild("PP_EventLook")
+		return `{if effect then "on" else "off"}, outdoor ambient {Lighting.OutdoorAmbient:ToHex()}, shift top {Lighting.ColorShift_Top:ToHex()}`
+	end
+	eventChecks.lookBefore = look()
+	local now = workspace:GetServerTimeNow()
+	local party = { Id = "Halloween2026", Name = "HALLOWEEN PARTY", EndsAt = now + 9.5 * 86400, DoubleCoins = false, DoubleEndsAt = 0 }
+	local today = math.floor(now / 86400)
+	if okSnap then
+		snapshot.Events = { Halloween2026 = { Candy = 31, Claimed = { Emote_CandyToss = true }, Found = { Day = today, Spots = { 3 } } } }
+		__fire("ProfileData", snapshot)
+	end
+	GameState.SetJSON("Event", party)
+	task.wait(1.2)
+	eventChecks.chip = chipText()
+	eventChecks.lookDuring = look()
+	step = "Event screen"
+	State.OpenScreen:Fire("Event")
+	task.wait(1.2)
+	snap("Event")
+	party.DoubleCoins, party.DoubleEndsAt = true, now + 86400 + 4 * 3600 + 120
+	GameState.SetJSON("Event", party)
+	task.wait(1.2)
+	snap("Event double")
+	eventChecks.chipDouble = chipText()
+	-- The Shop's Victory tab: the event's BAT BURST card says where it's from and the candy it takes.
+	State.OpenScreen:Fire("Shop", "Victory")
+	task.wait(1.2)
+	snap("Shop event")
+	pcall(__require("Client/UI/Modal").CloseAll)
+	GameState.SetJSON("Event", { Id = "", Name = "", EndsAt = 0, DoubleCoins = true, DoubleEndsAt = now + 86400 + 4 * 3600 + 120 })
+	task.wait(1.2)
+	eventChecks.chipWeekendOnly = chipText()
+	eventChecks.lookAfter = look()
+	party.DoubleCoins, party.DoubleEndsAt = false, 0
+	GameState.SetJSON("Event", party)
+	-- A round pays 2 candy (the profile comes with its results): nothing on the results card, then
+	-- "+2 CANDY" on the chip once back in the lobby.
+	local phaseBefore = GameState.Get("Phase")
+	GameState.Set("Phase", "Results")
+	if okSnap then
+		snapshot.Events.Halloween2026.Candy = 33
+		__fire("ProfileData", snapshot)
+	end
+	task.wait(0.5)
+	eventChecks.chipDuringResults = chipText()
+	GameState.Set("Phase", "Cleanup")
+	task.wait(1.6)
+	eventChecks.chipBackInLobby = chipText()
+	task.wait(3.2)
+	eventChecks.chipAfterPop = chipText()
+	GameState.Set("Phase", phaseBefore)
+	task.wait(0.3)
+end
+
 -- 3b. Skee-Ball in the lobby's arcade (SkeeBallController): the player takes machine 1, charges the
 -- ROLL meter, rolls a ball (its score pops), sees the vote open ("SkeeBall voting"), finishes a
 -- game (PLAY AGAIN / DONE) and leaves; then starts again and is taken into a round. A stand-in
@@ -1929,6 +2003,7 @@ return game:GetService("HttpService"):JSONEncode({
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
 	skeeChecks = skeeChecks,
+	eventChecks = eventChecks,
 	hudChecks = hudChecks,
 	sitOutChecks = sitOutChecks,
 	tipChecks = tipChecks,
