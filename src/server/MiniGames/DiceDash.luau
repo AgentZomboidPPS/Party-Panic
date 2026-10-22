@@ -779,14 +779,16 @@ function DiceDash:_land(together: { Racer }, at: number)
 	end
 	local place = self.finished + 1
 	self.finished += #landed
-	local names = {}
 	for _, racer in landed do
 		racer.Place = place
+	end
+	self:_share()
+	local names = {}
+	for _, racer in landed do
 		ctx:SetScoreText(racer.Player, `{Board.Ordinal(place)} · {string.format("%.1f", at - self.startAt)}s`)
 		ctx:Fire(nil, "Finish", racer.Player.UserId, place)
 		table.insert(names, racer.Player.DisplayName)
 	end
-	self:_share()
 	if place == 1 then
 		local who = table.concat(names, " & ")
 		ctx:Announce(`🏁 {who} {if #names == 1 then "wins" else "win"} the race!`, "success", 3)
