@@ -49,6 +49,16 @@
     "made": "2026-10-21",
     "width": 168
   },
+  "DiceDash": {
+    "columns": 6,
+    "decal": 112073899756964,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 70817654833833,
+    "made": "2026-10-22",
+    "width": 168
+  },
   "EatsaPizza": {
     "columns": 6,
     "decal": 107858445020587,
