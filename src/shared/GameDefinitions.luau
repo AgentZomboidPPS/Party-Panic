@@ -366,6 +366,19 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "DiceDash",
+		Name = "Dice Dash",
+		Category = "Luck",
+		Icon = "🎲",
+		Color = Color3.fromRGB(190, 130, 255),
+		Objective = "Roll giant dice and hop along the board: boosts help, trapdoors hurt. First to the FINISH wins!",
+		Controls = "Press ROLL (E, tap, or jump) to stop your die. That's the only button!",
+		Duration = 60,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
