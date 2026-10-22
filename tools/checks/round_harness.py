@@ -117,6 +117,9 @@ LOBBY_MODES = {"FireRope", "HexMeltdown", "HoneyTrap", "BumperBallers"}
 
 
 PRELUDE = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (Path(__file__).resolve().parent / "harness_prelude.luau").read_text()
+# Its comment-only lines are blanked like the modules' below (line numbers stay put): the biggest
+# modes' phone runs come within a few KB of Open Cloud's 1 MiB script cap.
+PRELUDE = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", PRELUDE)
 
 
 def main():
