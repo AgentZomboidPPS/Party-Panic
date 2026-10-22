@@ -1,5 +1,9 @@
 -- Props for Sinking Sands (meshes from tools/meshgen/props/SinkingSands.py). The pit and the swirl
 -- are positioned by their bounding boxes, which the meshes keep centered on the funnel's axis.
+--
+-- No seats (owner: "Also theres times where I will sit on invisible shit in game. NO mini game
+-- should require you to sit."): the throne no longer has the mode's invisible Seat on its cushion; a
+-- Sand King stands on the dais's top step in front of the seat (SinkingSands' THRONE_STAND).
 return function(h)
 	local sand = h.rgb(238, 198, 128)
 	-- The temple's colors: cream sandstone, gold, turquoise paint, royal red cloth, glowing gems.
@@ -129,8 +133,8 @@ return function(h)
 			end,
 		},
 		-- A Sand King's royal throne: gold-rimmed dais, a back (low, so the King's camera sees over it) with
-		-- a golden sunburst and gem, cat-head armrests and glowing orb posts. The seat stays where the
-		-- mode's Seat is.
+		-- a golden sunburst and gem, cat-head armrests and glowing orb posts. The dais's top step stays
+		-- where the mode stands the King (in front of the seat: SinkingSands' THRONE_STAND).
 		SandThrone = {
 			Height = 11.2,
 			AssetId = 130607562047963,
