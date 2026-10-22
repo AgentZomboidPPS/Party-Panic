@@ -80,7 +80,7 @@ def crowd(length: float) -> np.ndarray:
 def red_carpet_strut():
     """Red Carpet Strut (120 bpm shuffle, F minor): the premiere's house band. A plunger-muted trumpet
     struts the tune with the brass section answering, over a swung backbeat with finger snaps and the
-    press cameras' shutters clicking in time; the trumpet opens up over vibes and organ for a glamorous
+    press cameras' shutters clicking in time; the trumpet opens up over organ, strings and harp for a glamorous
     middle in A flat. The shout chorus goes up a half step to F sharp minor with the whole section on
     the tune, and its last hit lands on the 7th photo (47.5 s after GO, beat 4 of bar 24); a chromatic
     "that's a wrap" turnaround leads back to F minor for the loop. At 120 bpm every photo falls on a
@@ -164,10 +164,12 @@ def red_carpet_strut():
                     strum(tr, "bones", bar, st, notes, trombone, ln * tr.step, g * 0.9, spread=0.0, pan=-0.15)
             elif name in ("A", "tag") and step + length == 12 and local not in (1, 3):
                 strum(tr, "bones", bar, 11, notes, trombone, tr.step * 1.2, 0.8, spread=0.0, pan=-0.15)
-            if name == "B":
+            if name == "B":  # Hollywood glamour: organ and strings, a harp sweeping up every bar
                 tr.add("organ", bar, step, sum_organ(notes, length * tr.step), 1.0)
-                for k, st in enumerate(range(0, int(length), 3)):
-                    tr.add("vibes", bar, step + st + 2, ins.vibes(notes[k % 3] + 12, 0.6), 0.8 if k % 2 == 0 else 0.6, 0.35)
+                tr.add("strings", bar, step, ins.strings(tuple(notes + [notes[0] + 12]), length * tr.step, attack=0.3, bright=0.5), 1.0)
+                if step == 0:
+                    for k, m in enumerate(sorted({x + 12 * o for x in notes for o in (0, 1)})):
+                        tr.add("harp", bar, 6 + k * 0.5, ins.harp(m, 0.9, variant=k), 0.55 + 0.06 * k, -0.35 + 0.12 * k)
             if name == "shout" and local in (1, 3):
                 for st, ln, g in answer:
                     strum(tr, "brass", bar, st, [m + 12 for m in notes] + [notes[0] + 24], trumpet, ln * tr.step, g * 1.1, spread=0.0, pan=0.1)
@@ -238,7 +240,8 @@ def red_carpet_strut():
         "brass": Bus(-10, reverb=0.14, eq=(("high", 3000, -3), ("lp", 7500))),
         "bones": Bus(-11, reverb=0.14),
         "organ": Bus(-16, reverb=0.2, pump=0.1),
-        "vibes": Bus(-15, reverb=0.25, delay=0.12),
+        "strings": Bus(-15, reverb=0.3, pump=0.1),
+        "harp": Bus(-16, reverb=0.3, delay=0.1),
         "bass": Bus(-8, eq=(("lp", 1800),)),
         "kick": Bus(-10, drive=1.3),
         "snare": Bus(-12, reverb=0.14),

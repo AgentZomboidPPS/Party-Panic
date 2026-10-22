@@ -243,8 +243,10 @@ def rubber_stamp_rag():
                     tr.add("crash", bar, 0, s.crash(1.4), 1.0, 0.2)
                 if local in (1, 3):
                     tr.add("bell", bar, 12, bell, 0.9, 0.2)
-                if local == 5:
+                if local == 5:  # the end of the page: the carriage goes back for the next line (the loop)
                     tr.add("fx", bar, 0, twang, 0.8, -0.2)
+                    tr.add("fx", bar, 10, zip_back, 0.8, -0.2)
+                    tr.add("bell", bar, 15, bell, 0.8)
 
     tr.play("piano", 4, lead_in, tack_piano, 0.6)
     tr.play("piano", 7, rag, tack_piano)
