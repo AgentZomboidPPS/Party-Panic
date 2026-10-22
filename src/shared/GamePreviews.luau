@@ -121,7 +121,7 @@ local previews: { [string]: Preview } = {
 		Fps = 8,
 	},
 	RockinRaceway = {
-		Image = "rbxassetid://133114200071093",
+		Image = "rbxassetid://94756854657658",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),

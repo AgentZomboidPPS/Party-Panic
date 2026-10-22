@@ -3,7 +3,8 @@
 -- level (the last few never let go, so they spin out), and hops the hurdles, the first ones on time
 -- and later ones sloppily (bumps). No physics here, so their rigs are put where the server has them
 -- (the stand-in client, Bot1, seats its own from the client half). With 3 or more, one rider leaves
--- mid-race.
+-- mid-race. It also notes, once, everything solid in the arena (only the grass under it all should
+-- be: the hurdles and every other prop are judged or drawn, never physical) and the hurdles built.
 return function(env)
 	local ctx = env.ctx
 	local mode = env.game
@@ -11,9 +12,41 @@ return function(env)
 	local hopped = {}
 	local counts = { Gallops = 0, Hops = 0 }
 	local reported = {}
+
+	-- Nothing solid where nothing is drawn: every part that collides, or that queries or touches see.
+	local function noteSolids()
+		local groups = {}
+		local rows, bars = 0, 0
+		for _, part in ctx.Arena:GetDescendants() do
+			if part:IsA("Model") and part.Name == "HurdleRow" then
+				rows += 1
+			elseif part:IsA("Model") and part.Name == "HurdleBar" then
+				bars += 1
+			end
+			if part:IsA("BasePart") and (part.CanCollide or part.CanQuery or part.CanTouch) then
+				local size = part.Size
+				local label =
+					`{part.Name} {math.floor(size.X)}x{math.floor(size.Y * 10) / 10}x{math.floor(size.Z)} transparency {part.Transparency} collide {part.CanCollide}`
+				groups[label] = (groups[label] or 0) + 1
+			end
+		end
+		local lines = {}
+		for label, count in groups do
+			table.insert(lines, `{count} x {label}`)
+		end
+		table.sort(lines)
+		env.note(`solid or queryable parts in the arena: {if #lines > 0 then table.concat(lines, "; ") else "none"}`)
+		env.note(`hurdles: {rows} rows, {bars} bars`)
+	end
+	local noted = false
+
 	return function(elapsed)
 		local now = ctx:Now()
 		local count = #env.players
+		if not noted then
+			noted = true
+			noteSolids()
+		end
 		for index, player in env.players do
 			local rider = mode.riders and mode.riders[player]
 			if not rider or rider.Gone or not env.Alive(player) or not mode.racing then
