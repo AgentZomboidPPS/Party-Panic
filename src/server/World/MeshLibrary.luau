@@ -34,6 +34,10 @@
 -- collides gets its collision rebuilt once as PreciseConvexDecomposition (see preciseCollision).
 -- Pieces that only stop the camera keep the rough hull: the camera stopping a little early is
 -- harmless, and one piece of Fire Rope's temple alone took 142 s to rebuild on a test server.
+--
+-- No seats (owner: "Also theres times where I will sit on invisible shit in game. NO mini game
+-- should require you to sit."): every lobby bench used to carry an invisible Seat ("SeatSpot") that
+-- sat down anyone who brushed it. It's gone: a bench is a plain prop you can stand on.
 
 local AssetService = game:GetService("AssetService")
 local CollectionService = game:GetService("CollectionService")
@@ -294,18 +298,6 @@ local SPECS: { [string]: Spec } = {
 			rounded(m, "Bench", Vector3.new(8, 1.4, 0.4), 0.18, Vector3.new(0, 2.7, 1.1))
 			rounded(m, "Legs", Vector3.new(0.6, 1.4, 2.2), 0.25, Vector3.new(-3.2, 0.7, 0))
 			rounded(m, "Legs", Vector3.new(0.6, 1.4, 2.2), 0.25, Vector3.new(3.2, 0.7, 0))
-		end,
-		PostProcess = function(m)
-			-- An invisible Seat makes every bench sittable regardless of how it was built.
-			local _, size = m:GetBoundingBox()
-			local seat = Instance.new("Seat")
-			seat.Name = "SeatSpot"
-			seat.Anchored = true
-			seat.Transparency = 1
-			seat.CanQuery = false
-			seat.Size = Vector3.new(size.X * 0.8, 0.4, 1.6)
-			seat.CFrame = m:GetPivot() * CFrame.new(0, 1.95, -0.2)
-			seat.Parent = m
 		end,
 	},
 	LampPost = {
