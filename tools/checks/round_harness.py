@@ -17,8 +17,16 @@ watching sees (no mode buttons for them, for one).
 During the rules card: --leave-at T makes every stand-in leave T seconds in, and --spawn-fails gives
 them no character, so with --bots only bots are left: the round is called off (summary: calledOff).
 --reset-at T kills the last stand-in's character T seconds in (a reset); the summary's "reset" says
-where it is at GO and after. --bot FILE swaps the stand-ins' script (tools/checks/bots/<Id>.luau) for
-a scenario of your own, e.g. tools/checks/scenarios/*.luau.
+where it is at GO and after. --drop-at T drops the last stand-in through its floor to under KillY T
+seconds in (as on a device that hadn't loaded the floor); the summary's "drop" says where it is a
+moment later, at GO and after (back on its spot, the same character, still in). --bot FILE swaps the
+stand-ins' script (tools/checks/bots/<Id>.luau) for a scenario of your own, e.g.
+tools/checks/scenarios/*.luau.
+
+With --client, the summary's "clientHolds" lists every time the stand-in client's device held its
+character (Controllers/ArrivalController): never, once it's on a floor that's there. --late-floor T
+gives that device the arena T seconds late (its ground probe finds nothing until then, like a phone
+still loading a big arena): it must be held where the round put it until then.
 """
 
 import argparse
@@ -130,6 +138,8 @@ def main():
     parser.add_argument("--leave-at", type=float, default=None, help="every stand-in leaves this many seconds into the rules card")
     parser.add_argument("--spawn-fails", action="store_true", help="the stand-ins have no character, so they can't be placed")
     parser.add_argument("--reset-at", type=float, default=None, help="the last stand-in's character dies this many seconds into the rules card")
+    parser.add_argument("--drop-at", type=float, default=None, help="the last stand-in drops through its floor this many seconds into the rules card")
+    parser.add_argument("--late-floor", type=float, default=None, help="with --client: the stand-in client's device gets the arena this many seconds late")
     parser.add_argument("--bot", help="stand-in script to use instead of tools/checks/bots/<Id>.luau")
     args = parser.parse_args()
 
@@ -178,12 +188,14 @@ def main():
         def number(value):
             return "nil" if value is None else str(value)
 
-        watch = "{ sitOut = %s, outAt = %s, leaveAt = %s, spawnFails = %s, resetAt = %s }" % (
+        watch = "{ sitOut = %s, outAt = %s, leaveAt = %s, spawnFails = %s, resetAt = %s, dropAt = %s, lateFloor = %s }" % (
             "true" if args.client_sits_out else "false",
             number(args.client_out_at),
             number(args.leave_at),
             "true" if args.spawn_fails else "false",
             number(args.reset_at),
+            number(args.drop_at),
+            number(args.late_floor),
         )
         out.append(f'return __runRound("{args.game}", {args.players}, {args.seconds}, __bot, {client}, {dump}, {ui}, {args.bots}, {watch})')
     sys.stdout.write("\n".join(out))

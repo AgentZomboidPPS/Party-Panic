@@ -38,6 +38,7 @@ def fix(text: str) -> str:
 
 
 for key in ["bots", "brain", "prepare", "prepareSeconds", "arenaParts", "spawnFails", "peopleLeftAt", "calledOff", "reset",
+            "drop", "lateFloor", "clientHolds",
             "start", "endReason", "endHeld", "roundSeconds", "stop", "cleanup",
             "destroy", "arenaLeftovers", "sharedLeftovers", "winningTeam", "clientGuiDuringResults",
             "clientModeGuisAfterCleanup"]:
