@@ -1,0 +1,17 @@
+newmtl Metal
+Kd 0.784 0.804 0.843
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Hinge
+Kd 0.667 0.686 0.725
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rivets
+Kd 0.588 0.608 0.647
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
