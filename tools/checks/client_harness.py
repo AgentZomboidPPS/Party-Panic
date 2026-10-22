@@ -608,10 +608,11 @@ for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Rewards", "Rewards C
 end
 
 -- 3a. The HALLOWEEN PARTY (Controllers/EventController): the lobby chip and the event screen ("Event":
--- 31 candy, the first reward claimed, the next two ready), then one of its double coins weekends
--- ("Event double"), then the party over (nothing on: the chip leaves the row, the light goes back).
--- Then the candy a round pays pops on the chip back in the lobby. The result's "eventChecks" says
--- what the chip read each time. The party stays on after.
+-- 62 candy, the first reward and the PUMPKIN HAT claimed (its EQUIP), the two between them ready),
+-- then one of its double coins weekends ("Event double"), the hat in the Shop's Hats tab ("Shop hats")
+-- and beside the Rewards screen's road ("Rewards hat"), then the party over (nothing on: the chip
+-- leaves the row, the light goes back). Then the candy a round pays pops on the chip back in the
+-- lobby. The result's "eventChecks" says what the chip read each time. The party stays on after.
 local eventChecks = {}
 do
 	local function chipText()
@@ -636,7 +637,18 @@ do
 	local party = { Id = "Halloween2026", Name = "HALLOWEEN PARTY", EndsAt = now + 9.5 * 86400, DoubleCoins = false, DoubleEndsAt = 0 }
 	local today = math.floor(now / 86400)
 	if okSnap then
-		snapshot.Events = { Halloween2026 = { Candy = 31, Claimed = { Emote_CandyToss = true }, Found = { Day = today, Spots = { 3 } } } }
+		snapshot.Events = {
+			Halloween2026 = {
+				Candy = 62,
+				Claimed = { Emote_CandyToss = true, Hat_Pumpkin = true },
+				Found = { Day = today, Spots = { 3 } },
+			},
+		}
+		snapshot.Owned = snapshot.Owned or {}
+		snapshot.Owned.Emote_CandyToss = true
+		snapshot.Owned.Hat_Pumpkin = true
+		snapshot.Equipped = snapshot.Equipped or {}
+		snapshot.Equipped.Hat = ""
 		__fire("ProfileData", snapshot)
 	end
 	GameState.SetJSON("Event", party)
@@ -656,6 +668,15 @@ do
 	State.OpenScreen:Fire("Shop", "Victory")
 	task.wait(1.2)
 	snap("Shop event")
+	-- The Hats tab: the PUMPKIN HAT, owned, with its Equip.
+	State.OpenScreen:Fire("Shop", "Hat")
+	task.wait(1.2)
+	snap("Shop hats")
+	pcall(__require("Client/UI/Modal").CloseAll)
+	-- The Rewards screen: the hat beside the road, with EQUIP.
+	State.OpenScreen:Fire("Rewards", "Road")
+	task.wait(1.2)
+	snap("Rewards hat")
 	pcall(__require("Client/UI/Modal").CloseAll)
 	-- The party over: nothing on (double coins never come on their own), so no chip and the lobby's
 	-- light exactly as it was.
@@ -670,7 +691,7 @@ do
 	local phaseBefore = GameState.Get("Phase")
 	GameState.Set("Phase", "Results")
 	if okSnap then
-		snapshot.Events.Halloween2026.Candy = 33
+		snapshot.Events.Halloween2026.Candy = 64
 		__fire("ProfileData", snapshot)
 	end
 	task.wait(0.5)
