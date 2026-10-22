@@ -48,7 +48,7 @@ with it. Uploads go through moderation, and the game keeps using fallbacks until
 ### Or import the meshes in Studio
 
 Use **File > Import 3D** on `assets/meshes/<Prop>.obj` (or `.glb`), name the result after the
-prop (`ShoppingCart`, `Trophy`, ...) and put it in `ServerStorage/MeshTemplates`. Studio templates
+prop (`Trophy`, `Tree`, ...) and put it in `ServerStorage/MeshTemplates`. Studio templates
 take priority over uploaded ids.
 
 ## Changing the music

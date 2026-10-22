@@ -802,7 +802,6 @@ function ArrowAmbush:_tag(runner: Player, archer: Player?, away: Vector3)
 		ctx:AddScore(archer, 3)
 		local tags = self.tags[archer]
 		ctx:SetScoreText(archer, if tags == 1 then "1 tag" else `{tags} tags`)
-		ctx:SetPlayerShared(archer, "Tags", tags)
 	end
 	ctx:AddTeamScore(ArrowAmbush.ARCHERS, 1)
 	ctx:Delay(0.9, function()

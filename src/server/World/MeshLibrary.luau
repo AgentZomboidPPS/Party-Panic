@@ -147,52 +147,6 @@ end
 
 -- The fallback builders: as few pieces as possible, rounded wherever it shows.
 local SPECS: { [string]: Spec } = {
-	ShoppingCart = {
-		Height = 4.2,
-		Palette = {
-			Basket = rgb(205, 215, 225),
-			Chassis = rgb(150, 155, 170),
-			Frame = rgb(230, 60, 70),
-			Wheels = rgb(40, 40, 50),
-		},
-		Materials = { Basket = Enum.Material.Metal, Chassis = Enum.Material.Metal },
-		Fallback = function(m)
-			rounded(m, "Basket", Vector3.new(3.8, 2.2, 4.6), 0.3, Vector3.new(0, 2.6, -0.6))
-			rounded(m, "Frame", Vector3.new(3.6, 0.35, 5.2), 0.15, Vector3.new(0, 1.15, -0.3))
-			capsule(m, "Frame", 4.2, 0.4, CFrame.new(0, 4, 2.6))
-			for _, x in { -1.6, 1.6 } do
-				for _, z in { -2.4, 1.8 } do
-					roller(m, "Wheels", 0.9, 0.4, Vector3.new(x, 0.45, z))
-				end
-			end
-		end,
-	},
-	YeetGlove = {
-		Height = 2.4,
-		Palette = { Glove = rgb(235, 50, 70), Cuff = rgb(250, 250, 250) },
-		Fallback = function(m)
-			cluster(
-				m,
-				"Glove",
-				"Glove",
-				{ { 0, 0, 0, 2.4 }, { -0.95, 0.2, -0.3, 1.1 }, { 0, 0.35, -0.55, 1.9 } },
-				Vector3.new(0, 1.2, -0.4)
-			)
-			capsule(m, "Cuff", 1.2, 1.7, CFrame.new(0, 1.2, 1.1) * CFrame.Angles(0, math.rad(90), 0))
-		end,
-	},
-	Anvil = {
-		Height = 4.5,
-		Collide = true,
-		Palette = { Anvil = rgb(70, 72, 82) },
-		Materials = { Anvil = Enum.Material.Metal },
-		Fallback = function(m)
-			rounded(m, "Anvil", Vector3.new(4, 1.2, 3), 0.3, Vector3.new(0, 0.6, 0))
-			rounded(m, "Anvil", Vector3.new(2.2, 1.7, 1.8), 0.3, Vector3.new(0, 2, 0))
-			rounded(m, "Anvil", Vector3.new(4.6, 1.3, 2.4), 0.35, Vector3.new(0.2, 3.45, 0))
-			capsule(m, "Anvil", 2.6, 1.1, CFrame.new(-2.7, 3.6, 0))
-		end,
-	},
 	Boulder = {
 		Height = 8,
 		Collide = true,
@@ -207,17 +161,6 @@ local SPECS: { [string]: Spec } = {
 			}, Vector3.new(0, 4, 0))
 		end,
 	},
-	MalletHead = {
-		Height = 4.5,
-		Collide = true,
-		Palette = { Head = rgb(255, 90, 80), Bands = rgb(255, 235, 200) },
-		Fallback = function(m)
-			capsule(m, "Head", 7.5, 4.5, CFrame.new(0, 2.25, 0))
-			for _, x in { -2.2, 2.2 } do
-				roller(m, "Bands", 4.7, 0.5, Vector3.new(x, 2.25, 0))
-			end
-		end,
-	},
 	Treasure = {
 		Height = 2.2,
 		Touch = true,
@@ -225,17 +168,6 @@ local SPECS: { [string]: Spec } = {
 		Materials = { Gold = Enum.Material.Neon },
 		Fallback = function(m)
 			roller(m, "Gold", 2.2, 0.45, Vector3.new(0, 1.1, 0))
-		end,
-	},
-	Chest = {
-		Height = 4.4,
-		Collide = true,
-		Palette = { Body = rgb(150, 95, 55), Lid = rgb(120, 75, 45), Trim = rgb(255, 205, 60) },
-		Materials = { Body = Enum.Material.WoodPlanks, Lid = Enum.Material.WoodPlanks },
-		Fallback = function(m)
-			rounded(m, "Body", Vector3.new(5, 2.7, 3.4), 0.35, Vector3.new(0, 1.35, 0))
-			capsule(m, "Lid", 5.6, 2.8, CFrame.new(0, 2.9, 0))
-			rounded(m, "Trim", Vector3.new(0.8, 1.2, 0.5), 0.2, Vector3.new(0, 2.6, -1.75))
 		end,
 	},
 	Trophy = {
@@ -324,30 +256,6 @@ local SPECS: { [string]: Spec } = {
 			cluster(m, "Ribbon", "GiftBow", { { -0.6, 0, 0, 1.2 }, { 0.6, 0, 0, 1.2 } }, Vector3.new(0, 4.3, 0))
 		end,
 	},
-	Cone = {
-		Height = 3,
-		Collide = true,
-		Palette = { Cone = rgb(255, 130, 40), Stripe = rgb(250, 250, 250) },
-		Fallback = function(m)
-			rounded(m, "Cone", Vector3.new(2.4, 0.3, 2.4), 0.12, Vector3.new(0, 0.15, 0))
-			Shapes.Custom("TrafficCone", function(piece)
-				local pieces = {}
-				for index = 0, 5 do
-					local diameter = 1.6 - index * 0.24
-					table.insert(
-						pieces,
-						piece(
-							Vector3.new(0.48, diameter, diameter),
-							CFrame.new(0, index * 0.45, 0) * CFrame.Angles(0, 0, math.rad(90)),
-							Enum.PartType.Cylinder
-						)
-					)
-				end
-				return pieces
-			end, Vector3.new(1.4, 2.7, 1.4), { Name = "Cone", CFrame = CFrame.new(0, 0.55, 0), Parent = m })
-			pillar(m, "Stripe", 1.12, 0.35, Vector3.new(0, 1.55, 0))
-		end,
-	},
 	-- Backdrop for the lava arenas; its lava runs face -Z.
 	Volcano = {
 		Height = 62,
@@ -370,48 +278,6 @@ local SPECS: { [string]: Spec } = {
 			blob(m, "Rock", Vector3.new(7, 20.4, 7), Vector3.new(0, 10.2, 0))
 			blob(m, "Rock", Vector3.new(4, 11, 4), Vector3.new(4, 5.5, 1.5))
 			ball(m, "Glow", 1.6, Vector3.new(3, 0.3, -2.6))
-		end,
-	},
-	-- Turns Fire Rope's rope; stands in the YZ plane with its axle along X.
-	FireWheel = {
-		Height = 22.7,
-		Palette = { Rim = rgb(70, 55, 62), Spokes = rgb(255, 140, 50), Hub = rgb(255, 200, 60) },
-		Materials = { Rim = Enum.Material.Metal, Spokes = Enum.Material.Neon },
-		Fallback = function(m)
-			roller(m, "Rim", 22.7, 1.2, Vector3.new(0, 11.35, 0))
-			for spoke = 0, 3 do
-				Build.Part({
-					Name = "Spokes",
-					Size = Vector3.new(1.4, 19, 1),
-					CFrame = CFrame.new(-0.7, 11.35, 0) * CFrame.Angles(spoke * math.pi / 4, 0, 0),
-					Parent = m,
-				})
-			end
-			roller(m, "Hub", 3.4, 2.6, Vector3.new(0, 11.35, 0))
-		end,
-	},
-	-- Honey Trap's giant tree. "Anchor" marks the tip of the front branch, where the vine hangs.
-	HoneyTree = {
-		Height = 57.9,
-		Collide = true,
-		Palette = {
-			Trunk = rgb(125, 84, 56),
-			Leaves = rgb(96, 186, 88),
-			Hive = rgb(240, 176, 60),
-			Anchor = rgb(125, 84, 56),
-		},
-		Fallback = function(m)
-			pillar(m, "Trunk", 9, 38, Vector3.new(0, 19, 0))
-			cluster(m, "Leaves", "HoneyTreeLeaves", {
-				{ 0, 0, 0, 26 },
-				{ -11.5, -4, -2, 19 },
-				{ 11.5, -4, 2, 19 },
-				{ 0, -4, 11, 18 },
-				{ 0, -4.5, -10.5, 17 },
-			}, Vector3.new(0, 45, 0))
-			blob(m, "Hive", Vector3.new(6, 6.4, 6), Vector3.new(9.8, 29, 2.2))
-			rounded(m, "Trunk", Vector3.new(3, 3, 14), 1.4, Vector3.new(0, 30.5, -8))
-			ball(m, "Anchor", 0.6, Vector3.new(0, 29.6, -14.5))
 		end,
 	},
 	Fruit = {
@@ -446,14 +312,6 @@ local SPECS: { [string]: Spec } = {
 			blob(m, "Body", Vector3.new(1.1, 1, 1.44), Vector3.new(0, 0.62, 0))
 			ball(m, "Stripes", 0.72, Vector3.new(0, 0.72, -0.72))
 			blob(m, "Wings", Vector3.new(0.84, 0.08, 0.52), Vector3.new(0, 1.15, 0))
-		end,
-	},
-	Basket = {
-		Height = 1.59,
-		Palette = { Basket = rgb(205, 150, 85), Rim = rgb(150, 100, 55) },
-		Fallback = function(m)
-			pillar(m, "Basket", 3.4, 1.4, Vector3.new(0, 0.7, 0))
-			pillar(m, "Rim", 3.8, 0.25, Vector3.new(0, 1.45, 0))
 		end,
 	},
 	-- The 1-or-2 block; the client writes the numbers on it.

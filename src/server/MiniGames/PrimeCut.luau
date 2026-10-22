@@ -420,7 +420,6 @@ function PrimeCut:Prepare()
 	end
 	self.cut = 0
 	self.phase = "Wait"
-	self.history = {}
 	self:_serve(1)
 
 	ctx:ShareTemplate("PrimeCutKnife", MeshLibrary.Get("PrimeCutKnife"))
@@ -676,10 +675,8 @@ function PrimeCut:_judge(now: number)
 	end
 	self.lastResults = results
 	self.lastWinners = winners
-	table.insert(self.history, { N = self.cut, R = results, W = winners })
 	self:_shareKnives(now)
 	self:_shareCut()
-	ctx:SetSharedJSON("History", self.history)
 	ctx:SetStatus(`STEAK {self.cut}/{PrimeCutLogic.CUTS}  •  The verdict...`)
 	-- The best cut is announced as the reveal gets to it (WINNER_AT in), so the team scores don't
 	-- give it away early.
