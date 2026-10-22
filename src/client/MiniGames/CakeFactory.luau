@@ -22,6 +22,12 @@
 -- Sweep pass (owner: "Let's do a full bug and clean sweep."): the ✕ in every verdict (✕ JAMMED,
 -- ✕ SPLAT!...), on the lane dots and over a ruined cake was drawn as a missing-glyph box: the game's
 -- fonts don't have it. The verdicts and dots use × now, and a ruined cake gets a ❌.
+--
+-- A clear view (owner: "I cant even see the cakes because its blocking it."): the HUD stacked a row
+-- of team pills (🎂 and ⭐ per team) and your lanes under the banner and the team scores, right over
+-- your machine and the cakes under it. The pills only repeated the team scores above them, so
+-- they're gone (each team's shelf still shows its 🎂 in the world). On PC your lanes sit at the
+-- bottom, beside the ADD button they time; on phones they stay top right, now just under the scores.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -94,7 +100,6 @@ type Line = {
 	Done: number,
 	Stars: number,
 	Gone: boolean,
-	Pill: Frame?,
 }
 
 local function named(model: Instance, name: string): { BasePart }
@@ -223,7 +228,6 @@ function CakeFactory.Start(api)
 			Done = 0,
 			Stars = 0,
 			Gone = info.Gone == true,
-			Pill = nil,
 		}
 		if folder then
 			local beltModel = folder:FindFirstChild("Belt")
@@ -376,72 +380,13 @@ function CakeFactory.Start(api)
 	end
 	refreshTags()
 
-	-- HUD: a pill per team (shape, name, cakes), yours outlined, all in one row (with 3-4 teams
-	-- just the shape; the name floats over each line). Phones draw the HUD smaller, so there the
-	-- text is bigger and everything sits as high as it can, clear of the move stick.
+	-- HUD: no row of its own under the team scores (the scores say how each team is doing; each
+	-- team's shelf shows its 🎂). Your lanes: phones under the scores, PC beside the ADD button.
 	local hud = api:TopHud()
 	local y = api:HudY()
 	local touch = api:IsTouch()
-	local count = #order
-	-- (Phones: two to a row, right-aligned over the lanes, clear of the move stick's zone.)
-	local compact = count >= 3 or touch
-	local columns = if touch then math.min(count, 2) else count
-	local pillWidth = if touch then 200 elseif compact then math.min(150, math.floor(470 / count) - 10) else 210
-	local textSize = if touch then 26 else 20
-	local rowStep = 56
-	for index, team in order do
-		local line = lines[team]
-		local row = (index - 1) // columns
-		local inRow = math.min(columns, count - row * columns)
-		local column = (index - 1) % columns + 1
-		local isMine = team == myTeam
-		local pill = UIKit.new("Frame", {
-			Name = "Team_" .. team,
-			AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(0.5, 0),
-			Position = if touch
-				then UDim2.new(1, -(inRow - column) * (pillWidth + 10), 0, y + row * rowStep)
-				else UDim2.new(0.5, (column - (inRow + 1) / 2) * (pillWidth + 10), 0, y + row * rowStep),
-			Size = UDim2.fromOffset(pillWidth, 46),
-			BackgroundColor3 = Theme.Colors.PanelDark,
-			BackgroundTransparency = 0.15,
-			Parent = hud,
-			Children = {
-				UIKit.Corner(14),
-				UIKit.Stroke(if isMine then Color3.new(1, 1, 1) else line.Color, if isMine then 3 else 2, 0),
-			},
-		})
-		local nameWidth = if compact then 34 else math.floor(pillWidth * 0.42)
-		label(pill, if compact then line.Shape else `{line.Shape} {string.upper(team)}`, textSize, line.Color, {
-			Name = "Name",
-			TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.fromOffset(10, 0),
-			Size = UDim2.new(0, nameWidth, 1, 0),
-			TextTruncate = Enum.TextTruncate.AtEnd,
-		})
-		-- Cakes and ⭐ cakes (shrinks to fit a narrow pill).
-		local countLabel = label(pill, "🎂 0  ⭐ 0", textSize, Color3.new(1, 1, 1), {
-			Name = "Count",
-			TextXAlignment = Enum.TextXAlignment.Right,
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -10, 0.5, 0),
-			Size = UDim2.new(1, -nameWidth - 24, 0, textSize + 4),
-			TextScaled = true,
-		})
-		UIKit.new("UITextSizeConstraint", { MaxTextSize = textSize, Parent = countLabel })
-		line.Pill = pill
-	end
-	local pillsBottom = y + (math.ceil(count / columns) - 1) * rowStep + 46
+	-- A team's cakes, on its shelf in the world.
 	local function drawPill(line: Line)
-		local pill = line.Pill
-		local countLabel = pill and pill:FindFirstChild("Count") :: TextLabel?
-		if not pill or not countLabel then
-			return
-		end
-		local text = if line.Gone then "— left" else `🎂 {line.Done}  ⭐ {line.Stars}`
-		if countLabel.Text ~= text then
-			countLabel.Text = text
-		end
-		pill.BackgroundTransparency = if line.Gone then 0.6 else 0.15
 		if line.ShelfLabel then
 			line.ShelfLabel.Text = `🎂 {line.Done}`
 		end
@@ -451,7 +396,9 @@ function CakeFactory.Start(api)
 	end
 
 	-- Your lanes: one per machine you run.
-	-- (Phones: on the right half, so the move stick's corner stays clear.)
+	-- (Phones: on the right half under the team scores, so the move stick's corner stays clear. PC:
+	-- moved beside the ADD button once it exists, bottom aligned, so the middle of the screen stays
+	-- on your machine.)
 	type Lane = {
 		Machine: Machine,
 		Frame: Frame,
@@ -467,7 +414,7 @@ function CakeFactory.Start(api)
 	local lanes = {} :: { Lane }
 	local laneWidth = if touch then 440 else 380
 	local laneHeight = if touch then 80 else 54
-	local laneTop = pillsBottom + 10
+	local laneTop = y + 10
 	local laneHolder = UIKit.new("Frame", {
 		Name = "Lanes",
 		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(0.5, 0),
@@ -569,11 +516,20 @@ function CakeFactory.Start(api)
 	if add then
 		add:SetEnabled(false)
 	end
+	-- PC: the lanes beside ADD, bottom aligned and growing upward (in the button's holder, so they
+	-- scale with it and hide with it).
+	local addHolder = if add and not touch then api.Gui:FindFirstChild("Action_ADD") else nil
+	if addHolder then
+		laneHolder.AnchorPoint = Vector2.new(1, 1)
+		laneHolder.Position = UDim2.new(0, -14, 1, 0)
+		laneHolder.Parent = addHolder
+	end
 	local live = false
 	local hintUntil = math.huge
 	local jamUntil = -math.huge
-	local function hintY(): number
-		return laneTop + #mine * (laneHeight + 8) + 8
+	-- Under the lanes on phones; on PC (lanes at the bottom) the hint's usual line.
+	local function hintY(): number?
+		return if addHolder then nil else laneTop + #mine * (laneHeight + 8) + 8
 	end
 	-- Turn the camera once to look over your shoulder at your machine(s) (the custom camera keeps
 	-- that heading; players are put at their spot without turning the lobby's camera).
