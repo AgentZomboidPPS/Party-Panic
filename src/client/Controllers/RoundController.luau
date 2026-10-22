@@ -108,7 +108,10 @@ local function buildClose(touch: boolean)
 	button.MouseButton1Up:Connect(function()
 		pressTo(1, 0.1)
 	end)
-	button.Activated:Connect(RoundController.CloseRules)
+	button.Activated:Connect(function()
+		pressTo(1, 0.05) -- the card hides at once: the next round's ✕ mustn't still look pressed
+		RoundController.CloseRules()
+	end)
 end
 
 local function buildRules(parent: Instance)

@@ -752,6 +752,10 @@ function CelebrationController.Start(context)
 			CelebrationController.Dismiss() -- the vote or the round: out of the way
 		end
 	end)
+	-- The lobby's end time (MIN_SHOW) can land just after its phase does: look again when it does.
+	GameState.Changed("PhaseEndsAt", function()
+		CelebrationController.Pump()
+	end)
 	State.ProfileChanged:Connect(function()
 		if #queue > 0 then
 			CelebrationController.Pump()
