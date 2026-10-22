@@ -1088,12 +1088,13 @@ def chip(midi: float, length: float, duty: float = 0.25, vibrato: float = 0.0, s
 @lru_cache(maxsize=None)
 def chip_tri(midi: float, length: float) -> np.ndarray:
     """The console's triangle channel, used for the bass: a stepped triangle (its 4-bit staircase
-    adds the upper harmonics a phone needs to hear it) with a little square on top."""
+    adds upper harmonics) doubled by a quiet narrow pulse, whose bright 2nd-5th harmonics are what
+    a phone's speaker actually plays."""
     n = s.samples(length + 0.02)
     phase, _ = s.phase_of(s.midi_hz(midi), n)
     tri = 2 * np.abs(2 * phase - 1) - 1
     tri = np.round(tri * 7.5) / 7.5
-    tone = tri + 0.18 * s.square(s.midi_hz(midi), n, 0.5)
+    tone = tri + 0.65 * s.square(s.midi_hz(midi), n, 0.25)
     e = env(n, 0.002, 0.3, 0.85, 0.015, gate=length)
     return _frozen(normalize(eq(tone * e, ("lp", 4000))))
 

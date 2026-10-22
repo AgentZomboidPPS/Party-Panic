@@ -20,6 +20,7 @@ notation) and played by tools/music/instruments.py:
     MechaMarathon "Clockwork Air Show"    a village brass band and ticking clockwork at a sunny fete
     ParasolPlummet "Coins From the Clouds" whistled sunshine pop, ukulele and a trumpet COIN RUSH
     Spleef        "Snowbreaker Ska"       a snow-day ska band: offbeat skanks, organ and horns
+    Tanks         "Toy Box Battalion"     an 8-bit toy-soldier march with a tin drum and pop-gun cannons
 
 Every track opens with an intro of at least 13 seconds (the rules card and the 3-2-1, while the
 game loads its own track), then the band kicks in on GO: AudioController starts the track so its
