@@ -95,6 +95,9 @@ CAMERAS: dict[str, dict] = {
     # Over a team's shoulders at its grill: the giant knife lined up over the steak, the glowing line
     # where it will cut, the coals under the grate.
     "PrimeCut": {"look_at": "CutLine", "yaw": 28, "pitch": 36, "distance": 39, "shift": [-0.5, 0, 10.5], "raise": 4},
+    # Down the row of mills from the first one: its axe biting into a log on the stump, the team beside
+    # it, the next team's mill with its log rack and stump beyond.
+    "LogJam": {"look_at": "Top", "yaw": -110, "pitch": 26, "distance": 32, "shift": [8, 2, 6], "raise": 6},
     # Behind a player at their booth's counter: the mischief's smoke over the cubby shelf, toys
     # tumbling off it onto the counter.
     "MessyMemory": {"look_at": "CounterTop", "yaw": 168, "pitch": 16, "distance": 25, "shift": [0, 2, 0], "raise": 6},
@@ -128,6 +131,9 @@ CAMERAS: dict[str, dict] = {
     # Over the paper pad: stampers on their rubber stamps hopping across a patchwork of everyone's ink,
     # bare ruled paper still to win beyond.
     "StampOut": {"look_at": "Paper", "yaw": 20, "pitch": 50, "distance": 38, "shift": [5, 2, 6], "raise": 6},
+    # Into the first scrum on the sandlot: foam bats swinging, a wind-up's reach on the sand, orbs knocked
+    # loose flying out, the scoreboard over the fence behind.
+    "Struggle": {"look_at": "Sand", "yaw": 10, "pitch": 26, "distance": 20, "shift": [20.5, 2, 7.5], "raise": 9},
     # Chasing two riders down their lanes: their crayons drawing purple and teal lines behind them, the
     # dotted guides curving away ahead.
     "TraceRace": {"look_at": "StartLine", "yaw": 0, "pitch": 45, "distance": 46, "shift": [29, 3, -110], "raise": 6},
@@ -145,6 +151,7 @@ DUMP_AT: dict[str, float] = {
     "EatsaPizza": 15,  # halfway: some slices eaten down to the pan, teams munching on the rest
     "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
+    "LogJam": 10,  # every mill going, an axe coming down on a log
     "MechaMarathon": 12.5,  # a second after lift-off: the toys climbing away from their pads
     "MessyMemory": 8,  # a second into the mischief: smoke puffs, the last toys tumbling onto the counters
     "ParasolPlummet": 7,  # fallers still spread across the sky, a dozen lobs in the air
@@ -156,6 +163,7 @@ DUMP_AT: dict[str, float] = {
     "SnowballSummit": 25,  # snowballs rolling, someone teetering at the rim, most still on top
     "Spleef": 12,  # holes dug in every floor, players on all three
     "StampOut": 34,  # BIG STAMPS: the pad patched with everyone's ink, stampers mid-hop
+    "Struggle": 4.5,  # the first hits: orbs knocked loose and flying
     "Tanks": 5.5,  # a second after the shields drop: the first tanks blowing up, the rest still rolling
     "TraceRace": 8,  # past the straight start, into the first curves, lines trailing behind
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole
