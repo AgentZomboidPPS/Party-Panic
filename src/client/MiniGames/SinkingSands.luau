@@ -26,6 +26,10 @@
 -- on prime cut."): a chip like Arrow Ambush's under the sand panel, "💎 DIVER" or "👑 SAND KING" in
 -- the role's colours, with the hint and the flashes just under it, clear of the buttons beside
 -- JUMP, the move stick and the menu column on every phone.
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): a flash ("🌀 SWIRL! 🔄") kept its
+-- 400-wide box on phones, and on the smallest one the box reached into the move stick's corner (the
+-- phone checks: 15%). On phones a flash is now only as wide as its words, like the hints.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -459,6 +463,11 @@ function SinkingSands.Start(api)
 	local flashUntil = 0
 	local function showFlash(text: string, color: Color3, seconds: number)
 		flash.Text = text
+		if api:IsTouch() then
+			-- (Phones: only as wide as the words, so it stays clear of the move stick's corner.)
+			local width = math.ceil(UIKit.TextWidth(text, 54, Theme.Fonts.Display)) + 24
+			flash.Size = UDim2.fromOffset(math.min(400, width), 64)
+		end
 		flash.TextColor3 = color
 		flash.Visible = true
 		flashUntil = os.clock() + seconds
