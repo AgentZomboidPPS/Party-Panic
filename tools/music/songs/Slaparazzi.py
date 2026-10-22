@@ -80,11 +80,11 @@ def crowd(length: float) -> np.ndarray:
 def red_carpet_strut():
     """Red Carpet Strut (120 bpm shuffle, F minor): the premiere's house band. A plunger-muted trumpet
     struts the tune with the brass section answering, over a swung backbeat with finger snaps and the
-    press cameras' shutters clicking in time; the trumpet opens up over organ, strings and harp for a glamorous
-    middle in A flat. The shout chorus goes up a half step to F sharp minor with the whole section on
-    the tune, and its last hit lands on the 7th photo (47.5 s after GO, beat 4 of bar 24); a chromatic
-    "that's a wrap" turnaround leads back to F minor for the loop. At 120 bpm every photo falls on a
-    backbeat."""
+    press cameras' shutters clicking in time; the trumpet opens up over organ, strings and harp for a
+    glamorous middle in A flat. The shout chorus goes up a half step to F sharp minor with the whole
+    section on the tune, and its last hit lands on the 7th photo (47.5 s after GO, beat 4 of the 24th
+    bar after GO); a chromatic "that's a wrap" turnaround leads back to F minor for the loop. At 120 bpm
+    every photo falls on a backbeat."""
     tr = Track(bpm=120, bars=35, spb=12)
     parts = plan(tr, [
         ("intro", 7, "Fm | Fm | Fm | Fm | Fm | Db7 | C7"),
@@ -132,20 +132,24 @@ def red_carpet_strut():
         strum(tr, "bones", 3, st, [53, 56, 60], trombone, ln * tr.step, 0.7 * g, spread=0.0, pan=-0.15)
     tr.add("drums", 3, 0, crash, 0.6, 0.2)
 
+    # every chord in order, and the one after each (after the last comes the drop's, where the loop goes)
+    song_changes = [ch for p in parts for ch in p.changes]
+    after = {(b, st): song_changes[i + 1][3] if i + 1 < len(song_changes) else parts[1].changes[0][3]
+             for i, (b, st, _, _) in enumerate(song_changes)}
     prev = None
     for part in parts:
         name = part.name
         changes = part.changes
-        for index, (bar, step, length, c) in enumerate(changes):
+        for bar, step, length, c in changes:
             local = bar - part.first
             root = bass_note(c, 29) + 12  # F2 .. E3
             notes = voicing(c, 60, 72, prev, size=3)
             prev = notes
-            nxt = changes[(index + 1) % len(changes)][3] if index + 1 < len(changes) else None
+            nxt = after[(bar, step)]
             # bass: a strut (root, fifth, seventh, fifth, then a step into the next root) or a walk
             if name in ("A", "tag") or (name == "intro" and local >= 4):
                 seventh = 10 if "maj" not in c.name else 11
-                target = bass_note(nxt, 29) + 12 if nxt else root
+                target = bass_note(nxt, 29) + 12
                 line = [(0, root, 2), (3, root + 7, 2), (5, root + 12, 1), (6, root + seventh, 2), (9, root + 7, 2), (11, target - 1 if target - 1 != root + 7 else target + 1, 1)]
                 for st, m, ln in line:
                     if st < length:

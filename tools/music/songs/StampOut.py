@@ -207,8 +207,8 @@ def rubber_stamp_rag():
                     tr.drum("staple", bar, "....X.......X...", staple, 0.55 + 0.15 * (local - 5))
                 if local == 6:
                     typing(bar, "xoxoxoxoxoxo....", 0.9)
-                    tr.add("fx", bar, 10, zip_back, 0.9, -0.2)
-                    tr.add("bell", bar, 15, bell, 0.9)
+                    tr.add("bell", bar, 12, bell, 0.9)  # the end of the line: ding, and the carriage flies back
+                    tr.add("fx", bar, 12.5, zip_back, 0.9, -0.2)
                 continue
             if name == "A":
                 tr.drum("stamp", bar, "X.......X.......", stamp, 1.0)
@@ -217,7 +217,7 @@ def rubber_stamp_rag():
                 if local in (1, 7):  # the end of a line: ding!
                     tr.add("bell", bar, 12, bell, 0.9, 0.2)
                     if local == 7:
-                        tr.add("fx", bar, 8, zip_back, 0.8, -0.2)
+                        tr.add("fx", bar, 12.5, zip_back, 0.8, -0.2)
                 if local == 3:
                     tr.add("fx", bar, 12, snip, 0.9, 0.3)
                 if local == 5:
@@ -245,8 +245,8 @@ def rubber_stamp_rag():
                     tr.add("bell", bar, 12, bell, 0.9, 0.2)
                 if local == 5:  # the end of the page: the carriage goes back for the next line (the loop)
                     tr.add("fx", bar, 0, twang, 0.8, -0.2)
-                    tr.add("fx", bar, 10, zip_back, 0.8, -0.2)
-                    tr.add("bell", bar, 15, bell, 0.8)
+                    tr.add("bell", bar, 12, bell, 0.8)
+                    tr.add("fx", bar, 12.5, zip_back, 0.8, -0.2)
 
     tr.play("piano", 4, lead_in, tack_piano, 0.6)
     tr.play("piano", 7, rag, tack_piano)

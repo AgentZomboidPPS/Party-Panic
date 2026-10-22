@@ -65,10 +65,10 @@ def conch(midi: float, length: float) -> np.ndarray:
 
 def tiki_bumper_bash():
     """Tiki Bumper Bash (128 bpm, F major, soca): a beach party on the tiki island. A steel band (a lead
-    tenor pan with a second pan a third under it, chopping guitar pans, rolled chords) over soca drums:
-    four-on-the-floor kick, a skipping snare, the iron, log drums and a pea whistle; horns in the chorus.
-    BIG BUMPS (45 s after GO) lands on bar 24 after GO: up to G major, the horns take a counter-line
-    under the hook, and a tag swings back down into F for the loop."""
+    tenor pan with a second pan under it on the chord tones, chopping guitar pans, rolled chords) over
+    soca drums: four-on-the-floor kick, a skipping snare, the iron, log drums and a pea whistle; horns in
+    the chorus. BIG BUMPS (45 s after GO) lands on bar 24 after GO: up to G major, the horns take a
+    counter-line under the hook, and a tag swings back down into F for the loop."""
     tr = Track(bpm=128, bars=43)
     parts = plan(tr, [
         ("intro", 7, "F | F | Bb | F | Dm | Bb | C7"),
@@ -128,7 +128,6 @@ def tiki_bumper_bash():
             root = bass_note(c, 29) + 12
             notes = voicing(c, 55, 70, prev, size=3)
             prev = notes
-            seconds = length * tr.step
             # bass: a double tresillo with octave and fifth kicks
             if name == "intro":
                 if local >= 4:
@@ -242,7 +241,7 @@ def tiki_bumper_bash():
         "chop": Bus(-15, pump=0.15, reverb=0.12),
         "brass": Bus(-11, reverb=0.16),
         "conch": Bus(-18, reverb=0.35),
-        "surf": Bus(-20, width=1.0),
+        "surf": Bus(-20),
         "bass": Bus(-8, pump=0.25),
         "kick": Bus(-9, drive=1.4),
         "snare": Bus(-13, reverb=0.12),
