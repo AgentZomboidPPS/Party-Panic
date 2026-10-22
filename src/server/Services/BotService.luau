@@ -17,7 +17,13 @@
 --
 -- Movement goes through the Humanoid. Where physics isn't running (the Open Cloud test servers),
 -- bots walk and jump by moving their rig directly, so the same brains can be tested there.
+--
+-- Slaparazzi pass (owner: "Bots are terrible at slaparazzi"): on those test servers a bot stood on
+-- whatever was under it, other characters too, even in a mode where characters pass through each
+-- other (Slaparazzi's PP_SlapCast). A crowd of bots on one spot became a tower, which a real game
+-- never shows. Now a character a bot can't touch is no floor for it either.
 
+local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -595,6 +601,34 @@ local groundParams = RaycastParams.new()
 groundParams.FilterType = Enum.RaycastFilterType.Exclude
 groundParams.RespectCanCollide = true -- stand only on what a player could stand on
 
+-- A bot's own character and every character it passes through (their collision groups don't
+-- collide, as in a mode that turns bumping into each other off): none of them is floor for it.
+local function notFloor(character: Model, root: BasePart): { Instance }
+	local list: { Instance } = { character }
+	local function consider(other: Model?)
+		local otherRoot = if other and other ~= character then other:FindFirstChild("HumanoidRootPart") else nil
+		if not other or not otherRoot or not otherRoot:IsA("BasePart") then
+			return
+		end
+		local ok, collides = pcall(
+			PhysicsService.CollisionGroupsAreCollidable,
+			PhysicsService,
+			root.CollisionGroup,
+			otherRoot.CollisionGroup
+		)
+		if ok and not collides then
+			table.insert(list, other)
+		end
+	end
+	for _, other in BotRegistry.List() do
+		consider(other.Character)
+	end
+	for _, player in Players:GetPlayers() do
+		consider(player.Character)
+	end
+	return list
+end
+
 local function simulate(dt: number)
 	local now = os.clock()
 	for _, bot in BotRegistry.List() do
@@ -625,7 +659,7 @@ local function simulate(dt: number)
 		end
 		if not jumping then
 			bot.JumpBase = nil
-			groundParams.FilterDescendantsInstances = { character }
+			groundParams.FilterDescendantsInstances = notFloor(character, root)
 			local hit = workspace:Raycast(position + step, Vector3.new(0, -400, 0), groundParams)
 			local rest = if hit then hit.Position.Y + humanoid.HipHeight + root.Size.Y / 2 else -math.huge
 			if y > rest + 0.05 then
