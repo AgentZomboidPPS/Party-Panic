@@ -2,7 +2,7 @@
 -- file with a starter mesh, and its definition.
 --
 --   lune run tools/new-minigame <Id> "<Display Name>" <Category> [--team]
---   lune run tools/new-minigame HotPotato "Hot Potato" Survival
+--   lune run tools/new-minigame MyGame "My Game" Survival
 --
 -- Categories: Survival, Race, Knockback, Reaction, Team, Luck, Versus. --team makes it a team mode.
 

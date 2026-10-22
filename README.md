@@ -75,11 +75,11 @@ python3 tools/upload_assets.py --user-id <the game owner's user id>
 ## Adding mini-games
 
 ```sh
-lune run tools/new-minigame HotPotato "Hot Potato" Survival
+lune run tools/new-minigame MyGame "My Game" Survival
 ```
 
 That one command creates a working mode and registers it. Then set
-`Config.Debug.ForceGame = "HotPotato"` to test just that mode in Studio. The full guide is in
+`Config.Debug.ForceGame = "MyGame"` to test just that mode in Studio. The full guide is in
 [docs/ADDING_MINIGAMES.md](docs/ADDING_MINIGAMES.md), and the idea backlog is in
 [docs/MINIGAME_IDEAS.md](docs/MINIGAME_IDEAS.md).
 
