@@ -31,15 +31,23 @@
 -- the first dots hung half off the bar's start and covered the 🔥 waiting there (the phone checks found
 -- it 29% under a dot with 12 racers). Dots now stay inside the track's ends (EDGE), so the pack at the
 -- start sits just after the 🔥 and finishers just before the 🏁; in between they're where they were.
+--
+-- Poses pass (owner: "Bots are STILL ruberbanding and floating."): skaters ride crouched and
+-- sideways on their boards on R15 bodies now (the push kick, the ollie tuck, the wipeout flail, the
+-- cheer). This place's servers build R15 bodies (every bot's, and players' R15 avatars) with
+-- AnimationConstraint joints instead of Motor6Ds, and the pose only looked for Motor6Ds, so it
+-- found none there and no limb moved (measured on a test server: 0 of a skater's 12 joints; skaters
+-- stood stiff on their boards). The pose goes through client/Pose now, which turns either kind of
+-- joint; the poses themselves are as before.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local RaceBar = require(ReplicatedStorage.Shared.Logic.RaceBar)
 local SkateCourse = require(ReplicatedStorage.Shared.Logic.SkateCourse)
 
+local Pose = require(script.Parent.Parent.Pose)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -56,20 +64,20 @@ local rad = math.rad
 
 type Obstacle = SkateCourse.Obstacle
 
--- R15 joints we pose: part name -> motor name.
+-- The joints a skater's pose turns (R15's; client/Pose finds them on either kind of body).
 local JOINTS = {
-	UpperTorso = "Waist",
-	Head = "Neck",
-	LeftUpperArm = "LeftShoulder",
-	RightUpperArm = "RightShoulder",
-	LeftLowerArm = "LeftElbow",
-	RightLowerArm = "RightElbow",
-	LeftUpperLeg = "LeftHip",
-	RightUpperLeg = "RightHip",
-	LeftLowerLeg = "LeftKnee",
-	RightLowerLeg = "RightKnee",
-	LeftFoot = "LeftAnkle",
-	RightFoot = "RightAnkle",
+	"Waist",
+	"Neck",
+	"LeftShoulder",
+	"RightShoulder",
+	"LeftElbow",
+	"RightElbow",
+	"LeftHip",
+	"RightHip",
+	"LeftKnee",
+	"RightKnee",
+	"LeftAnkle",
+	"RightAnkle",
 }
 
 local function angles(x: number, y: number, z: number): CFrame
@@ -883,22 +891,14 @@ function SkateEscape.Start(api)
 
 	-- Posing every skater ------------------------------------------------------------------------------
 
-	local rigs: { [Model]: { [string]: { Motor: Motor6D, Current: CFrame } } } = {}
+	local rigs: { [Model]: { [string]: Pose.Joint } } = {}
 	local welds: { [Model]: Weld } = {} -- each skater's board weld, found once
 	local function rigOf(character: Model)
 		local rig = rigs[character]
-		if rig then
-			return rig
+		if not rig then
+			rig = Pose.Rig(character, JOINTS)
+			rigs[character] = rig
 		end
-		rig = {}
-		for partName, motorName in JOINTS do
-			local part = character:FindFirstChild(partName)
-			local motor = part and part:FindFirstChild(motorName)
-			if motor and motor:IsA("Motor6D") then
-				rig[motorName] = { Motor = motor, Current = CFrame.identity }
-			end
-		end
-		rigs[character] = rig
 		return rig
 	end
 
@@ -952,13 +952,13 @@ function SkateEscape.Start(api)
 		return math.sin(x * math.pi * 2) * 16
 	end
 
-	local poseConnection = (RunService :: any).PreSimulation or RunService.Stepped
-	api:Track(poseConnection:Connect(function(dt)
+	-- Just before physics, every frame: after the Animator, so the pose is what shows.
+	api:Track(Pose.Step(function(dt)
 		if not race then
 			return
 		end
 		local now = api:Now()
-		local alpha = 1 - math.exp(-(if type(dt) == "number" then dt else 1 / 60) * 18)
+		local alpha = 1 - math.exp(-dt * 18)
 		for key in race.Lane or {} do
 			local character = api:CharacterOf(tonumber(key))
 			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -970,9 +970,7 @@ function SkateEscape.Start(api)
 			if math.abs(offset.X) > 120 or offset.Z > 120 or offset.Z < -length - 200 or offset.Y < -200 then
 				local rig = rigs[character]
 				if rig then
-					for _, joint in rig do
-						joint.Motor.Transform = CFrame.identity
-					end
+					Pose.ReleaseAll(rig)
 					rigs[character] = nil
 					welds[character] = nil
 				end
@@ -985,8 +983,11 @@ function SkateEscape.Start(api)
 			local fresh = rigs[character] == nil
 			for name, joint in rigOf(character) do
 				local want = target[name] or CFrame.identity
-				joint.Current = if fresh then want else joint.Current:Lerp(want, alpha)
-				joint.Motor.Transform = joint.Current
+				if fresh then
+					Pose.Set(joint, want)
+				else
+					Pose.Ease(joint, want, alpha)
+				end
 			end
 			local weld = welds[character]
 			if not weld or weld.Parent == nil then
@@ -1008,9 +1009,7 @@ function SkateEscape.Start(api)
 	api:Track(function()
 		for character, rig in rigs do
 			if character.Parent then
-				for _, joint in rig do
-					joint.Motor.Transform = CFrame.identity
-				end
+				Pose.ReleaseAll(rig)
 			end
 		end
 	end)
