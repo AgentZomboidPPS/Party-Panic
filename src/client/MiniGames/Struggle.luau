@@ -889,6 +889,12 @@ function Struggle.Start(api)
 				if fan then
 					scaleBy(fan, reach / (fan:GetAttribute("PP_Radius") or 1))
 					fan:PivotTo(facing * CFrame.new(0, 0.08, -reach / 2))
+					-- (Its pivot can sit off the thin mesh's bottom: lay the bottom on the sand.)
+					local box, boxSize = fan:GetBoundingBox()
+					local lift = ground.Y + 0.08 - (box.Position.Y - boxSize.Y / 2)
+					if math.abs(lift) > 0.01 then
+						fan:PivotTo(fan:GetPivot() + Vector3.new(0, lift, 0))
+					end
 					for _, part in partsOf(fan) do
 						part.Transparency = if glow then 0.62 else 0.8
 					end
