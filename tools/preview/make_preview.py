@@ -84,6 +84,9 @@ CAMERAS: dict[str, dict] = {
     "RockinRaceway": {"yaw": 150, "pitch": 16, "distance": 26, "shift": [25, 0, -22], "raise": 6},
     # The turning field from a player's corner: lanes, veggies and bombs, the silo in the middle.
     "RakeItIn": {"look_at": "SiloBody", "yaw": 30, "pitch": 30, "distance": 50, "shift": [0, -4, 0], "raise": 2},
+    # Across the giant pizza on its pan: teams on their slices, half of them eaten down to the pan, the
+    # wood-fired oven and the pizzeria's sign beyond.
+    "EatsaPizza": {"look_at": "Pan", "yaw": 15, "pitch": 40, "distance": 66, "shift": [2, 2, -12], "raise": 9},
     # Over the cutters' shoulders: their boards with the dotted outlines half cut, the giant glass of
     # milk beyond.
     "CrazyCutters": {"yaw": 80, "pitch": 40, "distance": 38, "shift": [-12, -5, 0], "raise": 2},
@@ -139,6 +142,7 @@ CAMERAS: dict[str, dict] = {
 DUMP_AT: dict[str, float] = {
     "BobsledRun": 12,  # the sleds well down the run, a banked curve ahead
     "CakeFactory": 14,  # cakes with a few layers on every belt
+    "EatsaPizza": 15,  # halfway: some slices eaten down to the pan, teams munching on the rest
     "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
     "MechaMarathon": 12.5,  # a second after lift-off: the toys climbing away from their pads
