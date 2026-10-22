@@ -27,7 +27,7 @@
 -- Every team gets the same plates, so a good team could finish them all: skill shows in the score
 -- through ⭐ cakes. A finished cake scores 1, a ⭐ cake (every layer a PERFECT press) scores 2, and
 -- the pills show both counts (🎂 cakes, ⭐ cakes). A tie on points is broken by perfect presses, then
--- good layers (the results say so).
+-- good layers.
 --
 -- Judged by what each player saw (owner: "We need to fine tune some of the hitboxes. the precision
 -- games will feel super bad if we dont."): the ADD button sends the time on the player's clock
@@ -1186,7 +1186,9 @@ function CakeFactory:Stop(_reason: string?)
 	end
 end
 
--- Team results (most points first, then perfect presses); each player's line shows their own work.
+-- Team results (most points first, then perfect presses); each player's line shows the team's 🎂 and
+-- ⭐ cakes as its pill showed them and their own good layers, the figure the standings showed all
+-- round ("Yellow 🎂 12 ⭐ 3 • 14 layers": short enough to read whole on the results card).
 function CakeFactory:GetResults()
 	local results = self.context:TeamResults()
 	for _, entry in results.Entries do
@@ -1196,8 +1198,7 @@ function CakeFactory:GetResults()
 		end
 		local worker = self.workers[entry.Player]
 		if worker and line then
-			entry.ScoreText =
-				`{entry.Team} {line.Done} cakes, {line.Stars} ⭐ • {worker.Good} layers, {worker.Perfect} perfect`
+			entry.ScoreText = `{entry.Team} 🎂 {line.Done} ⭐ {line.Stars} • {worker.Good} layers`
 		end
 	end
 	results.WinningTeam = self:_leader()

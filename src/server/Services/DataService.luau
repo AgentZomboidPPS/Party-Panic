@@ -19,6 +19,17 @@
 --     and the server's close (BindToClose) waits for every save still running, whoever started
 --     it, so the last minutes of play aren't lost and no lock is left behind.
 --   * An autosave that was still running when the player left never locks the record again.
+--
+-- Third pass (the data-safety review that followed the move to the low coin scale): two visits of
+-- one player to the same server used to hold identical locks (the JobId was all a lock said), so
+-- the first visit could clear the second one's lock: a load still running when the player left
+-- and came back, or a leave save that took longer than the 30 s wait on rejoining. The second
+-- visit then played with no lock until its first autosave, and a quick move to another server
+-- could lose its progress. Now a lock also names its session (Lock.Session, numbered per server):
+-- saves and lock releases only touch their own session's lock, a load never takes the lock once
+-- its player has left, and a player back on the same server also waits for a load still running
+-- from their last visit. Locks written before this change have no Session; for those the JobId
+-- alone decides, as before. Older servers ignore the new field (another JobId is someone else's).
 
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
@@ -52,6 +63,7 @@ export type Profile = {
 	CanSave: boolean,
 	IsVip: boolean,
 	Released: boolean,
+	Session: number, -- this visit's number on this server (its lock's Session)
 	Migration: ProfileMigration.Report?, -- what loading changed (this session only, never saved)
 }
 
@@ -62,7 +74,8 @@ local store: DataStore? = nil
 local inFlight = 0 -- saves and lock releases still running; BindToClose waits for every one
 local closeDeadline = math.huge -- set when the server closes: no retry may wait past it
 local RELEASE_RETRY_WAITS = { 1, 2, 4 } -- seconds between the tries of a release
-local releasing: { [string]: boolean } = {} -- keys whose release is still running here
+local busy: { [string]: number } = {} -- keys with a load or release still running here (how many)
+local sessionCount = 0 -- the last visit's number (each load starts a new session)
 
 local loadedEvent = Instance.new("BindableEvent")
 DataService.ProfileLoaded = loadedEvent.Event -- (player, profile)
@@ -123,16 +136,37 @@ local function openStore()
 	store = result
 end
 
-local function loadRecord(player: Player): (any, boolean)
+-- Whether a record's lock is this session's: taken on this server, in this session. (A lock from
+-- before sessions were numbered has no Session, and this server's JobId is enough, as it was then.)
+local function ownsLock(lock: any, session: number): boolean
+	return lock.JobId == game.JobId and (lock.Session == nil or lock.Session == session)
+end
+
+-- Counts a load or release of `key` running here (`change` 1 when it starts, -1 when it's over).
+local function markBusy(key: string, change: number)
+	local count = (busy[key] or 0) + change
+	busy[key] = if count > 0 then count else nil
+end
+
+local function loadRecord(player: Player, session: number): (any, boolean)
 	local dataStore = store
 	if not dataStore then
 		return nil, false
 	end
 	local key = keyFor(player)
 	for attempt = 1, Config.Data.LoadRetries do
+		-- Gone while we waited between attempts: never lock (or take over another server's lock) for
+		-- someone who has left, or a session they've since started elsewhere could lose its lock.
+		if not player.Parent then
+			return nil, false
+		end
 		local blockedByLock = false
 		local ok, result = pcall(function()
 			return dataStore:UpdateAsync(key, function(stored)
+				-- Or gone while this request was on its way: still no lock (their next visit may hold it).
+				if not player.Parent then
+					return nil
+				end
 				stored = stored or {}
 				local lock = stored.Lock
 				local lockIsLive = lock
@@ -143,7 +177,7 @@ local function loadRecord(player: Player): (any, boolean)
 					blockedByLock = true
 					return nil
 				end
-				stored.Lock = { JobId = game.JobId, Time = os.time() }
+				stored.Lock = { JobId = game.JobId, Time = os.time(), Session = session }
 				return stored
 			end)
 		end)
@@ -174,8 +208,9 @@ local function saveRecord(profile: Profile, release: boolean): boolean
 		dataStore:UpdateAsync(profile.Key, function(stored)
 			stored = stored or {}
 			local lock = stored.Lock
-			if lock and lock.JobId ~= game.JobId then
-				-- Another server owns this profile now; never overwrite its newer data.
+			if lock and not ownsLock(lock, profile.Session) then
+				-- Another server (or the player's next visit here) owns this profile now; never
+				-- overwrite its newer data.
 				lostLock = true
 				return nil
 			end
@@ -188,7 +223,7 @@ local function saveRecord(profile: Profile, release: boolean): boolean
 			-- written), so a later load can spot coins paid by a server still running the old code.
 			ProfileMigration.Stamp(profile.Data)
 			stored.Data = profile.Data
-			stored.Lock = if release then nil else { JobId = game.JobId, Time = os.time() }
+			stored.Lock = if release then nil else { JobId = game.JobId, Time = os.time(), Session = profile.Session }
 			return stored
 		end)
 	end)
@@ -224,18 +259,18 @@ end
 -- The save when a player leaves or the server closes: their data, and our lock given up.
 local function releaseProfile(profile: Profile)
 	profile.Released = true
-	releasing[profile.Key] = true
+	markBusy(profile.Key, 1)
 	if not withRetries(function()
 		return saveRecord(profile, true)
 	end) then
 		Telemetry.Error("DataSave", `{profile.Key}: release failed after retries`)
 	end
-	releasing[profile.Key] = nil
+	markBusy(profile.Key, -1)
 end
 
 -- A player left while their profile was loading: give up the lock we took and touch nothing else
 -- (no session happened, so there's nothing to save; their data converts on their next real load).
-local function releaseLockOnly(key: string)
+local function releaseLockOnly(key: string, session: number)
 	local dataStore = store
 	if not dataStore then
 		return
@@ -244,7 +279,7 @@ local function releaseLockOnly(key: string)
 		local ok, err = pcall(function()
 			dataStore:UpdateAsync(key, function(stored)
 				local lock = if type(stored) == "table" then stored.Lock else nil
-				if type(lock) ~= "table" or lock.JobId ~= game.JobId then
+				if type(lock) ~= "table" or not ownsLock(lock, session) then
 					return nil -- not ours (any more): leave the record as it is
 				end
 				stored.Lock = nil
@@ -377,11 +412,12 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 	loadingThreads[player] = true
-	-- Back on this server while the save from their last visit is still being retried: wait for
-	-- it, or this load would read the record from before that visit (our own lock doesn't stop it).
+	-- Back on this server while the save from their last visit is still being retried, or the load
+	-- they left during is still running: wait for it, or this load would read the record from
+	-- before that visit (our own server's lock doesn't stop it).
 	local key = keyFor(player)
 	local waitUntil = os.clock() + 30
-	while releasing[key] and player.Parent and os.clock() < waitUntil do
+	while busy[key] and player.Parent and os.clock() < waitUntil do
 		task.wait(0.25)
 	end
 	if not player.Parent then
@@ -403,14 +439,18 @@ local function onPlayerAdded(player: Player)
 	-- A load counts as a save in flight until its profile is registered (or its lock released), so
 	-- a server closing meanwhile waits for it and never leaves the lock behind.
 	inFlight += 1
-	local stored, canSave = loadRecord(player)
+	markBusy(key, 1)
+	sessionCount += 1
+	local session = sessionCount
+	local stored, canSave = loadRecord(player, session)
 	loadingThreads[player] = nil
 
 	if not player.Parent then
 		-- Left while loading: release the lock we took, and nothing else.
 		if canSave then
-			releaseLockOnly(key)
+			releaseLockOnly(key, session)
 		end
+		markBusy(key, -1)
 		inFlight -= 1
 		return
 	end
@@ -423,7 +463,7 @@ local function onPlayerAdded(player: Player)
 		data, migration = prepare(nil)
 		if canSave then
 			canSave = false
-			task.spawn(releaseLockOnly, key)
+			task.spawn(releaseLockOnly, key, session)
 		end
 	end
 
@@ -434,12 +474,14 @@ local function onPlayerAdded(player: Player)
 		CanSave = canSave,
 		IsVip = false,
 		Released = false,
+		Session = session,
 		Migration = migration,
 	}
 	profiles[player] = profile
 	if closeDeadline < math.huge then
 		task.spawn(releaseProfile, profile) -- loaded while the server is closing: save and let go
 	end
+	markBusy(key, -1)
 	inFlight -= 1
 
 	if migration and migration.CoinsBefore and migration.CoinsBefore > 0 then

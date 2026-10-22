@@ -21,6 +21,7 @@
 local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
 
+local Arcade = require(script.Parent.Arcade)
 local Build = require(script.Parent.Build)
 local Environment = require(script.Parent.Environment)
 local LobbyObby = require(script.Parent.LobbyObby)
@@ -96,6 +97,7 @@ LobbyBuilder.BallTraps = {
 	{ Center = Vector3.zero, Radius = 13 },
 	{ Center = EMOTE, Radius = 15 },
 	{ Center = PARKOUR, Radius = LobbyObby.Radius },
+	Arcade.BallTrap(), -- the Skee-Ball arcade (north-east): no ball parks in front of a machine
 }
 
 local function tag(instance: Instance, name: string)
@@ -1646,6 +1648,7 @@ function LobbyBuilder.Build(): LobbyRefs
 	buildGardens(root)
 	buildSkyline(root)
 	buildScenery(root)
+	Arcade.Build(root) -- the Skee-Ball arcade (north-east lawn); clears the scenery in its way
 	softenFoliage(root)
 
 	return {

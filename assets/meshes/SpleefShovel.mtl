@@ -1,0 +1,23 @@
+newmtl Blade
+Kd 0.769 0.808 0.871
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Collar
+Kd 0.361 0.384 0.455
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Shaft
+Kd 0.659 0.439 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Grip
+Kd 0.910 0.251 0.282
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
