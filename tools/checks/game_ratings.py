@@ -59,7 +59,7 @@ for _, week in weeks do
 		for _, key in pages:GetCurrentPage() do
 			local game = string.match(key.KeyName, "^[^/]+/(.+)$")
 			local ok, value = pcall(store.GetAsync, store, key.KeyName)
-			if game and ok then
+			if game and ok and value ~= nil then -- (a removed key can still be listed)
 				records[game] = records[game] or {}
 				table.insert(records[game], value)
 				read += 1

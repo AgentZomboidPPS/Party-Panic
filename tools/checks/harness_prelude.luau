@@ -5,6 +5,12 @@ local HttpService = game:GetService("HttpService")
 local LogService = game:GetService("LogService")
 local RealPlayers = game:GetService("Players")
 
+-- A test run, from the first line: services that keep shared data (the weekly leaderboard, the
+-- 👍 / 👎 totals, client reports) must never write the real stores from a test; they check this
+-- attribute. (The PLAY AGAIN run starts the real RoundManager, which writes the ratings: it once ran
+-- without the flag and wrote to the real PP_GameRatings.)
+workspace:SetAttribute("PP_Harness", true)
+
 local __log = {}
 local __errors = {}
 LogService.MessageOut:Connect(function(message, kind)
