@@ -307,6 +307,19 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "SnowballSummit",
+		Name = "Snowball Summit",
+		Category = "Knockback",
+		Icon = "☃️",
+		Color = Color3.fromRGB(90, 170, 240),
+		Objective = "Roll snowballs and knock rivals off the mountain top. Stay on the summit to win!",
+		Controls = "Hold ROLL (E) and walk to grow a snowball, let go to throw it. Jump over small ones!",
+		Duration = 60,
+		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
