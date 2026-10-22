@@ -24,6 +24,7 @@ local order = {
 	-- What keeps players coming back (they listen to RoundEvents; the lobby exists for their pieces).
 	"CupService",
 	"FriendsService",
+	"PartyService", -- parties: same team in team games (RoundContext reads its PP_Party)
 	"MedalService",
 	"LeaderboardService",
 	"EventService",
