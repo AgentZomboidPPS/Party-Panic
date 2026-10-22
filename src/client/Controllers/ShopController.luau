@@ -189,10 +189,14 @@ local function render()
 			-- An event's reward says where it came from, owned or not ("🎃 HALLOWEEN 2026").
 			Text = if event then `{event.Icon} {event.Label}` else item.Description,
 			TextSize = if touch then Theme.Touch.MinText else 17,
+			TextScaled = not touch, -- PC: a long one shrinks a little to keep to two lines
 			TextColor3 = Theme.Colors.TextDim,
 			Position = UDim2.fromOffset(8, if touch then 126 else 132),
 			Size = UDim2.new(1, -16, 0, if touch then 44 else 40),
 			Parent = card,
+			Children = if touch
+				then {}
+				else { UIKit.new("UITextSizeConstraint", { MaxTextSize = 17, MinTextSize = 13 }) },
 		})
 
 		local actionText, top, bottom, onClick
@@ -246,11 +250,18 @@ local function render()
 		UIKit.Button({
 			Text = actionText,
 			TextSize = if touch then 20 else 18,
+			TextScaled = not touch, -- PC: a long lock ("🔒 Survival wins 0/5") shrinks a little
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -10),
 			Size = UDim2.new(1, -20, 0, if touch then 68 else 44),
 			CornerRadius = 14,
 			Parent = card,
+			Children = if touch
+				then {}
+				else {
+					UIKit.new("UITextSizeConstraint", { MaxTextSize = 18, MinTextSize = 14 }),
+					UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
+				},
 		}, onClick, top, bottom)
 	end
 end
