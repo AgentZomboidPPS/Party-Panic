@@ -171,17 +171,14 @@ for round = 1, ROUNDS do
 						{ K = "Switch", At = event.At, Tile = event.Tile, JudgeAt = event.At + Track.GRACE + LEEWAY }
 					)
 				elseif event.K == "Gap" or event.K == "Crystal" then
-					table.insert(
-						rider.Pending,
-						{
-							K = event.K,
-							At = event.At,
-							Tile = event.Tile,
-							V = event.V,
-							Gap = event.Gap,
-							JudgeAt = event.At + LEEWAY,
-						}
-					)
+					table.insert(rider.Pending, {
+						K = event.K,
+						At = event.At,
+						Tile = event.Tile,
+						V = event.V,
+						Gap = event.Gap,
+						JudgeAt = event.At + LEEWAY,
+					})
 				elseif event.K == "Buffer" then
 					rider.Bumps += 1
 					rider.Pending = {}

@@ -17,8 +17,8 @@
 -- rails shift sideways so nobody hides anybody, and carts right next to yours turn see-through.
 --
 -- Controls: PC, A / D or the arrow keys to pick a way and lean, Space to JUMP. Phones: two big
--- ◀ ▶ pads left of the middle (a touch anywhere on the left half counts by which pad side it's on),
--- JUMP beside the jump button (the jump button jumps too).
+-- ◀ ▶ pads just right of the middle (clear of the MOVE stick's half; the stick pushed left or right
+-- leans too), JUMP beside the jump button (the jump button jumps too).
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
@@ -199,6 +199,10 @@ function MinecartMayhem.Start(api)
 				end
 			elseif event.K == "Gap" then
 				local fell = myGaps[event.Tile]
+				if fell and math.abs(event.At - fell) > 0.5 then
+					fell = nil -- (an earlier try at this gap: this is a fresh one)
+					myGaps[event.Tile] = nil
+				end
 				if fell == nil and not Track.Clears(myJumpAt, event.At, event.V, event.Gap or 8) then
 					fell = event.At
 					myGaps[event.Tile] = fell
@@ -500,7 +504,7 @@ function MinecartMayhem.Start(api)
 		Name = "Ways",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, shiftX, 0, wayY),
-		Size = UDim2.fromOffset(420, wayHeight),
+		Size = UDim2.fromOffset(if touch then 470 else 430, wayHeight),
 		BackgroundTransparency = 1,
 		Visible = false,
 		Parent = hud,
@@ -527,7 +531,7 @@ function MinecartMayhem.Start(api)
 			Name = "Text",
 			Text = "",
 			Font = Theme.Fonts.Display,
-			TextSize = if touch then 24 else 22,
+			TextSize = if touch then 28 else 24,
 			Size = UDim2.new(1, -8, 1, 0),
 			Position = UDim2.fromOffset(4, 0),
 			Parent = boxFrame,
@@ -611,10 +615,10 @@ function MinecartMayhem.Start(api)
 		Name = "StartHint",
 		Text = "◀ ▶ pick a way & lean\nJUMP at the yellow arrows",
 		Font = Theme.Fonts.Display,
-		TextSize = 24,
+		TextSize = 30,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, shiftX, 0, promptY + 64),
-		Size = UDim2.fromOffset(360, 62),
+		Size = UDim2.fromOffset(420, 80),
 		Visible = false,
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.15) },
@@ -636,8 +640,8 @@ function MinecartMayhem.Start(api)
 	if touch then
 		local holder = UIKit.new("Frame", {
 			Name = "LeanPads",
-			AnchorPoint = Vector2.new(1, 1),
-			Position = UDim2.new(0.5, -8, 1, -20),
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0.5, 10, 1, -20), -- (right of the middle: the left half is the MOVE stick's)
 			Size = UDim2.fromOffset(204, 96),
 			BackgroundTransparency = 1,
 			Parent = api.Gui,
@@ -689,14 +693,34 @@ function MinecartMayhem.Start(api)
 		local entry = snapshot.R[myKey]
 		return stage == "Race" and entry ~= nil and entry.E == nil and api:CanAct()
 	end
-	-- The side a left-half touch is on: left of the line between the two pads is LEFT.
+	-- The side a touch on the pads is on: left of the line between them is LEFT.
 	local function touchSide(input: InputObject): number
 		local holder = padHolder
 		if holder then
 			local split = holder.AbsolutePosition.X + holder.AbsoluteSize.X / 2
 			return if input.Position.X < split then -1 else 1
 		end
-		return if input.Position.X < camera.ViewportSize.X * 0.25 then -1 else 1
+		return 0
+	end
+	local function onPads(input: InputObject): boolean
+		local holder = padHolder
+		if not holder or not holder.Visible then
+			return false
+		end
+		local at, size = holder.AbsolutePosition, holder.AbsoluteSize
+		local x, y = input.Position.X, input.Position.Y
+		return x >= at.X - 12 and x <= at.X + size.X + 12 and y >= at.Y - 16 and y <= at.Y + size.Y + 16
+	end
+	-- Phones: the MOVE stick leans too (pushed well left or right).
+	local controls = nil
+	if touch then
+		pcall(function()
+			local module = Players.LocalPlayer:FindFirstChild("PlayerScripts")
+			module = module and module:FindFirstChild("PlayerModule")
+			if module then
+				controls = (require :: any)(module):GetControls()
+			end
+		end)
 	end
 	local function wantedLean(): number
 		local dir = 0
@@ -713,6 +737,14 @@ function MinecartMayhem.Start(api)
 			end
 			if newest then
 				dir = touchSide(newest)
+			end
+		end
+		if dir == 0 and controls then
+			local ok, move = pcall(function()
+				return controls:GetMoveVector()
+			end)
+			if ok and typeof(move) == "Vector3" and math.abs(move.X) > 0.5 then
+				dir = if move.X < 0 then -1 else 1
 			end
 		end
 		return dir
@@ -746,8 +778,7 @@ function MinecartMayhem.Start(api)
 		elseif RIGHT_KEYS[input.KeyCode] and not processed then
 			keys.Right = true
 		elseif input.UserInputType == Enum.UserInputType.Touch and touch then
-			-- (touches on JUMP or the jump button are on the right half)
-			if input.Position.X < camera.ViewportSize.X * 0.5 then
+			if onPads(input) then
 				padTouches[input] = true
 			end
 		end
