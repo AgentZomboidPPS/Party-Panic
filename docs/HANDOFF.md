@@ -4,6 +4,24 @@ Last updated: **2026-10-22 ~20:05 UTC** by Session C (branch **`claude/friendly-
 from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes from 19:00 UTC and Session A's sections
 0-9, still accurate except where a newer block says otherwise.
 
+## THE GAME IS PUBLIC now (seen 2026-10-22 21:33 UTC): ask the owner before every publish
+
+`tools/publish_place.py` refuses while it's public (pass `--allow-public` only once the owner says yes).
+
+- **Waiting for the owner's yes:** `ce8754f` (bots), on top of live version 43. Owner: "Bots are STILL
+  ruberbanding and floating." / "Yes fix it.":
+  - Trace Race, Minecart Mayhem, Rockin' Raceway, Bobsled Run, Dice Dash: the server no longer moves bot riders
+    during the race (it seats them at the start and for a new character). Every client already stood every rider in
+    place each frame; the server's moves, a network trip behind, pulled bots back ~5 studs many times a second
+    (the devices' reports: 565 and 638 snaps in a Trace Race round). `tools/checks/scenarios/BotsMove.luau` checks
+    the clients carry every bot (all five: every bot moved the whole race, 0 errors).
+  - Floating: a bot resting still goes to sleep in Roblox's physics and isn't woken when its floor goes (Shark Bait's
+    flipped rafts: four bots hung 4.5 studs up, falling, not moving). `BotService` nudges any bot falling-but-still
+    for 0.8 s (PP_Wakes, now in the bot reports), and Shark Bait nudges bots over a raft the moment it flips.
+  - Left as is: Stamp Out's server-flown bot hops (8 snaps, 37 jerks a round), Shark Bait's 30-40 stud moves (chomps
+    and tosses, by design).
+  - After the owner's next session with bots, read `python3 tools/checks/client_reports.py --bots`.
+
 ## Session C, later still: version 43 (nobody floats over the lobby)
 
 - **Live: version 43** (from `20dff14`, still PRIVATE). Owner: "Friend spawned above the lobby floating. We need to
