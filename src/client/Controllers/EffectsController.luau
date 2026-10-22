@@ -2,6 +2,8 @@
 -- player's "reduced effects" setting is respected (design doc §12 accessibility).
 -- The Rewards Road and career rewards add balloons, ghosts, music notes, crowns, trophies and a
 -- grand finale (owner: "Also we need cool payoffs for players that keep playing the game.").
+-- The HALLOWEEN PARTY's free rewards add candy, bats and a spooky knockout (owner: "Can you work
+-- on all of that?").
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -176,11 +178,34 @@ local EFFECTS: { [string]: (position: Vector3, colors: { Color3 }?, scale: numbe
 	Trophies = function(position, _colors, scale)
 		emojiBurst(position, { "🏆", "🥇" }, math.max(2, math.floor(7 * scale)))
 	end,
+	-- The HALLOWEEN PARTY's rewards (Shared/Events): a candy toss, and a knockout in purple smoke.
+	Candy = function(position, _colors, scale)
+		emojiBurst(position, { "🍬", "🍭" }, math.max(3, math.floor(9 * scale)))
+	end,
+	Spooky = function(position, _colors, scale)
+		local holder = anchor(position, 3)
+		burst(holder, {
+			Texture = SMOKE,
+			Color = ColorSequence.new(Color3.fromRGB(150, 90, 220)),
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 7) }),
+			Transparency = NumberSequence.new(0.25, 1),
+			Lifetime = NumberRange.new(0.9, 1.4),
+			Speed = NumberRange.new(5, 9),
+			SpreadAngle = Vector2.new(180, 180),
+			Drag = 4,
+		}, math.floor(18 * scale))
+		emojiBurst(position, { "👻", "🦇" }, math.max(2, math.floor(6 * scale)))
+	end,
 }
 -- Everything at once: the Grand Finale victory effect.
 EFFECTS.Finale = function(position, colors, scale)
 	EFFECTS.Confetti(position, colors, scale)
 	EFFECTS.Sparkles(position, { Color3.fromRGB(255, 225, 120) }, scale)
+	EFFECTS.Fireworks(position, colors, scale)
+end
+-- A swarm of bats takes off in purple and orange fireworks (the HALLOWEEN PARTY's victory reward).
+EFFECTS.Bats = function(position, colors, scale)
+	emojiBurst(position, "🦇", math.max(3, math.floor(9 * scale)))
 	EFFECTS.Fireworks(position, colors, scale)
 end
 
