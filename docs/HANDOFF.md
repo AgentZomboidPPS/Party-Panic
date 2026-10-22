@@ -59,13 +59,14 @@ Session A's handoff from 17:40 UTC, still accurate except where this block says 
   A quick check of 7d3137b (code checks; SinkingSands, Slaparazzi, Spleef and PumpAndPop rounds; the lobby; the client
   on phone and PC) is running. Publish on the owner's word.
 - **Games 27-29, building** (owner: "Let's add the stars. If you need to hand them off do it."): Hot Potato (Survival,
-  games-1, `claude/games-1-HotPotato`), Dice Dash (Luck, games-2, `claude/games-2-DiceDash`) and Minecart Mayhem (Race,
-  games-3, `claude/games-3-MinecartMayhem`). Briefs: `docs/MINIGAME_BACKLOG.md` 27-29 and `docs/builds/`. On merge: keep
+  games-1), Dice Dash (Luck, games-2) and Minecart Mayhem (Race, games-3), each on its session's `claude/games-N` branch
+  (sessions can only push their own branch; games-2's and games-3's also carry the held shop pass, so take only the
+  game's changes from them). Briefs: `docs/MINIGAME_BACKLOG.md` 27-29 and `docs/builds/`. On merge: keep
   IsNew within the vote's cap (`tests/VoteFairness.spec.luau`: at most half of the games), make portal previews, add
   them to `docs/STORE_DESCRIPTION.txt` and the lineup doc.
 - **Held until the owner says the bug-fix wave is done ("after everything else is finished"):** the second shop
   pass, 25 coin items and 10 effects, finished on `claude/games-3` at f0cb9da (reviewed; its client checks are in
-  the same branch). `claude/games-2` also carries the earlier shop commits, so don't merge that branch whole.
+  the same branch; a copy is in `docs/wip/shop-pass2.bundle`). `claude/games-2` also carries the earlier shop commits, so don't merge that branch whole.
 - **Game sessions** (see [HANDOFF_GAMES.md](HANDOFF_GAMES.md)): all 14 backlog games are merged (27 games); games-1
   to games-3 are building games 27-29 and games-4 is on the performance audit.
 - **Later (owner):** the owner's call on rebalancing thin categories (Messy Memory to Luck, Tanks! to Knockback).
