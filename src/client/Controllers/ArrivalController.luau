@@ -30,6 +30,15 @@
 -- should require you to sit."): nothing sits a character down any more (Shared/NoSitting), so the
 -- sitting test below never lets go on its own; Sinking Sands' Kings, who sat on their thrones, now
 -- stand on the dais and are held like anyone else until this device has it.
+--
+-- Never in mid-air over the lobby (owner: "Friend spawned above the lobby floating. We need to make
+-- sure this doesnt happen again."): a character that respawns onto a lobby pad someone (a bot, say)
+-- is standing on is dropped in by Roblox on top of them, a few studs up. People and bots never
+-- collide, so they fall straight through to the floor, but there was no floor within REACH of the
+-- soles, and this held them up there until HOLD_LIMIT ran out. Away from a round's arena (not in a
+-- round, or out of it) the floor is the lobby's, which every device has from the start: there a
+-- character waits only while there's nothing solid at all under it for LOBBY_DEPTH studs (the lobby
+-- still downloading), and at most LOBBY_LIMIT seconds. Anything solid further down: it just drops.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -43,6 +52,8 @@ local ArrivalController = {}
 local HOLD_LIMIT = math.max(15, Config.Session.RulesTime + Config.Session.CountdownTime + 2)
 local MOVED = 4 -- studs a root went between two physics steps: only the server (or a mode) moves one so
 local REACH = 3 -- studs under the soles that still count as ground
+local LOBBY_DEPTH = 80 -- in the lobby: anything solid this far down is the floor (fall onto it)
+local LOBBY_LIMIT = 6 -- seconds at most in the lobby
 -- Where the rays start round the root's middle: anything solid under the character's footprint.
 local OFFSETS = {
 	Vector3.zero,
@@ -74,10 +85,16 @@ local function legs(humanoid: Humanoid, root: BasePart): number
 	return humanoid.HipHeight + root.Size.Y / 2
 end
 
+-- Whether the character is in a round's arena (in the round and still in it), not the lobby.
+local function inArena(): boolean
+	return player:GetAttribute("PP_InRound") == true and player:GetAttribute("PP_Alive") == true
+end
+
 local function probe(character: Model, humanoid: Humanoid, root: BasePart): boolean
 	rays.FilterDescendantsInstances = { character }
 	rays.CollisionGroup = root.CollisionGroup
-	local down = Vector3.new(0, -(legs(humanoid, root) + REACH), 0)
+	local reach = if inArena() then legs(humanoid, root) + REACH else LOBBY_DEPTH
+	local down = Vector3.new(0, -reach, 0)
 	for _, offset in OFFSETS do
 		if workspace:Raycast(root.Position + offset, down, rays) then
 			return true
@@ -132,7 +149,8 @@ local function beforePhysics()
 	lastRoot = root
 	local held = hold
 	if held then
-		if held.Root ~= root or taken(humanoid, root) or os.clock() - held.Since > HOLD_LIMIT then
+		local limit = if inArena() then HOLD_LIMIT else LOBBY_LIMIT
+		if held.Root ~= root or taken(humanoid, root) or os.clock() - held.Since > limit then
 			held = nil -- a mode has it now (or this has gone on long enough)
 		elseif (root.Position - held.At).Magnitude > MOVED then
 			held, arrived = nil, true -- moved again while held: start over where it is now

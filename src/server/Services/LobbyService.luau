@@ -16,8 +16,10 @@ local BeachBalls = require(script.Parent.Parent.World.BeachBalls)
 local Build = require(script.Parent.Parent.World.Build)
 local LobbyBuilder = require(script.Parent.Parent.World.LobbyBuilder)
 local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
+local ClientReports = require(script.Parent.ClientReports)
 local Notifier = require(script.Parent.Notifier)
 local SocialService = require(script.Parent.SocialService)
+local Telemetry = require(script.Parent.Telemetry)
 
 local LobbyService = {}
 
@@ -271,6 +273,97 @@ local function setupParkour()
 	Players.PlayerAdded:Connect(watch)
 end
 
+-- Nobody hangs in the air over the lobby (owner: "Friend spawned above the lobby floating. We need
+-- to make sure this doesnt happen again."; the cause, a device holding a respawned character in the
+-- air, is fixed in Controllers/ArrivalController). Whatever else might ever do it: a lobby player
+-- (not in a round's arena) who stays put with nothing solid under their feet for FLOAT_GAP studs,
+-- FLOAT_TIME seconds on end, is put back on a spawn pad, and it's written down for the check tools
+-- (ClientReports, key m<UserId>: "Lobby Float", where they were) so we'd know it happened.
+-- LobbyService.Floating says what it sees for one player (the check tools ask it too).
+local FLOAT_GAP = 6 -- studs under the soles with nothing to stand on
+local FLOAT_TIME = 4 -- seconds of it, standing still, before the server steps in
+local FLOAT_CHECK = 0.5
+local FOOTPRINT = Vector3.new(4, 1, 4) -- what's looked under: anything solid there is ground
+
+local floatRays = RaycastParams.new()
+floatRays.FilterType = Enum.RaycastFilterType.Exclude
+floatRays.RespectCanCollide = true
+
+-- Whether `player` stands still in the lobby with nothing under their feet, and where.
+function LobbyService.Floating(player: any): (boolean, string)
+	if player:GetAttribute("PP_InRound") == true and player:GetAttribute("PP_Alive") == true then
+		return false, "" -- in a round's arena: the mode's business
+	end
+	local character = player.Character
+	local root = rootOf(player)
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not character or not root or not humanoid or humanoid.Health <= 0 or root.Anchored then
+		return false, ""
+	end
+	if root.AssemblyLinearVelocity.Magnitude > 1 or humanoid:GetState() == Enum.HumanoidStateType.Climbing then
+		return false, "" -- walking, jumping or falling: physics is on it
+	end
+	local legs = if humanoid.RigType == Enum.HumanoidRigType.R6 then 3 else humanoid.HipHeight + root.Size.Y / 2
+	floatRays.FilterDescendantsInstances = { character }
+	floatRays.CollisionGroup = root.CollisionGroup
+	-- (a box the size of a generous footprint, so a heel on a ledge counts as standing)
+	if workspace:Blockcast(root.CFrame, FOOTPRINT, Vector3.new(0, -(legs + FLOAT_GAP), 0), floatRays) then
+		return false, ""
+	end
+	local below = workspace:Raycast(root.Position, Vector3.new(0, -500, 0), floatRays)
+	local p = root.Position
+	return true,
+		string.format(
+			"at (%.1f, %.1f, %.1f), %s below",
+			p.X,
+			p.Y,
+			p.Z,
+			if below
+				then `{below.Instance:GetFullName()} {math.floor(below.Distance - legs + 0.5)} studs`
+				else "nothing"
+		)
+end
+
+local function setupFloatWatch()
+	local since: { [Player]: number } = {}
+	local function putOnPad(player: Player, where: string)
+		local character = player.Character
+		local pads = refs.Root:FindFirstChild("Spawns")
+		local list = if pads then pads:GetChildren() else {}
+		local pad = list[math.random(1, math.max(1, #list))] :: BasePart?
+		if not character or not pad or not pad:IsA("BasePart") then
+			return
+		end
+		character:PivotTo(pad.CFrame + Vector3.new(0, 3, 0))
+		local root = rootOf(player)
+		if root then
+			root.AssemblyLinearVelocity = Vector3.zero
+		end
+		Telemetry.Error("LobbyFloat", `{player.Name} {where}`)
+		ClientReports.Record(player, "Lobby", "Float", `put back on {pad.Name}: stood still {FLOAT_TIME} s {where}`)
+	end
+	task.spawn(function()
+		while true do
+			task.wait(FLOAT_CHECK)
+			local now = os.clock()
+			for _, player in Players:GetPlayers() do
+				local ok, isFloating, where = pcall(LobbyService.Floating, player)
+				if not ok or not isFloating then
+					since[player] = nil
+				elseif now - (since[player] or now) >= FLOAT_TIME then
+					since[player] = nil
+					putOnPad(player, where)
+				else
+					since[player] = since[player] or now
+				end
+			end
+		end
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		since[player] = nil
+	end)
+end
+
 function LobbyService.Init()
 	refs = LobbyBuilder.Build()
 	MeshLibrary.Preload() -- resolves any props the lobby didn't use and reports mesh sources
@@ -279,6 +372,7 @@ function LobbyService.Init()
 	setupSecretToken()
 	setupTargetRange()
 	setupParkour()
+	setupFloatWatch()
 	BeachBalls.Setup(refs.Root, refs.BallSpots, {
 		PlazaRadius = LobbyBuilder.PlazaRadius,
 		StageFrontZ = LobbyBuilder.StageFrontZ,
