@@ -59,13 +59,23 @@ MIN_INTRO = 13.0  # the rules card and the 3-2-1
 TARGET_LUFS, LUFS_SLACK, MAX_PEAK = -11.0, 1.0, -1.0
 
 
+BROKEN: dict[str, str] = {}  # song files that failed to load, and why (check reports them)
+
+
 def load_songs() -> dict:
-    """Every SONG in tools/music/songs, by mode id."""
+    """Every SONG in tools/music/songs, by mode id. A file that fails to load is left out (and listed
+    in BROKEN), so one song being written can't stop every other song from rendering."""
     songs = {}
     for path in sorted(SONGS_DIR.glob("*.py")):
         spec = importlib.util.spec_from_file_location(f"songs.{path.stem}", path)
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except Exception as error:  # noqa: BLE001 (any mistake in a song file)
+            if path.stem not in BROKEN:
+                print(f"warning: {path.name} doesn't load ({type(error).__name__}: {error}); skipping it", file=sys.stderr)
+            BROKEN[path.stem] = f"{type(error).__name__}: {error}"
+            continue
         song = getattr(module, "SONG", None)
         if song is None:
             raise SystemExit(f"{path.name} has no SONG")
@@ -148,7 +158,10 @@ def check() -> int:
             f"{song_id:16s} {song.title[:24]:24s} {total:6.1f} {intro:6.1f} {after:6.1f} {length or 0:6d} "
             f"{info['lufs'] if info else 0:6.1f} {info['peak'] if info else 0:6.1f}  {', '.join(notes)}"
         )
-    missing = sorted(set(rounds) - set(songs))
+    for song_id, why in sorted(BROKEN.items()):
+        print(f"{song_id:16s} BROKEN FILE: {why}")
+        problems += 1
+    missing = sorted(set(rounds) - set(songs) - set(BROKEN))
     if missing:
         print(f"\nModes without a song yet (they play \"Panic Mode\"): {', '.join(missing)}")
     return problems
