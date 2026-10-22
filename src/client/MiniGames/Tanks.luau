@@ -1226,7 +1226,10 @@ function Tanks.Start(api)
 			Parent = api.World,
 		})
 	end
+	local NO_DOTS: { BasePart } = {}
+	local lastAimX, lastAimZ, lastAim, lastAimAt = math.huge, math.huge, math.huge, -math.huge
 	local function hideAim()
+		lastAimX = math.huge
 		for _, dot in dots do
 			dot.CFrame = HIDDEN
 		end
@@ -1415,10 +1418,19 @@ function Tanks.Start(api)
 				end
 				if visual.Model and since > 2.4 then
 					local fade = math.clamp((since - 2.4) / 0.8, 0, 1)
-					for _, part in visual.Model:GetDescendants() do
-						if part:IsA("BasePart") then
-							part.Transparency = fade
+					-- (The wreck's parts are found once, not every frame of the fade.)
+					local fadeParts = visual.FadeParts
+					if not fadeParts then
+						fadeParts = {}
+						for _, part in visual.Model:GetDescendants() do
+							if part:IsA("BasePart") then
+								table.insert(fadeParts, part)
+							end
 						end
+						visual.FadeParts = fadeParts
+					end
+					for _, part in fadeParts do
+						part.Transparency = fade
 					end
 					if fade >= 1 then
 						visual.Model:Destroy()
@@ -1547,12 +1559,22 @@ function Tanks.Start(api)
 		-- My aim: a dotted line along the flight, ricochet included.
 		local myTank = myVisual()
 		if myTank and not myTank.Out and api:CanAct() then
-			local path = TankField.Path(run, myTank.X, myTank.Z, aim)
-			local stop = math.min(path.Bounce + 16, 96)
+			-- (The flight is traced again only when the aim or the tank moved, or every 0.2 s for
+			-- walls that broke: the trace and 34 dots every frame cost phones for nothing.)
+			local retrace = math.abs(myTank.X - lastAimX) > 0.05
+				or math.abs(myTank.Z - lastAimZ) > 0.05
+				or math.abs(aim - lastAim) > 0.002
+				or clock - lastAimAt > 0.2
+			if retrace then
+				lastAimX, lastAimZ, lastAim, lastAimAt = myTank.X, myTank.Z, aim, clock
+			end
+			local path = if retrace then TankField.Path(run, myTank.X, myTank.Z, aim) else nil
+			local stop = if path then math.min(path.Bounce + 16, 96) else 0
 			local step = 2.8
-			for index, dot in dots do
+			local shown: { BasePart } = if path then dots else NO_DOTS
+			for index, dot in shown do
 				local s = TankField.MUZZLE + (index - 1) * step
-				if s > stop then
+				if s > stop or not path then
 					dot.CFrame = HIDDEN
 				else
 					local x, z = TankField.At(path, s)

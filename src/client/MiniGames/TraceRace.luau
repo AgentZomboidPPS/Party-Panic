@@ -27,7 +27,7 @@ local SEND_EVERY = 0.1
 local LATE_SEND = 0.6 -- keep sending unconfirmed positions this long after the ride
 local LINE_THICK = 0.1
 local MERGE_ANGLE = math.cos(math.rad(3.5)) -- strokes this close to straight join into one part...
-local MERGE_LENGTH = 12 -- ...up to this long (so a joined stroke stays within a few tenths of the line)
+local MERGE_LENGTH = 20 -- ...up to this long (a joined stroke stays within ~0.6 of the line: half its width)
 local MAX_YAW = math.rad(22) -- the crayon leans into a turn at most this much (it stays in its lane)
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -456,6 +456,7 @@ function TraceRace.Start(api)
 
 	-- Every frame ------------------------------------------------------------------------------------------
 	local lastState = ""
+	local lastLive: number? = -1
 	local finished = false
 	api:RenderStep(function(dt)
 		dt = math.min(dt, 0.1)
@@ -586,7 +587,10 @@ function TraceRace.Start(api)
 			fill.Size = UDim2.fromScale(if course.Length > 0 then s / course.Length else 0, 1)
 			if race and now >= t0 then
 				local live = tracker:Live()
-				accuracy.Text = if live then `{live}%` else "--"
+				if live ~= lastLive then
+					lastLive = live
+					accuracy.Text = if live then `{live}%` else "--"
+				end
 				local off = Rules.Distance(course, s, myX)
 				local key
 				if now > t1 then

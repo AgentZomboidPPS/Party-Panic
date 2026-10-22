@@ -797,8 +797,12 @@ function SkateEscape.Start(api)
 				local heat = 1 - (piece.D0 - front) / 32
 				local jitter = heat * heat * 0.18
 				model:PivotTo(piece.Base * CFrame.new(math.sin(now * 53) * jitter, math.sin(now * 61) * jitter, 0))
-				for _, plank in piece.Planks do
-					plank.Part.Color = plank.Color:Lerp(hot, heat * 0.6)
+				-- (Recoloured in small steps, not every frame: a piece has many planks.)
+				if math.abs(heat - (piece.Heat or -1)) > 0.04 then
+					piece.Heat = heat
+					for _, plank in piece.Planks do
+						plank.Part.Color = plank.Color:Lerp(hot, heat * 0.6)
+					end
 				end
 				piece.State = "Warn"
 			elseif front < piece.D1 then
@@ -834,8 +838,9 @@ function SkateEscape.Start(api)
 					end
 				end
 				-- Gone once even its pier's tower tops are under the lava.
+				-- (Taken out of this device's scene rather than parked under the lava: nothing left to draw.)
 				if drop > LAVA_DEPTH + 80 then
-					model:PivotTo(piece.Base - Vector3.new(0, 400, 0))
+					model.Parent = nil
 					piece.State = "Gone"
 				end
 			end

@@ -457,6 +457,7 @@ function TraceRace:Start()
 	end, { Interval = 0.04 }) -- every position is checked on its own, so batches can come quickly
 
 	local lastScores = 0
+	local lastCrayons = -math.huge
 	local finalized = false
 	ctx:Loop(function(): number?
 		local time = ctx:Now()
@@ -474,13 +475,19 @@ function TraceRace:Start()
 		if any then
 			ctx:Fire(nil, "Trails", relay)
 		end
-		-- Riders and crayons where the server has them (clients move them smoothly themselves).
+		-- Riders and crayons where the server has them. Every client moves every crayon smoothly
+		-- itself, so the server's copy only needs a nudge now and then (moving 12 models 10 times a
+		-- second replicated to every phone for nothing).
+		local moveCrayons = time - lastCrayons >= 1
+		if moveCrayons then
+			lastCrayons = time
+		end
 		for player, lane in self.lanes do
 			if not player.Parent then
 				continue
 			end
 			local s, x = self:_where(player)
-			if lane.Crayon then
+			if lane.Crayon and moveCrayons then
 				lane.Crayon:PivotTo(
 					self:_tip(lane, s, x) * CFrame.new(lane.Crayon:GetAttribute("TipToPivot") or Vector3.new(0, 0, TIP))
 				)
