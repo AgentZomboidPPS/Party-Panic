@@ -13,8 +13,12 @@ local test, expectEqual, expectTrue = TestKit.test, TestKit.expectEqual, TestKit
 local cosmeticsSource = fs.readFile("src/shared/Cosmetics.luau")
 local effectsSource = fs.readFile("src/client/Controllers/EffectsController.luau")
 local configSource = fs.readFile("src/shared/Config.luau")
+local goldSource = fs.readFile("src/shared/GoldPass.luau")
 
-local SLOTS = { Trail = true, Title = true, Emote = true, Victory = true, Elimination = true }
+-- Every slot an item can be in. Hats are the HALLOWEEN PARTY's and the GOLD PASS's only, so the
+-- shop sells none for coins (SOLD_SLOTS).
+local SLOTS = { Trail = true, Hat = true, Title = true, Emote = true, Victory = true, Elimination = true }
+local SOLD_SLOTS = { Trail = true, Title = true, Emote = true, Victory = true, Elimination = true }
 
 -- Roblox's default R15 emotes (the /e emotes in its Animate script, all made by Roblox): wave,
 -- cheer, point, laugh and the three dances. Checked on a Roblox server: each is an Animation
@@ -95,10 +99,24 @@ test("every item has a unique id, a known slot and a name", function()
 		expectTrue(item.Slot ~= nil and SLOTS[item.Slot :: string], `{item.Id} has slot {tostring(item.Slot)}`)
 		expectTrue(item.Name ~= nil and #(item.Name :: string) > 0, `{item.Id} has no name`)
 		local prefix = string.match(item.Id, "^(%a+)_")
-		local expected =
-			{ Trail = "Trail", Title = "Title", Emote = "Emote", Victory = "Victory", Elim = "Elimination" }
+		local expected = {
+			Trail = "Trail",
+			Hat = "Hat",
+			Title = "Title",
+			Emote = "Emote",
+			Victory = "Victory",
+			Elim = "Elimination",
+		}
 		expectEqual(expected[prefix or ""], item.Slot, `{item.Id}'s prefix matches its slot`)
 	end
+	-- The GOLD PASS's own items (Shared/GoldPass, added to the list after these) never reuse an Id.
+	local gold = 0
+	for id in string.gmatch(goldSource, 'Id = "([%w_]+)"') do
+		gold += 1
+		expectTrue(not seen[id], `{id} is in Shared/GoldPass and the catalogue (or twice there)`)
+		seen[id] = true
+	end
+	expectTrue(gold >= 30, `only {gold} GOLD PASS items found`)
 end)
 
 test("every coin item has a price from 8 to 120 and no other way to unlock it", function()
@@ -130,9 +148,23 @@ test("the shop has cheap, middle and save-up-for items in every slot", function(
 	expectTrue(cheap >= 5, `{cheap} cheap items`)
 	expectTrue(middle >= 20, `{middle} middle items`)
 	expectTrue(top >= 3 and top <= 5, `{top} items to save up for`)
-	for slot in SLOTS do
+	for slot in SOLD_SLOTS do
 		expectTrue((perSlot[slot] or 0) >= 4, `{slot} sells only {perSlot[slot] or 0} items`)
 	end
+end)
+
+-- The GOLD PASS's rewards (owner: "the paid one should also be insane") and the events' rewards are
+-- never for sale for coins.
+test("gold pass and event items are never sold for coins", function()
+	expectTrue(string.find(goldSource, "Price", 1, true) == nil, "Shared/GoldPass has no Price")
+	local events = 0
+	for _, item in items do
+		if string.find(item.Block, "Event = ", 1, true) or string.find(item.Block, "GoldLevel = ", 1, true) then
+			events += 1
+			expectTrue(item.Price == nil, `{item.Id} is a reward and has a Price`)
+		end
+	end
+	expectTrue(events >= 6, "the event and gold items were read")
 end)
 
 test("a regular player buys the whole shop in about 3 to 4 weeks", function()

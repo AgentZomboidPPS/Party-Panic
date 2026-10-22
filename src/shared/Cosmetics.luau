@@ -25,7 +25,10 @@
 --   at 15 from day 7 on: about 56 coins a day in the first week, then about 63 (call it 60). The 19
 --   first items cost 371 coins (about a week); the shop now costs 1381 (371 + 1010): about 23 days,
 --   3.3 weeks. Quests and Rewards Road coins (about 28 a day more) make it about 2 weeks for someone
---   who does everything; rounds alone (no gifts, first wins or quests) about 4.5 weeks.
+--   who does everything; rounds alone (no gifts, first wins or quests) about 4.5 weeks. The GOLD
+--   PASS's gold-lane coins (about 1-8% more) and double coins weekends only make it quicker. Hats
+--   aren't sold: they're the events' and the GOLD PASS's (tests/Catalog.spec checks neither has a
+--   Price).
 --   Price bands: a few at 10-20 for new players, most at 25-50, and four to save up for (Spotlight
 --   70, Panic Royalty 80, Northern Lights 100, Supernova 120).
 --   Roblox's default emote animations are all in use already (the other Dance variants it ships
@@ -848,6 +851,7 @@ local list: { Cosmetic } = {
 		Icon = "🍬",
 		Event = "Halloween2026",
 		Colors = { rgb(255, 250, 236), rgb(255, 146, 34), rgb(255, 212, 58) },
+	},
 	-- Second shop pass: more for coins.
 	{
 		Id = "Elim_Frozen",
