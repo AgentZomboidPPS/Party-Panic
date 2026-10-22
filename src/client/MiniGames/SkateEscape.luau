@@ -26,6 +26,11 @@
 -- as racing from the lobby: the bridge warning flashed and the hazard alarm sounded for the rest of the
 -- round and the results, and every jump in the lobby went boing. Racing now also needs the server's live
 -- list of racers to have me.
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): with the racers bunched on the start line,
+-- the first dots hung half off the bar's start and covered the 🔥 waiting there (the phone checks found
+-- it 29% under a dot with 12 racers). Dots now stay inside the track's ends (EDGE), so the pack at the
+-- start sits just after the 🔥 and finishers just before the 🏁; in between they're where they were.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -245,6 +250,9 @@ function SkateEscape.Start(api)
 	local DOT = if touch then 30 else 18 -- a rider's dot (yours is MY_DOT)
 	local MY_DOT = if touch then 36 else 26
 	local LIFT = if touch then 15 else 9 -- how far crowded dots step above or below the line
+	-- Dots' middles stay this far inside the track's ends, so no dot hangs off the start (over the 🔥
+	-- waiting there) or off the finish (over the 🏁); everywhere else a dot sits where the fire is drawn.
+	local EDGE = MY_DOT / 2
 	local barHeight = if touch then 60 else 36 -- room for a row above the line and one below
 	local grow = barHeight - (if touch then 40 else 30) -- (the bar was one row: what's under it moves down)
 	local bar = UIKit.Panel({
@@ -1203,7 +1211,8 @@ function SkateEscape.Start(api)
 			dot.BackgroundTransparency = if entry.O then 0.7 else 0
 			table.insert(dots, {
 				Key = key,
-				X = math.clamp(d / length, 0, 1) * trackLength,
+				-- (In the track less EDGE at each end: drawn at EDGE + X, where the fire is drawn too.)
+				X = math.clamp(math.clamp(d / length, 0, 1) * trackLength - EDGE, 0, trackLength - 2 * EDGE),
 				Size = if key == myKey then MY_DOT else DOT,
 				Tier = dotTiers[key],
 				Rank = dotRanks[key],
@@ -1214,7 +1223,7 @@ function SkateEscape.Start(api)
 			})
 		end
 		-- Riders side by side step above and below the line (Logic/RaceBar); dots ease to their spots.
-		local spots = RaceBar.Layout(dots, { Width = trackLength, Lift = LIFT })
+		local spots = RaceBar.Layout(dots, { Width = trackLength - 2 * EDGE, Lift = LIFT })
 		local ease = 1 - math.exp(-dt * 30) -- (about a tenth of a second: a quick swap when riders pass)
 		for _, item in dots do
 			local spot = spots[item.Key]
@@ -1228,7 +1237,7 @@ function SkateEscape.Start(api)
 				shift = { X = spot.X - item.X, Y = spot.Y }
 				dotShifts[item.Key] = shift
 			end
-			local position = UDim2.new(0, item.X + shift.X, 0.5, shift.Y)
+			local position = UDim2.new(0, EDGE + item.X + shift.X, 0.5, shift.Y)
 			markers[item.Key].Position = position
 			if item.Key == myKey and myGlow then
 				myGlow.Position = position
