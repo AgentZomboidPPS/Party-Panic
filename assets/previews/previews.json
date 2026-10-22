@@ -179,6 +179,16 @@
     "made": "2026-10-21",
     "width": 168
   },
+  "StampOut": {
+    "columns": 6,
+    "decal": 74311557489612,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 95835920095105,
+    "made": "2026-10-22",
+    "width": 168
+  },
   "Tanks": {
     "columns": 6,
     "decal": 123393163096992,

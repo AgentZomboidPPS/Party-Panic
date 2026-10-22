@@ -112,6 +112,9 @@ CAMERAS: dict[str, dict] = {
     # A tank going up in a toy explosion (turret and driver flying) beside a pink rival, a toy brick in
     # front, the playroom window and a beach ball beyond.
     "Tanks": {"look_at": "Cork", "yaw": -60, "pitch": 30, "distance": 44, "shift": [-63, 3.5, -26], "raise": 6},
+    # Over the paper pad: stampers on their rubber stamps hopping across a patchwork of everyone's ink,
+    # bare ruled paper still to win beyond.
+    "StampOut": {"look_at": "Paper", "yaw": 20, "pitch": 50, "distance": 38, "shift": [5, 2, 6], "raise": 6},
     # Divers at the rim of the swirling sinkhole, treasure on the sand around it.
     "SinkingSands": {"yaw": 30, "pitch": 30, "distance": 36, "shift": [0, 2, 6]},
     # Low over the water: a shark's fin between the rafts, swimmers and coins on the decks, the
@@ -132,6 +135,7 @@ DUMP_AT: dict[str, float] = {
     "SkateEscape": 10,
     "Slaparazzi": 11.7,  # just before the second photo: everyone crowding into the frame's rings
     "Spleef": 12,  # holes dug in every floor, players on all three
+    "StampOut": 34,  # BIG STAMPS: the pad patched with everyone's ink, stampers mid-hop
     "Tanks": 5.5,  # a second after the shields drop: the first tanks blowing up, the rest still rolling
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole
     "SharkBait": 13,  # a raft tipping, coins spilled in the water, the sharks closing in
