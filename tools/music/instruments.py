@@ -1040,3 +1040,45 @@ def orchestra_hit(notes: tuple, length: float = 0.5) -> np.ndarray:
     tp = np.asarray(timpani(min(notes) - 12, 1.0))
     stack[:, : tp.shape[0]] += s.pan(tp)[:, : stack.shape[1]] * 0.5
     return _frozen(normalize(stack))
+
+
+# --- batch A voices (tiki steel band, skate punk, carnival)
+
+@lru_cache(maxsize=None)
+def iron(length: float = 0.18, variant: int = 0) -> np.ndarray:
+    """The soca 'iron' (a struck brake drum): a bright, short metallic ting with a little clank."""
+    n = s.samples(length)
+    t = _t(n)
+    rng = _rng("iron", length, variant)
+    metal = sum(a * np.sin(2 * np.pi * f * (1 + rng.uniform(-0.004, 0.004)) * t) * np.exp(-t / d)
+                for f, a, d in ((1420, 1.0, 0.06), (2310, 0.7, 0.045), (3460, 0.45, 0.03), (4880, 0.25, 0.02)))
+    tick = s.bandpass(rng.uniform(-1, 1, n), 2500, 7000) * np.exp(-t / 0.003) * 0.5
+    return _frozen(normalize(eq(metal + tick, ("hp", 900), ("lp", 8000))))
+
+
+@lru_cache(maxsize=None)
+def lead_guitar(midi: float, length: float, bend_from: float | None = None, variant: int = 0) -> np.ndarray:
+    """An overdriven single-note guitar lead (pop-punk, warm not fizzy): a sustained pluck through a
+    soft-clipping amp and a speaker cabinet, with finger vibrato on long notes; `bend_from` bends up
+    into the note from that many semitones below."""
+    tone = np.asarray(ks(midi, length + 0.3, bright=0.65, decay=3.0, pick=0.14, soft=0.1, variant=variant)).copy()
+    n = tone.shape[-1]
+    t = _t(n)
+    shift_ = _vibrato(t, 0.22, 5.6, 0.25, 0.25)
+    if bend_from:
+        shift_ = shift_ - bend_from * np.clip(1 - t / 0.12, 0, 1) ** 2
+    tone = bend(tone, shift_)
+    tone = drive(tone * 4.0, 3.0)
+    tone = eq(tone, ("hp", 180), ("peak", 900, 3, 1.0), ("peak", 2600, -2, 1.0), ("lp", 4200), ("lp", 5500))
+    return _frozen(normalize(_gate(tone, length, 0.06)))
+
+
+@lru_cache(maxsize=None)
+def balloon_pop(length: float = 0.35) -> np.ndarray:
+    """A balloon popping: a sharp crack and a soft rubbery thump."""
+    n = s.samples(length)
+    t = _t(n)
+    rng = _rng("pop", length)
+    crack = eq(rng.uniform(-1, 1, n), ("hp", 700), ("lp", 7000), ("peak", 2200, 4, 1.0)) * np.exp(-t / 0.012)
+    thump = s.sine(150 * (1 + 0.6 * np.exp(-t / 0.01)), n) * np.exp(-t / 0.04) * 0.6
+    return _frozen(normalize(crack + thump))
