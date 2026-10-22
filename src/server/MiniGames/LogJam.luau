@@ -20,6 +20,12 @@
 -- no hazard here, the jam is the same server rule for everyone.
 --
 -- Ties: the team that reached its count first wins (the time of its last chop).
+--
+-- Sweep pass (owner: "Let's do a full bug and clean sweep."): the results card's line is short
+-- enough to show whole ("◆ YELLOW 12 logs • 12 turns", the team with its mark and the player's turns
+-- as the HUD counts them). "Yellow 12 logs • you placed 6, chopped 6" measured 314 wide at the
+-- card's smallest text on a real server, where its result column holds 232, so every row ended in
+-- "...placed 6, c...".
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -723,10 +729,12 @@ function LogJam:GetResults()
 		local stats = self.stats[entry.Player]
 		if station then
 			entry.Rank = station.Logs + later[station.Team] * 0.1
+			-- ("◆ YELLOW 12 logs • 12 turns": the team with its mark and the player's turns, as the HUD
+			-- counts them; "Yellow 12 logs • you placed 6, chopped 6" was cut to "...placed 6, c...".)
+			local turns = if stats then stats.Placed + stats.Chopped else 0
+			local logs = if station.Logs == 1 then "1 log" else `{station.Logs} logs`
 			entry.ScoreText =
-				`{entry.Team} {station.Logs} logs • you placed {if stats then stats.Placed else 0}, chopped {if stats
-					then stats.Chopped
-					else 0}`
+				`{Teams.Label(station.Team)} {logs} • {if turns == 1 then "1 turn" else `{turns} turns`}`
 		end
 	end
 	results.WinningTeam = self:_leader()
