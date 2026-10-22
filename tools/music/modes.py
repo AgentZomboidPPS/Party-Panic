@@ -31,6 +31,7 @@ import argparse
 import importlib.util
 import json
 import re
+import subprocess
 import sys
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
@@ -316,6 +317,15 @@ def write_luau(manifest: dict) -> None:
     LUAU.write_text("\n".join(lines) + "\n")
     print(f"wrote {LUAU.relative_to(ROOT)} ({len(entries)} songs in {len(manifest)} packs)")
     add_pack_ids(sorted(manifest, key=pack_number))
+    stylua(LUAU, AUDIO_ASSETS)
+
+
+def stylua(*paths: Path) -> None:
+    """Formats the Luau this writes the way the repo's checks want it (a long title wraps its line)."""
+    try:
+        subprocess.run(["stylua", *map(str, paths)], cwd=ROOT, check=True)
+    except (OSError, subprocess.CalledProcessError) as err:
+        print(f"note: stylua didn't run ({err}); run `stylua src` before committing")
 
 
 AUDIO_ASSETS = ROOT / "src" / "shared" / "AudioAssets.luau"
