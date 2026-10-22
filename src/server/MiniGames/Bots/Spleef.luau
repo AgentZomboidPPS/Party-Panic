@@ -13,8 +13,8 @@
 --   * Where to: a search over the untouched blocks it can walk to (a few steps out, further for
 --     skilled bots) for the spot with the most fresh snow around it, away from everyone else, a
 --     little noisier for clumsy bots. It only ever walks onto untouched blocks.
---   * Cornered (hardly any fresh snow left to walk to): skilled bots jump a one-block gap (taking
---     off from the edge of their block) to a
+--   * Cornered (hardly any fresh snow left to walk to): first a short way over fading blocks that
+--     will still hold long enough, to a good fresh patch; else skilled bots jump a one-block gap to a
 --     bigger patch; otherwise, above the last floor, it drops on purpose: it walks into the hole (or
 --     waits on its fading block) over the best fresh patch of the floor below, away from others. On
 --     the last floor with nowhere fresh to go it takes the fading block with the most time left.
@@ -166,6 +166,52 @@ local function cellUnder(mode, floor: number, position: Vector3)
 	return best
 end
 
+-- A short way over blocks that are already fading but will still hold long enough (it walks one
+-- block in about 0.4 s) to a fresh patch: the first step toward the best such patch, and how much
+-- fresh snow is around it.
+local function bridge(mode, floor: number, cur)
+	local came = { [cur] = cur }
+	local steps = { [cur] = 0 }
+	local queue = { cur }
+	local head = 1
+	local best, bestScore = nil, -math.huge
+	while head <= #queue do
+		local cell = queue[head]
+		head += 1
+		local d = steps[cell]
+		if cell ~= cur and cell.State == "Solid" then
+			local score = openness(mode, floor, cell.I, cell.J) - d * 0.5
+			if score > bestScore then
+				best, bestScore = cell, score
+			end
+			continue -- a fresh block: from here on it's a normal walk
+		end
+		if d < 3 then
+			for _, dir in ORTHO do
+				local next = mode:CellAt(floor, cell.I + dir[1], cell.J + dir[2])
+				if
+					next
+					and steps[next] == nil
+					and next.State ~= "Gone"
+					and mode:TimeLeft(next) > (d + 1) * 0.45 + 0.3
+				then
+					steps[next] = d + 1
+					came[next] = cell
+					table.insert(queue, next)
+				end
+			end
+		end
+	end
+	if not best then
+		return nil, -math.huge
+	end
+	local cell = best
+	while came[cell] ~= cur do
+		cell = came[cell]
+	end
+	return cell, bestScore
+end
+
 -- Cornered: the way out. A jump over a one-block gap to a bigger patch (skilled bots), else a drop
 -- to the best fresh patch below, else (on the last floor) the neighbor with the most time left.
 local function escape(bot, ctx, mode, floor: number, cur, here: Vector3)
@@ -174,8 +220,16 @@ local function escape(bot, ctx, mode, floor: number, cur, here: Vector3)
 	local below = floor + 1
 	local belowOthers = if below <= mode.Floors then othersOn(bot, ctx, mode, below) else {}
 
+	-- Over the fading blocks to fresh snow, when there's a good patch close by.
+	local way, wayScore = bridge(mode, floor, cur)
+	if way and wayScore >= 6 then
+		memory.Target, memory.Kind = way, "Walk"
+		bot:MoveTo(Vector3.new(way.Position.X, here.Y, way.Position.Z))
+		return
+	end
+
 	local hop, hopScore = nil, -math.huge
-	if skill >= 0.5 then
+	if skill >= 0.45 then
 		for _, dir in ORTHO do
 			local middle = mode:CellAt(floor, cur.I + dir[1], cur.J + dir[2])
 			local far = mode:CellAt(floor, cur.I + dir[1] * 2, cur.J + dir[2] * 2)
@@ -210,8 +264,9 @@ local function escape(bot, ctx, mode, floor: number, cur, here: Vector3)
 		end
 	end
 
-	if hop and hopScore >= 6 and (not drop or hopScore > dropScore + 2) then
-		memory.Target, memory.Kind, memory.Jumped = hop, "Hop", false
+	if hop and hopScore >= 5 and (not drop or hopScore > dropScore) then
+		memory.Target, memory.Kind = hop, "Hop"
+		bot:Jump() -- from the middle of its block: the jump carries it over the gap
 		bot:MoveTo(Vector3.new(hop.Position.X, here.Y, hop.Position.Z))
 		return
 	end
@@ -237,7 +292,8 @@ local function escape(bot, ctx, mode, floor: number, cur, here: Vector3)
 		memory.Target, memory.Kind = best, "Walk"
 		bot:MoveTo(Vector3.new(best.Position.X, here.Y, best.Position.Z))
 	elseif hop then
-		memory.Target, memory.Kind, memory.Jumped = hop, "Hop", false
+		memory.Target, memory.Kind = hop, "Hop"
+		bot:Jump()
 		bot:MoveTo(Vector3.new(hop.Position.X, here.Y, hop.Position.Z))
 	else
 		bot:Stop()
@@ -293,11 +349,6 @@ function Spleef.Step(bot, ctx, mode, _dt)
 			memory.LeaveAt = leaveTime(bot)
 		end
 		memory.Target = target
-		if target and kind == "Hop" and not memory.Jumped and flat(target.Position, here) <= mode.Block * 1.45 then
-			-- Jumps from the edge of its block, so it clears the gap.
-			memory.Jumped = true
-			bot:Jump()
-		end
 		if target then
 			bot:MoveTo(Vector3.new(target.Position.X, here.Y, target.Position.Z))
 			return

@@ -35,8 +35,8 @@
 --     grace (longer by its ping for people) is dropped by the server until it lands on a block of a
 --     lower floor. Below the last floor it is out at once. Everyone a single step drops out is
 --     eliminated in that same step.
---   * The crumble (second half of the round) uses the same Fade schedule with a longer warning, rim
---     first; the upper floors go completely and the last floor shrinks to a small core.
+--   * The crumble (from 42% of the round with 2 players, 52% with 12) uses the same Fade schedule
+--     with a longer warning, rim first; the upper floors go completely and the last floor shrinks to a small core.
 -- Bots (Bots/Spleef.luau) plan their steps over the fresh blocks and drop down when cornered.
 
 local ArenaKit = require(script.Parent.Kit.ArenaKit)
@@ -61,8 +61,11 @@ local AIR_MAX = 1.4 -- hanging above the floors longer than this counts as stand
 local PING_MAX = 0.3 -- the most of anyone's ping that is made up for
 local SWEEP_MAX = 14 -- a jump between two samples longer than this isn't a walk (a put-back, a drop)
 local WATER_BELOW = 47 -- the pool's surface under the top floor
-local CRUMBLE_AT = 0.55 -- share of the round before the floors start crumbling on their own
-local CRUMBLE_DONE = 0.92 -- share of the round by when the crumble has done its work
+-- Share of the round before the floors start crumbling on their own: sooner with few players (the
+-- floors are smaller but a few careful players could otherwise stroll on for a long time), later
+-- with twelve.
+local CRUMBLE_AT = { 0.42, 0.52 } -- for 2 players, for 12
+local CRUMBLE_DONE = 0.9 -- share of the round by when the crumble has done its work
 local CRUMBLE_WARN = { 1.7, 1.15 } -- a crumbling block's warning, early and late in the crumble
 local LAST_CORE = 6 -- blocks of the last floor the crumble leaves (stepping on them still counts)
 local FALL_MAX = 120 -- the fastest a dropped character falls (studs/s)
@@ -435,7 +438,8 @@ function Spleef:Start()
 	end)
 
 	local duration = ctx.Definition.Duration or 75
-	local startAt = duration * CRUMBLE_AT
+	local crowd = math.clamp((#ctx:GetPlayers() - 2) / 10, 0, 1)
+	local startAt = duration * ArenaKit.Lerp(CRUMBLE_AT[1], CRUMBLE_AT[2], crowd)
 	ctx:Delay(startAt, function()
 		self.crumbling = true
 		ctx:Announce("The ice is cracking!", "warning", 2.5)
