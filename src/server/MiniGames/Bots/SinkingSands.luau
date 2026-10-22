@@ -39,6 +39,16 @@
 -- king". With the stronger PULL and the extra King (SandSwirl.PULL, SandSwirl.KingCount) and the
 -- Divers backing out of a PULL, simulated rounds of bot Kings against bot Divers come out close:
 -- the Kings win about half of them at 8 players and two in five at 12 (before: none).
+--
+-- Owner, after playing it: "sand king needs to have more interaction, is boring" and "sand one more
+-- valuable stuff near the bottom. also increase pull". Sand Kings now SAND BLAST too: at the Diver
+-- it pays most to throw (about to grab treasure, the SUNKEN CHEST above all, or near the hole),
+-- leading them as better Kings do, the best aiming just outside them so the throw sends them
+-- inward. Divers take a blast's ring in a moment after it appears and get out of it, sideways along
+-- the slope rather than into the hole (sloppy ones sometimes too late), and gamble on the chest near
+-- the bottom while no PULL drains the funnel. With all that and the stronger PULL, simulated rounds
+-- still come out close: the Kings win about half at 8 players and at 12 (REST_PER_KING is smaller:
+-- four Kings overlap their PULLs less, one or two wait less between them).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SandSwirl = require(ReplicatedStorage.Shared.Logic.SandSwirl)
@@ -71,8 +81,15 @@ local KING_PULL = { 0.5, 1 } -- chance it PULLs (when ready) with good reason: t
 local PULL_WORTH = 2 -- ...this many coins lying out of the Divers' reach (half for treasure they're nearing)...
 local DEEP = 10 -- ...or a Diver this near the middle
 local PULL_REST = 0.5 -- three Kings let the sand settle this long after a PULL (anyone's) ends before the next...
-local REST_PER_KING = 2.5 -- ...each King more this much less (4 Kings keep it draining), each King fewer this much more
+local REST_PER_KING = 1.5 -- ...each King more this much less (4 Kings keep it draining), each King fewer this much more
 local KING_SWIRL = { 0.5, 1 } -- chance it SWIRLs (when ready) with Divers closing in on treasure
+local KING_BLAST = { 0.4, 0.9 } -- chance it BLASTs (when ready) a Diver worth throwing...
+local BLAST_WORTH = 2 -- ...this much: treasure value they're about to grab (and 2 for being near the hole)
+-- And a Diver's, against a SAND BLAST and for the SUNKEN CHEST:
+local DODGE_MISS = 0.35 -- chance (at Skill 0) it doesn't see a blast's ring coming in time
+local DODGE = 0.8 -- it takes in a blast's ring this many reaction times after it appears
+local CHEST_NERVE = { 0.6, 0.9 } -- the chest down near the hole is worth this much of its value to it (greedy: the second)
+local CHEST_EDGE = 2.4 -- it goes down to this far outside the chest for it (a grab reaches 2.9)
 
 local function flat(a: Vector3, b: Vector3): number
 	return Vector2.new(a.X - b.X, a.Z - b.Z).Magnitude
@@ -97,16 +114,28 @@ local function kingStep(bot, ctx, mode)
 
 	local divers = {}
 	local deep = 0
+	-- (where each Diver is and how fast they're going, as anyone watching the funnel can tell)
+	memory.Track = memory.Track or {}
+	local seen = {}
 	for _, player in ctx:GetAlivePlayers() do
 		if mode:IsKing(player) or mode:IsGulped(player) then
 			continue
 		end
 		local _, _, root = ctx:GetCharacter(player)
 		if root then
-			table.insert(divers, root.Position)
-			if flat(root.Position, center) < DEEP then
+			local position = root.Position
+			table.insert(divers, position)
+			if flat(position, center) < DEEP then
 				deep += 1
 			end
+			local last = memory.Track[player]
+			local velocity = Vector3.zero
+			if last and now > last.T and now - last.T < 1.5 then
+				local step = (position - last.Position) / (now - last.T)
+				velocity = last.Velocity:Lerp(Vector3.new(step.X, 0, step.Z), 0.6)
+			end
+			memory.Track[player] = { Position = position, Velocity = velocity, T = now }
+			table.insert(seen, memory.Track[player])
 		end
 	end
 	-- What's on the sand (or about to land): treasure a Diver is closing in on, which a SWIRL can
@@ -137,17 +166,18 @@ local function kingStep(bot, ctx, mode)
 	local rest = PULL_REST + REST_PER_KING * (3 - #mode.kings)
 	local settled = now >= lastPull + PULL_LENGTH + rest
 
-	local swirlCool, pullCool = mode:Cooldowns()
+	local swirlCool, pullCool, blastCool = mode:Cooldowns()
+	local pulled = false
 	if clock >= (memory.PullReady or 0) and settled then
 		local reason = loose + chased / 2 >= PULL_WORTH or deep > 0
 		local want = if reason then bySkill(KING_PULL, skill) else 0.02
 		if bot:Chance(want) then
 			memory.PullReady = clock + pullCool + 0.1
 			ctx:BotAction(bot, "Pull")
-			return
+			pulled = true
 		end
 	end
-	if clock >= (memory.SwirlReady or 0) then
+	if not pulled and clock >= (memory.SwirlReady or 0) then
 		local want = if chased >= 3
 			then bySkill(KING_SWIRL, skill)
 			elseif chased > 0 then bySkill(KING_SWIRL, skill) * 0.6
@@ -155,6 +185,38 @@ local function kingStep(bot, ctx, mode)
 		if bot:Chance(want) then
 			memory.SwirlReady = clock + swirlCool + 0.1
 			ctx:BotAction(bot, "Swirl")
+		end
+	end
+
+	-- SAND BLAST: at the Diver it pays most to throw, where they'll be when it erupts. A Diver about to
+	-- grab treasure (the SUNKEN CHEST most of all) or near the hole is worth it; better Kings lead them
+	-- better and miss by less, and good ones aim just outside them, so the throw sends them inward.
+	if clock >= (memory.BlastReady or 0) then
+		local best, bestScore = nil, BLAST_WORTH
+		for _, diver in seen do
+			local score = if flat(diver.Position, center) < DEEP + 2 then 2 else 0
+			for _, item in mode.items do
+				if item.T - now < mode.BLAST_DELAY then
+					local gap = flat(mode:ItemPosition(item, math.max(now, item.T)), diver.Position)
+					if gap < 8 then
+						score += mode.Kinds[item.Kind].Value * (1 - gap / 8)
+					end
+				end
+			end
+			if score > bestScore then
+				best, bestScore = diver, score
+			end
+		end
+		if best and bot:Chance(bySkill(KING_BLAST, skill)) then
+			local aim = best.Position + best.Velocity * mode.BLAST_DELAY * (0.3 + 0.7 * skill)
+			local miss = 3 * (1 - skill)
+			aim += Vector3.new(bot.Rng:NextNumber(-miss, miss), 0, bot.Rng:NextNumber(-miss, miss))
+			local out = Vector3.new(aim.X - center.X, 0, aim.Z - center.Z)
+			if skill > 0.6 and out.Magnitude > 1 then
+				aim += out.Unit * 1.2
+			end
+			memory.BlastReady = clock + blastCool + 0.1
+			ctx:BotAction(bot, "Blast", aim.X, aim.Z)
 		end
 	end
 end
@@ -209,12 +271,14 @@ local function appraise(bot, mode, item, position: Vector3, now: number, start: 
 	if not t or not spot or not r then
 		return nil, nil, nil
 	end
-	if r < floor then
+	-- (the SUNKEN CHEST lies near the bottom: worth the gamble while no PULL drains the funnel)
+	local chest = item.Kind == mode.CHEST and floor <= SandSwirl.HOLE + 1.5
+	if r < (if chest then SandSwirl.HOLE else floor) then
 		return nil, nil, nil -- on the lip, or too deep while a PULL drains the funnel
 	end
 	local worth = mode.Kinds[item.Kind].Value / (t - now + 0.7)
 	if r < memory.Safe then
-		worth *= if memory.Greedy then 0.7 else 0.25
+		worth *= if chest then CHEST_NERVE[if memory.Greedy then 2 else 1] elseif memory.Greedy then 0.7 else 0.25
 	end
 	for _, other in others do
 		if now + math.max(0, flat(other, spot) - SLACK) / WALK < t - 0.25 then
@@ -300,6 +364,45 @@ local function waitSpot(bot, ctx, mode, position: Vector3, outward: Vector3, dan
 	return spot
 end
 
+-- A SAND BLAST's ring, as a player sees it: a Diver takes each one in DODGE reaction times after it
+-- appears (a sloppy one sometimes not in time) and, if it's standing in it, where it runs to get out:
+-- straight away from its middle, or sideways along the slope when that way leads towards the hole.
+-- Nil when there's no ring to get out of.
+local function dodge(bot, mode, position: Vector3, outward: Vector3, clock: number, now: number): Vector3?
+	local memory = bot.Memory
+	memory.Blasts = memory.Blasts or {}
+	local ring = mode.BLAST_RING
+	local worst, worstGap = nil, math.huge
+	for id, blast in mode.blasts do
+		local seen = memory.Blasts[id]
+		if seen == nil then
+			seen = if bot:Chance(DODGE_MISS * (1 - bot.Skill)) then false else clock + bot:Reaction() * DODGE
+			memory.Blasts[id] = seen
+		end
+		if seen and clock >= seen and now < blast.T + 0.1 then
+			local gap = Vector2.new(position.X - blast.X, position.Z - blast.Z).Magnitude
+			if gap < ring + 1 and gap < worstGap then
+				worst, worstGap = blast, gap
+			end
+		end
+	end
+	for id in memory.Blasts do
+		if not mode.blasts[id] then
+			memory.Blasts[id] = nil
+		end
+	end
+	if not worst then
+		return nil
+	end
+	local away = Vector3.new(position.X - worst.X, 0, position.Z - worst.Z)
+	local way = if worstGap > 0.2 then away / worstGap else outward
+	if way:Dot(outward) < -0.2 then
+		local side = Vector3.new(-outward.Z, 0, outward.X)
+		way = ((if side:Dot(way) >= 0 then side else -side) + outward * 0.35).Unit
+	end
+	return position + way * (ring + 3)
+end
+
 local function diverStep(bot, ctx, mode)
 	local root = bot:Root()
 	if not root then
@@ -366,6 +469,9 @@ local function diverStep(bot, ctx, mode)
 	local danger = memory.Danger
 	if pulling then
 		danger = math.max(danger, memory.Safe + PULL_BACK + skill)
+	elseif item and item.Kind == mode.CHEST then
+		-- (down to the SUNKEN CHEST, as far as a grab's reach outside it)
+		danger = math.min(danger, mode:ItemPolar(item, now) + CHEST_EDGE - MARGIN)
 	end
 	-- (a careless moment: eyes on the treasure, not on the edge)
 	if r < (if memory.Careless and item then SandSwirl.HOLE + CUT else danger) then
@@ -381,6 +487,13 @@ local function diverStep(bot, ctx, mode)
 		end
 	else
 		memory.Alarm = nil
+	end
+
+	-- Standing in a SAND BLAST's ring: out of it first, treasure or not.
+	local escape = dodge(bot, mode, position, outward, clock, now)
+	if escape then
+		bot:MoveTo(steer(center, position, escape, danger + MARGIN))
+		return
 	end
 
 	-- Choose again every so often, as soon as the treasure is gone, and once a power has been seen.

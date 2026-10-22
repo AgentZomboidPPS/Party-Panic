@@ -107,6 +107,27 @@ return function(h)
 				h.ball(m, "Gold", 1.2, Vector3.new(0, 3.2, -0.2))
 			end,
 		},
+		-- The SUNKEN CHEST (owner: "sand one more valuable stuff near the bottom"): Shark Bait's
+		-- treasure chest, the same mesh (tools/meshgen/props/SharkBait.py), lid propped open on its
+		-- gold, padlock at the front (-Z). Its own entry so this game never leans on another's props.
+		SandChest = {
+			Height = 2.4,
+			AssetId = 136486848365204,
+			Palette = {
+				Wood = h.rgb(150, 90, 50),
+				Trim = h.rgb(255, 200, 60),
+				Gold = h.rgb(255, 215, 70),
+				Lock = h.rgb(90, 90, 100),
+			},
+			Materials = { Wood = Enum.Material.WoodPlanks, Trim = Metal, Lock = Metal },
+			Fallback = function(m)
+				h.rounded(m, "Wood", Vector3.new(2.8, 1.5, 1.9), 0.15, Vector3.new(0, 0.75, 0))
+				h.blob(m, "Gold", Vector3.new(2.4, 0.6, 1.6), Vector3.new(0, 1.6, 0))
+				h.capsule(m, "Wood", 2.8, 0.9, CFrame.new(0, 2.0, 0.15) * CFrame.Angles(0, math.rad(90), 0))
+				h.block(m, "Lock", Vector3.new(0.4, 0.5, 0.15), Vector3.new(0, 1.4, -0.98))
+				m.WorldPivot = CFrame.new() -- (level, whatever the turned lid's pivot was)
+			end,
+		},
 		-- A Sand King's royal throne: gold-rimmed dais, a back (low, so the King's camera sees over it) with
 		-- a golden sunburst and gem, cat-head armrests and glowing orb posts. The seat stays where the
 		-- mode's Seat is.

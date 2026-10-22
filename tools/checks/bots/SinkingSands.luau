@@ -1,8 +1,9 @@
 -- Test bot for Sinking Sands (tools/checks/round_harness.py). Stand-in Divers walk to treasure on
 -- the sand, dragged by the sand exactly as a player's device drags its own character, and one in a
--- while one wanders into the sinkhole; stand-in Sand Kings press SWIRL and PULL. Luau execution has
--- no physics, so bots move rigs with env.Move (on the sand's surface). Just before the buzzer it
--- notes each real bot's (--bots) role, skill and score, to see how skill shows in the haul.
+-- while one wanders into the sinkhole; stand-in Sand Kings press SWIRL and PULL and SAND BLAST a
+-- Diver's spot. Luau execution has no physics, so bots move rigs with env.Move (on the sand's
+-- surface). Just before the buzzer it notes each real bot's (--bots) role, skill and score, to see
+-- how skill shows in the haul.
 return function(env)
 	local ctx = env.ctx
 	local mode = env.game
@@ -10,7 +11,7 @@ return function(env)
 	local center = mode.center
 	local step = 0.05
 	local plans = {}
-	local presses = { Swirl = 0, Pull = 0 }
+	local presses = { Swirl = 0, Pull = 0, Blast = 0 }
 	local reported = false
 	local botsReported = false
 
@@ -27,6 +28,14 @@ return function(env)
 				elseif env.rng:NextNumber() < 0.02 then
 					env.Action(player, "Pull")
 					presses.Pull += 1
+				elseif env.rng:NextNumber() < 0.03 then
+					-- SAND BLAST where some Diver stands.
+					local target = env.players[env.rng:NextInteger(1, #env.players)]
+					local spot = if mode:IsKing(target) then nil else env.Root(target)
+					if spot then
+						env.Action(player, "Blast", spot.X, spot.Z)
+						presses.Blast += 1
+					end
 				end
 				continue
 			end
@@ -105,7 +114,7 @@ return function(env)
 				items += 1
 			end
 			env.note(
-				`kings {kings} divers {divers}; presses swirl {presses.Swirl} pull {presses.Pull}; team scores Divers {scores.Divers or 0} SandKings {scores.SandKings or 0}; items on sand {items}; segments {#mode.segments}`
+				`kings {kings} divers {divers}; presses swirl {presses.Swirl} pull {presses.Pull} blast {presses.Blast}; team scores Divers {scores.Divers or 0} SandKings {scores.SandKings or 0}; items on sand {items}; segments {#mode.segments}; blasts so far {mode.nextBlast or 0}`
 			)
 		end
 		-- Just before the buzzer: each real bot's skill and haul so far (for the bot brain's tuning).
