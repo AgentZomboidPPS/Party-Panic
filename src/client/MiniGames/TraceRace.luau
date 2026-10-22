@@ -27,7 +27,9 @@ local SEND_EVERY = 0.1
 local LATE_SEND = 0.6 -- keep sending unconfirmed positions this long after the ride
 local LINE_THICK = 0.1
 local MERGE_ANGLE = math.cos(math.rad(3.5)) -- strokes this close to straight join into one part...
-local MERGE_LENGTH = 12 -- ...up to this long (so a joined stroke stays within a few tenths of the line)
+local MERGE_LENGTH = 20 -- ...up to this long (a joined stroke stays within ~0.6 of the line: half its width)
+local MERGE_ANGLE_OTHERS = math.cos(math.rad(5)) -- the same for other riders' lines
+local MERGE_LENGTH_OTHERS = 18
 local MAX_YAW = math.rad(22) -- the crayon leans into a turn at most this much (it stays in its lane)
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -150,7 +152,12 @@ function TraceRace.Start(api)
 		if stroke and start then
 			local d1 = Vector2.new(from[1] - start[1], from[2] - start[2])
 			local d2 = Vector2.new(s - from[1], x - from[2])
-			if d1.Magnitude > 1e-3 and d1.Unit:Dot(d2.Unit) >= MERGE_ANGLE and d1.Magnitude < MERGE_LENGTH then
+			-- (Other riders' lines are seen from a lane or more away: they join longer and looser, so
+			-- twelve lines don't grow into thousands of parts on a phone.)
+			local mineLine = rider == mine
+			local straightEnough = if mineLine then MERGE_ANGLE else MERGE_ANGLE_OTHERS
+			local longest = if mineLine then MERGE_LENGTH else MERGE_LENGTH_OTHERS
+			if d1.Magnitude > 1e-3 and d1.Unit:Dot(d2.Unit) >= straightEnough and d1.Magnitude < longest then
 				placeStroke(rider, stroke, start, point, strokeBottom(rider))
 				rider.Drawn = point
 				return
@@ -456,6 +463,7 @@ function TraceRace.Start(api)
 
 	-- Every frame ------------------------------------------------------------------------------------------
 	local lastState = ""
+	local lastLive: number? = -1
 	local finished = false
 	api:RenderStep(function(dt)
 		dt = math.min(dt, 0.1)
@@ -586,7 +594,10 @@ function TraceRace.Start(api)
 			fill.Size = UDim2.fromScale(if course.Length > 0 then s / course.Length else 0, 1)
 			if race and now >= t0 then
 				local live = tracker:Live()
-				accuracy.Text = if live then `{live}%` else "--"
+				if live ~= lastLive then
+					lastLive = live
+					accuracy.Text = if live then `{live}%` else "--"
+				end
 				local off = Rules.Distance(course, s, myX)
 				local key
 				if now > t1 then

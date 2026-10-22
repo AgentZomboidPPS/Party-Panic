@@ -1,0 +1,29 @@
+newmtl Spud
+Kd 0.769 0.549 0.306
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Eyes
+Kd 0.118 0.094 0.086
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cap
+Kd 0.275 0.431 0.902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Fuse
+Kd 0.275 0.204 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Spark
+Kd 1.000 0.784 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

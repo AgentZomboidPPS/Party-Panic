@@ -355,12 +355,9 @@ local function buildBoard(parent: Instance)
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(place)
 end
 
+local boardKey = ""
+
 local function refreshBoard()
-	for _, child in board:GetChildren() do
-		if child:IsA("GuiObject") then
-			child:Destroy()
-		end
-	end
 	local touch = isTouch()
 	local entries = {}
 	for _, other in Participants.InRound() do
@@ -381,6 +378,25 @@ local function refreshBoard()
 		end
 		return a.who.UserId > b.who.UserId -- ties keep their places (players, then bots)
 	end)
+	-- Rebuilt only when something on it changed (it's checked ~3 times a second all round, and
+	-- rebuilding every row and measuring its text each time cost phones for nothing).
+	local parts = { if touch then "T" else "P" }
+	for _, entry in entries do
+		table.insert(
+			parts,
+			`{entry.who.UserId}|{entry.who.DisplayName}|{entry.alive}|{entry.score}|{entry.text}|{entry.team}`
+		)
+	end
+	local key = table.concat(parts, "\n")
+	if key == boardKey and #board:GetChildren() > 0 then
+		return
+	end
+	boardKey = key
+	for _, child in board:GetChildren() do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
 	if not touch then
 		UIKit.Label({
 			Text = "🏁 Standings",

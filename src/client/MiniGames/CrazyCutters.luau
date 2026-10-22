@@ -420,7 +420,8 @@ function CrazyCutters.Start(api)
 	-- A stretch of cut line on a board, colored by how close it is to the outline.
 	local function cutTo(board: Board, position: Vector2, force: boolean)
 		local from = board.TrailFrom
-		local step = if board.Mine then 0.3 else 0.6
+		-- (Others' boards are seen from a distance: longer stretches, ~40% fewer parts for phones.)
+		local step = if board.Mine then 0.3 else 1.0
 		local length = (position - from).Magnitude
 		if length < step and not force then
 			return
@@ -864,7 +865,7 @@ function CrazyCutters.Start(api)
 	api:OnShared("Round", onRound)
 	onRound()
 
-	api:OnEvent("Cut", function(userId: number, index: number, flat: { number })
+	local function onCut(userId: number, index: number, flat: { number })
 		local board = boards[userId]
 		if not board or not round or index ~= round.Index or type(flat) ~= "table" then
 			return
@@ -884,6 +885,18 @@ function CrazyCutters.Start(api)
 		-- delay creeps back down when the connection gets better).
 		local late = if type(flat[1]) == "number" then api:Now() - flat[1] else 0
 		board.Lag = math.clamp(math.max(board.Lag - 0.01, late + 0.1), REPLAY_DELAY, REPLAY_MAX)
+	end
+	-- Everyone's positions since the last relay, in one message (CrazyCutters:_flushRelay).
+	api:OnEvent("Cuts", function(index: number, relay: { [string]: { number } })
+		if type(relay) ~= "table" then
+			return
+		end
+		for key, flat in relay do
+			local userId = tonumber(key)
+			if userId then
+				onCut(userId, index, flat)
+			end
+		end
 	end)
 
 	-- A player left: their board stays, faded, so it doesn't look like someone stuck.

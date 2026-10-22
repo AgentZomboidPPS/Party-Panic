@@ -353,7 +353,10 @@ function SnowballSummit.Start(api)
 	snow.SpreadAngle = Vector2.new(14, 14)
 	snow.Acceleration = Vector3.new(1.5, 0, 0.8)
 	snow.EmissionDirection = Enum.NormalId.Bottom
-	snow.Rate = 60
+	-- (Phones get a little over half the flakes: up to 1,500 alive at once in a blizzard was a big
+	-- cost on their GPUs, and on a small screen it still reads as a blizzard.)
+	local flakeShare = if api:IsTouch() then 0.55 else 1
+	snow.Rate = 60 * flakeShare
 	snow.Rotation = NumberRange.new(0, 360)
 	snow.RotSpeed = NumberRange.new(-40, 40)
 	snow.Enabled = not reduced
@@ -361,7 +364,7 @@ function SnowballSummit.Start(api)
 	CollectionService:AddTag(snow, "PP_Ambient")
 	local function blizzard()
 		if api:Shared("Blizzard") then
-			snow.Rate = 160
+			snow.Rate = 160 * flakeShare
 			snow.Acceleration = Vector3.new(9, 0, 4)
 		end
 	end

@@ -129,15 +129,36 @@ function Participants.InRound(): { Participant }
 	return list
 end
 
+-- (Mini-games look riders up by UserId every frame, so the lookup is a cached map, refreshed when
+-- someone arrives or leaves; building the full list each time cost phones a table per call.)
+local byUserId: { [number]: Participant } = {}
+local notHere: { [number]: boolean } = {}
+
+local function stillHere(entry: Participant): boolean
+	local instance = entry.Instance
+	return instance.Parent ~= nil and (not entry.IsBot or instance.Parent == botFolder)
+end
+
 function Participants.FromUserId(userId: number?): Participant?
 	if type(userId) ~= "number" then
 		return nil
 	end
-	for _, entry in Participants.All() do
-		if entry.UserId == userId then
-			return entry
-		end
+	local entry = byUserId[userId]
+	if entry and stillHere(entry) then
+		return entry
 	end
+	if notHere[userId] then
+		return nil
+	end
+	table.clear(byUserId)
+	for _, each in Participants.All() do
+		byUserId[each.UserId] = each
+	end
+	entry = byUserId[userId]
+	if entry then
+		return entry
+	end
+	notHere[userId] = true -- until the next arrival or departure
 	return nil
 end
 
@@ -166,6 +187,7 @@ end
 -- Keeping up with arrivals and departures ----------------------------------------------------------
 
 local function changed()
+	table.clear(notHere)
 	Participants.Changed:Fire()
 end
 

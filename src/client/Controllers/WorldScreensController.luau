@@ -851,6 +851,18 @@ local function bindSecretToken()
 	State.ProfileChanged:Connect(refresh)
 	token:GetAttributeChangedSignal("Day"):Connect(refresh)
 	refresh()
+	-- Its gentle bob and spin, drawn here (the server only says where it is: its Spot), and only
+	-- while it's near enough to see.
+	local angle = 0
+	RunService.RenderStepped:Connect(function(dt)
+		local spot = token:GetAttribute("Spot")
+		local camera = workspace.CurrentCamera
+		if typeof(spot) ~= "Vector3" or not camera or (camera.CFrame.Position - spot).Magnitude > 250 then
+			return
+		end
+		angle += dt * 1.5
+		token.CFrame = CFrame.new(spot + Vector3.new(0, math.sin(angle * 2) * 0.3, 0)) * CFrame.Angles(0, angle, 0)
+	end)
 end
 
 function WorldScreensController.Start(_context)

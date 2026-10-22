@@ -393,10 +393,16 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 	function api.IsDown(_api)
 		return isDown
 	end
+	-- (Modes call these every frame: they only touch the button when something changes.)
 	function api.SetText(_api, text: string)
-		label.Text = text
+		if label.Text ~= text then
+			label.Text = text
+		end
 	end
 	function api.SetEnabled(_api, value: boolean)
+		if value == enabled then
+			return
+		end
 		enabled = value
 		button.BackgroundTransparency = if value then 0 else 0.55
 		if not value then
@@ -407,9 +413,15 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 		wanted = value
 		refreshShown()
 	end
+	local lastFill, lastFillColor = -1, nil
 	function api.SetFill(_api, fraction: number, fillColor: Color3?)
-		fill.Size = UDim2.fromScale(1, math.clamp(fraction, 0, 1))
-		if fillColor then
+		fraction = math.clamp(fraction, 0, 1)
+		if math.abs(fraction - lastFill) > 0.002 then
+			lastFill = fraction
+			fill.Size = UDim2.fromScale(1, fraction)
+		end
+		if fillColor and fillColor ~= lastFillColor then
+			lastFillColor = fillColor
 			fill.BackgroundColor3 = fillColor
 		end
 	end

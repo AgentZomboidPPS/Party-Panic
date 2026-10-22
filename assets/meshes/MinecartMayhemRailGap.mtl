@@ -1,0 +1,23 @@
+newmtl Rails
+Kd 0.588 0.408 0.259
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Ties
+Kd 0.471 0.322 0.196
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trestle
+Kd 0.361 0.243 0.149
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Marker
+Kd 1.000 0.804 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

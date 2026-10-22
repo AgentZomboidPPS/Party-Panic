@@ -61,11 +61,11 @@ end)
 
 test("a game added later gets its medal; a game switched off loses it", function()
 	local more = table.clone(games)
-	table.insert(more, { Id = "HotPotato", Name = "Hot Potato", Icon = "🥔" })
+	table.insert(more, { Id = "PretendGame", Name = "Pretend Game", Icon = "🧪" })
 	table.insert(more, { Id = "OldGame", Name = "Old Game", Icon = "🎮", Enabled = false })
 	local grown = MedalLogic.Build(more)
 	expectEqual(#grown.Games, #catalog.Games + 1)
-	expectEqual(grown.ById.WinHotPotato.Name, "HOT POTATO Winner")
+	expectEqual(grown.ById.WinPretendGame.Name, "PRETEND GAME Winner")
 	expectEqual(grown.ById.WinOldGame, nil)
 end)
 

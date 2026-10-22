@@ -1121,13 +1121,14 @@ function SkateEscape:_share()
 				ctx:SetScoreText(racer.Player, `{math.floor(math.clamp(racer.D / SkateCourse.Length, 0, 1) * 100)}%`)
 			end
 		end
-		-- The live standings sort by score: how far along in whole studs (they show the percent),
-		-- finishers above everyone by place, the same order as the results.
+		-- The live standings sort by score: how far along in steps of 4 studs (they show the
+		-- percent; finer steps changed every skater's score attribute ~8 times a second for every
+		-- phone), finishers above everyone by place, the same order as the results.
 		local state = self.startAt and ctx:State(racer.Player)
 		if state then
 			local score = if racer.Place
 				then 1e4 - racer.Place
-				else math.floor(math.clamp(racer.D, 0, SkateCourse.Length))
+				else math.floor(math.clamp(racer.D, 0, SkateCourse.Length) / 4) * 4
 			if score ~= state.Score then
 				ctx:AddScore(racer.Player, score - state.Score)
 			end
