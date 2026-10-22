@@ -718,12 +718,14 @@ local function pumpPodium()
 		return
 	end
 	if phase == "Results" then
+		-- Just after the phase changes, its end time can still be the round's (it's set right
+		-- after): look again then, so a stale one never cuts the results card short.
 		local left = GameState.TimeLeft()
 		local justBegan = os.clock() - resultsSince < 0.5
-		if left > PODIUM_LEAD or (justBegan and left <= 0) then
+		if left > PODIUM_LEAD or justBegan then
 			podiumToken += 1
 			local token = podiumToken
-			task.delay(math.max(0.2, left - PODIUM_LEAD), function()
+			task.delay(math.max(0.25, left - PODIUM_LEAD), function()
 				if podiumToken == token then
 					pumpPodium()
 				end
