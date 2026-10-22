@@ -257,10 +257,10 @@ function DiceDash.Start(api)
 	local hudY = api:HudY()
 	local barWidth = 560
 	local trackLength = barWidth - 96
-	local DOT = if touch then 30 else 26
-	local MY_DOT = if touch then 36 else 32
-	local LIFT = if touch then 15 else 13
-	local barHeight = if touch then 60 else 52
+	local DOT = if touch then 33 else 26
+	local MY_DOT = if touch then 39 else 32
+	local LIFT = if touch then 16 else 13
+	local barHeight = if touch then 66 else 52
 	local bar = UIKit.Panel({
 		Name = "RaceStrip",
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -322,7 +322,7 @@ function DiceDash.Start(api)
 		})
 		UIKit.Label({
 			Text = tostring(if info then info.N else "?"),
-			TextSize = if touch then (if isMine then 26 else 22) else (if isMine then 22 else 19),
+			TextSize = if touch then (if isMine then 29 else 25) else (if isMine then 22 else 19),
 			Font = Theme.Fonts.Bold,
 			TextColor3 = Color3.fromRGB(30, 24, 40),
 			Size = UDim2.fromScale(1, 1),
