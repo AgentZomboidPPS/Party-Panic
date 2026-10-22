@@ -27,8 +27,8 @@ local COOLDOWN = 0.2 -- between your breaks (the server allows a little faster)
 local GRAVITY = 110 -- for chunks and dropping blocks (a little floaty: they read better)
 local FLOOR_COLORS = {
 	Color3.fromRGB(248, 251, 255),
-	Color3.fromRGB(186, 222, 252),
-	Color3.fromRGB(120, 188, 246),
+	Color3.fromRGB(150, 194, 238),
+	Color3.fromRGB(84, 148, 222),
 }
 local FLOOR_MATERIALS = { Enum.Material.Snow, Enum.Material.Snow, Enum.Material.Glacier }
 local WARN_COLOR = Color3.fromRGB(150, 236, 255)

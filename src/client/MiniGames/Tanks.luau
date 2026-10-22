@@ -185,6 +185,11 @@ function Tanks.Start(api)
 	readGo()
 	api:OnShared("GoAt", readGo)
 
+	local function aliveCount(): number
+		local value = api:Shared("Alive")
+		return if type(value) == "number" then value else 12
+	end
+
 	local function world(x: number, y: number, z: number): Vector3
 		return origin + Vector3.new(x, y, z)
 	end
@@ -832,7 +837,8 @@ function Tanks.Start(api)
 			return
 		end
 		local now = api:Now()
-		if myShells() >= TankField.MAX_SHELLS or now - lastShot < TankField.RELOAD then
+		local cap, reload = TankField.Limits(aliveCount())
+		if myShells() >= cap or now - lastShot < reload then
 			return
 		end
 		lastShot = now
@@ -1554,8 +1560,8 @@ function Tanks.Start(api)
 					dot.Transparency = if s > path.Bounce then 0.55 else 0.2
 				end
 			end
-			local ready = TankField.MAX_SHELLS - myShells()
-			fireButton:SetFill(ready / TankField.MAX_SHELLS, Color3.new(1, 1, 1))
+			local cap = TankField.Limits(aliveCount())
+			fireButton:SetFill(math.max(cap - myShells(), 0) / cap, Color3.new(1, 1, 1))
 			local minesDown = 0
 			for _, entry in mines do
 				if entry.Owner == myId then
