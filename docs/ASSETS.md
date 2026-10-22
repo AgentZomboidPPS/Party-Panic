@@ -9,8 +9,8 @@ All art props and audio are **original and generated from code**, so there's not
 | `build/music/packs/ModePack*.ogg` (not in git: rebuilt by `pack`, kept by Roblox once uploaded) | each mini-game's own round song, several to a file | `python3 tools/music/modes.py` |
 | `assets/audio/sfx/*.ogg` | 15 sound effects, plus `SfxSprite.ogg` (all of them in one file) | same |
 
-Requirements for regenerating: Python 3.10+, `numpy`, `scipy`, `scikit-image` (meshes), and
-`ffmpeg` with libvorbis (audio).
+Requirements for regenerating: Python 3.10+, `numpy`, `scipy`, `scikit-image` (meshes; the hats also
+need `pyfqmr`), and `ffmpeg` with libvorbis (audio).
 
 ![Props](images/props-preview.png)
 
