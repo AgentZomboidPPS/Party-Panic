@@ -800,6 +800,8 @@ end
 
 -- Results ----------------------------------------------------------------------------------------
 
+-- Each row says the team with its mark, like the rest of the round: "★ RED 1/3 steaks". (It also
+-- had "• best cut ±1.5%", which never fitted the results card's result column and ended in "...".)
 function PrimeCut:GetResults()
 	local results = self.context:TeamResults()
 	for _, entry in results.Entries do
@@ -808,12 +810,7 @@ function PrimeCut:GetResults()
 			continue
 		end
 		entry.Rank = self:_rank(entry.Team)
-		local bestOff = math.huge
-		for _, result in station.Results do
-			bestOff = math.min(bestOff, result.O)
-		end
-		local best = if bestOff < math.huge then ` • best cut ±{string.format("%.1f", bestOff)}%` else ""
-		entry.ScoreText = `{entry.Team} {station.Wins}/{#station.Results} steaks{best}`
+		entry.ScoreText = `{Teams.Label(entry.Team)} {station.Wins}/{#station.Results} steaks`
 		entry.BestScore = station.Wins
 	end
 	results.WinningTeam = self:_winner()

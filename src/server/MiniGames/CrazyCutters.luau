@@ -369,12 +369,32 @@ function CrazyCutters:_onCut(player: Player, index: any, data: any)
 		end
 	end
 	if #accepted > 0 then
-		ctx:Fire(nil, "Cut", player.UserId, round.Index, accepted)
+		-- (Relayed to everyone in one batch about 10 times a second, not one message per player's
+		-- batch: twelve cutters made ~100 messages a second for every phone.)
+		local key = tostring(player.UserId)
+		local pending = self.relay[key]
+		if not pending then
+			pending = {}
+			self.relay[key] = pending
+		end
+		table.move(accepted, 1, #accepted, #pending + 1, pending)
+		self.relayIndex = round.Index
 	end
 	if track.Done then
+		self:_flushRelay() -- (its last positions go out before its cookie pops)
 		ctx:Fire(nil, "Done", player.UserId, round.Index, track:Score())
 		self:_checkAllDone()
 	end
+end
+
+-- Sends the positions taken since the last relay, everyone's in one message ("Cuts": round index,
+-- { [userId] = flat t, u, v, ... }).
+function CrazyCutters:_flushRelay()
+	if next(self.relay) == nil then
+		return
+	end
+	self.context:Fire(nil, "Cuts", self.relayIndex, self.relay)
+	self.relay = {}
 end
 
 function CrazyCutters:_checkAllDone()
@@ -413,12 +433,15 @@ function CrazyCutters:Start()
 		self:_checkAllDone()
 	end
 
+	self.relay = {}
+	self.relayIndex = 0
 	ctx:OnAction("Cut", function(player, index, data)
 		self:_onCut(player, index, data)
 	end, { Interval = 0.03 }) -- every position is checked on its own, so batches can come quickly
 
 	self:_startShape(1)
 	ctx:Loop(function(): number?
+		self:_flushRelay()
 		local round = self.round
 		if round and round.Phase == "Cut" and ctx:Now() >= round.T1 then
 			self:_finishShape()

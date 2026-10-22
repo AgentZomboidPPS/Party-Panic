@@ -105,6 +105,10 @@ CAMERAS: dict[str, dict] = {
     # clouds, coins in the air, a hot-air balloon and the sun beyond.
     "ParasolPlummet": {"look_at": "Cap", "yaw": 0, "pitch": -8, "distance": 58, "shift": [12, -1, 0], "raise": 6,
                        "sway": 6},
+    # From high over the kettle grill, down at players running round the lawn (one holding a sizzling
+    # potato), the picnic tables and the fence with its string lights.
+    "HotPotato": {"look_at": "Lawn", "yaw": 240, "pitch": 40, "distance": 30, "fov": 60, "sway": 8, "raise": 6,
+                  "shift": [19.9, 3, 9.3]},
     # A team pumping its balloon (with a face), a rival team's balloon beside it.
     "PumpAndPop": {"yaw": 25, "pitch": 12, "distance": 40, "shift": [0, 8.5, -4], "sway": 8},
     # Two riders who just bumped, the sea and a palm island behind.

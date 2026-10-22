@@ -266,10 +266,19 @@ function PrimeCut.Start(api)
 			})
 		end
 	end
+	local guideKey = ""
 	local function placeGuide(x: number, visible: boolean, color: Color3?)
 		if not myStation then
 			return
 		end
+		-- (Twelve pieces re-laid every frame cost phones for nothing while the knife sits still.)
+		local key = if visible
+			then `{math.floor(x * 200 + 0.5)}:{outlineKey}:{if color then color:ToHex() else ""}`
+			else "hidden"
+		if key == guideKey then
+			return
+		end
+		guideKey = key
 		local near, far = PrimeCutLogic.Chord(outline, x)
 		if not visible or not near or not far or far - near < 0.05 then
 			for _, piece in guide do

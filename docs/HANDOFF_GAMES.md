@@ -46,6 +46,25 @@ WIP: read them critically, keep what's good, finish the rest.
 | Mecha-Marathon | `docs/wip/game-MechaMarathon.bundle` | grandstands, balloons, closer chase camera |
 | Prime Cut | `docs/wip/game-PrimeCut.bundle` | first playable version (server, client, bots, props, meshes) + uncommitted mesh edits |
 
+## Games 27-29 (2026-10-22)
+
+The owner asked for one more Survival, Luck and Race game and picked these ("Let's add the stars. If you need to hand them
+off do it."). Briefs: [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md) 27-29 and `docs/builds/<Id>.md`.
+
+| Game | Category | Session |
+| --- | --- | --- |
+| Hot Potato (`HotPotato`) | Survival | games-1 |
+| Dice Dash (`DiceDash`) | Luck | games-2 |
+| Minecart Mayhem (`MinecartMayhem`) | Race | games-3 |
+
+- **Branches:** a session can only push its own `claude/games-N` branch, so each game is built there (merge the
+  coordinator's latest in first). `claude/games-2` and `claude/games-3` carry the second shop pass, which the owner holds
+  back until "after everything else is finished": keep it there, never force-push or reset those branches (a copy is in
+  `docs/wip/shop-pass2.bundle`), keep the game in its own files and commits, and list in the report every file the game
+  changed outside its own new files. The coordinator takes only the game's changes.
+- Give the definition `IsNew = true`. The coordinator keeps the vote's new-game boost within its cap when merging.
+- Report as in "Reporting back" below.
+
 ## How each game gets done
 
 1. Build it per `docs/builds/<Id>.md` (you may run two games at once with helper agents, each in its own git worktree;

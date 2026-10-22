@@ -1,0 +1,17 @@
+newmtl Cover
+Kd 0.784 0.196 0.275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Pages
+Kd 0.980 0.961 0.902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Band
+Kd 0.157 0.588 0.275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

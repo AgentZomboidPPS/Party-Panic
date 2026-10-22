@@ -94,6 +94,18 @@ function BobsledRun.Start(api)
 	local camera = workspace.CurrentCamera
 	local reduced = State.ReducedEffects()
 	local touch = api:IsTouch()
+	-- Phones get half the falling snow (the server's emitter keeps ~1,700 flakes alive at once over
+	-- the course; a big cost on their GPUs, and on a small screen half still reads as snowfall).
+	if touch then
+		api:Track(task.spawn(function()
+			local arena = api:Arena(10)
+			local sky = arena and arena:FindFirstChild("SnowSky", true)
+			local flakes = sky and sky:FindFirstChildOfClass("ParticleEmitter")
+			if flakes then
+				flakes.Rate = 70
+			end
+		end))
+	end
 
 	local course: BobsledCourse.Course? = nil
 	local originCF = CFrame.identity

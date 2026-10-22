@@ -516,7 +516,14 @@ function LogJam.Start(api)
 	end)
 
 	-- The card: what this player should do right now.
+	-- (Called every frame: the card is only touched when what it says changes.)
+	local cardKey = ""
 	local function showCard(text: string, symbol: number?, dim: boolean, color: Color3?)
+		local key = `{text}|{symbol}|{dim}|{if color then color:ToHex() else ""}`
+		if key == cardKey and card.Visible then
+			return
+		end
+		cardKey = key
 		card.Visible = true
 		card.Size = UDim2.fromOffset(card.Size.X.Offset, if symbol then 150 else 48)
 		title.Text = text

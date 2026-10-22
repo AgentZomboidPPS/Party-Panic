@@ -2,7 +2,6 @@
 -- snow blocks over an icy pool.
 --   SpleefBlock    one snow block of a floor (4 x 3 x 4): two packed courses under a pillowy cap.
 --                  One piece, so a block is one part; the game colors it per floor.
---   SpleefShovel   the shovel everyone carries (blade at the bottom, D-grip on top).
 --   SpleefCliff    a 60 degree arc of the crater rim, authored around the crater's middle (see
 --                  CLIFF_* in MiniGames/Spleef.luau): ice cliff face, snowy crest, outer slope.
 --   SpleefPine     a snowy pine for the rim and the snowfield.
@@ -26,22 +25,6 @@ return function(h)
 			Materials = { Snow = Enum.Material.Snow },
 			Fallback = function(m)
 				h.block(m, "Snow", Vector3.new(4, 3, 4), Vector3.new(0, 1.5, 0))
-			end,
-		},
-		SpleefShovel = {
-			Height = 3.6,
-			AssetId = 106513613615382,
-			Palette = {
-				Blade = rgb(196, 206, 222),
-				Collar = rgb(92, 98, 116),
-				Shaft = rgb(168, 112, 64),
-				Grip = rgb(232, 64, 72),
-			},
-			Materials = { Blade = Enum.Material.Metal, Collar = Enum.Material.Metal, Shaft = Enum.Material.Wood },
-			Fallback = function(m)
-				h.block(m, "Blade", Vector3.new(1.1, 1.3, 0.16), Vector3.new(0, 0.65, 0))
-				h.pillar(m, "Shaft", 0.24, 2.3, Vector3.new(0, 2.4, 0))
-				h.block(m, "Grip", Vector3.new(0.75, 0.22, 0.22), Vector3.new(0, 3.49, 0))
 			end,
 		},
 		SpleefCliff = {

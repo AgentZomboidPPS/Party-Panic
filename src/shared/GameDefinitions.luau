@@ -216,8 +216,8 @@ local list: { GameDefinition } = {
 		Category = "Survival",
 		Icon = "❄️",
 		Color = Color3.fromRGB(120, 200, 255),
-		Objective = "Break the snow under your rivals! Fall through all 3 floors into the water and you're out. Last one standing wins!",
-		Controls = "Click or tap a block near you to break it. DIG (E) breaks the block under the nearest rival.",
+		Objective = "Snow blocks vanish a second after you step on them! Fall through all 3 floors into the water and you're out. Last one standing wins!",
+		Controls = "Just walk - keep moving onto fresh snow! Standing still drops you through. Jump over gaps.",
 		Duration = 75,
 		MinPlayers = 2,
 		IsTeam = false,
@@ -234,7 +234,6 @@ local list: { GameDefinition } = {
 		Duration = 75,
 		MinPlayers = 2,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "PrimeCut",
@@ -247,7 +246,6 @@ local list: { GameDefinition } = {
 		Duration = 56,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "Slaparazzi",
@@ -363,6 +361,45 @@ local list: { GameDefinition } = {
 		Controls = "SWING (E / click) to hit - hold it for a big charged hit. Walk over orbs to grab them.",
 		Duration = 70,
 		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "DiceDash",
+		Name = "Dice Dash",
+		Category = "Luck",
+		Icon = "🎲",
+		Color = Color3.fromRGB(190, 130, 255),
+		Objective = "Roll giant dice and hop along the board: boosts help, trapdoors hurt. First to the FINISH wins!",
+		Controls = "Press ROLL (E, tap, or jump) to stop your die. That's the only button!",
+		Duration = 60,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "HotPotato",
+		Name = "Hot Potato",
+		Category = "Survival",
+		Icon = "🥔",
+		Color = Color3.fromRGB(235, 150, 70),
+		Objective = "Don't be holding a potato when it blows! Tag someone to pass it on. Last one standing wins.",
+		Controls = "Got the potato? Touch someone, or THROW (E) it at a player in front.",
+		Duration = 90,
+		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "MinecartMayhem",
+		Name = "Minecart Mayhem",
+		Category = "Race",
+		Icon = "⛏️",
+		Color = Color3.fromRGB(150, 110, 230),
+		Objective = "Race your mine cart out of the crystal cave! Pick the fast way at each split, jump the gaps, first out wins.",
+		Controls = "Hold LEFT or RIGHT (A / D) to pick a way and lean into bends. JUMP (Space) at the yellow arrows!",
+		Duration = 90,
+		MinPlayers = 1,
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},

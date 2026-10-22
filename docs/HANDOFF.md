@@ -1,63 +1,173 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-22 01:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-22 03:15 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (2026-10-22 01:00 UTC)
+## Session B in flight (2026-10-22 03:15 UTC)
 
-- **Live version 33** (published 00:58 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `d10b635`, on the
-  owner's "Can we push V33 out and then you keep working on everything?"; the owner must restart servers).
-  - **It was shipped after a quick check, not the full regression:**
+- **Live version 34** (published 02:38 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `1f08776`, on the
+  owner's "merge my branch claude/quirky-hopper-5yk8zk" and that window's "merge my branch ... and publish"; the owner
+  must restart servers).
+  - **Quick check on that exact commit:**
     - code checks;
-    - FireRope, SharkBait and EatsaPizza's 12-player, bots and phone rounds;
+    - the 12-player, bots and phone rounds of SinkingSands, PrimeCut, RockinRaceway, PumpAndPop, LogJam, Struggle,
+      ArrowAmbush and HoneyTrap;
     - a lobby round with 8 bots;
     - the whole client on phone and PC.
 
-    All passed with 0 errors and 0 render problems. One EatsaPizza bots run hit Roblox's transient "INTERNAL_ERROR Task
-    timed out" and passed on the re-run. **Run the full regression on it next** and fix anything it finds in v34.
-  - **What it adds to v32:** everything in the v33 candidate below, plus Messy Memory, Snowball Summit, Trace Race and
-    Eatsa Pizza: 25 games in all, 13 classics and 12 new.
-  - The store description (`docs/STORE_DESCRIPTION.txt`, updated after the publish) has to be pasted in Creator Hub by
-    the owner: `publish_place.py` can't set it (its settings PATCH gets a 403).
-- Version 32 was published 21:55 UTC from `6e0029b` after a full regression.
-- **Merged since v32 (live in v33):**
-  It's v32 plus:
-  - the Skee-Ball arcade;
-  - the client UI batch: the team pill shows the real teams, toasts rise above action buttons, AutoScale listeners are
-    released, results rows read whole, and the results headline names the game in capitals;
-  - new games Mecha-Marathon (games-3), Spleef (games-2), Prime Cut (games-4) and Tanks! (games-1), with portal
-    previews for the first three (Tanks! in progress);
-  - round-end fairness: same-step ties, nothing counts after the buzzer, no bots-only rounds, resets before GO put you
-    back. An independent review is running.
-  - Shark Bait safety nets (owner: "I chomped someone and now cant move"), independently reviewed and fixed: stuck
-    reports, put-backs, rescues, a fresh character if stuck again, logged to `ClientReports` (`m<UserId>`);
-  - the Sinking Sands rebalance (owner: "make it stronger and add another king"): one more King and a stronger, longer
-    PULL; bot Kings win about half of 8-player rounds;
-  - DataService per-session lock ids, reviewed safe to publish (owners must restart servers promptly after);
-  - `tools/preview/luau_task.py` retrying right after Roblox's rate window resets. Starting a task is capped at
-    5 a minute for everyone (`X-Ratelimit-Limit: 5;w=60`).
-  - the round harness leaves other modes' props out of a bundle (the 1 MiB script cap).
-- **Still to merge for v33:** the CRITICAL invisible-collision sweep (owner: "Theres invisible stuff you can jump on
-  and hang on in several games"; branch `worktree-agent-a584535e5323da1d7`: precise mesh collision, `Shapes.Custom`
-  fallback from pieces, reachable invisible walls removed), the fairness review's fixes, the client-harness size fix,
-  and the Tanks! preview. Then a full regression of every mode, the lobby and the client, and publish.
-- **New games still building in 4 cloud sessions** (each pushes `claude/games-N`, reports to Session B with
-  send_message, see [HANDOFF_GAMES.md](HANDOFF_GAMES.md)):
-  - games-1: Stamp Out, Slaparazzi, Struggle
-  - games-2: Messy Memory, Snowball Summit
-  - games-3: Parasol Plummet, Rockin' Raceway
-  - games-4: Trace Race, Eatsa Pizza, Log Jam
-- **Later (owner):**
-  - more shop items ("Yes lets add more items after everything else is finished");
-  - custom music per game (WIP in `docs/wip/music.bundle`);
-  - the owner's call on rebalancing thin categories.
+    All had 0 errors and 0 render problems. The full regression of v33 (all 25 games) was clean.
+  - **What it adds to v33:**
+    - the invisible-collision sweep: precise mesh collision, no reachable invisible walls, and the CSG fallback from
+      pieces;
+    - no falling through floors on load-in (`ArrivalController`, plus a put-back before GO);
+    - the lobby at 20 s, with the vote ending 1 s after the last person votes;
+    - the rules card's ✕;
+    - the Sand King rework (BLAST, SUNKEN CHEST, stronger PULL);
+    - team identity (Prime Cut's grills, the YOU'RE ON tab, the YOU mark on the pill);
+    - Rockin' Raceway's 3D hurdles;
+    - Log Jam and Struggle (27 games);
+    - Tanks! and Snowball Summit bot fixes;
+    - the vote-variety spec;
+    - all 27 portal previews;
+    - Stamp Out's 👣 icon;
+    - the Skee-Ball flicker and grass fix;
+    - from the owner's other window's branch `claude/quirky-hopper-5yk8zk`: per-game round songs (5 packs, NOT
+      uploaded yet, so every game plays Panic Mode until `AudioAssets` gets the ids) and Friends (invite chip, +1 coin
+      with a friend, beat-a-friend moments).
+  - **Store description:** `docs/STORE_DESCRIPTION.txt` lists 27 games. The owner pastes it in Creator Hub, because
+    publish_place can't set it (403).
+- Version 33 was published 00:58 UTC from `d10b635`, and version 32 at 21:55 UTC from `6e0029b`; both regressions
+  were clean.
+- **On the branch since version 34 (ships in version 35):**
+  - Sinking Sands' role chip (💎 DIVER / 👑 SAND KING all round) and team-marked results rows (owner: "I couldnt tell
+    what color I was on prime cut.");
+  - Slaparazzi bots (owner: "Bots are terrible at slaparazzi");
+  - the Spleef rework from games-2 (owner: "spleef doesnt require you to dig. It should be you walk over it and it
+    fades out within like 1 second or so", "Bots are awful at spleef", "make the spleef arena larger"), squashed
+    from `claude/games-2` 7073f05..1c0d206 without that branch's held shop commits;
+  - the PLAY AGAIN replay vote (owner: "Add a vote at the end of each minigame to replay the same minigame."):
+    `Services/ReplayService`, `Logic/ReplayVote`, the results card's PLAY AGAIN? / NO THANKS; more than half of the
+    round's people (never bots or anyone sitting out) replays the same game straight away, at most 3 plays in a row;
+  - the lobby's sky islands moved 700-1200 studs out, clear of every arena (they broke through the floor or sea of 21
+    arenas; games-2 saw a Spleef bot standing on one), and `tools/checks/colliders.py` now flags terrain near arenas.
+- **Still to come for version 35:**
+  - games-4's phone performance audit (`claude/games-4`: the round harness's `perf` line, cached participant lookups,
+    fewer per-frame writes in Trace Race, Skate Escape, Tanks!, Crazy Cutters and others);
+  - the round songs: the owner's other window uploads the 5 packs and pushes their ids to
+    `claude/quirky-hopper-5yk8zk`; until then every game plays Panic Mode.
+  A quick check of 7d3137b (code checks; SinkingSands, Slaparazzi, Spleef and PumpAndPop rounds; the lobby; the client
+  on phone and PC) is running. Publish on the owner's word.
+- **Games 27-29, building** (owner: "Let's add the stars. If you need to hand them off do it."): Hot Potato (Survival,
+  games-1), Dice Dash (Luck, games-2) and Minecart Mayhem (Race, games-3), each on its session's `claude/games-N` branch
+  (sessions can only push their own branch; games-2's and games-3's also carry the held shop pass, so take only the
+  game's changes from them). Briefs: `docs/MINIGAME_BACKLOG.md` 27-29 and `docs/builds/`. On merge: keep
+  IsNew within the vote's cap (`tests/VoteFairness.spec.luau`: at most half of the games), make portal previews, add
+  them to `docs/STORE_DESCRIPTION.txt` and the lineup doc.
+- **Held until the owner says the bug-fix wave is done ("after everything else is finished"):** the second shop
+  pass, 25 coin items and 10 effects, finished on `claude/games-3` at f0cb9da (reviewed; its client checks are in
+  the same branch; a copy is in `docs/wip/shop-pass2.bundle`). `claude/games-2` also carries the earlier shop commits, so don't merge that branch whole.
+- **Game sessions** (see [HANDOFF_GAMES.md](HANDOFF_GAMES.md)): all 14 backlog games are merged (27 games); games-1
+  to games-3 are building games 27-29 and games-4 is on the performance audit.
+- **Later (owner):** the owner's call on rebalancing thin categories (Messy Memory to Luck, Tanks! to Knockback).
 - **Toolchain in a fresh container (GitHub downloads are blocked here):** `cargo install --locked stylua@2.6.0 --features
   luau`, `selene@0.31.0`, `rojo@7.7.1`, `lune@0.11.0` (crates.io works); luau-lsp from source: `git clone --depth 1
   --branch 1.70.1 https://github.com/JohnnyMorganz/luau-lsp`, `git submodule update --init --depth 1`, cmake Release with
   `-DCMAKE_CXX_FLAGS=-Wno-error=maybe-uninitialized`, target `Luau.LanguageServer.CLI`; `globalTypes.d.luau` is in that
   repo's `scripts/`. Blender: `python3.11 -m venv` + `pip install bpy` (5.0.1). Mesh/music tools: `pip install scipy
   scikit-image`.
+
+## Session A: songs uploaded, and the five "keep players coming back" features (2026-10-22 05:00 UTC)
+
+Branch **`claude/quirky-hopper-5yk8zk`**. Session B merges it before publishing (the owner tells it to).
+
+- **Round songs uploaded** (owner: "take over the music.", then "Upload now"). There are 5 packs:
+
+  | Pack | Id |
+  | --- | --- |
+  | ModePack1 | 133632130255608 |
+  | ModePack2 | 117185721710928 |
+  | ModePack3 | 96432706159875 |
+  | ModePack4 | 91819577463974 |
+  | ModePack5 | 111855655225102 |
+
+  - All five are approved by Roblox and recorded in `AudioAssets` and `assets/uploaded.json` (c7dcb2d).
+  - That used 5 of the owner's 10 audio uploads for this month.
+  - Each of the 27 games plays its own song with the drop on GO (`tools/music`, `ModeMusic.luau`, `AudioController`).
+  - Re-check a game's timing with `python3 tools/music/modes.py check` when its round length changes. Replacing a song
+    costs an upload.
+- **The five features.** The owner asked "If you could do 5 things to keep players addicted what would you do?", then
+  "Can you work on all of that? this wont mess with what the other workers are working on right?". Each one is built
+  in its own files, hung on these shared hooks:
+  - `RoundEvents.Finished` (fired by RoundManager after the rewards);
+  - `Boosts` (extra coin lines on a round's reward);
+  - the save fields `Cups`, `Medals`, `Weekly` and `Events`, which the client snapshot carries;
+  - the GameState keys `Cup`, `Event` and `HallOfFame`;
+  - the lobby's chip row `UI/LobbyRibbon`. Chip priorities: 1 Event, 2 Cup, 3 Invite, 4 Weekly. On phones it sits in the
+    first-join tip's spot. On PC it sits under the banner, below the coins line;
+  - `MedalService.Award(player, id)`.
+
+  The features:
+  1. **Friends** (`FriendsService`, `InviteController`, `Logic/FriendLogic`):
+     - 👋 INVITE chip that opens Roblox's invite prompt;
+     - +1 coin for a round played with a Roblox friend;
+     - "You beat Ann!" / "Bo beat you" toasts after the results;
+     - "Ann is here!" when a friend joins.
+  2. **Party Cups** (`CupService`, `CupController`, `World/CupCrown`, `Logic/PartyCup`):
+     - every 5 rounds on a server make one cup, scored 10/8/6/5/4/3/2 then 1;
+     - bots can win;
+     - after the 5th round a podium pays 5/3/2 coins to people;
+     - the champion wears a crown in the lobby until the next cup ends. It comes off for their rounds.
+     - A PLAY AGAIN replay puts the podium off until the next real lobby.
+  3. **Medals** (`MedalService`, `MedalController`, `World/MedalWall`, `Shared/Medals`, `Logic/MedalLogic`):
+     - one per game (27, built from GameDefinitions) plus 9 big ones;
+     - a MEDAL EARNED card at a calm lobby moment;
+     - a 🥇 Medals tab in the Rewards screen;
+     - a medal wall on the south-west lawn that each client lights up;
+     - Roblox badges once ids go in `BADGE_IDS` (`Shared/Medals.luau`). All are 0 now.
+  4. **Weekly leaderboard + Hall of Fame** (`LeaderboardService`, `HallOfFameController`, `World/HallOfFame`,
+     `Logic/WeeklyLogic`):
+     - points 10/7/5 + 1 for playing, reset Monday 00:00 UTC;
+     - an OrderedDataStore `PP_Weekly_<week>` per week, written in the background;
+     - statues of last week's top 3 between the winner podium and the shooting gallery;
+     - the 📈 chip and the THIS WEEK window.
+  5. **HALLOWEEN PARTY + 2× coins weekends** (`EventService`, `EventController`, `World/EventDecor`, `Shared/Events`,
+     `Logic/EventLogic`):
+     - runs until 2026-11-02 00:00 UTC (`Ends` in `Events.luau`);
+     - candy from rounds and 3 golden pumpkins a day in the lobby;
+     - a free track of 5 limited cosmetics at 10/25/45/70/100 candy, with the Halloween medal at 100;
+     - decorations and a spookier lobby look, drawn per device;
+     - double coins every Saturday and Sunday UTC (`DoubleCoinsWeekends`).
+- **Shared screen rules added for them:**
+  - Toasts wait while the results card or the cup podium is up (`PP_ResultsShowing`, `PP_CupPodium`;
+    NotificationController).
+  - The results card draws 6+ reward lines compact.
+  - Pop-ups wait for calm lobby moments.
+- **Checks:**
+  - Each feature has its own round-harness check on a real server: `weekly_check.py`, `round_harness.py CUP`,
+    `scenarios/Friends.luau`, `scenarios/Medals_check.luau` and `scenarios/Event_halloween.luau`.
+  - Client harness blocks: `cupChecks`, `medalChecks` and `eventChecks`.
+  - All passed. Together, with version 35's PLAY AGAIN merged in: 6 real rounds of a cup with all five services on
+    (`round_harness.py CUP --players 3 --bots 5`): 0 errors, 28/28; the whole client on phones (5 sizes): 0 errors, 0
+    render problems; on PC: 0 problems after the chips moved below the coins' line and step aside for level-up and
+    medal cards.
+- **Tests never write real data:** under the harness flag (`workspace PP_Harness`) the weekly board uses an in-memory
+  store and badges are only listed.
+- **Not checkable here:**
+  - real friendships and invites;
+  - badges;
+  - DataStores at scale;
+  - real avatars on statues;
+  - the lobby look;
+  - touching a pumpkin;
+  - the crown on a moving character.
+- **The owner decides:**
+  - which badges to make (Creator Hub; a few free per day, then Robux);
+  - the event's end date;
+  - candy amounts;
+  - cup values;
+  - whether 2× weekends stay all year;
+  - a pumpkin hat later (needs a new Hat slot).
 
 ## 0. Start here (the first 10 minutes)
 

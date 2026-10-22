@@ -16,6 +16,8 @@
 --     that card's time is up, so a level-up card from the same round waits for it (and shows after
 --     the next round if the lobby has no time left for it), and it closes when the vote starts.
 -- Bots are in the standings and can stand on the podium (marked 🤖); only people win prizes.
+-- A PLAY AGAIN replay (Services/ReplayService) goes from the results straight into the same game:
+-- a podium it would cut short (or never let open) shows in the next real lobby instead.
 
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
@@ -58,12 +60,13 @@ local MOMENT_TIME = 4.5
 local MOMENT_MIN = 2 -- seconds before the vote: a moment doesn't start with less
 local PODIUM_LEAD = 0.35 -- the podium takes over this long before the results card's time is up
 local PODIUM_TIME = 6
+local PODIUM_MIN_SEEN = 3 -- seconds: a podium the next round cut shorter than this shows again later
 
 -- Scaled units (UIKit.AutoScale: phones get 0.62 points per unit).
--- The moment sits just under the lobby's chips (LobbyRibbon: their row ends 80 units down on
--- phones, 124 on PC, in a holder 4 or 10 points from the top).
+-- The moment sits just under the lobby's chips (LobbyRibbon.Bottom: where their row ends, in a
+-- holder 4 or 10 points from the top).
 local MOMENT_W, MOMENT_ROW, MOMENT_RESULT_W = 500, 30, 150
-local MOMENT_TOP = { Touch = 90, Pc = 134 }
+local MOMENT_TOP = { Touch = LobbyRibbon.Bottom.Touch + 10, Pc = LobbyRibbon.Bottom.Pc + 10 }
 local PODIUM_SIZE = Vector2.new(780, 470)
 local STANDINGS_SIZE = Vector2.new(640, 560)
 local STEP_HEIGHTS = { 84, 64, 50 }
@@ -99,6 +102,9 @@ local podiumLayer: Frame
 local podiumPending: Cup? = nil
 local podiumToken = 0
 local podiumShown: { [number]: boolean } = {}
+local podiumOwed: Cup? = nil -- a podium a replay cut short or skipped: the next real lobby shows it
+local podiumData: Cup? = nil -- the podium on screen
+local podiumOpenedAt = 0
 local resultsSince = 0
 
 local function me(): number
@@ -119,6 +125,11 @@ end
 
 local function fresh(data: Cup): boolean
 	return workspace:GetServerTimeNow() - (data.EndedAt or 0) < FRESH
+end
+
+-- A PLAY AGAIN replay's Cleanup: it goes straight into the same game's rules card, no lobby.
+local function replaying(): boolean
+	return State.Phase() == "Cleanup" and (GameState.Get("Replay") or "") ~= ""
 end
 
 local function placeText(place: number): string
@@ -686,6 +697,9 @@ end
 
 local function openPodium(data: Cup)
 	podiumShown[data.Number] = true
+	podiumOwed = nil
+	podiumData = data
+	podiumOpenedAt = os.clock()
 	hideMoment()
 	-- While it's up (other features can hold their own pop-ups for it, as for a level-up card).
 	Players.LocalPlayer:SetAttribute("PP_CupPodium", true)
@@ -707,6 +721,10 @@ end
 local function pumpPodium()
 	local data = podiumPending
 	if not data then
+		local owed = podiumOwed
+		if owed and CALM[State.Phase()] and not replaying() and not podiumModal.IsOpen then
+			openPodium(owed) -- the lobby a replay put off
+		end
 		return
 	end
 	local phase = State.Phase()
@@ -715,6 +733,10 @@ local function pumpPodium()
 	end
 	if not fresh(data) or GONE[phase] then
 		podiumPending = nil -- the vote or the next round has the screen: too late
+		return
+	elseif replaying() then
+		podiumPending = nil
+		podiumOwed = data -- the same game again first: the podium waits for the lobby after it
 		return
 	end
 	if phase == "Results" then
@@ -836,6 +858,9 @@ function CupController.Start(context)
 			momentPending = nil
 			hideMoment()
 			if podiumModal.IsOpen then
+				if os.clock() - podiumOpenedAt < PODIUM_MIN_SEEN then
+					podiumOwed = podiumData -- a replay's rules card cut it short: again in the lobby
+				end
 				closePodium() -- the vote has the screen now
 			end
 		end

@@ -50,6 +50,13 @@ local previews: { [string]: Preview } = {
 		FrameSize = Vector2.new(168, 240),
 		Fps = 8,
 	},
+	DiceDash = {
+		Image = "rbxassetid://70817654833833",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
 	EatsaPizza = {
 		Image = "rbxassetid://117491605847791",
 		Frames = 24,
@@ -78,6 +85,13 @@ local previews: { [string]: Preview } = {
 		FrameSize = Vector2.new(168, 240),
 		Fps = 8,
 	},
+	HotPotato = {
+		Image = "rbxassetid://120673934522622",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
 	LogJam = {
 		Image = "rbxassetid://135440319616290",
 		Frames = 24,
@@ -94,6 +108,13 @@ local previews: { [string]: Preview } = {
 	},
 	MessyMemory = {
 		Image = "rbxassetid://96045274126772",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
+	MinecartMayhem = {
+		Image = "rbxassetid://107135666496644",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),

@@ -21,6 +21,11 @@
 -- Diver standing in a new one is told to MOVE!, and a Diver it catches is BLASTED! (the King who
 -- threw it sees HIT!). The King's hint is now how to blast ("👑 Tap the sand to BLAST it!"; SWIRL,
 -- PULL and BLAST are on the buttons). The SUNKEN CHEST (+8) sits heavy on the slope near the bottom.
+--
+-- Your role all round, not just in the hint's first seconds (after "I couldnt tell what color I was
+-- on prime cut."): a chip like Arrow Ambush's under the sand panel, "💎 DIVER" or "👑 SAND KING" in
+-- the role's colours, with the hint and the flashes just under it, clear of the buttons beside
+-- JUMP, the move stick and the menu column on every phone.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,6 +34,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local GameState = require(ReplicatedStorage.Shared.GameState)
 local SandSwirl = require(ReplicatedStorage.Shared.Logic.SandSwirl)
+local Teams = require(ReplicatedStorage.Shared.Teams)
 
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -57,6 +63,10 @@ local SWIRL_COOLDOWN, PULL_COOLDOWN, BLAST_COOLDOWN = 3, 5, 6 -- (only until the
 local BLAST_RING, BLAST_DELAY = 4.5, 0.75
 local RING_BARS, FUSE_BARS = 28, 20 -- bars in a blast's ring and in the ring closing in on it
 local BLAST_COLOR, FUSE_COLOR = Color3.fromRGB(255, 70, 50), Color3.fromRGB(255, 240, 200)
+-- The HUD under the sand panel (TopHud units below api:HudY()): the role chip, then the hint's and
+-- the flashes' line.
+local CHIP_Y, CHIP_SIZE = 64, Vector2.new(240, 44)
+local HINT_Y = CHIP_Y + CHIP_SIZE.Y + 8
 
 type Treasure = {
 	Id: number,
@@ -387,6 +397,37 @@ function SinkingSands.Start(api)
 	api:Track(api.Player:GetAttributeChangedSignal("PP_Score"):Connect(refreshHaul))
 	refreshHaul()
 
+	-- The role chip (like Arrow Ambush's): "💎 DIVER" or "👑 SAND KING" in the role's colours, all
+	-- round, centred under the panel (it shows once the server gives this player a role).
+	local roleChip = UIKit.Panel({
+		Name = "Role",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + CHIP_Y),
+		Size = UDim2.fromOffset(CHIP_SIZE.X, CHIP_SIZE.Y),
+		Visible = false,
+		Parent = hud,
+	}, Teams.Colors.Divers, Teams.Colors.Divers)
+	local roleText = UIKit.Label({
+		Name = "Text",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextScaled = true,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -20, 1, -12),
+		Parent = roleChip,
+		Children = { UIKit.TextStroke(0.2) },
+	})
+	local function showRole(king: boolean)
+		local color = Teams.Colors[if king then "SandKings" else "Divers"] or Theme.Colors.Panel
+		roleText.Text = if king then "👑 SAND KING" else "💎 DIVER"
+		local gradient = roleChip:FindFirstChildOfClass("UIGradient")
+		if gradient then
+			gradient.Color = ColorSequence.new(color, color:Lerp(Color3.new(0, 0, 0), 0.4))
+		end
+		roleChip.Visible = true
+	end
+
 	-- The role hint: narrower than api:Hint so it clears the standings on small phones.
 	local hint = UIKit.Label({
 		Name = "RoleHint",
@@ -394,7 +435,7 @@ function SinkingSands.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 26,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, api:HudY() + 66),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + HINT_Y),
 		Size = UDim2.fromOffset(400, 66),
 		TextYAlignment = Enum.TextYAlignment.Top,
 		Visible = false,
@@ -409,7 +450,7 @@ function SinkingSands.Start(api)
 		Font = Theme.Fonts.Display,
 		TextSize = 54,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, api:HudY() + 66),
+		Position = UDim2.new(0.5, 0, 0, api:HudY() + HINT_Y),
 		Size = UDim2.fromOffset(400, 64),
 		Visible = false,
 		Parent = hud,
@@ -617,7 +658,9 @@ function SinkingSands.Start(api)
 		end
 		aimingSet = true
 		-- Kings sit on their thrones: the move stick and jump button go away so a tap anywhere on the
-		-- sand blasts it (dragging still turns the view), and come back when the round is over.
+		-- sand blasts it (dragging still turns the view), and come back when the round is over. (The
+		-- UI checks then draw no stick or jump button either: tools/checks/ui_render.py.)
+		api.Gui:SetAttribute("PP_NoTouchControls", if api:IsTouch() then true else nil)
 		pcall(function()
 			local scripts = api.Player:FindFirstChild("PlayerScripts")
 			local module = scripts and scripts:FindFirstChild("PlayerModule")
@@ -668,6 +711,7 @@ function SinkingSands.Start(api)
 		end
 		isKing = role == "King"
 		refreshHaul()
+		showRole(isKing)
 		-- (short enough for one line in the hint's 400 points: the longer ones wrapped onto two on
 		-- phones; the status line above says the rest, "Divers: grab the treasure! Sand Kings: sink it!",
 		-- and a King's buttons say SWIRL, PULL and BLAST)

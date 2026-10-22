@@ -31,6 +31,10 @@
 -- those 6 (the vote closes it), and one that comes in later in the lobby (an emote quest's level-up)
 -- waits for the next calm moment rather than start with under MIN_SHOW seconds to go: it would
 -- only flash up before the vote took it away, and it wouldn't come back.
+--
+-- PLAY AGAIN (owner: "Add a vote at the end of each minigame to replay the same minigame."): when
+-- the results' vote plays the same game again, Cleanup leads straight into its rules card (the
+-- GameState "Replay" attribute says so), so a round's card waits for the lobby after it.
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -637,6 +641,9 @@ function CelebrationController.Pump()
 	end
 	if phase == "Intermission" and GameState.TimeLeft() < MIN_SHOW then
 		return -- the vote is about to start: after the next round instead (Cleanup pumps again)
+	end
+	if phase == "Cleanup" and (GameState.Get("Replay") or "") ~= "" then
+		return -- the same game again straight away: no lobby time to show it in
 	end
 	if not State.Profile then
 		return -- its "Next up" comes from the profile: shown once the first one arrives
