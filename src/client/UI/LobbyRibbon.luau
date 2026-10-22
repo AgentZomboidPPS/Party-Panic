@@ -65,7 +65,10 @@ local function refresh()
 	end
 	local phase = GameState.Get("Phase") or "Waiting"
 	local player = Players.LocalPlayer
+	-- A PLAY AGAIN replay's Cleanup goes straight into its rules card: no lobby to show the row in.
+	local replaying = phase == "Cleanup" and (GameState.Get("Replay") or "") ~= ""
 	local free = LOBBY[phase]
+		and not replaying
 		and not (touch and HIDDEN_ON_PHONES[phase])
 		and not (touch and player:GetAttribute("PP_Celebrating") == true)
 		and not (touch and hud:GetAttribute("PP_TipShowing") == true)

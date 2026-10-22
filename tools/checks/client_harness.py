@@ -48,6 +48,9 @@ Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", 
 and shows a level-up, a career milestone and a returning player's celebration ("LevelUp",
 "LevelUp2", "Milestone", "Welcome"). After the round a level-up card shows while the last
 first-join tip is due; the result's "tipChecks" says what was on screen while it was up and after.
+The results card asks PLAY AGAIN? (Services/ReplayService): "Results" shows the vote open, "Results
+replay" after the player tapped PLAY AGAIN, "Results replay capped" after the most replays in a row;
+the result's "replayChecks" says what the strip showed each time.
 """
 
 import argparse
@@ -1353,7 +1356,64 @@ phase("Results", 8, function()
 		Standings = standings,
 	})
 	GameState.SetJSON("Champions", champions)
+	-- PLAY AGAIN? on the card (Services/ReplayService): the people who played vote (bots don't).
+	local voters = { __player.UserId }
+	for index = 2, math.min(5, #__players) do
+		table.insert(voters, __players[index].UserId)
+	end
+	GameState.SetJSON("ReplayVote", {
+		Open = true,
+		Game = if place == 1 then "SinkingSands" else ids[1],
+		Yes = math.max(0, #voters - 3),
+		No = math.min(1, #voters - 1),
+		Voters = voters,
+		Need = math.floor(#voters / 2) + 1,
+		Capped = false,
+	})
 end)
+-- The player taps PLAY AGAIN (marked, counted), then a card after the most replays in a row (no
+-- buttons: a new vote is next). replayChecks: what the strip showed each time.
+local replayChecks = {}
+do
+	step = "replay vote"
+	local function strip(label)
+		local overlay = __playerGui:FindFirstChild("PartyPanicOverlay")
+		local found = overlay and overlay:FindFirstChild("Replay", true)
+		local function text(name)
+			local item = found and found:FindFirstChild(name, true)
+			if not item or not item:IsA("GuiObject") or not item.Visible then
+				return "hidden"
+			end
+			local title = item:FindFirstChild("Title")
+			local count = item:FindFirstChild("Count")
+			if title and count then
+				return `{title.Text} / {count.Text}`
+			end
+			return (item :: any).Text
+		end
+		replayChecks[label] = {
+			strip = if found and found.Visible then "shown" else "hidden",
+			again = text("PlayAgain"),
+			no = text("NoThanks"),
+			note = text("Note"),
+		}
+	end
+	strip("open")
+	__player:SetAttribute("PP_Replay", "Yes")
+	local vote = GameState.GetJSON("ReplayVote")
+	vote.Yes += 1
+	GameState.SetJSON("ReplayVote", vote)
+	task.wait(0.6)
+	strip("tappedYes")
+	snap("Results replay")
+	vote.Open, vote.Capped = false, true
+	GameState.SetJSON("ReplayVote", vote)
+	__player:SetAttribute("PP_Replay", nil)
+	task.wait(0.6)
+	strip("capped")
+	snap("Results replay capped")
+	GameState.SetJSON("ReplayVote", { Open = false, Game = "", Voters = {} })
+end
 
 if #bots > 0 then
 	-- The podium name tags are BillboardGuis in the world; copy them onto a screen to draw them.
@@ -1588,6 +1648,7 @@ return game:GetService("HttpService"):JSONEncode({
 	hudChecks = hudChecks,
 	sitOutChecks = sitOutChecks,
 	tipChecks = tipChecks,
+	replayChecks = replayChecks,
 	textReport = __textReport,
 	portals = __portals,
 })
