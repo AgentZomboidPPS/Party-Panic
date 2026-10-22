@@ -13,6 +13,9 @@
 --     can't raise the score); stretches cut away from the line count against it by their length.
 --   * Coverage: the share of the outline's points the cutter passed within COVER studs of.
 --   score = coverage x precision, as a percentage. Nothing here touches instances.
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): a PERFECT cut's symbol was ★, which the
+-- fonts don't have, so the best grade showed as an empty box on the boards and in the shout. It is ⭐.
 
 local CrazyCutters = {}
 
@@ -304,7 +307,7 @@ end
 -- A word for a score, with its own symbol so it reads without color too.
 function CrazyCutters.Grade(score: number): (string, string)
 	if score >= 95 then
-		return "PERFECT!", "★"
+		return "PERFECT!", "⭐"
 	elseif score >= 80 then
 		return "NICE CUT!", "✔"
 	elseif score >= 50 then

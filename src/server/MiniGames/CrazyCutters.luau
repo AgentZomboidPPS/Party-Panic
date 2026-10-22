@@ -26,6 +26,11 @@
 -- starts. The order check used to turn down anything within 15 ms of CUT!, so a finger already
 -- moving at CUT! started its cut on the server with a straight line from the start, and the score
 -- shown live could end a point off the final one.
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): the board of someone who left during
+-- the rules card, or couldn't be placed, stayed lit with their name and an idle cutter all game
+-- (the PlayerLeft hook that fades a board is set at GO, after they were dropped). At GO their board
+-- now fades and says they left, like anyone who leaves later.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -431,6 +436,13 @@ function CrazyCutters:Start()
 		self.tracks[player] = nil
 		ctx:Fire(nil, "Left", player.UserId)
 		self:_checkAllDone()
+	end
+	-- Anyone gone before the hook was set (left during the rules card, or couldn't be placed: SpawnAll
+	-- drops them while Prepare waits): their board says so too, instead of waiting there all game.
+	for player in self.boards do
+		if not ctx:State(player) then
+			ctx:Fire(nil, "Left", player.UserId)
+		end
 	end
 
 	self.relay = {}
