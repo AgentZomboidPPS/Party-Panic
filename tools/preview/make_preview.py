@@ -92,6 +92,9 @@ CAMERAS: dict[str, dict] = {
     # Over a team's shoulders at its grill: the giant knife lined up over the steak, the glowing line
     # where it will cut, the coals under the grate.
     "PrimeCut": {"look_at": "CutLine", "yaw": 28, "pitch": 36, "distance": 39, "shift": [-0.5, 0, 10.5], "raise": 4},
+    # Behind a player at their booth's counter: the mischief's smoke over the cubby shelf, toys
+    # tumbling off it onto the counter.
+    "MessyMemory": {"look_at": "CounterTop", "yaw": 168, "pitch": 16, "distance": 25, "shift": [0, 2, 0], "raise": 6},
     # Side-on from a little below: two fallers under open umbrellas, the left throwers on their
     # clouds, coins in the air, a hot-air balloon and the sun beyond.
     "ParasolPlummet": {"look_at": "Cap", "yaw": 0, "pitch": -8, "distance": 58, "shift": [12, -1, 0], "raise": 6,
@@ -132,6 +135,7 @@ DUMP_AT: dict[str, float] = {
     "HexMeltdown": 4.6,  # the first call, halfway through sinking: the called color stays up
     "HoneyTrap": 12,
     "MechaMarathon": 12.5,  # a second after lift-off: the toys climbing away from their pads
+    "MessyMemory": 8,  # a second into the mischief: smoke puffs, the last toys tumbling onto the counters
     "ParasolPlummet": 7,  # fallers still spread across the sky, a dozen lobs in the air
     "PrimeCut": 9,  # the first steak, a second before the chop: the knives lined up
     "PumpAndPop": 16,  # the balloons are big by now
