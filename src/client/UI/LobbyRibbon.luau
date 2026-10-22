@@ -5,7 +5,8 @@
 -- priority order and leaves out the ones that don't fit, lowest priority first.
 -- Phones: under the top bar in the middle, the first-join tip's spot (the row gives way to the tip
 -- and to a celebration card, which use it too), between the profile chip and the menu column;
--- chips are 44 pt tall. PC: under the phase banner. It shows in the lobby only: never during a
+-- chips are 44 pt tall. PC: under the phase banner, below the line of the coins and their pink
+-- NEXT reward pill (which a full row reached over at first). It shows in the lobby only: never during a
 -- round, the rules card or the results, and not during the vote on phones (the vote cards' spot)
 -- or while a lobby game has the screen (the HUD's PP_TipsAside: Skee-Ball).
 --
@@ -36,9 +37,16 @@ export type Chip = {
 
 -- Scaled units (UIKit.AutoScale): phones get 0.62 points per unit, so a 72-unit chip is 44 pt.
 local TOUCH = { Width = 620, Height = Theme.Touch.Target, Text = 24, Top = 4 + 8, Pad = 18, Gap = 10 }
--- PC: under the 70-unit phase banner (its holder sits 10 px from the top and scales the same way),
--- clear of the toasts down the right.
-local PC = { Width = 560, Height = 44, Text = 20, Top = 80, Pad = 16, Gap = 10 }
+-- PC: under the phase banner (its holder sits 10 px from the top and scales the same way), below
+-- the line of the coins and the pink NEXT reward pill beside them (RewardsController), which reaches
+-- 129 units down and past where a full row would start; clear of the toasts down the right.
+local PC = { Width = 560, Height = 44, Text = 20, Top = 137, Pad = 16, Gap = 10 }
+local TOUCH_ROW_Y = 8 -- phones: the row's top in its holder (the first-join tip's spot)
+
+-- Where the row ends (scaled units, in a holder 4 points from the top on phones and 10 on PC, like
+-- the row's own): what goes just under it lines up with it (CupController's standings moment).
+LobbyRibbon.Bottom = { Touch = TOUCH_ROW_Y + TOUCH.Height, Pc = PC.Top + PC.Height }
+
 local LOBBY = { Waiting = true, Intermission = true, Voting = true, Cleanup = true }
 local HIDDEN_ON_PHONES = { Voting = true }
 
@@ -114,7 +122,7 @@ local function build(context)
 	UIKit.AutoScale(holder)
 	row = UIKit.new("Frame", {
 		Name = "Row",
-		Position = UDim2.fromOffset(0, if touch then 8 else s.Top),
+		Position = UDim2.fromOffset(0, if touch then TOUCH_ROW_Y else s.Top),
 		Size = UDim2.fromOffset(s.Width, s.Height),
 		BackgroundTransparency = 1,
 		Visible = false,

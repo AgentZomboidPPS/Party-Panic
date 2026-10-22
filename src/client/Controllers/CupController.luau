@@ -63,10 +63,10 @@ local PODIUM_TIME = 6
 local PODIUM_MIN_SEEN = 3 -- seconds: a podium the next round cut shorter than this shows again later
 
 -- Scaled units (UIKit.AutoScale: phones get 0.62 points per unit).
--- The moment sits just under the lobby's chips (LobbyRibbon: their row ends 80 units down on
--- phones, 124 on PC, in a holder 4 or 10 points from the top).
+-- The moment sits just under the lobby's chips (LobbyRibbon.Bottom: where their row ends, in a
+-- holder 4 or 10 points from the top).
 local MOMENT_W, MOMENT_ROW, MOMENT_RESULT_W = 500, 30, 150
-local MOMENT_TOP = { Touch = 90, Pc = 134 }
+local MOMENT_TOP = { Touch = LobbyRibbon.Bottom.Touch + 10, Pc = LobbyRibbon.Bottom.Pc + 10 }
 local PODIUM_SIZE = Vector2.new(780, 470)
 local STANDINGS_SIZE = Vector2.new(640, 560)
 local STEP_HEIGHTS = { 84, 64, 50 }
