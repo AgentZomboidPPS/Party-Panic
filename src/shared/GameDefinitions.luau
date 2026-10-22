@@ -268,6 +268,32 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "StampOut",
+		Name = "Stamp Out",
+		Category = "Versus",
+		Icon = "🖍️",
+		Color = Color3.fromRGB(235, 90, 120),
+		Objective = "Bounce your rubber stamp around the paper and ink it with your colour. Cover the most paper to win!",
+		Controls = "Steer with the stick or WASD. Tap STAMP (E) to hop, hold it for a long jump. Land on rivals' ink to take it!",
+		Duration = 40,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
+	{
+		Id = "RockinRaceway",
+		Name = "Rockin' Raceway",
+		Category = "Race",
+		Icon = "🐴",
+		Color = Color3.fromRGB(255, 140, 60),
+		Objective = "Race your hobby horse once round the track! Gallop, but let go before your carrots run out, or you spin out.",
+		Controls = "Hold GALLOP (W / left side) to speed up, let go to refill carrots. HOP (Space) blue hurdles, ride over orange carrots!",
+		Duration = 60,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
