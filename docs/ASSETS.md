@@ -4,7 +4,7 @@ All art props and audio are **original and generated from code**, so there's not
 
 | Folder | What | Generator |
 | --- | --- | --- |
-| `assets/meshes/*.obj, *.glb` | about 400 toy-style props: the lobby's (shopping cart, trophy, trees...) and each arena's own set | `python3 tools/meshgen/generate_meshes.py` (each game's props in `tools/meshgen/props/<Game>.py`) |
+| `assets/meshes/*.obj, *.glb` | about 400 toy-style props: the lobby's (trophy, trees, lamp posts...) and each arena's own set | `python3 tools/meshgen/generate_meshes.py` (each game's props in `tools/meshgen/props/<Game>.py`) |
 | `assets/audio/music/*.ogg` | "Party Plaza" + "Sunset Social" (lobby playlist), "Panic Mode" (rounds) | `python3 tools/music/compose.py` |
 | `build/music/packs/ModePack*.ogg` (not in git: rebuilt by `pack`, kept by Roblox once uploaded) | each mini-game's own round song, several to a file | `python3 tools/music/modes.py` |
 | `assets/audio/sfx/*.ogg` | 15 sound effects, plus `SfxSprite.ogg` (all of them in one file) | same |
