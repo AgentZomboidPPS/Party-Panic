@@ -16,26 +16,27 @@ return function(h)
 		h.rounded(m, "Top", Vector3.new(8.3, 0.4, 8.3), 0.16, Vector3.new(0, 0.9, 0))
 		h.pillar(m, "Icon", 3.6, 0.24, Vector3.new(0, 1.12, 0))
 	end
+	-- (a fallback's first part sets the frame its size is measured in: never a turned cylinder)
 	local function padFallback(m)
+		h.rounded(m, "Icon", Vector3.new(4, 0.24, 4), 0.1, Vector3.new(0, 1.12, 0))
 		h.pillar(m, "Base", 15, 0.9, Vector3.new(0, 0.45, 0))
 		h.pillar(m, "Top", 14, 0.4, Vector3.new(0, 0.9, 0))
-		h.pillar(m, "Icon", 5, 0.24, Vector3.new(0, 1.12, 0))
 	end
 
 	return {
 		DiceDashDie = {
 			Height = 3.672,
-			AssetId = 0,
+			AssetId = 87006048960769,
 			Palette = { Body = h.rgb(250, 248, 240), Pips = h.rgb(40, 36, 60) },
 			Materials = { Body = Enum.Material.SmoothPlastic, Pips = Enum.Material.SmoothPlastic },
 			Fallback = function(m)
 				h.rounded(m, "Body", Vector3.new(3.4, 3.4, 3.4), 0.6, Vector3.new(0, 1.836, 0))
-				h.ball(m, "Pips", 0.7, Vector3.new(0, 3.55, 0))
+				h.ball(m, "Pips", 0.7, Vector3.new(0, 3.322, 0))
 			end,
 		},
 		DiceDashTile = {
 			Height = TILE_HEIGHT,
-			AssetId = 0,
+			AssetId = 83438567974099,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(245, 236, 212), Icon = h.rgb(205, 190, 160) },
@@ -44,7 +45,7 @@ return function(h)
 		},
 		DiceDashTileBoost = {
 			Height = TILE_HEIGHT,
-			AssetId = 0,
+			AssetId = 91684865212653,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(90, 205, 110), Icon = h.rgb(250, 255, 245) },
@@ -53,7 +54,7 @@ return function(h)
 		},
 		DiceDashTileSlip = {
 			Height = TILE_HEIGHT,
-			AssetId = 0,
+			AssetId = 122713995573076,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(80, 120, 210), Icon = h.rgb(255, 222, 70) },
@@ -62,7 +63,7 @@ return function(h)
 		},
 		DiceDashTileCannon = {
 			Height = TILE_HEIGHT,
-			AssetId = 0,
+			AssetId = 140531788477320,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(255, 150, 60), Icon = h.rgb(45, 42, 58) },
@@ -71,7 +72,7 @@ return function(h)
 		},
 		DiceDashTileSwap = {
 			Height = TILE_HEIGHT,
-			AssetId = 0,
+			AssetId = 115196170081614,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(255, 205, 50), Icon = h.rgb(255, 255, 250) },
@@ -80,7 +81,7 @@ return function(h)
 		},
 		DiceDashTileEvent = {
 			Height = TILE_HEIGHT,
-			AssetId = 0,
+			AssetId = 73764926600017,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(170, 110, 255), Icon = h.rgb(255, 255, 255) },
@@ -89,7 +90,7 @@ return function(h)
 		},
 		DiceDashTileTrap = {
 			Height = TILE_HEIGHT,
-			AssetId = 0,
+			AssetId = 91734989495227,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(230, 70, 80), Icon = h.rgb(70, 46, 36) },
@@ -102,7 +103,7 @@ return function(h)
 		},
 		DiceDashPadStart = {
 			Height = TILE_HEIGHT,
-			AssetId = 0,
+			AssetId = 94361141570426,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(70, 160, 255), Icon = h.rgb(255, 215, 60) },
@@ -111,7 +112,7 @@ return function(h)
 		},
 		DiceDashPadFinish = {
 			Height = TILE_HEIGHT,
-			AssetId = 0,
+			AssetId = 98308065425939,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(250, 250, 250), Icon = h.rgb(30, 30, 38) },
@@ -120,7 +121,7 @@ return function(h)
 		},
 		DiceDashArchStart = {
 			Height = 17,
-			AssetId = 0,
+			AssetId = 122317180580908,
 			Palette = {
 				Posts = h.rgb(245, 245, 250),
 				Beam = h.rgb(70, 160, 255),
@@ -138,7 +139,7 @@ return function(h)
 		},
 		DiceDashArchFinish = {
 			Height = 17,
-			AssetId = 0,
+			AssetId = 102507023173870,
 			Palette = {
 				Posts = h.rgb(245, 245, 250),
 				Beam = h.rgb(255, 90, 100),
@@ -157,18 +158,18 @@ return function(h)
 		},
 		DiceDashSpring = {
 			Height = 2.685,
-			AssetId = 0,
+			AssetId = 87290167864681,
 			Palette = { Base = h.rgb(70, 72, 90), Coil = h.rgb(200, 205, 220), Plate = h.rgb(90, 205, 110) },
 			Materials = { Coil = Enum.Material.Metal, Base = Enum.Material.Metal },
 			Fallback = function(m)
 				h.block(m, "Base", Vector3.new(3.4, 0.4, 3.4), Vector3.new(0, 0.2, 0))
-				h.pillar(m, "Coil", 2, 1.7, Vector3.new(0, 1.25, 0))
+				h.pillar(m, "Coil", 2, 1.9, Vector3.new(0, 1.25, 0))
 				h.block(m, "Plate", Vector3.new(3.6, 0.35, 3.6), Vector3.new(0, 2.3, 0))
 			end,
 		},
 		DiceDashCannon = {
 			Height = 4.047,
-			AssetId = 0,
+			AssetId = 71613096589997,
 			Palette = { Barrel = h.rgb(58, 60, 74), Carriage = h.rgb(160, 100, 58), Wheels = h.rgb(110, 70, 45) },
 			Materials = {
 				Barrel = Enum.Material.Metal,
@@ -182,16 +183,16 @@ return function(h)
 		},
 		DiceDashTableLeg = {
 			Height = 29.7,
-			AssetId = 0,
+			AssetId = 78884615498790,
 			Palette = { Leg = h.rgb(150, 100, 62) },
 			Materials = { Leg = Enum.Material.Wood },
 			Fallback = function(m)
-				h.pillar(m, "Leg", 4, 29.7, Vector3.new(0, 14.85, 0))
+				h.rounded(m, "Leg", Vector3.new(4, 29.7, 4), 1.2, Vector3.new(0, 14.85, 0))
 			end,
 		},
 		DiceDashSpinner = {
 			Height = 1.9,
-			AssetId = 0,
+			AssetId = 96950710674004,
 			Palette = {
 				Card = h.rgb(250, 245, 230),
 				SegA = h.rgb(255, 90, 100),
@@ -203,13 +204,13 @@ return function(h)
 			},
 			Fallback = function(m)
 				h.block(m, "Card", Vector3.new(20, 0.6, 20), Vector3.new(0, 0.3, 0))
-				h.pillar(m, "SegA", 16, 0.3, Vector3.new(0, 0.72, 0))
+				h.pillar(m, "SegA", 16, 0.36, Vector3.new(0, 0.72, 0))
 				h.block(m, "Arrow", Vector3.new(1, 0.35, 9), Vector3.new(0, 1.55, 0))
 			end,
 		},
 		DiceDashRuleBook = {
 			Height = 3.67,
-			AssetId = 0,
+			AssetId = 140052668173931,
 			Palette = { Cover = h.rgb(200, 50, 70), Pages = h.rgb(250, 245, 230), Band = h.rgb(255, 205, 60) },
 			Materials = { Cover = Enum.Material.Fabric },
 			Fallback = function(m)
@@ -220,7 +221,7 @@ return function(h)
 		},
 		DiceDashCards = {
 			Height = 1.6,
-			AssetId = 0,
+			AssetId = 127539608589812,
 			Palette = { Face = h.rgb(252, 250, 245), Mark = h.rgb(230, 50, 70), Back = h.rgb(60, 90, 200) },
 			Fallback = function(m)
 				h.block(m, "Face", Vector3.new(8, 0.2, 12), Vector3.new(0, 0.1, -4))
@@ -229,13 +230,13 @@ return function(h)
 		},
 		DiceDashPawn = {
 			Height = 10.4,
-			AssetId = 0,
+			AssetId = 130722575504269,
 			Palette = { Body = h.rgb(255, 90, 100) },
 			Materials = { Body = Enum.Material.SmoothPlastic },
 			Fallback = function(m)
-				h.pillar(m, "Body", 6, 1.2, Vector3.new(0, 0.6, 0))
-				h.pillar(m, "Body", 2.4, 6, Vector3.new(0, 4, 0))
 				h.ball(m, "Body", 3.8, Vector3.new(0, 8.5, 0))
+				h.pillar(m, "Body", 6, 1.2, Vector3.new(0, 0.6, 0))
+				h.pillar(m, "Body", 2.4, 6.2, Vector3.new(0, 4, 0))
 			end,
 		},
 	}

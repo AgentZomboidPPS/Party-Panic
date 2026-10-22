@@ -274,9 +274,10 @@ function Board.Deal(random: (number, number) -> number): string
 		end
 	end
 	local quarter = math.floor(last / 4)
-	put(Board.CANNON, 4, 12, 1)
-	put(Board.CANNON, 15, 24, 1)
-	put(Board.CANNON, last - 10, last - 5, 1)
+	put(Board.CANNON, 5, 9, 1)
+	put(Board.CANNON, 13, 17, 1)
+	put(Board.CANNON, 22, 26, 1)
+	put(Board.CANNON, last - 8, last - 5, 1)
 	put(Board.TRAP, 6, 2 * quarter - 1, 1)
 	put(Board.TRAP, 2 * quarter, 3 * quarter - 1, 1)
 	put(Board.SWAP, 10, last - 8, 1)
