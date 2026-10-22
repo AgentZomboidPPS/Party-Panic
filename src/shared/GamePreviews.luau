@@ -205,7 +205,7 @@ local previews: { [string]: Preview } = {
 		Fps = 8,
 	},
 	Struggle = {
-		Image = "rbxassetid://104109564808610",
+		Image = "rbxassetid://94727421623197",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),
