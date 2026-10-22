@@ -210,10 +210,9 @@ local function buildRating()
 	local buttons = {}
 	for order, choice in { "Up", "Down" } do
 		local look = THUMBS[choice]
-		buttons[choice] = UIKit.Button({
+		local button = UIKit.Button({
 			Name = look.Name,
-			Text = look.Icon,
-			TextSize = if touch then 36 else 30,
+			Text = "",
 			Size = UDim2.fromOffset(size, size),
 			CornerRadius = 18,
 			LayoutOrder = order,
@@ -224,6 +223,19 @@ local function buildRating()
 			local mine = State.LocalPlayer:GetAttribute("PP_Rating")
 			Remotes.Get("RateGame"):FireServer(if mine == choice then "None" else choice)
 		end, Theme.Colors.Lavender, Theme.Colors.Purple)
+		-- The emoji in a label of its own: the button's gradient tints its own text, and drew the
+		-- thumbs dark (owner: "why are the thumbs up and down black? can we revert them to the
+		-- standard yellow?").
+		UIKit.Label({
+			Name = "Icon",
+			Text = look.Icon,
+			TextSize = if touch then 36 else 30,
+			TextWrapped = false,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 24,
+			Parent = button,
+		})
+		buttons[choice] = button
 	end
 	rating = { row = row, buttons = buttons }
 end

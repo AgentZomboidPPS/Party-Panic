@@ -2185,7 +2185,9 @@ do
 			local gradient = item:FindFirstChildOfClass("UIGradient")
 			local top = gradient and gradient.Color.Keypoints[1].Value:ToHex() or "?"
 			local rim = item:FindFirstChildOfClass("UIStroke")
-			return `{item.Text} {item.Size.X.Offset}x{item.Size.Y.Offset} top #{top}{if rim and rim.Thickness > 2 then " LIT" else ""}`
+			local icon = item:FindFirstChild("Icon")
+			local text = if icon and icon:IsA("TextLabel") then icon.Text else "no icon"
+			return `{text} {item.Size.X.Offset}x{item.Size.Y.Offset} top #{top}{if rim and rim.Thickness > 2 then " LIT" else ""}`
 		end
 		ratingChecks[label] = {
 			row = if row and row:IsA("GuiObject") and row.Visible then "shown" else "hidden",
