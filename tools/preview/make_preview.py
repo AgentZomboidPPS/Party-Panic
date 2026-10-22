@@ -79,6 +79,9 @@ CAMERAS: dict[str, dict] = {
     # Low in front of the launch line: two wind-up toys just launched, flying toward the camera, the
     # players who wound them behind their pads.
     "MechaMarathon": {"yaw": 200, "pitch": 13, "distance": 26, "fov": 46, "shift": [-3, 4, -15], "raise": 9, "sway": 8},
+    # From the infield at a hurdle row: a rider hopping it on his hobby horse, the pack behind on the
+    # carrot panels, the grandstand beyond.
+    "RockinRaceway": {"yaw": 150, "pitch": 16, "distance": 26, "shift": [25, 0, -22], "raise": 6},
     # The turning field from a player's corner: lanes, veggies and bombs, the silo in the middle.
     "RakeItIn": {"look_at": "SiloBody", "yaw": 30, "pitch": 30, "distance": 50, "shift": [0, -4, 0], "raise": 2},
     # Over the cutters' shoulders: their boards with the dotted outlines half cut, the giant glass of
@@ -132,6 +135,7 @@ DUMP_AT: dict[str, float] = {
     "ParasolPlummet": 7,  # fallers still spread across the sky, a dozen lobs in the air
     "PrimeCut": 9,  # the first steak, a second before the chop: the knives lined up
     "PumpAndPop": 16,  # the balloons are big by now
+    "RockinRaceway": 4,  # the pack galloping down the home straight into the first panel rows
     "SkateEscape": 10,
     "Slaparazzi": 11.7,  # just before the second photo: everyone crowding into the frame's rings
     "Spleef": 12,  # holes dug in every floor, players on all three

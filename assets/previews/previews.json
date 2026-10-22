@@ -129,6 +129,16 @@
     "made": "2026-10-21",
     "width": 168
   },
+  "RockinRaceway": {
+    "columns": 6,
+    "decal": 130564954510610,
+    "fps": 8,
+    "frames": 24,
+    "height": 240,
+    "image": 133114200071093,
+    "made": "2026-10-22",
+    "width": 168
+  },
   "SharkBait": {
     "columns": 6,
     "decal": 97186706656994,
