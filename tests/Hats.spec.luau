@@ -82,7 +82,7 @@ test("the PUMPKIN HAT is a free HALLOWEEN PARTY reward nobody can buy", function
 	expectTrue(string.find(block, 'Slot = "Hat"', 1, true) ~= nil, "it's a hat")
 	expectTrue(string.find(block, 'Name = "Pumpkin Hat"', 1, true) ~= nil)
 	expectTrue(string.find(block, 'Event = "Halloween2026"', 1, true) ~= nil, "from the HALLOWEEN PARTY")
-	for _, field in { "Price =", "UnlockLevel =", "UnlockStat =", "Default =", "Vip =" } do
+	for _, field in { "Price =", "UnlockLevel =", "UnlockStat =", "Default =", "GoldLevel =" } do
 		expectTrue(not string.find(block, field, 1, true), `it has no {field}`)
 	end
 end)

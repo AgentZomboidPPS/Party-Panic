@@ -2,6 +2,9 @@
 -- currency not high."): exactly once, nothing lost, run the way DataService runs it (Load on every
 -- profile loaded from the DataStore, Stamp in every save), including a player whose last game was
 -- on a server still running the old code (live version 30) before the servers were restarted.
+-- The GOLD PASS (owner: "Also we do need a paid battle pass too. I like the current free one. But the
+-- paid one should also be insane."), which took the old VIP pass's place: its ownership is kept in the
+-- profile now (the VIP flag never was), so the field must load safely and never grant the pass.
 local TestKit = require("./TestKit")
 local ProfileMigration = require("../src/shared/Logic/ProfileMigration")
 local ProfileTemplate = require("../src/shared/Logic/ProfileTemplate")
@@ -33,6 +36,7 @@ for _, key in { "Podiums", "TeamWins", "RacePodiums", "GamesTried", "DaysPlayed"
 	OLD_TEMPLATE.Stats[key] = nil
 end
 OLD_TEMPLATE.Daily.FirstWinDay = nil
+OLD_TEMPLATE.GoldPass = nil -- (older code has never heard of the GOLD PASS)
 
 -- A session on a server still running version 30: its load (Reconcile, Version = 1), the coins it
 -- pays or spends (old scale), its save (no stamp: it doesn't know about it).
@@ -247,6 +251,89 @@ test("the player is told about their coins even if they leave before the message
 	-- No coins, nothing to say.
 	expectEqual((load(veteran(0))).Meta.CoinNotice, nil)
 	expectEqual((load(save(copy(ProfileTemplate)))).Meta.CoinNotice, nil)
+end)
+
+local NO_PASS = { Owned = false, Since = 0, CoinsTo = 1 }
+
+test("a save from before the GOLD PASS gets it as not owned, and nothing else changes", function()
+	-- Live version 30's shape (old coin scale) and a later one on the low scale, before the pass.
+	local data = load(veteran(1234))
+	expectEqual(data.GoldPass, NO_PASS)
+	expectEqual(data.Coins, 124, "the coins move as they always did")
+	local lowScale = save(data)
+	lowScale.GoldPass = nil
+	local again, report = load(lowScale)
+	expectEqual(report, {})
+	expectEqual(again.GoldPass, NO_PASS)
+	expectEqual(again.Coins, 124)
+	expectEqual(again.Owned, data.Owned)
+	expectEqual(again.Version, ProfileMigration.SchemaVersion, "no new Version for a new field")
+	expectEqual(ProfileTemplate.GoldPass, NO_PASS, "a new player doesn't own it")
+end)
+
+test("an owner's GOLD PASS survives saves, loads and a game on a server running older code", function()
+	local data = load(save(copy(ProfileTemplate)))
+	data.GoldPass = { Owned = true, Since = 1761100000, CoinsTo = 30 }
+	data.Owned.Hat_RoyalCrown = true
+	local again = load(save(data))
+	expectEqual(again.GoldPass, { Owned = true, Since = 1761100000, CoinsTo = 30 })
+	-- A game on a server still running older code (before the pass): it keeps the field it doesn't
+	-- know, so the pass is still theirs back here; the levels reached there pay their gold coins on
+	-- the next join (CoinsTo is still 30: Services/GoldPassService catches up).
+	local afterOld = oldServerSession(save(again), 0)
+	expectEqual(afterOld.GoldPass, { Owned = true, Since = 1761100000, CoinsTo = 30 })
+	local back = load(afterOld)
+	expectEqual(back.GoldPass, { Owned = true, Since = 1761100000, CoinsTo = 30 })
+	expectTrue(back.Owned.Hat_RoyalCrown, "its rewards stay theirs")
+end)
+
+test("loading never grants the GOLD PASS: anything but a real true is not owned", function()
+	for _, value in { "true", 1, 0, {}, "yes", false } do
+		local data = load({ EconomyVersion = 2, GoldPass = { Owned = value } })
+		expectEqual(data.GoldPass.Owned, false, `Owned = {tostring(value)}`)
+	end
+	local real = load({ EconomyVersion = 2, GoldPass = { Owned = true, Since = 5, CoinsTo = 40 } })
+	expectEqual(real.GoldPass, { Owned = true, Since = 5, CoinsTo = 40 })
+	-- A field that isn't a table at all: the default.
+	for _, broken in { 5, "Owned", true } do
+		expectEqual((load({ EconomyVersion = 2, GoldPass = broken })).GoldPass, NO_PASS, tostring(broken))
+	end
+end)
+
+test("the GOLD PASS's last paid level is a whole level, at least 1; its date is never negative", function()
+	local cases = {
+		{ -5, 1 },
+		{ 0, 1 },
+		{ 12.7, 12 },
+		{ "40", 40 },
+		{ 0 / 0, 1 },
+		{ math.huge, 1 },
+		{ "lots", 1 },
+		{ 100, 100 },
+	}
+	for _, case in cases do
+		local data = load({ EconomyVersion = 2, GoldPass = { Owned = true, CoinsTo = case[1] } })
+		expectEqual(data.GoldPass.CoinsTo, case[2], `CoinsTo {tostring(case[1])}`)
+	end
+	for _, since in { -3, 0 / 0, "soon", math.huge } do
+		local data = load({ EconomyVersion = 2, GoldPass = { Owned = true, Since = since } })
+		expectEqual(data.GoldPass.Since, 0, `Since {tostring(since)}`)
+	end
+end)
+
+test("the old VIP flag means nothing: a stray IsVip in a save is dropped and grants nothing", function()
+	local data = load({ EconomyVersion = 2, IsVip = true })
+	expectEqual(data.IsVip, nil)
+	expectEqual(data.GoldPass, NO_PASS)
+	-- Owning the two old VIP items (gold rewards now) doesn't make anyone an owner either.
+	local items = load({ EconomyVersion = 2, Owned = { Trail_VIP = true, Title_VIP = true } })
+	expectEqual(items.GoldPass.Owned, false)
+	expectTrue(items.Owned.Trail_VIP and items.Owned.Title_VIP, "but they keep them")
+end)
+
+test("what newer code keeps in the GOLD PASS field stays", function()
+	local data = load({ EconomyVersion = 2, GoldPass = { Owned = true, CoinsTo = 3, Seen = 7 } })
+	expectEqual(data.GoldPass, { Owned = true, Since = 0, CoinsTo = 3, Seen = 7 })
 end)
 
 test("GamesTried counts the games played that are in the game", function()

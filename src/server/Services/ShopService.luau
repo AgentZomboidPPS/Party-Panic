@@ -1,4 +1,5 @@
--- Coin shop purchases and equipping (design doc §10 "Shop layout").
+-- Coin shop purchases and equipping (design doc §10 "Shop layout"). A GOLD PASS reward (owner: "the
+-- paid one should also be insane") can't be bought with coins: it says where it's from.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -34,7 +35,7 @@ local function purchase(player: Player, itemId: any)
 		local how = if item.UnlockLevel
 			then `It's a Rewards Road reward: reach level {item.UnlockLevel}.`
 			elseif item.UnlockStat then `It's a career reward: {item.Description}`
-			elseif item.Vip then "It comes with the VIP pass."
+			elseif item.GoldLevel then `It's a GOLD PASS reward: level {item.GoldLevel} of the gold lane.`
 			else item.Description
 		Notifier.Send(player, `{item.Name} can't be bought with coins. {how}`, "warning")
 		return

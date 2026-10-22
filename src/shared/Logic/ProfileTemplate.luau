@@ -4,7 +4,8 @@
 -- (no Roblox APIs) so the Lune tests load saved profiles exactly the way the server does.
 -- Version 2 is the low coin scale and the career stats (owner: "Also lets balance the shop down. I
 -- want low currency not high." and "Also we need cool payoffs for players that keep playing the
--- game."); Logic/ProfileMigration moves older saves over, once.
+-- game."); Logic/ProfileMigration moves older saves over, once. The GOLD PASS's field (GoldPass)
+-- came later: older saves get its default (not owned), and loading makes it safe (ProfileMigration).
 -- Leaf module: no requires, no Roblox APIs.
 
 return {
@@ -57,6 +58,10 @@ return {
 	Medals = {} :: { [string]: number }, -- medal id -> the UTC day it was earned (MedalService)
 	Weekly = { Week = 0, Points = 0 }, -- the weekly leaderboard: which week, and its points (LeaderboardService)
 	Events = {} :: { [string]: { [string]: any } }, -- per limited-time event id, its progress (EventService)
+	-- The GOLD PASS (owner: "the paid one should also be insane"; Services/GoldPassService): whether
+	-- they own the game pass (kept, so a failed ownership check never takes it away), when they got it,
+	-- and the last level whose gold coins were paid (Logic/GoldLane: each level pays once).
+	GoldPass = { Owned = false, Since = 0, CoinsTo = 1 },
 	Tutorial = { Done = false },
 	Settings = {
 		ReducedEffects = false,

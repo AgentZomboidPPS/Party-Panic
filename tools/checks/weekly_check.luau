@@ -379,7 +379,6 @@ function __runWeekly()
 		Key = "Harness_7",
 		Data = DataService.Migrate({ EconomyVersion = 2 }),
 		CanSave = false,
-		IsVip = false,
 		Released = false,
 	}
 	task.wait(1) -- (the earlier rounds' toasts have gone)

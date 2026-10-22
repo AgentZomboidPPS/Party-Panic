@@ -4,12 +4,15 @@
 -- grand finale (owner: "Also we need cool payoffs for players that keep playing the game.").
 -- The HALLOWEEN PARTY's free rewards add candy, bats and a spooky knockout (owner: "Can you work
 -- on all of that?").
+-- The GOLD PASS's effects (owner: "the paid one should also be insane") live in their own module,
+-- GoldEffects, and play by name like these.
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local GoldEffects = require(script.Parent.Parent.GoldEffects)
 local State = require(script.Parent.Parent.State)
 
 local EffectsController = {}
@@ -210,7 +213,7 @@ EFFECTS.Bats = function(position, colors, scale)
 end
 
 function EffectsController.Play(name: string, position: Vector3, colors: { Color3 }?)
-	local effect = EFFECTS[name]
+	local effect = EFFECTS[name] or GoldEffects.Get(name)
 	if not effect then
 		return
 	end

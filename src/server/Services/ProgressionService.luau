@@ -6,6 +6,8 @@
 -- Second pass (review): most level-ups happen as a round's rewards are paid, when everyone's
 -- results window covers the screen and the players are still in the arena, so the "Lv 10!" pop
 -- waits until everyone is back in the lobby (Cleanup, after the new characters have spawned).
+-- The GOLD PASS (owner: "the paid one should also be insane"): an owner's level-up also gives the
+-- gold lane's reward, its cosmetics (CosmeticService) or its gold coins (GoldCoins on the card).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -35,6 +37,7 @@ export type Celebration = {
 	Level: number?, -- LevelUp: the new level
 	From: number?, -- LevelUp: the level before
 	Coins: number, -- coins this paid (already added)
+	GoldCoins: number?, -- LevelUp: the gold lane's coins on top (already added; GOLD PASS owners)
 	Items: { string }, -- cosmetics this unlocked (already owned)
 }
 
@@ -88,13 +91,20 @@ local function flushHeldPops()
 end
 
 -- Economy.AddXP calls this once the level went from `before` to `after` and the road's coins for
--- those levels (`coins`) were added. Several levels at once make one celebration.
-function ProgressionService.LevelUp(player: Player, before: number, after: number, coins: number)
+-- those levels (`coins`, and a GOLD PASS owner's `goldCoins`) were added. Several levels at once
+-- make one celebration.
+function ProgressionService.LevelUp(player: Player, before: number, after: number, coins: number, goldCoins: number?)
 	local unlocked = CosmeticService.CheckUnlocks(player, true)
 	CosmeticService.Refresh(player) -- the name tag shows the new level and its color
 	milestoneTelemetry(player, unlocked)
-	local payload: Celebration =
-		{ Kind = "LevelUp", Level = after, From = before, Coins = coins, Items = ids(unlocked) }
+	local payload: Celebration = {
+		Kind = "LevelUp",
+		Level = after,
+		From = before,
+		Coins = coins,
+		GoldCoins = if goldCoins and goldCoins > 0 then goldCoins else nil,
+		Items = ids(unlocked),
+	}
 	celebrateRemote:FireClient(player, payload)
 	if HOLD_IN[GameState.Get("Phase") or "Waiting"] then
 		heldPops[player] = math.max(heldPops[player] or 0, after)

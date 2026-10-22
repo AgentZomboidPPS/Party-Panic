@@ -156,7 +156,6 @@ do
 				Key = "Harness_Late",
 				Data = data,
 				CanSave = false,
-				IsVip = false,
 				Released = false,
 			}
 			MedalService.ProfileLoaded(late)
