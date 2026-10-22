@@ -20,6 +20,8 @@
 --                 PLAY AGAIN vote (Services/ReplayService); each voter's answer is their PP_Replay
 --   Replay        the game a PLAY AGAIN vote chose to play again straight after this round's results,
 --                 from the end of those results until the replay's own results ("" if none)
+--   Parties       JSON of every party's look and streak, by party id (a player's PP_Party):
+--                 { Name, Color, Emblem, Streak } ("" with no parties): see Services/PartyService
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -56,6 +58,7 @@ function GameState.Folder(): Folder
 			created:SetAttribute("HallOfFame", "")
 			created:SetAttribute("ReplayVote", "")
 			created:SetAttribute("Replay", "")
+			created:SetAttribute("Parties", "")
 			created.Parent = ReplicatedStorage
 			folder = created
 		end

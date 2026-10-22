@@ -19,6 +19,7 @@ end
 local Teams = load("src/shared/Teams.luau", "Teams")
 local StampGrid = load("src/shared/Logic/StampGrid.luau", "StampGrid")
 local Struggle = load("src/shared/Logic/Struggle.luau", "Struggle")
+local PartyIdentity = load("src/shared/Logic/PartyIdentity.luau", "PartyIdentity")
 
 local BLANK = { "★", "✕", "✚", "☾", "◐", "✦", "☆", "☰" }
 
@@ -52,6 +53,16 @@ test("Marks: Struggle's orbs each have their own glyph", function()
 		glyphs[slot.Name] = slot.Glyph
 	end
 	checkSet("Struggle.SLOTS", glyphs)
+end)
+
+-- A party's emblem tells parties apart beside their colour (owner: "Also make the party system
+-- insane. I want it to look super epic.").
+test("Marks: party emblems each have their own icon", function()
+	local icons = {}
+	for _, emblem in PartyIdentity.Emblems do
+		icons[emblem.Name] = emblem.Icon
+	end
+	checkSet("PartyIdentity.Emblems", icons)
 end)
 
 return nil
