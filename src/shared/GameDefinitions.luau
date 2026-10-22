@@ -196,7 +196,6 @@ local list: { GameDefinition } = {
 		Duration = 30,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "ParasolPlummet",
