@@ -48,6 +48,10 @@ Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", 
 and shows a level-up, a career milestone and a returning player's celebration ("LevelUp",
 "LevelUp2", "Milestone", "Welcome"). After the round a level-up card shows while the last
 first-join tip is due; the result's "tipChecks" says what was on screen while it was up and after.
+Medals (MedalController): a MEDAL EARNED card ("Medal"), the medals a returning player had already
+earned as one card ("Medals earlier"), the Rewards screen's MEDALS tab ("Rewards Medals"), and the
+medal wall lit up for the player; the result's "medalChecks" says what showed when (a card waits
+out the vote and steps aside for a level-up card).
 """
 
 import argparse
@@ -1035,6 +1039,135 @@ do
 	end
 	__fire("LevelPop", workspace, 3) -- no head: nothing happens
 end
+-- Medals (MedalController): the player has a few; a medal won just before the vote waits it out,
+-- shows in the lobby ("Medal"), steps aside for a level-up card and comes back; several make one
+-- card; the ones a returning player had already earned make one card ("Medals earlier"); the
+-- Rewards screen's MEDALS tab ("Rewards Medals"); the medal wall lit for this player (stand-in
+-- slots when the place's lobby is older than this client).
+local medalChecks = {}
+do
+	local CollectionService = game:GetService("CollectionService")
+	local MedalCards = __require("Client/Controllers/MedalController")
+	local Celebrations = __require("Client/Controllers/CelebrationController")
+	local function card()
+		local layer = __playerGui:FindFirstChild("PartyPanicMedals")
+		local shown = layer and layer:FindFirstChild("MedalCard")
+		local texts = {}
+		for _, item in if shown then shown:GetDescendants() else {} do
+			if (item:IsA("TextLabel") or item:IsA("TextButton")) and item.Text ~= "" then
+				table.insert(texts, item.Text)
+			end
+		end
+		return if shown then table.concat(texts, " | ") else "none"
+	end
+	if #CollectionService:GetTagged("MedalSlot") == 0 then
+		medalChecks.wallStandIn = true
+		for index, id in { "FirstWin", "WinSpleef" } do
+			local model = Instance.new("Model")
+			model.Name = "Medal_" .. id
+			local disc = Instance.new("Part")
+			disc.Name = "Disc"
+			disc.Shape = Enum.PartType.Cylinder
+			disc.Anchored = true
+			disc.Size = Vector3.new(0.24, 1.44, 1.44)
+			disc.CFrame = CFrame.new(-60 + index * 2, 6, 24)
+			disc.Parent = model
+			local ribbon = disc:Clone()
+			ribbon.Name = "Ribbon"
+			ribbon.Shape = Enum.PartType.Block
+			ribbon.Size = Vector3.new(0.5, 0.9, 0.05)
+			ribbon.Parent = model
+			model:SetAttribute("MedalId", id)
+			model.Parent = workspace
+			model:AddTag("MedalSlot")
+		end
+		local plaque = Instance.new("Part")
+		plaque.Name = "MedalCount"
+		plaque.Anchored = true
+		plaque.Size = Vector3.new(9, 0.7, 0.1)
+		plaque.Parent = workspace
+		plaque:AddTag("MedalCount")
+	end
+	local today = math.floor(os.time() / 86400)
+	snapshot.Medals = { FirstWin = today - 40, TenWins = today - 3, CupChampion = today, WinSpleef = nil, WinFireRope = today - 400, WinHexMeltdown = today }
+	__fire("ProfileData", snapshot)
+	task.wait(0.8)
+	local lit = {}
+	for _, model in CollectionService:GetTagged("MedalSlot") do
+		local disc = model:FindFirstChild("Disc")
+		local id = model:GetAttribute("MedalId")
+		if disc and (id == "FirstWin" or id == "WinSpleef") then
+			table.insert(lit, `{id}: {disc.Material.Name} {disc.Color:ToHex()}`)
+		end
+	end
+	table.sort(lit)
+	medalChecks.wall = table.concat(lit, "; ")
+	local plaques = {}
+	for _, gui in __playerGui:GetChildren() do
+		if gui.Name == "MedalCount" then
+			local text = gui:FindFirstChildWhichIsA("TextLabel", true)
+			table.insert(plaques, if text then text.Text else "?")
+		end
+	end
+	medalChecks.plaque = table.concat(plaques, " / ")
+	step = "medal card"
+	GameState.Set("Phase", "Voting")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 12)
+	__fire("MedalEarned", "WinFireRope", false)
+	task.wait(1.2)
+	medalChecks.duringVote = card()
+	GameState.Set("Phase", "Intermission")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 20)
+	task.wait(1.6)
+	medalChecks.backInLobby = card()
+	snap("Medal")
+	__fire("Celebrate", { Kind = "Milestone", Coins = 0, Items = { "Title_Veteran" } })
+	task.wait(0.6)
+	medalChecks.levelUpCard = card()
+	Celebrations.Dismiss()
+	task.wait(1.4)
+	medalChecks.afterLevelUpCard = card()
+	MedalCards.Dismiss()
+	task.wait(0.6)
+	for _, id in { "WinHexMeltdown", "EveryGame", "WinSpleef" } do
+		__fire("MedalEarned", id, false)
+	end
+	task.wait(1.2)
+	medalChecks.several = card()
+	MedalCards.Dismiss()
+	task.wait(0.6)
+	for _, id in { "FirstWin", "TenWins", "FiftyWins" } do
+		__fire("MedalEarned", id, true)
+	end
+	task.wait(1.2)
+	medalChecks.earlier = card()
+	snap("Medals earlier")
+	MedalCards.Dismiss()
+	task.wait(0.4)
+	step = "OpenScreen Rewards Medals"
+	State.OpenScreen:Fire("Rewards", "Medals")
+	task.wait(1)
+	snap("Rewards Medals")
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
+	medalChecks.afterAll = card()
+	-- The PARTY CUP's final podium (PP_CupPodium) and the results card (PP_ResultsShowing) have the
+	-- screen: a medal waits for both to clear.
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 20)
+	__player:SetAttribute("PP_CupPodium", true)
+	__fire("MedalEarned", "CupChampion", false)
+	task.wait(1.2)
+	medalChecks.duringCupPodium = card()
+	__player:SetAttribute("PP_ResultsShowing", true)
+	__player:SetAttribute("PP_CupPodium", nil)
+	task.wait(1)
+	medalChecks.duringResultsCard = card()
+	__player:SetAttribute("PP_ResultsShowing", nil)
+	task.wait(1.2)
+	medalChecks.afterPodiumAndResults = card()
+	MedalCards.Dismiss()
+	task.wait(0.4)
+end
 phase("Voting", 12, function()
 	GameState.SetJSON("VoteOptions", {
 		{ Id = longNames[1], Mystery = false },
@@ -1699,6 +1832,7 @@ return game:GetService("HttpService"):JSONEncode({
 	sitOutChecks = sitOutChecks,
 	tipChecks = tipChecks,
 	cupChecks = cupChecks,
+	medalChecks = medalChecks,
 	textReport = __textReport,
 	portals = __portals,
 })
