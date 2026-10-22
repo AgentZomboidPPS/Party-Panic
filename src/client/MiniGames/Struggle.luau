@@ -15,31 +15,177 @@
 -- Your own press draws your swing at once, but only when the server will take it: not during the
 -- 3-2-1, the wait after a swing or while you're knocked down; if the server still turns it down it
 -- says so ("Refused") and the swing is dropped. A charge held to the end is let go by the server.
+--
+-- Bats in hand (owner: "Bats on struggle arent actually being held they are floating. plus they dont
+-- even look like bats."): the bat is a real bat now (knob, taped handle, flare, thick barrel) and is
+-- held in every character's right hand, players and bots, R15 and R6: each of its pieces is jointed to
+-- the hand (RightHand, or R6's "Right Arm") at the fist, so it can't drift from it. The swing is the
+-- arm's: every frame, just before physics, the body's turn, the right arm and the bat's angle in the
+-- fist are posed from the same cues as before (Shared/Logic/Struggle's poses: held up ready, wound
+-- back over the shoulder, further while a charge builds, then a level sweep round the front whose tip
+-- follows the rule's reach). Every screen poses everyone from those cues, so all screens agree. A
+-- swoosh follows the barrel through the sweep (not with reduced effects).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local GameState = require(ReplicatedStorage.Shared.GameState)
 local Rules = require(ReplicatedStorage.Shared.Logic.Struggle)
 
+local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local Struggle = {}
 
-local REST_BACK = 0.3 -- seconds the bat takes back to rest after a strike
+local REST_BACK = 0.3 -- seconds the bat takes back to ready after a strike
+local SETTLE = 0.15 -- seconds a pose eases over when a swing is cut short (hit, refused)
+local HIPS = 0.4 -- an R15 body turns this share of a swing at the hips, the rest at the waist
+local SWOOSH = 0.14 -- seconds the swoosh behind the barrel lasts
 local FLY = 0.25 -- seconds a picked-up orb takes to fly to its taker
 local ORB_SCALE = 1.25 -- orbs are drawn a little bigger than their meshes (easy to spot on phones)
+local rad = math.rad
 
--- Bat poses in the holder's root space (the bat's pivot is the knob; it points along its +Y).
-local REST = CFrame.new(1.05, -0.1, -0.35) * CFrame.Angles(math.rad(55), 0, math.rad(-12))
-local WIND = CFrame.new(1.25, 0.55, 0.15) * CFrame.Angles(math.rad(105), math.rad(-25), math.rad(-35))
--- The strike sweeps the bat through exactly the rule's arc (+-ARC), its knob 0.4 in front of the
--- swinger's middle, so the tip passes RANGE out (RANGE_CHARGED with the longer charged bat).
-local SWEEP_FROM, SWEEP_TO = -Rules.ARC, Rules.ARC
+-- A joint a pose turns: a Motor6D, or the AnimationConstraint newer R15 bodies have instead (both
+-- carry a Transform the Animator writes each frame before PreSimulation, where the pose overwrites
+-- it). Base is the joint's own axes in its first part (Motor6D C0, or the first attachment's), so a
+-- turn given in that part's axes lands the same on any rig.
+type Joint = { Instance: Instance, Base: CFrame, Written: CFrame?, Under: CFrame? }
 
-local function sweepPose(yaw: number): CFrame
-	return CFrame.new(0, 0.15, -0.4) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+-- What poses a character: the joints, and the hand (RightHand, or R6's "Right Arm") with the fist in
+-- its space, the bat's axis coming out of the fist's front (+Y).
+type Rig = {
+	Character: Model,
+	R6: boolean,
+	Hand: BasePart,
+	Fist: CFrame,
+	Turn: { { Joint: Joint, Share: number } },
+	Shoulder: Joint?,
+	Elbow: Joint?,
+	Wrist: Joint?,
+}
+
+local function jointOf(part: Instance?, name: string): Joint?
+	local joint = part and part:FindFirstChild(name)
+	if joint and joint:IsA("Motor6D") then
+		return { Instance = joint, Base = joint.C0.Rotation }
+	elseif joint and joint:IsA("AnimationConstraint") then
+		local attachment = joint.Attachment0
+		return { Instance = joint, Base = if attachment then attachment.CFrame.Rotation else CFrame.identity }
+	end
+	return nil
+end
+
+-- The fist: where a tool's grip goes (the hand's grip attachment), the bat's axis out of its front.
+local function fistOf(hand: BasePart): CFrame
+	local attachment = hand:FindFirstChild("RightGripAttachment")
+	local at = if attachment and attachment:IsA("Attachment")
+		then attachment.Position
+		else Vector3.new(0, -hand.Size.Y / 2, 0)
+	return CFrame.new(at) * CFrame.Angles(rad(-90), 0, 0)
+end
+
+local function rigOf(character: Model): Rig?
+	local hand = character:FindFirstChild("RightHand")
+	if hand and hand:IsA("BasePart") then
+		local root = jointOf(character:FindFirstChild("LowerTorso"), "Root")
+		local waist = jointOf(character:FindFirstChild("UpperTorso"), "Waist")
+		local turn = {}
+		if root then
+			table.insert(turn, { Joint = root, Share = if waist then HIPS else 1 })
+		end
+		if waist then
+			table.insert(turn, { Joint = waist, Share = if root then 1 - HIPS else 1 })
+		end
+		return {
+			Character = character,
+			R6 = false,
+			Hand = hand,
+			Fist = fistOf(hand),
+			Turn = turn,
+			Shoulder = jointOf(character:FindFirstChild("RightUpperArm"), "RightShoulder"),
+			Elbow = jointOf(character:FindFirstChild("RightLowerArm"), "RightElbow"),
+			Wrist = jointOf(hand, "RightWrist"),
+		}
+	end
+	local arm = character:FindFirstChild("Right Arm")
+	if arm and arm:IsA("BasePart") then
+		local root = jointOf(character:FindFirstChild("HumanoidRootPart"), "RootJoint")
+		return {
+			Character = character,
+			R6 = true,
+			Hand = arm,
+			Fist = fistOf(arm),
+			Turn = if root then { { Joint = root, Share = 1 } } else {},
+			Shoulder = jointOf(character:FindFirstChild("Torso"), "Right Shoulder"),
+		}
+	end
+	return nil
+end
+
+-- Turns a joint by `rotation` (in its first part's axes, about the joint), instead of the Animator.
+local function turn(joint: Joint, rotation: CFrame)
+	local value = joint.Base:Inverse() * rotation * joint.Base;
+	(joint.Instance :: any).Transform = value
+	joint.Written = value
+end
+
+-- Turns a joint on top of what the Animator gave it this frame (a walk's bob stays). If nothing
+-- wrote it since our last turn, the Animator's last one is used again (so turns never pile up).
+local function turnOver(joint: Joint, rotation: CFrame)
+	local current = (joint.Instance :: any).Transform :: CFrame
+	local written = joint.Written
+	local under = if written and current:FuzzyEq(written, 1e-5) then joint.Under or CFrame.identity else current
+	local value = under * joint.Base:Inverse() * rotation * joint.Base
+	joint.Under = under;
+	(joint.Instance :: any).Transform = value
+	joint.Written = value
+end
+
+local function release(joint: Joint?)
+	if joint and joint.Written then
+		pcall(function()
+			(joint.Instance :: any).Transform = joint.Under or CFrame.identity
+		end)
+		joint.Written, joint.Under = nil, nil
+	end
+end
+
+local function releaseRig(rig: Rig)
+	for _, entry in rig.Turn do
+		release(entry.Joint)
+	end
+	release(rig.Shoulder)
+	release(rig.Elbow)
+	release(rig.Wrist)
+end
+
+-- Poses the body (turn, right arm) and returns the bat's tilt in the fist (degrees).
+local function poseRig(rig: Rig, pose: Rules.Pose): number
+	for _, entry in rig.Turn do
+		turnOver(entry.Joint, CFrame.Angles(0, rad(pose.Twist * entry.Share), 0))
+	end
+	local arm = CFrame.Angles(0, rad(pose.Yaw), 0)
+		* CFrame.Angles(rad(pose.Pitch), 0, 0)
+		* CFrame.Angles(0, rad(pose.Roll), 0)
+	local tilt = pose.Tilt
+	if rig.R6 then
+		-- No elbow: half the bend at the shoulder, half in the fist (the bat ends up the same way).
+		arm *= CFrame.Angles(rad(pose.Elbow / 2), 0, 0)
+		tilt += pose.Elbow / 2
+	else
+		if rig.Elbow then
+			turn(rig.Elbow, CFrame.Angles(rad(pose.Elbow), 0, 0))
+		end
+		if rig.Wrist then
+			turn(rig.Wrist, CFrame.identity)
+		end
+	end
+	if rig.Shoulder then
+		turn(rig.Shoulder, arm)
+	end
+	return tilt
 end
 
 local function partsOf(model: Instance): { BasePart }
@@ -202,12 +348,29 @@ function Struggle.Start(api)
 	local safeUntil: { [number]: number } = {}
 
 	-- Bats and head tags ---------------------------------------------------------------------------
-	type Gear = {
-		Bat: Model?,
+
+	-- A bat: each piece jointed to the hand at the fist (Offset: the piece in the bat's frame at the
+	-- fist, at its normal size), so it is wherever the hand is. Scale draws a charged bat longer.
+	type Piece = { Part: BasePart, Size: Vector3, Offset: CFrame, Motor: Motor6D }
+	type Bat = {
+		Model: Model,
+		Pieces: { Piece },
 		Foam: { BasePart },
+		Scale: number,
+		Hand: BasePart?,
+		Swoosh: Trail?,
+		Ends: { { Attachment: Attachment, Along: number, Offset: CFrame } },
+	}
+	type Gear = {
+		Bat: Bat?,
+		Rig: Rig?,
+		Pose: Rules.Pose,
+		From: Rules.Pose?, -- easing from here (a swing cut short) since FromAt
+		FromAt: number,
+		Swing: any, -- the swing being drawn (to notice one cut short)
+		Shake: number,
 		Disc: Part,
 		Fan: Model?,
-		BatScale: number,
 		Tag: BillboardGui,
 		Count: TextLabel,
 		Slot: number,
@@ -217,8 +380,11 @@ function Struggle.Start(api)
 	local function dropGear(userId: number)
 		local entry = gear[userId]
 		if entry then
+			if entry.Rig then
+				releaseRig(entry.Rig)
+			end
 			if entry.Bat then
-				entry.Bat:Destroy()
+				entry.Bat.Model:Destroy()
 			end
 			entry.Disc:Destroy()
 			if entry.Fan then
@@ -229,24 +395,111 @@ function Struggle.Start(api)
 		end
 	end
 
-	-- A bat in the slot's colour (nil until the server's template has arrived).
-	local function makeBat(slotIndex: number): (Model?, { BasePart })
+	-- Places the swoosh's ends along the bat (from the fist) at the bat's current size.
+	local function placeEnds(bat: Bat)
+		local reach = (Rules.BAT_LENGTH - Rules.BAT_GRIP) * bat.Scale
+		for _, entry in bat.Ends do
+			local offset = entry.Offset
+			local scaled = CFrame.new(offset.Position * bat.Scale) * offset.Rotation
+			entry.Attachment.Position = scaled:PointToObjectSpace(Vector3.new(0, reach * entry.Along, 0))
+		end
+	end
+
+	-- A bat in the slot's colour (nil until the server's template has arrived), not yet in a hand.
+	local function makeBat(slotIndex: number): Bat?
 		local slot = Rules.SLOTS[slotIndex] or Rules.SLOTS[1]
-		local foam = {}
 		local batTemplate = template("StruggleBat")
 		if not batTemplate then
-			return nil, foam
+			return nil
 		end
-		local copy = batTemplate:Clone()
-		quiet(copy)
+		local copy = batTemplate:Clone() :: Model
+		-- The bat's frame at the fist: its pivot is the knob's end, its axis +Y.
+		local fist = copy:GetPivot() * CFrame.new(0, Rules.BAT_GRIP, 0)
+		local bat: Bat = { Model = copy, Pieces = {}, Foam = {}, Scale = 1, Ends = {} }
+		local barrel: BasePart? = nil
 		for _, part in partsOf(copy) do
+			part.Anchored = false
+			part.Massless = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.CastShadow = false
 			if part.Name == "Foam" then
 				part.Color = slot.Color
-				table.insert(foam, part)
+				table.insert(bat.Foam, part)
+				if not barrel or part.Size.Magnitude > barrel.Size.Magnitude then
+					barrel = part
+				end
 			end
+			local offset = fist:ToObjectSpace(part.CFrame)
+			local motor = Instance.new("Motor6D")
+			motor.Name = "StruggleGrip"
+			motor.C1 = offset:Inverse()
+			motor.Part1 = part
+			motor.Parent = part
+			table.insert(bat.Pieces, { Part = part, Size = part.Size, Offset = offset, Motor = motor })
 		end
-		copy.Parent = api.World
-		return copy :: Model, foam
+		-- The swoosh: a ribbon left behind by the barrel's top half through a sweep.
+		if barrel then
+			local offset = fist:ToObjectSpace(barrel.CFrame)
+			local ends = {}
+			for _, along in { 0.62, 0.97 } do
+				local attachment = Instance.new("Attachment")
+				attachment.Name = "Swoosh"
+				attachment.Parent = barrel
+				table.insert(bat.Ends, { Attachment = attachment, Along = along, Offset = offset })
+				table.insert(ends, attachment)
+			end
+			local swoosh = Instance.new("Trail")
+			swoosh.Name = "Swoosh"
+			swoosh.Attachment0, swoosh.Attachment1 = ends[1], ends[2]
+			swoosh.Lifetime = SWOOSH
+			swoosh.MinLength = 0.05
+			swoosh.LightEmission = 0.5
+			swoosh.Color = ColorSequence.new(Color3.new(1, 1, 1), slot.Color)
+			swoosh.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.35),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			swoosh.Enabled = false
+			swoosh.Parent = barrel
+			bat.Swoosh = swoosh
+			placeEnds(bat)
+		end
+		return bat
+	end
+
+	-- A charged bat is drawn longer, from the fist (so the fist still holds the handle).
+	local function scaleBat(bat: Bat, scale: number)
+		if bat.Scale == scale then
+			return
+		end
+		bat.Scale = scale
+		for _, piece in bat.Pieces do
+			piece.Part.Size = piece.Size * scale
+			local offset = piece.Offset
+			piece.Motor.C1 = (CFrame.new(offset.Position * scale) * offset.Rotation):Inverse()
+		end
+		placeEnds(bat)
+	end
+
+	-- Into this hand (or out of the world while there's none: it never floats free).
+	local function holdBat(bat: Bat, hand: BasePart?)
+		if bat.Hand == hand and (hand == nil) == (bat.Model.Parent == nil) then
+			return
+		end
+		bat.Hand = hand
+		if not hand then
+			bat.Model.Parent = nil
+			for _, piece in bat.Pieces do
+				piece.Motor.Part0 = nil
+			end
+			return
+		end
+		for _, piece in bat.Pieces do
+			piece.Motor.Part0 = hand
+		end
+		bat.Model.Parent = api.World
 	end
 
 	-- The reach fan on the sand (radius 1 as shipped; scaled to the swing's RANGE when drawn).
@@ -271,7 +524,6 @@ function Struggle.Start(api)
 
 	local function makeGear(userId: number, slotIndex: number): Gear
 		local slot = Rules.SLOTS[slotIndex] or Rules.SLOTS[1]
-		local bat, foam = makeBat(slotIndex)
 		local disc = Instance.new("Part")
 		disc.Name = "Reach"
 		disc.Shape = Enum.PartType.Cylinder
@@ -309,11 +561,12 @@ function Struggle.Start(api)
 			Children = { UIKit.TextStroke(0.1) },
 		})
 		local entry: Gear = {
-			Bat = bat,
-			Foam = foam,
+			Bat = makeBat(slotIndex),
+			Pose = Rules.READY,
+			FromAt = -math.huge,
+			Shake = 0,
 			Disc = disc,
 			Fan = makeFan(slotIndex),
-			BatScale = 1,
 			Tag = tag,
 			Count = count,
 			Slot = slotIndex,
@@ -797,7 +1050,11 @@ function Struggle.Start(api)
 			if not root then
 				if entry then
 					if entry.Bat then
-						entry.Bat.Parent = nil
+						holdBat(entry.Bat, nil)
+					end
+					if entry.Rig then
+						releaseRig(entry.Rig)
+						entry.Rig = nil
 					end
 					if entry.Fan then
 						for _, part in partsOf(entry.Fan) do
@@ -816,10 +1073,17 @@ function Struggle.Start(api)
 			end
 			local g = entry :: Gear
 			if not g.Bat then
-				g.Bat, g.Foam = makeBat(slotIndex)
+				g.Bat = makeBat(slotIndex)
 			end
-			if g.Bat and g.Bat.Parent == nil then
-				g.Bat.Parent = api.World
+			-- The body that holds it (a new one after a respawn).
+			if not g.Rig or g.Rig.Character ~= character then
+				if g.Rig then
+					releaseRig(g.Rig)
+				end
+				g.Rig = rigOf(character :: Model)
+			end
+			if g.Bat then
+				holdBat(g.Bat, if g.Rig then g.Rig.Hand else nil)
 			end
 			g.Tag.Enabled = true
 			g.Tag.Adornee = root
@@ -829,45 +1093,68 @@ function Struggle.Start(api)
 
 			local rootCF = root.CFrame
 			local swing = swings[userId]
-			local pose = REST * CFrame.new(0, math.sin(clock * 4 + userId % 7) * 0.05, 0)
+			local pose = Rules.READY
 			local glow = false
+			local swooshing = false
 			local reach = 0
 			if swing then
 				local strike = swing.Strike
 				if strike and now >= strike + Rules.SWEEP + REST_BACK then
 					swings[userId] = nil
+					swing = nil
 				elseif strike and now >= strike + Rules.SWEEP then
 					local k = (now - strike - Rules.SWEEP) / REST_BACK
-					pose = sweepPose(SWEEP_TO):Lerp(REST, k)
+					pose = Rules.BlendPose(
+						Rules.SweepPose(Rules.SWEEP_TO, swing.Charged),
+						Rules.READY,
+						k * k * (3 - 2 * k)
+					)
 				elseif strike and now >= strike then
-					local k = (now - strike) / Rules.SWEEP
-					k = 1 - (1 - k) * (1 - k)
-					pose = sweepPose(SWEEP_FROM + (SWEEP_TO - SWEEP_FROM) * k)
+					-- From the wind-up as it was at the strike, round through the arc.
+					local from = Rules.WindPose(strike - swing.Wind)
+					pose = Rules.StrikePose(from, (now - strike) / Rules.SWEEP, swing.Charged)
 					glow = swing.Charged
+					swooshing = true
 				elseif now >= swing.Wind then
 					local held_ = now - swing.Wind
-					local k = math.clamp(held_ / 0.15, 0, 1)
 					local charge = math.clamp(held_ / Rules.CHARGE, 0, 1)
 					glow = held_ >= Rules.CHARGE or swing.Charged
-					local shake = if glow then CFrame.Angles(0, 0, math.sin(clock * 40) * 0.06) else CFrame.identity
-					pose = REST:Lerp(WIND, k) * shake
+					pose = Rules.WindPose(held_)
 					-- (A swing that never got its Strike cue is gone after its longest hold.)
 					if not strike and held_ > Rules.MAX_HOLD + 1 then
 						swings[userId] = nil
+						swing = nil
 					end
 					reach = Rules.RANGE + (Rules.RANGE_CHARGED - Rules.RANGE) * charge
 				end
 			end
-			-- A charged swing's bat is drawn longer, to its longer reach.
-			local batScale = if glow then Rules.CHARGED_BAT else 1
-			if g.Bat then
-				if g.BatScale ~= batScale then
-					scaleBy(g.Bat, batScale)
-					g.BatScale = batScale
+			-- A swing cut short (knocked out of it, refused) eases back instead of jumping. (A swing gone
+			-- at the end of its way back is at READY already; the server's Strike cue taking over from
+			-- its Wind cue is the same swing going on.)
+			if swing ~= g.Swing then
+				if swing == nil and g.Swing ~= nil then
+					g.From, g.FromAt = g.Pose, clock
 				end
-				g.Bat:PivotTo(rootCF * pose)
-				for _, part in g.Foam do
+				g.Swing = swing
+			end
+			if g.From and clock - g.FromAt < SETTLE then
+				local k = (clock - g.FromAt) / SETTLE
+				pose = Rules.BlendPose(g.From :: Rules.Pose, pose, k * k * (3 - 2 * k))
+			else
+				g.From = nil
+			end
+			g.Pose = pose
+			-- A charge held to the full shakes the bat in the fist.
+			g.Shake = if glow and not swooshing then math.sin(clock * 40) * 3.5 else 0
+			-- A charged swing's bat is drawn longer, to its longer reach.
+			if g.Bat then
+				scaleBat(g.Bat, if glow then Rules.CHARGED_BAT else 1)
+				for _, part in g.Bat.Foam do
 					part.Material = if glow then Enum.Material.Neon else Enum.Material.SmoothPlastic
+				end
+				local swoosh = g.Bat.Swoosh
+				if swoosh then
+					swoosh.Enabled = swooshing and not State.ReducedEffects()
 				end
 			end
 			-- The reach, drawn as the rule: a +-ARC fan of radius RANGE in front and the CLOSE circle
@@ -958,8 +1245,41 @@ function Struggle.Start(api)
 		end
 	end)
 
-	-- Pooled orbs and the template copies go when the round ends (the rest is in api.World).
+	-- Just before physics, every frame (after the Animator): everyone's body in their pose, and the
+	-- bat at its angle in their fist.
+	local ended = false
+	local poseStep = (RunService :: any).PreSimulation or RunService.Stepped
+	api:Track(poseStep:Connect(function()
+		if ended then
+			return
+		end
+		for _, g in gear do
+			local rig, bat = g.Rig, g.Bat
+			if not rig or not rig.Character.Parent then
+				continue
+			end
+			-- (No bat in the hand yet: the arm is the Animator's.)
+			if not bat or bat.Hand ~= rig.Hand then
+				releaseRig(rig)
+				continue
+			end
+			local tilt = poseRig(rig, g.Pose)
+			local fist = rig.Fist * CFrame.Angles(rad(tilt), 0, rad(g.Shake))
+			for _, piece in bat.Pieces do
+				piece.Motor.C0 = fist
+			end
+		end
+	end))
+
+	-- Pooled orbs and the template copies go when the round ends (the rest is in api.World), and
+	-- every body is the Animator's again.
 	api:Track(function()
+		ended = true
+		for _, g in gear do
+			if g.Rig then
+				releaseRig(g.Rig)
+			end
+		end
 		for _, pool in pools do
 			for _, model in pool do
 				model:Destroy()

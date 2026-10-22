@@ -44,6 +44,12 @@
 --     boards, rails and posts whose collision is their own drawn shape. Everything behind it (tram,
 --     scoreboard, benches, banners) is scenery nobody can reach.
 --
+-- Bats in hand (owner: "Bats on struggle arent actually being held they are floating. plus they dont
+-- even look like bats."): the bat is a real bat (knob, taped handle, flare, thick barrel; Props
+-- StruggleBat), and clients draw it in every character's right hand and swing the arm with it, from
+-- the same Wind / Strike cues (client half and Shared/Logic/Struggle's poses, whose tip follows the
+-- reach below). Nothing here changed: the server's swings and hits are judged exactly as before.
+--
 -- Sweep pass (owner: "Let's do a full bug and clean sweep."): the leave hook is set before anyone is
 -- placed. Set after ctx:SpawnAll, it missed anyone the round couldn't place (SpawnAll waits out a
 -- failed spawn, and a failure counts as leaving) or who left meanwhile: they kept their 20 orbs on
