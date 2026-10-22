@@ -57,11 +57,12 @@
 -- fall animation). Now, where physics runs (self.physics), falls are physics: blocks go on the
 -- server at their time and everyone drops by their own device's physics (bots by the server's).
 -- The server's drop stays only as a net against hovering: someone at a floor's height with no block
--- within their body's reach (HOLD_FOOT) for HOLD_GRACE (people add their ping). Which blocks a step
--- starts is unchanged. At the buzzer, anyone already through the last floor (by physics) is ranked
--- out at the moment they left a floor, as a server drop through it was. Each server drop counts on
--- the one dropped (PP_Drops) and each velocity clamp on a bot (PP_Clamps), for the devices' bot
--- reports (Controllers/BotWatchController).
+-- within their body's reach (HOLD_FOOT) for HOLD_GRACE (people add their ping). Steps start the same
+-- blocks as before, and a block that holds someone only by its edge (further than FOOT, within
+-- HOLD_FOOT) is started too, so nobody stands on a block without starting it. At the buzzer, anyone
+-- already through the last floor (by physics) is ranked out at the moment they left a floor, as a
+-- server drop through it was. Each server drop counts on the one dropped (PP_Drops) and each
+-- velocity clamp on a bot (PP_Clamps), for the devices' bot reports (Controllers/BotWatchController).
 
 local RunService = game:GetService("RunService")
 
@@ -723,12 +724,25 @@ function Spleef:_falls(dt: number)
 		elseif not outside then
 			self:_step(player, floor, position, dropAt, fresh)
 		end
-		-- Held up here? Where physics runs, by anything within the body's reach (physics drops anyone
-		-- it doesn't hold, long before the net below); on the test servers, by the footprint rule.
+		-- Held up here? On the test servers, by the footprint rule. Where physics runs, also by any
+		-- block within the body's reach (physics drops anyone it doesn't hold, long before the net
+		-- below); a block that holds someone only by its edge is stepped on too, so nobody stands on
+		-- a block without starting it.
+		if self:Supported(floor, position) then
+			self.unsupported[player] = nil
+			continue
+		end
 		local reach = if self.physics
 			then math.max(HOLD_FOOT, Vector2.new(root.Size.X, root.Size.Z).Magnitude / 2 + 0.5)
 			else nil
-		if self:Supported(floor, position, reach) then
+		if reach and self:Supported(floor, position, reach) then
+			if not outside then
+				for _, cell in self:Supports(floor, position, reach) do
+					if self:_fade(cell, dropAt) then
+						table.insert(fresh, cell.Index)
+					end
+				end
+			end
 			self.unsupported[player] = nil
 			continue
 		end
