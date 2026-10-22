@@ -630,6 +630,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 				"RewardsController",
 				"CelebrationController",
 				"MiniGameController",
+				"AudioController",
 			}
 		do
 			local okLoad, controller = pcall(__require, "Client/Controllers/" .. name)
@@ -643,6 +644,25 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 					__note(`client {name} failed to start: {err}`)
 				end
 			end)
+			if name == "AudioController" then
+				-- Which music the client picks as the phases change (the mode's own round track, or
+				-- "Panic Mode" when it isn't uploaded or doesn't load; sounds may not load here).
+				task.spawn(function()
+					local last = ""
+					for _ = 1, 600 do
+						task.wait(0.25)
+						local ok, status = pcall(controller.Status)
+						local track = if ok
+							then `{status.Track} loaded={status.Loaded} at={math.floor(status.Time * 10) / 10}`
+							else "?"
+						local name = if ok then `{status.Track} {status.Loaded} {status.Playing}` else "?"
+						if name ~= last then
+							last = name
+							__note(`music: {track}`)
+						end
+					end
+				end)
+			end
 		end
 		clientGuis = __localPlayer.PlayerGui
 		__uiScaleFor = __require("Client/UI/UIKit").ScaleFor -- gui_dump.luau: the scale per screen
