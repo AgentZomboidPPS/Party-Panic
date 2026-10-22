@@ -19,7 +19,10 @@
 --   * The SQUAD card: in a team game (or a role game), while the rules card is up, a card slides in on
 --     the left: the party's emblem and SQUAD, your team as a chip of its colour, and the party mates
 --     the round put on your team, faces and names, for SQUAD_TIME seconds. (Everyone is frozen then,
---     so on phones it can use the left side; it's narrow enough to stay clear of the rules card.)
+--     so on phones it can use the left side.) It never covers the rules card: the room left of it is
+--     measured where the rules card really is on this screen, and a screen too narrow for the full
+--     card (narrower than an iPhone SE) gets a compact one, faces only; one too narrow even for that
+--     gets none.
 -- Bots are never in parties: nothing here shows one.
 
 local Players = game:GetService("Players")
@@ -70,12 +73,14 @@ local FLY_TIME = 0.6
 local CALM_WAIT = 10 -- seconds a moment waits for a level-up card to finish before showing anyway
 local MOMENT_AGE = 120 -- a moment older than this (a long round in between) isn't shown any more
 local SQUAD_TIME = 5.5
-local SQUAD_MAX_WIDTH = 290 -- phones with room to spare get a wider SQUAD card, up to this
--- The SQUAD card (scaled units), on the left: phones under the profile pill, narrow enough to stay
--- clear of the rules card on the smallest phone; PC under the profile chip and its coins.
+local SQUAD_GAP = 20 -- scaled units kept clear between the SQUAD card and the rules card
+-- The SQUAD card (scaled units), on the left: phones under the profile pill, PC under the profile
+-- chip and its coins. Width is the full card (it fits beside the rules card from a 667-point iPhone
+-- SE up, and on PC from about 800 pixels wide); Compact is the faces-only one for narrower screens.
 local SQUAD = {
 	Touch = {
-		Width = 204,
+		Width = 188,
+		Compact = 100,
 		Top = 106,
 		Medallion = 50,
 		Title = 30,
@@ -86,7 +91,8 @@ local SQUAD = {
 		First = 108,
 	},
 	Pc = {
-		Width = 290,
+		Width = 280,
+		Compact = 112,
 		Top = 152,
 		Medallion = 58,
 		Title = 34,
@@ -118,6 +124,8 @@ local barShown = false
 local moments: { Moment } = {}
 local playing = false
 local squadCard: Frame? = nil
+local squadCompact = false -- whether it's the compact one
+local squadWatch: RBXScriptConnection? = nil -- the screen changing under it
 local squadRound = -1 -- the round whose SQUAD card has been shown
 
 local function sizes(): any
@@ -707,18 +715,37 @@ local function squadMates(): ({ Player }, string?)
 	return mates, team
 end
 
+-- The SQUAD card's room on this screen, in scaled units: from its holder's left edge (`left` pixels
+-- into the HUD) to the rules card's, less SQUAD_GAP. Measured where the rules card really is
+-- (RoundController's Rules in the middle of the screen; on phones the Card inside it), so it holds on
+-- any screen. Nil without a rules card.
+local function roomBesideRules(left: number): number?
+	local rules = hud:FindFirstChild("Rules")
+	if not (rules and rules:IsA("GuiObject")) then
+		return nil
+	end
+	local card = rules:FindFirstChild("Card")
+	local edge = if card and card:IsA("GuiObject") then card.AbsolutePosition.X else rules.AbsolutePosition.X
+	return (edge - (hud.AbsolutePosition.X + left)) / UIKit.CurrentScale() - SQUAD_GAP
+end
+
 local function hideSquad()
 	local cardFrame = squadCard
 	squadCard = nil
+	if squadWatch then
+		squadWatch:Disconnect()
+		squadWatch = nil
+	end
 	if not cardFrame then
 		return
 	end
+	-- (Quint: Back would swing it right first, towards the rules card.)
 	local width = cardFrame.Size.X.Offset
 	UIKit.Tween(
 		cardFrame,
 		0.3,
 		{ Position = UDim2.fromOffset(-width - 40, cardFrame.Position.Y.Offset) },
-		Enum.EasingStyle.Back,
+		Enum.EasingStyle.Quint,
 		Enum.EasingDirection.In
 	)
 	task.delay(0.32, function()
@@ -731,21 +758,31 @@ end
 
 local function showSquad(mates: { Player }, team: string)
 	local layout = if touch then SQUAD.Touch else SQUAD.Pc
+	local left = if touch then 8 else 16 -- where its holder sits, in pixels
+	-- The full card when it fits left of the rules card on this screen, else the compact one, else
+	-- none this round (a screen narrower than any phone).
+	local room = roomBesideRules(left)
+	local compact = false
+	if room and room < layout.Width then
+		if room < layout.Compact then
+			return
+		end
+		compact = true
+	end
+	local width = if compact then layout.Compact else layout.Width
 	local info = PartyView.Info(PartyView.Mine())
 	local teamColor = Teams.Colors[team] or info.Color
-	local width = layout.Width
-	if touch then
-		-- As wide as the room left of the rules card allows on this screen (it's 620 units wide in
-		-- the middle: RoundController), from the smallest phone's width up to SQUAD_MAX_WIDTH. The
-		-- holder sits 8 pixels in; 20 units spare keep the spinning border off the rules card.
-		local scale = UIKit.CurrentScale()
-		local room = (hud.AbsoluteSize.X / 2 - 310 * scale - 8) / scale - 20
-		width = math.clamp(math.floor(room), layout.Width, SQUAD_MAX_WIDTH)
-	end
-	local height = layout.First + #mates * layout.Row + 8
+	-- Compact: the emblem, SQUAD and the team's mark stacked over the faces, all a little smaller.
+	local medal = if compact then layout.Medallion - 6 else layout.Medallion
+	local titleSize = if compact then layout.Title - 8 else layout.Title
+	local row = if compact then layout.Row - 6 else layout.Row
+	local faceSize = if compact then layout.Face - 4 else layout.Face
+	local chipTop = if compact then 10 + medal + 4 + titleSize + 6 + 4 else 12 + medal + 8
+	local first = if compact then chipTop + layout.Chip + 10 else layout.First
+	local height = first + #mates * row + 8
 	local holder = UIKit.new("Frame", {
 		Name = "SquadIntro",
-		Position = if touch then UDim2.fromOffset(8, 6) else UDim2.fromOffset(16, 12),
+		Position = UDim2.fromOffset(left, if touch then 6 else 12),
 		Size = UDim2.fromOffset(width + 20, layout.Top + height + 10),
 		BackgroundTransparency = 1,
 		Parent = hud,
@@ -774,11 +811,12 @@ local function showSquad(mates: { Player }, team: string)
 	)
 	PartyKit.Shine(cardFrame, loops, { ZIndex = 2, Period = 1.6, Strength = 0.35 })
 	-- The party's emblem and SQUAD, then the team the round put you on, as a chip of its colour.
-	local medal = layout.Medallion
 	local emblem = PartyKit.Medallion({
 		Size = medal,
 		Parent = cardFrame,
-		Position = UDim2.fromOffset(12 + medal / 2, 12 + medal / 2),
+		Position = if compact
+			then UDim2.fromOffset(width / 2, 10 + medal / 2)
+			else UDim2.fromOffset(12 + medal / 2, 12 + medal / 2),
 		ZIndex = 4,
 		Halo = false,
 	})
@@ -787,18 +825,23 @@ local function showSquad(mates: { Player }, team: string)
 		Name = "Title",
 		Text = "SQUAD",
 		Font = Theme.Fonts.Display,
-		TextSize = layout.Title,
+		TextSize = titleSize,
 		TextWrapped = false,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(12 + medal + 10, 12),
-		Size = UDim2.new(1, -(12 + medal + 16), 0, medal),
+		TextXAlignment = if compact then Enum.TextXAlignment.Center else Enum.TextXAlignment.Left,
+		Position = if compact then UDim2.fromOffset(8, 10 + medal + 4) else UDim2.fromOffset(12 + medal + 10, 12),
+		Size = if compact then UDim2.new(1, -16, 0, titleSize + 6) else UDim2.new(1, -(12 + medal + 16), 0, medal),
 		ZIndex = 4,
 		Parent = cardFrame,
 		Children = { UIKit.TextStroke(0) },
 	})
-	local teamText = Teams.Label(team)
-	local chipWidth =
-		math.min(width - 24, math.ceil(UIKit.TextWidth(teamText, layout.ChipText, Theme.Fonts.Display)) + 26)
+	-- (Compact: the team's mark alone, "■" or "🦈".)
+	local teamText = if compact
+		then Teams.Shapes[team] or Teams.Icons[team] or string.sub(string.upper(team), 1, 1)
+		else Teams.Label(team)
+	local chipWidth = math.min(
+		width - 24,
+		math.ceil(UIKit.TextWidth(teamText, layout.ChipText, Theme.Fonts.Display)) + (if compact then 34 else 26)
+	)
 	UIKit.Label({
 		Name = "Team",
 		Text = teamText,
@@ -807,19 +850,20 @@ local function showSquad(mates: { Player }, team: string)
 		TextWrapped = false,
 		BackgroundTransparency = 0,
 		BackgroundColor3 = PartyKit.Darker(teamColor, 0.15),
-		Position = UDim2.fromOffset(12, 12 + medal + 8),
+		AnchorPoint = Vector2.new(if compact then 0.5 else 0, 0),
+		Position = if compact then UDim2.new(0.5, 0, 0, chipTop) else UDim2.fromOffset(12, chipTop),
 		Size = UDim2.fromOffset(chipWidth, layout.Chip),
 		ZIndex = 4,
 		Parent = cardFrame,
 		Children = { UIKit.Round(), UIKit.Stroke(WHITE, 2, 0.1), UIKit.TextStroke(0.1) },
 	})
-	-- Your party mates on your team: face, name (the leader wears the crown).
+	-- Your party mates on your team: face (the leader wears the crown) and name; compact, faces only.
 	for index, mate in mates do
-		local top = layout.First + (index - 1) * layout.Row
+		local top = first + (index - 1) * row
 		UIKit.new("Frame", {
 			Name = "Row",
 			Position = UDim2.fromOffset(8, top),
-			Size = UDim2.new(1, -16, 0, layout.Row - 6),
+			Size = UDim2.new(1, -16, 0, row - 6),
 			BackgroundColor3 = Color3.new(0, 0, 0),
 			BackgroundTransparency = 0.7,
 			ZIndex = 3,
@@ -827,33 +871,44 @@ local function showSquad(mates: { Player }, team: string)
 			Children = { UIKit.Round() },
 		})
 		local face = PartyKit.Face({
-			Size = layout.Face,
+			Size = faceSize,
 			Parent = cardFrame,
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.fromOffset(12, top + (layout.Row - 6) / 2),
+			AnchorPoint = Vector2.new(if compact then 0.5 else 0, 0.5),
+			Position = UDim2.fromOffset(if compact then width / 2 else 12, top + (row - 6) / 2),
 			Halo = false,
 			ZIndex = 4,
 		})
 		PartyKit.SetFace(face, mate, info.Color, PartyView.SeatOf(mate) == 1, nil)
-		local name = UIKit.Label({
-			Name = "Mate",
-			Text = mate.DisplayName,
-			Font = Theme.Fonts.Display,
-			TextSize = 22,
-			TextWrapped = false,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			Position = UDim2.fromOffset(12 + layout.Face + 10, top),
-			Size = UDim2.new(1, -(12 + layout.Face + 20), 0, layout.Row - 6),
-			ZIndex = 5,
-			Parent = cardFrame,
-			Children = { UIKit.TextStroke(0.1) },
-		})
-		name:SetAttribute("PP_TruncateOk", true)
+		if not compact then
+			local name = UIKit.Label({
+				Name = "Mate",
+				Text = mate.DisplayName,
+				Font = Theme.Fonts.Display,
+				TextSize = 22,
+				TextWrapped = false,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				Position = UDim2.fromOffset(12 + faceSize + 10, top),
+				Size = UDim2.new(1, -(12 + faceSize + 20), 0, row - 6),
+				ZIndex = 5,
+				Parent = cardFrame,
+				Children = { UIKit.TextStroke(0.1) },
+			})
+			name:SetAttribute("PP_TruncateOk", true)
+		end
 	end
 	squadCard = cardFrame
-	UIKit.Tween(cardFrame, 0.45, { Position = UDim2.fromOffset(0, layout.Top) }, Enum.EasingStyle.Back)
+	squadCompact = compact
+	-- (Quint: Back would overshoot to the right, into the gap kept for the rules card.)
+	UIKit.Tween(cardFrame, 0.45, { Position = UDim2.fromOffset(0, layout.Top) }, Enum.EasingStyle.Quint)
 	AudioController.Play("Pickup")
+	-- A screen that changes under it (a window made smaller) takes it away if it no longer fits.
+	squadWatch = hud:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		local now = roomBesideRules(left)
+		if squadCard == cardFrame and now and now < width then
+			hideSquad()
+		end
+	end)
 	task.delay(SQUAD_TIME, function()
 		if squadCard == cardFrame then
 			hideSquad()
@@ -905,6 +960,8 @@ function SquadController.Status(): { [string]: any }
 		Streak = if streakPill and streakPill.Visible then streakText.Text else nil,
 		Name = if partyName then partyName.Text else nil,
 		Squad = squad,
+		SquadCompact = if squadCard then squadCompact else nil,
+		SquadWidth = if squadCard then squadCard.Size.X.Offset else nil,
 		Moments = #moments,
 		Banner = layer and layer:FindFirstChild("PartyUp") ~= nil,
 	}

@@ -2024,8 +2024,10 @@ end
 -- joining, the PARTY UP! banner ("Party up"); the window as a member ("Party window") and as the
 -- leader with the PARTY LOOK ("Party window leader"); an invite card from Captain Waffles of
 -- GALACTIC LLAMAS in the lobby ("Party invite") and during the vote ("Party invite voting"); then a
--- team round's rules card with the SQUAD card ("Party squad"); last, the window for someone on their
--- own ("Party window alone"). The card goes under the rules card
+-- team round's rules card with the SQUAD card ("Party squad"), and the next round's on a screen too
+-- narrow for the full card beside the rules card: the compact one, faces only ("Party squad
+-- compact"; the rules card is moved over while the SQUAD card measures its room, then put back);
+-- last, the window for someone on their own ("Party window alone"). The card goes under the rules card
 -- and comes back with the time the server says it has left; JOIN asks the server and the card goes.
 -- partyChecks: what the chip, the window, the squad bar, the banner, the card and the SQUAD card
 -- showed each time, and what the leader's PARTY LOOK asked the server.
@@ -2142,6 +2144,25 @@ do
 	snap("Party squad")
 	partyChecks.squadCard = SquadController.Status()
 	partyChecks.underRulesCard = PartyController.Status()
+	-- The next round on a narrower screen: 94 pixels less room beside the rules card (the harness's
+	-- screen is 800 wide) makes the SQUAD card the compact one.
+	step = "party squad compact"
+	local rulesFrame = context.Hud:FindFirstChild("Rules")
+	local rulesAt = if rulesFrame then rulesFrame.Position else nil
+	setPhase("Cleanup", 0)
+	task.wait(0.6)
+	GameState.Set("RoundId", (GameState.Get("RoundId") or 0) + 1)
+	if rulesFrame and rulesAt then
+		rulesFrame.Position = rulesAt + UDim2.fromOffset(-94, 0)
+	end
+	setPhase("Preparing", 13)
+	task.wait(1)
+	if rulesFrame and rulesAt then
+		rulesFrame.Position = rulesAt
+	end
+	task.wait(0.3)
+	snap("Party squad compact")
+	partyChecks.squadCompact = SquadController.Status()
 	for _, who in __players do
 		who:SetAttribute("PP_InRound", false)
 		who:SetAttribute("PP_Alive", false)
