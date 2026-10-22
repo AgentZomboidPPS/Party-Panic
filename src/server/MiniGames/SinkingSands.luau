@@ -200,13 +200,11 @@ function SinkingSands:Prepare()
 	self.nextBlast = 0
 	self.shoves = {} :: { [any]: { Velocity: Vector3, Until: number } }
 
-	-- Teams (SandSwirl.KingCount): 3 Sand Kings of 8 players, 4 of 12, none when playing alone.
-	local players = ctx:GetPlayers()
-	for index = #players, 2, -1 do
-		local other = rng:NextInteger(1, index)
-		players[index], players[other] = players[other], players[index]
-	end
-	local kingCount = SandSwirl.KingCount(#players)
+	-- Teams (SandSwirl.KingCount): 3 Sand Kings of 8 players, 4 of 12, none when playing alone. Picked
+	-- at random, with a party on one side where the counts allow (owner: "if you party with others
+	-- for team games you are on the same team"): the first kingCount of the order are the Kings.
+	local kingCount = SandSwirl.KingCount(#ctx:GetPlayers())
+	local players = ctx:PartySides(kingCount)
 	for index, player in players do
 		if index <= kingCount then
 			table.insert(self.kings, player)

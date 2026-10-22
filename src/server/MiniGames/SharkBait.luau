@@ -363,13 +363,11 @@ function SharkBait:Prepare()
 	self:_buildArena()
 
 	-- Roles: one shark under seven players, two from seven on; everyone else swims. (A lone player
-	-- in Studio is the shark, so they can try the jaws; bots fill real rounds.)
-	local players = ctx:GetPlayers()
-	for index = #players, 2, -1 do
-		local other = rng:NextInteger(1, index)
-		players[index], players[other] = players[other], players[index]
-	end
-	local sharkCount = if #players >= 7 then 2 else 1
+	-- in Studio is the shark, so they can try the jaws; bots fill real rounds.) Picked at random, with a
+	-- party on one side where the counts allow (owner: "if you party with others for team games you
+	-- are on the same team"): the first sharkCount of the order are the sharks.
+	local sharkCount = if #ctx:GetPlayers() >= 7 then 2 else 1
+	local players = ctx:PartySides(sharkCount)
 	local sharkAngle = rng:NextNumber(0, math.pi * 2)
 	local spawns = {}
 	local swimmerIndex = 0
