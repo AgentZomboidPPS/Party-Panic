@@ -366,6 +366,19 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "DiceDash",
+		Name = "Dice Dash",
+		Category = "Luck",
+		Icon = "🎲",
+		Color = Color3.fromRGB(190, 130, 255),
+		Objective = "TODO: one sentence that explains how to win.",
+		Controls = "TODO: one short controls tip.",
+		Duration = 75,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
