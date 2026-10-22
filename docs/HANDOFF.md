@@ -8,6 +8,20 @@ from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes fro
 
 `tools/publish_place.py` refuses while it's public (pass `--allow-public` only once the owner says yes).
 
+- **Waiting for the owner's yes:** the analytics funnels (owner: "Can you make me some sick ass funnels to track
+  where players leave/complete stuff"). `Services/FunnelService` logs, `Shared/Logic/Funnels` names them (step names
+  are pinned by `tests/Funnels.spec.luau`: Roblox keys steps by number, so only ever add steps at the end):
+  - Onboarding (new players only, whose first visit is after it ships; the profile's `Funnel.Onboarding` keeps
+    their last step): Joined, Played a round, Finished a round, Finished 3 / 5 / 10 / 20 rounds.
+  - Session (every visit, field New/Returning): the same ladder for one visit.
+  - Round (every round, field = game): In the round, GO, Saw the results, Stayed for the next round.
+  - Shop: Opened the shop, Picked an item, Bought it. GoldPass: Saw the offer, Pressed GET GOLD PASS, Bought it.
+    The screens send the first steps (remote `Funnel`, only `Funnels.ClientSteps`).
+  - Custom event `LeftDuring` (value: minutes played, field: what they were doing: "Round: playing",
+    "Lobby: vote"...).
+  - Owner reads them in Creator Hub > Analytics > Funnels and Custom Events (Roblox shows new events after a
+    while, often a day). The `--replay` harness run's summary.funnels lists every step it logged.
+
 - **Live: version 44** (published 21:37 UTC from `ce8754f` + docs, owner: "Yes push to live."). Bots. Owner:
   "Bots are STILL ruberbanding and floating." / "Yes fix it.":
   - Trace Race, Minecart Mayhem, Rockin' Raceway, Bobsled Run, Dice Dash: the server no longer moves bot riders
