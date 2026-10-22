@@ -18,6 +18,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 
+local GameState = require(ReplicatedStorage.Shared.GameState)
 local Sounds = require(ReplicatedStorage.Shared.Sounds)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -94,6 +95,31 @@ function Spleef.Start(api)
 		api:Track(function()
 			pcall(function()
 				localPlayer.DevCameraOcclusionMode = saved
+			end)
+		end)
+	end)
+
+	-- The floors are wide ("Also make the spleef arena larger"): the camera starts a little further
+	-- out so you see the snow around you and can plan a route (you can zoom back in after a moment),
+	-- and may zoom further out than usual. Both are put back after the round.
+	pcall(function()
+		local savedMin, savedMax = localPlayer.CameraMinZoomDistance, localPlayer.CameraMaxZoomDistance
+		localPlayer.CameraMaxZoomDistance = math.max(savedMax, 140)
+		localPlayer.CameraMinZoomDistance = math.max(savedMin, 24)
+		local released = false
+		local function release()
+			if not released then
+				released = true
+				pcall(function()
+					localPlayer.CameraMinZoomDistance = savedMin
+				end)
+			end
+		end
+		task.delay(16, release) -- a few seconds into the round: the zoom has moved out; scrolling in works again
+		api:Track(function()
+			release()
+			pcall(function()
+				localPlayer.CameraMaxZoomDistance = savedMax
 			end)
 		end)
 	end)
@@ -391,10 +417,27 @@ function Spleef.Start(api)
 		UIKit.PopIn(panel, 0.25)
 	end
 
+	-- The hint shows from the rules card until 8 s into the round.
 	api:Hint("Keep moving! Blocks vanish after you step on them", api:HudY() + 66)
-	task.delay(8, function()
-		api:Hint("")
-	end)
+	local hintCleared = false
+	local function clearHintSoon()
+		if hintCleared then
+			return
+		end
+		hintCleared = true
+		task.delay(8, function()
+			api:Hint("")
+		end)
+	end
+	if GameState.Get("Phase") == "InRound" then
+		clearHintSoon()
+	else
+		api:Track(GameState.Changed("Phase", function(phase)
+			if phase == "InRound" then
+				clearHintSoon()
+			end
+		end))
+	end
 
 	-- Falling snow (ambient: off with reduced effects).
 	local sky = Instance.new("Part")
@@ -404,7 +447,7 @@ function Spleef.Start(api)
 	sky.CanQuery = false
 	sky.CanTouch = false
 	sky.Transparency = 1
-	sky.Size = Vector3.new(170, 1, 170)
+	sky.Size = Vector3.new(240, 1, 240)
 	sky.CFrame = CFrame.new(0, -1000, 0) -- placed over the floors once the layout is in
 	sky.Parent = api.World
 	local snow = Instance.new("ParticleEmitter")

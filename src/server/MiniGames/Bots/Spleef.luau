@@ -13,10 +13,13 @@
 --   * Where to: a search over the untouched blocks it can walk to (a few steps out, further for
 --     skilled bots) for the spot with the most fresh snow around it, away from everyone else, a
 --     little noisier for clumsy bots. It only ever walks onto untouched blocks.
---   * Cornered (hardly any fresh snow left to walk to): skilled bots jump a one-block gap to a
+--   * Cornered (hardly any fresh snow left to walk to): skilled bots jump a one-block gap (taking
+--     off from the edge of their block) to a
 --     bigger patch; otherwise, above the last floor, it drops on purpose: it walks into the hole (or
 --     waits on its fading block) over the best fresh patch of the floor below, away from others. On
 --     the last floor with nowhere fresh to go it takes the fading block with the most time left.
+-- Every place a bot heads for is the middle of one of the floor's own blocks (or a hole in the
+-- floor), so it never walks off the floors (owner's report of a bot out on the snowfield).
 -- Bots step on blocks exactly like players (the mode judges everyone's feet the same way), and a
 -- bot left over a hole is dropped by the mode like anyone else (Spleef:_falls).
 
@@ -208,8 +211,7 @@ local function escape(bot, ctx, mode, floor: number, cur, here: Vector3)
 	end
 
 	if hop and hopScore >= 6 and (not drop or hopScore > dropScore + 2) then
-		memory.Target, memory.Kind = hop, "Hop"
-		bot:Jump()
+		memory.Target, memory.Kind, memory.Jumped = hop, "Hop", false
 		bot:MoveTo(Vector3.new(hop.Position.X, here.Y, hop.Position.Z))
 		return
 	end
@@ -235,8 +237,7 @@ local function escape(bot, ctx, mode, floor: number, cur, here: Vector3)
 		memory.Target, memory.Kind = best, "Walk"
 		bot:MoveTo(Vector3.new(best.Position.X, here.Y, best.Position.Z))
 	elseif hop then
-		memory.Target, memory.Kind = hop, "Hop"
-		bot:Jump()
+		memory.Target, memory.Kind, memory.Jumped = hop, "Hop", false
 		bot:MoveTo(Vector3.new(hop.Position.X, here.Y, hop.Position.Z))
 	else
 		bot:Stop()
@@ -292,6 +293,11 @@ function Spleef.Step(bot, ctx, mode, _dt)
 			memory.LeaveAt = leaveTime(bot)
 		end
 		memory.Target = target
+		if target and kind == "Hop" and not memory.Jumped and flat(target.Position, here) <= mode.Block * 1.45 then
+			-- Jumps from the edge of its block, so it clears the gap.
+			memory.Jumped = true
+			bot:Jump()
+		end
 		if target then
 			bot:MoveTo(Vector3.new(target.Position.X, here.Y, target.Position.Z))
 			return

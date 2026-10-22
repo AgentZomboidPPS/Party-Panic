@@ -21,7 +21,10 @@
 --     footprint (FOOT, the body's width), along the whole way from where it was last step to where
 --     it is now (so a fast mover or a bunched-up network update never skips a block it crossed, and
 --     a block it never touched is never triggered). Someone hanging above the floors for longer than
---     a jump (AIR_MAX) counts as standing on the floor under them: nobody hovers for free.
+--     a jump (AIR_MAX) counts as standing on the floor under them: nobody hovers for free. Anyone
+--     beyond the floors' edge (self.edge) is falling out whatever they stand on (owner's report: a
+--     bot standing out on the snowfield; the lobby's sky-island terrain is solid and pokes through
+--     this arena's snowfield, the only solid thing outside the floors).
 --   * A triggered block gets DropAt = now + WARN + FADE (attribute + "Fade" event). Every client
 --     shakes, cracks and tints it for WARN, fades it for FADE, then hides it and turns its collision
 --     off at DropAt by the shared clock; the server destroys it at that same moment. Until then it
@@ -44,7 +47,7 @@ local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 
 local Spleef = MiniGame.Define("Spleef")
 
-local BLOCK = 5 -- a block's width and depth (the 4-stud mesh, scaled)
+local BLOCK = 6 -- a block's width and depth (the 4-stud mesh, scaled)
 local BLOCK_H = 3 -- its height
 local FLOORS = 3
 local FLOOR_GAP = 16 -- from one floor's top to the next one down
@@ -68,11 +71,14 @@ local FALL_MAX = 120 -- the fastest a dropped character falls (studs/s)
 local BOT_MAX_UP, BOT_MAX_FLAT = 60, 30
 -- The crater rim (World/Props/Spleef.luau, SpleefCliff): each arc is authored around the crater's
 -- middle with its mesh bottom CLIFF_BASE under the water; its pivot (bounding box bottom center)
--- sits at CLIFF_PIVOT from there. The cliff face rises out of the water CLIFF_INNER out.
-local CLIFF_BASE = 6
-local CLIFF_PIVOT = Vector3.new(0, 0, -92)
-local CLIFF_INNER = 66
-local CLIFF_TOP = 22 -- the rim's top above the water
+-- sits at CLIFF_PIVOT from there. The cliff face rises out of the water CLIFF_INNER out. The whole
+-- rim is scaled up by CLIFF_SCALE (the floors grew: "Also make the spleef arena larger"), so even the
+-- biggest floors (78 studs out) stay well inside it.
+local CLIFF_SCALE = 1.5
+local CLIFF_BASE = 6 * CLIFF_SCALE
+local CLIFF_PIVOT = Vector3.new(0, 0, -92 * CLIFF_SCALE)
+local CLIFF_INNER = 66 * CLIFF_SCALE
+local CLIFF_TOP = 33 -- the rim's top above the water
 
 -- Each floor has its own snow (number and color both shown on the HUD).
 Spleef.FloorColors = {
@@ -84,11 +90,11 @@ Spleef.FloorMaterials = { Enum.Material.Snow, Enum.Material.Snow, Enum.Material.
 Spleef.Block, Spleef.BlockHeight, Spleef.Floors, Spleef.FloorGap = BLOCK, BLOCK_H, FLOORS, FLOOR_GAP
 Spleef.Foot, Spleef.StepTime = FOOT, STEP_TIME
 
--- The floor's radius in blocks for a number of players: about 100 blocks a floor for two, about
--- 415 for twelve (57 studs, inside the crater rim). Everyone has to keep moving and every step
--- uses up a block, so this sets how long a floor lasts.
+-- The floor's radius in blocks for a number of players: about 140 blocks a floor for two, 225 for
+-- five, about 490 for twelve (75 studs; under 1500 blocks in all). Everyone has to keep moving and
+-- every step uses up a block, so this sets how long a floor lasts.
 function Spleef.RadiusFor(count: number): number
-	return math.clamp(4.4 + 0.6 * count, 5.6, 11.5)
+	return math.clamp(5.6 + 0.58 * count, 6.5, 12.5)
 end
 
 export type Cell = {
@@ -160,6 +166,7 @@ function Spleef:_buildScenery()
 	-- The crater rim: six arcs of ice cliff (each 60 degrees, authored around the crater's middle).
 	for index = 0, 5 do
 		MeshLibrary.Get("SpleefCliff", {
+			Scale = CLIFF_SCALE,
 			CFrame = CFrame.new(pool.X, waterY - CLIFF_BASE, pool.Z)
 				* CFrame.Angles(0, math.rad(index * 60 + 30), 0)
 				* CFrame.new(CLIFF_PIVOT),
@@ -170,7 +177,7 @@ function Spleef:_buildScenery()
 	for index = 0, 15 do
 		local angle = index / 16 * math.pi * 2 + rng:NextNumber(-0.1, 0.1)
 		local onRim = index % 2 == 0
-		local distance = if onRim then rng:NextNumber(CLIFF_INNER + 14, CLIFF_INNER + 22) else rng:NextNumber(150, 230)
+		local distance = if onRim then rng:NextNumber(CLIFF_INNER + 20, CLIFF_INNER + 32) else rng:NextNumber(215, 300)
 		local y = if onRim then CLIFF_TOP else -0.6
 		MeshLibrary.Get("SpleefPine", {
 			Scale = rng:NextNumber(0.9, 1.5),
@@ -182,7 +189,7 @@ function Spleef:_buildScenery()
 	-- Ice crystals at the foot of the cliffs, floes drifting on the pool.
 	for index = 0, 8 do
 		local angle = index / 9 * math.pi * 2 + rng:NextNumber(-0.2, 0.2)
-		local distance = rng:NextNumber(CLIFF_INNER - 6, CLIFF_INNER - 2)
+		local distance = rng:NextNumber(CLIFF_INNER - 8, CLIFF_INNER - 3)
 		MeshLibrary.Get("SpleefCrystal", {
 			Scale = rng:NextNumber(1.2, 2),
 			CFrame = CFrame.new(pool + Vector3.new(math.cos(angle) * distance, -1.5, math.sin(angle) * distance))
@@ -192,7 +199,7 @@ function Spleef:_buildScenery()
 	end
 	for index = 0, 6 do
 		local angle = index / 7 * math.pi * 2 + rng:NextNumber(-0.25, 0.25)
-		local distance = rng:NextNumber(40, CLIFF_INNER - 14)
+		local distance = rng:NextNumber(84, CLIFF_INNER - 8)
 		MeshLibrary.Get("SpleefFloe", {
 			Scale = rng:NextNumber(0.9, 1.4),
 			CFrame = CFrame.new(pool + Vector3.new(math.cos(angle) * distance, -0.7, math.sin(angle) * distance))
@@ -307,6 +314,7 @@ function Spleef:Prepare()
 	local count = #ctx:GetPlayers()
 	local radius = Spleef.RadiusFor(count)
 	self.radius = radius
+	self.edge = radius * BLOCK + BLOCK / 2 + FOOT + 2 -- further out than this is off the floors
 	self:_buildScenery()
 	self:_buildFloors(radius)
 	ctx:SetSharedJSON("Layout", {
@@ -620,7 +628,15 @@ function Spleef:_falls(dt: number)
 		end
 		local position = root.Position
 		local floor = self:FloorAt(feet)
-		if floor then
+		local outside = Vector2.new(position.X - self.center.X, position.Z - self.center.Z).Magnitude > self.edge
+		if outside then
+			-- Off the floors altogether: nothing out here holds anyone up in this mode (the lobby's
+			-- sky islands are solid terrain around the arena and poke through the snowfield), so
+			-- whoever gets out here is falling out, wherever they stand.
+			self.track[player] = nil
+			self.airborne[player] = nil
+			floor = self:FloorBelow(feet) or FLOORS
+		elseif floor then
 			self.airborne[player] = nil
 		else
 			-- In the air: a jump or a fall is fine; hanging up here longer than a jump isn't (on
@@ -638,13 +654,13 @@ function Spleef:_falls(dt: number)
 				continue
 			end
 		end
-		if self.airborne[player] then
+		if self.airborne[player] and not outside then
 			for _, cell in self:Supports(floor, position) do
 				if self:_fade(cell, dropAt) then
 					table.insert(fresh, cell.Index)
 				end
 			end
-		else
+		elseif not outside then
 			self:_step(player, floor, position, dropAt, fresh)
 		end
 		if self:Supported(floor, position) then
