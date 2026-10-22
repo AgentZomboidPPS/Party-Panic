@@ -233,14 +233,18 @@ function Struggle:_buildArena()
 		Parent = arena,
 	})
 	-- Chalk lines on the sand: a halfway line and a centre circle.
-	Build.Decor({
-		Name = "Chalk",
-		Size = Vector3.new(0.4, 0.04, FENCE_Z * 2 - 3),
-		CFrame = CFrame.new(origin + Vector3.new(0, 0.07, 0)),
-		Color = chalk,
-		Transparency = 0.2,
-		Parent = arena,
-	})
+	-- (The halfway line stops at the circle, so the two never overlap and flicker.)
+	local halfLength = FENCE_Z - 1.5 - 9.8
+	for _, side in { -1, 1 } do
+		Build.Decor({
+			Name = "Chalk",
+			Size = Vector3.new(0.4, 0.04, halfLength),
+			CFrame = CFrame.new(origin + Vector3.new(0, 0.07, side * (9.8 + halfLength / 2))),
+			Color = chalk,
+			Transparency = 0.2,
+			Parent = arena,
+		})
+	end
 	for index = 0, 35 do
 		local angle = index / 36 * math.pi * 2
 		Build.Decor({
