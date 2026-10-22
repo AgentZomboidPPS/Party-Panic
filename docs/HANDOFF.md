@@ -1,18 +1,18 @@
 # Handoff: Party Panic (for the next Claude)
 
-Last updated: **2026-10-22 15:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
+Last updated: **2026-10-22 16:00 UTC** by Session B (branch **`claude/upbeat-galileo-gvwq66`**, which started from
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
-## Session B in flight (2026-10-22 15:00 UTC)
+## Session B in flight (2026-10-22 16:00 UTC)
 
-- **Live version 36** (published ~13:35 UTC on 2026-10-22 from `f288f2f`, on the owner's word; the owner must restart
-  servers after every publish). 30 mini-games. Version 35 (645aff5) added games 27-29 (Hot Potato, Dice Dash, Minecart
+- **Live version 37** (published 15:56 UTC on 2026-10-22 from `7405f0c`, on the owner's "Push when things come back";
+  the owner must restart servers after every publish). Version 36 was published ~13:35 UTC from `f288f2f`. 30 mini-games. Version 35 (645aff5) added games 27-29 (Hot Potato, Dice Dash, Minecart
   Mayhem), the PLAY AGAIN vote, the Spleef rework and server-owned bots. Version 36 added Session A's work (round songs,
   Friends, Party Cups, Medals, the weekly leaderboard and Hall of Fame, the Halloween party with the pumpkin hat, 2x
   coins on Halloween weekends) and the sweep's core, clean-up and group C fixes (brighter buttons among them).
-- **Next update, merged on the branch and not published** (publish only on the owner's word: `python3
-  tools/publish_place.py --universe-id 10772087888 --place-id 78868713931081`; the settings PATCH's 403 is expected):
+- **Version 37 carries** (publish only on the owner's word: `python3 tools/publish_place.py --universe-id 10772087888
+  --place-id 78868713931081` from the main checkout at the release commit; the settings PATCH's 403 is expected):
   - sweep A (37f3813): Crazy Cutters' magnifier bubble on phones, mode fixes;
   - sweep B (a3fe9a1): Prime Cut's floating YOU badge gone, Spleef bot jumps, Shark Bait's stuck watchdog, mode fixes;
   - in-round screen space (81b2e02): the ☰ menu in rounds, compact standings on phones, the players-left pill in the
