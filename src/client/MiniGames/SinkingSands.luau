@@ -15,7 +15,7 @@
 -- Owner, after playing it: "sand king needs to have more interaction, is boring" and "sand one more
 -- valuable stuff near the bottom". A Sand King SAND BLASTs a spot by tapping it on the sand (a click
 -- on PC, where a faint ring under the pointer shows where), or with BLAST (R) beside the jump
--- button, which blasts the Diver nearest the middle of their view. Kings sit on their thrones, so
+-- button, which blasts the Diver nearest the middle of their view. Kings stay at their thrones, so
 -- their move stick is put away and the whole screen is theirs to tap; dragging still turns the view.
 -- Everyone sees a blast's ring on the sand with a second ring closing in on it until it erupts, a
 -- Diver standing in a new one is told to MOVE!, and a Diver it catches is BLASTED! (the King who
@@ -30,6 +30,10 @@
 -- Bug sweep (owner: "Let's do a full bug and clean sweep."): a flash ("🌀 SWIRL! 🔄") kept its
 -- 400-wide box on phones, and on the smallest one the box reached into the move stick's corner (the
 -- phone checks: 15%). On phones a flash is now only as wide as its words, like the hints.
+--
+-- Kings stand (owner: "Also theres times where I will sit on invisible shit in game. NO mini game
+-- should require you to sit."): a Sand King now stands at their throne instead of sitting on an
+-- invisible Seat; on this side nothing changes but the words.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -666,7 +670,7 @@ function SinkingSands.Start(api)
 			return
 		end
 		aimingSet = true
-		-- Kings sit on their thrones: the move stick and jump button go away so a tap anywhere on the
+		-- Kings stay at their thrones: the move stick and jump button go away so a tap anywhere on the
 		-- sand blasts it (dragging still turns the view), and come back when the round is over. (The
 		-- UI checks then draw no stick or jump button either: tools/checks/ui_render.py.)
 		api.Gui:SetAttribute("PP_NoTouchControls", if api:IsTouch() then true else nil)

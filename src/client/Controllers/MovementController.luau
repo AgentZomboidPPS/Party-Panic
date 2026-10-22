@@ -2,11 +2,16 @@
 -- obby's run timer. The local client simulates its own character, so these apply instantly.
 -- The obby's checkpoints are the server's (LobbyService): it puts a player who falls into the goo
 -- back on their last checkpoint, and onto the start pad (which restarts the timer) if they had none.
+--
+-- No sitting (owner: "Also theres times where I will sit on invisible shit in game. NO mini game
+-- should require you to sit."): this device simulates this player's character, so this is where
+-- its Seated state is turned off, for every character they get (Shared/NoSitting).
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local NoSitting = require(ReplicatedStorage.Shared.NoSitting)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 
 local AudioController = require(script.Parent.AudioController)
@@ -97,6 +102,11 @@ local function onTag(tag: string, callback: (Instance) -> ())
 end
 
 function MovementController.Start(_context)
+	if player.Character then
+		NoSitting.Guard(player.Character)
+	end
+	player.CharacterAdded:Connect(NoSitting.Guard)
+
 	onTag("BouncePad", bindBouncePad)
 	onTag("ParkourStart", bindParkourStart)
 	onTag("ParkourFinish", bindParkourFinish)

@@ -3,6 +3,10 @@ the treasure, the Divers' chests, the Sand Kings' palace, thrones and crowns, an
 
 The funnel's shape must match src/shared/Logic/SandSwirl.luau (RIM, HOLE, DEPTH, CURVE, RINGS):
 the game walks players on invisible collision built from the same numbers.
+
+No seats (owner: "Also theres times where I will sit on invisible shit in game. NO mini game should
+require you to sit."): a Sand King stands on the throne's dais in front of the seat, where the game's
+invisible Seat used to sit them; keep the dais's top step where it is (sand_throne).
 """
 
 import math
@@ -438,8 +442,9 @@ def sand_throne():
     """A Sand King's royal throne on a gold-rimmed dais (faces -Z): a back with a turquoise cap and a
     golden sunburst with a glowing gem leaning back over it (kept low, so a seated King's camera
     still sees over it into the funnel), cat-head armrests, a cushion and back pad (colored per
-    team in-game) and two gold posts topped with glowing orbs. The seat stays where the game's Seat
-    is (cushion top at 3.45, z = 0.5), and the footprint is centered so the pivot doesn't move."""
+    team in-game) and two gold posts topped with glowing orbs. The King stands on the dais's top step
+    in front of the seat (top 1.4, z = -2.5 to the seat's front at -1.2: the game's THRONE_STAND), and
+    the footprint is centered so the pivot doesn't move."""
     stone = [box(9.6, 0.7, 7.4, y=0.35, bevel=0.15), box(8.0, 0.7, 6.0, y=1.05, z=0.5, bevel=0.15),
              box(4.2, 1.6, 3.4, y=2.2, z=0.5, bevel=0.15), box(4.4, 6.8, 1.0, y=4.8, z=2.6, bevel=0.2)]
     gold = [box(9.8, 0.2, 7.6, y=0.42, bevel=0.06), box(8.2, 0.2, 6.2, y=1.12, z=0.5, bevel=0.06)]
