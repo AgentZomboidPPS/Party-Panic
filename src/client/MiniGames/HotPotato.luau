@@ -186,7 +186,7 @@ function HotPotato.Start(api)
 		ResetOnSpawn = false,
 		IgnoreGuiInset = true,
 		ScreenInsets = Enum.ScreenInsets.None,
-		DisplayOrder = 1,
+		DisplayOrder = -1, -- under every HUD layer (the main HUD is 0)
 		Enabled = false,
 		Parent = localPlayer:WaitForChild("PlayerGui"),
 	}))
