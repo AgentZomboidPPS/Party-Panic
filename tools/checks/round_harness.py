@@ -47,6 +47,13 @@ says JOIN. The summary's "parties" says what each stand-in's PP_Party became, "p
 (or role) each member was dealt and whether the party is together, and "partyToasts" what partied
 people were told (a party that had to be split is told so). With --replay, any --party puts the
 two people (Ann and Bo) in a party: "rounds" shows their teams in the round and in its replay.
+With --client too, the stand-in client (Bot1, who leads the first party) runs the party controllers
+(the PARTY window, the squad bar and PARTY UP!, the world's rings, crests, links and outlines):
+"partyLobby" is the lobby before the round (the world, the squad bar, the moment, then the leader's
+new name, colour and emblem through the remote, a change asked too soon, junk, and a member who
+doesn't lead trying), "partySquad" the SQUAD card under the rules card, "partyRound" the mates'
+outlines in the round, "partyAfter" the lobby after it (the streak, the world on the new characters,
+then the second member leaving the party). With --ui-at rules the SQUAD card is in that snapshot.
 
 CUP plays a whole PARTY CUP and the next cup's first round (tools/checks/cup_rounds.luau): --rounds
 real rounds of the --modes in turn, with --players stand-ins and --bots real bots, then the rest of
@@ -204,6 +211,9 @@ def cup_table(modes: list) -> str:
     return "__cupModes = {\n" + "\n".join(rows) + "\n}\n"
 
 
+# The party controllers the stand-in client runs with --party (harness_prelude.luau, __runRound).
+PARTY_CLIENT = ("PartyController", "SquadController", "PartyWorldController")
+
 # --ui-at snapshots that aren't round times (tools/checks/harness_prelude.luau, __rulesShots).
 UI_SHOTS = ("rules", "closed")
 
@@ -341,8 +351,17 @@ def main():
     elif args.replay:
         entry = "__runReplay"
     roots = {"Shared", "Server"} | ({"Client"} if args.client else set())
+    # Parties on the stand-in client's device (--party with --client): only then do its controllers
+    # come along (Open Cloud's 1 MiB cap on a script).
+    party_client = "__partyClient = nil"
+    if args.party and args.client and args.game not in ("LOBBY", "SKEEBALL", "CUP") and not args.replay:
+        loaders = ",\n".join(
+            f'\t{{ Name = "{name}", Load = function() return __require("Client/Controllers/{name}") end }}'
+            for name in PARTY_CLIENT
+        )
+        party_client = "__partyClient = {\n" + loaders + "\n}"
     try:
-        start = bundling.seeds(reachable_luau(harness, entry) + "\n" + bot, args.game, available, roots)
+        start = bundling.seeds(reachable_luau(harness, entry) + "\n" + bot + "\n" + party_client, args.game, available, roots)
         keep = bundling.closure(available, start, provided={"Shared/Remotes"})
     except bundling.BundleError as err:
         sys.exit(f"round_harness: {err}")
@@ -360,6 +379,7 @@ def main():
         line += 1
     if args.map:
         Path(args.map).write_text(json.dumps(line_map))
+    out.append(party_client)
     out.append("local __bot = (function()\n" + bot + "\nend)()")
     client = "true" if args.client else "false"
     dump = "nil" if args.dump_at is None else str(args.dump_at)

@@ -831,6 +831,98 @@ function __partyTeams(parties)
 	return rows
 end
 
+-- Parties on the stand-in client's device (round_harness.py --party with --client; owner: "Also make
+-- the party system insane. I want it to look super epic."): what a party controller shows now.
+__partyControllers = {}
+function __partyStatus(name)
+	local controller = __partyControllers[name]
+	if not controller or not controller.Status then
+		return "not running"
+	end
+	local ok, status = pcall(controller.Status)
+	return if ok then status else tostring(status)
+end
+
+-- Each party's look and streak as PartyService publishes them ("7: Turbo Pancakes c1 e5 🔥0").
+function __partyLooks()
+	local GameState = __require("Shared/GameState")
+	local looks = GameState.GetJSON("Parties") or {}
+	local rows = {}
+	for id, look in looks do
+		table.insert(rows, `{id}: {look.Name} c{look.Color} e{look.Emblem} streak {look.Streak}`)
+	end
+	table.sort(rows)
+	return rows
+end
+
+-- In the lobby with the party just made (the first stand-in of each leads; Bot1 is this device):
+-- the world (a ring and a link to each mate, crests over everyone partied), the squad bar and the
+-- PARTY UP! moment; then the PARTY LOOK through the Party remote: the leader rolls a new name, picks
+-- a colour and an emblem, asks again too soon, sends junk; a member who doesn't lead tries too.
+function __partyLobbyChecks(parties)
+	local GameState = __require("Shared/GameState")
+	local remote = __remoteObjects.Party
+	local result = {}
+	GameState.Set("Phase", "Intermission")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 20)
+	task.wait(0.4)
+	result.partyUp = __partyStatus("SquadController")
+	task.wait(1.4)
+	result.world = __partyStatus("PartyWorldController")
+	result.squad = __partyStatus("SquadController")
+	result.looks = __partyLooks()
+	local leader = __fakePlayers[parties[1][1]]
+	local member = __fakePlayers[parties[1][2]]
+	local function ask(who, ...)
+		remote.__bindable:Fire(__playerKey(who), ...)
+		task.wait(0.05)
+	end
+	-- (Picks the party doesn't wear yet, so each one is a change.)
+	local look = (GameState.GetJSON("Parties") or {})[tostring(leader:GetAttribute("PP_Party"))] or {}
+	local color = (look.Color or 1) % 8 + 1
+	local emblem = (look.Emblem or 1) % 8 + 1
+	ask(leader, "Reroll")
+	result.rerolled = __partyLooks()
+	task.wait(0.7)
+	ask(leader, "Color", color)
+	task.wait(0.7)
+	ask(leader, "Emblem", emblem)
+	result.picked = __partyLooks()
+	ask(leader, "Color", color % 8 + 1) -- too soon after the emblem
+	task.wait(0.7)
+	ask(leader, "Color", 99)
+	ask(leader, "Emblem", 0 / 0)
+	ask(leader, "Color", 2.5)
+	ask(leader, "Name", "Cool Kids")
+	ask(member, "Color", 2) -- not the leader
+	ask(member, "Reroll")
+	result.refused = __partyLooks()
+	task.wait(0.6)
+	result.squadAfterLook = __partyStatus("SquadController")
+	result.worldAfterLook = __partyStatus("PartyWorldController")
+	return result
+end
+
+-- Back in the lobby after the round: the streak went up (the whole party played), the rings and
+-- crests are back on the new characters; then the second member leaves the party and theirs go.
+function __partyAfterChecks(parties)
+	local remote = __remoteObjects.Party
+	local result = {}
+	task.wait(1.2)
+	result.looks = __partyLooks()
+	result.world = __partyStatus("PartyWorldController")
+	result.squad = __partyStatus("SquadController")
+	local member = __fakePlayers[parties[1][2]]
+	if member then
+		remote.__bindable:Fire(__playerKey(member), "Leave")
+		task.wait(1.2)
+		result.leftLooks = __partyLooks()
+		result.leftWorld = __partyStatus("PartyWorldController")
+		result.leftSquad = __partyStatus("SquadController")
+	end
+	return result
+end
+
 function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, uiAt, botCount, watch, colliders)
 	local GameDefinitions = __require("Shared/GameDefinitions")
 	local GameState = __require("Shared/GameState")
@@ -917,6 +1009,22 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 				rawset(__clientShims.RunService, "PostSimulation", nil)
 			end
 		end
+		-- Parties on this device (--party): the window, the squad bar and PARTY UP!, the world's rings,
+		-- crests, links and outlines (round_harness.py names them in __partyClient).
+		for _, entry in __partyClient or {} do
+			local okLoad, controller = pcall(entry.Load)
+			if not okLoad then
+				__note(`client {entry.Name} failed to load: {controller}`)
+				continue
+			end
+			__partyControllers[entry.Name] = controller
+			task.spawn(function()
+				local okStart, err = pcall(controller.Start, context)
+				if not okStart then
+					__note(`client {entry.Name} failed to start: {err}`)
+				end
+			end)
+		end
 		clientGuis = __localPlayer.PlayerGui
 		__uiScaleFor = __require("Client/UI/UIKit").ScaleFor -- gui_dump.luau: the scale per screen
 	end
@@ -962,6 +1070,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	if watch and watch.parties then
 		task.wait(0.2) -- PartyService's Start
 		summary.parties = __formParties(watch.parties)
+		if clientMode and __partyClient then
+			summary.partyLobby = __partyLobbyChecks(watch.parties)
+		end
 	end
 
 	-- Real bots (Services/BotService) driven by the mode's brain, alongside the scripted stand-ins.
@@ -1033,6 +1144,10 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	summary.arenaParts = #ctx.Arena:GetDescendants()
 	if watch and watch.parties then
 		summary.partyTeams = __partyTeams(watch.parties) -- dealt in Prepare
+		if clientMode and __partyClient then
+			task.wait(1) -- the rules card is up: the SQUAD card comes with it
+			summary.partySquad = __partyStatus("SquadController")
+		end
 	end
 	-- What a device has to draw, at its peak during the round (phone performance): the arena's parts
 	-- (MeshParts among them), particle emitters, lights and surface/billboard GUIs, and the parts the
@@ -1208,6 +1323,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 			if colliderTimes[1] and now - begin >= colliderTimes[1] then
 				snapColliders(string.format("t%.0f", table.remove(colliderTimes, 1)))
 			end
+			if watch and watch.parties and __partyClient and not summary.partyRound and now - begin >= 2 then
+				summary.partyRound = __partyStatus("PartyWorldController") -- mates' outlines
+			end
 			if dumpAt and not summary.dump and now - begin >= dumpAt then
 				local roots = { ctx.Arena }
 				local clientWorld = workspace:FindFirstChild("MiniGameClient")
@@ -1322,6 +1440,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		task.wait(0.1)
 	end
 	summary.notHomeAfterCleanup = notHome
+	if watch and watch.parties and clientMode and __partyClient then
+		summary.partyAfter = __partyAfterChecks(watch.parties)
+	end
 	summary.arenaLeftovers = if ctx.Arena.Parent then #ctx.Arena:GetDescendants() else 0
 	if colliders then
 		summary.colliderLeftovers = __colliderLeftovers()

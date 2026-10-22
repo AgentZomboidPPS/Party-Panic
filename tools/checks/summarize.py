@@ -42,7 +42,8 @@ for key in ["bots", "brain", "prepare", "prepareSeconds", "arenaParts", "perf", 
             "rulesCard", "start", "endReason", "endHeld", "roundSeconds", "stop", "cleanup",
             "destroy", "arenaLeftovers", "sharedLeftovers", "winningTeam", "clientGuiDuringResults",
             "clientModeGuisAfterCleanup", "lobby", "portalScreens", "votePads", "botVoteRefused",
-            "finished", "seconds", "botReplayRefused", "parties", "partyTeams", "partyToasts"]:
+            "finished", "seconds", "botReplayRefused", "parties", "partyTeams", "partyToasts",
+            "partySquad", "partyRound"]:
     if key in d:
         print(f"{key:28s}", fix(str(d.get(key))))
 # The lobby run (round_harness.py LOBBY) and the replay run (<Mode> --replay): each phase, and how
@@ -74,6 +75,10 @@ for vote in d.get("votes") or []:
           f"; winner {vote.get('winner')}{' (tie broken at random)' if vote.get('tie') else ''}; counts {vote.get('counts')}")
     print(f"    cards {vote.get('options')}")
     print(f"    {'; '.join(vote.get('casts') or [])}; the banner's timer just after each: {vote.get('timerAfter')}")
+# Parties on the stand-in client's device (--party --client): the lobby before and after the round.
+for key in ("partyLobby", "partyAfter"):
+    for step, value in (d.get(key) or {}).items():
+        print(f"{key}.{step:20s}", fix(str(value)))
 # The lobby run's party check (harness_prelude.luau, __checkParties): each step, and what was sent.
 for key, value in (d.get("partyCheck") or {}).items():
     if isinstance(value, list):
