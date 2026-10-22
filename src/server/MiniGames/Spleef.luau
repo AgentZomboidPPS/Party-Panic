@@ -769,15 +769,36 @@ function Spleef:Stop()
 	end
 end
 
--- Survivors share first place, except anyone the server was already dropping when the round ended
--- (over a hole with nothing under them: out, they just hadn't got through yet), ranked by when
--- they were dropped.
+-- Whether a character the server is dropping has a block of a lower floor under it to land on.
+function Spleef:_willLand(character: Model): boolean
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not root or not humanoid then
+		return false
+	end
+	local feet = self:Feet(humanoid, root)
+	for floor = 1, FLOORS do
+		if self.tops[floor] <= feet + 0.05 and self:Supported(floor, root.Position) then
+			return true
+		end
+	end
+	return false
+end
+
+-- Survivors share first place, except anyone the server was dropping through the last floor when
+-- the round ended (nothing under them to land on: out, they just hadn't got through yet), ranked by
+-- when they were dropped. (Someone dropping onto a lower floor still survived.)
 function Spleef:GetResults()
 	local ctx = self.context
 	local results = ctx:SurvivalResults()
 	for _, entry in results.Entries do
 		local fall = self.falling and self.falling[entry.Player]
-		if fall and fall.Character == entry.Player.Character and ctx:IsAlive(entry.Player) then
+		if
+			fall
+			and fall.Character == entry.Player.Character
+			and ctx:IsAlive(entry.Player)
+			and not self:_willLand(fall.Character)
+		then
 			entry.Rank = math.floor(fall.At * 10) / 10
 			entry.ScoreText = string.format("Lasted %ds", math.floor(fall.At))
 			entry.BestScore = math.floor(fall.At)
