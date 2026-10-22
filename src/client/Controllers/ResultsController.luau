@@ -30,6 +30,10 @@
 -- step (and a round nobody can play next goes to Waiting), and a device only gets the phase set
 -- last in a step, so the card stayed up over the replay's rules card and the round. Any phase but
 -- Results closes it now.
+--
+-- NO THANKS wore the panels' dark purple on the card's (owner: "why are the close menu buttons and
+-- the invite friend button so dark?"): it's Theme's neutral lavender button now, beside the green
+-- PLAY AGAIN.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -197,7 +201,7 @@ local function buildReplay()
 		Parent = strip,
 	}, function()
 		choose(false)
-	end, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+	end, Theme.Colors.Lavender, Theme.Colors.Purple)
 	local note = UIKit.Label({
 		Name = "Note",
 		Text = `🗳️ {Config.Session.MaxReplays + 1} in a row - a new vote next!`,

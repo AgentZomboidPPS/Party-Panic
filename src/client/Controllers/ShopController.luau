@@ -6,6 +6,10 @@
 -- State.OpenScreen:Fire("Shop", "Emote") opens it on a tab (the emote picker's "Get more").
 -- Prices are low (owner: "Also lets balance the shop down. I want low currency not high."); what
 -- coins buy comes first, then the Rewards Road and career rewards, which say how to unlock them.
+--
+-- The purchase confirmation's Cancel was a dark purple button on its dark panel (owner: "why are
+-- the close menu buttons and the invite friend button so dark?"): it's Theme's neutral lavender
+-- button now. A locked item's button and the tabs not chosen stay dark on purpose: they say so.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -333,7 +337,7 @@ function ShopController.Start(context)
 	}, function()
 		pendingItem = nil
 		confirm.Visible = false
-	end, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+	end, Theme.Colors.Lavender, Theme.Colors.Purple)
 
 	State.OpenScreen:Connect(function(name, tab)
 		if name ~= "Shop" then

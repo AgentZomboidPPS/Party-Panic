@@ -21,6 +21,9 @@
 -- since players can close the rules card (owner: "Let players close the instructions if they
 -- want."), the "Read the rules card" tip is only up while their card is (PP_RulesShowing,
 -- RoundController): it goes when they close the card or the 3-2-1 starts.
+--
+-- Skip was a dark purple button on the bright blue tip (owner: "why are the close menu buttons and
+-- the invite friend button so dark?"): it's Theme's neutral lavender button now, clearly tappable.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -188,7 +191,7 @@ local function buildPc(context)
 		Size = UDim2.fromOffset(80, 32),
 		CornerRadius = 16,
 		Parent = panel,
-	}, finish, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+	}, finish, Theme.Colors.Lavender, Theme.Colors.Purple)
 	task.delay(3, function() -- again once the font has surely loaded
 		if step > 0 and not finished then
 			fitPanel()
@@ -232,7 +235,7 @@ local function buildTouch(context)
 		Size = UDim2.fromOffset(112, Theme.Touch.Target),
 		CornerRadius = 18,
 		Parent = panel,
-	}, finish, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+	}, finish, Theme.Colors.Lavender, Theme.Colors.Purple)
 end
 
 function OnboardingController.Start(context)

@@ -35,6 +35,9 @@
 -- PLAY AGAIN (owner: "Add a vote at the end of each minigame to replay the same minigame."): when
 -- the results' vote plays the same game again, Cleanup leads straight into its rules card (the
 -- GameState "Replay" attribute says so), so a round's card waits for the lobby after it.
+--
+-- The card's ✕ wore the panels' dark purple (owner: "why are the close menu buttons and the invite
+-- friend button so dark?"): it's the windows' bright red ✕ now, same size and spot.
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -454,7 +457,7 @@ local function show(celebration: Celebration)
 		CornerRadius = "round",
 		ZIndex = 5,
 		Parent = card,
-	}, close, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+	}, close, Theme.Colors.Red, Color3.fromRGB(190, 40, 60))
 
 	-- Row 2: the rewards, revealed one by one.
 	local row = UIKit.new("Frame", {

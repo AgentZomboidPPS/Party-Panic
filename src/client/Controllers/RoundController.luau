@@ -19,6 +19,10 @@
 -- prime cut."): a tab under it in your team's colour, "YOU'RE ON ★ RED" (or your role in a versus
 -- game, "YOU'RE AN 🏹 ARCHER": Teams.YouAre), there from the moment the server puts you on a team.
 -- It goes with the card (its ✕ too); the mode's own HUD carries the team on from the 3-2-1.
+--
+-- The ✕ was a near-black dot on the card (owner: "why are the close menu buttons and the invite
+-- friend button so dark?"): it's the windows' bright red round ✕ now (UI/Modal: a red gradient,
+-- a white ✕ with a text stroke and a white ring), with the same size and tap area as before.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -88,19 +92,26 @@ local function buildClose(touch: boolean)
 		Parent = rulesCard,
 	})
 	local press = UIKit.new("UIScale", { Scale = 1 })
+	-- Drawn like the windows' ✕ (UI/Modal, a UIKit.Button): white under a red gradient.
 	UIKit.Label({
 		Name = "Mark",
 		Text = "✕",
 		Font = Theme.Fonts.Display,
 		TextSize = if touch then 24 else 20,
 		TextWrapped = false,
-		BackgroundTransparency = 0.2,
-		BackgroundColor3 = Theme.Colors.PanelDark,
+		BackgroundTransparency = 0,
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(size, size),
 		Parent = button,
-		Children = { UIKit.Round(), UIKit.Stroke(nil, 2, 0.45), press },
+		Children = {
+			UIKit.Round(),
+			UIKit.Gradient(Theme.Colors.Red, Color3.fromRGB(190, 40, 60)),
+			UIKit.Stroke(nil, 2, 0.55),
+			UIKit.TextStroke(0.35),
+			press,
+		},
 	})
 	local function pressTo(value: number, time: number)
 		UIKit.Tween(press, time, { Scale = value })
