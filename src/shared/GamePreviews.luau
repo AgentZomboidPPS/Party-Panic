@@ -114,7 +114,7 @@ local previews: { [string]: Preview } = {
 		Fps = 8,
 	},
 	MinecartMayhem = {
-		Image = "rbxassetid://107135666496644",
+		Image = "rbxassetid://74545768718600",
 		Frames = 24,
 		Columns = 6,
 		FrameSize = Vector2.new(168, 240),
