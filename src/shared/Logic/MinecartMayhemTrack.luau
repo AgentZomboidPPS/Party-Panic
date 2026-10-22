@@ -52,7 +52,7 @@ Track.GAP_FROM = 38
 Track.GAP_TO = 46
 Track.FINISH_AT = 40
 Track.START_LANE = 5.5 -- the station's stub tracks, side by side
-Track.START_MERGE = 50 -- the carts are on the main line by here
+Track.START_MERGE = 28 -- the carts are on the main line by here (the station deck ends at 30)
 Track.CHOOSE = 50 -- presses count from this far before a switch (its sign is 30 before it)
 Track.BEND_RUN = 0.7 -- a bend swings over this share of its tile, then runs straight to the next
 Track.GRACE = 0.12
@@ -358,10 +358,16 @@ function Track.LeanAt(tile: BuiltTile, branch: number, s: number): number
 end
 
 -- How far along the course a cart is (for places, the progress strip and results).
+-- A cart off the rails (DownUntil) counts where it will come back (ReTile, ReS on the main way),
+-- not where it fell.
 function Track.Progress(course: Course, rider: Rider): number
-	local tile = course.Tiles[rider.Tile]
-	local path = tile.Paths[rider.B] or tile.Paths[1]
-	return tile.Start + tile.Nominal * math.clamp(rider.S / path.Total, 0, 1)
+	local tileIndex, branch, s = rider.Tile, rider.B, rider.S
+	if rider.DownUntil and rider.DownUntil > 0 and rider.ReTile and rider.ReS then
+		tileIndex, branch, s = rider.ReTile, 1, rider.ReS
+	end
+	local tile = course.Tiles[tileIndex]
+	local path = tile.Paths[branch] or tile.Paths[1]
+	return tile.Start + tile.Nominal * math.clamp(s / path.Total, 0, 1)
 end
 
 -- The next switch ahead of a cart within `reach` studs: its tile index and the studs to it.

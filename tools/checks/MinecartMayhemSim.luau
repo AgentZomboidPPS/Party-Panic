@@ -166,6 +166,10 @@ for round = 1, ROUNDS do
 			end
 			for _, event in events do
 				if event.K == "Switch" then
+					rider.B = Track.BranchFor(
+						course.Tiles[event.Tile],
+						Track.Choose(rider.Picks, rider.ZoneAt[event.Tile] or event.At, event.At)
+					)
 					table.insert(
 						rider.Pending,
 						{ K = "Switch", At = event.At, Tile = event.Tile, JudgeAt = event.At + Track.GRACE + LEEWAY }
@@ -193,7 +197,7 @@ for round = 1, ROUNDS do
 					continue
 				end
 				local tile = course.Tiles[item.Tile]
-				if item.K == "Switch" and rider.Tile == item.Tile and rider.B == 1 then
+				if item.K == "Switch" and rider.Tile == item.Tile and not rider.Back then
 					rider.B =
 						Track.BranchFor(tile, Track.Choose(rider.Picks, rider.ZoneAt[item.Tile] or item.At, item.At))
 					if rider.B == 2 and tile.O == "Short" then
@@ -202,11 +206,11 @@ for round = 1, ROUNDS do
 				elseif item.K == "Gap" and rider.Tile == item.Tile then
 					if not Track.Clears(rider.JumpAt, item.At, item.V, item.Gap) then
 						rider.Falls += 1
-						Track.Fall(course, rider, item.Tile, now)
+						Track.Fall(course, rider, item.Tile, item.At)
 						rider.Pending = {}
 					end
 				elseif item.K == "Crystal" and not Track.Airborne(rider.JumpAt, item.At) then
-					rider.DashUntil = now + Track.DASH_TIME
+					rider.DashUntil = item.At + Track.DASH_TIME
 				end
 			end
 		end

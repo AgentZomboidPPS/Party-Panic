@@ -28,6 +28,7 @@ BEND_WIDE, BEND_RUN = 36, 0.7
 GAP_FROM, GAP_TO = 38, 46
 TAKEOFF_NEAR, TAKEOFF_FAR = 1.2, 5.2
 START_LANE = 5.5
+START_MERGE = 28
 GAUGE = 3.0
 RAIL_W = 0.32
 RAIL_Y0, RAIL_Y1 = 0.45, 0.75  # rails, above the path line
@@ -320,8 +321,25 @@ def rail_tile(kind, d=1, l=1):
                     x = (lane - 6.5) * START_LANE
                     sp = np.array([(x, 0.0, -f) for f in np.arange(-6, 5, 1.0)])
                     sr = np.array([(1.0, 0.0, 0.0)] * len(sp))
-                    rails += rails_on(sp, sr)
                     ties += ties_on(sp, sr, every=1.6)
+                    # the lane's lead-in: rails resting on the deck along Track.StartOffset, until they
+                    # meet the main line's (each lane a little lower, so crossing rails never share a top)
+                    pts = []
+                    for f in np.arange(-6, START_MERGE + 0.01, 1.0):
+                        o = x * (1 - smooth(max(f, 0) / START_MERGE))
+                        if abs(o) < 0.35:
+                            break
+                        pts.append((o, 0.0, -f))
+                    if len(pts) >= 2:
+                        lp, lr = np.array(pts), []
+                        for i in range(len(lp)):
+                            fw = lp[min(i + 1, len(lp) - 1)] - lp[max(i - 1, 0)]
+                            r = np.array([-fw[2], 0.0, fw[0]])
+                            lr.append(r / np.linalg.norm(r))
+                        drop = 0.02 + 0.015 * abs(lane - 6.5)
+                        for side in (-1, 1):
+                            cx = side * GAUGE / 2
+                            rails.append(sweep_rect(lp, np.array(lr), cx - RAIL_W / 2, cx + RAIL_W / 2, -0.1, RAIL_Y1 - drop))
                     # a buffer beam behind each stub
                     trestle.append(box(x - 2.0, x + 2.0, 0.2, 1.3, 6.2, 6.8))
             else:

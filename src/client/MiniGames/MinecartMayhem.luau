@@ -634,7 +634,8 @@ function MinecartMayhem.Start(api)
 	-- Controls ---------------------------------------------------------------------------------------
 
 	local keys = { Left = false, Right = false }
-	local padTouches: { [InputObject]: boolean } = {}
+	local padTouches: { [InputObject]: number } = {} -- (each touch's order: the newest one wins)
+	local touchCount = 0
 	local pads: { [number]: Frame } = {}
 	local padHolder: Frame? = nil
 	if touch then
@@ -731,9 +732,11 @@ function MinecartMayhem.Start(api)
 			dir += 1
 		end
 		if dir == 0 then
-			local newest = nil
-			for input in padTouches do
-				newest = input
+			local newest, order = nil, -1
+			for input, n in padTouches do
+				if n > order then
+					newest, order = input, n
+				end
 			end
 			if newest then
 				dir = touchSide(newest)
@@ -779,7 +782,8 @@ function MinecartMayhem.Start(api)
 			keys.Right = true
 		elseif input.UserInputType == Enum.UserInputType.Touch and touch then
 			if onPads(input) then
-				padTouches[input] = true
+				touchCount += 1
+				padTouches[input] = touchCount
 			end
 		end
 		refreshLean()
@@ -1151,7 +1155,19 @@ function MinecartMayhem.Start(api)
 				root.CFrame = frame * CFrame.new(0, CART_FLOOR + rootY - SEAT_DROP, 0.3)
 			end
 
-			local progress = Track.Progress(c, { Tile = place.T, B = place.B, S = place.S } :: any)
+			local data0 = place.Data
+			local down = if isMine and mine then mine.DownUntil else (data0.Dn or 0)
+			local progress = Track.Progress(
+				c,
+				{
+					Tile = place.T,
+					B = place.B,
+					S = place.S,
+					DownUntil = down,
+					ReTile = if isMine and mine then mine.ReTile else data0.Rt,
+					ReS = if isMine and mine then mine.ReS else data0.Rs,
+				} :: any
+			)
 			local dot = marker(key)
 			dot.Visible = true
 			table.insert(dots, {

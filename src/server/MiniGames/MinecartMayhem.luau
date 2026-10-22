@@ -731,6 +731,10 @@ function MinecartMayhem:_ride(player: any, rider: Rider, dt: number, now: number
 	for _, event in events do
 		local kind = event.K
 		if kind == "Switch" then
+			-- (a provisional way from the presses already here, so everyone's screens follow it at
+			-- once; the judge below settles it once late presses have had time to arrive)
+			local tile = self.course.Tiles[event.Tile]
+			rider.B = Track.BranchFor(tile, Track.Choose(rider.Picks, rider.ZoneAt[event.Tile] or event.At, event.At))
 			table.insert(rider.Pending, {
 				K = kind,
 				At = event.At,
@@ -777,7 +781,7 @@ function MinecartMayhem:_judge(player: any, rider: Rider, now: number)
 		end
 		local tile = self.course.Tiles[item.Tile]
 		if item.K == "Switch" then
-			if rider.Tile ~= item.Tile or rider.B ~= 1 or rider.Back then
+			if rider.Tile ~= item.Tile or rider.Back then
 				continue
 			end
 			local dir = Track.Choose(rider.Picks, rider.ZoneAt[item.Tile] or item.At, item.At)
@@ -796,7 +800,7 @@ function MinecartMayhem:_judge(player: any, rider: Rider, now: number)
 			else
 				rider.Falls += 1
 				rider.DownKind = "fall"
-				Track.Fall(self.course, rider, item.Tile, now)
+				Track.Fall(self.course, rider, item.Tile, item.At) -- (from when it happened)
 				rider.Pending = {}
 				ctx:Fire(nil, "Fall", player.UserId, item.Tile)
 				return
@@ -806,7 +810,7 @@ function MinecartMayhem:_judge(player: any, rider: Rider, now: number)
 				ctx:Fire(player, "Missed", player.UserId)
 			else
 				rider.Dashes += 1
-				rider.DashUntil = now + Track.DASH_TIME
+				rider.DashUntil = item.At + Track.DASH_TIME
 				ctx:Fire(nil, "Dash", player.UserId)
 			end
 		end
@@ -816,11 +820,18 @@ end
 -- A cart out of the mine: its place, the cheer, the finish clock for everyone else.
 function MinecartMayhem:_home(player: any, rider: Rider, now: number)
 	local ctx = self.context
+	-- (its place among the finishers still here: one who left gives up theirs, as in the results)
+	local place = 1
+	for _, other in self.riders do
+		if other ~= rider and other.Place and not other.Gone then
+			place += 1
+		end
+	end
 	self.finished += 1
-	rider.Place = self.finished
+	rider.Place = place
 	local time = (rider.Finish :: number) - self.startAt
-	ctx:SetScoreText(player, `{Track.Ordinal(self.finished)} · {string.format("%.1f", time)}s`)
-	ctx:Fire(nil, "Finish", player.UserId, self.finished, time)
+	ctx:SetScoreText(player, `{Track.Ordinal(place)} · {string.format("%.1f", time)}s`)
+	ctx:Fire(nil, "Finish", player.UserId, place, time)
 	if self.finished == 1 then
 		ctx:Announce(`🏁 {player.DisplayName} is out of the mine!`, "success", 3)
 		ctx:Sound("Victory")
