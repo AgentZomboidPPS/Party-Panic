@@ -499,7 +499,7 @@ local order = {
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
 	"RewardsController", "CelebrationController",
-	"CupController", "InviteController", "MedalController", "HallOfFameController", "EventController",
+	"CupController", "InviteController", "PartyController", "MedalController", "HallOfFameController", "EventController",
 	"EmoteController", "SpectateController", "OnboardingController", "SkeeBallController", "AssetReportController",
 	"BotWatchController",
 }
@@ -2014,6 +2014,82 @@ do
 	task.wait(0.5)
 end
 
+-- 4c. Parties (PartyController; owner: "stuff to work on right now is parties."), from the
+-- server's attributes (PP_Party, PP_PartySeat, as Services/PartyService sets them): the 👥 PARTY chip
+-- in the lobby's row ("Party chip"); its window with the player in Bubbles's party (Bubbles leads),
+-- another party of two, a full one and an invite already sent ("Party window"); then an invite card
+-- from Captain Waffles in the lobby ("Party invite") and during the vote ("Party invite voting"). The
+-- card goes under the rules card and comes back with the time the server says it has left; JOIN asks
+-- the server and the card goes. partyChecks: what the chip, the window and the card showed each time.
+local partyChecks = {}
+do
+	local PartyController = __require("Client/Controllers/PartyController")
+	local function setPhase(name, seconds)
+		GameState.Set("Phase", name)
+		GameState.Set("PhaseEndsAt", if seconds > 0 then workspace:GetServerTimeNow() + seconds else 0)
+	end
+	local function party(player, id, seat)
+		if player then
+			player:SetAttribute("PP_Party", id)
+			player:SetAttribute("PP_PartySeat", seat)
+		end
+	end
+	local byName = {}
+	for _, other in __players do
+		byName[other.Name] = other
+	end
+	step = "party chip"
+	setPhase("Intermission", 20)
+	party(byName.Bubbles, 7, 1)
+	party(__player, 7, 2)
+	party(byName.Pancake, 8, 1)
+	party(byName.NoodleArms, 8, 2)
+	for seat, name in { "Zoomer", "Mochi", "LavaLarry", "SirHopsALot" } do
+		party(byName[name], 9, seat)
+	end
+	if byName.Glitch then
+		__fire("Party", "Sent", byName.Glitch.UserId)
+	end
+	task.wait(1)
+	pcall(__require("Client/UI/Modal").CloseAll) -- the cup's podium, if the lobby brought it back
+	task.wait(0.5)
+	snap("Party chip")
+	partyChecks.chip = PartyController.Status()
+	step = "party window"
+	PartyController.Open()
+	task.wait(1)
+	snap("Party window")
+	partyChecks.window = PartyController.Status()
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
+	step = "party invite"
+	__fire("Party", "Invited", 105, "Captain Waffles", 20)
+	task.wait(1)
+	snap("Party invite")
+	partyChecks.card = PartyController.Status()
+	setPhase("Voting", 12)
+	task.wait(1)
+	snap("Party invite voting")
+	partyChecks.cardVoting = PartyController.Status()
+	setPhase("Preparing", 13)
+	task.wait(0.6)
+	partyChecks.underRulesCard = PartyController.Status()
+	setPhase("Cleanup", 0)
+	__fire("Party", "Invited", 105, "Captain Waffles", 12) -- the server: back in the lobby, 12 s left
+	task.wait(0.6)
+	partyChecks.backInLobby = PartyController.Status()
+	local sentBefore = #__sent
+	PartyController.Answer(true)
+	task.wait(0.3)
+	partyChecks.joinAsked = __sent[sentBefore + 1]
+	partyChecks.afterJoin = PartyController.Status()
+	for _, other in __players do
+		party(other, nil, nil)
+	end
+	setPhase("Waiting", 0)
+	task.wait(0.5)
+end
+
 -- 5. Sitting out (UI/SitOutSwitch: by the banner, and in Settings). A tap flips the switches at
 -- once and asks the server; with no answer they slide back. Then the server's answer (PP_SitOut,
 -- as Services/SitOutService sets it) and the screens that change for someone sitting out.
@@ -2165,6 +2241,7 @@ return game:GetService("HttpService"):JSONEncode({
 	sitOutChecks = sitOutChecks,
 	tipChecks = tipChecks,
 	cupChecks = cupChecks,
+	partyChecks = partyChecks,
 	medalChecks = medalChecks,
 	replayChecks = replayChecks,
 	textReport = __textReport,

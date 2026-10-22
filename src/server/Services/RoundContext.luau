@@ -23,6 +23,11 @@
 --     because the round had just ended. Only what happened before the buzzer counts in that moment
 --     (InTime, Logic/Buzzer): nobody is put out for a fall or a reset after it.
 --
+-- Parties (owner: "The parties work in the way that if you party with others for team games you are
+-- on the same team."): AssignTeams keeps each party's members in the round on one team, and modes
+-- that pick roles themselves ask PartySides for an order that keeps a party on one side; either one
+-- splits a party only when the teams have no room for it, and tells its members (Logic/PartyTeams).
+--
 -- Falling through a floor that hasn't loaded (owner: "Friend fell through the floor while loading
 -- into pump and pop."). The arena is built as the rules card comes up and everyone is moved onto it
 -- straight after, while a slow phone can still be downloading it; each device moves its own
@@ -794,22 +799,57 @@ function RoundContext.IsStunned(self: RoundContext, player: Player): boolean
 	return (self._stunnedUntil[player] or 0) > os.clock()
 end
 
--- Splits the participants into teams with these names (shuffled; sizes differ by at most one).
+-- Parties (owner: "stuff to work on right now is parties. The parties work in the way that if you
+-- party with others for team games you are on the same team."): Services/PartyService marks each
+-- party's people with its id (PP_Party); teams and sides are dealt with each party's members in the
+-- round together (Logic/PartyTeams), split only when the teams have no room for them, and then
+-- they're told.
+local PartyTeams = require(Shared.Logic.PartyTeams)
+
+local SPLIT_TOAST = "👥 This round's teams are too small for your whole party, so it's split up."
+
+local function pickNumber(count: number): number
+	return rng:NextInteger(1, count)
+end
+
+local function tellSplit(split: { { Player } })
+	for _, party in split do
+		Notifier.Players(party, SPLIT_TOAST, "info", 6)
+	end
+end
+
+-- Everyone in the round in groups: each party's members here together (two or more of them), and
+-- everyone else on their own (a bot always).
+function RoundContext.PartyGroups(self: RoundContext): { { Player } }
+	return PartyTeams.Groups(self:GetPlayers(), function(player: Player): PartyTeams.Member
+		local bot = BotRegistry.IsBot(player)
+		local party = if bot then nil else player:GetAttribute("PP_Party")
+		return { IsBot = bot, Party = if type(party) == "number" then party else nil }
+	end)
+end
+
+-- For a mode that picks sides itself (Arrow Ambush's archers, Shark Bait's sharks, Sinking Sands'
+-- Kings): everyone in the round in a random order whose first `count` make the one side, with each
+-- party on one side where the counts allow.
+function RoundContext.PartySides(self: RoundContext, count: number): { Player }
+	local order, split = PartyTeams.Sides(self:PartyGroups(), count, pickNumber)
+	tellSplit(split)
+	return order
+end
+
+-- Splits the participants into teams with these names (at random; sizes differ by at most one), each
+-- party's members on one team where the teams have room for them.
 function RoundContext.AssignTeams(self: RoundContext, names: { string }): { [string]: { Player } }
-	local players = self:GetPlayers()
-	for index = #players, 2, -1 do
-		local other = rng:NextInteger(1, index)
-		players[index], players[other] = players[other], players[index]
-	end
+	local dealt, split = PartyTeams.Deal(self:PartyGroups(), #names, pickNumber)
 	local teams = {}
-	for _, name in names do
+	for index, name in names do
 		teams[name] = {}
+		for _, player in dealt[index] or {} do
+			self:SetTeam(player, name)
+			table.insert(teams[name], player)
+		end
 	end
-	for index, player in players do
-		local name = names[((index - 1) % #names) + 1]
-		self:SetTeam(player, name)
-		table.insert(teams[name], player)
-	end
+	tellSplit(split)
 	return teams
 end
 

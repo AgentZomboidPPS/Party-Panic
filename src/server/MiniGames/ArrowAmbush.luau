@@ -141,14 +141,12 @@ function ArrowAmbush:Prepare()
 
 	self:_buildArena()
 
-	-- Roles: one archer under six players, two from six on; everyone else runs.
-	local players = ctx:GetPlayers()
-	for index = #players, 2, -1 do
-		local other = rng:NextInteger(1, index)
-		players[index], players[other] = players[other], players[index]
-	end
+	-- Roles: one archer under six players, two from six on; everyone else runs. Picked at random, with
+	-- a party on one side where the counts allow (owner: "if you party with others for team games
+	-- you are on the same team"): the first archerCount of the order are the archers.
 	-- (A lone player in Studio is the archer, so they can try the bow; bots fill real rounds.)
-	local archerCount = if #players >= 6 then 2 else 1
+	local archerCount = if #ctx:GetPlayers() >= 6 then 2 else 1
+	local players = ctx:PartySides(archerCount)
 	local archers, runners = {}, {}
 	for index, player in players do
 		if index <= archerCount then

@@ -64,6 +64,7 @@ local order = {
 	-- What keeps players coming back.
 	"CupController",
 	"InviteController",
+	"PartyController", -- the PARTY chip, its window, the invite card and the 👥 on name tags
 	"MedalController",
 	"HallOfFameController",
 	"EventController",
