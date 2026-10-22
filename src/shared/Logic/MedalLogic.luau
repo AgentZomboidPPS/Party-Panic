@@ -4,7 +4,7 @@
 -- work on all of that? this wont mess with what the other workers are working on right?"):
 --   * the list: one medal for winning each game (built from the game list, so a game added later
 --     gets its own medal), and the big ones: four other features give (a PARTY CUP won, a week in
---     the top three, the Halloween 2026 party, a round with a friend) and five that come from
+--     the top three, the Halloween 2026 candy track, a round with a friend) and five that come from
 --     playing (a first win, 10 and 50 wins, every game played, every game won: the collect-them-all
 --     goal);
 --   * who won a round, the way the round's rewards count it;
@@ -88,7 +88,7 @@ local BIG: { { Id: string, Name: string, Icon: string, How: string, Ribbon: { nu
 		Id = "Halloween2026",
 		Name = "Halloween 2026",
 		Icon = "🎃",
-		How = "Join the HALLOWEEN 2026 party",
+		How = "Finish the HALLOWEEN candy track",
 		Ribbon = { 255, 140, 40 },
 	},
 }

@@ -221,7 +221,8 @@ local function stepCard(
 	order: number,
 	step: EventLogic.Step,
 	mine: EventLogic.Progress,
-	height: number
+	height: number,
+	medal: boolean -- the track's last step, which also gives the event's medal
 )
 	local item = Cosmetics.Get(step.Reward)
 	if not item then
@@ -246,7 +247,7 @@ local function stepCard(
 		justClaimed = nil
 		UIKit.PopIn(card, 0.5) -- it's theirs: the card pops, with EQUIP on it
 	end
-	-- The candy it takes, on a ribbon.
+	-- The candy it takes, on a ribbon (with the medal on the last one).
 	local ribbon = UIKit.new("Frame", {
 		Position = UDim2.fromOffset(8, 8),
 		Size = UDim2.new(1, -16, 0, if touch then 30 else 34),
@@ -255,7 +256,7 @@ local function stepCard(
 		Children = { UIKit.Round(), UIKit.Gradient(Theme.Colors.Orange, PURPLE, 0) },
 	})
 	UIKit.Label({
-		Text = `🍬 {step.Candy}`,
+		Text = if medal then `🍬 {step.Candy} + 🏅` else `🍬 {step.Candy}`,
 		Font = Theme.Fonts.Display,
 		TextSize = 20,
 		TextWrapped = false,
@@ -438,7 +439,7 @@ local function render()
 		},
 	})
 	for order, step in definition.Track do
-		stepCard(track, order, step, mine, cardHeight)
+		stepCard(track, order, step, mine, cardHeight, order == #definition.Track and definition.Medal ~= nil)
 	end
 
 	-- Where candy comes from (and the medal, once the track is done).
