@@ -22,6 +22,20 @@
 -- whatever was under it, other characters too, even in a mode where characters pass through each
 -- other (Slaparazzi's PP_SlapCast). A crowd of bots on one spot became a tower, which a real game
 -- never shows. Now a character a bot can't touch is no floor for it either.
+--
+-- Bots and people pass through each other, in every mode and the lobby (owner: "Bots are STILL
+-- ruberbanding and floating." "This has got to be fixed. You said last time you did but clearly you
+-- didnt fix it."). The server moves a bot and each person's own device moves them, so when the two
+-- touch, each side works out the bump on its own with the other where it last heard it was: on the
+-- server the person's body is an unstoppable wall that shoves the bot aside or lifts it onto their
+-- head, on their screen the bot is a wall that stops them, and everyone sees the bot jerk, snap
+-- back as it walks back to where it was going, or ride a head in mid-air. Hex Meltdown, Shark Bait
+-- and Slaparazzi each split them this way after "Bot is floating." reports; now every bot's body is
+-- in PP_Bots, which touches everything Default does except people (the lobby's PP_Players, World/
+-- BeachBalls.luau). Bots still bump into each other (the server moves both, so they agree), and a
+-- mode that puts characters in its own groups still does. Hits, stomps and tags never needed bodies
+-- to touch: they go by position. The rebalance loop keeps PP_Bots in step with Default as modes add
+-- their own groups.
 
 local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
@@ -97,11 +111,15 @@ local ANIMATIONS = {
 local JUMP_TIME = 0.75 -- simulated jump (no physics): time in the air
 local JUMP_HEIGHT = 7
 
+-- Bots' bodies: they touch everything Default does except people's (see the header).
+local BOT_GROUP, PEOPLE_GROUP = "PP_Bots", "PP_Players"
+
 local rng = Random.new()
 local folder: Folder
 local nextId = 0
 local usedNames: { [string]: boolean } = {}
 local physics = false
+local grouped = false -- PP_Bots is set up (if it couldn't be, bots stay in Default and touch people)
 
 local Bot = {}
 Bot.__index = Bot
@@ -380,6 +398,59 @@ local function fade(model: Model, visible: boolean, time: number)
 	end
 end
 
+-- PP_Bots never touches people, nor any group Default doesn't touch (a mode may add groups later:
+-- the rebalance loop calls this again). (Only ever turned off: a group that keeps itself to Default
+-- alone, like MeshLibrary's camera-only scenery, turns PP_Bots off itself.)
+local function syncGroups()
+	for _, group in PhysicsService:GetRegisteredCollisionGroups() do
+		local name = group.name
+		if name == BOT_GROUP or name == PEOPLE_GROUP then
+			continue
+		end
+		if
+			not PhysicsService:CollisionGroupsAreCollidable("Default", name)
+			and PhysicsService:CollisionGroupsAreCollidable(BOT_GROUP, name)
+		then
+			PhysicsService:CollisionGroupSetCollidable(BOT_GROUP, name, false)
+		end
+	end
+	if PhysicsService:CollisionGroupsAreCollidable(BOT_GROUP, PEOPLE_GROUP) then
+		PhysicsService:CollisionGroupSetCollidable(BOT_GROUP, PEOPLE_GROUP, false)
+	end
+end
+
+local function setupGroups()
+	grouped = pcall(function()
+		for _, name in { BOT_GROUP, PEOPLE_GROUP } do
+			if not PhysicsService:IsCollisionGroupRegistered(name) then
+				PhysicsService:RegisterCollisionGroup(name)
+			end
+		end
+		syncGroups()
+	end)
+	if not grouped then
+		warn("[BotService] couldn't set up PP_Bots: bots and people will bump into each other")
+	end
+end
+
+-- Puts a bot's body in PP_Bots, parts it gets later too (unless a mode already put one in a group of
+-- its own).
+local function groupBody(character: Model)
+	if not grouped then
+		return
+	end
+	for _, item in character:GetDescendants() do
+		if item:IsA("BasePart") then
+			item.CollisionGroup = BOT_GROUP
+		end
+	end
+	character.DescendantAdded:Connect(function(item)
+		if item:IsA("BasePart") and item.CollisionGroup == "Default" then
+			item.CollisionGroup = BOT_GROUP
+		end
+	end)
+end
+
 function BotService.SpawnCharacter(bot: Bot, fadeIn: boolean)
 	if not bot.Parent then
 		return
@@ -396,6 +467,7 @@ function BotService.SpawnCharacter(bot: Bot, fadeIn: boolean)
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	humanoid.DisplayName = bot.DisplayName
 	decorate(bot, character, bot.Info:GetAttribute("Color") :: Color3)
+	groupBody(character)
 	character:PivotTo(lobbySpawn())
 
 	local old = bot.Character
@@ -708,6 +780,9 @@ function BotService.Init()
 			if not ok then
 				warn("[BotService] rebalance failed:", err)
 			end
+			if grouped then
+				pcall(syncGroups)
+			end
 			local now = os.clock()
 			for _, bot in BotRegistry.List() do
 				pcall(keepServerOwned, bot)
@@ -731,6 +806,7 @@ function BotService.Setup()
 		created.Parent = ReplicatedStorage
 		folder = created
 		physics = RunService:IsRunning()
+		setupGroups()
 		if not physics then
 			RunService.Heartbeat:Connect(simulate)
 		end
