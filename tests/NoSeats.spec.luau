@@ -51,6 +51,10 @@ test("every character's Seated state is turned off where it's simulated", functi
 		guard ~= nil and string.find(guard, "SetStateEnabled(Enum.HumanoidStateType.Seated, false)", 1, true) ~= nil,
 		"NoSitting must turn the Seated state off"
 	)
+	expectTrue(
+		guard ~= nil and string.find(guard, '"SeatWeld"', 1, true) ~= nil,
+		"NoSitting must break the weld a seat holds a character with"
+	)
 	for _, path in { "src/client/Controllers/MovementController.luau", "src/server/Services/NoSitService.luau" } do
 		local source = sources[path]
 		expectTrue(
