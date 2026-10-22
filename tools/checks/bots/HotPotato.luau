@@ -38,12 +38,26 @@ return function(env)
 		env.Move(player, at, at + offset.Unit)
 	end
 
+	local handed = false
 	return function(elapsed)
 		local dt = 0.05
 		if not mode.center or not mode.potatoes then
 			return
 		end
 		local now = ctx:Now()
+		-- With the client half running, hand its player a potato once (from whoever holds one), so the
+		-- phone HUD captures show the holder's banner, red edge and THROW button.
+		local person = env.players[1]
+		if env.client and not handed and elapsed > 11 and env.Alive(person) and not mode:Busy(person) then
+			for _, potato in mode.potatoes do
+				if potato.Holder and potato.Holder ~= person and not potato.Flight then
+					handed = true
+					potato.FuseEnd = math.max(potato.FuseEnd, now + 6)
+					mode:_give(potato, person, nil, "Drop")
+					break
+				end
+			end
+		end
 		-- Count blasts: a potato that vanished while its fuse had run out.
 		local current = {}
 		for _, potato in mode.potatoes do
@@ -57,8 +71,8 @@ return function(env)
 		lastPotatoes = current
 
 		for _, player in env.players do
-			if not env.Alive(player) then
-				continue
+			if not env.Alive(player) or (handed and player == person and elapsed < 16.5) then
+				continue -- (the client's player keeps its potato for the HUD capture)
 			end
 			local position = env.Root(player) -- a Vector3 here
 			if not position then

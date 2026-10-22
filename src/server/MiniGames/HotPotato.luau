@@ -179,7 +179,6 @@ function HotPotato:Prepare()
 	ctx:SetSharedJSON("Lawn", { R = self.radius, Y = self.center.Y })
 	self:_publish()
 	self:_publishLeft()
-	ctx:SetStatus("Pass the potato before it blows!")
 end
 
 function HotPotato:_buildArena()
@@ -270,12 +269,20 @@ function HotPotato:_publish()
 		table.insert(list, entry)
 	end
 	self.context:SetSharedJSON("Potatoes", list)
+	local count = #list
+	if count ~= self.shownCount then
+		self.shownCount = count
+		self.context:SetStatus(
+			if count == 0
+				then "Pass the potato before it blows!"
+				else `▼ {count} HOT POTATO{if count == 1 then "" else "ES"} IN PLAY`
+		)
+	end
 end
 
 function HotPotato:_publishLeft()
 	local ctx = self.context
 	ctx:SetShared("Left", ctx:AliveCount())
-	ctx:SetStatus(`Survivors: {ctx:AliveCount()}`)
 end
 
 function HotPotato:HolderOf(player: any): Potato?

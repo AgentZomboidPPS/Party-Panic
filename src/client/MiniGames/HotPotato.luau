@@ -181,7 +181,7 @@ function HotPotato.Start(api)
 			Visible = false,
 			AnchorPoint = Vector2.new(if side == "Right" then 1 else 0, if side == "Bottom" then 1 else 0),
 			Position = UDim2.fromScale(if side == "Right" then 1 else 0, if side == "Bottom" then 1 else 0),
-			Size = if vertical then UDim2.new(0, 70, 1, 0) else UDim2.new(1, 0, 0, 70),
+			Size = if vertical then UDim2.new(0, 44, 1, 0) else UDim2.new(1, 0, 0, 44),
 			Parent = api.Gui,
 		})
 		local gradient = Instance.new("UIGradient")
@@ -407,15 +407,22 @@ function HotPotato.Start(api)
 	-- Every frame -------------------------------------------------------------------------------------
 	local beepAt = 0
 	local hintUntil = 0
+	local shownHint = ""
 	api:RenderStep(function(dt)
 		local now = api:Now()
 		-- How to play, for the first seconds of the round (under the holder's banner).
 		if hintUntil == 0 and State.Phase() == "InRound" then
-			hintUntil = now + 7
-			api:Hint("Run from the ▼ potato! Got it? Touch someone or THROW.", api:HudY() + 86)
-		elseif hintUntil > 0 and now > hintUntil and hintUntil ~= math.huge then
-			hintUntil = math.huge
-			api:Hint("")
+			hintUntil = now + 8
+		end
+		local hint = if hintUntil > 0
+				and now < hintUntil
+				and api:CanAct()
+				and myPotato(now) == nil
+			then "Run from the ▼ potato!"
+			else ""
+		if hint ~= shownHint then
+			shownHint = hint
+			api:Hint(hint, api:HudY() + 40)
 		end
 		local mine = myPotato(now)
 		local holding = mine ~= nil and inRound()
@@ -454,7 +461,7 @@ function HotPotato.Start(api)
 		end
 		for _, edge in edges do
 			edge.Visible = holding
-			edge.BackgroundTransparency = if warned then 0.1 + 0.4 * pulse else 0.35 + 0.35 * pulse
+			edge.BackgroundTransparency = if warned then 0.2 + 0.4 * pulse else 0.45 + 0.3 * pulse
 		end
 		local target, targetRoot = nil, nil
 		if holding and mine and now >= mine.L and guesses[mine.I] == nil then
