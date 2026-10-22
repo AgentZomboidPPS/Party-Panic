@@ -1081,3 +1081,21 @@ def piano(midi: float, length: float = 0.6, hard: float = 0.7) -> np.ndarray:
     out = (tone + knock) * np.clip(t / 0.002, 0, 1)
     out = _gate(out, length, 0.12)
     return _frozen(normalize(eq(out, ("hp", 60), ("lp", 7000))))
+
+
+@lru_cache(maxsize=None)
+def factory_whistle(notes: tuple, length: float) -> np.ndarray:
+    """A steam whistle (the factory's shift hooter): a chord of breathy pipes that scoop up to pitch
+    as the steam comes through, with a hiss on top."""
+    n = s.samples(length + 0.25)
+    t = _t(n)
+    out = np.zeros(n)
+    for k, midi in enumerate(notes):
+        pitch = midi - 1.2 * np.exp(-t / 0.12) + _vibrato(t, 0.06, 5.0 + k * 0.4, 0.2, 0.3)
+        freq = s.midi_hz(pitch)
+        ph = 2 * np.pi * np.cumsum(freq) / SR
+        out += np.sin(ph) + 0.25 * np.sin(2 * ph) + 0.1 * np.sin(3 * ph)
+    out /= max(1, len(notes)) ** 0.7
+    hiss = eq(_rng("hooter", notes, length).uniform(-1, 1, n), ("hp", 2500), ("lp", 9000)) * 0.12
+    e = env(n, 0.06, 0.3, 0.85, 0.2, gate=length)
+    return _frozen(normalize(eq((out + hiss) * e, ("hp", 200), ("lp", 7000))))
