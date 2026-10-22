@@ -7,7 +7,8 @@
 -- The GOLD PASS's effects (owner: "the paid one should also be insane") live in their own module,
 -- GoldEffects, and play by name like these.
 -- The second shop pass adds thumbs up, snow, flowers, rainbows, streamers, a spotlight, a
--- supernova, paint splats, rubber ducks and a zap (owner: "Yes lets add more items after everything
+-- supernova, paint splats, rubber ducks, a zap, and the victory and knockout cousins of three
+-- emotes (a balloon flight, a streamer storm, a blizzard) that look different from them (owner: "Yes lets add more items after everything
 -- else is finished"). Each one is over in about two seconds and stays small, so a knockout effect
 -- never hides the game around it; with reduced effects there are fewer pieces and no flashes.
 
@@ -15,6 +16,7 @@ local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
+local Cosmetics = require(ReplicatedStorage.Shared.Cosmetics)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local GoldEffects = require(script.Parent.Parent.GoldEffects)
 local State = require(script.Parent.Parent.State)
@@ -89,7 +91,14 @@ local function emojiBurst(position: Vector3, emoji: string | { string }, count: 
 end
 
 -- A glowing see-through shape (the spotlight's beam, the supernova's ring) that fades out.
-local function glow(cframe: CFrame, size: Vector3, color: Color3, shape: Enum.PartType, lifetime: number): Part
+local function glow(
+	cframe: CFrame,
+	size: Vector3,
+	color: Color3,
+	shape: Enum.PartType,
+	lifetime: number,
+	transparency: number?
+): Part
 	local part = Instance.new("Part")
 	part.Anchored = true
 	part.CanCollide = false
@@ -99,7 +108,7 @@ local function glow(cframe: CFrame, size: Vector3, color: Color3, shape: Enum.Pa
 	part.Shape = shape
 	part.Material = Enum.Material.Neon
 	part.Color = color
-	part.Transparency = 0.55
+	part.Transparency = transparency or 0.55
 	part.Size = size
 	part.CFrame = cframe
 	part.Parent = folder
@@ -157,12 +166,14 @@ local EFFECTS: { [string]: (position: Vector3, colors: { Color3 }?, scale: numbe
 					Acceleration = Vector3.new(0, -12, 0),
 					Drag = 2,
 				}, math.floor(40 * scale))
-				local light = Instance.new("PointLight")
-				light.Color = color
-				light.Range = 30
-				light.Brightness = 4
-				light.Parent = holder
-				TweenService:Create(light, TweenInfo.new(0.8), { Brightness = 0 }):Play()
+				if scale >= 1 then -- reduced effects: no flashes
+					local light = Instance.new("PointLight")
+					light.Color = color
+					light.Range = 30
+					light.Brightness = 4
+					light.Parent = holder
+					TweenService:Create(light, TweenInfo.new(0.8), { Brightness = 0 }):Play()
+				end
 			end)
 		end
 	end,
@@ -281,6 +292,42 @@ local EFFECTS: { [string]: (position: Vector3, colors: { Color3 }?, scale: numbe
 			}, math.floor(8 * scale))
 		end
 	end,
+	-- Victory: a big bunch of balloons and gifts with a cloud of confetti in the item's colors
+	-- drifting up after them (the emote's Balloons is a small bunch on its own).
+	BalloonFlight = function(position, colors, scale)
+		emojiBurst(position, { "🎈", "🎈", "🎁" }, math.max(3, math.floor(14 * scale)))
+		local holder = anchor(position, 3)
+		for _, color in colors or PARTY do
+			burst(holder, {
+				Texture = SPARKLE,
+				Color = ColorSequence.new(color),
+				LightEmission = 0.3,
+				Size = NumberSequence.new(0.6, 0.3),
+				Lifetime = NumberRange.new(1.4, 2.2),
+				Speed = NumberRange.new(3, 7),
+				SpreadAngle = Vector2.new(60, 60),
+				Acceleration = Vector3.new(0, 5, 0),
+				Drag = 1,
+				EmissionDirection = Enum.NormalId.Top,
+			}, math.floor(8 * scale))
+		end
+	end,
+	-- Knockout: a quick icy swirl of snowflakes and snowmen (the Snow emote is a gentle shower).
+	Blizzard = function(position, colors, scale)
+		emojiBurst(position, { "❄️", "⛄" }, math.max(2, math.floor(5 * scale)))
+		local holder = anchor(position, 2)
+		burst(holder, {
+			Texture = SPARKLE,
+			Color = Cosmetics.ColorSequence(colors or { Color3.fromRGB(255, 255, 255), Color3.fromRGB(150, 210, 255) }),
+			LightEmission = 0.4,
+			Size = NumberSequence.new(0.5, 0.1),
+			Lifetime = NumberRange.new(0.6, 1),
+			Speed = NumberRange.new(10, 16),
+			SpreadAngle = Vector2.new(180, 30),
+			RotSpeed = NumberRange.new(-400, 400),
+			Drag = 3,
+		}, math.floor(30 * scale))
+	end,
 	-- A quick splash of paint drops that falls back to the ground.
 	Splat = function(position, colors, scale)
 		local holder = anchor(position, 2)
@@ -320,12 +367,15 @@ local EFFECTS: { [string]: (position: Vector3, colors: { Color3 }?, scale: numbe
 	Spotlight = function(position, colors, scale)
 		local color = (colors and colors[1]) or Color3.fromRGB(255, 245, 200)
 		local height = 36
+		-- Reduced effects: a narrower, fainter beam (no bright flash of light).
+		local width = if scale >= 1 then 7 else 4
 		glow(
 			CFrame.new(position + Vector3.new(0, height / 2 - 3, 0)) * CFrame.Angles(0, 0, math.rad(90)),
-			Vector3.new(height, 7, 7),
+			Vector3.new(height, width, width),
 			color,
 			Enum.PartType.Cylinder,
-			2
+			2,
+			if scale >= 1 then 0.55 else 0.82
 		)
 		local holder = anchor(position, 3)
 		burst(holder, {
@@ -340,6 +390,16 @@ local EFFECTS: { [string]: (position: Vector3, colors: { Color3 }?, scale: numbe
 		}, math.floor(30 * scale))
 	end,
 }
+-- Victory: three volleys of streamers in the item's colors, from either side and the middle (the
+-- Encore! emote's Streamers is one burst).
+EFFECTS.StreamerStorm = function(position, colors, scale)
+	local offsets = { Vector3.new(-3, 0, 0), Vector3.new(3, 0, 0), Vector3.zero }
+	for index, offset in offsets do
+		task.delay((index - 1) * 0.3, function()
+			EFFECTS.Streamers(position + offset, colors, scale)
+		end)
+	end
+end
 -- A flat ring of light that spreads out and fades, then stars and purple fireworks.
 EFFECTS.Supernova = function(position, colors, scale)
 	local palette = colors

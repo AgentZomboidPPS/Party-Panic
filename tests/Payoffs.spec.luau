@@ -90,7 +90,7 @@ test("pacing: a few rounds for a cheap item, a few evenings for the best one", f
 	end
 	local cheap, mid, top = prices[1], prices[math.ceil(#prices / 2)], prices[#prices]
 	expectTrue(rounds(cheap) <= 4, `the cheapest item takes {rounds(cheap)} rounds`)
-	expectTrue(rounds(mid) >= 4 and rounds(mid) <= 15, `a middle item takes {rounds(mid)} rounds`)
+	expectTrue(rounds(mid) >= 4 and rounds(mid) <= 10, `a middle item takes {rounds(mid)} rounds`)
 	expectTrue(rounds(top) >= 20 and rounds(top) <= 45, `the best item takes {rounds(top)} rounds`)
 end)
 

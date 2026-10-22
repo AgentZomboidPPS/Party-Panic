@@ -712,7 +712,8 @@ local list: { Cosmetic } = {
 		Description = "A bunch of balloons floats up.",
 		Icon = "🎈",
 		Price = 40,
-		Effect = "Balloons",
+		Effect = "BalloonFlight",
+		Colors = { rgb(255, 90, 110), rgb(255, 210, 70), rgb(90, 180, 255) },
 	},
 	{
 		Id = "Victory_Streamers",
@@ -721,7 +722,8 @@ local list: { Cosmetic } = {
 		Description = "Party streamers shoot up high.",
 		Icon = "🎏",
 		Price = 45,
-		Effect = "Streamers",
+		Effect = "StreamerStorm",
+		Colors = { rgb(255, 215, 90), rgb(255, 110, 190), rgb(70, 220, 210) },
 	},
 	{
 		Id = "Victory_Spotlight",
@@ -853,7 +855,8 @@ local list: { Cosmetic } = {
 		Description = "Out in a flurry of snow.",
 		Icon = "❄️",
 		Price = 25,
-		Effect = "Snow",
+		Effect = "Blizzard",
+		Colors = { rgb(255, 255, 255), rgb(150, 210, 255) },
 	},
 	{
 		Id = "Elim_Splat",
