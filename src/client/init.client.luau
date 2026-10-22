@@ -2,6 +2,9 @@
 --
 -- ArrivalController keeps a character the server has just placed where it was put until this device
 -- has the floor under it (owner: "Friend fell through the floor while loading into pump and pop.").
+--
+-- BotWatchController tells the server how the bots moved on this screen in each round (owner: "Bots
+-- are STILL ruberbanding and floating."): only a real game has physics, so only a real game can show it.
 
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
@@ -70,6 +73,7 @@ local order = {
 	"MiniGameController",
 	"SkeeBallController",
 	"AssetReportController",
+	"BotWatchController",
 }
 
 local context = { Hud = hud, Overlay = overlay }

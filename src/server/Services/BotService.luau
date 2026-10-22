@@ -35,7 +35,8 @@
 -- BeachBalls.luau). Bots still bump into each other (the server moves both, so they agree), and a
 -- mode that puts characters in its own groups still does. Hits, stomps and tags never needed bodies
 -- to touch: they go by position. The rebalance loop keeps PP_Bots in step with Default as modes add
--- their own groups.
+-- their own groups, counts each time it has to take a bot back from a device (PP_Retakes, for the
+-- devices' bot reports: Controllers/BotWatchController), and still takes it back.
 
 local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
@@ -764,6 +765,7 @@ local function keepServerOwned(bot: Bot)
 	local okOwner, owner = pcall(root.GetNetworkOwner, root)
 	if (okAuto and auto) or (okOwner and owner ~= nil) then
 		pcall(root.SetNetworkOwner, root, nil)
+		bot:SetAttribute("PP_Retakes", (tonumber(bot:GetAttribute("PP_Retakes")) or 0) + 1)
 	end
 end
 

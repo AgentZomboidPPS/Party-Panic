@@ -1,4 +1,8 @@
 -- Central tuning values. Numbers come from the design outline and are starting points for playtests.
+--
+-- Bot reports (owner: "Bots are STILL ruberbanding and floating."): RateLimits.ClientReport allows
+-- five reports a minute, so each round's bot report (Controllers/BotWatchController) never crowds
+-- out a device's mesh and sound reports.
 
 local Config = {}
 
@@ -83,7 +87,7 @@ Config.RateLimits = {
 	Claim = { 3, 2 },
 	Settings = { 10, 5 },
 	Tutorial = { 5, 5 },
-	ClientReport = { 3, 60 },
+	ClientReport = { 5, 60 }, -- mesh, sound and (each round) bot reports: Services/ClientReports
 	SitOut = { 4, 4 }, -- the sit-out switch: a few quick changes of mind, not a stream
 }
 

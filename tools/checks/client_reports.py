@@ -1,7 +1,11 @@
 """Shows which uploaded meshes and sounds players' devices couldn't load, and whether the music
 really plays for them (Services/ClientReports records them in the PP_ClientReports data store;
 this reads it on a Roblox test server). Mini-games' own trouble reports are there too (keys m<UserId>),
-e.g. what held a Shark Bait player who got stuck.
+e.g. what held a Shark Bait player who got stuck, and each device's bot reports from its last few rounds
+(keys b<UserId>, Controllers/BotWatchController): how the bots moved on that screen.
+
+    python3 tools/checks/client_reports.py           # everything
+    python3 tools/checks/client_reports.py --bots    # only the bot reports
 
     python3 tools/checks/client_reports.py
 """
@@ -40,9 +44,46 @@ if isinstance(reports, list):  # an empty Luau table encodes as []
     reports = {}
 if not reports:
     print("No reports yet (a player's device sends one ~15 s after joining, and one per round).")
-for key, entry in sorted(reports.items(), key=lambda item: -(item[1] or {}).get("Time", 0) if isinstance(item[1], dict) else 0):
+
+
+def print_bots(key: str, entry: dict):
+    """A device's bot reports, newest first: one block per round (BotWatchController's kinds: snap =
+    drawn position jumped over 5 studs in a frame, jerk = over 2 (counted only), hover = feet over 2
+    studs above anything under it for 0.5 s while not rising or falling, head = standing on someone,
+    me* = the player's own character, invisible = the player stood on a nearly invisible part;
+    Server = the server's counts on each body that round: Retakes = taken back from a player's device,
+    Drops = dropped by the server (Spleef's net), Clamps = speed clamped after a shove)."""
+    for report in entry.get("Reports") or []:
+        when = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(report.get("Time") or 0))
+        counts = report.get("Counts") or {}
+        shown = " ".join(f"{name}={value}" for name, value in sorted(counts.items()))
+        print(f"{key}: bots in {report.get('Where')} at {when} (place v{report.get('PlaceVersion')}, "
+              f"touch={report.get('Touch')}, playing={report.get('In')}, {report.get('Seconds')} s): {shown}")
+        for line in report.get("Events") or []:
+            print(f"    {line}")
+        if report.get("Server"):
+            print(f"    server: {'; '.join(report['Server'])}")
+        if report.get("Anchored"):
+            print(f"    anchored: {', '.join(report['Anchored'])}")
+
+
+def newest(item) -> float:
+    entry = item[1]
+    if not isinstance(entry, dict):
+        return 0
+    reports = entry.get("Reports") or [{}]
+    return -(entry.get("Time") or reports[0].get("Time") or 0)
+
+
+only_bots = "--bots" in sys.argv[1:]
+for key, entry in sorted(reports.items(), key=newest):
     if not isinstance(entry, dict):
         print(key, entry)
+        continue
+    if entry.get("Kind") == "BotsLog":
+        print_bots(key, entry)
+        continue
+    if only_bots:
         continue
     failed = entry.get("Failed") or {}
     if entry.get("Kind") == "Mode":
