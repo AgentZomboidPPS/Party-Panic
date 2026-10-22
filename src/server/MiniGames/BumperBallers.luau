@@ -43,6 +43,11 @@
 -- (their brains are unchanged). A player's ball the server has taken back (see :_takeBack) now
 -- slows as if its stick were let go, instead of coasting on frictionless for a second. The phone
 -- side of the fix (a steady camera, tilt off by default) is in the client half.
+--
+-- Bug sweep (owner: "Let's do a full bug and clean sweep."): four riders' shapes (Yellow ★, Pink ✚,
+-- Navy ☾, Black ◐) aren't in any of the game's fonts, so their tags over the ball and their icons in
+-- the rider strip showed the same empty box: four riders with no shape to tell them apart by. They
+-- are ♪, +, ◀ and ◉ now, all drawn by the fonts and still all different.
 
 local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -121,21 +126,21 @@ local FLOAT_KINDS = {
 }
 
 -- Every rider gets a color, a pattern on the ball and a shape tag, so color is never the only cue.
--- All 12 shapes differ, and riders with similar colors (Red/Orange/Pink, Blue/Navy/Cyan,
--- Green/Lime) never share a pattern.
+-- All 12 shapes differ (and are ones the fonts have: ★ ✚ ☾ ◐ are drawn as an empty box), and riders
+-- with similar colors (Red/Orange/Pink, Blue/Navy/Cyan, Green/Lime) never share a pattern.
 BumperBallers.Riders = {
 	{ Name = "Red", Color = Color3.fromRGB(240, 70, 70), Shape = "●", Pattern = "BumperBallGores" },
 	{ Name = "Blue", Color = Color3.fromRGB(60, 135, 255), Shape = "■", Pattern = "BumperBallGores" },
 	{ Name = "Green", Color = Color3.fromRGB(70, 200, 95), Shape = "▲", Pattern = "BumperBallGores" },
-	{ Name = "Yellow", Color = Color3.fromRGB(255, 205, 45), Shape = "★", Pattern = "BumperBallDots" },
+	{ Name = "Yellow", Color = Color3.fromRGB(255, 205, 45), Shape = "♪", Pattern = "BumperBallDots" },
 	{ Name = "Purple", Color = Color3.fromRGB(160, 90, 255), Shape = "◆", Pattern = "BumperBallDots" },
 	{ Name = "Orange", Color = Color3.fromRGB(255, 140, 40), Shape = "♥", Pattern = "BumperBallBands" },
-	{ Name = "Pink", Color = Color3.fromRGB(255, 100, 190), Shape = "✚", Pattern = "BumperBallDots" },
+	{ Name = "Pink", Color = Color3.fromRGB(255, 100, 190), Shape = "+", Pattern = "BumperBallDots" },
 	{ Name = "Cyan", Color = Color3.fromRGB(40, 210, 230), Shape = "♣", Pattern = "BumperBallDots" },
 	{ Name = "Lime", Color = Color3.fromRGB(165, 230, 60), Shape = "♠", Pattern = "BumperBallBands" },
-	{ Name = "Navy", Color = Color3.fromRGB(50, 60, 170), Shape = "☾", Pattern = "BumperBallBands" },
+	{ Name = "Navy", Color = Color3.fromRGB(50, 60, 170), Shape = "◀", Pattern = "BumperBallBands" },
 	{ Name = "Brown", Color = Color3.fromRGB(150, 95, 60), Shape = "▼", Pattern = "BumperBallDots" },
-	{ Name = "Black", Color = Color3.fromRGB(45, 45, 55), Shape = "◐", Pattern = "BumperBallGores" },
+	{ Name = "Black", Color = Color3.fromRGB(45, 45, 55), Shape = "◉", Pattern = "BumperBallGores" },
 }
 BumperBallers.Patterns = { "BumperBallGores", "BumperBallBands", "BumperBallDots" }
 
