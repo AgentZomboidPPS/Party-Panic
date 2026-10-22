@@ -17,6 +17,9 @@
 -- The GOLD PASS's rewards (owner: "the paid one should also be insane") come after the road's and
 -- the career's: never for coins, their button is gold ("👑 GOLD Lv 25") and opens the Rewards screen
 -- on the gold lane, where the pass is.
+-- Since the second shop pass (owner: "Yes lets add more items after everything else is finished") a
+-- tab can hold twice as many cards, so a tab you switch to starts at its top, not where the last one
+-- was scrolled to.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -302,6 +305,9 @@ function ShopController.Start(context)
 			LayoutOrder = order,
 			Parent = tabs,
 		}, function()
+			if currentSlot ~= tab.Slot then
+				grid.CanvasPosition = Vector2.zero -- a new tab starts at its top
+			end
 			currentSlot = tab.Slot
 			render()
 		end, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
@@ -394,6 +400,9 @@ function ShopController.Start(context)
 			return
 		end
 		if type(tab) == "string" and tabButtons[tab] then
+			if currentSlot ~= tab then
+				grid.CanvasPosition = Vector2.zero
+			end
 			currentSlot = tab
 			if modal.IsOpen then
 				render()
