@@ -249,6 +249,9 @@ function OnboardingController.Start(context)
 		if snapshot.TutorialDone then
 			finished = true
 			panel.Visible = false
+			if hud then
+				hud:SetAttribute("PP_TipShowing", nil) -- (finished elsewhere while a tip was up here)
+			end
 			return
 		end
 		if step == 0 then

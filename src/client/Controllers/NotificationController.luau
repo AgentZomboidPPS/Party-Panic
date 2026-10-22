@@ -6,11 +6,17 @@
 -- Two at a time (a new one pushes the oldest out), so they never reach the menu or the vote.
 -- A toast is as tall as its lines (measured, not AutomaticSize, which cut text short on phones).
 --
+-- Toasts wait while the results card or a Party Cup podium is up (the local player's
+-- PP_ResultsShowing / PP_CupPodium): those windows draw over them, so a toast sent then (a quest done
+-- with the round's rewards, a friend beaten) would come and go unseen. They show when it closes, a
+-- couple at a time, oldest first.
+--
 -- Phones in a round: a mode's action buttons (HIT, RAKE!, PUMP, Bobsled's LEFT...: Api.Button) sit
 -- beside the jump button, right in that low gap, and the toasts drew over them just when an
 -- announcement told players to press ("GOLDEN RUSH!"). While any is showing, the toasts sit above
 -- the buttons' row instead (still clear of the thumbstick's corner and the menu column).
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -36,14 +42,62 @@ local WIDTH, TEXT, PAD_X, PAD_Y = 360, 21, 18, 10
 local TOUCH_WIDTH, TOUCH_TEXT, TOUCH_PAD_X, TOUCH_PAD_Y = 440, 19, 16, 8
 
 local MAX_TOASTS = 2
+-- Windows that draw over the toasts while they're up (attributes on the local player).
+local COVERS = { "PP_ResultsShowing", "PP_CupPodium" }
+local MAX_WAITING = 6 -- toasts kept while covered (the oldest go first past this)
+local RELEASE_GAP = 1.6 -- seconds between waiting toasts once the window closes, after the first two
 local ACTION_GAP = 8 -- phones: between the toasts and the mode's action buttons under them (pixels)
 local touch = false
 local newestLast = false -- phones: the newest toast sits at the bottom of the stack
 local stack: Frame
 local active: { Frame } = {}
 local order = 0
+local waiting: { { Text: string, Kind: string?, Duration: number? } } = {}
+local releasing = false
+
+local function covered(): boolean
+	for _, name in COVERS do
+		if Players.LocalPlayer:GetAttribute(name) == true then
+			return true
+		end
+	end
+	return false
+end
+
+local show: (text: string, kind: string?, duration: number?) -> ()
+
+-- The toasts that waited out a window: two at once (as many as show), the rest one by one.
+local function release()
+	if releasing then
+		return
+	end
+	releasing = true
+	local shown = 0
+	while #waiting > 0 and not covered() do
+		local nextToast = table.remove(waiting, 1)
+		if nextToast then
+			show(nextToast.Text, nextToast.Kind, nextToast.Duration)
+			shown += 1
+		end
+		if shown >= MAX_TOASTS and #waiting > 0 then
+			task.wait(RELEASE_GAP)
+		end
+	end
+	releasing = false
+end
 
 function NotificationController.Show(text: string, kind: string?, duration: number?)
+	if covered() then
+		table.insert(waiting, { Text = text, Kind = kind, Duration = duration })
+		while #waiting > MAX_WAITING do
+			table.remove(waiting, 1)
+		end
+		return
+	end
+	show(text, kind, duration)
+end
+
+function show(text: string, kind: string?, duration: number?)
 	local style = KINDS[kind or "info"] or KINDS.info
 	order += 1
 
@@ -219,6 +273,13 @@ function NotificationController.Start(context)
 			NotificationController.Show(text, kind, duration)
 		end
 	end)
+	for _, name in COVERS do
+		Players.LocalPlayer:GetAttributeChangedSignal(name):Connect(function()
+			if not covered() and #waiting > 0 then
+				task.spawn(release)
+			end
+		end)
+	end
 end
 
 return NotificationController

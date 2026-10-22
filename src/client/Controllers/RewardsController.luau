@@ -14,6 +14,11 @@
 -- State.OpenScreen:Fire("Rewards", "Career") opens it on a tab.
 -- Second pass: CAREER lists the quickest milestones first (5 race podiums before 30 days), the
 -- same order the celebration's "Next:" goal uses (Progression.SortedMilestones).
+-- Medals (owner, asked what keeps players coming back: "Medals: a medal for winning each game and a
+-- few big ones, Roblox badges, a collect-them-all wall in the lobby", then: "Can you work on all of
+-- that? this wont mess with what the other workers are working on right?"): a third tab, MEDALS,
+-- is the collect-them-all screen (Controllers/MedalController draws it); the medal wall's prompt and
+-- the MEDAL EARNED card's SEE ALL open the screen on it (State.OpenScreen:Fire("Rewards", "Medals")).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -24,6 +29,7 @@ local GameState = require(Shared.GameState)
 local Progression = require(Shared.Progression)
 local Remotes = require(Shared.Remotes)
 
+local MedalController = require(script.Parent.MedalController)
 local State = require(script.Parent.Parent.State)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -672,6 +678,8 @@ local function render(keep: Vector2?)
 	end
 	if currentTab == "Career" then
 		renderCareer(keep)
+	elseif currentTab == "Medals" then
+		MedalController.Render(body, keep)
 	else
 		renderRoad(keep)
 	end
@@ -692,9 +700,14 @@ function RewardsController.Start(context)
 		BackgroundTransparency = 1,
 		Parent = content,
 	})
-	-- The tabs, in the title bar after the title.
+	-- The tabs, in the title bar after the title (the third ends 50 units short of the ✕ on phones).
 	local tabHeight = if touch then Theme.Touch.Target else 50
-	for index, tab in { { Key = "Road", Text = "⭐ Level Road" }, { Key = "Career", Text = "🏅 Career" } } do
+	local tabs = {
+		{ Key = "Road", Text = "⭐ Level Road" },
+		{ Key = "Career", Text = "🏅 Career" },
+		{ Key = "Medals", Text = "🥇 Medals" },
+	}
+	for index, tab in tabs do
 		tabButtons[tab.Key] = UIKit.Button({
 			Name = tab.Key .. "Tab",
 			Text = tab.Text,

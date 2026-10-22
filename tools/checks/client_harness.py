@@ -40,13 +40,18 @@ everything and reports every error).
 
 Client-only APIs are replaced by small stand-ins: Players.LocalPlayer (a fake player with a
 PlayerGui folder and attributes) and, without --bots, 11 other fake players for the standings, RenderStepped
-(Heartbeat), StarterGui:SetCore, and the remotes (bindable events the harness can fire). The two
+(Heartbeat), StarterGui:SetCore, SocialService's invites (the invite chip) and the remotes (bindable
+events the harness can fire). The two
 ScreenGuis are made like init.client.luau makes them. Shared modules come from the working tree
 (except Remotes), and so does the profile snapshot (DataService and the two services it needs).
 Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", "Rewards Career")
 and shows a level-up, a career milestone and a returning player's celebration ("LevelUp",
 "LevelUp2", "Milestone", "Welcome"). After the round a level-up card shows while the last
 first-join tip is due; the result's "tipChecks" says what was on screen while it was up and after.
+Medals (MedalController): a MEDAL EARNED card ("Medal"), the medals a returning player had already
+earned as one card ("Medals earlier"), the Rewards screen's MEDALS tab ("Rewards Medals"), and the
+medal wall lit up for the player; the result's "medalChecks" says what showed when (a card waits
+out the vote and steps aside for a level-up card).
 """
 
 import argparse
@@ -60,7 +65,7 @@ from ui_render import devices_luau, size_names  # noqa: E402  (the screens the e
 
 ROOT = Path(__file__).resolve().parents[2]
 CLIENT = ROOT / "src" / "client"
-SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService")
+SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService", "SocialService")
 # Server modules bundled from the working tree: the profile snapshot the client is sent.
 SERVER_MODULES = ("DataService", "Notifier", "Telemetry")
 
@@ -287,6 +292,14 @@ local __shims = {
 		end,
 	}),
 }
+-- Roblox's SocialService (InviteController's invite chip): the stand-in player isn't a real one to
+-- ask about, so the stand-in service says it can send invites, and its prompt opens nothing.
+__shims.SocialService = __wrap(game:GetService("SocialService"), {
+	CanSendGameInviteAsync = function()
+		return true
+	end,
+	PromptGameInvite = function() end,
+})
 local function __service(name)
 	return __shims[name] or game:GetService(name)
 end
@@ -940,6 +953,47 @@ do
 	end
 end
 
+-- 3c. The weekly leaderboard (HallOfFameController): this week's board and last week's top three
+-- with long names, the player 14th with 35 points, so its chip is in the lobby's row from here on,
+-- and the THIS WEEK window the chip opens ("Weekly").
+do
+	local week = __require("Shared/Logic/DailyLogic").WeekNumber(os.time())
+	local top, last = {}, {}
+	for index = 1, 10 do
+		local name = if index % 2 == 1 then "SuperLongDisplayNm20" else "Captain Waffles"
+		table.insert(top, { UserId = 200 + index, Name = name, Points = 1250 - index * 37 })
+	end
+	for index = 1, 3 do
+		table.insert(last, { UserId = 300 + index, Name = "SuperLongDisplayNm20", Points = 2400 - index * 300 })
+	end
+	GameState.SetJSON("HallOfFame", { Week = week, LastWeek = last, Top = top })
+	__player:SetAttribute("PP_WeeklyRank", 14)
+	if okSnap then
+		snapshot.Weekly = { Week = week, Points = 35 }
+		__fire("ProfileData", snapshot)
+	end
+	task.wait(0.5)
+	-- Phones: the row as a player who has finished the first-join tips sees it (this run's player is
+	-- new, so everywhere else the tip has the row's spot): the tip put away for one snapshot.
+	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+	local tip = hud and hud:FindFirstChild("Onboarding", true)
+	if __touchMode and tip and tip.Visible then
+		tip.Visible = false
+		hud:SetAttribute("PP_TipShowing", false)
+		task.wait(1)
+		snap("Weekly row")
+		tip.Visible = true
+		hud:SetAttribute("PP_TipShowing", true)
+		task.wait(0.3)
+	end
+	step = "OpenScreen Weekly"
+	State.OpenScreen:Fire("Weekly")
+	task.wait(1)
+	snap("Weekly")
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
+end
+
 -- 4. A whole round, phase by phase, with three toasts on screen in the lobby. The vote shows the
 -- fullest cards: the two longest names and the longest objective (that game is the one played).
 -- The stand-in players play it (round attributes, as RoundContext sets them), with the stand-in
@@ -1100,6 +1154,135 @@ do
 	end
 	__fire("LevelPop", workspace, 3) -- no head: nothing happens
 end
+-- Medals (MedalController): the player has a few; a medal won just before the vote waits it out,
+-- shows in the lobby ("Medal"), steps aside for a level-up card and comes back; several make one
+-- card; the ones a returning player had already earned make one card ("Medals earlier"); the
+-- Rewards screen's MEDALS tab ("Rewards Medals"); the medal wall lit for this player (stand-in
+-- slots when the place's lobby is older than this client).
+local medalChecks = {}
+do
+	local CollectionService = game:GetService("CollectionService")
+	local MedalCards = __require("Client/Controllers/MedalController")
+	local Celebrations = __require("Client/Controllers/CelebrationController")
+	local function card()
+		local layer = __playerGui:FindFirstChild("PartyPanicMedals")
+		local shown = layer and layer:FindFirstChild("MedalCard")
+		local texts = {}
+		for _, item in if shown then shown:GetDescendants() else {} do
+			if (item:IsA("TextLabel") or item:IsA("TextButton")) and item.Text ~= "" then
+				table.insert(texts, item.Text)
+			end
+		end
+		return if shown then table.concat(texts, " | ") else "none"
+	end
+	if #CollectionService:GetTagged("MedalSlot") == 0 then
+		medalChecks.wallStandIn = true
+		for index, id in { "FirstWin", "WinSpleef" } do
+			local model = Instance.new("Model")
+			model.Name = "Medal_" .. id
+			local disc = Instance.new("Part")
+			disc.Name = "Disc"
+			disc.Shape = Enum.PartType.Cylinder
+			disc.Anchored = true
+			disc.Size = Vector3.new(0.24, 1.44, 1.44)
+			disc.CFrame = CFrame.new(-60 + index * 2, 6, 24)
+			disc.Parent = model
+			local ribbon = disc:Clone()
+			ribbon.Name = "Ribbon"
+			ribbon.Shape = Enum.PartType.Block
+			ribbon.Size = Vector3.new(0.5, 0.9, 0.05)
+			ribbon.Parent = model
+			model:SetAttribute("MedalId", id)
+			model.Parent = workspace
+			model:AddTag("MedalSlot")
+		end
+		local plaque = Instance.new("Part")
+		plaque.Name = "MedalCount"
+		plaque.Anchored = true
+		plaque.Size = Vector3.new(9, 0.7, 0.1)
+		plaque.Parent = workspace
+		plaque:AddTag("MedalCount")
+	end
+	local today = math.floor(os.time() / 86400)
+	snapshot.Medals = { FirstWin = today - 40, TenWins = today - 3, CupChampion = today, WinSpleef = nil, WinFireRope = today - 400, WinHexMeltdown = today }
+	__fire("ProfileData", snapshot)
+	task.wait(0.8)
+	local lit = {}
+	for _, model in CollectionService:GetTagged("MedalSlot") do
+		local disc = model:FindFirstChild("Disc")
+		local id = model:GetAttribute("MedalId")
+		if disc and (id == "FirstWin" or id == "WinSpleef") then
+			table.insert(lit, `{id}: {disc.Material.Name} {disc.Color:ToHex()}`)
+		end
+	end
+	table.sort(lit)
+	medalChecks.wall = table.concat(lit, "; ")
+	local plaques = {}
+	for _, gui in __playerGui:GetChildren() do
+		if gui.Name == "MedalCount" then
+			local text = gui:FindFirstChildWhichIsA("TextLabel", true)
+			table.insert(plaques, if text then text.Text else "?")
+		end
+	end
+	medalChecks.plaque = table.concat(plaques, " / ")
+	step = "medal card"
+	GameState.Set("Phase", "Voting")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 12)
+	__fire("MedalEarned", "WinFireRope", false)
+	task.wait(1.2)
+	medalChecks.duringVote = card()
+	GameState.Set("Phase", "Intermission")
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 20)
+	task.wait(1.6)
+	medalChecks.backInLobby = card()
+	snap("Medal")
+	__fire("Celebrate", { Kind = "Milestone", Coins = 0, Items = { "Title_Veteran" } })
+	task.wait(0.6)
+	medalChecks.levelUpCard = card()
+	Celebrations.Dismiss()
+	task.wait(1.4)
+	medalChecks.afterLevelUpCard = card()
+	MedalCards.Dismiss()
+	task.wait(0.6)
+	for _, id in { "WinHexMeltdown", "EveryGame", "WinSpleef" } do
+		__fire("MedalEarned", id, false)
+	end
+	task.wait(1.2)
+	medalChecks.several = card()
+	MedalCards.Dismiss()
+	task.wait(0.6)
+	for _, id in { "FirstWin", "TenWins", "FiftyWins" } do
+		__fire("MedalEarned", id, true)
+	end
+	task.wait(1.2)
+	medalChecks.earlier = card()
+	snap("Medals earlier")
+	MedalCards.Dismiss()
+	task.wait(0.4)
+	step = "OpenScreen Rewards Medals"
+	State.OpenScreen:Fire("Rewards", "Medals")
+	task.wait(1)
+	snap("Rewards Medals")
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
+	medalChecks.afterAll = card()
+	-- The PARTY CUP's final podium (PP_CupPodium) and the results card (PP_ResultsShowing) have the
+	-- screen: a medal waits for both to clear.
+	GameState.Set("PhaseEndsAt", workspace:GetServerTimeNow() + 20)
+	__player:SetAttribute("PP_CupPodium", true)
+	__fire("MedalEarned", "CupChampion", false)
+	task.wait(1.2)
+	medalChecks.duringCupPodium = card()
+	__player:SetAttribute("PP_ResultsShowing", true)
+	__player:SetAttribute("PP_CupPodium", nil)
+	task.wait(1)
+	medalChecks.duringResultsCard = card()
+	__player:SetAttribute("PP_ResultsShowing", nil)
+	task.wait(1.2)
+	medalChecks.afterPodiumAndResults = card()
+	MedalCards.Dismiss()
+	task.wait(0.4)
+end
 phase("Voting", 12, function()
 	GameState.SetJSON("VoteOptions", {
 		{ Id = longNames[1], Mystery = false },
@@ -1119,6 +1302,12 @@ phase("Preparing", 6, function()
 		who:SetAttribute("PP_Score", 0)
 		who:SetAttribute("PP_ScoreText", "")
 		who:SetAttribute("PP_Team", "")
+	end
+	-- In a team game the server puts the player on a team while the card is up: the card's tab says
+	-- which ("YOU'RE ON ◆ YELLOW", the widest colour team).
+	local played = GameDefinitions.Get(ids[1])
+	if played and played.IsTeam then
+		__player:SetAttribute("PP_Team", "Yellow")
 	end
 end)
 task.wait(2) -- Random's reel lands on the game that won
@@ -1172,32 +1361,54 @@ end
 -- The team pill under the status line (HudController) shows every team in the round with its mark
 -- and score: the versus modes' roles and two colour teams (hudChecks.teamPill: what it read and how
 -- wide it was, in its own units), then all four colour teams with 3-digit scores, its widest (the
--- snapshot).
+-- snapshot). The player is on one of the teams each time (PP_Team), so the pill marks theirs: "YOU"
+-- by its mark and a box round its words (hudChecks: each team's words in order, the boxed one in
+-- [brackets]).
 step = "team scores"
 local hudChecks = { teamPill = {} }
 do
 	local function pill()
 		local hud = __playerGui:FindFirstChild("PartyPanicHUD")
 		local frame = hud and hud:FindFirstChild("TeamScores", true)
-		local label = frame and frame:FindFirstChildWhichIsA("TextLabel")
-		return if label and frame.Visible then `{label.Text}  [{frame.Size.X.Offset} wide]` else "hidden"
+		local row = frame and frame:FindFirstChild("Row")
+		if not row or not frame.Visible then
+			return "hidden"
+		end
+		local parts = {}
+		for _, part in row:GetChildren() do
+			local words = part:FindFirstChild("Words")
+			if part:IsA("Frame") and part.Visible and words then
+				table.insert(parts, part)
+			end
+		end
+		table.sort(parts, function(a, b)
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+		local shown = {}
+		for _, part in parts do
+			local text = part.Words.Text
+			table.insert(shown, if part.BackgroundTransparency < 1 then `[{text}]` else text)
+		end
+		return `{table.concat(shown, "  ")}  [{frame.Size.X.Offset} wide]`
 	end
-	for _, scores in
+	for _, case in
 		{
-			{ Sharks = 3, Swimmers = 120 },
-			{ SandKings = 85, Divers = 240 },
-			{ Archers = 4, Runners = 7 },
-			{ Red = 12, Blue = 9 },
-			{ Red = 100, Blue = 64, Green = 109, Yellow = 7 },
+			{ { Sharks = 3, Swimmers = 120 }, "Swimmers" },
+			{ { SandKings = 85, Divers = 240 }, "SandKings" },
+			{ { Archers = 4, Runners = 7 }, "Archers" },
+			{ { Red = 12, Blue = 9 }, "Blue" },
+			{ { Red = 100, Blue = 64, Green = 109, Yellow = 7 }, "Green" },
 		}
 	do
-		GameState.SetJSON("TeamScores", scores)
+		__player:SetAttribute("PP_Team", case[2])
+		GameState.SetJSON("TeamScores", case[1])
 		task.wait(0.3)
 		table.insert(hudChecks.teamPill, pill())
 	end
 	task.wait(0.5)
 	snap("InRound teams")
 	GameState.SetJSON("TeamScores", {})
+	__player:SetAttribute("PP_Team", "")
 	task.wait(0.1)
 	table.insert(hudChecks.teamPill, "after the round: " .. pill())
 end
@@ -1481,6 +1692,116 @@ end
 phase("Waiting", 0)
 task.wait(1)
 
+-- 4b. The PARTY CUP (CupController), from the server's attribute (GameState "Cup", as
+-- Services/CupService writes it): after round 2 of 5 with the player 5th of eight, the standings
+-- for a moment back in the lobby ("Cup moment": the top three and you), the chip in the lobby's row
+-- ("Cup chip"), the standings window it opens ("Cup standings"), then a cup's final standings and
+-- its podium as the results card's time runs out ("Cup podium": a bot champion with --bots, else
+-- the player), closed by the vote. cupChecks: what the chip and the screens showed.
+local cupChecks = {}
+do
+	local CupController = __require("Client/Controllers/CupController")
+	-- On phones the lobby's chips and the moment give way to the first-join tip: let it finish.
+	for _ = 1, 40 do
+		if table.find(__sent, "TutorialDone") then
+			break
+		end
+		task.wait(0.25)
+	end
+	cupChecks.tutorialDone = table.find(__sent, "TutorialDone") ~= nil
+	local others = {}
+	for index, other in __players do
+		if index > 1 then
+			table.insert(others, { other.DisplayName, other.UserId, false })
+		end
+	end
+	for _, bot in bots do
+		if bot.info.Parent then
+			table.insert(others, { bot.display, bot.userId, true })
+		end
+	end
+	local function standings(myPlace, points)
+		local rows, nextOther = {}, 0
+		for place = 1, 8 do
+			local gain = ({ 10, 8, 6, 5, 4, 3, 2, 1 })[place]
+			local who = if place == myPlace then { __player.DisplayName, __player.UserId, false } else nil
+			if not who then
+				nextOther += 1
+				who = others[nextOther]
+			end
+			if who then
+				table.insert(rows, { UserId = who[2], Name = who[1], Points = points[place], IsBot = who[3], Place = place, Gain = gain })
+			end
+		end
+		return rows
+	end
+	local lastPodium = { Number = 2, Podium = standings(if #bots > 0 then 1 else 3, { 44, 40, 37 }) }
+	-- Who wears the crown (a person: with --bots the player won last cup, and loses it to a bot now).
+	local champion = if #bots > 0
+		then { UserId = __player.UserId, Name = __player.DisplayName, Cup = 2 }
+		else { UserId = others[1][2], Name = others[1][1], Cup = 2 }
+	local function setPhase(name, seconds)
+		GameState.Set("Phase", name)
+		GameState.Set("PhaseEndsAt", if seconds > 0 then workspace:GetServerTimeNow() + seconds else 0)
+	end
+	step = "cup moment"
+	setPhase("Results", 3)
+	GameState.SetJSON("Cup", {
+		Number = 3, Round = 3, Of = 5, Played = 2, Done = false, EndedAt = workspace:GetServerTimeNow(),
+		Standings = standings(5, { 18, 16, 14, 12, 11, 9, 6, 4 }), Champion = champion, Last = lastPodium,
+	})
+	task.wait(1)
+	setPhase("Cleanup", 0)
+	task.wait(1.4) -- a beat for a level-up card to go first, then it pops in
+	snap("Cup moment")
+	cupChecks.moment = CupController.Status()
+	setPhase("Intermission", 20)
+	task.wait(4.6) -- the moment's time
+	cupChecks.afterMoment = CupController.Status()
+	snap("Cup chip")
+	step = "cup standings"
+	CupController.OpenStandings()
+	task.wait(1)
+	snap("Cup standings")
+	cupChecks.standings = CupController.Status()
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
+	-- The cup's last round: its final standings come with the results, the podium takes over as the
+	-- results card's time runs out, the new cup arrives as it's paid, and the vote closes it.
+	step = "cup podium"
+	setPhase("InRound", 30)
+	local myFinal = if #bots > 0 then 2 else 1
+	local final = standings(myFinal, { 46, 41, 37, 30, 26, 21, 17, 12 })
+	GameState.SetJSON("Cup", {
+		Number = 3, Round = 5, Of = 5, Played = 5, Done = true, EndedAt = workspace:GetServerTimeNow(),
+		Standings = final, Champion = champion, Last = lastPodium,
+	})
+	task.wait(0.5)
+	cupChecks.podiumBeforeResults = CupController.Status().Podium
+	setPhase("Results", 1.5)
+	task.wait(1.7)
+	snap("Cup podium")
+	cupChecks.podium = CupController.Status()
+	setPhase("Cleanup", 0)
+	task.wait(0.4)
+	local podiumRows = {}
+	for index = 1, 3 do
+		table.insert(podiumRows, final[index])
+	end
+	GameState.SetJSON("Cup", {
+		Number = 4, Round = 1, Of = 5, Played = 0, Done = false, EndedAt = workspace:GetServerTimeNow(),
+		Standings = {}, Champion = if final[1].IsBot then nil else { UserId = final[1].UserId, Name = final[1].Name, Cup = 3 },
+		Last = { Number = 3, Podium = podiumRows },
+	})
+	task.wait(0.5)
+	cupChecks.newCup = CupController.Status()
+	setPhase("Voting", 12)
+	task.wait(0.5)
+	cupChecks.atTheVote = CupController.Status()
+	setPhase("Waiting", 0)
+	task.wait(0.5)
+end
+
 -- 5. Sitting out (UI/SitOutSwitch: by the banner, and in Settings). A tap flips the switches at
 -- once and asks the server; with no answer they slide back. Then the server's answer (PP_SitOut,
 -- as Services/SitOutService sets it) and the screens that change for someone sitting out.
@@ -1626,6 +1947,8 @@ return game:GetService("HttpService"):JSONEncode({
 	hudChecks = hudChecks,
 	sitOutChecks = sitOutChecks,
 	tipChecks = tipChecks,
+	cupChecks = cupChecks,
+	medalChecks = medalChecks,
 	textReport = __textReport,
 	portals = __portals,
 })

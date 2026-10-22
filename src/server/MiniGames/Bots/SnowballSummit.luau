@@ -58,7 +58,9 @@ function Brain.Step(bot, ctx, mode, _dt)
 	if ball then
 		memory.Seen[ball.Id] = memory.Seen[ball.Id] or now
 		if not memory.Reacted[ball.Id] and now - memory.Seen[ball.Id] >= bot:Reaction() * 0.6 then
-			memory.Reacted[ball.Id] = if bot:Chance(0.35 + skill * 0.55) then "dodge" else "freeze"
+			-- (most of the time, like a decent player watching the ball: about 2 in 3 for the clumsiest
+			-- bots, 9 in 10 for the best; they used to stand still for nearly half of them)
+			memory.Reacted[ball.Id] = if bot:Chance(0.5 + skill * 0.45) then "dodge" else "freeze"
 		end
 		if memory.Reacted[ball.Id] == "dodge" then
 			if ball.R < 2.6 and eta < 0.32 and eta > 0.08 then

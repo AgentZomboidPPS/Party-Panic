@@ -511,11 +511,51 @@ local function __grantRewards(definition, results, before)
 	return report
 end
 
--- What happens to the stand-ins during the rules card (round_harness.py --leave-at / --reset-at):
--- every one of them leaves `leaveAt` seconds in (only real bots stay), or the last one's character
--- dies `resetAt` seconds in, like a reset from the Roblox menu; the report says where it is at GO
--- and after (it should be back on its spot, or where a respawn mode's Respawn hook puts it, and
--- still in).
+-- round_harness.py --drop-at T: T seconds into the rules card the last stand-in drops straight
+-- through its floor to under KillY, as on a device that hadn't loaded the floor yet (owner: "Friend
+-- fell through the floor while loading into pump and pop."). Before GO that isn't a fall: the round
+-- puts the same character straight back on its spot (RoundContext._putBack), alive and still in.
+-- The report says where it is a moment later, just before GO and after.
+local function __dropThrough(ctx, player, at, summary, prepStart, prepDeadline)
+	task.delay(math.max(0, prepStart + at - os.clock()), function()
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not character or not root then
+			summary.drop = "no character to drop"
+			return
+		end
+		local spot = root.Position
+		local report = { who = player.Name, at = at, checks = {} }
+		summary.drop = report
+		character:PivotTo(character:GetPivot() - Vector3.new(0, spot.Y - ctx.KillY + 20, 0))
+		report.droppedTo = `{__round(ctx.KillY - root.Position.Y)} under KillY`
+		local function check(label)
+			local _, _, rootNow = ctx:GetCharacter(player)
+			table.insert(report.checks, {
+				label = label,
+				alive = ctx:IsAlive(player),
+				sameCharacter = player.Character == character,
+				fromSpot = if rootNow then __round((rootNow.Position - spot).Magnitude) else "no character",
+			})
+		end
+		task.wait(0.5)
+		check("0.5s later")
+		task.wait(math.max(0, prepDeadline - 0.3 - os.clock()))
+		check("just before GO")
+		while not ctx.Started and ctx.Active do
+			task.wait(0.05)
+		end
+		task.wait(1)
+		check("1s after GO")
+		report.putBacks = __require("Server/Services/Telemetry").Counters.PutBack or 0
+	end)
+end
+
+-- What happens to the stand-ins during the rules card (round_harness.py --leave-at / --reset-at /
+-- --drop-at): every one of them leaves `leaveAt` seconds in (only real bots stay), or the last one's
+-- character dies `resetAt` seconds in, like a reset from the Roblox menu, or drops through its floor
+-- `dropAt` seconds in (__dropThrough); the report says where it is at GO and after (it should be
+-- back on its spot, or where a respawn mode's Respawn hook puts it, and still in).
 function __prepEvents(ctx, roundPlayers, watch, summary, leave, prepStart, prepDeadline)
 	if watch.leaveAt then
 		task.delay(math.max(0, prepStart + watch.leaveAt - os.clock()), function()
@@ -526,6 +566,9 @@ function __prepEvents(ctx, roundPlayers, watch, summary, leave, prepStart, prepD
 		end)
 	end
 	local player = roundPlayers[#roundPlayers]
+	if watch.dropAt and player then
+		__dropThrough(ctx, player, watch.dropAt, summary, prepStart, prepDeadline)
+	end
 	if not watch.resetAt or not player then
 		return
 	end
@@ -581,6 +624,64 @@ function __prepEvents(ctx, roundPlayers, watch, summary, leave, prepStart, prepD
 			check(`{after}s after GO`)
 		end
 	end)
+end
+
+-- The stand-in client's ArrivalController (owner: "Friend fell through the floor while loading into
+-- pump and pop."): every hold of the stand-in's character goes in summary.clientHolds (from and to,
+-- in seconds since the rules card came up, and how far from the spot the round gave it: 0 is on it,
+-- "not placed yet" is before, at its start in the empty test world). Placed on a floor that's there,
+-- it's never held. With round_harness.py --late-floor T its ground probe finds nothing for the first
+-- T seconds, like a phone still loading the arena: it must be held on its spot until then, and let go
+-- then. Returns a function that stops watching.
+function __watchHolds(ctx, summary, prepStart, lateFloor)
+	local ok, arrival = pcall(__require, "Client/Controllers/ArrivalController")
+	if not ok then
+		summary.clientHolds = "no ArrivalController: " .. tostring(arrival)
+		return nil
+	end
+	if lateFloor then
+		local probe = arrival.GroundUnder
+		local floorAt = prepStart + lateFloor
+		arrival.GroundUnder = function(...)
+			if os.clock() < floorAt then
+				return false -- this device hasn't got the arena yet
+			end
+			return probe(...)
+		end
+		summary.lateFloor = lateFloor
+	end
+	local RunService = game:GetService("RunService")
+	local holds = {}
+	summary.clientHolds = holds
+	local open, at = nil, nil
+	local function close()
+		if open then
+			open.to = __round(os.clock() - prepStart)
+			table.insert(holds, open)
+			open, at = nil, nil
+		end
+	end
+	local watching = RunService.Heartbeat:Connect(function()
+		local heldAt = arrival.HeldAt()
+		if at and (not heldAt or (heldAt - at).Magnitude > 1) then
+			close()
+		end
+		if heldAt and not open then
+			-- Where it's held, against where the round put it (its spot, root 3 studs up).
+			local spot = ctx._spots[__localPlayer]
+			open = {
+				from = __round(os.clock() - prepStart),
+				offSpot = if spot
+					then __round((heldAt - (spot.CFrame.Position + Vector3.yAxis * 3)).Magnitude)
+					else "not placed yet",
+			}
+			at = heldAt
+		end
+	end)
+	return function()
+		watching:Disconnect()
+		close()
+	end
 end
 
 -- The stand-in client's rules card (round_harness.py --client --ui-at rules,closed): "rules" is a
@@ -700,6 +801,7 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 				"RewardsController",
 				"CelebrationController",
 				"MiniGameController",
+				"ArrivalController",
 			}
 		do
 			local okLoad, controller = pcall(__require, "Client/Controllers/" .. name)
@@ -707,12 +809,30 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 				__note(`client {name} failed to load: {controller}`)
 				continue
 			end
+			-- No physics here, so PreSimulation and PostSimulation never fire: ArrivalController steps on
+			-- Heartbeat instead, its "after the physics step" deferred to the end of the frame. (Only for
+			-- it, while it starts: the modes' own pose loops stay as they always ran here.)
+			local physicsShim = name == "ArrivalController"
+			if physicsShim then
+				rawset(__clientShims.RunService, "PreSimulation", __realRun.Heartbeat)
+				rawset(__clientShims.RunService, "PostSimulation", {
+					Connect = function(_, fn)
+						return __realRun.Heartbeat:Connect(function(...)
+							task.defer(fn, ...)
+						end)
+					end,
+				})
+			end
 			task.spawn(function()
 				local okStart, err = pcall(controller.Start, context)
 				if not okStart then
 					__note(`client {name} failed to start: {err}`)
 				end
 			end)
+			if physicsShim then
+				rawset(__clientShims.RunService, "PreSimulation", nil)
+				rawset(__clientShims.RunService, "PostSimulation", nil)
+			end
 		end
 		clientGuis = __localPlayer.PlayerGui
 		__uiScaleFor = __require("Client/UI/UIKit").ScaleFor -- gui_dump.luau: the scale per screen
@@ -812,6 +932,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 	end
 
 	local t0 = os.clock()
+	local stopWatchingHolds = if clientMode and not watcher
+		then __watchHolds(ctx, summary, t0, watch and watch.lateFloor)
+		else nil
 	local okPrepare, prepareErr = pcall(miniGame.Prepare, miniGame)
 	summary.prepare = if okPrepare then "ok" else tostring(prepareErr)
 	summary.prepareSeconds = __round(os.clock() - t0)
@@ -1079,6 +1202,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		for _, bot in bots do
 			BotService.Remove(bot)
 		end
+	end
+	if stopWatchingHolds then
+		stopWatchingHolds()
 	end
 	summary.errors = __errors
 	summary.textReport = if summary.ui then __textReport else nil
