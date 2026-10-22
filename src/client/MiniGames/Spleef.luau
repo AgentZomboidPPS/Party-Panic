@@ -505,11 +505,12 @@ function Spleef.Start(api)
 			part.LocalTransparencyModifier = 0.7 * q
 			if block.Cracks then
 				local top = block.Top + offset + Vector3.new(0, 0.03, 0)
-				for _, crack in block.Cracks do
+				for index, crack in block.Cracks do
 					local length = crack.Length * (0.3 + 0.7 * p)
 					local crackPart = crack.Part
 					crackPart.Size = Vector3.new(0.16, 0.05, length)
-					crackPart.CFrame = CFrame.new(top)
+					-- (Each line a hair higher than the last, so where they meet they don't flicker.)
+					crackPart.CFrame = CFrame.new(top + Vector3.new(0, index * 0.012, 0))
 						* CFrame.Angles(0, crack.Angle, 0)
 						* CFrame.new(0, 0, -length / 2)
 					crackPart.Transparency = 0.7 * q
