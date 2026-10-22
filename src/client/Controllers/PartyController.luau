@@ -3,10 +3,12 @@
 -- (Services/PartyService: the PP_Party and PP_PartySeat player attributes, and the "Party" remote);
 -- this only shows them and asks.
 --   * The 👥 PARTY chip in the lobby's row (UI/LobbyRibbon, priority 2.5: after the cup, before the
---     invite chip) opens the PARTY window: your party (👑 its leader) with LEAVE, and everyone else
+--     invite chip; it shows once someone else is on the server) opens the PARTY window: your party (👑 its leader) with LEAVE, and everyone else
 --     here with an INVITE each, your Roblox friends (⭐) first. Someone in a full party has no INVITE
 --     ("FULL"); someone in another party shows it ("👥 2/4": joining yours takes them out of it). A
---     tapped INVITE says SENT until the answer comes.
+--     tapped INVITE says SENT until the answer comes. At the bottom, Roblox's invite to the game for
+--     friends who aren't here (on a phone's full row of chips, the 👋 INVITE chip can be the one left
+--     out while PARTY shows).
 --   * An invite comes as a card: "👥 Bubbles invited you to their party!" with JOIN and NO, and a bar
 --     running down its 20 seconds. It shows in the lobby only (its time stops under the rules card
 --     and in the round, and it comes back after), one at a time. Phones: in the middle of the gap
@@ -19,6 +21,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SocialService = game:GetService("SocialService") -- Roblox's invites to the game
 
 local Shared = ReplicatedStorage.Shared
 local GameState = require(Shared.GameState)
@@ -44,11 +47,12 @@ local TAG_SWEEP = 1 -- seconds between name tag checks (a new character brings a
 local WINDOW = Vector2.new(620, 600)
 local ROW = { Touch = 76, Pc = 50 } -- a player's line in the window: a thumb-sized INVITE on phones
 local BUTTON = { Touch = Vector2.new(176, 72), Pc = Vector2.new(140, 44) }
-local CARD = { Touch = Vector2.new(500, 236), Pc = Vector2.new(500, 210) }
-local CARD_BUTTON = { Touch = Vector2.new(200, 72), Pc = Vector2.new(180, 52) }
+local CARD = { Touch = Vector2.new(500, 236), Pc = Vector2.new(500, 196) }
+local CARD_BUTTON = { Touch = Vector2.new(200, 72), Pc = Vector2.new(180, 48) }
 -- Where the card's middle is, as a share of the screen's safe area: phones, right of the MOVE stick's
--- zone (its left 40%) and left of the menu column; PC, in the middle under the chips.
-local CARD_AT = { Touch = Vector2.new(0.64, 0.52), Pc = Vector2.new(0.5, 0.42) }
+-- zone (its left 40%) and left of the menu column; PC, in the middle of the band between the chips'
+-- row and the vote cards.
+local CARD_AT = { Touch = Vector2.new(0.64, 0.52), Pc = Vector2.new(0.5, 0.46) }
 
 local touch = false
 local remote: RemoteEvent
@@ -64,6 +68,7 @@ local asked: { [number]: number } = {} -- UserId -> until when my invite to them
 local friends: { [number]: boolean } = {}
 local watched: { [any]: boolean } = {}
 local refreshQueued = false
+local canInviteFriends = false -- Roblox lets this player send invites to the game
 
 local function me(): Player
 	return Players.LocalPlayer
@@ -261,13 +266,13 @@ local function fillWindow()
 	end
 
 	-- Everyone else.
-	heading(nextOrder(), "INVITE")
+	heading(nextOrder(), "INVITE TO YOUR PARTY")
 	if full then
 		note(nextOrder(), `Your party is full ({PartyLogic.MaxSize} at most).`, Theme.Colors.Yellow)
 	end
 	local people = others(mine)
 	if #people == 0 then
-		note(nextOrder(), "Nobody else is here yet. Invite friends to the game with 👋 INVITE!")
+		note(nextOrder(), "Nobody else is here yet.")
 	end
 	for _, player in people do
 		local theirs = partyOf(player)
@@ -277,16 +282,37 @@ local function fillWindow()
 		local status = if theirs then ` · 👥 {theirSize}/{PartyLogic.MaxSize}` else ""
 		local friend = if friends[player.UserId] then "⭐ " else ""
 		nameLabel(row, `{friend}{player.DisplayName}{status}`, size(BUTTON).X)
+		-- (FULL and SENT wear the panel's colours: they're not buttons.)
 		if theyreFull then
 			pill(row, "FULL", nil, Theme.Colors.PanelLight, Theme.Colors.Panel)
 		elseif waitingFor(player.UserId) then
-			pill(row, "SENT ✓", nil, Theme.Colors.Lavender, Theme.Colors.Purple)
+			pill(row, "SENT ✓", nil, Theme.Colors.PanelLight, Theme.Colors.Panel)
 		elseif not full then
 			local userId = player.UserId
 			pill(row, "INVITE", function()
 				invite(userId)
 			end, Theme.Colors.Green, Color3.fromRGB(60, 160, 90))
 		end
+	end
+
+	-- Friends who aren't here yet: Roblox's invite (the lobby's 👋 INVITE chip does the same, but on
+	-- a phone's full row it can be the chip left out).
+	if canInviteFriends then
+		UIKit.Button({
+			Name = "InviteFriends",
+			Text = "👋 INVITE FRIENDS TO THE GAME",
+			TextSize = if touch then 24 else 22,
+			Size = UDim2.new(1, -12, 0, size(BUTTON).Y),
+			CornerRadius = "round",
+			LayoutOrder = nextOrder(),
+			Parent = list,
+		}, function()
+			window:Close()
+			local ok, err = pcall(SocialService.PromptGameInvite, SocialService, me())
+			if not ok then
+				warn(`[PartyController] the invite prompt didn't open: {err}`)
+			end
+		end, Theme.Colors.Green, Color3.fromRGB(60, 160, 90))
 	end
 end
 
@@ -314,6 +340,11 @@ local function answer(join: boolean)
 	end
 	shown = nil
 	queueRefresh()
+end
+
+-- The card's JOIN (true) or NO (false) (the client harness answers with it too).
+function PartyController.Answer(join: boolean)
+	answer(join)
 end
 
 -- Shows the oldest invite when the lobby's up, and hides the card (stopping its time) when not.
@@ -479,8 +510,11 @@ end
 
 -- Keeping up ------------------------------------------------------------------------------------------
 
+-- The chip shows when there's someone to party with: alone (bots aren't players), the row's room goes
+-- to the 👋 INVITE chip, which brings friends in.
 local function refreshChip()
-	chip:Set("👥", "PARTY")
+	local someone = #Players:GetPlayers() > 1 or partyOf(me()) ~= nil
+	chip:Set("👥", if someone then "PARTY" else "")
 end
 
 local function refreshAll()
@@ -530,7 +564,7 @@ local function watch(player: Player)
 end
 
 local function onServer(kind: any, userId: any, name: any, left: any)
-	if type(userId) ~= "number" then
+	if type(userId) ~= "number" or userId ~= userId then
 		return
 	end
 	if kind == "Invited" and type(name) == "string" and type(left) == "number" then
@@ -613,6 +647,11 @@ function PartyController.Start(context)
 	})
 	buildCard(context)
 	refreshChip()
+	task.spawn(function()
+		local ok, result = pcall(SocialService.CanSendGameInviteAsync, SocialService, me())
+		canInviteFriends = ok and result == true
+		queueRefresh()
+	end)
 
 	remote.OnClientEvent:Connect(onServer)
 	for _, player in Players:GetPlayers() do

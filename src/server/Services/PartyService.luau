@@ -152,7 +152,7 @@ end
 local function invite(player: Player, userId: any)
 	local other = personHere(userId)
 	if not other or other == player or not lobbyUp() then
-		if type(userId) == "number" then
+		if type(userId) == "number" and userId == userId then
 			send(player, "Done", userId) -- the button goes back
 		end
 		return
