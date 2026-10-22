@@ -3,12 +3,13 @@
 -- round, the invite button. Each feature adds its own chip here instead of finding its own spot on
 -- the screen, so no two of them ever draw on top of each other: the row keeps them side by side in
 -- priority order and leaves out the ones that don't fit, lowest priority first.
--- Phones: under the top bar in the middle, the first-join tip's spot (the row gives way to the tip
--- and to a celebration card, which use it too), between the profile chip and the menu column;
--- chips are 44 pt tall. PC: under the phase banner, below the line of the coins and their pink
--- NEXT reward pill (which a full row reached over at first). It shows in the lobby only: never during a
--- round, the rules card or the results, and not during the vote on phones (the vote cards' spot)
--- or while a lobby game has the screen (the HUD's PP_TipsAside: Skee-Ball).
+-- Phones: under the top bar in the middle, the first-join tip's spot (the row gives way to the tip,
+-- which uses it too), between the profile chip and the menu column; chips are 44 pt tall. PC: under
+-- the phase banner, below the line of the coins and their pink NEXT reward pill (which a full row
+-- reached over at first). It shows in the lobby only: never during a round, the rules card or the
+-- results, not during the vote on phones (the vote cards' spot), and not while a level-up or medal
+-- card is up (PP_Celebrating: on phones it's in the same spot, on PC its top reaches the row) or a
+-- lobby game has the screen (the HUD's PP_TipsAside: Skee-Ball).
 --
 --   local chip = LobbyRibbon.Add(context, { Name = "Cup", Priority = 2, OnClick = openStandings })
 --   chip:Set("🏆", "CUP 3/5")   -- icon and words; empty words take the chip off the row
@@ -78,7 +79,7 @@ local function refresh()
 	local free = LOBBY[phase]
 		and not replaying
 		and not (touch and HIDDEN_ON_PHONES[phase])
-		and not (touch and player:GetAttribute("PP_Celebrating") == true)
+		and player:GetAttribute("PP_Celebrating") ~= true
 		and not (touch and hud:GetAttribute("PP_TipShowing") == true)
 		and hud:GetAttribute("PP_TipsAside") ~= true
 	local s = size()
