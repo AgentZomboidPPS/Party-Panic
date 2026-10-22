@@ -18,6 +18,7 @@ notation) and played by tools/music/instruments.py:
     BobsledRun    "Ice Chute Rush"        sleigh bells and heroic brass down the ice
     SharkBait     "Shark Surf Panic"      surf guitar, spring reverb and a lurking shark riff
     StampOut      "Ink Pad Ska"           a two-tone ska band on a giant desk, BIG STAMPS up a step at 30 s
+    RockinRaceway "Hobby Horse Hop"       rock'n'roll sax, boogie piano and galloping hooves round the fair
 
 Every track opens with an intro of at least 13 seconds (the rules card and the 3-2-1, while the
 game loads its own track), then the band kicks in on GO: AudioController starts the track so its
