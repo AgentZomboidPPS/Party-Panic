@@ -25,6 +25,14 @@
 -- skill-based amount, wobble and now and then slip, so careful players beat most of them. Nothing in
 -- this mode can hurt anyone (no hazards), and the server seats bots on their crayons itself (players'
 -- own clients seat them), so spectators and the round code see everyone riding.
+--
+-- Wandering (owner: "On trace race you should be able to leave your own lane. They wont score points
+-- but its funny"): a player's crayon may leave its lane and ride anywhere on the paper, over the
+-- other lanes, up to a stud and a half from the paper's outer edges (Rules.Bounds). The server takes
+-- those positions like any others (in order, inside the ride, no faster sideways than the crayon
+-- steers), refuses anything off the paper, and scores every step against the rider's own guide, so a
+-- line drawn in someone else's lane scores 0. Its crayon, rider and line follow it there on every
+-- screen. Bots keep to their own lanes.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -71,6 +79,8 @@ type Lane = {
 	Index: number,
 	Color: number,
 	Frame: CFrame, -- the start line's middle on the paper, facing down the lane (-Z)
+	Lo: number, -- the crayon's x can go from Lo to Hi: anywhere on the paper (Rules.Bounds)
+	Hi: number,
 	Crayon: Model?,
 }
 
@@ -105,10 +115,13 @@ function TraceRace:Prepare()
 	local shared = {}
 	for index, player in players do
 		local x = origin.X + (index - (count + 1) / 2) * Rules.LANE
+		local lo, hi = Rules.Bounds(index, count)
 		local lane: Lane = {
 			Index = index,
 			Color = colors[(index - 1) % #colors + 1],
 			Frame = CFrame.new(x, self.paperY, self.zStart),
+			Lo = lo,
+			Hi = hi,
 		}
 		self.lanes[player] = lane
 		table.insert(shared, { U = player.UserId, I = index, C = lane.Color })
@@ -208,7 +221,7 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 	local width = count * Rules.LANE
 	local zStart, zFinish = self.zStart, self.zStart - length
 	local paperY = self.paperY
-	local paperW, paperL = width + 10, length + RUN_IN + RUN_OUT
+	local paperW, paperL = width + 2 * Rules.MARGIN, length + RUN_IN + RUN_OUT -- (crayons ride all of it)
 	local paperMid = (zStart + RUN_IN + zFinish - RUN_OUT) / 2
 	local boardW = paperW + 22
 	local boardFar = zFinish - RUN_OUT - 30 -- room for the clip
@@ -253,7 +266,7 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 		Build.Decor({
 			Name = "Margin",
 			Size = Vector3.new(0.3, LAYER.Lane * 2, paperL - 1),
-			CFrame = CFrame.new(origin.X + side * (width / 2 + 2.5), paperY, paperMid),
+			CFrame = CFrame.new(origin.X + side * (width / 2 + Rules.MARGIN / 2), paperY, paperMid),
 			Color = rgb(240, 120, 130),
 			Parent = arena,
 		})
@@ -602,7 +615,12 @@ function TraceRace:_onTrace(player: any, data: any)
 		return
 	end
 	local list = self.pending[player]
-	local limit = Rules.LIMIT + 0.05
+	-- Anywhere on the paper, over the other lanes too (only the rider's own guide scores).
+	local lane = self.lanes[player]
+	if not lane then
+		return
+	end
+	local lo, hi = lane.Lo - 0.05, lane.Hi + 0.05
 	for at = 1, #data, 2 do
 		local t, x = data[at], data[at + 1]
 		if type(t) ~= "number" or type(x) ~= "number" or t ~= t or x ~= x then
@@ -618,7 +636,7 @@ function TraceRace:_onTrace(player: any, data: any)
 		then
 			continue
 		end
-		if math.abs(x) > limit then
+		if x < lo or x > hi then
 			continue
 		end
 		-- (Clients cap the crayon at STEER; the 15% over that covers frame timing.)
@@ -640,7 +658,8 @@ end
 -- The next crayon positions for a bot (or a test player) of this skill (0..1), up to `now`, in the
 -- same flat { t, x, ... } form a client sends. A bot follows the guide a moment late (clumsy riders
 -- turn late and cut every bend), wobbles round it and now and then slips off the line and back;
--- skilled riders are quicker and steadier (about 95%), clumsy ones wander (60s-70s).
+-- skilled riders are quicker and steadier (about 95%), clumsy ones wander (60s-70s). Bots never
+-- leave their own lane (Rules.LIMIT), though players can.
 function TraceRace:BotSamples(player: any, skill: number, random: Random, now: number): { number }?
 	local race = self.race
 	if not race or now < race.T0 then

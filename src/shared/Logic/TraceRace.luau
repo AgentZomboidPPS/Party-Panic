@@ -18,13 +18,22 @@
 -- would still touch it often. Scores are measured against that: every step also knows what a crayon
 -- left in the middle would score there (Course.I), and a player's percent is how much of the gap
 -- between "never steered" and "perfect" they made up. Never steering scores 0; a perfect line 100.
+--
+-- Wandering (owner: "On trace race you should be able to leave your own lane. They wont score points
+-- but its funny"): the lanes lie side by side on one sheet of paper, and a crayon can go anywhere on
+-- it, over the other lanes too, up to EDGE from the paper's outer edges (Bounds, in the crayon's own
+-- lane's x). A step is always judged against the rider's own guide, so a line scribbled in someone
+-- else's lane, even right along their guide, is ZERO or more from it and scores 0, the same as a
+-- step never drawn. Bots stay in their own lane (LIMIT).
 
 local TraceRace = {}
 
 TraceRace.LANE = 16 -- lane width in studs
 TraceRace.SPEED = 15 -- studs a second down the lane
 TraceRace.STEER = 13 -- the crayon's top sideways speed (studs a second)
-TraceRace.LIMIT = 7 -- how far from the lane's middle the crayon can go
+TraceRace.LIMIT = 7 -- a crayon in its own lane is this far from the middle at most (bots never go further)
+TraceRace.MARGIN = 5 -- paper beyond the outer lanes, each side: it's (count * LANE + 2 * MARGIN) wide
+TraceRace.EDGE = 1.5 -- how close to the paper's outer edges a crayon can go (its body, 2.4 across, stays on)
 TraceRace.AMP = 5 -- how far from the lane's middle the guide goes
 TraceRace.LENGTH = 450 -- the course is about this long (30 s)
 TraceRace.GUIDE_WIDTH = 0.7 -- the pencil guideline, as drawn
@@ -178,6 +187,14 @@ function TraceRace.Distance(course: Course, s: number, x: number): number
 		end
 	end
 	return math.sqrt(best)
+end
+
+-- How far a crayon can go either way from its lane's middle, as (lowest x, highest x): anywhere on
+-- the paper, up to EDGE from its outer edges. Lane `index` of `count` (1 is the left-most).
+function TraceRace.Bounds(index: number, count: number): (number, number)
+	local reach = count * TraceRace.LANE / 2 + TraceRace.MARGIN - TraceRace.EDGE -- from the paper's middle
+	local middle = (index - (count + 1) / 2) * TraceRace.LANE -- the lane's middle, from the paper's
+	return -reach - middle, reach - middle
 end
 
 -- 0..1 for a step drawn `distance` studs from the guide.
