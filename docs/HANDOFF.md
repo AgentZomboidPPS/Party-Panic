@@ -89,7 +89,20 @@ owner before publishing (the game is public).
   --only <Name>` -> `upload_assets.py --user-id 11690979745 --what meshes --only <Name>` (uploads only when the
   AssetId is 0, so zero it to re-upload) -> `tools/checks/mesh_orientation.py`. Piece names come from material
   names; a group's `piece_prefix` (WingL / WingR / Head / Lantern...) is what PetController animates.
-- **Checks**: `tools/checks/crates_check.py` (53 checks on a real server: the lobby, grants, opening, bots get
+- **The five pets were rebuilt from the owner's own pictures** (they sent one each: the owl in flight with
+  glowing leaf-feather wings and a lantern on a chain from its beak; a white stag with leafy, ember-cracked
+  antlers; a jack-o'-lantern Gourdian of vines; a toadstool Tot with glowing gills and an acorn; a ghost in an
+  iron lantern). `hollow_night_pets.py` has the kit: closed double-sided leaf meshes (`feather_mesh`: blade,
+  flame, scale, maple; a glowing-rim + core version), `metablob` (smooth blended bodies), `surface` (ray-cast
+  placement on them), `lathe`, `carving` (the jack-o'-lantern face on a pumpkin). Moving parts are named
+  groups with an invisible `<Group>Hinge` piece where they turn.
+- **Pet animations** (owner: "They all have super cool animations right?"): `client/PetPoses` (pure; tested by
+  `tests/PetPoses.spec.luau`) moves them, `Controllers/PetController` builds and places them. Idle and at a run
+  (the stag gallops, the owl beats faster) plus a flourish each. `SIZES` there: the owl's wingspan 4.2 studs,
+  the stag 3.6.
+- **Checks**: `tools/checks/pets_check.py` (41 checks on a real server with the uploaded meshes: every hinge
+  holds standing, running and mid-flourish; the moves happen; no errors),
+  `tools/checks/crates_check.py` (53 checks on a real server: the lobby, grants, opening, bots get
   nothing, the board, the shop with a stand-in for Roblox's purchases; never touches real DataStores),
   `client_harness.py --touch --skip SkeeBall` (section 3d is the crates; `--skip` keeps the script under Open
   Cloud's 1 MiB) then `ui_render.py` for phone/tablet renders, and `tests/CrateLogic.spec.luau` in Lune.
