@@ -2,6 +2,7 @@
 
     python3 tools/music/compose.py                       # renders everything into assets/audio
     python3 tools/music/compose.py --preview previews/   # also writes MP3 previews into previews/
+    python3 tools/music/compose.py --season              # just the crate season's effects (SeasonSprite)
 
 Tracks loop seamlessly: reverb and delay tails from the end of each loop wrap around to its start.
 """
@@ -565,6 +566,136 @@ SFX = {
     "VoteClick": sfx_vote_click,
 }
 
+# ---------------------------------------------------------------- the crate season (HOLLOW NIGHT)
+# The crate seasons' design: "Creaking wood and a lantern's whoomph for the open, a rising wind-chime
+# tick for the reel, and an owl hoot when a pet lands ... a different stinger for each tier, and a
+# lobby-wide chime for pets and the title." In a sprite of their own (SeasonSprite), so the uploaded
+# effects sprite stays as it is.
+
+def season_open():
+    """The lid giving way: a wooden creak, then a lantern's whoomph and a little sparkle."""
+    tl = s.Timeline(1.4)
+    n = s.samples(0.42)
+    t = np.arange(n) / s.SR
+    # The creak: a slow, rough saw sliding up, through a woody band.
+    rough = 1 + 0.25 * np.sign(np.sin(2 * np.pi * 34 * t))
+    creak = s.saw(np.linspace(170, 240, n) * rough, n) * s.adsr(n, 0.04, 0.1, 0.8, 0.12)
+    tl.add(0, s.pan(s.bandpass(creak, 300, 1800) * 0.9), 0.55)
+    # The whoomph: a low thump with a rush of air.
+    m = s.samples(0.9)
+    u = np.arange(m) / s.SR
+    thump = s.sine(70 + 120 * (1 - np.exp(-u / 0.05)), m) * s.exp_decay(m, 0.18)
+    rush = s.sweep_lowpass(s.noise(m), 400, 5000, blocks=24) * s.adsr(m, 0.02, 0.15, 0.4, 0.5)
+    tl.add(0.36, s.pan(thump), 0.8)
+    tl.add(0.36, rush, 0.45)
+    for i, midi in enumerate((88, 93, 96)):
+        tl.add(0.42 + i * 0.05, s.pan(s.fm_bell(midi, 0.12, ratio=3.5, index=1.4, decay=0.5), -0.4 + i * 0.4), 0.18)
+    return s.reverb(tl.buffer, 1.0, 0.22)
+
+
+def season_tick():
+    """One tick of the reel: a little wind chime."""
+    tl = s.Timeline(0.32)
+    tl.add(0, s.pan(s.fm_bell(96, 0.06, ratio=2.76, index=1.2, decay=0.22)), 0.5)
+    tl.add(0.012, s.pan(s.fm_bell(103, 0.05, ratio=2.76, index=0.8, decay=0.16), 0.3), 0.22)
+    return tl.buffer
+
+
+def season_coins():
+    """Coins out of a crate: a jingle."""
+    tl = s.Timeline(0.9)
+    for i, midi in enumerate((88, 91, 95, 100)):
+        tl.add(i * 0.045, s.pan(s.fm_bell(midi, 0.08, ratio=5.1, index=2.4, decay=0.35), -0.5 + i * 0.33), 0.32)
+    m = s.samples(0.25)
+    tl.add(0, s.highpass(s.noise(m), 6000) * s.exp_decay(m, 0.05), 0.12)
+    return s.reverb(tl.buffer, 0.8, 0.2)
+
+
+def _stinger(chord, bells, length, wash):
+    tl = s.Timeline(length)
+    tl.add(0, s.supersaw(chord, length * 0.5, cutoff=wash, attack=0.01, release=length * 0.4), 0.32)
+    for i, midi in enumerate(bells):
+        tl.add(i * 0.07, s.pan(s.fm_bell(midi, 0.2, ratio=3.5, index=1.5, decay=0.9), -0.6 + i * 1.2 / max(1, len(bells) - 1)), 0.3)
+    return s.fade(s.reverb(tl.buffer, 1.6, 0.3), 0, 0.3)
+
+
+def season_effect():
+    """An effect (the blue tier): a cool shimmer up."""
+    return _stinger([s.note("D4"), s.note("A4"), s.note("E5")], (86, 90, 93, 98), 1.4, 5000)
+
+
+def season_hat():
+    """A hat (the purple tier): brighter, a step higher."""
+    return _stinger([s.note("F4"), s.note("A4"), s.note("C5"), s.note("E5")], (89, 93, 96, 101, 105), 1.7, 6500)
+
+
+def season_pet():
+    """A pet (the pink tier): an owl's two hoots over a warm chime."""
+    tl = s.Timeline(2.2)
+    for i, start in enumerate((0.0, 0.32)):
+        n = s.samples(0.26 if i == 0 else 0.42)
+        t = np.arange(n) / s.SR
+        pitch = 380 + 40 * np.sin(np.pi * t / (n / s.SR)) - (25 if i == 1 else 0)
+        hoot = s.sine(pitch, n) * s.adsr(n, 0.05, 0.08, 0.75, 0.12)
+        breath = s.bandpass(s.noise(n), 300, 900) * s.adsr(n, 0.05, 0.08, 0.5, 0.1) * 0.25
+        tl.add(start, s.pan(s.lowpass(hoot + breath, 1500)), 0.55)
+    chime = _stinger([s.note("G4"), s.note("B4"), s.note("D5"), s.note("G5")], (91, 95, 98, 103, 107), 1.5, 7000)
+    tl.add(0.7, chime, 0.9)
+    return s.reverb(tl.buffer, 1.8, 0.25)
+
+
+def season_title():
+    """THE HARVESTER: a deep boom, a swelling chord and bells pouring down, for the whole lobby."""
+    tl = s.Timeline(3.6)
+    tl.add(0, s.impact(), 0.7)
+    tl.add(0, s.riser(0.6), 0.3)
+    chord = [s.note(x) for x in ("C3", "G3", "C4", "E4", "G4", "C5")]
+    tl.add(0.55, s.supersaw(chord, 2.0, cutoff=6000, attack=0.25, release=1.0), 0.35)
+    for i, midi in enumerate((108, 103, 100, 96, 91, 88, 84)):
+        tl.add(0.6 + i * 0.11, s.pan(s.fm_bell(midi, 0.25, ratio=3.5, index=1.8, decay=1.4), 0.6 - i * 0.2), 0.3)
+    tl.add(0.55, s.crash(2.6), 0.35)
+    return s.fade(s.reverb(tl.buffer, 2.4, 0.32), 0, 0.5)
+
+
+def season_caw():
+    """A crow on the rooftops: two harsh caws."""
+    tl = s.Timeline(0.9)
+    for i, start in enumerate((0.0, 0.34)):
+        n = s.samples(0.24)
+        t = np.arange(n) / s.SR
+        voice = s.saw(np.linspace(720, 520, n) * (1 + 0.06 * np.sin(2 * np.pi * 70 * t)), n)
+        voice = s.bandpass(voice, 900, 2600) * s.adsr(n, 0.01, 0.05, 0.8, 0.08)
+        grit = s.bandpass(s.noise(n), 1500, 4000) * s.adsr(n, 0.005, 0.05, 0.5, 0.06) * 0.35
+        tl.add(start, s.pan(s.soft_clip(voice + grit, 2.0), 0.2), 0.5 if i == 0 else 0.4)
+    return s.reverb(tl.buffer, 1.2, 0.18)
+
+
+def season_rustle():
+    """Jumping into a leaf heap: a crunchy rustle."""
+    tl = s.Timeline(0.8)
+    rng = np.random.default_rng(7)
+    for _ in range(18):
+        start = rng.uniform(0, 0.45)
+        n = s.samples(rng.uniform(0.03, 0.09))
+        grain = s.bandpass(s.noise(n), 2500, 9000) * s.exp_decay(n, 0.02)
+        tl.add(start, s.pan(grain, rng.uniform(-0.6, 0.6)), rng.uniform(0.2, 0.5))
+    m = s.samples(0.5)
+    tl.add(0, s.pan(s.lowpass(s.noise(m), 1200) * s.adsr(m, 0.01, 0.1, 0.4, 0.3)), 0.25)
+    return tl.buffer
+
+
+SEASON_SFX = {
+    "CrateOpen": season_open,
+    "CrateTick": season_tick,
+    "CrateCoins": season_coins,
+    "CrateEffect": season_effect,
+    "CrateHat": season_hat,
+    "CratePet": season_pet,
+    "CrateTitle": season_title,
+    "CrowCaw": season_caw,
+    "LeafRustle": season_rustle,
+}
+
 MUSIC = {
     "Lobby": party_plaza,
     "Lobby2": sunset_social,
@@ -576,6 +707,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--preview", type=Path, help="also write MP3 previews into this folder")
     parser.add_argument("--only", help="render just one name (e.g. Lobby, Victory)")
+    parser.add_argument("--season", action="store_true", help="render just the crate season's effects "
+                        "and their sprite (assets/audio/sfx/SeasonSprite.ogg)")
     args = parser.parse_args()
 
     (OUT / "music").mkdir(parents=True, exist_ok=True)
@@ -584,6 +717,9 @@ def main():
         args.preview.mkdir(parents=True, exist_ok=True)
 
     jobs = [("music", name, fn) for name, fn in MUSIC.items()] + [("sfx", name, lambda fn=fn: render_sfx(fn)) for name, fn in SFX.items()]
+    jobs += [("sfx", name, lambda fn=fn: render_sfx(fn)) for name, fn in SEASON_SFX.items()]
+    if args.season:
+        jobs = [job for job in jobs if job[1] in SEASON_SFX]
     rendered_sfx: dict[str, np.ndarray] = {}
     with tempfile.TemporaryDirectory() as tmp:
         for group, name, fn in jobs:
@@ -599,18 +735,21 @@ def main():
             if args.preview:
                 s.encode(wav, args.preview / f"{group}-{name}.mp3", "mp3")
             print(f"{group}/{name}: {audio.shape[1] / s.SR:.1f}s -> {target.relative_to(ROOT)}")
-        if len(rendered_sfx) == len(SFX):
-            write_sprite(rendered_sfx, Path(tmp))
+        if all(name in rendered_sfx for name in SFX):
+            write_sprite({name: rendered_sfx[name] for name in SFX}, Path(tmp))
+        if all(name in rendered_sfx for name in SEASON_SFX):
+            write_sprite({name: rendered_sfx[name] for name in SEASON_SFX}, Path(tmp), "SeasonSprite", "SeasonSfxSprite")
 
 
 SPRITE_GAP = 0.3
 
 
-def write_sprite(effects: dict[str, np.ndarray], tmp: Path):
+def write_sprite(effects: dict[str, np.ndarray], tmp: Path, file: str = "SfxSprite", table: str = "SfxSprite"):
     """Packs every effect into one file (one upload instead of fifteen) plus an offsets table.
 
     Roblox limits audio uploads per month, so the game plays each effect as a PlaybackRegion of
-    this single sprite.
+    this single sprite. The crate season's effects are a sprite of their own (SeasonSprite, its table
+    Shared/SeasonSfxSprite), so adding them never moves the uploaded one's effects.
     """
     gap = np.zeros((2, s.samples(SPRITE_GAP)))
     pieces, regions, cursor = [], [], 0.0
@@ -620,20 +759,20 @@ def write_sprite(effects: dict[str, np.ndarray], tmp: Path):
         pieces += [audio, gap]
         cursor += length + SPRITE_GAP
     sprite = np.hstack(pieces)
-    wav = tmp / "SfxSprite.wav"
+    wav = tmp / f"{file}.wav"
     s.write_wav(wav, sprite)
-    s.encode(wav, OUT / "sfx" / "SfxSprite.ogg", "ogg")
+    s.encode(wav, OUT / "sfx" / f"{file}.ogg", "ogg")
     lines = [
         "-- GENERATED by tools/music/compose.py - do not edit by hand.",
-        "-- Where each sound effect sits inside assets/audio/sfx/SfxSprite.ogg (seconds).",
+        f"-- Where each sound effect sits inside assets/audio/sfx/{file}.ogg (seconds).",
         "",
         "return {",
     ]
     for name, start, length in regions:
         lines.append(f"\t{name} = {{ Start = {start:.3f}, Length = {length:.3f} }},")
     lines.append("}")
-    (ROOT / "src" / "shared" / "SfxSprite.luau").write_text("\n".join(lines) + "\n")
-    print(f"sfx/SfxSprite: {sprite.shape[1] / s.SR:.1f}s ({len(regions)} effects) -> assets/audio/sfx/SfxSprite.ogg")
+    (ROOT / "src" / "shared" / f"{table}.luau").write_text("\n".join(lines) + "\n")
+    print(f"sfx/{file}: {sprite.shape[1] / s.SR:.1f}s ({len(regions)} effects) -> assets/audio/sfx/{file}.ogg")
 
 
 if __name__ == "__main__":

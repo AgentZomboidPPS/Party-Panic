@@ -315,7 +315,7 @@ def blender_scene(kind: str, out: Path):
         elev = 0.1
     elif kind == "Elim_LanternSnuff":
         g = group((0, 0, 0.55), (0, 0, 0.35), 1.1)
-        ir = H.iron()
+        ir = pbr("snuff_iron", "#8a82a2", rough=0.3, metal=0.9)  # lighter than the game's, to read on a dark card
         obj(rbox((0.7, 0.7, 0.12), 0.04), (0, 0, 0.5), 1, m=ir, parent=g)
         obj(rbox((0.6, 0.6, 0.1), 0.03), (0, 0, -0.45), 1, m=ir, parent=g)
         obj("cone6", (0, 0, 0.66), (0.42, 0.42, 0.16), m=ir, parent=g)
@@ -323,13 +323,16 @@ def blender_scene(kind: str, out: Path):
         for sx in (-1, 1):
             for sy in (-1, 1):
                 obj("cube", (sx * 0.3, sy * 0.3, 0.02), (0.03, 0.03, 0.46), m=ir, parent=g)
-        obj("cube", (0, 0, 0.02), (0.28, 0.28, 0.44), m=pbr("darkglass", "#3a3046", 0.1, trans=0.7), parent=g)
+        # Snuffed: the glass dim, only a faint warm glow left from the ember on the wick.
+        obj("cube", (0, 0, 0.02), (0.28, 0.28, 0.44),
+            m=pbr("snuffglass", "#3a2430", 0.1, trans=0.6, emit="#ff6a1f", es=0.28), parent=g)
         obj("cyl", (0, 0, -0.2), (0.03, 0.03, 0.12), m=pbr("wick", "#2a2020", 0.9), parent=g)
-        obj("sphere", (0, 0, -0.07), 0.035, m=glow(H.EMBER, 18), parent=g)
+        obj("sphere", (0, 0, -0.07), 0.06, m=glow(H.EMBER, 12), parent=g)
+        lib.point_light((0, -0.1, 0.5), H.EMBER, 25, 0.15)
         smoke = [Vector((0.35 * math.sin(t * 9) * t, 0.15 * math.cos(t * 7) * t, 1.55 + t * 1.6)) for t in
                  [k / 60 for k in range(61)]]
-        tube(smoke, lambda t: 0.05 + 0.16 * t, lambda t: (*col("#b8aec8"), 0.55 * (1 - t) ** 0.8 * min(1, t * 8)),
-             vmat("smoke", 0.6), seg=12)
+        tube(smoke, lambda t: 0.06 + 0.17 * t, lambda t: (*col("#f2ecfa"), 0.8 * (1 - t) ** 0.7 * min(1, t * 8)),
+             vmat("smoke", 1.4), seg=12)
         elev = 0.15
     elif kind == "Victory_Bonfire":
         for k in range(10):
@@ -365,8 +368,6 @@ def blender_scene(kind: str, out: Path):
         elev = 0.18
     elif kind == "Victory_Moonrise":
         H.moon((0, 0.8, 1.05), 1.05)
-        hill = lib.blob((0, -0.2, -1.0), (2.6, 1.0, 1.1), pbr("hill", "#120a1a", 0.9), seed=4, amp=0.08)
-        hill.name = "hill"
         for k in range(7):
             obj("ico", (rng.uniform(-1.6, 1.6), 0.9, rng.uniform(1.4, 2.6)), 0.03, m=glow("#ffffff", 20))
         flier((-0.55, -0.6, 1.25), 0.9, "owl", 0.12)
@@ -388,6 +389,13 @@ def blender_scene(kind: str, out: Path):
     def spark(o) -> bool:
         material = o.active_material.name if o.active_material else ""
         return material.startswith("glow") and max(o.dimensions) < 0.25
+
+    # Fewer sparkles than the lobby renders have: an icon is small (finish_icon makes the rest soft dots).
+    sparkles = sorted((o for o in scene.objects if o.type == "MESH" and spark(o) and o.data.name.startswith("ico")),
+                      key=lambda o: o.name)
+    for index, o in enumerate(sparkles):
+        if index % 5 in (0, 2):
+            bpy.data.objects.remove(o)
 
     # Warm studio light round the subject, framed to fill the square (the sparkles may poke out).
     lo, hi = Vector((1e9, 1e9, 1e9)), Vector((-1e9, -1e9, -1e9))
@@ -571,9 +579,43 @@ def finish_icon(path: Path):
     import numpy as np
     from PIL import Image, ImageFilter
 
+    from scipy import ndimage
+
     im = Image.open(path).convert("RGBA")
     a = np.asarray(im).astype(np.float32) / 255
-    rgb, alpha = a[..., :3], a[..., 3:4]
+    rgb, alpha = a[..., :3].copy(), a[..., 3:4].copy()
+    # Sparkles (small specks on their own) become soft glowing dots, a bright core fading out: drawn
+    # flat they shrank to a speck with the dark rim round it and the glow outside, a little donut.
+    labels, count = ndimage.label(alpha[..., 0] > 0.3)
+    sizes = ndimage.sum(np.ones_like(labels), labels, range(1, count + 1))
+    yy, xx = np.mgrid[0:RENDER, 0:RENDER].astype(np.float32)
+    specks = np.zeros(alpha.shape[:2], bool)
+    dots = []
+    for index, area in enumerate(sizes, start=1):
+        if area > 260:
+            continue
+        where = labels == index
+        # (Only a glowing speck: evenly bright all over. A small leaf or acorn has shading and stays.)
+        if np.percentile(rgb[where].max(axis=1), 20) < 0.8:
+            continue
+        weight = alpha[..., 0] * where
+        total = weight.sum()
+        if total <= 0:
+            continue
+        cy, cx = (yy * weight).sum() / total, (xx * weight).sum() / total
+        color = (rgb * weight[..., None]).sum(axis=(0, 1)) / total
+        dots.append((cx, cy, max(math.sqrt(area / math.pi) * 1.5, 5.0), color))
+        specks |= ndimage.binary_dilation(where, iterations=2)
+    alpha[specks] = 0
+    solid = alpha.copy()  # (what gets the dark rim: everything but the sparkles)
+    for cx, cy, r, color in dots:
+        d = np.hypot(xx - cx, yy - cy)
+        dot_a = np.clip(np.exp(-(d / r) ** 2) * 1.25, 0, 1)[..., None]
+        core = np.clip(1 - d / (r * 0.7), 0, 1)[..., None]
+        dot_rgb = color + (1 - color) * 0.55 * core  # whiter in the middle
+        new_a = dot_a + alpha * (1 - dot_a)
+        rgb = (dot_rgb * dot_a + rgb * alpha * (1 - dot_a)) / np.maximum(new_a, 1e-4)
+        alpha = new_a
     lum = (rgb * alpha).max(axis=2)
     bright = np.clip((lum - 0.72) / 0.28, 0, 1)
     glow_src = Image.fromarray((np.dstack([rgb * bright[..., None], bright]) * 255).astype(np.uint8), "RGBA")
@@ -581,7 +623,7 @@ def finish_icon(path: Path):
     halo_a = np.clip(halo[..., 3:4] * 1.4, 0, 0.75)
     halo_rgb = np.where(halo_a > 0, halo[..., :3] / np.maximum(halo[..., 3:4], 1e-4), 0)
     # The rim: the shape grown a few pixels, in dusk plum, under everything.
-    grown = Image.fromarray((alpha[..., 0] * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(7))
+    grown = Image.fromarray((solid[..., 0] * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(7))
     grown = grown.filter(ImageFilter.GaussianBlur(2))
     rim_a = np.asarray(grown).astype(np.float32)[..., None] / 255 * 0.7
     rim_rgb = np.ones_like(rgb) * np.array([28, 15, 46], np.float32) / 255

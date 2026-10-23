@@ -219,7 +219,7 @@ local function onShow(show: { [string]: any })
 	local mine = show.UserId == player.UserId
 	local position = showPosition(show)
 	if mine or nearCamera(position) then
-		AudioController.Play("Splash")
+		AudioController.PlayOr("CrateOpen", "Splash")
 	end
 	-- The opener's card when the reel ends (whether or not the show is drawn here).
 	if mine then
@@ -233,7 +233,17 @@ local function onShow(show: { [string]: any })
 			for _, result in show.Results do
 				best = math.min(best, RANK[result.Tier] or 5)
 			end
-			AudioController.Play(if best <= 2 then "Victory" elseif best == 3 then "Purchase" else "Pickup")
+			if best == 1 then
+				AudioController.PlayOr("CrateTitle", "Victory")
+			elseif best == 2 then
+				AudioController.PlayOr("CratePet", "Victory")
+			elseif best == 3 then
+				AudioController.PlayOr("CrateHat", "Purchase")
+			elseif best == 4 then
+				AudioController.PlayOr("CrateEffect", "Pickup")
+			else
+				AudioController.PlayOr("CrateCoins", "Pickup")
+			end
 		end)
 	end
 end
@@ -246,7 +256,10 @@ local function onBanner(banner: { [string]: any })
 	SeasonWorldController.ScareCrows()
 	if banner.Tier == "Title" then
 		SeasonWorldController.TitleMoment()
-		AudioController.Play("Victory")
+	end
+	-- The lobby-wide chime (the opener heard their own stinger already).
+	if banner.UserId ~= player.UserId then
+		AudioController.PlayOr(if banner.Tier == "Title" then "CrateTitle" else "CratePet", "Victory")
 	end
 end
 
@@ -288,7 +301,7 @@ function CrateController.Start(context)
 	CrateShow.Landed = SeasonWorldController.ShowLanded
 	CrateShow.Tick = function(p: number, position: Vector3?)
 		if nearCamera(position) and math.random() < 0.6 + p * 0.4 then
-			AudioController.Play("Click")
+			AudioController.PlayOr("CrateTick", "Click")
 		end
 	end
 

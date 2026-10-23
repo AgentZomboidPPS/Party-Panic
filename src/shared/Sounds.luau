@@ -9,6 +9,7 @@
 
 local AudioAssets = require(script.Parent.AudioAssets)
 local ModeMusic = require(script.Parent.ModeMusic)
+local SeasonSfxSprite = require(script.Parent.SeasonSfxSprite)
 local SfxSprite = require(script.Parent.SfxSprite)
 
 local defaults = {
@@ -59,6 +60,12 @@ end
 local spriteId = idFor(AudioAssets.SfxSprite)
 local sprite = if spriteId then { Id = spriteId, Regions = SfxSprite } else nil
 
+-- The crate season's effects (the opening's creak and whoomph, the reel's tick, a stinger per tier,
+-- the crows, the leaf heaps), once their sprite is uploaded; until then the crates use the effects
+-- above (AudioController.PlayOr).
+local seasonId = idFor((AudioAssets :: any).SeasonSprite)
+local seasonSprite = if seasonId then { Id = seasonId, Regions = SeasonSfxSprite } else nil
+
 -- Each mini-game's own round song (owner: "custom music for each mini game"), once its pack is
 -- uploaded: the pack's id and where the song sits in it (Logic/SongTiming says how they're played).
 export type ModeSong = { Id: string, Title: string, Start: number, Drop: number, End: number }
@@ -75,5 +82,6 @@ return {
 	Music = defaults.Music,
 	Sfx = defaults.Sfx,
 	Sprite = sprite,
+	SeasonSprite = seasonSprite,
 	ModeSongs = modeSongs,
 }

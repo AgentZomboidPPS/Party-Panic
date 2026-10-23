@@ -15,7 +15,7 @@ return {
 	Leaves = "rbxassetid://75255011425315",
 	Ember = "rbxassetid://108956217002977",
 	Moon = "rbxassetid://123032692789433",
-	Icons = "rbxassetid://117378850422784",
+	Icons = "rbxassetid://126681471772772",
 	IconSize = 204,
 	IconCells = {
 		Pet_HarvestOwl = { 0, 0 },

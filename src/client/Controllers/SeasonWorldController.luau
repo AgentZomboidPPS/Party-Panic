@@ -30,6 +30,7 @@ local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 local CrateTheme = require(script.Parent.Parent.Crates.CrateTheme)
+local AudioController = require(script.Parent.AudioController)
 
 local SeasonWorldController = {}
 
@@ -304,6 +305,11 @@ local function stepCrows(now: number)
 			crow.Next = now + 3 + math.random() * 7
 			crow.Model:SetAttribute("PP_Look", (math.random() - 0.5) * 1.2)
 			crow.Model:SetAttribute("PP_Ruffle", now)
+			-- Now and then one caws (only heard close by).
+			local camera = workspace.CurrentCamera
+			if math.random() < 0.15 and camera and (camera.CFrame.Position - crow.Perch.Position).Magnitude < 45 then
+				AudioController.PlayOr("CrowCaw", "")
+			end
 		end
 		local turn = crow.Model:GetAttribute("PP_Look") or 0
 		local ruffle = now - (crow.Model:GetAttribute("PP_Ruffle") or -10)
@@ -394,6 +400,9 @@ local function stepHeaps(now: number)
 				heap.Squash = now
 				local falling = root.AssemblyLinearVelocity.Y < -6
 				heap.Emitter:Emit(if State.ReducedEffects() then 12 elseif falling then 60 else 30)
+				if camera and (camera.CFrame.Position - heap.Base.Position).Magnitude < 50 then
+					AudioController.PlayOr("LeafRustle", "")
+				end
 			end
 		end
 	end
@@ -634,6 +643,9 @@ function SeasonWorldController.ScareCrows()
 		if not crow.Flying then
 			crow.Flying = now + math.random() * 0.4
 		end
+	end
+	if atLobby and next(crows) then
+		AudioController.PlayOr("CrowCaw", "")
 	end
 end
 

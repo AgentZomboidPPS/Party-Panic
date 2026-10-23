@@ -87,6 +87,12 @@ function AudioController.Play(name: string)
 	end
 end
 
+-- Plays `name` if the game has it, else `fallback` (the crate season's effects before their sprite
+-- is uploaded).
+function AudioController.PlayOr(name: string, fallback: string)
+	AudioController.Play(if sfx[name] then name else fallback)
+end
+
 local function playerLevel(): number
 	local level = State.Setting("MusicVolume")
 	return if type(level) == "number" then math.clamp(level, 0, 1) else DEFAULT_LEVEL
@@ -288,7 +294,7 @@ end
 
 function AudioController.Start(_context)
 	local function effectVolume(name: string): number
-		return if name == "Click" or name == "VoteClick" then 0.4 else 0.6
+		return if name == "Click" or name == "VoteClick" or name == "CrateTick" then 0.4 else 0.6
 	end
 	local sprite = Sounds.Sprite
 	if sprite then
@@ -301,6 +307,16 @@ function AudioController.Start(_context)
 	else
 		for name, id in Sounds.Sfx do
 			sfx[name] = makeSound("Sfx_" .. name, id, effectVolume(name), false)
+		end
+	end
+	-- The crate season's effects, from their own sprite (once it's uploaded).
+	local season = Sounds.SeasonSprite
+	if season then
+		for name, region in season.Regions do
+			local sound = makeSound("Sfx_" .. name, season.Id, effectVolume(name), false)
+			sound.PlaybackRegionsEnabled = true
+			sound.PlaybackRegion = NumberRange.new(region.Start, region.Start + region.Length)
+			sfx[name] = sound
 		end
 	end
 	UIKit.SetClickHandler(function()
