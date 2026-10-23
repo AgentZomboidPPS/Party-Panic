@@ -106,6 +106,15 @@ your ideas. This has to be sick. This will be players first season. I want it to
 spooky. Commits `632645b`..`8b649e3` on this branch. **Live in version 49** (2026-10-23 21:42 UTC); ask the owner
 before every publish (the game is public).
 
+**Since version 49, not published yet** (the owner's notes after playing it): 21 s of lobby before the vote and
+crates open in the lobby while a round goes on; the crate window brighter with the display font and no dark
+buttons; key pack pictures; bots without a tag; keys 3/2/1 for the top 3 of every round (and the cup podium);
+the starter pack at 49 Robux; a Season button; the stag walks on the ground; Prime Cut's steaks no longer lose
+pieces when the next one drops in (owner: "some steaks dont render properly": the client's drop moved the model
+by its pivot, and a steak whose pieces came a frame apart kept its seared body sunk under the grate; now each
+piece drops from where the server put it, and the round's steaks are shared up front so devices download them
+before they're served).
+
 **The owner's plan for seasons and events** (2026-10-23): "Also we can have events/holidays run along side seasons.
 Also seasons are actually spring summer fall and winter". So the crate seasons are the year's four: HOLLOW NIGHT is
 the **fall** season (`Seasons` `Time = "FALL"`; screens say "FALL SEASON", "THE FALL SEASON HAS BEGUN"), and
@@ -118,9 +127,11 @@ The owner also wants **a private test experience** to publish to before producti
 latest commits): they create it in Creator Hub, add it to the API key, and send its universe and place ids.
 
 - **What it is** (`Shared/Seasons`, `Shared/Logic/CrateLogic`; the odds and key rules are in CrateLogic's header):
-  Hollow Crates (1 per round a person plays to the end) opened with Lantern Keys (Party Cup podium 3/2/1, +1 for
-  playing the whole cup, +1 GOLD PASS on the podium, 3 to start, 1 for the first cup a day, 1 per weekly quest, 1
-  every 5th Rewards Road level, or Robux). Tiers: THE HARVESTER title 1/500, 5 pets 1/100, 5 hats 1/50, 12
+  Hollow Crates (1 per round a person plays to the end) opened with Lantern Keys: every round pays its top 3
+  people 3/2/1 (owner, after "won obby odyssey and got no keys got 3rd got no key on crazy cutters": "3/2/1 every
+  round"; `CrateService.RoundKeys` from `RewardService`, shown on the results card's crate line, no pop-up), the
+  Party Cup podium 3/2/1 too, nothing for just playing a cup ("No keys for playing a cup."); 3 to start, 1 per
+  weekly quest, 1 every 5th Rewards Road level, or Robux. Tiers: THE HARVESTER title 1/500, 5 pets 1/100, 5 hats 1/50, 12
   effects 1/25, coins the rest; no duplicates (a finished tier is out of the roll, its share going to the coins;
   owner: "Remove the jackpot for coins. It feels bad to hit a "jackpot" and only get 150 coins.": no coin jackpot,
   and no server-wide news of a coin result); the Lantern Meter gives a pet at 150 crates without one.
@@ -135,9 +146,18 @@ latest commits): they create it in Creator Hub, add it to the API key, and send 
   `tools/meshgen/season/pile_crates.py`), three altars, the board, autumn trees, lanterns, pumpkins, leaf heaps,
   crows, falling leaves.
 - **Client**: `Crates/CrateMenu` (Crates / Collection / Top / Odds / Keys tabs, phone-fitted; owner: "Most players
-  are mobile... I want it to just make sense and work": the season's name once, in blackletter on the title bar;
-  buttons say what they do: OPEN AT THE PILE, GET KEYS with no keys; an item's details and the gift picker are
-  pages in the tab's place, never pop-overs; `CrateMenu.ShowItem` / `ShowGift` open them for the checks),
+  are mobile... I want it to just make sense and work", then "this screen sucks, too dark, hollow night font is
+  bad": the game's own bright purple window with the season's embers as accents, the season's name once on the
+  title bar in the display font (no blackletter in the crate screens; THE HARVESTER's own name tag keeps it);
+  buttons say what they do: OPEN AT THE PILE, GET KEYS with no keys; the Odds tab is a card per tier with each
+  outcome's picture; the key shop is one row of cards, the starter pack first, each with its picture
+  (`SeasonArt.KeyPacks`: one key, five on a ring, a heap, the crate brimming; `art.py` renders them, mode
+  `shop`, and the products' icons on Roblox are made from the same renders); BEST VALUE is the 40 pack; an
+  item's details and the gift picker are pages in the tab's place, never pop-overs; `CrateMenu.ShowItem` /
+  `ShowGift` open them for the checks). Keys and crates show as currencies under the coins on PC
+  (`HudController`: tap to open the window); phones show them on the lobby's crate chip (under the coins is the
+  thumbstick's corner). Buttons are never dark (owner: "Stop making all of the buttons so dark."; Theme:
+  Lavender to Purple neutral, Muted to MutedDark for one that can't be used yet).
   `Crates/CrateShow`
   (the opening everyone around sees), `Crates/CrateMoments` (banners, the season's welcome),
   `Controllers/CrateController` (the ribbon chip; walks you to an altar), `SeasonWorldController` (moon, wisps,
@@ -146,7 +166,8 @@ latest commits): they create it in Creator Hub, add it to the API key, and send 
 - **On Roblox already** (uploaded under the owner, 11690979745): every mesh in `World/Props/HollowNight` (AssetIds in
   the file), the art in `Shared/SeasonArt` (leaf flipbook, ember, moon, icon sheet `126681471772772`), and the
   developer products in `Config.Monetization`: Keys1 / 5 / 15 / 40 at 25 / 99 / 249 / 549 Robux (each with a gift
-  twin) and the Starter Pack (79: 5 keys + the Harvest Banner trail).
+  twin) and the Starter Pack (49, was 79 until the owner said "Lets make the starter pack be 49 robux instead": 5
+  keys + the Harvest Banner trail; prices are read from Roblox, so a price change is made there).
 - **The season's sounds**: `assets/audio/sfx/SeasonSprite.ogg`, uploaded with the owner's OK as 71236754603032
   (`tools/upload_assets.py --user-id 11690979745 --what season`; approved at once; the owner's 8th of 10 audio
   uploads this month). A stinger per tier on the opener's reveal (coins jingle, effect shimmer, hat a step higher,
@@ -168,10 +189,11 @@ latest commits): they create it in Creator Hub, add it to the API key, and send 
 - **Pet animations** (owner: "They all have super cool animations right?"): `client/PetPoses` (pure; tested by
   `tests/PetPoses.spec.luau`) moves them, `Controllers/PetController` builds and places them. Idle and at a run
   (the stag gallops, the owl beats faster) plus a flourish each. `SIZES` there: the owl's wingspan 4.2 studs,
-  the stag 3.6.
-- **Checks**: `tools/checks/pets_check.py` (41 checks on a real server with the uploaded meshes: every hinge
+  the stag 3.6. The stag walks on the ground beside its owner's right foot (`WALKERS`; owner: "Lets make the deer
+  stop floating and walk on the ground near the player."); the others float over the shoulder.
+- **Checks**: `tools/checks/pets_check.py` (43 checks on a real server with the uploaded meshes: every hinge
   holds standing, running and mid-flourish; the moves happen; no errors),
-  `tools/checks/crates_check.py` (63 checks on a real server: the lobby, grants, opening, bots get
+  `tools/checks/crates_check.py` (73 checks on a real server: the lobby, grants, opening, bots get
   nothing, the board, the shop with a stand-in for Roblox's purchases, purchases whose saves fail or whose
   buyer or gift friend leaves mid-save; never touches real DataStores),
   `client_harness.py --touch --skip SkeeBall` (section 3d is the crates; `--skip` keeps the script under Open
@@ -627,6 +649,9 @@ LinearVelocity never moves. There is no way to step physics in a test; the bot r
   plus an entry in `src/shared/GameDefinitions.luau` (name, category, duration, rules card text: Objective and Controls;
   keep them about as long as the others, the card is small on phones). Kit: `src/server/MiniGames/Kit`,
   `src/client/MiniGames/Kit/Api.luau` (TopHud, HudY, Hint, Button, mode ScreenGui).
+- Bots look like anyone (owner: "Lets remove the bot tag so people dont know they are playing with a bot."): a name
+  and a level on the same name tag as people's, no antenna, no 🤖, no softer name in lists, an initial for a
+  portrait on the lobby's podium, a cup podium line like anyone's (the server still pays bots nothing).
 - `src/server/Services/BotService.luau`: bots are fake Player-likes with real R15 characters, moved by the server's
   physics on live servers (`RoundContext:RunBots` drives the mode's brain).
 - Props: `src/server/World/Props/<File>.luau` (one spec per prop with its own `AssetId`, a primitive `Fallback`, a

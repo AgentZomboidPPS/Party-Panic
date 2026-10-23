@@ -398,9 +398,10 @@ local function buildBoard(parent: Instance)
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 	UIKit.AutoScale(board, 0.9)
 	boardRoot = board
-	-- Just under the profile chip and coins (HudController: 130 tall at y 12, scaled the same way).
+	-- Just under the profile chip, the coins, keys and crates (HudController: 182 tall at y 12, scaled
+	-- the same way).
 	local function place()
-		board.Position = UDim2.fromOffset(14, 12 + 130 * UIKit.CurrentScale() + 8)
+		board.Position = UDim2.fromOffset(14, 12 + 182 * UIKit.CurrentScale() + 8)
 	end
 	board:SetAttribute("PP_UnderProfile", true)
 	place()

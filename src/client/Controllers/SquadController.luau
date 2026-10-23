@@ -78,7 +78,7 @@ local MOMENT_AGE = 120 -- a moment older than this (a long round in between) isn
 local SQUAD_TIME = 5.5
 local SQUAD_GAP = 20 -- scaled units kept clear between the SQUAD card and the rules card
 -- The SQUAD card (scaled units), on the left: phones under the profile pill, PC under the profile
--- chip and its coins. Width is the full card (it fits beside the rules card from a 667-point iPhone
+-- chip and its coins, keys and crates (HudController.ProfileHeight). Width is the full card (it fits beside the rules card from a 667-point iPhone
 -- SE up, and on PC from about 800 pixels wide); Compact is the faces-only one for narrower screens.
 local SQUAD = {
 	Touch = {
@@ -96,7 +96,7 @@ local SQUAD = {
 	Pc = {
 		Width = 280,
 		Compact = 112,
-		Top = 152,
+		Top = 204,
 		Medallion = 58,
 		Title = 34,
 		Chip = 32,

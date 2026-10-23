@@ -532,8 +532,8 @@ local function bindBoard(part: Instance)
 		})
 		UIKit.Label({
 			Text = "TOP UNBOXERS",
-			Font = Enum.Font.GrenzeGotisch,
-			TextSize = 66,
+			Font = Theme.Fonts.Display,
+			TextSize = 58,
 			TextWrapped = false,
 			Size = UDim2.new(1, 0, 0, 74),
 			Parent = root,

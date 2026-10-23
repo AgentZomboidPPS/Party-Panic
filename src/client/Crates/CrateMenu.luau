@@ -28,6 +28,7 @@ local DailyLogic = require(Shared.Logic.DailyLogic)
 local GoldLane = require(Shared.Logic.GoldLane)
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
+local SeasonArt = require(Shared.SeasonArt)
 local Seasons = require(Shared.Seasons)
 
 local State = require(script.Parent.Parent.State)
@@ -45,6 +46,12 @@ local remote = Remotes.Get("Crate")
 local creator = GoldLane.IsCreator(game.CreatorType.Name, game.CreatorId, Players.LocalPlayer.UserId)
 local season = Seasons.CurrentSeason()
 local colors = CrateTheme.Colors(season)
+-- The window wears the game's own bright purple, like the shop, with the season's embers for its
+-- accents (owner: "this screen sucks, too dark, hollow night font is bad, needs to be cleaned up and
+-- have better UI"): its cards are the game's purple, not the season's dusk plum.
+colors.Panel = Color3.fromRGB(98, 68, 186)
+colors.Deep = Color3.fromRGB(60, 40, 128)
+local EMPTY = Color3.fromRGB(50, 35, 104) -- a card for something not found yet
 
 local TABS = {
 	{ Key = "Crates", Label = "Crates", Icon = "📦" },
@@ -55,8 +62,8 @@ local TABS = {
 }
 local MEDALS = { "🥇", "🥈", "🥉" }
 local KEYS_HOW =
-	"🔑 Keys: 3 · 2 · 1 on the PARTY CUP podium, +1 for playing all 5 rounds, +1 for your first cup each day, every 5th level and weekly quests."
-local TITLE_FONT = Enum.Font.GrenzeGotisch
+	"🔑 Keys: 3 · 2 · 1 for the top 3 of every round and the PARTY CUP podium, a key every 5th level and one per weekly quest."
+local TITLE_FONT = Theme.Fonts.Display
 
 local touch = false
 local modal: Modal.Modal
@@ -114,7 +121,7 @@ local function buttonHeight(): number
 	return if touch then Theme.Touch.Target else 56
 end
 
--- An ember-gradient headline in the season's blackletter.
+-- An ember-gradient headline in the game's display font.
 local function headline(props: { [string]: any }): TextLabel
 	local defaults: { [string]: any } = {
 		Font = TITLE_FONT,
@@ -235,7 +242,7 @@ local function meterBar(parent: Instance, y: number, width: number)
 	local track = UIKit.new("Frame", {
 		Position = UDim2.fromOffset(0, y + 32),
 		Size = UDim2.fromOffset(width, 20),
-		BackgroundColor3 = Color3.fromRGB(20, 10, 26),
+		BackgroundColor3 = EMPTY,
 		Parent = parent,
 		Children = { UIKit.Round(), UIKit.Stroke(colors.Main, 1.5, 0.5) },
 	})
@@ -281,7 +288,7 @@ local function renderCrates()
 		-- Where keys come from, in short, under the crate (the column has no room under the buttons on
 		-- a phone; the whole line is in the key shop).
 		local keysLine = UIKit.Label({
-			Text = "🔑 Win keys on the PARTY CUP podium, every 5th level and in weekly quests.",
+			Text = "🔑 Top 3 in every round win keys: 3 · 2 · 1. More on the PARTY CUP podium.",
 			TextSize = textSize(16),
 			TextColor3 = colors.Glow,
 			Position = UDim2.fromOffset(0, 280),
@@ -349,8 +356,8 @@ local function renderCrates()
 				CrateMenu.Show("Keys")
 			end
 		end,
-		if (canOpen and not inRound) or noKeys then colors.Glow else Theme.Colors.PanelLight,
-		if (canOpen and not inRound) or noKeys then colors.Main else Theme.Colors.PanelDark
+		if (canOpen and not inRound) or noKeys then colors.Glow else Theme.Colors.Muted,
+		if (canOpen and not inRound) or noKeys then colors.Main else Theme.Colors.MutedDark
 	)
 	y += h + L.Gap
 	local many = crates() >= CrateLogic.OpenMany and keys() >= CrateLogic.OpenMany
@@ -368,8 +375,8 @@ local function renderCrates()
 				CrateMenu.OnOpen(1, true)
 			end
 		end,
-		if canOpen and not inRound then Theme.Colors.Lavender else Theme.Colors.PanelLight,
-		if canOpen and not inRound then Theme.Colors.Purple else Theme.Colors.PanelDark
+		if canOpen and not inRound then Theme.Colors.Lavender else Theme.Colors.Muted,
+		if canOpen and not inRound then Theme.Colors.Purple else Theme.Colors.MutedDark
 	)
 	UIKit.Button(
 		{
@@ -387,8 +394,8 @@ local function renderCrates()
 				CrateMenu.Show("Keys") -- (the crates are there, the keys aren't)
 			end
 		end,
-		if many and not inRound then colors.Gold else Theme.Colors.PanelLight,
-		if many and not inRound then colors.Main else Theme.Colors.PanelDark
+		if many and not inRound then colors.Gold else Theme.Colors.Muted,
+		if many and not inRound then colors.Main else Theme.Colors.MutedDark
 	)
 	if touch then
 		return
@@ -580,7 +587,7 @@ local function card(parent: Instance, itemId: string, order: number, have: boole
 	local button = UIKit.new("TextButton", {
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = if have then colors.Panel else Color3.fromRGB(24, 14, 30),
+		BackgroundColor3 = if have then colors.Panel else EMPTY,
 		LayoutOrder = order,
 		Parent = parent,
 		Children = {
@@ -730,8 +737,8 @@ local function renderCollection()
 					closeDetail()
 					renderCollection()
 				end,
-				if id == seasonShown then colors.Glow else Theme.Colors.PanelLight,
-				if id == seasonShown then colors.Main else Theme.Colors.PanelDark
+				if id == seasonShown then colors.Glow else Theme.Colors.Lavender,
+				if id == seasonShown then colors.Main else Theme.Colors.Purple
 			)
 		end
 	end
@@ -770,7 +777,7 @@ local function renderCollection()
 		Text = "",
 		AutoButtonColor = false,
 		Size = UDim2.new(1, 0, 0, 96),
-		BackgroundColor3 = if titleHave then colors.Panel else Color3.fromRGB(24, 14, 30),
+		BackgroundColor3 = if titleHave then colors.Panel else EMPTY,
 		LayoutOrder = 1,
 		Parent = list,
 		Children = {
@@ -875,8 +882,8 @@ local function renderTop()
 				boardKind = kind.Key
 				renderTop()
 			end,
-			if kind.Key == boardKind then colors.Glow else Theme.Colors.PanelLight,
-			if kind.Key == boardKind then colors.Main else Theme.Colors.PanelDark
+			if kind.Key == boardKind then colors.Glow else Theme.Colors.Lavender,
+			if kind.Key == boardKind then colors.Main else Theme.Colors.Purple
 		)
 	end
 	local rows = UIKit.new("ScrollingFrame", {
@@ -1036,58 +1043,129 @@ local function renderOdds()
 		CanvasSize = UDim2.new(),
 		Parent = page,
 		Children = {
-			UIKit.List(Enum.FillDirection.Vertical, 4, Enum.HorizontalAlignment.Left),
+			UIKit.List(Enum.FillDirection.Vertical, 10, Enum.HorizontalAlignment.Left),
 			UIKit.new("UIPadding", { PaddingRight = UDim.new(0, 14), PaddingBottom = UDim.new(0, 10) }),
 		},
 	})
+	local rowHeight = if touch then 44 else 36
+	local headHeight = if touch then 52 else 44
 	local order = 0
-	local function line(left: string, right: string, color: Color3, bold: boolean)
+	local function nextOrder(): number
 		order += 1
-		local row = UIKit.new("Frame", {
-			BackgroundTransparency = if bold then 0.35 else 1,
-			BackgroundColor3 = colors.Deep,
-			Size = UDim2.new(1, 0, 0, if touch then 34 else 30),
-			LayoutOrder = order,
+		return order
+	end
+	local intro = UIKit.Label({
+		Text = "🎲 Every outcome of your next crate. You never get the same item twice, so these change as you collect.",
+		TextSize = textSize(17),
+		TextColor3 = Theme.Colors.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, 0, 0, if touch then 52 else 44),
+		LayoutOrder = nextOrder(),
+		Parent = list,
+	})
+	intro:SetAttribute("PP_Lines", 2)
+
+	-- One card per tier: its name and total in its colour, then each outcome with its picture.
+	local function tierCard(color: Color3): Frame
+		local cardFrame = UIKit.Panel({
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			CornerRadius = 16,
+			LayoutOrder = nextOrder(),
 			Parent = list,
-			Children = { UIKit.Corner(8) },
+			Children = { UIKit.List(Enum.FillDirection.Vertical, 2), UIKit.Padding(8, 12) },
+		}, colors.Panel, colors.Deep)
+		local stroke = cardFrame:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Color = color
+			stroke.Transparency = 0.25
+			stroke.Thickness = 2
+		end
+		return cardFrame
+	end
+	local function header(cardFrame: Frame, title: string, right: string, color: Color3, pillColor: Color3)
+		local head = UIKit.new("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, headHeight),
+			LayoutOrder = 0,
+			Parent = cardFrame,
 		})
 		UIKit.Label({
-			Text = left,
-			Font = if bold then Theme.Fonts.Display else Theme.Fonts.Bold,
-			TextSize = textSize(if bold then 19 else 17),
+			Text = title,
+			Font = Theme.Fonts.Display,
+			TextSize = textSize(22),
 			TextColor3 = color,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextWrapped = false,
 			TextTruncate = Enum.TextTruncate.AtEnd,
-			Position = UDim2.fromOffset(if bold then 10 else 30, 0),
-			Size = UDim2.new(1, -(if bold then 10 else 30) - 140, 1, 0),
-			Parent = row,
+			Size = UDim2.new(1, -150, 1, 0),
+			Parent = head,
+			Children = { UIKit.TextStroke(0.3) },
+		})
+		local pill = UIKit.new("Frame", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, 0, 0.5, 0),
+			Size = UDim2.fromOffset(140, headHeight - 12),
+			BackgroundColor3 = pillColor,
+			Parent = head,
+			Children = { UIKit.Round() },
 		})
 		UIKit.Label({
 			Text = right,
 			Font = Theme.Fonts.Display,
-			TextSize = textSize(if bold then 19 else 17),
-			TextColor3 = color,
+			TextSize = textSize(20),
+			TextWrapped = false,
+			Size = UDim2.fromScale(1, 1),
+			Parent = pill,
+			Children = { UIKit.TextStroke(0.2) },
+		})
+	end
+	local function outcome(cardFrame: Frame, index: number, picture: string?, name: string, chance: string)
+		local row = UIKit.new("Frame", {
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = if index % 2 == 1 then 0.92 else 1,
+			Size = UDim2.new(1, 0, 0, rowHeight),
+			LayoutOrder = index,
+			Parent = cardFrame,
+			Children = { UIKit.Corner(10) },
+		})
+		local art = UIKit.new("Frame", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(6, 3),
+			Size = UDim2.fromOffset(rowHeight - 6, rowHeight - 6),
+			Parent = row,
+		})
+		if picture then
+			CrateTheme.Picture(picture, art)
+		else
+			UIKit.Label({ Text = Theme.CoinIcon, TextScaled = true, Size = UDim2.fromScale(1, 1), Parent = art })
+		end
+		UIKit.Label({
+			Text = name,
+			Font = Theme.Fonts.Bold,
+			TextSize = textSize(18),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextWrapped = false,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Position = UDim2.fromOffset(rowHeight + 8, 0),
+			Size = UDim2.new(1, -(rowHeight + 8) - 110, 1, 0),
+			Parent = row,
+		})
+		UIKit.Label({
+			Text = chance,
+			Font = Theme.Fonts.Display,
+			TextSize = textSize(18),
 			TextXAlignment = Enum.TextXAlignment.Right,
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -10, 0, 0),
-			Size = UDim2.fromOffset(120, if touch then 34 else 30),
+			Size = UDim2.fromOffset(100, rowHeight),
 			Parent = row,
 		})
 	end
-	order += 1
-	UIKit.Label({
-		Text = "Your next crate. You never get the same item twice, so these change as you collect.",
-		TextSize = textSize(17),
-		TextColor3 = Theme.Colors.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, 0, 0, 48),
-		LayoutOrder = order,
-		Parent = list,
-	})
-	local groups = { "Title", "Pet", "Hat", "Effect", "Coins" }
+
+	local names = { Title = "THE TITLE", Pet = "PETS", Hat = "HATS", Effect = "EFFECTS", Coins = "COINS" }
 	local total = 0
-	for _, tier in groups do
+	for _, tier in { "Title", "Pet", "Hat", "Effect", "Coins" } do
 		local tierRows = {}
 		local tierTotal = 0
 		for _, row in rows do
@@ -1100,39 +1178,28 @@ local function renderOdds()
 		local color = CrateTheme.TierColor(tier, season)
 		local missing = if tier ~= "Coins" then #CrateLogic.Missing(season, tier :: any, have) else 0
 		if #tierRows == 0 then
-			-- A finished tier is out of the roll (its share is in the coins): say so, with no odds.
+			-- A finished tier is out of the roll (its share is in the coins).
 			if tier ~= "Coins" and missing == 0 then
-				line(
-					if tier == "Title"
-						then `{info.Icon} {CrateTheme.NameOf(season.Title)}: yours!`
-						else `{info.Icon} {string.upper(string.sub(info.Word, 1, 1))}{string.lower(
-							string.sub(info.Word, 2)
-						)}s: all found!`,
-					"✓",
-					color,
-					true
-				)
+				header(tierCard(color), `{info.Icon} {names[tier]}`, "✓ ALL FOUND", color, Theme.Colors.Green)
 			end
 			continue
 		end
 		total += tierTotal
-		local heading = if tier == "Title"
-			then `{info.Icon} {CrateTheme.NameOf(season.Title)} (the title)`
-			elseif tier == "Coins" then `{info.Icon} Coins (5 to 150)`
-			else `{info.Icon} A {string.lower(info.Word)} you don't own ({missing} left)`
-		line(heading, CrateLogic.Percent(tierTotal), color, true)
-		if tier == "Title" then
-			continue -- (one item: its heading says it)
-		end
-		for _, row in tierRows do
-			local label = if row.Tier == "Coins" then row.Label else CrateTheme.NameOf(row.Key)
-			line(label, CrateLogic.Percent(row.Chance), Theme.Colors.Text, false)
+		local cardFrame = tierCard(color)
+		local left = if tier ~= "Coins" and tier ~= "Title" then ` · {missing} LEFT` else ""
+		header(cardFrame, `{info.Icon} {names[tier]}{left}`, CrateLogic.Percent(tierTotal), color, color)
+		for index, row in tierRows do
+			if row.Tier == "Coins" then
+				outcome(cardFrame, index, nil, row.Label, CrateLogic.Percent(row.Chance))
+			else
+				outcome(cardFrame, index, row.Key, CrateTheme.NameOf(row.Key), CrateLogic.Percent(row.Chance))
+			end
 		end
 	end
-	line("Total", CrateLogic.Percent(total), colors.Gold, true)
+	local totalCard = tierCard(colors.Gold)
+	header(totalCard, "TOTAL", CrateLogic.Percent(total), colors.Gold, colors.Main)
 	local missingPets = #CrateLogic.Missing(season, "Pet", have)
-	order += 1
-	UIKit.Label({
+	local note = UIKit.Label({
 		Text = if missingPets == 0
 			then `🏮 {season.Meter}: every pet found.`
 			elseif
@@ -1142,10 +1209,11 @@ local function renderOdds()
 		TextSize = textSize(17),
 		TextColor3 = colors.Glow,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, 0, 0, 52),
-		LayoutOrder = order,
+		Size = UDim2.new(1, 0, 0, if touch then 78 else 52),
+		LayoutOrder = nextOrder(),
 		Parent = list,
 	})
+	note:SetAttribute("PP_Lines", 3)
 end
 renderers.Odds = renderOdds
 
@@ -1262,7 +1330,7 @@ local function renderKeys()
 			Children = { UIKit.TextStroke(0.3) },
 		})
 		UIKit.Label({
-			Text = "Keys you win in PARTY CUPS, with levels and weekly quests still open crates!",
+			Text = "Keys you win in rounds and PARTY CUPS, with levels and weekly quests, still open crates!",
 			TextSize = textSize(19),
 			TextColor3 = Theme.Colors.TextDim,
 			Position = UDim2.fromOffset(20, 84),
@@ -1276,72 +1344,41 @@ local function renderKeys()
 	local starter = data and data.Starter
 	local p = profile()
 	local h = buttonHeight()
-	-- Phones: the content is about 380 tall: the starter pack (or how to get keys), the packs, then
-	-- VIEW ODDS and GIFT.
-	local top = if touch then 92 else 96
+	-- One row of cards, the starter pack first while it's theirs to buy, each with its picture: one
+	-- key, five on a ring, a heap, the crate brimming (owner: "This should show different quanities of
+	-- keys (images). 1 key, 5 keys, pile of keys, chest of keys etc."). Under them VIEW ODDS and GIFT.
+	-- Without the starter, how to earn keys goes over the row.
 	local bottomRow = h + 8
-	local starterShown = type(starter) == "table" and not (p and p.CrateFlags and p.CrateFlags.StarterPack)
-	if starterShown then
-		local banner = UIKit.Panel({
-			Size = UDim2.new(1, 0, 0, top),
-			CornerRadius = 16,
-			Parent = page,
-		}, colors.Main, colors.Crimson)
-		UIKit.Label({
-			Text = `🏮 {season.Name} STARTER`,
-			Font = Theme.Fonts.Display,
-			TextSize = textSize(22),
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextWrapped = false,
-			Position = UDim2.fromOffset(16, 8),
-			Size = UDim2.new(1, -220, 0, 30),
-			Parent = banner,
-			Children = { UIKit.TextStroke(0.2) },
-		})
-		UIKit.Label({
-			Text = `{CrateTheme.Count(starter.Keys, "key")} + the {CrateTheme.NameOf(starter.Item or season.Starter)} trail, sold only here. Once per player.`,
-			TextSize = textSize(17),
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			Position = UDim2.fromOffset(16, 40),
-			Size = UDim2.new(1, -220, 0, top - 44),
-			Parent = banner,
-		})
-		UIKit.Button({
-			Text = `R$ {starter.Price}`,
-			TextSize = textSize(24),
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -12, 0.5, 0),
-			Size = UDim2.fromOffset(180, math.min(h, top - 12)),
-			Parent = banner,
-		}, function()
-			remote:FireServer("Buy", starter.Key)
-		end, Theme.Colors.Green, Color3.fromRGB(60, 160, 90))
-	else
-		UIKit.Label({
+	local starterShown = type(starter) == "table"
+		and not giftMode
+		and not (p and p.CrateFlags and p.CrateFlags.StarterPack)
+	local top = 0
+	if not starterShown then
+		top = if touch then 56 else 50
+		local how = UIKit.Label({
 			Text = KEYS_HOW,
-			TextSize = textSize(17),
+			TextSize = textSize(16),
 			TextColor3 = Theme.Colors.TextDim,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Size = UDim2.new(1, 0, 0, top),
+			Size = UDim2.new(1, 0, 0, top - 6),
 			Parent = page,
 		})
+		how:SetAttribute("PP_Lines", 2)
 	end
-	local y = top + 10
 	if #packs == 0 then
 		UIKit.Label({
 			Text = if data then "Key packs are coming soon!" else "Asking Roblox for the prices...",
 			TextSize = textSize(20),
 			TextColor3 = Theme.Colors.TextDim,
-			Position = UDim2.fromOffset(0, y),
+			Position = UDim2.fromOffset(0, top),
 			Size = UDim2.new(1, 0, 0, 60),
 			Parent = page,
 		})
 	end
 	local row = UIKit.new("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, y),
-		Size = UDim2.new(1, 0, 1, -(y + bottomRow + 6)),
+		Position = UDim2.fromOffset(0, top),
+		Size = UDim2.new(1, 0, 1, -(top + bottomRow + 6)),
 		Parent = page,
 		Children = { UIKit.List(Enum.FillDirection.Horizontal, 10, Enum.HorizontalAlignment.Left) },
 	})
@@ -1351,48 +1388,88 @@ local function renderKeys()
 			onePrice = pack.Price
 		end
 	end
-	for order, pack in packs do
+	local cards = {}
+	if starterShown then
+		table.insert(cards, { Starter = true, Pack = starter })
+	end
+	for _, pack in packs do
+		table.insert(cards, { Starter = false, Pack = pack })
+	end
+	for order, entry in cards do
+		local pack = entry.Pack
+		local isStarter = entry.Starter
 		local cardFrame = UIKit.Panel({
-			Size = UDim2.new(1 / math.max(1, #packs), -8, 1, 0),
+			Size = UDim2.new(1 / math.max(1, #cards), -8, 1, 0),
 			LayoutOrder = order,
 			CornerRadius = 16,
 			Parent = row,
-		}, colors.Panel, colors.Deep)
-		if pack.Badge then
+		}, if isStarter then colors.Main else colors.Panel, if isStarter then colors.Crimson else colors.Deep)
+		local badge = if isStarter then "STARTER" else pack.Badge
+		if badge then
 			UIKit.Label({
-				Text = pack.Badge,
+				Text = badge,
 				Font = Theme.Fonts.Display,
 				TextSize = textSize(15),
 				TextColor3 = colors.Deep,
+				TextWrapped = false,
 				BackgroundTransparency = 0,
 				BackgroundColor3 = colors.Gold,
 				AnchorPoint = Vector2.new(0.5, 0),
 				Position = UDim2.new(0.5, 0, 0, 6),
-				Size = UDim2.new(1, -20, 0, 24),
+				Size = UDim2.new(1, -16, 0, 24),
 				Parent = cardFrame,
 				Children = { UIKit.Round() },
 			})
 		end
-		-- (Short enough for the smallest phone: the badge, the keys, the saving, then BUY.)
+		-- The picture fills what's left between the badge and the words (square, as big as fits, in the
+		-- middle of that space).
+		local picture = SeasonArt.KeyPacks[if isStarter then "Starter" else pack.Key]
+		local below = 26 + 22 + h + 16
+		local art = UIKit.new("Frame", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, (32 - below) / 2),
+			Size = UDim2.new(1, -12, 1, -(32 + below)),
+			Parent = cardFrame,
+			Children = { UIKit.new("UIAspectRatioConstraint", { AspectRatio = 1 }) },
+		})
+		if picture and picture ~= "" then
+			UIKit.new("ImageLabel", {
+				BackgroundTransparency = 1,
+				Image = picture,
+				ScaleType = Enum.ScaleType.Fit,
+				Size = UDim2.fromScale(1, 1),
+				Parent = art,
+			})
+		else
+			UIKit.Label({ Text = "🔑", TextScaled = true, Size = UDim2.fromScale(1, 1), Parent = art })
+		end
 		UIKit.Label({
-			Text = `🔑 {CrateTheme.Count(pack.Keys, "KEY", "KEYS")}`,
+			Text = CrateTheme.Count(pack.Keys, "KEY", "KEYS"),
 			Font = Theme.Fonts.Display,
-			TextSize = textSize(24),
-			Position = UDim2.fromOffset(0, 32),
-			Size = UDim2.new(1, 0, 0, 30),
+			TextSize = textSize(22),
+			TextWrapped = false,
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -(h + 16 + 22)),
+			Size = UDim2.new(1, -8, 0, 26),
 			Parent = cardFrame,
 			Children = { UIKit.TextStroke(0.3) },
 		})
-		local save = if onePrice and pack.Keys > 1
+		local save = if not isStarter
+				and onePrice
+				and pack.Keys > 1
 			then math.floor((1 - pack.Price / (pack.Keys * onePrice)) * 100 + 0.5)
 			else 0
-		if save > 0 then
+		local line = if isStarter then "+ a trail · once" elseif save > 0 then `save {save}%` else ""
+		if line ~= "" then
 			UIKit.Label({
-				Text = `save {save}%`,
+				Text = line,
 				TextSize = textSize(16),
-				TextColor3 = colors.Glow,
-				Position = UDim2.fromOffset(0, 62),
-				Size = UDim2.new(1, 0, 0, 22),
+				TextColor3 = if isStarter then colors.Gold else colors.Glow,
+				TextWrapped = false,
+				AnchorPoint = Vector2.new(0.5, 1),
+				Position = UDim2.new(0.5, 0, 1, -(h + 14)),
+				Size = UDim2.new(1, -8, 0, 22),
 				Parent = cardFrame,
 			})
 		end
@@ -1454,7 +1531,7 @@ local function render()
 		if gradient then
 			gradient.Color = if key == current
 				then ColorSequence.new(colors.Glow, colors.Main)
-				else ColorSequence.new(colors.Panel, colors.Deep)
+				else ColorSequence.new(Theme.Colors.Lavender, Theme.Colors.Purple)
 		end
 	end
 	for key, page in pages do
@@ -1519,14 +1596,13 @@ function CrateMenu.Build(context)
 	touch = UIKit.IsTouch()
 	modal = Modal.new(context.Overlay, season.Name, "🎃", Vector2.new(980, 600))
 	CrateTheme.Dress(modal.Window, season)
-	-- The season's name, once: the title bar wears its blackletter and embers (the pages don't repeat
-	-- it).
+	-- The season's name, once: the title bar wears its embers (the pages don't repeat it).
 	local titleBar = modal.Window:FindFirstChild("TitleBar")
 	local titleLabel = titleBar and titleBar:FindFirstChildOfClass("TextLabel")
 	if titleLabel then
-		titleLabel.Text = season.Name
+		titleLabel.Text = string.upper(season.Name)
 		titleLabel.Font = TITLE_FONT
-		titleLabel.TextSize = if touch then 40 else 44
+		titleLabel.TextSize = if touch then 32 else 36
 		titleLabel.TextColor3 = Color3.new(1, 1, 1)
 		local stroke = titleLabel:FindFirstChildOfClass("UIStroke")
 		if stroke then
@@ -1566,7 +1642,7 @@ function CrateMenu.Build(context)
 			Parent = tabs,
 		}, function()
 			CrateMenu.Show(tab.Key)
-		end, colors.Panel, colors.Deep)
+		end, Theme.Colors.Lavender, Theme.Colors.Purple)
 		local page = UIKit.new("Frame", {
 			Name = tab.Key,
 			Position = UDim2.fromOffset(186, 0),

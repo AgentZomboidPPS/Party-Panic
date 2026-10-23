@@ -4,7 +4,7 @@
 --
 -- A bot (server: Services/BotService) is a Configuration in ReplicatedStorage.PartyBots with the
 -- attributes players get in a round (PP_InRound, PP_Alive, PP_Score, PP_ScoreText, PP_Team,
--- PP_Vote, MG_<key>), plus DisplayName ("🤖 Mochi"), a negative UserId, IsBot, Color, and an
+-- PP_Vote, MG_<key>), plus DisplayName ("Mochi"), a negative UserId, IsBot, Color, and an
 -- ObjectValue "Character" pointing at its character model.
 --
 --   Participants.All()               players, then bots
@@ -21,8 +21,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Signal = require(ReplicatedStorage.Shared.Signal)
-
-local Theme = require(script.Parent.UI.Theme)
 
 local Participants = {}
 
@@ -88,7 +86,7 @@ local function botEntry(info: Instance): Participant
 		local shortName = string.gsub(info.Name, "^Bot_", "")
 		entry = setmetatable({
 			Name = info.Name,
-			DisplayName = info:GetAttribute("DisplayName") or `🤖 {shortName}`,
+			DisplayName = info:GetAttribute("DisplayName") or shortName,
 			UserId = info:GetAttribute("UserId") or 0,
 			IsBot = true,
 			IsLocal = false,
@@ -177,11 +175,10 @@ function Participants.Escape(text: string): string
 	return (string.gsub(text, "[&<>]", { ["&"] = "&amp;", ["<"] = "&lt;", [">"] = "&gt;" }))
 end
 
--- A name for a RichText list row (escaped). A bot's name is a little softer than a person's: the
--- 🤖 says what it is, and people's names still stand out in a list full of bots.
-function Participants.ListName(name: string, soft: boolean): string
-	local safe = Participants.Escape(name)
-	return if soft then `<font color="#{Theme.Colors.TextDim:ToHex()}">{safe}</font>` else safe
+-- A name for a RichText list row (escaped). Bots' names look like anyone's (owner: "Lets remove the
+-- bot tag so people dont know they are playing with a bot."): `_bot` says nothing on screen.
+function Participants.ListName(name: string, _bot: boolean): string
+	return Participants.Escape(name)
 end
 
 -- Keeping up with arrivals and departures ----------------------------------------------------------

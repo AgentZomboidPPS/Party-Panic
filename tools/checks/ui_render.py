@@ -604,7 +604,7 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
             pox = jx - px - 12 - (n["touchSlot"] - 1) * (width + 12)
             poy = jy + jump / 2 - py - jump * 0.15
         if n.get("underProfile"):
-            psx, psy, pox, poy = 0, 0, 14, 12 + 130 * auto_scale + 8  # RoundController: under the profile chip
+            psx, psy, pox, poy = 0, 0, 14, 12 + 182 * auto_scale + 8  # RoundController: under the profile chip
         if n.get("aboveActions") and touch:
             # NotificationController: the toasts sit above the mode's action buttons (their row, as above).
             jx, jy, jump = jump_button(dev)

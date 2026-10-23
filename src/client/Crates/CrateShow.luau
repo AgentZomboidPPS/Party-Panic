@@ -385,7 +385,7 @@ local function addPrize(crate: Crate, color: Color3)
 		local colors = CrateTheme.Colors(season)
 		UIKit.Label({
 			Text = CrateTheme.NameOf(item or season.Title),
-			Font = Enum.Font.GrenzeGotisch,
+			Font = Theme.Fonts.Display,
 			TextScaled = true,
 			Size = UDim2.fromScale(1, 0.7),
 			Position = UDim2.fromScale(0, 0.15),

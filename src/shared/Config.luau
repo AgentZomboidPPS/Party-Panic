@@ -116,14 +116,16 @@ Config.Monetization = {
 	-- Roblox needs no update). A pack's Gift is the same pack bought for someone else in the server.
 	-- The starter pack is once per player: 5 keys and the season's banner trail, sold only there. Keys
 	-- never expire and work in every season. An id of 0 is a pack that isn't made: it isn't shown.
-	-- Made through Open Cloud on 2026-10-23 with their icons (assets/images/season/packs).
+	-- Made through Open Cloud on 2026-10-23 with their icons (assets/images/season/packs). BEST VALUE
+	-- is the biggest pack, the one that saves the most (owner: "best value is also just entirely wrong
+	-- should be over the max one").
 	KeyPacks = {
 		{ Key = "Keys1", Keys = 1, Price = 25, Id = 3721597936, GiftId = 3721598019 },
 		{ Key = "Keys5", Keys = 5, Price = 99, Id = 3721597983, GiftId = 3721598054, Badge = "POPULAR" },
-		{ Key = "Keys15", Keys = 15, Price = 249, Id = 3721598002, GiftId = 3721598066, Badge = "BEST VALUE" },
-		{ Key = "Keys40", Keys = 40, Price = 549, Id = 3721598005, GiftId = 3721598089 },
+		{ Key = "Keys15", Keys = 15, Price = 249, Id = 3721598002, GiftId = 3721598066 },
+		{ Key = "Keys40", Keys = 40, Price = 549, Id = 3721598005, GiftId = 3721598089, Badge = "BEST VALUE" },
 	},
-	StarterPack = { Key = "Starter", Keys = 5, Price = 79, Id = 3721598113 },
+	StarterPack = { Key = "Starter", Keys = 5, Price = 49, Id = 3721598113 }, -- (owner: "Lets make the starter pack be 49 robux instead")
 }
 
 -- The crate seasons' openings (Shared/Seasons, Services/CrateService): how long the show at an

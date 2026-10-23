@@ -1307,7 +1307,7 @@ local function render(keep: Vector2?)
 		if gradient then
 			gradient.Color = if key == currentTab
 				then ColorSequence.new(Theme.Colors.Pink, PINK_DARK)
-				else ColorSequence.new(Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+				else ColorSequence.new(Theme.Colors.Lavender, Theme.Colors.Purple)
 		end
 	end
 	if not State.Profile then
@@ -1358,7 +1358,7 @@ function RewardsController.Start(context)
 		}, function()
 			currentTab = tab.Key
 			render()
-		end, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+		end, Theme.Colors.Lavender, Theme.Colors.Purple)
 	end
 
 	State.OpenScreen:Connect(function(name, tab)

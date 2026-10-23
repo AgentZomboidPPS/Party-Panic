@@ -23,6 +23,7 @@
 -- team pills' YOU mark and the before-GO "YOU'RE ON ..." title still say which team you're on, and
 -- so do your grill's colours.
 
+local ContentProvider = game:GetService("ContentProvider")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
@@ -54,6 +55,7 @@ type Station = {
 	Height: number, -- drawn edge height over the grate
 	Steak: Model?,
 	Dropping: number?, -- when the steak started dropping in
+	Rest: { [BasePart]: CFrame }, -- where each of its pieces lies on the grill (as the server put it)
 }
 
 local function lerp(a: number, b: number, t: number): number
@@ -94,6 +96,7 @@ function PrimeCut.Start(api)
 			X = 0,
 			Target = 0,
 			Height = PrimeCutLogic.HEIGHT + HOVER,
+			Rest = {},
 		}
 		table.insert(order, entry.T)
 	end
@@ -214,6 +217,21 @@ function PrimeCut.Start(api)
 
 	-- Knives and steaks in the world -------------------------------------------------------------
 	local template = api:Template("PrimeCutKnife")
+	-- The round's steaks, downloaded now (the server shares them with the knife, before the first is
+	-- served), so the next one doesn't land on the grill before its pieces have loaded.
+	task.spawn(function()
+		local folder = ReplicatedStorage:FindFirstChild("MiniGameAssets")
+		local steaks = {}
+		for _, steak in PrimeCutLogic.Steaks do
+			local shared = folder and folder:FindFirstChild(`PrimeCutSteak_{steak.Id}`)
+			if shared then
+				table.insert(steaks, shared)
+			end
+		end
+		if #steaks > 0 then
+			pcall(ContentProvider.PreloadAsync, ContentProvider, steaks)
+		end
+	end)
 	local edgeOffset = Vector3.new(0, 0, -3.7) -- the edge's middle relative to the knife's pivot
 	if template then
 		local blade = template:FindFirstChild("Blade", true) :: BasePart?
@@ -318,7 +336,7 @@ function PrimeCut.Start(api)
 				station.Steak = model
 				if not first then
 					station.Dropping = now
-					model:SetAttribute("PP_Land", model:GetPivot().Position.Y)
+					station.Rest = {}
 				end
 			end
 		end
@@ -948,19 +966,29 @@ function PrimeCut.Start(api)
 			)
 			placeKnife(station)
 
-			-- A new steak drops onto the grill.
+			-- A new steak drops onto the grill. Each piece moves from where the server put it, the moment
+			-- it's here: a steak's pieces can arrive a frame or two apart, and moving the model by its
+			-- pivot (once by the pivot it had before its biggest piece came) left that piece sunk under
+			-- the grate, so only the pale top and the grill marks showed (owner: "some steaks dont
+			-- render properly", on steak 3/3: "See-through or pieces missing").
 			local steak = station.Steak
 			if steak and station.Dropping then
-				local land = steak:GetAttribute("PP_Land")
 				local t = (now - station.Dropping) / 0.35
-				if type(land) == "number" and steak.Parent then
-					local pivot = steak:GetPivot()
-					local y = if t >= 1
-						then land
-						else land + 5 * (1 - ease(t)) + math.sin(math.min(t, 1) * math.pi) * 0.3
-					steak:PivotTo(pivot - Vector3.new(0, pivot.Position.Y - y, 0))
+				if steak.Parent then
+					local lift = if t >= 1 then 0 else 5 * (1 - ease(t)) + math.sin(t * math.pi) * 0.3
+					for _, piece in steak:GetDescendants() do
+						if piece:IsA("BasePart") then
+							local rest = station.Rest[piece]
+							if not rest then
+								rest = piece.CFrame
+								station.Rest[piece] = rest
+							end
+							piece.CFrame = rest + Vector3.new(0, lift, 0)
+						end
+					end
 				end
 				if t >= 1 then
+					table.clear(station.Rest)
 					station.Dropping = nil
 					if team == mine then
 						api:Sound("Boing")

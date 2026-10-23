@@ -158,9 +158,9 @@ local function __engineLayout(playerGui, entries)
 					local top = centerY - js * 0.15 - 118 * __autoScale(device.w, device.h, 1) / 2
 					item.Position = UDim2.new(item.Position.X.Scale, item.Position.X.Offset, 0, top - 8)
 				end
-				-- RoundController's standings on PC: under the profile chip (130 tall at y 12, scaled).
+				-- RoundController's standings on PC: under the profile chip (182 tall at y 12, scaled).
 				if item:GetAttribute("PP_UnderProfile") then
-					item.Position = UDim2.fromOffset(14, 12 + 130 * __autoScale(device.w, device.h, 1) + 8)
+					item.Position = UDim2.fromOffset(14, 12 + 182 * __autoScale(device.w, device.h, 1) + 8)
 				end
 			end
 		end

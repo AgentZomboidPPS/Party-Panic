@@ -15,7 +15,9 @@
 --     prizes, the crown, confetti and a fanfare. It takes over from the results card just before
 --     that card's time is up, so a level-up card from the same round waits for it (and shows after
 --     the next round if the lobby has no time left for it), and it closes when the vote starts.
--- Bots are in the standings and can stand on the podium (marked 🤖); only people win prizes.
+-- Bots are in the standings and can stand on the podium, looking like anyone (owner: "Lets remove
+-- the bot tag so people dont know they are playing with a bot."); only people win prizes (the
+-- podium shows a bot's too, but the server gives bots nothing).
 -- A PLAY AGAIN replay (Services/ReplayService) goes from the results straight into the same game:
 -- a podium it would cut short (or never let open) shows in the next real lobby instead.
 
@@ -25,6 +27,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
 local GameState = require(Shared.GameState)
+local CrateLogic = require(Shared.Logic.CrateLogic)
 local PartyCup = require(Shared.Logic.PartyCup)
 local Placement = require(Shared.Logic.Placement)
 
@@ -542,9 +545,8 @@ local function podiumStep(parent: Instance, row: Row?, slot: number, x: number, 
 		return
 	end
 	local mine = row.UserId == me()
-	local prize = if row.IsBot then 0 else PartyCup.PrizeFor(row.Place)
+	local prize = PartyCup.PrizeFor(row.Place) -- (a bot's too, on screen: the server pays bots nothing)
 	-- From the step up: the prize, the points, the name, the medal (and the crown over a champion).
-	-- The prize's line is kept for a bot too, so the higher step always has the higher name.
 	local y = floor - height - 6 - 28
 	if prize > 0 then
 		label({
@@ -593,7 +595,7 @@ local function podiumStep(parent: Instance, row: Row?, slot: number, x: number, 
 	y -= 44
 	label({
 		Name = "Medal",
-		Text = if row.Place == 1 and not row.IsBot then "👑🥇" else MEDALS[tier],
+		Text = if row.Place == 1 then "👑🥇" else MEDALS[tier],
 		TextSize = 36,
 		TextWrapped = false,
 		Position = UDim2.fromOffset(x, y),
@@ -618,6 +620,9 @@ local function fillPodium(data: Cup)
 	})
 	local keysBy = if type(data.Keys) == "table" then data.Keys else {}
 	local function keysOf(row: Row?): number
+		if row and row.IsBot then
+			return CrateLogic.CupKeys(row.Place, false) -- (what a person there gets: on screen only)
+		end
 		return if row then tonumber(keysBy[tostring(row.UserId)]) or 0 else 0
 	end
 	for position, slot in { 2, 1, 3 } do
@@ -642,9 +647,7 @@ local function fillPodium(data: Cup)
 		elseif prize > 0 then
 			yours =
 				`{MEDALS[mine.Place]} You finished {Placement.Ordinal(mine.Place)}! +{prize} {Theme.CoinIcon}{keyText}`
-		elseif myKeys > 0 then
-			yours = `You finished {Placement.Ordinal(mine.Place)}: +{myKeys} 🔑 for playing the cup!`
-		else
+		else -- (no keys for playing a cup, only for the podium: owner: "No keys for playing a cup.")
 			yours = `You finished {Placement.Ordinal(mine.Place)} with {mine.Points} pts. Next cup!`
 		end
 	else
@@ -672,8 +675,8 @@ local function fillPodium(data: Cup)
 		crownText = ""
 	elseif winner.IsBot then
 		crownText = if wore
-			then "👑 Your crown comes off: a bot won. Win it back next cup!"
-			else `{winner.Name} won it: no crown this time. Beat the bots next cup!`
+			then `👑 Your crown comes off: {winner.Name} won. Win it back next cup!`
+			else `{winner.Name} won the cup! Beat them next cup!`
 	elseif winner.UserId == me() then
 		crownText = if wore
 			then "👑 You keep your crown until the next cup ends!"

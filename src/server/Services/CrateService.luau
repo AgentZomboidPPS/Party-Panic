@@ -8,8 +8,7 @@
 -- Earning (all server side, never for bots, the check tools' stand-ins or anyone without a profile):
 --   * a crate for every round a person plays to the end (RewardService: it's on the results card),
 --     the same rule round coins use, so nobody farms them standing still in the lobby;
---   * keys from a Party Cup (CupService: 3 / 2 / 1 on the podium, 1 more for playing all 5 rounds, 1
---     more on the podium for a GOLD PASS owner, 1 more for the first cup finished each day, UTC);
+--   * keys from a Party Cup (CupService: exactly 3 / 2 / 1 on the podium; owner, then: "Winner should get 3 keys, 2nd gets 2 and 3rd gets 1.");
 --   * 3 keys to start (once per player), a crate with the season's welcome (once per season), a key
 --     for each weekly quest finished (QuestService) and every 5th level (ProgressionService);
 --   * keys bought with Robux (KeyShopService).
@@ -95,9 +94,6 @@ type Altar = { Index: number, Model: Model, Prompt: ProximityPrompt?, Position: 
 
 local altars: { Altar } = {}
 local showing: { [Player]: number } = {} -- os.clock() their show ends
--- The day (UTC) each player's coming cup keys counted the day's first cup key for (CupKeysFor at the
--- cup's end, GiveCupKeys when they're paid a few seconds later, maybe past midnight).
-local cupDays: { [Player]: number } = {}
 local shows = 0
 local limiter = RateLimiter.new(Config.RateLimits.Crate[1], Config.RateLimits.Crate[2])
 
@@ -173,8 +169,14 @@ local function refreshMarks(player: Player)
 end
 CrateService.RefreshMarks = refreshMarks
 
--- Gives keys (and says why on their screen). Never to bots.
-function CrateService.GiveKeys(player: Player, amount: number, reason: string, detail: string?): boolean
+-- Gives keys (and says why on their screen, unless `quiet`: the results card says it). Never to bots.
+function CrateService.GiveKeys(
+	player: Player,
+	amount: number,
+	reason: string,
+	detail: string?,
+	quiet: boolean?
+): boolean
 	local profile = DataService.Get(player)
 	if not isPerson(player) or not profile or amount <= 0 then
 		return false
@@ -183,7 +185,9 @@ function CrateService.GiveKeys(player: Player, amount: number, reason: string, d
 	data.Keys += math.floor(amount)
 	Telemetry.PlayerEvent(player, "KeysEarned", amount, reason)
 	Telemetry.Keys(player, math.floor(amount), data.Keys, reason, detail)
-	remote:FireClient(player, "Gift", { Keys = math.floor(amount), Reason = reason, Detail = detail })
+	if not quiet then
+		remote:FireClient(player, "Gift", { Keys = math.floor(amount), Reason = reason, Detail = detail })
+	end
 	DataService.Changed(player)
 	return true
 end
@@ -210,9 +214,19 @@ local function giveCrates(player: Player, amount: number): boolean
 	return true
 end
 
+-- RewardService: a person finished a round in `place`: 3 / 2 / 1 keys for the top 3, shown on their
+-- results card with the round's crate. The keys given (0 for bots and anyone lower).
+function CrateService.RoundKeys(player: Player, place: number, gameId: string): number
+	local keys = CrateLogic.RoundKeys(place, not isPerson(player))
+	if keys > 0 and CrateService.GiveKeys(player, keys, "Round", `{gameId} place {place}`, true) then
+		return keys
+	end
+	return 0
+end
+
 -- RewardService: a person played a round to the end, so they get its crate. What the results card
 -- shows about it (nil for nobody: bots, someone who left).
-function CrateService.RoundCrate(player: Player): { [string]: any }?
+function CrateService.RoundCrate(player: Player, keysWon: number?): { [string]: any }?
 	if not giveCrates(player, CrateLogic.CratesPerRound) then
 		return nil
 	end
@@ -224,40 +238,22 @@ function CrateService.RoundCrate(player: Player): { [string]: any }?
 		Season = season.Id,
 		Total = data.Crates.Count,
 		Keys = data.Keys,
+		KeysWon = keysWon or 0,
 	}
 end
 
 -- The keys a finished Party Cup gives `player` (CupService shows them on the podium, then pays them
--- with GiveCupKeys): their place (1 to 3 on the podium), whether they played all its rounds, a
--- GOLD PASS owner's extra on the podium, and the day's first cup. 0 for bots.
-function CrateService.CupKeysFor(player: Player, place: number?, wholeCup: boolean): number
-	local profile = DataService.Get(player)
-	if not isPerson(player) or not profile then
+-- with GiveCupKeys): 3 / 2 / 1 for their place on the podium, nothing off it. 0 for bots.
+function CrateService.CupKeysFor(player: Player, place: number?): number
+	if not isPerson(player) or not DataService.Get(player) then
 		return 0
 	end
-	local data = profile.Data :: any
-	local keys = CrateLogic.CupKeys(place, wholeCup, data.GoldPass.Owned == true, false)
-	local day = today()
-	if data.CrateFlags.DailyKeyDay < day then
-		keys += CrateLogic.DailyCupKeys
-		cupDays[player] = day
-	else
-		cupDays[player] = nil
-	end
-	return keys
+	return CrateLogic.CupKeys(place, false)
 end
 
 function CrateService.GiveCupKeys(player: Player, keys: number, place: number?)
-	local profile = DataService.Get(player)
-	if not profile or keys <= 0 then
+	if not DataService.Get(player) or keys <= 0 then
 		return
-	end
-	local data = profile.Data :: any
-	-- (the day the keys counted the day's first cup key for, not the day they're paid)
-	local day = cupDays[player]
-	cupDays[player] = nil
-	if day and data.CrateFlags.DailyKeyDay < day then
-		data.CrateFlags.DailyKeyDay = day
 	end
 	CrateService.GiveKeys(player, keys, "PartyCup", if place and place <= 3 then `Place {place}` else "Played")
 end
@@ -642,7 +638,6 @@ function CrateService.Init()
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		showing[player] = nil
-		cupDays[player] = nil
 		for _, altar in altars do
 			if altar.Busy == player then
 				setAltar(altar, nil, 0)

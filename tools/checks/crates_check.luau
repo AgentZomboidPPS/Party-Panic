@@ -7,7 +7,7 @@
 --
 -- It builds the real lobby (the pile, the altars, the board, the autumn dressing, the meshes the
 -- devices get) and checks: starter keys once, last season's crates carried over, a crate a round (not
--- for bots), the cup's keys (3 / 2 / 1, the whole cup, the day's first cup, the GOLD PASS), quest and
+-- for bots), the cup's keys (exactly 3 / 2 / 1 on the podium), quest and
 -- level keys, the welcome's crate once, opening at an altar (rolled and saved before the show, the
 -- altar busy until it ends, too far / busy / in a round / no keys refused), Open 5, over the head, a
 -- forced pet (put on at the reveal, the banner, first in the world), the title (every other server
@@ -179,15 +179,40 @@ function __runCrates()
 	local bot = { IsBot = true, UserId = -1, Name = "Bot_1", DisplayName = "🤖", Parent = true }
 	check("no crate for a bot", CrateService.RoundCrate(bot :: any) == nil)
 
-	-- 4. Keys: the cup, quests, levels.
-	local first = CrateService.CupKeysFor(Bo, 1, true)
-	check("cup winner who played it all, first cup today: 3 + 1 + 1", first == 5, first)
+	-- 4. Keys: every round's top 3, the cup, quests, levels.
+	local roundBefore = data(Di).Keys
+	local sentBefore = #sent
+	local won = CrateService.RoundKeys(Di, 1, "ObbyOdyssey")
+	check("round winner: 3 keys", won == 3 and data(Di).Keys == roundBefore + 3, { won, roundBefore, data(Di).Keys })
+	check(
+		"round 2nd: 2, 3rd: 1, 4th: none",
+		CrateService.RoundKeys(Di, 2, "CrazyCutters") == 2
+			and CrateService.RoundKeys(Di, 3, "CrazyCutters") == 1
+			and CrateService.RoundKeys(Di, 4, "CrazyCutters") == 0
+			and data(Di).Keys == roundBefore + 6,
+		data(Di).Keys
+	)
+	check("no round keys for a bot", CrateService.RoundKeys(bot :: any, 1, "ObbyOdyssey") == 0)
+	local popups = 0
+	for index = sentBefore + 1, #sent do
+		if sent[index].Action == "Gift" then
+			popups += 1
+		end
+	end
+	check("round keys: no pop-up, the results card says it", popups == 0, popups)
+	local card = CrateService.RoundCrate(Di, 3)
+	check(
+		"the results card: keys won and keys now",
+		card ~= nil and card.KeysWon == 3 and card.Keys == data(Di).Keys,
+		card
+	)
+	local keysBefore = data(Bo).Keys
+	local first = CrateService.CupKeysFor(Bo, 1)
+	check("cup winner: 3 keys", first == 3, first)
 	CrateService.GiveCupKeys(Bo, first, 1)
-	local again = CrateService.CupKeysFor(Bo, 1, true)
-	check("the day's first-cup key only once", again == 4, again)
-	check("off the podium, part of the cup: just the day's key", CrateService.CupKeysFor(Cy, 5, false) == 1)
-	data(Cy).GoldPass.Owned = true
-	check("GOLD PASS on the podium: +1", CrateService.CupKeysFor(Cy, 3, false) == 1 + 1 + 1)
+	check("paid", data(Bo).Keys == keysBefore + 3, { keysBefore, data(Bo).Keys })
+	check("2nd: 2, 3rd: 1", CrateService.CupKeysFor(Cy, 2) == 2 and CrateService.CupKeysFor(Cy, 3) == 1)
+	check("off the podium: none", CrateService.CupKeysFor(Cy, 5) == 0 and CrateService.CupKeysFor(Cy, nil) == 0)
 	check("weekly quest key", CrateService.QuestKeys(Cy, "Weekly") == 1 and CrateService.QuestKeys(Cy, "Daily") == 0)
 	check("a key every 5th level", CrateService.LevelKeys(Cy, 4, 11) == 2)
 	local gift = lastSent("Gift", "Bot3")

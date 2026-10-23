@@ -238,7 +238,7 @@ local function render()
 		if gradient then
 			gradient.Color = if slot == currentSlot
 				then ColorSequence.new(Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
-				else ColorSequence.new(Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+				else ColorSequence.new(Theme.Colors.Lavender, Theme.Colors.Purple)
 		end
 	end
 
@@ -341,8 +341,8 @@ local function render()
 		elseif item.Price then
 			local affordable = profile.Coins >= item.Price
 			actionText = `{Theme.CoinIcon} {UIKit.FormatNumber(item.Price)}`
-			top = if affordable then Theme.Colors.Yellow else Theme.Colors.PanelLight
-			bottom = if affordable then Theme.Colors.Orange else Theme.Colors.PanelDark
+			top = if affordable then Theme.Colors.Yellow else Theme.Colors.Muted
+			bottom = if affordable then Theme.Colors.Orange else Theme.Colors.MutedDark
 			onClick = function()
 				pendingItem = item
 				confirmText.Text = `Buy {item.Icon} {item.Name} for {Theme.CoinIcon} {UIKit.FormatNumber(
@@ -355,8 +355,8 @@ local function render()
 		elseif item.Event then
 			local source, on = eventSource(item)
 			actionText = source or "Locked"
-			top = if on then Theme.Colors.Orange else Theme.Colors.PanelLight
-			bottom = if on then Color3.fromRGB(205, 92, 24) else Theme.Colors.PanelDark
+			top = if on then Theme.Colors.Orange else Theme.Colors.Muted
+			bottom = if on then Color3.fromRGB(205, 92, 24) else Theme.Colors.MutedDark
 			if on then
 				onClick = function()
 					State.OpenScreen:Fire("Event")
@@ -382,10 +382,10 @@ local function render()
 					State.OpenScreen:Fire("Crates", if starter then "Keys" else "Collection")
 				end
 			else
-				actionText, top, bottom = "🔒 VAULTED", Theme.Colors.PanelLight, Theme.Colors.PanelDark
+				actionText, top, bottom = "🔒 VAULTED", Theme.Colors.Muted, Theme.Colors.MutedDark
 			end
 		else
-			actionText, top, bottom = lockReason(item) or "Locked", Theme.Colors.PanelLight, Theme.Colors.PanelDark
+			actionText, top, bottom = lockReason(item) or "Locked", Theme.Colors.Muted, Theme.Colors.MutedDark
 		end
 		UIKit.Button({
 			Text = actionText,
@@ -461,7 +461,7 @@ function ShopController.Start(context)
 			end
 			currentSlot = tab.Slot
 			render()
-		end, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+		end, Theme.Colors.Lavender, Theme.Colors.Purple)
 	end
 	UIKit.Label({
 		Text = "Cosmetics only - no gameplay advantages.",

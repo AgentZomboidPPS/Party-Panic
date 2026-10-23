@@ -467,7 +467,8 @@ local function show(data)
 	end
 	if crate then
 		-- The crate season (Services/CrateService): one crate for every round played to the end, in
-		-- the season's ember colours, with the keys they have to open it.
+		-- the season's ember colours, with the keys the top 3 won (3 / 2 / 1) or the keys they have to
+		-- open it.
 		local row = UIKit.new("Frame", {
 			Size = UDim2.new(1, 0, 0, if compact then 26 else 34),
 			BackgroundColor3 = Color3.fromRGB(110, 46, 30),
@@ -486,8 +487,12 @@ local function show(data)
 			Parent = row,
 		})
 		local keys = tonumber(crate.Keys) or 0
+		local won = tonumber(crate.KeysWon) or 0
 		UIKit.Label({
-			Text = if keys > 0 then `🔑 {keys} to open it` else "🔑 win keys in the PARTY CUP",
+			Text = if won > 0
+				then `🔑 +{won} key{if won == 1 then "" else "s"}!`
+				elseif keys > 0 then `🔑 {keys} to open it`
+				else "🔑 top 3 win keys",
 			TextSize = 18,
 			TextColor3 = Color3.fromRGB(255, 196, 92),
 			TextXAlignment = Enum.TextXAlignment.Right,

@@ -414,9 +414,10 @@ function PrimeCut:Prepare()
 	for cut = 1, PrimeCutLogic.CUTS do
 		table.insert(self.plan, { Id = steakIds[(cut - 1) % #steakIds + 1], Angle = rng:NextNumber(0, math.pi * 2) })
 	end
-	-- (Loaded up front, so serving the next steak never waits on a mesh.)
+	-- (Loaded up front, so serving the next steak never waits on a mesh; and shared, so every device
+	-- downloads the round's steaks before they're served rather than as each one lands.)
 	for _, plan in self.plan do
-		MeshLibrary.Get(PrimeCutLogic.Steak(plan.Id).Prop):Destroy()
+		ctx:ShareTemplate(`PrimeCutSteak_{plan.Id}`, MeshLibrary.Get(PrimeCutLogic.Steak(plan.Id).Prop))
 	end
 	self.cut = 0
 	self.phase = "Wait"

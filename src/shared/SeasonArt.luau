@@ -9,6 +9,10 @@
 --   Icons     the season's item and crate icons in one sheet (IconCells: each id's cell); the
 --             collection log, the odds, the reveal cards and the banners
 --   IconSize  the size of one cell in the sheet, in pixels
+--   KeyPacks  each key pack's picture on its card in the key shop: one key, five on a ring, a heap,
+--             the Hollow Crate brimming with keys, the starter's keys with its banner (owner: "This
+--             should show different quanities of keys (images). 1 key, 5 keys, pile of keys, chest of
+--             keys etc.")
 -- Leaf module: no requires, no Roblox APIs.
 
 return {
@@ -44,4 +48,11 @@ return {
 		Crate = { 3, 4 },
 		Key = { 4, 4 },
 	} :: { [string]: { number } }, -- id -> { column, row } (from 0)
+	KeyPacks = {
+		Keys1 = "rbxassetid://78916692015866",
+		Keys5 = "rbxassetid://70631790085204",
+		Keys15 = "rbxassetid://117984579892708",
+		Keys40 = "rbxassetid://94855269853922",
+		Starter = "rbxassetid://137918661588088",
+	} :: { [string]: string },
 }

@@ -4,8 +4,9 @@
 -- While anyone is here, the server keeps Config.Bots.FillTo participants: when a player joins, a
 -- bot fades out to make room (right away from the lobby, or after its round if it's playing one);
 -- when a player leaves, a bot fades in. Someone sitting out (SitOutService) leaves their spot to
--- a bot the same way. Bots are clearly labelled (🤖 name and a BOT tag), never earn rewards and
--- never save data.
+-- a bot the same way. Bots look like anyone else (owner: "Lets remove the bot tag so people dont
+-- know they are playing with a bot."): a name, a level on a name tag like everyone's, no antenna.
+-- They never earn rewards and never save data.
 --
 -- A bot is a table that looks like a Player to the round code (Name, DisplayName, UserId < 0,
 -- Character, Parent, attributes, CharacterAdded, LoadCharacterAsync), so RoundContext and every
@@ -46,6 +47,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
+local NameTag = require(Shared.NameTag)
 local Signal = require(Shared.Signal)
 
 local BotRegistry = require(script.Parent.BotRegistry)
@@ -131,6 +133,7 @@ export type Bot = typeof(setmetatable(
 		Name: string,
 		DisplayName: string,
 		UserId: number,
+		Level: number,
 		Skill: number,
 		Memory: { [any]: any },
 		Rng: Random,
@@ -255,70 +258,14 @@ local function lobbySpawn(): CFrame
 	return points[rng:NextInteger(1, #points)] * CFrame.new(rng:NextNumber(-1.5, 1.5), 3, rng:NextNumber(-1.5, 1.5))
 end
 
-local function weldTo(part: BasePart, to: BasePart)
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = to
-	weld.Part1 = part
-	weld.Parent = part
-end
-
--- A little antenna with a glowing tip, and a nameplate saying who it is: never mistaken for a person.
-local function decorate(bot: Bot, model: Model, color: Color3)
+-- A name tag like everyone's (Shared/NameTag: the name and a level): nothing says it's a bot (owner:
+-- "Lets remove the bot tag so people dont know they are playing with a bot.").
+local function decorate(bot: Bot, model: Model)
 	local head = model:FindFirstChild("Head") :: BasePart?
 	if not head then
 		return
 	end
-	local top = head.CFrame * CFrame.new(0, head.Size.Y / 2, 0)
-	local stalk = Instance.new("Part")
-	stalk.Name = "BotAntenna"
-	stalk.Shape = Enum.PartType.Cylinder
-	stalk.Size = Vector3.new(1.1, 0.16, 0.16)
-	stalk.CFrame = top * CFrame.new(0, 0.5, 0) * CFrame.Angles(0, 0, math.rad(90))
-	stalk.Color = Color3.fromRGB(70, 70, 90)
-	stalk.Material = Enum.Material.Metal
-	local bulb = Instance.new("Part")
-	bulb.Name = "BotAntennaTip"
-	bulb.Shape = Enum.PartType.Ball
-	bulb.Size = Vector3.one * 0.5
-	bulb.CFrame = top * CFrame.new(0, 1.15, 0)
-	bulb.Color = color
-	bulb.Material = Enum.Material.Neon
-	for _, part in { stalk, bulb } do
-		part.CanCollide = false
-		part.CanQuery = false
-		part.CanTouch = false
-		part.Massless = true
-		part.CastShadow = false
-		weldTo(part, head)
-		part.Parent = model
-	end
-
-	local gui = Instance.new("BillboardGui")
-	gui.Name = "PP_Nameplate"
-	gui.Size = UDim2.fromOffset(220, 54)
-	gui.StudsOffset = Vector3.new(0, 3, 0)
-	gui.MaxDistance = 90
-	gui.LightInfluence = 0
-	local name = Instance.new("TextLabel")
-	name.BackgroundTransparency = 1
-	name.Size = UDim2.new(1, 0, 0.55, 0)
-	name.Font = Enum.Font.FredokaOne
-	name.TextScaled = true
-	name.TextColor3 = Color3.new(1, 1, 1)
-	name.TextStrokeTransparency = 0.4
-	name.Text = bot.DisplayName
-	name.Parent = gui
-	local tag = Instance.new("TextLabel")
-	tag.BackgroundTransparency = 1
-	tag.Position = UDim2.fromScale(0, 0.55)
-	tag.Size = UDim2.new(1, 0, 0.42, 0)
-	tag.Font = Enum.Font.GothamBold
-	tag.TextScaled = true
-	tag.TextStrokeTransparency = 0.5
-	tag.TextColor3 = color
-	tag.Text = "BOT"
-	tag.Parent = gui
-	gui.Parent = head
+	NameTag.Build(bot.DisplayName, bot.Level, false, nil, nil).Parent = head
 end
 
 -- Plays Roblox's walk/run/jump/fall animations on the server (they replicate to everyone).
@@ -467,7 +414,7 @@ function BotService.SpawnCharacter(bot: Bot, fadeIn: boolean)
 	local humanoid = character:FindFirstChildOfClass("Humanoid") :: Humanoid
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	humanoid.DisplayName = bot.DisplayName
-	decorate(bot, character, bot.Info:GetAttribute("Color") :: Color3)
+	decorate(bot, character)
 	groupBody(character)
 	character:PivotTo(lobbySpawn())
 
@@ -515,7 +462,9 @@ local function pickName(): string
 			table.insert(free, name)
 		end
 	end
-	local name = if #free > 0 then free[rng:NextInteger(1, #free)] else `Bot{nextId + 1}`
+	local name = if #free > 0
+		then free[rng:NextInteger(1, #free)]
+		else `{NAMES[rng:NextInteger(1, #NAMES)]}{nextId + 1}`
 	usedNames[name] = true
 	return name
 end
@@ -528,7 +477,8 @@ function BotService.Add(): Bot
 	self.IsBot = true
 	self.ShortName = name
 	self.Name = "Bot_" .. name
-	self.DisplayName = "🤖 " .. name
+	self.DisplayName = name
+	self.Level = rng:NextInteger(3, 26) -- (on its name tag, like anyone's)
 	self.UserId = -nextId
 	self.Skill = rng:NextNumber(0.35, 0.9)
 	self.Memory = {}

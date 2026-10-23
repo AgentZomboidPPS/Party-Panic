@@ -203,18 +203,16 @@ local function waitForResultsCard()
 	end
 end
 
--- The crate keys a finished cup gives each person in its standings (Services/CrateService: 3 / 2 / 1
--- on the podium, 1 for playing every round, a GOLD PASS owner's 1 on the podium, the day's first cup).
-local function cupKeys(finished: PartyCup.Cup, standings: { PartyCup.Standing }): { [string]: number }
+-- The crate keys a finished cup gives each person in its standings (Services/CrateService: exactly
+-- 3 / 2 / 1 on the podium).
+local function cupKeys(standings: { PartyCup.Standing }): { [string]: number }
 	local keys = {}
 	for _, standing in standings do
 		local player = members[standing.UserId]
 		if standing.IsBot or not player or isBot(player) or not player.Parent then
 			continue
 		end
-		local entry = finished.Entries[standing.UserId]
-		local wholeCup = entry ~= nil and entry.Rounds >= PartyCup.Rounds
-		local ok, count = pcall(CrateService.CupKeysFor, player, standing.Place, wholeCup)
+		local ok, count = pcall(CrateService.CupKeysFor, player, standing.Place)
 		if ok and count > 0 then
 			keys[tostring(standing.UserId)] = count
 		end
@@ -295,7 +293,7 @@ local function finish()
 	cup = PartyCup.New(finished.Number + 1) -- the next cup counts from the next round on
 	table.clear(away)
 	finishing = true
-	local keys = cupKeys(finished, standings)
+	local keys = cupKeys(standings)
 	publishFinal(finished, standings, keys)
 	task.spawn(function()
 		waitForResultsCard()

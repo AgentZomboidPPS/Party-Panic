@@ -150,11 +150,15 @@ local function profileHolder(props: { [string]: any }): TextButton
 	return holder
 end
 
+-- PC: the profile chip's frame is 182 tall (the pill, the coins, then the keys and crates): what sits
+-- under it (OnboardingController's tip, RoundController's standings) starts there.
+HudController.ProfileHeight = 182
+
 local function buildProfileChip(parent: Instance)
 	local width = 310
 	local holder = profileHolder({
 		Position = UDim2.fromOffset(16, 12),
-		Size = UDim2.fromOffset(width, 130),
+		Size = UDim2.fromOffset(width, HudController.ProfileHeight),
 		Parent = parent,
 	})
 	UIKit.AutoScale(holder)
@@ -234,6 +238,67 @@ local function buildProfileChip(parent: Instance)
 	})
 	followProfile(levelLabel, barFill, xpText, badge, coins, function(value)
 		coinLabel.Text = UIKit.FormatNumber(value)
+	end)
+
+	-- The crate season's currencies under the coins (owner: "show keys as a currency, show crates as a
+	-- currency. both under the coins."): keys and crates, side by side as wide as the coins; a tap
+	-- opens the crate window (its key shop for the keys). Phones show them on the lobby's crate chip
+	-- (under their coins is the thumbstick's corner).
+	local function currency(name: string, icon: string, x: number, top: Color3, bottom: Color3, tab: string)
+		local pill = UIKit.Panel({
+			Name = name,
+			Position = UDim2.fromOffset(x, 136),
+			Size = UDim2.fromOffset(96, 42),
+			CornerRadius = 21,
+			Parent = holder,
+		}, top, bottom)
+		-- (The whole pill takes the tap; its words are on the tap button.)
+		local tap = UIKit.new("TextButton", {
+			Name = "Tap",
+			Text = "",
+			AutoButtonColor = false,
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			Parent = pill,
+		})
+		tap.Activated:Connect(function()
+			State.OpenScreen:Fire("Crates", tab)
+		end)
+		UIKit.Label({
+			Text = icon,
+			TextScaled = true,
+			Position = UDim2.fromOffset(8, 7),
+			Size = UDim2.fromOffset(28, 28),
+			Parent = tap,
+		})
+		local label = UIKit.Label({
+			Text = "0",
+			Font = Theme.Fonts.Display,
+			TextSize = 24,
+			TextWrapped = false,
+			TextScaled = true,
+			Position = UDim2.fromOffset(38, 5),
+			Size = UDim2.new(1, -46, 1, -10),
+			Parent = tap,
+			Children = { UIKit.TextStroke(0.15), UIKit.new("UITextSizeConstraint", { MaxTextSize = 26 }) },
+		})
+		return pill, label
+	end
+	local keysPill, keysLabel =
+		currency("Keys", "🔑", 0, Color3.fromRGB(120, 210, 255), Color3.fromRGB(60, 120, 230), "Keys")
+	local cratesPill, cratesLabel =
+		currency("Crates", "📦", 104, Color3.fromRGB(255, 170, 80), Color3.fromRGB(225, 95, 40), "Crates")
+	State.ProfileChanged:Connect(function(profile, previous)
+		local keys = profile.Keys or 0
+		local crates = if profile.Crates then profile.Crates.Count or 0 else 0
+		keysLabel.Text = UIKit.FormatNumber(keys)
+		cratesLabel.Text = UIKit.FormatNumber(crates)
+		if previous and keys > (previous.Keys or 0) then
+			UIKit.PopIn(keysPill, 0.3)
+		end
+		if previous and crates > (if previous.Crates then previous.Crates.Count or 0 else 0) then
+			UIKit.PopIn(cratesPill, 0.3)
+		end
 	end)
 end
 
@@ -1046,7 +1111,7 @@ local function menuButton(
 	bottom: Color3
 ): TextButton
 	local touch = isTouch()
-	local size = if touch then Theme.Touch.Target else 74
+	local size = if touch then Theme.Touch.Target else 70
 	local button = UIKit.Button({
 		Name = name,
 		Text = icon,
@@ -1091,14 +1156,14 @@ local function buildMenu(parent: Instance): Frame
 	-- PC: the middle of the right edge. Touch: down from the top right corner, where it can't be
 	-- hit by mistake when reaching for the jump button.
 	local touch = isTouch()
-	local gap = if touch then 12 else 14
+	local gap = if touch then 12 else 12
 	local menu = UIKit.new("Frame", {
 		Name = "Menu",
 		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(1, 0.5),
-		Position = if touch then UDim2.new(1, -8, 0, 6) else UDim2.new(1, -14, 0.5, 0),
+		Position = if touch then UDim2.new(1, -8, 0, 6) else UDim2.new(1, -14, 0.55, 0),
 		Size = if touch
 			then UDim2.fromOffset(Theme.Touch.Target + 20, 4 * Theme.Touch.Target + 3 * gap + 6)
-			else UDim2.fromOffset(80, 360),
+			else UDim2.fromOffset(80, 5 * 70 + 4 * gap + 6),
 		BackgroundTransparency = 1,
 		Parent = parent,
 		Children = {
@@ -1115,6 +1180,12 @@ local function buildMenu(parent: Instance): Frame
 	menuButton(menu, "Quests", "📜", "Quests", 2, Theme.Colors.Yellow, Theme.Colors.Orange)
 	menuButton(menu, "Emotes", "🕺", "Emotes", 3, Theme.Colors.Cyan, Color3.fromRGB(50, 120, 230))
 	menuButton(menu, "Settings", "⚙️", "Settings", 4, Theme.Colors.Lavender, Theme.Colors.Purple)
+	-- The season's crate window (owner: "Do we not have a button to open the season rewards?"). PC:
+	-- a fifth tile; phones: a fifth tile would reach the jump button, so it's up in the top bar's right
+	-- corner in the lobby (buildSeasonButton).
+	if not touch then
+		menuButton(menu, "Crates", "🎃", "Season", 5, Theme.Colors.Orange, Color3.fromRGB(205, 92, 24))
+	end
 
 	State.ProfileChanged:Connect(function(profile)
 		local claimable = profile.Daily.CanClaim
@@ -1284,6 +1355,33 @@ local function followMenu(hud: Instance, menu: Frame, topBar: ScreenGui)
 		refresh()
 	end
 	toggle = buildMenuToggle(topBar, HudController.ToggleMenu)
+	if isTouch() then
+		-- Phones: the season's button in the ☰'s corner of the top bar row while the ☰ isn't there.
+		local season = UIKit.new("Frame", {
+			Name = "SeasonButton",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -8, 0, 34), -- level with Roblox's buttons (12 to 55)
+			Size = UDim2.fromOffset(TOGGLE_SIZE, TOGGLE_SIZE),
+			BackgroundTransparency = 1,
+			Parent = topBar,
+		})
+		UIKit.AutoScale(season, 0.8)
+		UIKit.Button({
+			Name = "Button",
+			Text = "🎃",
+			TextSize = 38,
+			Size = UDim2.fromScale(1, 1),
+			CornerRadius = 22,
+			Parent = season,
+		}, function()
+			State.OpenScreen:Fire("Crates")
+		end, Theme.Colors.Orange, Color3.fromRGB(205, 92, 24))
+		local function follow()
+			season.Visible = not toggle.Visible
+		end
+		toggle:GetPropertyChangedSignal("Visible"):Connect(follow)
+		follow()
+	end
 
 	State.OnPlayingChanged(refresh)
 	Modal.AnyOpenChanged:Connect(function(open)

@@ -109,7 +109,7 @@ local function render()
 			cell(count, item.Icon, item.Name, function()
 				play(item)
 				setOpen(false)
-			end, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+			end, Theme.Colors.Lavender, Theme.Colors.Purple)
 		end
 	end
 	count += 1

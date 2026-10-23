@@ -124,18 +124,15 @@ function CrateTheme.Silhouette(itemId: string, parent: Instance): GuiObject
 	return picture
 end
 
--- A season-coloured window: the crate screens' plum-to-dusk panel with an ember rim.
+-- A season's window: the game's own purple (bright, like the shop: the season's dusk plum was "too
+-- dark") with an ember rim.
 function CrateTheme.Dress(window: Frame, season: Seasons.Season?)
 	local colors = CrateTheme.Colors(season)
-	local gradient = window:FindFirstChildOfClass("UIGradient")
-	if gradient then
-		gradient.Color = ColorSequence.new(colors.Panel, colors.Deep)
-	end
 	local stroke = window:FindFirstChildOfClass("UIStroke")
 	if stroke then
 		stroke.Color = colors.Main
-		stroke.Transparency = 0.35
-		stroke.Thickness = 2.5
+		stroke.Transparency = 0.1
+		stroke.Thickness = 3
 	end
 end
 

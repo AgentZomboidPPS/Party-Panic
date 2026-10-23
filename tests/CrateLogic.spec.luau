@@ -215,15 +215,21 @@ test("Crates: the Lantern Meter guarantees a pet at 150, then starts again", fun
 	expectTrue(longest < CrateLogic.Meter, `longest dry run {longest}`)
 end)
 
-test("Crates: keys from a Party Cup, levels and milestones", function()
-	expectEqual(CrateLogic.CupKeys(1, true, false, false), 4)
-	expectEqual(CrateLogic.CupKeys(2, true, false, false), 3)
-	expectEqual(CrateLogic.CupKeys(3, false, false, false), 1)
-	expectEqual(CrateLogic.CupKeys(4, true, false, false), 1)
-	expectEqual(CrateLogic.CupKeys(nil, false, false, false), 0)
-	expectEqual(CrateLogic.CupKeys(1, true, true, false), 5) -- GOLD PASS: +1 on the podium
-	expectEqual(CrateLogic.CupKeys(5, true, true, false), 1) -- (not off it)
-	expectEqual(CrateLogic.CupKeys(1, true, true, true), 0) -- bots never
+test("Crates: keys from rounds, a Party Cup, levels and milestones", function()
+	-- Exactly 3 / 2 / 1 on the podium (owner: "Winner should get 3 keys, 2nd gets 2 and 3rd gets 1.").
+	expectEqual(CrateLogic.CupKeys(1, false), 3)
+	expectEqual(CrateLogic.CupKeys(2, false), 2)
+	expectEqual(CrateLogic.CupKeys(3, false), 1)
+	expectEqual(CrateLogic.CupKeys(4, false), 0)
+	expectEqual(CrateLogic.CupKeys(nil, false), 0)
+	expectEqual(CrateLogic.CupKeys(1, true), 0) -- bots never
+	-- Every round pays the same to its top 3 (owner: "3/2/1 every round"); a shared place pays each.
+	expectEqual(CrateLogic.RoundKeys(1, false), 3)
+	expectEqual(CrateLogic.RoundKeys(2, false), 2)
+	expectEqual(CrateLogic.RoundKeys(3, false), 1)
+	expectEqual(CrateLogic.RoundKeys(4, false), 0)
+	expectEqual(CrateLogic.RoundKeys(nil, false), 0)
+	expectEqual(CrateLogic.RoundKeys(1, true), 0) -- bots never
 	expectEqual(CrateLogic.MilestoneAt(50), 50)
 	expectEqual(CrateLogic.MilestoneAt(51), nil)
 	expectEqual(CrateLogic.FrameFor(9), 0)

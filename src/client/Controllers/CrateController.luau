@@ -25,6 +25,7 @@ local Remotes = require(Shared.Remotes)
 local Seasons = require(Shared.Seasons)
 
 local State = require(script.Parent.Parent.State)
+local UIKit = require(script.Parent.Parent.UI.UIKit)
 local LobbyRibbon = require(script.Parent.Parent.UI.LobbyRibbon)
 local CrateMenu = require(script.Parent.Parent.Crates.CrateMenu)
 local CrateMoments = require(script.Parent.Parent.Crates.CrateMoments)
@@ -63,12 +64,15 @@ local function refreshChip()
 		return
 	end
 	local crates, keys = counts()
+	-- (PC shows the counts under the coins, HudController: the chip just opens the window. Phones
+	-- show them here.)
+	local touch = UIKit.IsTouch()
 	if not State.Profile then
 		current:Set("", "")
 	elseif crates > 0 and keys > 0 then
-		current:Set("📦", `OPEN · {crates} · 🔑 {keys}`)
+		current:Set("📦", if touch then `OPEN · {crates} · 🔑 {keys}` else "OPEN CRATES")
 	else
-		current:Set("📦", `{crates} · 🔑 {keys}`)
+		current:Set("📦", if touch then `{crates} · 🔑 {keys}` else "CRATES")
 	end
 	local glow = current.Button:FindFirstChild("Glow")
 	if glow and glow:IsA("UIStroke") then

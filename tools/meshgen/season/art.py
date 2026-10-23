@@ -60,6 +60,10 @@ ICONS = [
     "Victory_HarvestRain", "Victory_Moonrise", "Title_Harvester", "Crate", "Key",
 ]
 PACKS = {"Keys1": 1, "Keys5": 5, "Keys15": 15, "Keys40": 40, "Starter": 5}
+# The key shop's pictures, one per pack (owner: "This should show different quanities of keys
+# (images). 1 key, 5 keys, pile of keys, chest of keys etc."): transparent, for the shop's cards, and
+# on a backdrop with the count for the products' own icons.
+SHOP_PICTURE = 512
 
 
 # =================================================================================================
@@ -504,6 +508,119 @@ def blender_pack(name: str, out: Path):
     lib.render(out, 512, 512, 64)
 
 
+def frame_all(elev: float, azim: float = 0.0, fov: float = 26.0, fill: float = 0.9):
+    """Points the camera at everything built so far, from `elev` degrees up and `azim` round from the
+    front (-Y), so it fills the frame."""
+    import bpy
+    from mathutils import Vector
+
+    sys.path.insert(0, str(HERE))
+    import blender_lib as lib
+
+    points = []
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    for o in bpy.context.scene.objects:
+        if o.type != "MESH":
+            continue
+        evaluated = o.evaluated_get(depsgraph)
+        mesh = evaluated.to_mesh()
+        points += [o.matrix_world @ v.co for v in mesh.vertices]
+        evaluated.to_mesh_clear()
+    lo = Vector((min(p.x for p in points), min(p.y for p in points), min(p.z for p in points)))
+    hi = Vector((max(p.x for p in points), max(p.y for p in points), max(p.z for p in points)))
+    center = (lo + hi) / 2
+    radius = (hi - lo).length / 2
+    distance = radius / math.tan(math.radians(fov) / 2) / fill
+    e, a = math.radians(elev), math.radians(azim)
+    eye = center + Vector((math.sin(a) * math.cos(e), -math.cos(a) * math.cos(e), math.sin(e))) * distance
+    lib.cam(tuple(eye), tuple(center), fov)
+    return center, radius
+
+
+def blender_shop(name: str, out: Path):
+    """A key pack's picture for the shop: one key; five on a ring; a heap; the Hollow Crate brimming
+    with keys (40); the starter's keys with its banner. The iron is lighter than the game's so they
+    read on a card."""
+    import bpy
+
+    sys.path.insert(0, str(HERE))
+    import blender_lib as lib
+    import hollow_night as H
+    from blender_lib import glow, group, obj, sparks, torus, tube
+    from mathutils import Vector
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    lib.studio_world("#1a1030", "#3a2050", 0.5)
+    scene = bpy.context.scene
+    scene.render.film_transparent = True
+    rng = random.Random(11)
+
+    def hanging(center, ring_r, count, step, scale):
+        # Keys on a ring, fanned below it, each bow through the ring.
+        torus(center, ring_r, 0.055, H.brass(), (math.pi / 2, 0, 0))
+        for k in range(count):
+            phi = math.radians((k - (count - 1) / 2) * step)
+            down = Vector((math.sin(phi), 0, -math.cos(phi)))
+            bow = Vector(center) + down * (ring_r + 0.5 * scale) + Vector((0, 0.07 * (k % 2), 0))
+            H.key(tuple(bow), (0, math.radians(90) - phi, math.radians(rng.uniform(-14, 14))), scale)
+
+    elev = 14.0
+    if name == "Keys1":
+        H.key((0, 0, 0), (0, math.radians(-40), math.radians(16)), 1.6)
+    elif name == "Keys5":
+        hanging((0, 0, 0), 0.95, 5, 30, 1.0)
+    elif name == "Starter":
+        hanging((0, 0, 0), 0.7, 3, 26, 1.0)
+        pole = [Vector((1.5, 0.3, -2.6)), Vector((1.5, 0.3, 1.2))]
+        tube(pole, lambda t: 0.05, lambda t: (1, 1, 1, 0), H.brass(), seg=10)
+        flag = group((1.5, 0.3, 1.15), (0, 0, 0), 1.0)
+        for i, c in enumerate(["#c8322a", "#ff8a2a", "#ffd04a"]):
+            path = [Vector((-0.02 - t * 1.4, 0, -i * 0.28 + 0.12 * math.sin(t * 5))) for t in [j / 24 for j in range(25)]]
+            lib.ribbon(path, lambda u: 0.28 * (1 - 0.35 * u), lambda u, v, c=c: (*lib.col(c), 1.0),
+                       lib.vsolid(f"banner{c}", 0.6), side=(0, 0, 1), parent=flag)
+        H.emblem_leaf((-0.65, -0.05, -0.28), (0, 0, 0), 0.6, glow(H.GOLDLEAF, 6), flag)
+        obj("sphere", (1.5, 0.3, 1.25), 0.1, m=H.brass())
+    elif name == "Keys15":
+        # A heap: keys every which way in a mound, the top ones standing up out of it.
+        elev = 20.0
+        for i in range(20):
+            a = rng.uniform(0, 2 * math.pi)
+            r = math.sqrt(rng.random()) * (1 - 0.5 * i / 20)
+            x, y = math.cos(a) * r * 1.2, math.sin(a) * r * 0.8
+            z = 1.5 * (1 - r * r) * (0.4 + 0.6 * i / 20)
+            tilt = rng.uniform(20, 160) if i > 12 else rng.uniform(60, 120)
+            H.key((x - 0.5, y, z), (math.radians(tilt), math.radians(rng.uniform(-40, 40)), rng.uniform(0, 2 * math.pi)),
+                  0.85)
+    else:  # Keys40: the Hollow Crate, lid up, brimming with keys and a few spilt in front
+        elev = 22.0
+        scale = 0.7
+        H.crate((0, 0, 0), scale, (0, 0, math.radians(-12)), lid=math.radians(72), top=False)
+        rim = 2.2 * scale
+        inside = 3.0 * scale / 2 - 0.25
+        lib.point_light((0, 0, rim + 0.2), H.AMBER, 120, 0.6)
+        for i in range(26):
+            x, y = rng.uniform(-inside, inside), rng.uniform(-inside, inside)
+            mound = 1 - (x * x + y * y) / (2 * inside * inside)
+            H.key((x - 0.4, y, rim - 0.1 + 0.75 * mound * rng.uniform(0.5, 1.0)),
+                  (math.radians(rng.uniform(30, 150)), math.radians(rng.uniform(-40, 40)), rng.uniform(0, 2 * math.pi)),
+                  0.6)
+        for k in range(3):
+            H.key((-1.0 + k * 0.9, -1.45 - 0.12 * k, 0.1), (math.radians(90), 0, math.radians(rng.uniform(-50, 50))), 0.6)
+    iron = bpy.data.materials.get("hollow_iron")
+    if iron:
+        iron.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (*lib.col("#b9b0dc"), 1)
+    bpy.context.view_layer.update()
+    center, radius = frame_all(elev)
+    sparks(tuple(center), radius * 0.9, 14, [H.AMBER, "#fff1c2", H.GOLDLEAF], (0.03, 0.06), seed=5,
+           z=(-radius * 0.4, radius * 0.6))
+    lib.area_light((-4, -7, 6), (0, 0, 0), "#fff4e6", 1800, 5)
+    lib.area_light((5, 3, 4), (0, 0, 0), "#ff8a3a", 1200, 3)
+    lib.area_light((-5, 2, 1), (0, 0, 0), "#a07aff", 700, 3)
+    standard_view(scene)
+    scene.view_settings.exposure = 0.15
+    lib.render(out, SHOP_PICTURE, SHOP_PICTURE, 64)
+
+
 # =================================================================================================
 # The rest (plain Python): numpy and Pillow.
 
@@ -574,21 +691,22 @@ def run_blender(mode: str, name: str, out: Path):
     print(f"rendered {out.relative_to(ROOT)}")
 
 
-def finish_icon(path: Path):
-    """A render made icon-ready: shrunk to its cell, a soft glow round the lit parts, a dark rim."""
+def finish_icon(path: Path, cell: int = CELL):
+    """A render made icon-ready: shrunk to `cell`, a soft glow round the lit parts, a dark rim."""
     import numpy as np
     from PIL import Image, ImageFilter
 
     from scipy import ndimage
 
     im = Image.open(path).convert("RGBA")
+    size = im.size[0]
     a = np.asarray(im).astype(np.float32) / 255
     rgb, alpha = a[..., :3].copy(), a[..., 3:4].copy()
     # Sparkles (small specks on their own) become soft glowing dots, a bright core fading out: drawn
     # flat they shrank to a speck with the dark rim round it and the glow outside, a little donut.
     labels, count = ndimage.label(alpha[..., 0] > 0.3)
     sizes = ndimage.sum(np.ones_like(labels), labels, range(1, count + 1))
-    yy, xx = np.mgrid[0:RENDER, 0:RENDER].astype(np.float32)
+    yy, xx = np.mgrid[0:size, 0:size].astype(np.float32)
     specks = np.zeros(alpha.shape[:2], bool)
     dots = []
     for index, area in enumerate(sizes, start=1):
@@ -619,7 +737,7 @@ def finish_icon(path: Path):
     lum = (rgb * alpha).max(axis=2)
     bright = np.clip((lum - 0.72) / 0.28, 0, 1)
     glow_src = Image.fromarray((np.dstack([rgb * bright[..., None], bright]) * 255).astype(np.uint8), "RGBA")
-    halo = np.asarray(glow_src.filter(ImageFilter.GaussianBlur(RENDER / 40))).astype(np.float32) / 255
+    halo = np.asarray(glow_src.filter(ImageFilter.GaussianBlur(size / 40))).astype(np.float32) / 255
     halo_a = np.clip(halo[..., 3:4] * 1.4, 0, 0.75)
     halo_rgb = np.where(halo_a > 0, halo[..., :3] / np.maximum(halo[..., 3:4], 1e-4), 0)
     # The rim: the shape grown a few pixels, in dusk plum, under everything.
@@ -634,14 +752,14 @@ def finish_icon(path: Path):
         out_rgb = (layer_rgb * layer_a + out_rgb * out_a * (1 - layer_a)) / np.maximum(new_a, 1e-4)
         out_a = new_a
     merged = Image.fromarray((np.dstack([np.clip(out_rgb, 0, 1), np.clip(out_a, 0, 1)]) * 255).astype(np.uint8), "RGBA")
-    cell = np.asarray(merged.resize((CELL, CELL), Image.LANCZOS)).copy()
+    out = np.asarray(merged.resize((cell, cell), Image.LANCZOS)).copy()
     # A clear margin all round, so a cell drawn from the sheet never picks up its neighbour's edge.
     margin = 3
-    cell[:margin, :, 3] = 0
-    cell[-margin:, :, 3] = 0
-    cell[:, :margin, 3] = 0
-    cell[:, -margin:, 3] = 0
-    return Image.fromarray(cell, "RGBA")
+    out[:margin, :, 3] = 0
+    out[-margin:, :, 3] = 0
+    out[:, :margin, 3] = 0
+    out[:, -margin:, 3] = 0
+    return Image.fromarray(out, "RGBA")
 
 
 def build_sheet():
@@ -780,28 +898,38 @@ def build_moon():
     print(f"wrote {(OUT / 'moon.png').relative_to(ROOT)}")
 
 
+def build_shop(name: str):
+    """A key pack's picture for the shop's cards: the render, a soft glow, a dark rim, transparent."""
+    picture = finish_icon(CELLS / f"shop_{name}.png", 256)
+    (OUT / "shop").mkdir(parents=True, exist_ok=True)
+    picture.save(OUT / "shop" / f"{name}.png", optimize=True)
+    print(f"wrote {(OUT / 'shop' / f'{name}.png').relative_to(ROOT)}")
+
+
 def build_pack(name: str):
-    """A key pack's product icon: dusk plum, an ember glow, the keys, and the count."""
+    """A key pack's product icon (what Roblox's purchase prompt shows): the game's bright purple with a
+    warm glow behind the shop's picture, and the count (owner, of the old dark ones: "Gotta clean this
+    up. this looks awful.")."""
     import numpy as np
     from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
     n = 512
     yy, xx = np.mgrid[0:n, 0:n].astype(np.float32)
-    r = np.hypot(xx - n * 0.45, yy - n * 0.42) / n
-    deep = np.array([28, 15, 46], np.float32) / 255
-    panel = np.array([84, 34, 66], np.float32) / 255
-    ember = np.array([255, 120, 40], np.float32) / 255
-    base = deep + (panel - deep) * np.clip(1 - r * 1.6, 0, 1)[..., None]
-    base = base + ember * (np.exp(-(r / 0.28) ** 2) * 0.45)[..., None]
+    r = np.hypot(xx - n * 0.5, yy - n * 0.42) / n
+    top = np.array([128, 86, 230], np.float32) / 255
+    bottom = np.array([70, 44, 160], np.float32) / 255
+    amber = np.array([255, 170, 70], np.float32) / 255
+    base = top + (bottom - top) * (yy / n)[..., None]
+    base = base + (amber - base) * (np.exp(-(r / 0.3) ** 2) * 0.55)[..., None]
     bg = Image.fromarray((np.clip(base, 0, 1) * 255).astype(np.uint8), "RGB").convert("RGBA")
-    keys = Image.open(CELLS / f"pack_{name}.png").convert("RGBA")
-    bg.alpha_composite(keys.resize((n, n), Image.LANCZOS))
+    picture = finish_icon(CELLS / f"shop_{name}.png", 440)
+    bg.alpha_composite(picture, ((n - 440) // 2, 6))
     draw = ImageDraw.Draw(bg)
-    label = "STARTER" if name == "Starter" else f"x{PACKS[name]}"
-    font = ImageFont.truetype(str(FONTS / "LuckiestGuy.ttf"), 92 if name == "Starter" else 150)
+    label = "STARTER PACK" if name == "Starter" else f"{PACKS[name]} KEY" + ("" if PACKS[name] == 1 else "S")
+    font = ImageFont.truetype(str(FONTS / "LuckiestGuy.ttf"), 76 if name == "Starter" else 96)
     box = draw.textbbox((0, 0), label, font=font, stroke_width=10)
-    x = n - (box[2] - box[0]) - 28 if name != "Starter" else (n - (box[2] - box[0])) / 2
-    y = n - (box[3] - box[1]) - 30
+    x = (n - (box[2] - box[0])) / 2
+    y = n - (box[3] - box[1]) - 26
     shadow = Image.new("RGBA", (n, n), (0, 0, 0, 0))
     ImageDraw.Draw(shadow).text((x + 6, y + 8), label, font=font, fill=(10, 4, 16, 200), stroke_width=10,
                                 stroke_fill=(10, 4, 16, 200))
@@ -813,6 +941,9 @@ def build_pack(name: str):
 
 
 UPLOADS = {"Icons": "icons.png", "Leaves": "leaves.png", "Ember": "ember.png", "Moon": "moon.png"}
+# The key shop's pictures: SeasonArt.KeyPacks.<pack>.
+for _pack in PACKS:
+    UPLOADS[f"Shop_{_pack}"] = f"shop/{_pack}.png"
 SEASON_ART = ROOT / "src" / "shared" / "SeasonArt.luau"
 
 
@@ -857,7 +988,9 @@ def write_season_art(record: dict):
     text = SEASON_ART.read_text()
     for key in UPLOADS:
         image = record.get(key, {}).get("image")
-        if image:
+        if image and key.startswith("Shop_"):
+            text = re.sub(rf'(\n\t\t{key[5:]} = )"[^"]*"', rf'\g<1>"rbxassetid://{image}"', text)
+        elif image:
             text = re.sub(rf'(\n\t{key} = )"[^"]*"', rf'\g<1>"rbxassetid://{image}"', text)
     text = re.sub(r"(\n\tIconSize = )\d+", rf"\g<1>{CELL}", text)
     cells = "\n".join(f"\t\t{name} = {{ {i % COLUMNS}, {i // COLUMNS} }}," for i, name in enumerate(ICONS))
@@ -877,6 +1010,8 @@ def main():
         mode, name, out = sys.argv[i + 1], sys.argv[i + 2], Path(sys.argv[i + 3])
         if mode == "icon":
             blender_scene(name, out)
+        elif mode == "shop":
+            blender_shop(name, out)
         else:
             blender_pack(name, out)
         return
@@ -901,6 +1036,10 @@ def main():
     build_ember()
     build_moon()
     for name in PACKS:
+        path = CELLS / f"shop_{name}.png"
+        if force or name in redo or not path.exists():
+            run_blender("shop", name, path)
+        build_shop(name)
         build_pack(name)
 
 

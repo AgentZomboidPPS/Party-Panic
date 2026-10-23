@@ -385,7 +385,7 @@ local function show(items: { Earned })
 		Parent = card,
 	}, function()
 		close(false)
-	end, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
+	end, Theme.Colors.Red, Color3.fromRGB(190, 40, 60))
 
 	-- The count (left) and SEE ALL (right half: clear of the thumbstick's corner).
 	local buttonHeight = if touch then Theme.Touch.Target else 60

@@ -1403,10 +1403,10 @@ do
 		Packs = {
 			{ Key = "Keys1", Keys = 1, Price = 25, Gift = true },
 			{ Key = "Keys5", Keys = 5, Price = 99, Gift = true, Badge = "POPULAR" },
-			{ Key = "Keys15", Keys = 15, Price = 249, Gift = true, Badge = "BEST VALUE" },
-			{ Key = "Keys40", Keys = 40, Price = 549, Gift = true },
+			{ Key = "Keys15", Keys = 15, Price = 249, Gift = true },
+			{ Key = "Keys40", Keys = 40, Price = 549, Gift = true, Badge = "BEST VALUE" },
 		},
-		Starter = { Key = "Starter", Keys = 5, Price = 79, Item = season.Starter },
+		Starter = { Key = "Starter", Keys = 5, Price = 49, Item = season.Starter },
 	})
 	__player:SetAttribute("PP_CrateRank", 48)
 	__player:SetAttribute("PP_CrateWeekRank", 12)
@@ -1557,7 +1557,7 @@ local function addBot()
 	local name = BOT_NAMES[(index - 1) % #BOT_NAMES + 1]
 	local info = Instance.new("Configuration")
 	info.Name = "Bot_" .. name
-	info:SetAttribute("DisplayName", "🤖 " .. name)
+	info:SetAttribute("DisplayName", name)
 	info:SetAttribute("UserId", -index)
 	info:SetAttribute("IsBot", true)
 	info:SetAttribute("Color", BOT_COLORS[(index - 1) % #BOT_COLORS + 1])
@@ -1580,7 +1580,7 @@ local function addBot()
 		rig = nil
 	end
 	info.Parent = botFolder
-	local bot = { name = name, display = "🤖 " .. name, userId = -index, info = info, rig = rig }
+	local bot = { name = name, display = name, userId = -index, info = info, rig = rig }
 	table.insert(bots, bot)
 	return bot
 end

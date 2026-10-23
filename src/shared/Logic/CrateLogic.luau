@@ -18,10 +18,11 @@
 -- outcome and its real chance for this player right now (no duplicates changes them as they
 -- collect), adding up to exactly 100%.
 --
--- Keys (the owner: "3 keys for 1st place, 2 keys for second, and 1 key for third"; the design page's
--- plan for when, so keys stay scarce and earnable by everyone): the Party Cup podium pays 3 / 2 / 1
--- to people (bots never get keys), everyone who played the whole cup gets 1 more, a GOLD PASS owner
--- on the podium 1 more, every new player 3 to start, and the first cup finished each day (UTC) 1.
+-- Keys (the owner: "3 keys for 1st place, 2 keys for second, and 1 key for third", then "Winner
+-- should get 3 keys, 2nd gets 2 and 3rd gets 1.", and after "won obby odyssey and got no keys got
+-- 3rd got no key on crazy cutters", asked how keys should work: "3/2/1 every round"): every round
+-- pays 3 / 2 / 1 to the people in 1st to 3rd, and so does the Party Cup podium (bots never get
+-- keys), nothing for just playing a cup; every new player gets 3 to start.
 -- Crates: 1 for every round a person plays to the end. More keys (the design page's "More ways to earn
 -- keys"): 1 for each weekly quest finished and 1 for every 5th level reached on the Rewards Road.
 -- Leaf module: no requires, no Roblox APIs.
@@ -71,10 +72,7 @@ CrateLogic.BigCoins = 60 -- a coin result this big gets a gold beam and a cheer
 
 -- Keys and crates.
 CrateLogic.PodiumKeys = { 3, 2, 1 }
-CrateLogic.WholeCupKeys = 1
-CrateLogic.GoldPassPodiumKeys = 1
 CrateLogic.StarterKeys = 3
-CrateLogic.DailyCupKeys = 1
 CrateLogic.CratesPerRound = 1
 CrateLogic.OpenMany = 5 -- "Open 5"
 CrateLogic.FriendRadius = 20 -- a friend this close when you open adds a point to the meter
@@ -250,24 +248,22 @@ function CrateLogic.TierOdds(season: Season, owned: { [string]: any }, meter: nu
 	return out
 end
 
--- The keys a Party Cup gives one person: by their podium place (1 to 3; 0 or nil off it), whether
--- they played every round of it, whether they own the GOLD PASS. Bots get none.
-function CrateLogic.CupKeys(place: number?, wholeCup: boolean, goldPass: boolean, isBot: boolean): number
-	if isBot then
+-- The keys a Party Cup gives one person: by their podium place (1 to 3; 0 or nil off it). Bots get
+-- none.
+function CrateLogic.CupKeys(place: number?, isBot: boolean): number
+	if isBot or not place then
 		return 0
 	end
-	local keys = 0
-	local podium = if place then CrateLogic.PodiumKeys[place] else nil
-	if podium then
-		keys += podium
-		if goldPass then
-			keys += CrateLogic.GoldPassPodiumKeys
-		end
+	return CrateLogic.PodiumKeys[place] or 0
+end
+
+-- The keys a round gives one person for their place in it: 3 / 2 / 1 for 1st to 3rd (a shared place
+-- pays each person in it), nothing lower. Bots get none.
+function CrateLogic.RoundKeys(place: number?, isBot: boolean): number
+	if isBot or not place then
+		return 0
 	end
-	if wholeCup then
-		keys += CrateLogic.WholeCupKeys
-	end
-	return keys
+	return CrateLogic.PodiumKeys[place] or 0
 end
 
 -- The keys for going from level `before` to `after`: one for every multiple of LevelKeysEvery passed.

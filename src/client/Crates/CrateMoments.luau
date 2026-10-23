@@ -10,7 +10,7 @@
 --     PARTY CUP 1ST", "🎁 Bo sent you 5 keys!", the starter pack's trail).
 --   * THE WELCOME: the season's first moment for each player ("Season trailer moment: On the first
 --     day, the lobby trees turn from green to orange over a few seconds when the season starts"):
---     letterbox bars, the trees turning (SeasonWorldController), HOLLOW NIGHT in its blackletter,
+--     letterbox bars, the trees turning (SeasonWorldController), HOLLOW NIGHT in its embers,
 --     then their first crate and keys with OPEN IT! (walks them to the pile once).
 -- They keep out of the way of the screens that mustn't be cut short (the results card, the cup's
 -- podium: PP_ResultsShowing, PP_CupPodium) and never show during a round the player is in.
@@ -32,7 +32,7 @@ local CrateMoments = {}
 local player = Players.LocalPlayer
 local season = Seasons.CurrentSeason()
 local colors = CrateTheme.Colors(season)
-local TITLE_FONT = Enum.Font.GrenzeGotisch
+local TITLE_FONT = Theme.Fonts.Display -- (owner: "hollow night font is bad": not the blackletter)
 
 -- Where the banners hang: under the top bar, the first-join tip and the lobby's chips, with a gap.
 -- On a phone the chips share the top row with the profile chip; on PC they're a row of their own
@@ -588,7 +588,7 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 		UIKit.Label({
 			Text = if keys > 0
 				then `🔑 and {CrateTheme.Count(keys, season.Key)} to open it`
-				else "🔑 Win keys on the PARTY CUP podium to open it",
+				else "🔑 Finish top 3 in a round to win keys",
 			Font = Theme.Fonts.Display,
 			TextSize = 22,
 			TextColor3 = colors.Gold,

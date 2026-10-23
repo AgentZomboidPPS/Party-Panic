@@ -8,7 +8,10 @@
 --   * Where: about 3 studs big (the owl's wingspan and the stag's antlers a little more), floating
 --     behind its owner's shoulder above head height (3.4 back, 1.9 to the side, 4.4 up), so it never
 --     covers a face or a name tag. It springs after them with a little lag, bobs, and turns to face
---     where they're going.
+--     where they're going. The stag walks on the ground instead (owner: "Lets make the deer stop
+--     floating and walk on the ground near the player."): beside its owner's right foot (3.2 to the
+--     side, 1.4 back), its hooves on whatever is under it, no bob, galloping when they run; when they
+--     jump it stays on the ground.
 --   * Alive the whole time (owner: "For all of these pets. They all have super cool animations
 --     right?"), and more so as its owner runs: the owl beats its wings in flight, rising on each
 --     downstroke, its lantern swinging from its beak and its head cocking; the stag looks about,
@@ -61,6 +64,9 @@ local SIZE = 3 -- studs: a pet's biggest side
 local SIZES = { Pet_HarvestOwl = 4.2, Pet_EmberStag = 3.6, Pet_ToadstoolTot = 2.5 }
 local ROUND_SIZE = 0.8 -- in a mini-game
 local BACK, SIDE, UP = 3.4, 1.9, 4.4 -- where it floats: behind, to the right of, and above the feet
+local WALKERS = { Pet_EmberStag = true } -- these walk on the ground instead
+local WALK_BACK, WALK_SIDE = 1.4, 3.2 -- where a walker walks: behind and to the right of the feet
+local GROUND_REACH = 8 -- studs a walker looks for ground below its owner's feet (none: their feet's height)
 local FOLLOW = 6 -- how quickly it catches up (higher: less lag)
 local TURN = 5
 local BOB = 0.25
@@ -505,6 +511,20 @@ local function step(dt: number)
 	local parts: { BasePart } = {}
 	local frames: { CFrame } = {}
 	local filtered = false
+	-- Rays find the world, never a person or a pet (set once a frame, when first needed).
+	local function filter()
+		if filtered then
+			return
+		end
+		filtered = true
+		local exclude: { Instance } = { folder }
+		for _, other in Players:GetPlayers() do
+			if other.Character then
+				table.insert(exclude, other.Character)
+			end
+		end
+		rayParams.FilterDescendantsInstances = exclude
+	end
 
 	for owner, pet in pets do
 		local root = rootOf(owner)
@@ -542,21 +562,34 @@ local function step(dt: number)
 			end
 		end
 
-		-- Where it wants to be: behind the right shoulder, above the head.
+		-- Where it wants to be: behind the right shoulder, above the head (a walker: beside the right
+		-- foot, on the ground).
 		local look = body.CFrame.LookVector
 		local flat = Vector3.new(look.X, 0, look.Z)
 		flat = if flat.Magnitude > 0.01 then flat.Unit else Vector3.new(0, 0, -1)
 		local right = Vector3.new(-flat.Z, 0, flat.X)
 		local feet = body.Position.Y - feetBelow(owner, body)
 		local scale = pet.Scale
-		local target = Vector3.new(body.Position.X, feet + UP * (0.85 + 0.15 * scale), body.Position.Z)
-			- flat * BACK * scale
-			+ right * SIDE * scale
-		if (target - pet.Position).Magnitude > SNAP then
-			pet.Position = target
-		else
-			pet.Position = pet.Position:Lerp(target, 1 - math.exp(-FOLLOW * dt))
+		local walks = WALKERS[pet.Id] == true
+		local target = if walks
+			then Vector3.new(body.Position.X, feet, body.Position.Z) - flat * WALK_BACK * scale + right * WALK_SIDE * scale
+			else Vector3.new(body.Position.X, feet + UP * (0.85 + 0.15 * scale), body.Position.Z)
+				- flat * BACK * scale
+				+ right * SIDE * scale
+		local moved = if (target - pet.Position).Magnitude > SNAP
+			then target
+			else pet.Position:Lerp(target, 1 - math.exp(-FOLLOW * dt))
+		if walks then
+			-- Its hooves on whatever is under it there (looked for from a little over the higher of its
+			-- owner's feet and itself, so a step up is found too).
+			filter()
+			local top = math.max(feet, pet.Position.Y) + 3
+			local bottom = math.min(feet, pet.Position.Y) - GROUND_REACH
+			local hit =
+				workspace:Raycast(Vector3.new(moved.X, top, moved.Z), Vector3.new(0, bottom - top, 0), rayParams)
+			moved = Vector3.new(moved.X, if hit then hit.Position.Y else feet, moved.Z)
 		end
+		pet.Position = moved
 		-- Facing where its owner goes (or looks, standing still).
 		local moving = Vector3.new(body.AssemblyLinearVelocity.X, 0, body.AssemblyLinearVelocity.Z)
 		local heading = if moving.Magnitude > 2 then moving.Unit else flat
@@ -586,8 +619,10 @@ local function step(dt: number)
 			burst(pet, pet.Matched)
 		end
 
-		-- (its bob gives way to its flourish)
-		local bob = math.sin(pet.Clock * 2.1) * BOB * scale * (if t then 1 - math.sin(t * math.pi) else 1)
+		-- (its bob gives way to its flourish; a walker doesn't bob)
+		local bob = if walks
+			then 0
+			else math.sin(pet.Clock * 2.1) * BOB * scale * (if t then 1 - math.sin(t * math.pi) else 1)
 		local base = CFrame.new(pet.Position + Vector3.new(0, bob, 0)) * CFrame.Angles(0, pet.Yaw, 0)
 		place(pet, base, t, pet.Clock, parts, frames)
 
@@ -615,17 +650,9 @@ local function step(dt: number)
 		-- Its pool of light on the ground under it.
 		if now >= pet.PoolAt then
 			pet.PoolAt = now + POOL_EVERY
-			if not filtered then
-				filtered = true
-				local exclude: { Instance } = { folder }
-				for _, other in Players:GetPlayers() do
-					if other.Character then
-						table.insert(exclude, other.Character)
-					end
-				end
-				rayParams.FilterDescendantsInstances = exclude
-			end
-			local hit = workspace:Raycast(pet.Position, Vector3.new(0, -20, 0), rayParams)
+			filter()
+			-- (from a stud up: a walker stands right on the ground)
+			local hit = workspace:Raycast(pet.Position + Vector3.new(0, 1, 0), Vector3.new(0, -21, 0), rayParams)
 			if hit then
 				pet.Pool.CFrame = CFrame.new(hit.Position + Vector3.new(0, 0.06, 0)) * CFrame.Angles(0, 0, math.rad(90))
 				pet.Pool.Transparency = 0.82

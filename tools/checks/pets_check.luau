@@ -205,6 +205,33 @@ function __runPets()
 	check("standing: the owl's wings beat", ok, value)
 	ok, value = turned(idle, "Pet_EmberStag", "LegFL", 0, 3)
 	check("standing: the stag's legs stay still", ok, value)
+	-- The stag walks on the ground beside its owner; the others float over their shoulder (owner:
+	-- "Lets make the deer stop floating and walk on the ground near the player.").
+	local function stance(pet: string): (number?, number?)
+		for _, entry in watched do
+			local root = entry.Owner.Character and entry.Owner.Character:FindFirstChild("HumanoidRootPart")
+			local humanoid = entry.Owner.Character and entry.Owner.Character:FindFirstChildOfClass("Humanoid")
+			if entry.Pet == pet and root and humanoid then
+				local box, size = entry.Model:GetBoundingBox()
+				local feet = root.Position.Y - humanoid.HipHeight - root.Size.Y / 2
+				local apart = (Vector3.new(box.Position.X, 0, box.Position.Z) - Vector3.new(
+					root.Position.X,
+					0,
+					root.Position.Z
+				)).Magnitude
+				return box.Position.Y - size.Y / 2 - feet, apart
+			end
+		end
+		return nil, nil
+	end
+	local above, apart = stance("Pet_EmberStag")
+	check(
+		"standing: the stag stands on the ground beside its owner",
+		above ~= nil and math.abs(above) < 0.4 and apart ~= nil and apart > 2 and apart < 5,
+		{ above = above and math.floor(above * 100) / 100, apart = apart and math.floor(apart * 100) / 100 }
+	)
+	above = stance("Pet_HarvestOwl")
+	check("standing: the owl still flies over its owner's shoulder", above ~= nil and above > 3, above)
 	ok, value = turned(idle, "Pet_EmberStag", "Head", 4)
 	check("standing: the stag looks about", ok, value)
 	ok, value = turned(idle, "Pet_Gourdian", "Roots", 3)

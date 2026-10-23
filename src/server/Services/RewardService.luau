@@ -3,7 +3,8 @@
 -- The first win of each day pays a bonus, and the lifetime (career) stats feed the career
 -- milestones, which ProgressionService celebrates (owner: "Also we need cool payoffs for players
 -- that keep playing the game."). Every round played to the end also gives the season's crate
--- (Services/CrateService), on the results card with the rest.
+-- (Services/CrateService), on the results card with the rest, and the top 3 win 3 / 2 / 1 keys
+-- (owner: "3/2/1 every round").
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -127,8 +128,14 @@ local function grantOne(
 	Economy.AddXP(player, reward.XP)
 	ProgressionService.CheckMilestones(player)
 	local levelAfter = LevelCurve.FromTotalXP(data.XP)
-	-- The round's crate (the crate seasons: one for every round played to the end; Services/CrateService).
-	local okCrate, crate = pcall(CrateService.RoundCrate, player)
+	-- The round's keys for the top 3, then its crate (the crate seasons: one for every round played to
+	-- the end; Services/CrateService), so the card's key count has them.
+	local okKeys, keysWon = pcall(CrateService.RoundKeys, player, item.Place, definition.Id)
+	if not okKeys then
+		Telemetry.Error("Crates", `round keys: {keysWon}`)
+		keysWon = 0
+	end
+	local okCrate, crate = pcall(CrateService.RoundCrate, player, keysWon)
 	if not okCrate then
 		Telemetry.Error("Crates", `round crate: {crate}`)
 		crate = nil
@@ -148,7 +155,7 @@ local function grantOne(
 		Standings = standings,
 		WinningTeam = winningTeam,
 		MyTeam = entry.Team,
-		Crate = crate, -- { Count, Name, Season, Total, Keys } (nil: none)
+		Crate = crate, -- { Count, Name, Season, Total, Keys, KeysWon } (nil: none)
 	})
 	Telemetry.PlayerEvent(player, "RoundPlacement", item.Place, definition.Id)
 	DataService.Changed(player)

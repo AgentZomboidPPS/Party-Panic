@@ -711,7 +711,7 @@ type PodiumTag = {
 	userId: number?,
 }
 
--- Puts a champion's face on a podium tag: their headshot, or a robot on the bot's own color.
+-- Puts a champion's face on a podium tag: their headshot, or a bot's initial on its own color.
 local function showPortrait(tag: PodiumTag, userId: number)
 	tag.userId = userId
 	local isBot = Participants.IsBotId(userId)
@@ -719,6 +719,7 @@ local function showPortrait(tag: PodiumTag, userId: number)
 	tag.glow.Enabled = isBot
 	if isBot then
 		local bot = Participants.FromUserId(userId)
+		tag.robot.Text = string.upper(string.sub(if bot then bot.DisplayName else "?", 1, 1))
 		tag.image.Image = ""
 		tag.image.BackgroundColor3 = bot and bot.Color or Theme.Colors.Cyan
 		return
@@ -784,8 +785,8 @@ local function buildChampions()
 			Children = { UIKit.Round(), UIKit.Stroke(Theme.Colors.Yellow, 3, 0), glow },
 		})
 		local robot = UIKit.Label({
-			Name = "Robot",
-			Text = "🤖",
+			Name = "Robot", -- (a bot has no Roblox headshot: its initial on its colour, like a default picture)
+			Text = "",
 			TextScaled = true,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.52),

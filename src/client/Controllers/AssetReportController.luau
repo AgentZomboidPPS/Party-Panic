@@ -65,10 +65,13 @@ local function check(where: string)
 				reported[id] = true
 				table.insert(parts, descendant)
 			end
-		elseif descendant:IsA("Decal") then -- (Textures too)
-			addImage(descendant.Texture)
-		elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Beam") or descendant:IsA("Trail") then
-			addImage(descendant.Texture)
+		elseif
+			descendant:IsA("Decal") -- (Textures too)
+			or descendant:IsA("ParticleEmitter")
+			or descendant:IsA("Beam")
+			or descendant:IsA("Trail")
+		then
+			addImage((descendant :: any).Texture)
 		elseif descendant:IsA("ImageLabel") or descendant:IsA("ImageButton") then
 			addImage(descendant.Image)
 		end

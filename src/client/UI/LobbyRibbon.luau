@@ -169,7 +169,7 @@ function LobbyRibbon.Add(
 		LayoutOrder = math.round(options.Priority * 10),
 		Visible = false,
 		Parent = row,
-	}, options.OnClick, options.Top or Theme.Colors.PanelLight, options.Bottom or Theme.Colors.PanelDark)
+	}, options.OnClick, options.Top or Theme.Colors.Lavender, options.Bottom or Theme.Colors.Purple)
 	local chip: Chip = {
 		Name = options.Name,
 		Priority = options.Priority,
