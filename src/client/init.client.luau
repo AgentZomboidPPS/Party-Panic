@@ -5,9 +5,16 @@
 --
 -- BotWatchController tells the server how the bots moved on this screen in each round (owner: "Bots
 -- are STILL ruberbanding and floating."): only a real game has physics, so only a real game can show it.
+--
+-- Once everything has started, it tells the server which kind of device this is, for the analytics
+-- (Services/FunnelService; owner: "What information should we collect to gage if players are having
+-- fun and staying?"): Console, Phone, Tablet (a touch screen 600 points or more each way) or PC.
 
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
 
 local State = require(script.State)
 local UIKit = require(script.UI.UIKit)
@@ -97,3 +104,15 @@ for _, name in order do
 		warn(`[PartyPanic] {name} failed to start: {err}`)
 	end
 end
+
+-- Which kind of device this is, for the analytics.
+pcall(function()
+	local kind = "PC"
+	if GuiService:IsTenFootInterface() then
+		kind = "Console"
+	elseif UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+		local size = workspace.CurrentCamera.ViewportSize
+		kind = if math.min(size.X, size.Y) >= 600 then "Tablet" else "Phone"
+	end
+	require(ReplicatedStorage.Shared.Remotes).Get("Funnel"):FireServer("Device", kind)
+end)

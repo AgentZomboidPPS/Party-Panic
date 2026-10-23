@@ -2065,6 +2065,12 @@ function __runReplay(id, botCount, party)
 		return who
 	end
 	local ann, bo = person(1, "Ann"), person(2, "Bo")
+	-- (The funnels' fields: Ann's screen is a phone, Bo's a PC, and they're Roblox friends.)
+	FunnelService.DeviceForTests(ann, "Phone")
+	FunnelService.DeviceForTests(bo, "PC")
+	pcall(function()
+		__require("Server/Services/FriendsService").SetFriendsForTest(ann, bo)
+	end)
 	if party then
 		local PartyService = __require("Server/Services/PartyService")
 		PartyService.Init()
@@ -2278,6 +2284,13 @@ function __runReplay(id, botCount, party)
 		FunnelService.Left(bo)
 	end)
 	summary.funnels = FunnelService.Log()
+	-- What went to Roblox's economy and progression reports (counted even for the stand-ins).
+	local Telemetry = __require("Server/Services/Telemetry")
+	summary.telemetry = {
+		coinsIn = Telemetry.Counters["Coins:in"],
+		coinsOut = Telemetry.Counters["Coins:out"],
+		levels = Telemetry.Counters.Levels,
+	}
 	-- The ratings: the taps, every write (the record after it), and what the run added to this game's
 	-- week (read back from the store).
 	task.wait(3) -- the last round's write

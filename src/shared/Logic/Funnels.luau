@@ -14,6 +14,17 @@
 -- And where players leave: a custom event "LeftDuring" when someone leaves, its field saying what
 -- they were doing (LeftWhere) and its value how many minutes they'd played.
 --
+-- What tells fun and staying apart (owner: "What information should we collect to gage if players
+-- are having fun and staying?", then "lets do 1-7."): every step and event carries custom fields
+-- (Creator Hub splits a chart by them):
+--   * the device: Phone, Tablet, PC or Console (the screen says which: DeviceKinds);
+--   * friends: Party (in a party with someone in the round), Friends (a Roblox friend in it) or Solo;
+--   * how many people (not bots) were in the round (PeopleBucket);
+--   * the win or loss streak someone left on (StreakLabel);
+-- and a custom event "FirstRoundWait": how many seconds a visit waited from joining to its first GO.
+-- Coins earned and spent go to Roblox's economy report and levels to its progression report
+-- (Services/Telemetry, Services/Economy). Which field is which, per funnel, is FIELDS below.
+--
 -- Roblox keys a funnel's steps by number: a step's name must never change once it has been logged,
 -- and new steps go on the end. Leaf module: no requires, no Roblox APIs.
 
@@ -68,8 +79,71 @@ function Funnels.FinishedStep(rounds: number): number?
 end
 
 -- What the steps of the client's screens are called on the remote (Services/FunnelService takes no
--- other word from a device).
-Funnels.ClientSteps = { ShopOpen = true, ShopPick = true, GoldSeen = true }
+-- other word from a device), and the devices it can say it is.
+Funnels.ClientSteps = { ShopOpen = true, ShopPick = true, GoldSeen = true, Device = true }
+Funnels.DeviceKinds = { Phone = true, Tablet = true, PC = true, Console = true }
+
+-- The custom fields, in order (the first is CustomField01), per funnel and event.
+Funnels.FIELDS = {
+	Onboarding = { "Device", "Friends" },
+	Session = { "New or returning", "Device", "Friends" },
+	Round = { "Game", "Friends", "People" },
+	Shop = { "Item or tab", "Device" },
+	GoldPass = { "", "Device" },
+	LeftDuring = { "Where", "Device", "Streak" },
+	FirstRoundWait = { "New or returning", "Device", "People" },
+}
+
+-- How many people (not bots) were in a round.
+function Funnels.PeopleBucket(people: number): string
+	if people <= 1 then
+		return "1 person"
+	elseif people == 2 then
+		return "2 people"
+	elseif people <= 5 then
+		return "3-5 people"
+	end
+	return "6+ people"
+end
+
+-- Who someone played with: in a party with someone there, a Roblox friend there, or neither.
+function Funnels.Social(party: boolean, friend: boolean): string
+	return if party then "Party" elseif friend then "Friends" else "Solo"
+end
+
+-- The better of two Social labels (a visit's "with friends so far").
+function Funnels.BestSocial(a: string?, b: string?): string
+	local rank = { Solo = 1, Friends = 2, Party = 3 }
+	local x, y = a or "Solo", b or "Solo"
+	return if (rank[y] or 0) > (rank[x] or 0) then y else x
+end
+
+-- The streak someone is on after `rounds` rounds this visit, `lost` of the latest in a row lost.
+function Funnels.StreakLabel(rounds: number, lost: number): string
+	if rounds <= 0 then
+		return "No rounds yet"
+	elseif lost <= 0 then
+		return "Won the last round"
+	elseif lost <= 2 then
+		return `Lost the last {lost}`
+	elseif lost <= 4 then
+		return "Lost the last 3-4"
+	end
+	return "Lost the last 5+"
+end
+
+-- Roblox's economy report sorts coins by kind of transaction (Enum.AnalyticsEconomyTransactionType
+-- names): where each of the game's reasons for coins goes.
+Funnels.CoinKinds = {
+	Round = "Gameplay",
+	PartyCup = "Gameplay",
+	Quest = "Gameplay",
+	SecretToken = "Gameplay",
+	Road = "Gameplay",
+	Daily = "TimedReward",
+	GoldPass = "IAP",
+	Shop = "Shop",
+}
 
 -- What someone was doing when they left, for the "LeftDuring" event: the round's phase if they were
 -- in it, else where the server was (the lobby, the vote...).

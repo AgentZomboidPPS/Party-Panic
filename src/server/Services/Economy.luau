@@ -4,6 +4,9 @@
 -- level reached pays the Rewards Road's coins (Config.Road) exactly once, since XP only goes up,
 -- and ProgressionService unlocks the level's cosmetics and celebrates. A GOLD PASS owner's level
 -- also pays the gold lane's coins (owner: "the paid one should also be insane"; GoldPassService).
+-- Every coin in and out, and every level, also goes to Roblox's economy and progression reports
+-- (Telemetry.Coins, Telemetry.Levels; owner: "What information should we collect to gage if players
+-- are having fun and staying?"): whether the rewards keep people going and the shop feels in reach.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -26,17 +29,19 @@ function Economy.AddCoins(player: Player, amount: number, reason: string): boole
 	end
 	profile.Data.Coins += math.floor(amount)
 	Telemetry.PlayerEvent(player, "CoinsEarned", amount, reason)
+	Telemetry.Coins(player, math.floor(amount), profile.Data.Coins, reason)
 	DataService.Changed(player)
 	return true
 end
 
-function Economy.SpendCoins(player: Player, amount: number, reason: string): boolean
+function Economy.SpendCoins(player: Player, amount: number, reason: string, item: string?): boolean
 	local profile = DataService.Get(player)
 	if not profile or amount < 0 or amount ~= amount or profile.Data.Coins < amount then
 		return false
 	end
 	profile.Data.Coins -= math.floor(amount)
 	Telemetry.PlayerEvent(player, "CoinsSpent", amount, reason)
+	Telemetry.Coins(player, -math.floor(amount), profile.Data.Coins, reason, item)
 	DataService.Changed(player)
 	return true
 end
@@ -54,6 +59,9 @@ function Economy.AddXP(player: Player, amount: number)
 		profile.Data.Coins += coins
 		local goldCoins = GoldPassService.LevelUp(player, after) -- (added already, 0 without the pass)
 		Telemetry.PlayerEvent(player, "LevelUp", after)
+		Telemetry.Coins(player, coins, profile.Data.Coins - goldCoins, "Road", `Level {after}`)
+		Telemetry.Coins(player, goldCoins, profile.Data.Coins, "GoldPass", `Level {after}`)
+		Telemetry.Levels(player, before, after)
 		ProgressionService.LevelUp(player, before, after, coins, goldCoins)
 	end
 	DataService.Changed(player)

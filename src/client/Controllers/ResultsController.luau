@@ -45,6 +45,9 @@
 -- the yellow rim of an answer; tapping the other one switches the vote and tapping the lit one again
 -- takes it back, until the results end. On phones they're 44 pt like the rest of the bar, and the
 -- card is wider than it was so the title, the thumbs and PLAY AGAIN all fit beside each other.
+-- Only about one round in 17 got a vote, so the thumbs say what they're for: "RATE IT!" in yellow
+-- just before them, and they pop in as the card opens (owner: "lets do 1-7."). The card's title is
+-- "Results" (not "Round Results") to make room.
 --
 -- Only the card's X closes it early (owner: "I don't like how clicking skips the ending screen. I
 -- clicked and I couldn't vote."): a click beside it, on the dim backdrop, used to close it, and so
@@ -110,6 +113,7 @@ local replay: ReplayStrip
 -- The 👍 / 👎 pair (scaled units): each a square the size of the bar's other buttons, THUMB_GAP apart,
 -- RATE_GAP after the title.
 local THUMB_GAP, RATE_GAP = 10, 16
+local RATE_TEXT = "RATE IT!"
 local THUMBS = {
 	Up = { Name = "ThumbUp", Icon = "👍", Lit = Theme.Colors.Green, LitDark = GREEN_DARK },
 	Down = { Name = "ThumbDown", Icon = "👎", Lit = Theme.Colors.Red, LitDark = Color3.fromRGB(190, 40, 60) },
@@ -156,6 +160,9 @@ end
 local function refreshRating()
 	local vote = GameState.GetJSON("Rating")
 	local open = type(vote) == "table" and vote.Open == true and cardGame ~= "" and vote.Game == cardGame
+	if open and not rating.row.Visible and not State.ReducedEffects() then
+		UIKit.PopIn(rating.row, 0.35) -- (the eye finds them as the card opens)
+	end
 	rating.row.Visible = open
 	local mine = State.LocalPlayer:GetAttribute("PP_Rating")
 	for choice, button in rating.buttons do
@@ -189,11 +196,13 @@ local function buildRating()
 		end
 	end
 	local titleWidth = if title then UIKit.TextWidth(title.Text, title.TextSize, title.Font) else 0
+	local textSize = if touch then 22 else 21
+	local labelWidth = math.ceil(UIKit.TextWidth(RATE_TEXT, textSize, Theme.Fonts.Display) * 1.06) + 4
 	local row = UIKit.new("Frame", {
 		Name = "Rating",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 24 + math.ceil(titleWidth) + RATE_GAP, 0, Modal.TitleHeight() / 2 + 2),
-		Size = UDim2.fromOffset(2 * size + THUMB_GAP, size),
+		Size = UDim2.fromOffset(labelWidth + THUMB_GAP + 2 * size + THUMB_GAP, size),
 		BackgroundTransparency = 1,
 		Visible = false,
 		ZIndex = 23,
@@ -206,6 +215,19 @@ local function buildRating()
 				Enum.VerticalAlignment.Center
 			),
 		},
+	})
+	UIKit.Label({
+		Name = "Ask",
+		Text = RATE_TEXT,
+		Font = Theme.Fonts.Display,
+		TextSize = textSize,
+		TextWrapped = false,
+		TextColor3 = Theme.Colors.Yellow,
+		Size = UDim2.fromOffset(labelWidth, size),
+		LayoutOrder = 0,
+		ZIndex = 23,
+		Parent = row,
+		Children = { UIKit.TextStroke(0.3) },
 	})
 	local buttons = {}
 	for order, choice in { "Up", "Down" } do
@@ -494,7 +516,7 @@ end
 
 function ResultsController.Start(context)
 	-- (960 wide: the title, 👍 / 👎 and PLAY AGAIN side by side in the title bar.)
-	modal = Modal.new(context.Overlay, "Round Results", "🏆", Vector2.new(960, 470))
+	modal = Modal.new(context.Overlay, "Results", "🏆", Vector2.new(960, 470))
 	modal.CloseOnBackdrop = false -- a stray click never skips the card (and its votes)
 	-- Toasts wait while the card is up (it draws over them: NotificationController).
 	modal.Opened:Connect(function()

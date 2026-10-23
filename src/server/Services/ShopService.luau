@@ -41,7 +41,7 @@ local function purchase(player: Player, itemId: any)
 		Notifier.Send(player, `{item.Name} can't be bought with coins. {how}`, "warning")
 		return
 	end
-	if not Economy.SpendCoins(player, price, "Shop") then
+	if not Economy.SpendCoins(player, price, "Shop", itemId) then
 		Notifier.Send(player, `You need {price - profile.Data.Coins} more coins for {item.Name}.`, "warning")
 		return
 	end

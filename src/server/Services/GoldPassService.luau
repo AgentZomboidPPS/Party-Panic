@@ -134,6 +134,7 @@ end
 local function catchUp(player: Player, profile: DataService.Profile)
 	local level = LevelCurve.FromTotalXP(profile.Data.XP)
 	local coins = payCoins(profile, level)
+	Telemetry.Coins(player, coins, profile.Data.Coins, "GoldPass", "Catch up") -- (Roblox's economy report)
 	local items = CosmeticService.CheckUnlocks(player, true)
 	if coins > 0 or #items > 0 then
 		local parts = {}
@@ -164,6 +165,7 @@ function GoldPassService.Grant(player: Player, source: string): boolean
 	pass.Since = os.time()
 	local level = LevelCurve.FromTotalXP(profile.Data.XP)
 	local coins, coinLevels = payCoins(profile, level)
+	Telemetry.Coins(player, coins, profile.Data.Coins, "GoldPass", source) -- (Roblox's economy report)
 	local unlocked = CosmeticService.CheckUnlocks(player, true)
 	CosmeticService.Refresh(player) -- the name tag: the GOLD badge and the shimmer
 	local payload: Unlocked = {

@@ -63,7 +63,38 @@ test("Funnels: the screens can only send their own steps", function()
 		table.insert(words, word)
 	end
 	table.sort(words)
-	expectEqual(words, { "GoldSeen", "ShopOpen", "ShopPick" })
+	expectEqual(words, { "Device", "GoldSeen", "ShopOpen", "ShopPick" })
+	expectEqual(Funnels.DeviceKinds, { Phone = true, Tablet = true, PC = true, Console = true })
+end)
+
+-- (owner: "What information should we collect to gage if players are having fun and staying?", then
+-- "lets do 1-7.")
+test("Funnels: the fields that tell fun and staying apart", function()
+	expectEqual(
+		{ Funnels.PeopleBucket(0), Funnels.PeopleBucket(1), Funnels.PeopleBucket(2), Funnels.PeopleBucket(5) },
+		{ "1 person", "1 person", "2 people", "3-5 people" }
+	)
+	expectEqual(Funnels.PeopleBucket(6), "6+ people")
+	expectEqual(
+		{ Funnels.Social(true, true), Funnels.Social(false, true), Funnels.Social(false, false) },
+		{ "Party", "Friends", "Solo" }
+	)
+	expectEqual(Funnels.BestSocial("Solo", "Friends"), "Friends")
+	expectEqual(Funnels.BestSocial("Party", "Friends"), "Party")
+	expectEqual(Funnels.BestSocial(nil, nil), "Solo")
+	expectEqual(Funnels.StreakLabel(0, 0), "No rounds yet")
+	expectEqual(Funnels.StreakLabel(4, 0), "Won the last round")
+	expectEqual(Funnels.StreakLabel(4, 2), "Lost the last 2")
+	expectEqual(Funnels.StreakLabel(9, 4), "Lost the last 3-4")
+	expectEqual(Funnels.StreakLabel(9, 7), "Lost the last 5+")
+	for name, fields in Funnels.FIELDS do
+		expectTrue(#fields <= 3, `{name}: Roblox takes three custom fields`)
+	end
+	-- Roblox's economy kinds (Enum.AnalyticsEconomyTransactionType's names).
+	local kinds = { Gameplay = true, TimedReward = true, IAP = true, Shop = true, Onboarding = true }
+	for reason, kind in Funnels.CoinKinds do
+		expectTrue(kinds[kind] == true, `{reason} goes to {kind}`)
+	end
 end)
 
 return nil
