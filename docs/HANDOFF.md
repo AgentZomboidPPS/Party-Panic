@@ -51,6 +51,13 @@ then the average mini game too."). Built as **Obby Odyssey** (`ObbyOdyssey`, Rac
 
 `tools/publish_place.py` refuses while it's public (pass `--allow-public` only once the owner says yes).
 
+- **Live: version 49** (published 2026-10-23 21:42 UTC from `8b649e3`, owner: "Lets push this to production"):
+  HOLLOW NIGHT, the fall crate season (crates, keys and the key shop, the five pets, hats, effects, THE HARVESTER,
+  the season's sounds, the welcome; no coin jackpot), Obby Odyssey, the cleaned-up phone UI, and the asset gate.
+  The gate's first try refused (the Open Use calls were rate-limited and didn't retry; fixed); the second passed:
+  463 of 463 models, sounds and images granted, 1898 of 1898 mesh files and images Open Use, all approved. 48 was
+  this branch's own (below), so nothing of it was lost. Check players' devices with
+  `client_reports.py --version 49`.
 - **Live: version 47** (published 2026-10-23 03:25 UTC from `b8eadaa`, owner: "Can you push the update for minecart
   mayhem"): Minecart Mayhem out of the rotation (`Enabled = false` in GameDefinitions; the code stays). Version 46
   was published by someone else between 45 and 47 (Studio, or another chat that pushed nothing to GitHub); 47
@@ -91,13 +98,13 @@ then the average mini game too."). Built as **Obby Odyssey** (`ObbyOdyssey`, Rac
     and tosses, by design).
   - After the owner's next session with bots, read `python3 tools/checks/client_reports.py --bots`.
 
-## HOLLOW NIGHT, the first crate season (2026-10-23, NOT published yet)
+## HOLLOW NIGHT, the first crate season (2026-10-23, live in version 49)
 
 Owner: "Hollow night comes first I want you to actually work on adding it to the game right now. The season should
 always run (so when winter hits the winter event can take place) ... 4 doesn't need to be spooky ... Also do all of
 your ideas. This has to be sick. This will be players first season. I want it to look insane." Cozy autumn, not
-spooky. Commits `632645b`..`23f90de` on this branch, plus whatever is newer than this note. **Not live**: ask the
-owner before publishing (the game is public).
+spooky. Commits `632645b`..`8b649e3` on this branch. **Live in version 49** (2026-10-23 21:42 UTC); ask the owner
+before every publish (the game is public).
 
 **The owner's plan for seasons and events** (2026-10-23): "Also we can have events/holidays run along side seasons.
 Also seasons are actually spring summer fall and winter". So the crate seasons are the year's four: HOLLOW NIGHT is

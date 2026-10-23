@@ -86,7 +86,20 @@ def asset_gate(universe_id: int):
     from asset_permissions import grant_all
     from asset_status import audit
 
-    print("Asset gate: is every model, sound, image and mesh file approved? (a few minutes)", flush=True)
+    # The grants first (a few minutes), then the moderation check (long the first time: every asset is
+    # looked up, rate-limited; approvals are remembered for a few hours).
+    print("Asset gate: may the game use everything, and may every device load every mesh file and image?", flush=True)
+    try:
+        summary, errors, missing = grant_all(universe_id)
+    except Exception as error:
+        sys.exit(f"Refusing to publish: the grants couldn't run ({error}). Run it again.")
+    print("  " + summary)
+    if errors or missing:
+        sys.exit(
+            f"Refusing to publish: Roblox didn't confirm every grant (missing {missing[:30]}, "
+            f"errors {json.dumps(errors)[:800]}). Run it again."
+        )
+    print("Asset gate: is every model, sound, image and mesh file approved?", flush=True)
     try:
         problems, ids, inner = audit(meshes=True, quiet=True)
     except Exception as error:
@@ -94,13 +107,6 @@ def asset_gate(universe_id: int):
     if problems:
         sys.exit(f"Refusing to publish: not approved yet, players wouldn't see them: {', '.join(problems)[:1500]}")
     print(f"  approved: {len(ids)} models, sounds and images, and {len(inner)} mesh files inside the models")
-    summary, errors, missing = grant_all(universe_id, inner=inner)
-    print("  " + summary)
-    if errors or missing:
-        sys.exit(
-            f"Refusing to publish: Roblox didn't confirm every grant (missing {missing[:30]}, "
-            f"errors {json.dumps(errors)[:800]}). Run it again."
-        )
 
 
 def main():

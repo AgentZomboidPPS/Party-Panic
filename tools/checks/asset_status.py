@@ -33,6 +33,11 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "preview"))
 # The account every upload goes under (the game's owner).
 OWNER = int(os.environ.get("PP_OWNER_ID", "11690979745"))
+# Approvals already seen, so a check soon after another doesn't ask about all ~2,300 assets again (each
+# lookup is rate-limited): an asset approved in the last few hours is taken as still approved. Anything
+# pending or rejected is always asked again.
+APPROVED_CACHE = ROOT / "build" / "asset_approved.json"
+APPROVED_FRESH = 6 * 3600
 
 
 def collect() -> dict[str, int]:
@@ -132,8 +137,18 @@ def audit(meshes: bool = True, quiet: bool = False) -> tuple[list[str], dict[str
                     if number:
                         inner.append(int(number))
                         checks.append((f"{key}.{piece} {label}", int(number)))
-    pending = checks
+    try:
+        cache = {int(k): float(v) for k, v in json.loads(APPROVED_CACHE.read_text()).items()}
+    except (OSError, ValueError):
+        cache = {}
+    now = time.time()
     verdicts: dict[str, tuple[int, str, str]] = {}
+    pending = []
+    for key, asset_id in checks:
+        if now - cache.get(asset_id, 0) < APPROVED_FRESH:
+            verdicts[key] = (asset_id, "(seen)", "Approved")
+        else:
+            pending.append((key, asset_id))
     for round_ in range(4):
         retry = []
         for key, asset_id in pending:
@@ -145,6 +160,11 @@ def audit(meshes: bool = True, quiet: bool = False) -> tuple[list[str], dict[str
             break
         pending = retry
         time.sleep(30 * (round_ + 1))
+    for asset_id, kind, state in verdicts.values():
+        if state == "Approved" and kind != "(seen)":
+            cache[asset_id] = now
+    APPROVED_CACHE.parent.mkdir(exist_ok=True)
+    APPROVED_CACHE.write_text(json.dumps({str(k): v for k, v in cache.items()}))
     problems = list(load_problems)
     for key, (asset_id, kind, state) in verdicts.items():
         flag = "" if state == "Approved" else "   <-- NOT APPROVED"

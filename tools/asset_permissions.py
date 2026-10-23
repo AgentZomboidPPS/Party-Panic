@@ -36,6 +36,24 @@ ROOT = Path(__file__).resolve().parents[1]
 UNIVERSE = int(os.environ.get("PP_UNIVERSE_ID", "10772087888"))
 URL = "https://apis.roblox.com/asset-permissions-api/v1/assets/permissions"
 BATCH = 20
+# Roblox rate-limits these calls (HTTP 429): wait and ask again, longer each time.
+BACKOFF = (5, 10, 20, 40, 60, 60)
+
+
+def patch(body: dict, headers: dict) -> tuple[dict | None, dict | None]:
+    """One permissions call: (its answer, or None and the error after the retries)."""
+    request = urllib.request.Request(URL, data=json.dumps(body).encode(), method="PATCH", headers=headers)
+    for attempt, wait in enumerate((0,) + BACKOFF):
+        time.sleep(wait)
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return json.loads(response.read() or b"{}"), None
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode(errors="replace")[:300]
+            if (error.code == 429 or error.code >= 500) and attempt < len(BACKOFF):
+                continue
+            return None, {"http": error.code, "detail": detail}
+    return None, {"http": "?"}
 
 
 def grant(asset_ids: list[int], universe_id: int = UNIVERSE) -> tuple[list[int], list]:
@@ -55,20 +73,12 @@ def grant(asset_ids: list[int], universe_id: int = UNIVERSE) -> tuple[list[int],
             "action": "Use",
             "requests": [{"assetId": asset_id, "grantToDependencies": True} for asset_id in batch],
         }
-        request = urllib.request.Request(URL, data=json.dumps(body).encode(), method="PATCH", headers=headers)
-        for attempt in range(5):
-            try:
-                with urllib.request.urlopen(request, timeout=60) as response:
-                    data = json.loads(response.read() or b"{}")
-                granted += [int(i) for i in data.get("successAssetIds", [])]
-                errors += data.get("errors", [])
-                break
-            except urllib.error.HTTPError as error:
-                if error.code == 429 or error.code >= 500:
-                    time.sleep(2 * (attempt + 1))
-                    continue
-                errors.append({"http": error.code, "detail": error.read().decode(errors="replace")[:300], "ids": batch})
-                break
+        data, error = patch(body, headers)
+        if data is None:
+            errors.append({**(error or {}), "ids": batch})
+            continue
+        granted += [int(i) for i in data.get("successAssetIds", [])]
+        errors += data.get("errors", [])
     return granted, errors
 
 
@@ -83,14 +93,12 @@ def open_use(mesh_ids: list[int]) -> tuple[list[int], list]:
     for start in range(0, len(ids), BATCH):
         batch = ids[start : start + BATCH]
         body = {"subjectType": "All", "action": "Use", "requests": [{"assetId": asset_id} for asset_id in batch]}
-        request = urllib.request.Request(URL, data=json.dumps(body).encode(), method="PATCH", headers=headers)
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                data = json.loads(response.read() or b"{}")
-            opened += [int(i) for i in data.get("successAssetIds", [])]
-            errors += data.get("errors", [])
-        except urllib.error.HTTPError as error:
-            errors.append({"http": error.code, "detail": error.read().decode(errors="replace")[:300], "ids": batch})
+        data, error = patch(body, headers)
+        if data is None:
+            errors.append({**(error or {}), "ids": batch})
+            continue
+        opened += [int(i) for i in data.get("successAssetIds", [])]
+        errors += data.get("errors", [])
     return opened, errors
 
 
