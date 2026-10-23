@@ -1,3 +1,15 @@
+newmtl AcornCap
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Nose
+Kd 0.353 0.196 0.196
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
 newmtl Glow
 Kd 1.000 0.784 0.353
 Ka 0 0 0
@@ -6,12 +18,6 @@ d 1
 
 newmtl Skin
 Kd 0.941 0.745 0.588
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Eye
-Kd 1.000 0.902 0.353
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
@@ -28,31 +34,79 @@ Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Spot
+newmtl Eye
+Kd 1.000 0.902 0.353
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl CapGlow
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Leaf
+newmtl CapCap
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Cap
-Kd 0.275 0.431 0.902
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Acorn
+newmtl CapSpot
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl AcornCap
+newmtl CapFire
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl CapMossLight
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl CapMoss
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl CapHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume3
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl MossLight
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Moss
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1

@@ -2,104 +2,32 @@
  "pieces": {
   "Fur": {
    "color": [
-    184,
-    112,
-    60
+    243,
+    231,
+    217
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "AntlerOrange": {
+  "TailPlume": {
    "color": [
-    214,
-    151,
-    43
+    240,
+    160,
+    64
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "AntlerOrange2": {
+  "TailPlume2": {
    "color": [
-    254,
-    145,
-    43
-   ],
-   "material": "Neon",
-   "transparency": 0.0
-  },
-  "AntlerOrange3": {
-   "color": [
-    149,
-    100,
-    36
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Light": {
-   "color": [
-    244,
-    220,
-    192
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Glow": {
-   "color": [
-    255,
-    106,
-    31
-   ],
-   "material": "Neon",
-   "transparency": 0.0
-  },
-  "Glow2": {
-   "color": [
-    255,
-    255,
-    255
-   ],
-   "material": "Neon",
-   "transparency": 0.0
-  },
-  "Eye": {
-   "color": [
-    22,
-    18,
-    36
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Leaf": {
-   "color": [
-    255,
-    201,
-    67
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Leaf2": {
-   "color": [
-    255,
-    138,
-    42
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Leaf3": {
-   "color": [
-    232,
-    82,
+    224,
+    88,
     30
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "Leaf4": {
+  "TailPlume3": {
    "color": [
     200,
     50,
@@ -108,21 +36,480 @@
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "Glow3": {
+  "TailPlume4": {
+   "color": [
+    246,
+    234,
+    216
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "TailHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "LegBRGlow": {
    "color": [
     255,
-    226,
-    122
+    138,
+    30
    ],
    "material": "Neon",
+   "transparency": 0.0
+  },
+  "LegBRSock": {
+   "color": [
+    74,
+    42,
+    26
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegBRHoof": {
+   "color": [
+    36,
+    20,
+    12
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegBRFur": {
+   "color": [
+    243,
+    231,
+    217
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegBRPlume": {
+   "color": [
+    224,
+    88,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegBRPlume2": {
+   "color": [
+    200,
+    50,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegBRHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "LegFRGlow": {
+   "color": [
+    255,
+    138,
+    30
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "LegFRSock": {
+   "color": [
+    74,
+    42,
+    26
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegFRHoof": {
+   "color": [
+    36,
+    20,
+    12
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegFRFur": {
+   "color": [
+    243,
+    231,
+    217
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegFRPlume": {
+   "color": [
+    224,
+    88,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegFRPlume2": {
+   "color": [
+    200,
+    50,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegFRHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "LegBLGlow": {
+   "color": [
+    255,
+    138,
+    30
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "LegBLSock": {
+   "color": [
+    74,
+    42,
+    26
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegBLHoof": {
+   "color": [
+    36,
+    20,
+    12
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegBLFur": {
+   "color": [
+    243,
+    231,
+    217
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegBLPlume": {
+   "color": [
+    224,
+    88,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegBLPlume2": {
+   "color": [
+    200,
+    50,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegBLHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "LegFLGlow": {
+   "color": [
+    255,
+    138,
+    30
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "LegFLSock": {
+   "color": [
+    74,
+    42,
+    26
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegFLHoof": {
+   "color": [
+    36,
+    20,
+    12
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegFLFur": {
+   "color": [
+    243,
+    231,
+    217
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegFLPlume": {
+   "color": [
+    224,
+    88,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegFLPlume2": {
+   "color": [
+    200,
+    50,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LegFLHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "HeadAntlerWood": {
+   "color": [
+    107,
+    63,
+    34
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadGlow": {
+   "color": [
+    255,
+    144,
+    31
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "HeadNose": {
+   "color": [
+    26,
+    18,
+    20
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadFur": {
+   "color": [
+    243,
+    231,
+    217
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "EarREarPink": {
+   "color": [
+    240,
+    174,
+    176
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "EarRFur": {
+   "color": [
+    243,
+    231,
+    217
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "EarRHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "EarLEarPink": {
+   "color": [
+    240,
+    174,
+    176
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "EarLFur": {
+   "color": [
+    243,
+    231,
+    217
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "EarLHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "HeadFire": {
+   "color": [
+    255,
+    194,
+    58
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "HeadFire2": {
+   "color": [
+    255,
+    90,
+    26
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "HeadPlume": {
+   "color": [
+    154,
+    31,
+    28
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadPlume2": {
+   "color": [
+    240,
+    160,
+    64
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadPlume3": {
+   "color": [
+    224,
+    88,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadPlume4": {
+   "color": [
+    200,
+    50,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadPlume5": {
+   "color": [
+    232,
+    199,
+    154
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "Plume": {
+   "color": [
+    224,
+    88,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Plume2": {
+   "color": [
+    200,
+    50,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Plume3": {
+   "color": [
+    240,
+    160,
+    64
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Plume4": {
+   "color": [
+    154,
+    31,
+    28
+   ],
+   "material": "SmoothPlastic",
    "transparency": 0.0
   }
  },
  "size": [
-  1.863,
-  4.006,
-  2.37
+  3.696,
+  4.485,
+  2.453
  ],
- "middle": 1.275,
- "tris": 7522
+ "middle": 1.244,
+ "tris": 14494
 }

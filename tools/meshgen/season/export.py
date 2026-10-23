@@ -69,11 +69,11 @@ PROPS = {
     "HarvestCrow": (lambda: HN.crow(), 500),
     "HarvestPumpkin": (lambda: HN.pumpkin((0, 0, 0), 1.0), 1400),
     "LanternPost": (lambda: HN.lantern_post((0, 0, 0), 6.0, 1), 1400),
-    "HarvestOwl": (lambda: HP.harvest_owl((0, 0, 0)), 7500),
-    "EmberStag": (lambda: HP.ember_stag((0, 0, 0)), 7500),
-    "Gourdian": (lambda: HP.gourdian((0, 0, 0)), 7500),
-    "ToadstoolTot": (lambda: HP.toadstool_tot((0, 0, 0)), 6500),
-    "LanternWisp": (lambda: HP.lantern_wisp((0, 0, 0)), 6500),
+    "HarvestOwl": (lambda: HP.harvest_owl((0, 0, 0)), 13000),
+    "EmberStag": (lambda: HP.ember_stag((0, 0, 0)), 14000),
+    "Gourdian": (lambda: HP.gourdian((0, 0, 0)), 11000),
+    "ToadstoolTot": (lambda: HP.toadstool_tot((0, 0, 0)), 11000),
+    "LanternWisp": (lambda: HP.lantern_wisp((0, 0, 0)), 9000),
     "LeafCrown": (hat(HP.leaf_crown), 3000),
     "ScarecrowHat": (hat(HP.scarecrow_hat), 3000),
     "AntlerCirclet": (hat(HP.antler_circlet), 3000),
@@ -319,6 +319,7 @@ def export(name, builder, budget):
     lib._DEFAULT = None
     HN._LEAF.clear()
     HN._PUMPKIN.clear()
+    HP._FEATHER.clear()
     root = builder()
     raw = collect(root)
     built = []

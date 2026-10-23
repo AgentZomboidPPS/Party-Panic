@@ -1,10 +1,28 @@
 {
  "pieces": {
+  "AcornCap": {
+   "color": [
+    106,
+    68,
+    38
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Nose": {
+   "color": [
+    58,
+    36,
+    32
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
   "Glow": {
    "color": [
-    255,
-    138,
-    42
+    240,
+    160,
+    64
    ],
    "material": "Neon",
    "transparency": 0.0
@@ -12,17 +30,8 @@
   "Skin": {
    "color": [
     244,
-    232,
-    207
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Eye": {
-   "color": [
-    20,
-    12,
-    28
+    230,
+    204
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
@@ -30,8 +39,8 @@
   "Blush": {
    "color": [
     255,
-    143,
-    200
+    154,
+    168
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
@@ -45,57 +54,129 @@
    "material": "Neon",
    "transparency": 0.0
   },
-  "Spot": {
+  "Eye": {
+   "color": [
+    20,
+    12,
+    28
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "CapGlow": {
    "color": [
     255,
-    238,
-    191
+    174,
+    58
    ],
    "material": "Neon",
    "transparency": 0.0
   },
-  "Leaf": {
+  "CapCap": {
+   "color": [
+    206,
+    60,
+    41
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "CapSpot": {
+   "color": [
+    246,
+    226,
+    192
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "CapFire": {
    "color": [
     255,
+    138,
+    30
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "CapMossLight": {
+   "color": [
+    111,
     138,
     42
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "Cap": {
+  "CapMoss": {
+   "color": [
+    78,
+    106,
+    34
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "CapHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "Plume": {
+   "color": [
+    243,
+    175,
+    64
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Plume2": {
    "color": [
     224,
-    72,
-    46
+    88,
+    30
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "Acorn": {
+  "Plume3": {
    "color": [
-    168,
-    99,
-    46
+    200,
+    50,
+    42
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "AcornCap": {
+  "MossLight": {
    "color": [
+    111,
+    138,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Moss": {
+   "color": [
+    78,
     106,
-    68,
-    38
+    34
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   }
  },
  "size": [
-  2.104,
-  2.243,
-  2.382
+  1.881,
+  2.002,
+  1.881
  ],
- "middle": 0.975,
- "tris": 6490
+ "middle": 0.006,
+ "tris": 11006
 }

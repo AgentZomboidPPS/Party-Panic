@@ -1,41 +1,221 @@
-newmtl Iron
-Kd 0.235 0.227 0.243
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Glow
-Kd 1.000 0.784 0.353
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
 newmtl Talon
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Glow2
+newmtl Leg
+Kd 0.588 0.392 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LanternIron
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Eye
-Kd 1.000 0.902 0.353
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Glow3
+newmtl LanternGlow
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Face
-Kd 0.133 0.235 0.188
+newmtl LanternLanternLeaf
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LanternLanternGlass
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl TailFire
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl TailFire2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl TailPlume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl TailPlume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl TailHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingRPlume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingRFire
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingRFire2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingRFire3
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingRPlume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingRPlume3
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingRHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingLPlume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingLFire
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingLFire2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingLFire3
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingLPlume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingLPlume3
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl WingLHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadBeak
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadGlow
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadEye
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadGlow2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadFace
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadHead
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadPlume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadFire
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadFire2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadPlume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadPlume3
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadHinge
+Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
@@ -52,61 +232,7 @@ Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Leaf
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Leaf2
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Leaf3
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Glow4
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl WingRLeaf
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl WingRLeaf2
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl WingRLeaf3
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl WingLLeaf
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl WingLLeaf2
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl WingLLeaf3
+newmtl Claw
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1

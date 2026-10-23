@@ -4,73 +4,331 @@ Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl AntlerOrange
+newmtl TailPlume
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl AntlerOrange2
+newmtl TailPlume2
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl AntlerOrange3
+newmtl TailPlume3
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Light
-Kd 0.902 0.157 0.157
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Glow
-Kd 1.000 0.784 0.353
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Glow2
+newmtl TailPlume4
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Eye
-Kd 1.000 0.902 0.353
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Leaf
+newmtl TailHinge
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Leaf2
+newmtl LegBRGlow
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Leaf3
+newmtl LegBRSock
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Leaf4
+newmtl LegBRHoof
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Glow3
+newmtl LegBRFur
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegBRPlume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegBRPlume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegBRHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFRGlow
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFRSock
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFRHoof
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFRFur
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFRPlume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFRPlume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFRHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegBLGlow
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegBLSock
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegBLHoof
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegBLFur
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegBLPlume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegBLPlume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegBLHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFLGlow
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFLSock
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFLHoof
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFLFur
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFLPlume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFLPlume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl LegFLHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadAntlerWood
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadGlow
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadNose
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadFur
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl EarREarPink
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl EarRFur
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl EarRHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl EarLEarPink
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl EarLFur
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl EarLHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadFire
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadFire2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadPlume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadPlume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadPlume3
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadPlume4
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadPlume5
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume3
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume4
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1

@@ -4,85 +4,139 @@ Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Glow
-Kd 1.000 0.784 0.353
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Seed
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Low
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
 newmtl Body
 Kd 0.980 0.784 0.157
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Leaf
+newmtl SeedFire
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Leaf2
+newmtl SeedPlume
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Leaf3
+newmtl RootsVineDark
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Leaf4
+newmtl RootsGlow
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl FistRStem
+newmtl RootsHinge
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl FistRPumpkin
+newmtl FistRVine
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl FistLStem
+newmtl FistRGlow
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl FistLPumpkin
+newmtl FistRPumpkinFist
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Pumpkin
+newmtl FistRPlume
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Glow2
+newmtl FistRPlume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FistLVine
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FistLGlow
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FistLPumpkinFist
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FistLPlume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl FistLPlume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadVine
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadPumpkinHead
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl HeadGlow
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume3
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1

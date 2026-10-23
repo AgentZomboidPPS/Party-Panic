@@ -1,6 +1,24 @@
 {
  "pieces": {
-  "Iron": {
+  "Talon": {
+   "color": [
+    224,
+    166,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leg": {
+   "color": [
+    220,
+    174,
+    116
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LanternIron": {
    "color": [
     47,
     43,
@@ -9,106 +27,7 @@
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "Glow": {
-   "color": [
-    255,
-    138,
-    42
-   ],
-   "material": "Neon",
-   "transparency": 0.0
-  },
-  "Talon": {
-   "color": [
-    237,
-    160,
-    47
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Glow2": {
-   "color": [
-    255,
-    255,
-    255
-   ],
-   "material": "Neon",
-   "transparency": 0.0
-  },
-  "Eye": {
-   "color": [
-    20,
-    12,
-    28
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Glow3": {
-   "color": [
-    255,
-    181,
-    48
-   ],
-   "material": "Neon",
-   "transparency": 0.0
-  },
-  "Face": {
-   "color": [
-    245,
-    226,
-    189
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Chest": {
-   "color": [
-    233,
-    196,
-    138
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Feather": {
-   "color": [
-    160,
-    98,
-    44
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Leaf": {
-   "color": [
-    255,
-    208,
-    74
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Leaf2": {
-   "color": [
-    232,
-    82,
-    30
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Leaf3": {
-   "color": [
-    200,
-    50,
-    42
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Glow4": {
+  "LanternGlow": {
    "color": [
     255,
     241,
@@ -117,66 +36,336 @@
    "material": "Neon",
    "transparency": 0.0
   },
-  "WingRLeaf": {
+  "LanternLanternLeaf": {
    "color": [
-    245,
-    186,
-    70
+    58,
+    20,
+    16
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "WingRLeaf2": {
+  "LanternLanternGlass": {
    "color": [
-    217,
-    124,
+    255,
+    167,
+    60
+   ],
+   "material": "Neon",
+   "transparency": 0.2
+  },
+  "TailFire": {
+   "color": [
+    255,
+    138,
+    30
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "TailFire2": {
+   "color": [
+    255,
+    194,
+    58
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "TailPlume": {
+   "color": [
+    200,
+    50,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "TailPlume2": {
+   "color": [
+    154,
+    31,
+    28
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "TailHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "WingRPlume": {
+   "color": [
+    109,
+    28,
+    22
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingRFire": {
+   "color": [
+    255,
+    194,
+    58
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "WingRFire2": {
+   "color": [
+    255,
+    138,
+    30
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "WingRFire3": {
+   "color": [
+    255,
+    90,
+    26
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "WingRPlume2": {
+   "color": [
+    154,
+    31,
+    28
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingRPlume3": {
+   "color": [
+    209,
+    67,
+    35
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingRHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "WingLPlume": {
+   "color": [
+    109,
+    28,
+    22
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingLFire": {
+   "color": [
+    255,
+    194,
+    58
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "WingLFire2": {
+   "color": [
+    255,
+    138,
+    30
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "WingLFire3": {
+   "color": [
+    255,
+    90,
+    26
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "WingLPlume2": {
+   "color": [
+    154,
+    31,
+    28
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingLPlume3": {
+   "color": [
+    209,
+    67,
+    35
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingLHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "HeadBeak": {
+   "color": [
+    58,
+    50,
     56
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "WingRLeaf3": {
+  "HeadGlow": {
    "color": [
-    198,
-    53,
-    46
+    255,
+    255,
+    255
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "HeadEye": {
+   "color": [
+    20,
+    12,
+    28
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "WingLLeaf": {
+  "HeadGlow2": {
    "color": [
-    245,
-    186,
-    70
+    255,
+    148,
+    27
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "HeadFace": {
+   "color": [
+    244,
+    220,
+    174
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "WingLLeaf2": {
+  "HeadHead": {
    "color": [
-    217,
-    124,
-    56
+    150,
+    80,
+    44
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "WingLLeaf3": {
+  "HeadPlume": {
    "color": [
-    198,
-    53,
-    46
+    112,
+    37,
+    24
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadFire": {
+   "color": [
+    255,
+    90,
+    26
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "HeadFire2": {
+   "color": [
+    255,
+    194,
+    58
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "HeadPlume2": {
+   "color": [
+    154,
+    31,
+    28
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadPlume3": {
+   "color": [
+    200,
+    50,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "Chest": {
+   "color": [
+    240,
+    212,
+    164
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Feather": {
+   "color": [
+    140,
+    68,
+    38
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Claw": {
+   "color": [
+    42,
+    34,
+    40
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   }
  },
  "size": [
-  2.449,
-  3.147,
-  1.649
+  4.615,
+  4.227,
+  2.351
  ],
- "middle": 1.875,
- "tris": 7486
+ "middle": 1.319,
+ "tris": 13086
 }

@@ -1,16 +1,88 @@
-newmtl TailGreen
+newmtl Vine
+Kd 0.306 0.549 0.204
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Glass
+Kd 0.667 0.863 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Trim
+Kd 0.980 0.933 0.804
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl TailTailGreen
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl TailTeal
+newmtl TailTailGreen2
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl TailGreen2
+newmtl TailTailGreen3
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl TailHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl GhostGlow
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl GhostEye
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl GhostGlow2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl GhostHinge
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume2
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume3
+Kd 0.784 0.784 0.784
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Plume4
 Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
@@ -18,54 +90,6 @@ d 1
 
 newmtl Glow
 Kd 1.000 0.784 0.353
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Brass
-Kd 0.843 0.686 0.275
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Iron
-Kd 0.235 0.227 0.243
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Eye
-Kd 1.000 0.902 0.353
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Glow2
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl FlameFlameGreen
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl FlameFlameGreen2
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl FlameFlameGreen3
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl Glass
-Kd 0.667 0.863 1.000
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1

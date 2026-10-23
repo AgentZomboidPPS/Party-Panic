@@ -5,14 +5,26 @@
 -- meshes (World/SeasonWorld's SeasonMeshes): the server only says which pet someone has on
 -- (PP_Pet), so pets cost no network traffic or physics.
 --
---   * Where: about 3 studs big, floating behind its owner's shoulder above head height (3.4 back, 1.9
---     to the side, 4.4 up), so it never covers a face or a name tag. It springs after them with a
---     little lag, bobs, and turns to face where they're going.
+--   * Where: about 3 studs big (the owl's wingspan and the stag's antlers a little more), floating
+--     behind its owner's shoulder above head height (3.4 back, 1.9 to the side, 4.4 up), so it never
+--     covers a face or a name tag. It springs after them with a little lag, bobs, and turns to face
+--     where they're going.
+--   * Alive the whole time (owner: "For all of these pets. They all have super cool animations
+--     right?"), and more so as its owner runs: the owl beats its wings in flight, rising on each
+--     downstroke, its lantern swinging from its beak and its head cocking; the stag looks about,
+--     flicks its ears and tail, and gallops after its owner; the Gourdian bobs its head and swings
+--     its fists, its roots streaming behind it at a run; the Tot waddles, its cap wobbling a beat
+--     behind; the wisp's ghost bobs and looks about in its lantern, its tail swaying, the lantern
+--     swinging from its ring.
 --   * How it gets noticed without getting bigger: a soft pool of light on the ground under it, its own
---     glow, a few sparkles in its colour, and its flourish every 20 seconds or so: the owl turns its
---     head all the way round, flaps and swings its lantern; the stag rears up and fireflies burst
---     from its antlers; the Gourdian drums its fists and its seeds spin out; the Tot hops and puffs
---     glowing spores; the wisp's flame flares tall and its tail curls into a ring. Wearing the pet's
+--     glow, a few sparkles in its colour, and its flourish every 20 seconds or so: the owl tucks its
+--     wings, swoops and flares them wide with big beats, its lantern swinging; the stag rears up,
+--     kicking, tossing its antlers in a burst of embers; the Gourdian drums its fists, shakes its head
+--     laughing, its face blazing, and its glowing leaves whirl; the Tot hops and spins, its cap
+--     bouncing, and puffs glowing spores; the wisp's ghost spins round and its tail curls into a
+--     ring. The parts that move are the meshes' named pieces (WingL..., Head..., LegFL...), each
+--     turning at its Hinge marker (tools/meshgen/season/hollow_night_pets.py); the moves are
+--     client/PetPoses. Wearing the pet's
 --     matching hat (PetInfo.Hat: the Scarecrow Hat with the owl, the Antler Circlet with the stag...)
 --     makes it flourish more often, with a ring of light. Owning all five of a season's pets
 --     (PP_PetSets) gives them that season's sparkle for good.
@@ -37,13 +49,16 @@ local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 local Seasons = require(Shared.Seasons)
 
+local PetPoses = require(script.Parent.Parent.PetPoses)
 local SeasonParts = require(script.Parent.Parent.SeasonParts)
 local State = require(script.Parent.Parent.State)
 
 local PetController = {}
 
 local SIZE = 3 -- studs: a pet's biggest side
-local SIZES = { Pet_ToadstoolTot = 2.5 } -- (the cute one is a little smaller)
+-- (the owl's biggest side is its wingspan and the stag's its antlers, so they're a little bigger; the
+-- cute one is a little smaller)
+local SIZES = { Pet_HarvestOwl = 4.2, Pet_EmberStag = 3.6, Pet_ToadstoolTot = 2.5 }
 local ROUND_SIZE = 0.8 -- in a mini-game
 local BACK, SIDE, UP = 3.4, 1.9, 4.4 -- where it floats: behind, to the right of, and above the feet
 local FOLLOW = 6 -- how quickly it catches up (higher: less lag)
@@ -51,7 +66,6 @@ local TURN = 5
 local BOB = 0.25
 local FLOURISH_EVERY = 20 -- seconds, give or take a few
 local MATCHED_EVERY = 13 -- wearing its matching hat
-local FLOURISH_TIME = 1.6
 local NEAR_CAMERA = 6
 local SPARKLE_RANGE = 60
 local SHOW_RANGE = 150
@@ -59,7 +73,7 @@ local SNAP = 40 -- studs: further than this (a teleport to the arena) and it's p
 local POOL_EVERY = 0.12 -- seconds between finding the ground under it
 local ROUND = { Preparing = true, InRound = true }
 
-type Group = { Hinge: Vector3, Parts: { BasePart } }
+type Group = PetPoses.Group
 
 type Pet = {
 	Owner: Player,
@@ -69,13 +83,15 @@ type Pet = {
 	Model: Model,
 	Parts: { BasePart },
 	Offsets: { CFrame }, -- each part from the model's pivot
-	Sizes: { [BasePart]: Vector3 }, -- the flame's own sizes (it grows when it flares)
 	Groups: { [string]: Group },
 	GroupOf: { string | false }, -- each part's group (false: none)
 	TailOrder: { [BasePart]: number }, -- the tail's pieces from its root out
 	Core: BasePart,
 	Depth: number, -- half its length (the stag rears up on its back legs)
 	Height: number,
+	Run: number, -- 0 to 1: how fast its owner is moving (its gallop, its wingbeat)
+	Flare: { { Part: BasePart, Color: Color3 } }, -- the Gourdian's face (it blazes in its flourish)
+	FlareLevel: number,
 	Scale: number,
 	Position: Vector3,
 	Yaw: number,
@@ -124,27 +140,9 @@ local function inRound(): boolean
 	return ROUND[GameState.Get("Phase") or "Waiting"] == true
 end
 
--- The piece group a part of a pet moves with in its flourish (by its name's prefix), or nil.
-local function groupOf(flourish: string, name: string): string?
-	for _, prefix in { "WingL", "WingR", "FistL", "FistR", "Flame", "Tail" } do
-		if string.sub(name, 1, #prefix) == prefix then
-			return prefix
-		end
-	end
-	if flourish == "Owl" then
-		if name == "Face" or name == "Eye" or name == "Glow2" then
-			return "Head"
-		elseif name == "Iron" or name == "Glow4" then
-			return "Lantern"
-		end
-	elseif flourish == "Gourdian" and name == "Seed" then
-		return "Seed"
-	end
-	return nil
-end
-
--- Where a group turns: wings at their inner top edge, the head and the seeds round their middle,
--- the lantern from its top, the tail from where it leaves the lantern.
+-- Where a group turns when its mesh has no Hinge marker: wings at their inner top edge, the head
+-- and the seeds round their middle, the lantern from its top, the tail from where it leaves the
+-- lantern.
 local function hingeOf(name: string, low: Vector3, high: Vector3): Vector3
 	local middle = (low + high) / 2
 	if name == "WingL" then
@@ -205,8 +203,9 @@ local function build(player: Player, id: string): Pet?
 
 	local parts: { BasePart } = {}
 	local offsets: { CFrame } = {}
-	local sizes: { [BasePart]: Vector3 } = {}
 	local bounds: { [string]: { Low: Vector3, High: Vector3, Parts: { BasePart } } } = {}
+	local markers: { [string]: Vector3 } = {}
+	local flare: { { Part: BasePart, Color: Color3 } } = {}
 	local core: BasePart? = nil
 	for _, part in model:GetDescendants() do
 		if not part:IsA("BasePart") then
@@ -223,7 +222,14 @@ local function build(player: Player, id: string): Pet?
 		if not core or part.Size.Magnitude > core.Size.Magnitude then
 			core = part
 		end
-		local group = groupOf(info.Flourish, part.Name)
+		local group = PetPoses.GroupOf(part.Name)
+		if group and string.sub(part.Name, -5) == "Hinge" then
+			-- (an invisible marker where the group turns)
+			markers[group] = offset.Position
+		end
+		if group == "Head" and info.Flourish == "Gourdian" and part.Material == Enum.Material.Neon then
+			table.insert(flare, { Part = part, Color = part.Color })
+		end
 		if group then
 			local half = part.Size / 2
 			local entry = bounds[group]
@@ -232,9 +238,6 @@ local function build(player: Player, id: string): Pet?
 			entry.High = entry.High:Max(offset.Position + half)
 			table.insert(entry.Parts, part)
 			bounds[group] = entry
-			if group == "Flame" then
-				sizes[part] = part.Size
-			end
 		end
 	end
 	if not core then
@@ -243,21 +246,21 @@ local function build(player: Player, id: string): Pet?
 	end
 	local groups: { [string]: Group } = {}
 	for name, entry in bounds do
-		groups[name] = { Hinge = hingeOf(name, entry.Low, entry.High), Parts = entry.Parts }
+		groups[name] = { Hinge = markers[name] or hingeOf(name, entry.Low, entry.High), Parts = entry.Parts }
 	end
 	local groupOfPart: { string | false } = {}
-	local zOf: { [BasePart]: number } = {}
+	local placeOf: { [BasePart]: Vector3 } = {}
 	for index, part in parts do
-		groupOfPart[index] = groupOf(info.Flourish, part.Name) or false
-		zOf[part] = offsets[index].Position.Z
+		groupOfPart[index] = PetPoses.GroupOf(part.Name) or false
+		placeOf[part] = offsets[index].Position
 	end
-	-- The tail curls piece by piece: the further from its root, the more each piece turns.
+	-- The wisp's tail curls piece by piece: the further from its root, the more each piece turns.
 	local tailOrder: { [BasePart]: number } = {}
 	local tail = groups.Tail
 	if tail then
 		local sorted = table.clone(tail.Parts)
 		table.sort(sorted, function(a, b)
-			return zOf[a] < zOf[b]
+			return (placeOf[a] - tail.Hinge).Magnitude < (placeOf[b] - tail.Hinge).Magnitude
 		end)
 		for index, part in sorted do
 			tailOrder[part] = index
@@ -333,13 +336,15 @@ local function build(player: Player, id: string): Pet?
 		Model = model,
 		Parts = parts,
 		Offsets = offsets,
-		Sizes = sizes,
 		Groups = groups,
 		GroupOf = groupOfPart,
 		TailOrder = tailOrder,
 		Core = core,
 		Depth = boxSize.Z / 2,
 		Height = boxSize.Y,
+		Run = 0,
+		Flare = flare,
+		FlareLevel = 0,
 		Scale = 1,
 		Position = start,
 		Yaw = 0,
@@ -376,95 +381,54 @@ local function refresh(player: Player)
 	end
 end
 
--- The flourish's whole-body move and each group's, `t` from 0 to 1 through it (nil: no flourish,
--- just the idle motion at time `clock`).
-local function poseOf(pet: Pet, t: number?, clock: number): (CFrame, { [string]: CFrame })
-	local kind = pet.Info.Flourish
-	local body = CFrame.identity
-	local turns: { [string]: CFrame } = {}
-	local s = pet.Height / 3 -- (moves are in studs for a 3-stud pet)
-	local wave = if t then math.sin(t * math.pi) else 0 -- 0 -> 1 -> 0 through the flourish
-	if kind == "Owl" then
-		local flap = math.rad(6) * math.sin(clock * 3)
-		if t then
-			flap += math.rad(38) * math.abs(math.sin(t * math.pi * 4)) * wave
-			turns.Head = CFrame.Angles(0, t * math.pi * 2, 0)
-			turns.Lantern = CFrame.Angles(math.rad(22) * math.sin(t * math.pi * 3) * wave, 0, 0)
-		else
-			turns.Lantern = CFrame.Angles(math.rad(4) * math.sin(clock * 1.7), 0, 0)
-		end
-		turns.WingL = CFrame.Angles(0, 0, flap)
-		turns.WingR = CFrame.Angles(0, 0, -flap)
-	elseif kind == "Stag" then
-		if t then
-			local hinge = Vector3.new(0, 0, pet.Depth * 0.8) -- (its back legs: its front is -Z)
-			body = CFrame.new(hinge) * CFrame.Angles(math.rad(28) * wave, 0, 0) * CFrame.new(-hinge)
-		end
-	elseif kind == "Gourdian" then
-		local beat = if t then math.sin(t * math.pi * 8) * wave else math.sin(clock * 2) * 0.15
-		turns.FistL = CFrame.new(-0.25 * s * math.max(beat, 0), -0.35 * s * math.max(beat, 0), 0)
-		turns.FistR = CFrame.new(0.25 * s * math.max(-beat, 0), -0.35 * s * math.max(-beat, 0), 0)
-		turns.Seed = CFrame.Angles(0, clock * 0.6 + (if t then t * math.pi * 4 else 0), 0)
-	elseif kind == "Tot" then
-		if t then
-			local hop = math.abs(math.sin(t * math.pi * 2)) * (1 - t * 0.4)
-			body = CFrame.new(0, 1.1 * s * hop, 0) * CFrame.Angles(0, 0, math.rad(8) * math.sin(t * math.pi * 4))
-		end
-	elseif kind == "Wisp" then
-		local curl = if t then -math.rad(60) * wave else math.rad(6) * math.sin(clock * 1.3)
-		turns.Tail = CFrame.Angles(curl, math.rad(8) * math.sin(clock * 0.9), 0)
-	end
-	return body, turns
-end
-
 -- Moves every part of `pet` to its place for this frame: `base` is where the pet is.
 local function place(pet: Pet, base: CFrame, t: number?, clock: number, parts: { BasePart }, frames: { CFrame })
-	local body, turns = poseOf(pet, t, clock)
+	local body, turns = PetPoses.Pose(pet, t, clock)
 	local whole = base * body
-	local flare = if t and pet.Info.Flourish == "Wisp" then math.sin(t * math.pi) else 0
+	local moves = PetPoses.Moves(pet, turns)
 	for index, part in pet.Parts do
 		local offset = pet.Offsets[index]
 		local frame = whole * offset
 		local group = pet.GroupOf[index]
-		local turn = if group then turns[group] else nil
-		local entry = if group then pet.Groups[group] else nil
-		if turn and entry then
-			local hinge = CFrame.new(entry.Hinge)
-			if group == "Tail" then
-				local steps = pet.TailOrder[part] or 1
+		if group then
+			local move = moves[group]
+			if move and group == "Tail" and pet.Info.Flourish == "Wisp" then
+				-- (the wisp's tail curls piece by piece: the further from its root, the more)
+				local entry = pet.Groups[group]
 				local partial = CFrame.identity
-				for _ = 1, steps do
-					partial *= turn
+				for _ = 1, pet.TailOrder[part] or 1 do
+					partial *= turns[group]
 				end
-				turn = partial
+				move = CFrame.new(entry.Hinge) * partial * CFrame.new(-entry.Hinge)
 			end
-			frame = whole * hinge * turn * hinge:Inverse() * offset
-		end
-		local own = pet.Sizes[part]
-		if own then
-			-- The wisp's flame flares tall (and flickers a little the rest of the time).
-			local grow = 1 + 0.75 * flare + 0.05 * math.sin(clock * 9 + index)
-			local size = own * Vector3.new(1 + 0.2 * flare, grow, 1 + 0.2 * flare)
-			if part.Size ~= size then
-				part.Size = size
+			if move then
+				frame = whole * move * offset
 			end
-			frame = frame * CFrame.new(0, (size.Y - own.Y) / 2, 0)
 		end
 		table.insert(parts, part)
 		table.insert(frames, frame)
 	end
+	-- The Gourdian's face blazes through its flourish.
+	local level = if t and pet.Info.Flourish == "Gourdian" then math.floor(math.sin(t * math.pi) * 10 + 0.5) / 10 else 0
+	if level ~= pet.FlareLevel then
+		pet.FlareLevel = level
+		for _, entry in pet.Flare do
+			entry.Part.Color = entry.Color:Lerp(Color3.fromRGB(255, 246, 200), level)
+		end
+	end
 end
 
--- The flourish's own sparkle: fireflies, seeds, spores, a flare. More with reduced effects off.
+-- The flourish's own sparkle: embers, seeds, spores, wisps. More with reduced effects off.
 local function burst(pet: Pet, matched: boolean)
 	local count = if State.ReducedEffects() then 6 else 18
 	local emitterNow = pet.Burst
 	local kind = pet.Info.Flourish
 	if kind == "Stag" then
-		emitterNow.Color = ColorSequence.new(Color3.fromRGB(255, 236, 140), Color3.fromRGB(190, 255, 120))
+		-- (embers off its antlers)
+		emitterNow.Color = ColorSequence.new(Color3.fromRGB(255, 226, 130), Color3.fromRGB(255, 106, 31))
 		emitterNow.Speed = NumberRange.new(2, 4)
 		emitterNow.Lifetime = NumberRange.new(1.2, 2)
-		emitterNow.Acceleration = Vector3.new(0, 1, 0)
+		emitterNow.Acceleration = Vector3.new(0, 1.5, 0)
 	elseif kind == "Gourdian" then
 		emitterNow.Color = ColorSequence.new(Color3.fromRGB(255, 196, 92), Color3.fromRGB(196, 120, 50))
 		emitterNow.Speed = NumberRange.new(5, 8)
@@ -573,9 +537,6 @@ local function step(dt: number)
 				local part = pet.Parts[index]
 				part.Size *= ratio
 			end
-			for part, size in pet.Sizes do
-				pet.Sizes[part] = size * ratio
-			end
 			for _, group in pet.Groups do
 				group.Hinge *= ratio
 			end
@@ -599,6 +560,9 @@ local function step(dt: number)
 		-- Facing where its owner goes (or looks, standing still).
 		local moving = Vector3.new(body.AssemblyLinearVelocity.X, 0, body.AssemblyLinearVelocity.Z)
 		local heading = if moving.Magnitude > 2 then moving.Unit else flat
+		-- How fast its owner goes (a walk is 16 studs a second): its gallop, its wingbeat.
+		local wantRun = math.clamp((moving.Magnitude - 1) / 15, 0, 1)
+		pet.Run += (wantRun - pet.Run) * (1 - math.exp(-5 * dt))
 		local wantYaw = math.atan2(-heading.X, -heading.Z)
 		local delta = (wantYaw - pet.Yaw + math.pi) % (2 * math.pi) - math.pi
 		pet.Yaw += delta * (1 - math.exp(-TURN * dt))
@@ -608,10 +572,11 @@ local function step(dt: number)
 		local t: number? = nil
 		if pet.FlourishAt then
 			local elapsed = now - pet.FlourishAt
-			if elapsed >= FLOURISH_TIME then
+			local length = PetPoses.FLOURISH_TIMES[pet.Info.Flourish] or PetPoses.FLOURISH_TIME
+			if elapsed >= length then
 				pet.FlourishAt = nil
 			else
-				t = elapsed / FLOURISH_TIME
+				t = elapsed / length
 			end
 		elseif now >= pet.NextFlourish then
 			pet.Matched = wearsMatch(owner, pet)
@@ -621,7 +586,8 @@ local function step(dt: number)
 			burst(pet, pet.Matched)
 		end
 
-		local bob = math.sin(pet.Clock * 2.1) * BOB * scale
+		-- (its bob gives way to its flourish)
+		local bob = math.sin(pet.Clock * 2.1) * BOB * scale * (if t then 1 - math.sin(t * math.pi) else 1)
 		local base = CFrame.new(pet.Position + Vector3.new(0, bob, 0)) * CFrame.Angles(0, pet.Yaw, 0)
 		place(pet, base, t, pet.Clock, parts, frames)
 

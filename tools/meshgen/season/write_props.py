@@ -43,11 +43,18 @@ PROPS = {
     "HarvestCrow": ("A crow, wings spread (WingL..., WingR...: the game flaps them).", []),
     "HarvestPumpkin": ("A ribbed pumpkin for the lobby's autumn dressing.", []),
     "LanternPost": ("An iron post with a hanging lantern.", []),
-    "HarvestOwl": ("Pet: the Harvest Owl (wings WingL... / WingR...).", []),
-    "EmberStag": ("Pet: the Ember Stag.", []),
-    "Gourdian": ("Pet: the Gourdian (fists FistL... / FistR...).", []),
-    "ToadstoolTot": ("Pet: the Toadstool Tot.", []),
-    "LanternWisp": ("Pet: the Lantern Wisp (its flame is Flame...).", []),
+    "HarvestOwl": ("Pet: the Harvest Owl, in flight, with leaf-feather wings and a lantern on a chain from its beak "
+                   "(Head..., WingL... / WingR..., Lantern..., Tail...: the game moves them, each turning at its "
+                   "Hinge).", []),
+    "EmberStag": ("Pet: the Ember Stag, white, with leafy antlers cracked with ember light (Head..., EarL... / "
+                  "EarR..., LegFL... / LegFR... / LegBL... / LegBR..., Tail...: the game moves them, each turning at "
+                  "its Hinge).", []),
+    "Gourdian": ("Pet: the Gourdian, a jack-o'-lantern-headed guardian of vines and leaves (Head..., FistL... / "
+                 "FistR..., Roots..., Seed...: the game moves them).", []),
+    "ToadstoolTot": ("Pet: the Toadstool Tot, under a red cap with glowing gills, hugging a glowing acorn (Cap...: "
+                     "the game wobbles it).", []),
+    "LanternWisp": ("Pet: the Lantern Wisp, a little ghost in an iron lantern, its smoky tail curling out of the "
+                    "roof (Ghost..., Tail...: the game moves them).", []),
     "LeafCrown": ("Hat: the Leaf Crown.", []),
     "ScarecrowHat": ("Hat: the Scarecrow Hat.", []),
     "AntlerCirclet": ("Hat: the Antler Circlet.", []),

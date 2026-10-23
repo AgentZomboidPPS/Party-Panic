@@ -11,7 +11,7 @@ local Seasons = require("../src/shared/Seasons")
 local test, expectTrue = TestKit.test, TestKit.expectTrue
 
 local effectsSource = fs.readFile("src/client/Controllers/EffectsController.luau")
-local petsSource = fs.readFile("src/client/Controllers/PetController.luau")
+local petsSource = fs.readFile("src/client/PetPoses.luau")
 local cosmeticSource = fs.readFile("src/server/Services/CosmeticService.luau")
 
 local effects: { [string]: boolean } = {}
@@ -41,7 +41,7 @@ test("Seasons: every pet's flourish and particle trail is one the game knows", f
 			local flourish = season.PetInfo[pet].Flourish
 			expectTrue(
 				string.find(petsSource, `kind == "{flourish}"`, 1, true) ~= nil,
-				`{pet}'s flourish {flourish} is drawn by PetController`
+				`{pet}'s flourish {flourish} is moved by PetPoses`
 			)
 		end
 	end

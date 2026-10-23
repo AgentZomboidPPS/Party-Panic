@@ -2,50 +2,32 @@
  "pieces": {
   "Vine": {
    "color": [
-    79,
-    107,
-    36
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Glow": {
-   "color": [
-    255,
-    138,
-    42
-   ],
-   "material": "Neon",
-   "transparency": 0.0
-  },
-  "Seed": {
-   "color": [
-    251,
-    221,
-    152
-   ],
-   "material": "Neon",
-   "transparency": 0.0
-  },
-  "Low": {
-   "color": [
-    232,
-    216,
-    168
+    83,
+    100,
+    34
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
   "Body": {
    "color": [
-    207,
-    155,
-    58
+    142,
+    139,
+    51
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "Leaf": {
+  "SeedFire": {
+   "color": [
+    255,
+    138,
+    30
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "SeedPlume": {
    "color": [
     200,
     50,
@@ -54,93 +36,192 @@
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "Leaf2": {
+  "RootsVineDark": {
    "color": [
-    255,
-    181,
-    48
+    82,
+    74,
+    32
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "Leaf3": {
+  "RootsGlow": {
    "color": [
-    232,
-    82,
+    255,
+    138,
+    30
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "RootsHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "FistRVine": {
+   "color": [
+    85,
+    106,
+    36
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "FistRGlow": {
+   "color": [
+    255,
+    176,
+    32
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "FistRPumpkinFist": {
+   "color": [
+    240,
+    126,
+    34
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "FistRPlume": {
+   "color": [
+    138,
+    74,
     30
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "Leaf4": {
+  "FistRPlume2": {
    "color": [
-    111,
-    158,
-    58
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "FistRStem": {
-   "color": [
-    93,
-    107,
-    42
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "FistRPumpkin": {
-   "color": [
-    255,
-    154,
-    58
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "FistLStem": {
-   "color": [
-    93,
-    107,
-    42
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "FistLPumpkin": {
-   "color": [
-    255,
-    154,
-    58
-   ],
-   "material": "SmoothPlastic",
-   "transparency": 0.0
-  },
-  "Pumpkin": {
-   "color": [
-    255,
     122,
-    26
+    138,
+    42
    ],
    "material": "SmoothPlastic",
    "transparency": 0.0
   },
-  "Glow2": {
+  "FistLVine": {
+   "color": [
+    85,
+    106,
+    36
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "FistLGlow": {
    "color": [
     255,
-    181,
-    48
+    176,
+    32
    ],
    "material": "Neon",
+   "transparency": 0.0
+  },
+  "FistLPumpkinFist": {
+   "color": [
+    240,
+    126,
+    34
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "FistLPlume": {
+   "color": [
+    216,
+    88,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "FistLPlume2": {
+   "color": [
+    168,
+    154,
+    50
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadVine": {
+   "color": [
+    89,
+    112,
+    37
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadPumpkinHead": {
+   "color": [
+    231,
+    113,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "HeadHinge": {
+   "color": [
+    0,
+    0,
+    0
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 1.0
+  },
+  "HeadGlow": {
+   "color": [
+    255,
+    176,
+    32
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Plume": {
+   "color": [
+    212,
+    128,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Plume2": {
+   "color": [
+    138,
+    74,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Plume3": {
+   "color": [
+    216,
+    88,
+    42
+   ],
+   "material": "SmoothPlastic",
    "transparency": 0.0
   }
  },
  "size": [
-  3.122,
-  3.262,
-  2.971
+  3.18,
+  3.571,
+  2.943
  ],
- "middle": 1.078,
- "tris": 7526
+ "middle": 1.404,
+ "tris": 11080
 }
