@@ -428,6 +428,35 @@ function __runCrates()
 	task.wait(0.3)
 	check("the starter pack can't be prompted twice before its receipt", #bought == prompts + 1, bought)
 
+	-- 12. The creator's TRY ON (a playtest): any season item, worn this visit only, never owned or
+	-- saved. (The creator here is a bare stand-in with the game's CreatorId and no profile: nothing
+	-- reads or writes a real save.)
+	local CosmeticService = __require("Server/Services/CosmeticService")
+	local tried = {}
+	local creator = { UserId = game.CreatorId, Name = "Creator", DisplayName = "Creator", Parent = true }
+	function creator.SetAttribute(_, key, value)
+		tried[key] = value
+	end
+	function creator.GetAttribute(_, key)
+		return tried[key]
+	end
+	local annPet = Ann:GetAttribute("PP_Pet")
+	check(
+		"only the game's creator can try items on",
+		CosmeticService.TryOn(Ann, season.Pets[2]) == false and Ann:GetAttribute("PP_Pet") == annPet
+	)
+	check(
+		"the creator tries a pet on",
+		CosmeticService.TryOn(creator, season.Pets[3]) and tried.PP_Pet == season.Pets[3],
+		tried.PP_Pet
+	)
+	check(
+		"trying it again takes it off",
+		CosmeticService.TryOn(creator, season.Pets[3]) and tried.PP_Pet == "",
+		tried.PP_Pet
+	)
+	check("only season items", CosmeticService.TryOn(creator, "Trail_Bubbles") == false)
+
 	summary.toasts = toasts
 	summary.sent = #sent
 	return summary

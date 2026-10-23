@@ -634,6 +634,8 @@ function CrateService.Init()
 			tryOpen(player, count, altarIndex)
 		elseif action == "Welcome" then
 			welcome(player)
+		elseif action == "TryOn" then
+			CosmeticService.TryOn(player, a) -- (the game's creator only)
 		end
 	end)
 	Players.PlayerRemoving:Connect(function(player)

@@ -18,6 +18,8 @@
 --     effects) and a soft light.
 -- The crate seasons (Shared/Seasons): the pet, aura and title someone has on go in player attributes
 -- (PP_Pet, PP_Aura, PP_Title), and every device draws them itself; nothing moving is sent.
+-- The game's creator can try any season item on for a playtest (TryOn: the crate collection's TRY
+-- ON; owner: "Is everything ready for a play test?"): worn this visit only, never owned or saved.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -25,10 +27,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
 local Cosmetics = require(Shared.Cosmetics)
+local GoldLane = require(Shared.Logic.GoldLane)
 local LevelCurve = require(Shared.Logic.LevelCurve)
 local NameTag = require(Shared.NameTag)
 local Remotes = require(Shared.Remotes)
 local SeasonArt = require(Shared.SeasonArt)
+local Seasons = require(Shared.Seasons)
 
 local CupCrown = require(script.Parent.Parent.World.CupCrown)
 local Hats = require(script.Parent.Parent.World.Hats)
@@ -47,7 +51,14 @@ local FIRE = "rbxasset://textures/particles/fire_main.dds"
 local TRAIL_LEAVES = "PP_TrailLeaves" -- a season trail's leaves (an attachment of emitters)
 local TRAIL_FEET = "PP_TrailFeet" -- a season trail's footprint flames
 
+-- The season items the creator is trying on, by slot (this visit only).
+local trying: { [Player]: { [string]: string } } = {}
+
 local function equippedItem(player: Player, slot: string): Cosmetics.Cosmetic?
+	local tried = trying[player] and trying[player][slot]
+	if tried then
+		return Cosmetics.Get(tried)
+	end
 	local profile = DataService.Get(player)
 	if not profile then
 		return nil
@@ -388,6 +399,23 @@ function CosmeticService.PlayElimination(player: Player, position: Vector3)
 	Notifier.Effect(effect, position, colors)
 end
 
+-- The game's creator puts a season item on (or, tried again, takes it off) for a playtest: worn this
+-- visit only, never owned or saved, on no board. False for anyone else.
+function CosmeticService.TryOn(player: Player, itemId: any): boolean
+	if not GoldLane.IsCreator(game.CreatorType.Name, game.CreatorId, player.UserId) or type(itemId) ~= "string" then
+		return false
+	end
+	local item = Cosmetics.Get(itemId)
+	if not item or not Seasons.ItemById[itemId] then
+		return false
+	end
+	local slots = trying[player] or {}
+	trying[player] = slots
+	slots[item.Slot] = if slots[item.Slot] == itemId then nil else itemId
+	CosmeticService.Refresh(player)
+	return true
+end
+
 function CosmeticService.Init()
 	DataService.ProfileLoaded:Connect(function(player: Player, profile)
 		local unlocked = CosmeticService.CheckUnlocks(player, true)
@@ -426,6 +454,9 @@ function CosmeticService.Init()
 	for _, player in Players:GetPlayers() do
 		track(player)
 	end
+	Players.PlayerRemoving:Connect(function(player)
+		trying[player] = nil
+	end)
 end
 
 return CosmeticService

@@ -25,6 +25,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage.Shared
 local CrateLogic = require(Shared.Logic.CrateLogic)
 local DailyLogic = require(Shared.Logic.DailyLogic)
+local GoldLane = require(Shared.Logic.GoldLane)
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 local Seasons = require(Shared.Seasons)
@@ -39,6 +40,9 @@ local CrateMenu = {}
 
 local player = Players.LocalPlayer
 local remote = Remotes.Get("Crate")
+-- The game's creator can open any item and TRY ON it for a playtest (Services/CosmeticService.TryOn:
+-- this visit only, never owned or saved).
+local creator = GoldLane.IsCreator(game.CreatorType.Name, game.CreatorId, Players.LocalPlayer.UserId)
 local season = Seasons.CurrentSeason()
 local colors = CrateTheme.Colors(season)
 
@@ -477,8 +481,9 @@ local function showDetail(itemId: string)
 		ZIndex = 41,
 		Parent = frame,
 	})
+	local have = owned()[itemId] == true
 	UIKit.Label({
-		Text = `📦 {foundLine(seasonShown, itemId)}`,
+		Text = if have then `📦 {foundLine(seasonShown, itemId)}` else "🧪 Creator test: worn this visit only",
 		Font = Theme.Fonts.Display,
 		TextSize = textSize(18),
 		TextColor3 = colors.Glow,
@@ -492,8 +497,23 @@ local function showDetail(itemId: string)
 	local slot = item and item.Slot or ""
 	local wearing = p and p.Equipped and p.Equipped[slot] == itemId
 	local h = buttonHeight()
+	if not have then
+		UIKit.Button({
+			Text = "TRY ON",
+			TextSize = textSize(22),
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 20, 1, -18),
+			Size = UDim2.fromOffset(200, h),
+			ZIndex = 42,
+			Parent = frame,
+		}, function()
+			remote:FireServer("TryOn", itemId)
+			closeDetail()
+		end, Theme.Colors.Green, Color3.fromRGB(60, 160, 90))
+	end
 	UIKit.Button(
 		{
+			Visible = have,
 			Text = if wearing then "TAKE OFF" else "EQUIP",
 			TextSize = textSize(22),
 			AnchorPoint = Vector2.new(0, 1),
@@ -587,7 +607,7 @@ local function card(parent: Instance, itemId: string, order: number, have: boole
 		Children = if touch then {} else { UIKit.new("UITextSizeConstraint", { MaxTextSize = 16 }) },
 	})
 	button.Activated:Connect(function()
-		if have then
+		if have or creator then
 			showDetail(itemId)
 		end
 	end)
