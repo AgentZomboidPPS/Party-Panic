@@ -22,9 +22,9 @@ then the average mini game too."). Built as **Obby Odyssey** (`ObbyOdyssey`, Rac
   screen showed them (half their ping back; bars swept between checks), with ctx:Knockback.
 - **Look:** all parts and CSG rounded blocks (the photo is blocky), no new meshes, so nothing to upload or approve.
   Scenery never collides.
-- **Checks (2026-10-23):** code checks clean; `mode_check.sh ObbyOdyssey`: 12 players, 0 errors; 10 real bots, 0
-  errors, all 12 reached the crown; phone HUD 0 errors (only the race strip's dots touching, as in Minecart);
-  `colliders.py`: nothing invisible to stand on.
+- **Checks (2026-10-23, on the pushed code):** code checks clean (259 tests); `mode_check.sh ObbyOdyssey`: 12 players,
+  0 errors; 10 real bots, 0 errors, all 12 reached the crown (35-47 s); phone HUD 0 errors, 0 layout problems;
+  `colliders.py`: nothing invisible to stand on. Blender renders of every section looked right.
 - **Not done yet:** a portal preview (`make_preview.py ObbyOdyssey`, the portal shows its icon until then); its own
   song (it plays Panic Mode; a new pack costs one of the owner's audio uploads); a real-device playtest (jump feel,
   ball and bar knockbacks, the blinking blocks on a phone). Not published.
