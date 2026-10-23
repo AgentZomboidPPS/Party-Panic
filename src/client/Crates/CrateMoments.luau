@@ -574,20 +574,31 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 			stroke.Transparency = 0
 			stroke.Thickness = 3
 		end
-		local headline = UIKit.Label({
-			Text = `Your first {season.Crate} is waiting{if keys > 0
-				then `, with {CrateTheme.Count(keys, season.Key)}`
-				else ""}!`,
+		UIKit.Label({
+			Text = `Your first {season.Crate} is waiting!`,
 			Font = Theme.Fonts.Display,
-			TextSize = 26,
+			TextSize = 28,
+			TextWrapped = false,
 			Position = UDim2.fromOffset(20, 18),
-			Size = UDim2.new(1, -40, 0, 70),
+			Size = UDim2.new(1, -40, 0, 36),
 			Parent = card,
 			Children = { UIKit.TextStroke(0.3) },
 		})
-		headline:SetAttribute("PP_Lines", 2) -- room for two (the UI checks)
 		UIKit.Label({
-			Text = "A crate every round you play. Keys on the PARTY CUP podium. 5 pets, 5 hats, 12 effects and one title.",
+			Text = if keys > 0
+				then `🔑 and {CrateTheme.Count(keys, season.Key)} to open it`
+				else "🔑 Win keys on the PARTY CUP podium to open it",
+			Font = Theme.Fonts.Display,
+			TextSize = 22,
+			TextColor3 = colors.Gold,
+			TextWrapped = false,
+			Position = UDim2.fromOffset(20, 56),
+			Size = UDim2.new(1, -40, 0, 28),
+			Parent = card,
+			Children = { UIKit.TextStroke(0.3) },
+		})
+		UIKit.Label({
+			Text = `A crate every round you play, and 1 key opens 1. {#season.Pets} pets, {#season.Hats} hats, {#season.Effects} effects and one title to find.`,
 			TextSize = 18,
 			TextColor3 = Theme.Colors.TextDim,
 			Position = UDim2.fromOffset(20, 88),

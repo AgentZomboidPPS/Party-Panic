@@ -166,6 +166,7 @@ end)
 local function __note(text)
 	table.insert(__errors, "NOTE: " .. text)
 end
+local __runStart = os.clock() -- (the result's "seconds": Open Cloud stops a task at 5 minutes)
 
 local __realPlayers = game:GetService("Players")
 local __realRun = game:GetService("RunService")
@@ -484,6 +485,11 @@ local function snap(key, root)
 	local wanted = if __sitOutMode then sitOut == true or SIT_OUT_COMPARE[key] == true else sitOut == nil
 	if __onlyShots then
 		wanted = __onlyShots[key] == true -- --shots: just these
+	end
+	if wanted and __half then
+		-- --half: every other one, so a whole run's screens fit Open Cloud's 5 minutes in two runs
+		__shotCount += 1
+		wanted = __shotCount % 2 == __half % 2
 	end
 	if wanted then
 		__ui[key] = __dumpGui(root or __playerGui, key)
@@ -2916,6 +2922,7 @@ return game:GetService("HttpService"):JSONEncode({
 	uiDefaults = __uiDefaults, -- the values gui_dump.luau left out of the snapshots
 	errors = __errors,
 	startMs = startTimes,
+	seconds = math.floor(os.clock() - __runStart),
 	sentToServer = __sent,
 	soundReports = __soundReports,
 	botReports = __botReports,
@@ -2969,6 +2976,9 @@ def main():
                         "playing ones to compare) instead of every screen")
     parser.add_argument("--shots", help="only these snapshots, comma-separated (e.g. Intermission,LevelUp,Rewards): "
                         "a run with every screen at several sizes is over Open Cloud's result cap")
+    parser.add_argument("--half", type=int, choices=(1, 2), help="dump every other snapshot (1: the odd ones, 2: the "
+                        "even ones): a whole run's screens take longer to dump than Open Cloud's 5 minutes allow, "
+                        "so a full sweep is two runs")
     parser.add_argument("--skip", help="leave these sections (and their controllers) out of the run, comma-separated: "
                         "SkeeBall. The whole client is close to Open Cloud's 1 MiB script cap; a run checking "
                         "something else can make room this way")
@@ -2983,6 +2993,8 @@ def main():
         f"__goldMode = {'true' if args.gold else 'false'}\n"
         f"__botCount = {args.bots}\n"
         f"__sitOutMode = {'true' if args.sit_out else 'false'}\n"
+        f"__half = {args.half or 'nil'}\n"
+        "__shotCount = 0\n"
         + (
             "__onlyShots = { " + ", ".join(f'["{name}"] = true' for name in args.shots.split(",")) + " }\n"
             if args.shots

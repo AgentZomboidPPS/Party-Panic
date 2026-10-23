@@ -125,7 +125,11 @@ latest commits): they create it in Creator Hub, add it to the API key, and send 
   shop locked). Lobby: `World/SeasonWorld` puts the crate pile where the fountain was (24 real crate meshes, from
   `tools/meshgen/season/pile_crates.py`), three altars, the board, autumn trees, lanterns, pumpkins, leaf heaps,
   crows, falling leaves.
-- **Client**: `Crates/CrateMenu` (Crates / Collection / Top / Odds / Keys tabs, phone-fitted), `Crates/CrateShow`
+- **Client**: `Crates/CrateMenu` (Crates / Collection / Top / Odds / Keys tabs, phone-fitted; owner: "Most players
+  are mobile... I want it to just make sense and work": the season's name once, in blackletter on the title bar;
+  buttons say what they do: OPEN AT THE PILE, GET KEYS with no keys; an item's details and the gift picker are
+  pages in the tab's place, never pop-overs; `CrateMenu.ShowItem` / `ShowGift` open them for the checks),
+  `Crates/CrateShow`
   (the opening everyone around sees), `Crates/CrateMoments` (banners, the season's welcome),
   `Controllers/CrateController` (the ribbon chip; walks you to an altar), `SeasonWorldController` (moon, wisps,
   crows, leaf heaps, the board), `PetController`, `AuraController`, `TitleController` (THE HARVESTER's burning
@@ -160,7 +164,9 @@ latest commits): they create it in Creator Hub, add it to the API key, and send 
   nothing, the board, the shop with a stand-in for Roblox's purchases, purchases whose saves fail or whose
   buyer or gift friend leaves mid-save; never touches real DataStores),
   `client_harness.py --touch --skip SkeeBall` (section 3d is the crates; `--skip` keeps the script under Open
-  Cloud's 1 MiB) then `ui_render.py` for phone/tablet renders, and `tests/CrateLogic.spec.luau` in Lune.
+  Cloud's 1 MiB) then `ui_render.py` for phone/tablet renders, and `tests/CrateLogic.spec.luau` in Lune. A whole
+  run's screens no longer fit Open Cloud's 5 minutes at one size: sweep with two runs, `--half 1` and `--half 2`
+  (every other snapshot each; the result's `seconds` says how long a run took).
 
 ## Session C, later still: version 43 (nobody floats over the lobby)
 
