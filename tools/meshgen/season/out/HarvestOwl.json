@@ -1,0 +1,182 @@
+{
+ "pieces": {
+  "Iron": {
+   "color": [
+    47,
+    43,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Talon": {
+   "color": [
+    237,
+    160,
+    47
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow2": {
+   "color": [
+    255,
+    255,
+    255
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Eye": {
+   "color": [
+    20,
+    12,
+    28
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow3": {
+   "color": [
+    255,
+    181,
+    48
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Face": {
+   "color": [
+    245,
+    226,
+    189
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Chest": {
+   "color": [
+    233,
+    196,
+    138
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Feather": {
+   "color": [
+    160,
+    98,
+    44
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf": {
+   "color": [
+    255,
+    208,
+    74
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf2": {
+   "color": [
+    232,
+    82,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf3": {
+   "color": [
+    200,
+    50,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow4": {
+   "color": [
+    255,
+    241,
+    194
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "WingRLeaf": {
+   "color": [
+    245,
+    186,
+    70
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingRLeaf2": {
+   "color": [
+    217,
+    124,
+    56
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingRLeaf3": {
+   "color": [
+    198,
+    53,
+    46
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingLLeaf": {
+   "color": [
+    245,
+    186,
+    70
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingLLeaf2": {
+   "color": [
+    217,
+    124,
+    56
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingLLeaf3": {
+   "color": [
+    198,
+    53,
+    46
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  2.449,
+  3.147,
+  1.649
+ ],
+ "middle": 1.875,
+ "tris": 7486
+}

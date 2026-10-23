@@ -1,0 +1,38 @@
+{
+ "pieces": {
+  "MoonhatOrange": {
+   "color": [
+    255,
+    207,
+    122
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    255,
+    255
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Crow": {
+   "color": [
+    26,
+    22,
+    34
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  2.23,
+  1.326,
+  1.036
+ ],
+ "middle": -0.734,
+ "tris": 1196
+}

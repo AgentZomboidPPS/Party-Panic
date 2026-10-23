@@ -1,0 +1,128 @@
+{
+ "pieces": {
+  "Fur": {
+   "color": [
+    184,
+    112,
+    60
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "AntlerOrange": {
+   "color": [
+    214,
+    151,
+    43
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "AntlerOrange2": {
+   "color": [
+    254,
+    145,
+    43
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "AntlerOrange3": {
+   "color": [
+    149,
+    100,
+    36
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Light": {
+   "color": [
+    244,
+    220,
+    192
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    106,
+    31
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Glow2": {
+   "color": [
+    255,
+    255,
+    255
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Eye": {
+   "color": [
+    22,
+    18,
+    36
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf": {
+   "color": [
+    255,
+    201,
+    67
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf2": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf3": {
+   "color": [
+    232,
+    82,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf4": {
+   "color": [
+    200,
+    50,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow3": {
+   "color": [
+    255,
+    226,
+    122
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  1.863,
+  4.006,
+  2.37
+ ],
+ "middle": 1.275,
+ "tris": 7522
+}

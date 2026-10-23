@@ -1,0 +1,92 @@
+{
+ "pieces": {
+  "Ring": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Leaf": {
+   "color": [
+    255,
+    208,
+    74
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf2": {
+   "color": [
+    184,
+    52,
+    35
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf3": {
+   "color": [
+    255,
+    123,
+    27
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf4": {
+   "color": [
+    232,
+    82,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Stone": {
+   "color": [
+    47,
+    43,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Stem": {
+   "color": [
+    93,
+    107,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    241,
+    194
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Lglass": {
+   "color": [
+    255,
+    181,
+    48
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  6.587,
+  5.375,
+  6.569
+ ],
+ "middle": -0.0,
+ "tris": 6024
+}

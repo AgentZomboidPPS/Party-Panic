@@ -1,0 +1,65 @@
+{
+ "pieces": {
+  "Patch": {
+   "color": [
+    106,
+    79,
+    184
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    181,
+    48
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Crow": {
+   "color": [
+    26,
+    22,
+    34
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Beak": {
+   "color": [
+    224,
+    160,
+    48
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Straw": {
+   "color": [
+    217,
+    178,
+    90
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Hatband": {
+   "color": [
+    122,
+    42,
+    26
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  2.785,
+  0.788,
+  2.789
+ ],
+ "middle": -0.533,
+ "tris": 3162
+}

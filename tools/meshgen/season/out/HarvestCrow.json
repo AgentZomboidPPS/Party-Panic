@@ -1,0 +1,56 @@
+{
+ "pieces": {
+  "Glow": {
+   "color": [
+    255,
+    181,
+    48
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Crow": {
+   "color": [
+    26,
+    22,
+    34
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingRCrow": {
+   "color": [
+    26,
+    22,
+    34
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "WingLCrow": {
+   "color": [
+    26,
+    22,
+    34
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Beak": {
+   "color": [
+    224,
+    160,
+    48
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  1.583,
+  0.359,
+  1.179
+ ],
+ "middle": 0.16,
+ "tris": 520
+}

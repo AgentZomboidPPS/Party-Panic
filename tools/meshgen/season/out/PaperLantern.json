@@ -1,0 +1,29 @@
+{
+ "pieces": {
+  "Rib": {
+   "color": [
+    90,
+    52,
+    32
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Paper": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  0.891,
+  1.14,
+  0.885
+ ],
+ "middle": 0.57,
+ "tris": 598
+}

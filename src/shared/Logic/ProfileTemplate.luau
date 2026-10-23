@@ -20,6 +20,8 @@ return {
 		Title = "Title_Rookie",
 		Victory = "Victory_Confetti",
 		Elimination = "Elim_Poof",
+		Pet = "", -- a crate season's pet, floating behind them (Controllers/PetController)
+		Aura = "", -- a crate season's aura, round them in the lobby (Controllers/AuraController)
 	},
 	Stats = {
 		RoundsPlayed = 0,
@@ -62,6 +64,19 @@ return {
 	-- they own the game pass (kept, so a failed ownership check never takes it away), when they got it,
 	-- and the last level whose gold coins were paid (Logic/GoldLane: each level pays once).
 	GoldPass = { Owned = false, Since = 0, CoinsTo = 1 },
+	-- Crate seasons (owner: "seasonal crates are awarded at end of match. every player gets one crate
+	-- per match. Keys to open the crate are available to be awarded upon winning"; Shared/Seasons,
+	-- Logic/CrateLogic, Services/CrateService). Keys open any season's crates and never expire.
+	-- Crates are the unopened ones, for the season named (a new season takes them over, one for one).
+	-- Seasons keeps each season's progress: crates opened, coins they paid, the Lantern Meter, and
+	-- when each item was first found (crate number and UTC day). Flags: the 3 starter keys were given,
+	-- the season's welcome was seen, the UTC day of the daily cup key, the starter pack was bought.
+	-- Receipts: the latest Robux purchases already granted (so none is ever granted twice).
+	Keys = 0,
+	Crates = { Season = "", Count = 0 },
+	Seasons = {} :: { [string]: { [string]: any } },
+	CrateFlags = { StarterKeys = false, Welcome = "", DailyKeyDay = 0, StarterPack = false },
+	Receipts = {} :: { string },
 	Tutorial = { Done = false },
 	-- The new-player funnel (Services/FunnelService): the last step logged for this player, -1 for
 	-- someone who had played before it shipped (never logged), 0 before their first load decides.

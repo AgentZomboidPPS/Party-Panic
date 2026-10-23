@@ -1,0 +1,83 @@
+{
+ "pieces": {
+  "AntlerOrange": {
+   "color": [
+    212,
+    146,
+    54
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "AntlerOrange2": {
+   "color": [
+    250,
+    177,
+    48
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "AntlerOrange3": {
+   "color": [
+    143,
+    96,
+    36
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf": {
+   "color": [
+    255,
+    194,
+    61
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf2": {
+   "color": [
+    184,
+    52,
+    35
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf3": {
+   "color": [
+    232,
+    82,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf4": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    226,
+    122
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  2.615,
+  1.641,
+  1.42
+ ],
+ "middle": -0.5,
+ "tris": 2600
+}

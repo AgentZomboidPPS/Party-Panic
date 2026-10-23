@@ -1,0 +1,146 @@
+{
+ "pieces": {
+  "Vine": {
+   "color": [
+    79,
+    107,
+    36
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Seed": {
+   "color": [
+    251,
+    221,
+    152
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Low": {
+   "color": [
+    232,
+    216,
+    168
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Body": {
+   "color": [
+    207,
+    155,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf": {
+   "color": [
+    200,
+    50,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf2": {
+   "color": [
+    255,
+    181,
+    48
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf3": {
+   "color": [
+    232,
+    82,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf4": {
+   "color": [
+    111,
+    158,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "FistRStem": {
+   "color": [
+    93,
+    107,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "FistRPumpkin": {
+   "color": [
+    255,
+    154,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "FistLStem": {
+   "color": [
+    93,
+    107,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "FistLPumpkin": {
+   "color": [
+    255,
+    154,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Pumpkin": {
+   "color": [
+    255,
+    122,
+    26
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow2": {
+   "color": [
+    255,
+    181,
+    48
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  3.122,
+  3.262,
+  2.971
+ ],
+ "middle": 1.078,
+ "tris": 7526
+}

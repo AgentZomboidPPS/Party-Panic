@@ -1,0 +1,65 @@
+{
+ "pieces": {
+  "Bark": {
+   "color": [
+    102,
+    65,
+    37
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Berry": {
+   "color": [
+    192,
+    43,
+    39
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf2": {
+   "color": [
+    255,
+    193,
+    59
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf3": {
+   "color": [
+    232,
+    82,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Acorn": {
+   "color": [
+    168,
+    99,
+    46
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  1.549,
+  0.521,
+  1.558
+ ],
+ "middle": -0.483,
+ "tris": 2994
+}

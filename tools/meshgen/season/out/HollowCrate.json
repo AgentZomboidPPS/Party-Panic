@@ -1,0 +1,137 @@
+{
+ "pieces": {
+  "Glow": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Iron": {
+   "color": [
+    47,
+    43,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Brass": {
+   "color": [
+    212,
+    145,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Wood": {
+   "color": [
+    138,
+    85,
+    48
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LidBrass": {
+   "color": [
+    212,
+    145,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LidIron": {
+   "color": [
+    47,
+    43,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LidWood": {
+   "color": [
+    138,
+    85,
+    48
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LidLeaf": {
+   "color": [
+    255,
+    194,
+    61
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LidLeaf2": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LidLeaf3": {
+   "color": [
+    225,
+    73,
+    44
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LidLeaf4": {
+   "color": [
+    168,
+    54,
+    28
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LidMushStem": {
+   "color": [
+    242,
+    230,
+    204
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "LidGlow": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "WoodDark": {
+   "color": [
+    90,
+    52,
+    32
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  3.335,
+  3.55,
+  3.398
+ ],
+ "middle": 0.029,
+ "tris": 3776
+}

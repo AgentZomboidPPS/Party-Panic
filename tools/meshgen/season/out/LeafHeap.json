@@ -1,0 +1,47 @@
+{
+ "pieces": {
+  "Leaf": {
+   "color": [
+    255,
+    191,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf2": {
+   "color": [
+    227,
+    82,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf3": {
+   "color": [
+    178,
+    53,
+    32
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf4": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  6.247,
+  2.539,
+  6.441
+ ],
+ "middle": 1.201,
+ "tris": 3998
+}

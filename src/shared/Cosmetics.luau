@@ -54,6 +54,7 @@ export type Cosmetic = {
 	Animation: number?, -- emote animation asset id (Roblox default R15 emotes)
 	Looped: boolean?,
 	Effect: string?, -- visual effect played by emotes / victory / elimination
+	Season: string?, -- a crate season's item (Shared/Seasons id): found in its crates, never sold for coins
 }
 
 -- Every game, for the Game Explorer milestone ("play every game once").
@@ -891,16 +892,65 @@ local list: { Cosmetic } = {
 		Effect = "Zap",
 	},
 }
--- The GOLD PASS lane's own cosmetics (Shared/GoldPass) come last.
+-- The GOLD PASS lane's own cosmetics (Shared/GoldPass) come next.
 for _, item in require(script.Parent.GoldPass).Items do
 	table.insert(list, item)
+end
+
+-- Then every crate season's (Shared/Seasons; owner: "Hollow night comes first ... This will be players
+-- first season. I want it to look insane."): the title, the pets, the hats and the effects found in
+-- its crates, and the starter pack's trail. Their colours come as {r, g, b} lists; a trail's extra
+-- looks (Trail = {...}) become its Style.
+local TEXTURES = {
+	Fire = "rbxasset://textures/particles/fire_main.dds",
+	Sparkle = "rbxasset://textures/particles/sparkles_main.dds",
+}
+local function color3(c: { number }): Color3
+	return rgb(c[1], c[2], c[3])
+end
+local Seasons = require(script.Parent.Seasons)
+for _, entry in Seasons.Items do
+	local colors: { Color3 }? = nil
+	if entry.Colors then
+		local converted = {}
+		for _, c in entry.Colors do
+			table.insert(converted, color3(c))
+		end
+		colors = converted
+	end
+	local style: { [string]: any }? = nil
+	local trail = (entry :: any).Trail
+	if trail then
+		style = {
+			Texture = trail.Texture and TEXTURES[trail.Texture],
+			TextureLength = trail.TextureLength,
+			Emission = trail.Emission,
+			Width = trail.Width,
+			Lifetime = trail.Lifetime,
+			Glitter = trail.Glitter and color3(trail.Glitter),
+			Light = trail.Light and color3(trail.Light),
+			Particles = trail.Particles,
+		}
+	end
+	local season = Seasons.SeasonOf(entry.Id)
+	table.insert(list, {
+		Id = entry.Id,
+		Slot = entry.Slot,
+		Name = entry.Name,
+		Description = entry.Description,
+		Icon = entry.Icon,
+		Effect = entry.Effect,
+		Colors = colors,
+		Style = style,
+		Season = season and season.Id,
+	})
 end
 
 local Cosmetics = {
 	List = list,
 	ById = {} :: { [string]: Cosmetic },
 	-- Slots a player equips one item into (emotes are not equipped; every owned emote is usable).
-	EquipSlots = { "Trail", "Hat", "Title", "Victory", "Elimination" },
+	EquipSlots = { "Trail", "Hat", "Title", "Victory", "Elimination", "Pet", "Aura" },
 	-- What each slot is called on reward cards ("TRAIL", "KNOCKOUT").
 	SlotNames = {
 		Trail = "Trail",
@@ -909,10 +959,14 @@ local Cosmetics = {
 		Emote = "Emote",
 		Victory = "Victory",
 		Elimination = "Knockout",
+		Pet = "Pet",
+		Aura = "Aura",
 	} :: { [string]: string },
 	ShopTabs = {
 		{ Slot = "Trail", Label = "Trails", Icon = "🌈" },
 		{ Slot = "Hat", Label = "Hats", Icon = "🎩" },
+		{ Slot = "Pet", Label = "Pets", Icon = "🐾" },
+		{ Slot = "Aura", Label = "Auras", Icon = "✨" },
 		{ Slot = "Title", Label = "Titles", Icon = "🏷️" },
 		{ Slot = "Emote", Label = "Emotes", Icon = "🕺" },
 		{ Slot = "Victory", Label = "Victory", Icon = "🏆" },

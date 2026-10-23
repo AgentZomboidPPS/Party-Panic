@@ -1,0 +1,38 @@
+{
+ "pieces": {
+  "Iron": {
+   "color": [
+    47,
+    43,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    241,
+    194
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Lglass": {
+   "color": [
+    255,
+    181,
+    48
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  1.567,
+  6.363,
+  0.756
+ ],
+ "middle": -0.0,
+ "tris": 1354
+}

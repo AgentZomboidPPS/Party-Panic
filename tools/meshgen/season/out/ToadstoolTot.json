@@ -1,0 +1,101 @@
+{
+ "pieces": {
+  "Glow": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Skin": {
+   "color": [
+    244,
+    232,
+    207
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Eye": {
+   "color": [
+    20,
+    12,
+    28
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Blush": {
+   "color": [
+    255,
+    143,
+    200
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow2": {
+   "color": [
+    255,
+    255,
+    255
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Spot": {
+   "color": [
+    255,
+    238,
+    191
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Leaf": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Cap": {
+   "color": [
+    224,
+    72,
+    46
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Acorn": {
+   "color": [
+    168,
+    99,
+    46
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "AcornCap": {
+   "color": [
+    106,
+    68,
+    38
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  2.104,
+  2.243,
+  2.382
+ ],
+ "middle": 0.975,
+ "tris": 6490
+}

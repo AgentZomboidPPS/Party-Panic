@@ -1,0 +1,92 @@
+{
+ "pieces": {
+  "Iron": {
+   "color": [
+    49,
+    43,
+    56
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Wood": {
+   "color": [
+    138,
+    85,
+    48
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf": {
+   "color": [
+    255,
+    124,
+    28
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf2": {
+   "color": [
+    184,
+    52,
+    35
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf3": {
+   "color": [
+    255,
+    194,
+    61
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf4": {
+   "color": [
+    232,
+    82,
+    30
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Stem": {
+   "color": [
+    93,
+    107,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    241,
+    194
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Lglass": {
+   "color": [
+    255,
+    181,
+    48
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  12.927,
+  16.612,
+  2.628
+ ],
+ "middle": 0.0,
+ "tris": 6074
+}

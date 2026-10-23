@@ -1,0 +1,47 @@
+{
+ "pieces": {
+  "Iron": {
+   "color": [
+    47,
+    43,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    181,
+    48
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Brass": {
+   "color": [
+    212,
+    145,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  2.63,
+  1.808,
+  1.32
+ ],
+ "middle": 0.968,
+ "tris": 898
+}

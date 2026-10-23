@@ -1,0 +1,110 @@
+{
+ "pieces": {
+  "Bark": {
+   "color": [
+    88,
+    52,
+    32
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "StumpTop": {
+   "color": [
+    212,
+    145,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Ring": {
+   "color": [
+    138,
+    86,
+    49
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Leafpile": {
+   "color": [
+    218,
+    71,
+    37
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf": {
+   "color": [
+    168,
+    54,
+    28
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf2": {
+   "color": [
+    255,
+    193,
+    59
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Leaf3": {
+   "color": [
+    255,
+    129,
+    33
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Iron": {
+   "color": [
+    47,
+    43,
+    58
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "MushStem": {
+   "color": [
+    242,
+    228,
+    197
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Stem": {
+   "color": [
+    93,
+    107,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  33.372,
+  10.912,
+  33.754
+ ],
+ "middle": 0.766,
+ "tris": 48220
+}

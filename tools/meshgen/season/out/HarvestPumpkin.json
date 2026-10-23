@@ -1,0 +1,29 @@
+{
+ "pieces": {
+  "Stem": {
+   "color": [
+    93,
+    107,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Pumpkin": {
+   "color": [
+    255,
+    122,
+    26
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  2.0,
+  1.75,
+  2.0
+ ],
+ "middle": 0.78,
+ "tris": 1414
+}

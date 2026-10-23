@@ -134,6 +134,7 @@ function ProfileMigration.Load(
 		data.Stats.GamesTried = ProfileMigration.GamesTried(data.Stats.ModePlays, knownGames)
 	end
 	ProfileMigration.GoldPass(data)
+	ProfileMigration.Crates(data)
 	if type(data.Meta) == "table" then
 		ProfileMigration.NoteCoins(data.Meta, report)
 	end
@@ -160,6 +161,64 @@ function ProfileMigration.GoldPass(data: { [string]: any })
 			and coinsTo < math.huge
 		then math.floor(coinsTo)
 		else 1
+end
+
+-- Makes a loaded profile's crate-season fields safe to use (owner: "seasonal crates ... Keys to open
+-- the crate ... we also need to be able to sell keys for Robux"): keys and crates are whole numbers,
+-- never below 0 (a broken value is 0, never more); each season's progress is a table of numbers and
+-- found items; the flags have their types; the receipts list holds strings only and keeps the
+-- latest 60. Fields newer code keeps in them stay.
+local MAX_RECEIPTS = 60
+ProfileMigration.MaxReceipts = MAX_RECEIPTS
+function ProfileMigration.Crates(data: { [string]: any })
+	data.Keys = whole(data.Keys)
+	if type(data.Crates) ~= "table" then
+		data.Crates = { Season = "", Count = 0 }
+	end
+	data.Crates.Season = if type(data.Crates.Season) == "string" then data.Crates.Season else ""
+	data.Crates.Count = whole(data.Crates.Count)
+	if type(data.Seasons) ~= "table" then
+		data.Seasons = {}
+	end
+	for id, progress in data.Seasons do
+		if type(id) ~= "string" or type(progress) ~= "table" then
+			data.Seasons[id] = nil
+			continue
+		end
+		progress.Opened = whole(progress.Opened)
+		progress.Coins = whole(progress.Coins)
+		progress.Meter = whole(progress.Meter)
+		if type(progress.Found) ~= "table" then
+			progress.Found = {}
+		end
+	end
+	if type(data.CrateFlags) ~= "table" then
+		data.CrateFlags = {}
+	end
+	local flags = data.CrateFlags
+	flags.StarterKeys = flags.StarterKeys == true
+	flags.StarterPack = flags.StarterPack == true
+	flags.Welcome = if type(flags.Welcome) == "string" then flags.Welcome else ""
+	flags.DailyKeyDay = whole(flags.DailyKeyDay)
+	local receipts = {}
+	if type(data.Receipts) == "table" then
+		for _, id in data.Receipts do
+			if type(id) == "string" then
+				table.insert(receipts, id)
+			end
+		end
+	end
+	while #receipts > MAX_RECEIPTS do
+		table.remove(receipts, 1)
+	end
+	data.Receipts = receipts
+	if type(data.Equipped) == "table" then
+		for _, slot in { "Pet", "Aura" } do
+			if type(data.Equipped[slot]) ~= "string" then
+				data.Equipped[slot] = ""
+			end
+		end
+	end
 end
 
 -- Leaves the note about what this load did to the coins in `meta.CoinNotice` (kept until the

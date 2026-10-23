@@ -1,0 +1,38 @@
+{
+ "pieces": {
+  "AcornRidge": {
+   "color": [
+    90,
+    57,
+    32
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  },
+  "Glow": {
+   "color": [
+    255,
+    181,
+    48
+   ],
+   "material": "Neon",
+   "transparency": 0.0
+  },
+  "Leaf": {
+   "color": [
+    255,
+    138,
+    42
+   ],
+   "material": "SmoothPlastic",
+   "transparency": 0.0
+  }
+ },
+ "size": [
+  1.71,
+  0.956,
+  1.71
+ ],
+ "middle": -0.299,
+ "tris": 2996
+}
