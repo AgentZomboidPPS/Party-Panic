@@ -485,15 +485,16 @@ function ObbyOdyssey:_sectionArch(pad: Course.Piece)
 		Name = "SectionSign",
 		Size = Vector3.new(width - 2, 3.6, 0.8),
 		CFrame = self:_at(pad.X, pad.Top + 15, exit),
-		Color = rgb(40, 28, 90),
+		Color = color,
 	})
 	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
-		Build.SurfaceText(sign, face, `{section.Icon} {section.Name}`, {
+		local label = Build.SurfaceText(sign, face, `{section.Icon} {section.Name}`, {
 			PixelsPerStud = 14,
 			Font = SIGN_FONT,
-			TextColor3 = color:Lerp(rgb(255, 255, 255), 0.35),
-			TextStrokeTransparency = 0.3,
+			TextColor3 = rgb(255, 255, 255),
+			TextStrokeTransparency = 0.2,
 		})
+		label.TextStrokeColor3 = rgb(40, 28, 90)
 	end
 end
 

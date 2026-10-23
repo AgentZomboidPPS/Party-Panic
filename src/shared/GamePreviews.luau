@@ -120,6 +120,13 @@ local previews: { [string]: Preview } = {
 		FrameSize = Vector2.new(168, 240),
 		Fps = 8,
 	},
+	ObbyOdyssey = {
+		Image = "rbxassetid://129333029357941",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
 	ParasolPlummet = {
 		Image = "rbxassetid://118573541606477",
 		Frames = 24,

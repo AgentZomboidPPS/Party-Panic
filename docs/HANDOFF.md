@@ -42,6 +42,8 @@ then the average mini game too."). Built as **Obby Odyssey** (`ObbyOdyssey`, Rac
 - **Its own song** (owner: "Make the custom song for it"): "Bounce to the Crown" (`tools/music/songs/ObbyOdyssey.py`,
   150 bpm bubblegum electro-pop, 14.4 s intro, -11 LUFS), alone in ModePack7, uploaded as 89946863953014 and approved.
   That used the owner's 7th of 10 audio uploads this month.
+- **Portal preview** (owner: "portal preview video"): runners lining up for the BALL BRIDGE under a swinging ball
+  (`make_preview.py ObbyOdyssey --dump-at 4`, its camera in CAMERAS), image 129333029357941, approved.
 - **Not done yet:** a real-device playtest (jump feel, the knockbacks, launch flights, barrels and blinking blocks on
   a phone). Not published.
 
