@@ -470,25 +470,25 @@ def blender_pack(name: str, out: Path):
     count = {"Keys1": 1, "Keys5": 2, "Keys15": 3, "Keys40": 4, "Starter": 2}[name]
     for k in range(count):
         spread = k - (count - 1) / 2
-        fan = group((-0.6 + spread * 0.75, -0.08 * k, -0.4 - abs(spread) * 0.15), (0, math.radians(-spread * 14), 0), 1)
-        H.key((0, 0, 0), (math.radians(20), math.radians(-48), math.radians(25)), 0.95, fan)
+        fan = group((-0.8 + spread * 0.32, -0.12 * k, -0.7 - abs(spread) * 0.06), (0, math.radians(-spread * 24), 0), 1)
+        H.key((0, 0, 0), (math.radians(20), math.radians(-42), math.radians(25)), 1.45, fan)
     iron = bpy.data.materials.get("hollow_iron")
     if iron:
         iron.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (*lib.col("#7a7290"), 1)
     if name == "Starter":
-        pole = [Vector((1.5, 0.3, -1.2)), Vector((1.5, 0.3, 1.9))]
+        pole = [Vector((1.7, 0.3, -1.4)), Vector((1.7, 0.3, 2.1))]
         tube(pole, lambda t: 0.05, lambda t: (1, 1, 1, 0), H.brass(), seg=10)
-        flag = group((1.5, 0.3, 1.85), (0, 0, 0), 1)
+        flag = group((1.7, 0.3, 2.05), (0, 0, 0), 1.2)
         stripes = ["#c8322a", "#ff8a2a", "#ffd04a"]
         for i, c in enumerate(stripes):
             path = [Vector((-0.02 - t * 1.4, 0, -i * 0.28 + 0.12 * math.sin(t * 5))) for t in [j / 24 for j in range(25)]]
             lib.ribbon(path, lambda u: 0.28 * (1 - 0.35 * u), lambda u, v, c=c: (*lib.col(c), 1.0),
                        lib.vsolid(f"banner{c}", 0.6), side=(0, 0, 1), parent=flag)
         H.emblem_leaf((-0.65, -0.05, -0.28), (0, 0, 0), 0.6, glow(H.GOLDLEAF, 6), flag)
-        obj("sphere", (1.5, 0.3, 1.95), 0.09, m=H.brass())
+        obj("sphere", (1.7, 0.3, 2.15), 0.1, m=H.brass())
     sparks((0, 0, 0.3), 1.8, 22, [H.AMBER, "#fff1c2", H.GOLDLEAF], (0.025, 0.06), seed=3, z=(-0.8, 1.2))
     bpy.context.view_layer.update()
-    lib.cam((0.35, -10.5, 1.2), (0.45 if name == "Starter" else 0.2, 0, 0.55), 30)
+    lib.cam((0.3, -10.5, 0.9), (0.35 if name == "Starter" else 0.25, 0, 0.35), 30)
     lib.area_light((-3, -6, 5), (0, 0, 0), "#fff0dc", 1300, 4)
     lib.area_light((4, 3, 3), (0, 0, 0), "#ff7a3a", 1000, 3)
     lib.area_light((-4, 3, 2), (0, 0, 0), "#9a6aff", 800, 3)
@@ -592,7 +592,14 @@ def finish_icon(path: Path):
         out_rgb = (layer_rgb * layer_a + out_rgb * out_a * (1 - layer_a)) / np.maximum(new_a, 1e-4)
         out_a = new_a
     merged = Image.fromarray((np.dstack([np.clip(out_rgb, 0, 1), np.clip(out_a, 0, 1)]) * 255).astype(np.uint8), "RGBA")
-    return merged.resize((CELL, CELL), Image.LANCZOS)
+    cell = np.asarray(merged.resize((CELL, CELL), Image.LANCZOS)).copy()
+    # A clear margin all round, so a cell drawn from the sheet never picks up its neighbour's edge.
+    margin = 3
+    cell[:margin, :, 3] = 0
+    cell[-margin:, :, 3] = 0
+    cell[:, :margin, 3] = 0
+    cell[:, -margin:, 3] = 0
+    return Image.fromarray(cell, "RGBA")
 
 
 def build_sheet():

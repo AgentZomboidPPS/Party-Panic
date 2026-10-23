@@ -82,22 +82,21 @@ return function(h)
 		},
 		-- The crate pile on its tree stump, the lobby's middle for the season (the turning crate on top, the keys round it and the wisps are separate: the game moves them).
 		HollowPile = {
-			Height = 10.912,
-			AssetId = 96283343045646,
+			Height = 4.569,
+			AssetId = 131627660570337,
 			BlocksCamera = true,
 			Shadow = true,
 			Palette = {
-				Bark = rgb(88, 52, 32),
-				StumpTop = rgb(212, 145, 58),
-				Ring = rgb(138, 86, 49),
+				Bark = rgb(74, 47, 30),
+				StumpTop = rgb(192, 138, 85),
+				Ring = rgb(138, 90, 52),
 				Glow = rgb(255, 138, 42),
-				Leafpile = rgb(218, 71, 37),
-				Leaf = rgb(168, 54, 28),
-				Leaf2 = rgb(255, 193, 59),
-				Leaf3 = rgb(255, 129, 33),
-				Iron = rgb(47, 43, 58),
-				MushStem = rgb(242, 228, 197),
+				Leafpile = rgb(223, 83, 30),
+				Leaf = rgb(184, 52, 35),
+				Leaf2 = rgb(255, 194, 60),
+				Leaf3 = rgb(255, 127, 31),
 				Stem = rgb(93, 107, 42),
+				Pumpkin = rgb(242, 228, 196),
 			},
 			Materials = {
 				Bark = Enum.Material.SmoothPlastic,
@@ -108,12 +107,11 @@ return function(h)
 				Leaf = Enum.Material.SmoothPlastic,
 				Leaf2 = Enum.Material.SmoothPlastic,
 				Leaf3 = Enum.Material.SmoothPlastic,
-				Iron = Enum.Material.SmoothPlastic,
-				MushStem = Enum.Material.SmoothPlastic,
 				Stem = Enum.Material.SmoothPlastic,
+				Pumpkin = Enum.Material.SmoothPlastic,
 			},
 			Fallback = function(m)
-				h.block(m, "Bark", Vector3.new(33.37, 8.99, 33.75), Vector3.new(-0.33, 5.19, 0.07))
+				h.block(m, "Bark", Vector3.new(33.28, 2.15, 33.67), Vector3.new(-0.33, 1.67, 0.07))
 			end,
 		},
 		-- An opening altar: two stone steps, a glowing ring (Ring: the game colours it by tier), lantern posts and pumpkins. Its crate is a HollowCrate on top.

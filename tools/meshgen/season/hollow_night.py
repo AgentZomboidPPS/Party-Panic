@@ -300,9 +300,12 @@ def moon(pos, r):
             m=pbr("crater", "#f3a650", 0.9, emit="#e8923e", es=1.0))
 
 
-def crate_pile(spin=0.4, game=False):
+def crate_pile(spin=0.4, game=False, crates=True, record=None):
     """The pile on its tree stump. game: only the still parts (the game turns the big crate on top,
-    flies the keys round it and draws the wisps and the leaf swirl itself)."""
+    flies the keys round it and draws the wisps and the leaf swirl itself). crates=False leaves the
+    crates of its three rings out and appends where each goes to `record` as (location, scale,
+    rotation): the game places real Hollow Crate meshes there (World/SeasonWorld), so their lids keep
+    their shape (the pile's mesh simplification flattened them into roofs)."""
     st = group((0, 0, 0))
     obj("cyl", (0, 0, 0.75), (12.5, 12.5, 0.75), m=bark(), parent=st)
     obj("cyl", (0, 0, 1.52), (12.2, 12.2, 0.03), m=pbr("stump_top", "#c08a55", 0.8), parent=st)
@@ -327,7 +330,11 @@ def crate_pile(spin=0.4, game=False):
         for k in range(n):
             a = k * 2 * math.pi / n + rng.uniform(-0.1, 0.1) + r
             tilt = (rng.uniform(-0.12, 0.12), rng.uniform(-0.12, 0.12) + 0.08, a + rng.uniform(-0.5, 0.5))
-            crate((math.cos(a) * r, math.sin(a) * r, z + rng.uniform(-0.25, 0.1)), s, tilt)
+            at = (math.cos(a) * r, math.sin(a) * r, z + rng.uniform(-0.25, 0.1))
+            if crates:
+                crate(at, s, tilt)
+            elif record is not None:
+                record.append((at, s, tilt))
     if game:
         for k, (a, r) in enumerate([(0.3, 10.8), (1.2, 11.0), (2.4, 10.6), (3.4, 10.9), (4.4, 10.7), (5.4, 11.0)]):
             p = (math.cos(a) * r, math.sin(a) * r, 1.5)

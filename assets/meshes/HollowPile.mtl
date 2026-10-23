@@ -46,20 +46,14 @@ Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1
 
-newmtl Iron
-Kd 0.235 0.227 0.243
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
-newmtl MushStem
-Kd 0.784 0.784 0.784
-Ka 0 0 0
-Ks 0.1 0.1 0.1
-d 1
-
 newmtl Stem
 Kd 0.431 0.627 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Pumpkin
+Kd 0.784 0.784 0.784
 Ka 0 0 0
 Ks 0.1 0.1 0.1
 d 1

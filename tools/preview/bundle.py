@@ -12,10 +12,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 WORLD = ROOT / "src" / "server" / "World"
 MODULES = ["Build", "Shapes", "MeshAssets", "MeshLibrary", "Environment", "LobbyObby", "Arcade", "HallOfFame",
-           "MedalWall", "EventDecor", "LobbyBuilder", "BeachBalls"]
+           "MedalWall", "EventDecor", "Hats", "SeasonWorld", "LobbyBuilder", "BeachBalls"]
 SHARED_DIR = ROOT / "src" / "shared"
 # World/Props modules the lobby uses (the mini-games' own props are skipped).
-PROPS = ["Lobby", "Arcade"]
+PROPS = ["Lobby", "Arcade", "HollowNight"]  # (HollowNight: the crate season's pile, altars and dressing)
 
 # A Shared module asked for by its path from ReplicatedStorage (ReplicatedStorage.Shared.Logic.X,
 # game:GetService("ReplicatedStorage").Shared.X, or a local Shared = ReplicatedStorage.Shared).

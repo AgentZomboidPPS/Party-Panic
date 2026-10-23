@@ -61,7 +61,7 @@ def hat(builder):
 PROPS = {
     "HollowCrate": (lambda: HN.crate((0, 0, 0), 1.0), 3600),
     "LanternKey": (lambda: HN.key((0, 0, 0)), 900),
-    "HollowPile": (lambda: HN.crate_pile(game=True), 40000),
+    "HollowPile": (lambda: HN.crate_pile(game=True, crates=False), 40000),
     "HollowAltar": (lambda: HN.altar_base(), 6000),
     "HollowBoard": (lambda: HN.board_frame(), 6000),
     "LeafHeap": (lambda: HN.leaf_heap(), 4000),

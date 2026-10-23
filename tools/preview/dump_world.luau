@@ -61,6 +61,12 @@ local function propOf(part: Instance): string?
 		if node:IsA("Model") and propNames[node.Name] then
 			return node.Name
 		end
+		-- A prop renamed where it's used (the crate season's "TopCrate", "AltarCrate", "Key1"...)
+		-- still says which prop it is (MeshLibrary's PP_Prop).
+		local prop = if node:IsA("Model") then node:GetAttribute("PP_Prop") else nil
+		if type(prop) == "string" and propNames[prop] then
+			return prop
+		end
 		node = node.Parent
 	end
 	return nil
