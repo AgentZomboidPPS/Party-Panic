@@ -682,7 +682,9 @@ def picnic_table():
         wood.append(rbox(12.0, 0.34, 1.3, 0.1).translate(0, 1.85, side * 3.45))
     for x in (-4.6, 4.6):
         for lean in (-1, 1):
-            wood.append(rbox(0.42, 3.5, 0.42, 0.1).rotate("x", lean * 30).translate(x, 1.55, lean * 0.95))
+            # An A: each pair meets under the top and stands out under the benches (the tilt was the other way,
+            # a V on its point, like Hot Potato's table the owner caught).
+            wood.append(rbox(0.42, 3.9, 0.42, 0.1).rotate("x", -lean * 40).translate(x, 1.63, lean * 1.75))
         wood.append(rbox(0.36, 0.36, 8.0, 0.1).translate(x, 1.6, 0))
     return {"Wood": merge(*wood)}
 

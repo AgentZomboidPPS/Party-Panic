@@ -137,7 +137,10 @@ def table():
     legs = []
     for x in (-2.7, 2.7):
         for s in (-1, 1):
-            leg = rounded_box(0.32, 3.9, 0.45, 0.06, 3).rotate("x", s * 40).translate(x, 1.62, s * 1.25)
+            # An A: each pair meets under the top and stands out under the benches. (The tilt was the other
+            # way, so the legs met in a point under the middle and stuck up past the benches; owner, of a
+            # screenshot: "This is not good claude.")
+            leg = rounded_box(0.32, 3.9, 0.45, 0.06, 3).rotate("x", -s * 40).translate(x, 1.62, s * 1.25)
             legs.append(leg)
         legs.append(rounded_box(0.3, 0.3, 6.0, 0.06, 3).translate(x, 1.5, 0))
         legs.append(rounded_box(0.3, 0.3, 2.9, 0.06, 3).translate(x, 3.12, 0))

@@ -91,7 +91,7 @@ return function(h)
 		},
 		HotPotatoTable = {
 			Height = 3.6,
-			AssetId = 105868232967252,
+			AssetId = 136455383692499,
 			Collide = true,
 			Palette = {
 				Top = h.rgb(176, 112, 64),

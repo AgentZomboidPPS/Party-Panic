@@ -177,7 +177,7 @@ return function(h)
 		},
 		PrimeCutTable = {
 			Height = 3.28,
-			AssetId = 117832438875253,
+			AssetId = 81554601852768,
 			Palette = { Wood = h.rgb(176, 116, 70) },
 			Materials = { Wood = wood },
 			Fallback = function(m)
