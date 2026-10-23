@@ -14,9 +14,11 @@ Config.Session = {
 	MinPlayers = 2,
 	MinPlayersInStudio = 1, -- lets a single tester run the loop in Studio
 	IgnoreModePlayerLimitsInStudio = true,
-	-- Between two rounds, ResultsTime + IntermissionTime + VoteTime: 6 + 6 + 8 = 20 seconds at most
-	-- (owner: "Less time sitting in the lobby. total of 20 seconds instead of 40.").
-	IntermissionTime = 6, -- lobby social time before each vote
+	-- Between two rounds, ResultsTime + IntermissionTime + VoteTime: 6 + 21 + 8 = 35 seconds at most
+	-- (owner: "Less time sitting in the lobby. total of 20 seconds instead of 40.", then, with the crate
+	-- season: "we need more time between games now. theres not enough time to open the crates. add 15
+	-- seconds of intermission before voting.").
+	IntermissionTime = 21, -- lobby time before each vote (opening crates at the pile, the shop, friends)
 	VoteTime = 8, -- at most: once every person playing has voted, it ends VoteLastBeat after the last vote
 	VoteLastBeat = 1, -- so the last voter sees their tick before the winner shows (VotingService.Wait)
 	VoteChoices = 3, -- games shown in a vote; a 4th card, Random, is always added (owner: "4 options always")

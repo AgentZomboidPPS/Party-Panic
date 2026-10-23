@@ -324,7 +324,7 @@ local function renderCrates()
 
 	local h = buttonHeight()
 	local canOpen = crates() >= 1 and keys() >= 1
-	local inRound = State.InRound()
+	local inRound = State.StillPlaying() -- (out of a round, back in the lobby, they open)
 	local y = L.Open
 	-- Each button says what it does: with no keys, it's the key shop.
 	local noKeys = not inRound and crates() >= 1 and keys() < 1
@@ -1620,6 +1620,14 @@ function CrateMenu.Build(context)
 			render()
 		end
 	end)
+	-- OPEN wakes up when they're out of a round (and back in the lobby).
+	for _, attribute in { "PP_InRound", "PP_Alive" } do
+		player:GetAttributeChangedSignal(attribute):Connect(function()
+			if modal.IsOpen and current == "Crates" then
+				render()
+			end
+		end)
+	end
 	-- The crate in its window turns.
 	RunService.RenderStepped:Connect(function()
 		local model = viewportModel

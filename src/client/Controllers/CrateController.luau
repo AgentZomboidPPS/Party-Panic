@@ -131,7 +131,7 @@ local function walkTo(stand: Vector3, arrived: () -> ())
 		end
 		local deadline = os.clock() + WALK_TIMEOUT
 		for _, point in points do
-			if walking ~= mine or State.InRound() or not root.Parent then
+			if walking ~= mine or State.StillPlaying() or not root.Parent then
 				return
 			end
 			humanoid:MoveTo(point)
@@ -165,7 +165,7 @@ local function open(count: number, here: boolean)
 		end
 		return
 	end
-	if State.InRound() then
+	if State.StillPlaying() then
 		NotificationController.Show("Crates open in the lobby, after the round.", "info", 3)
 		return
 	end
@@ -270,7 +270,7 @@ local function tryWelcome()
 	if welcomed or not profile or not profile.CrateFlags or profile.CrateFlags.Welcome == season.Id then
 		return
 	end
-	if not profile.TutorialDone or State.InRound() then
+	if not profile.TutorialDone or State.StillPlaying() then
 		return
 	end
 	local phase = State.Phase()

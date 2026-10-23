@@ -75,6 +75,12 @@ function State.Alive(): boolean
 	return State.LocalPlayer:GetAttribute("PP_Alive") == true
 end
 
+-- Still playing the round they're in (in it, and not out of it): once out they're back in the lobby
+-- while it goes on, and the lobby's crates open for them (Services/CrateService.Open asks the same).
+function State.StillPlaying(): boolean
+	return State.InRound() and State.Alive()
+end
+
 -- Sitting out the next rounds (the server's word: Services/SitOutService sets PP_SitOut).
 function State.SittingOut(): boolean
 	return State.LocalPlayer:GetAttribute("PP_SitOut") == true

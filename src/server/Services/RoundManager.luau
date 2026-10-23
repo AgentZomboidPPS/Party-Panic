@@ -10,10 +10,10 @@
 -- break!") instead of running with bots only. For the same reason a round whose people all leave or
 -- can't be placed during the rules card is called off before GO (RoundContext.WaitForStart).
 --
--- Between two rounds the results, the lobby and the vote take 20 seconds at most (owner: "Less time
--- sitting in the lobby. total of 20 seconds instead of 40."; Config.Session's ResultsTime,
--- IntermissionTime and VoteTime), and the vote ends early once every person playing has voted
--- (VotingService.Wait).
+-- Between two rounds the results, the lobby and the vote take 35 seconds at most (owner: "Less time
+-- sitting in the lobby. total of 20 seconds instead of 40.", then 15 seconds more of lobby before the
+-- vote for opening crates; Config.Session's ResultsTime, IntermissionTime and VoteTime), and the vote
+-- ends early once every person playing has voted (VotingService.Wait).
 --
 -- The results cards ask PLAY AGAIN? (owner: "Add a vote at the end of each minigame to replay the
 -- same minigame."; Services/ReplayService): if more than half of the round's people say yes, the

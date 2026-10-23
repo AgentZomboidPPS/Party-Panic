@@ -376,7 +376,10 @@ function CrateService.Open(player: Player, count: number, altarIndex: number): (
 	if not isPerson(player) or not profile then
 		return false, "NoProfile"
 	end
-	if player:GetAttribute("PP_InRound") == true then
+	-- Not while they're still playing a round; once they're out of it they're back in the lobby, and
+	-- crates open there while the round goes on (owner: "Bug: cant open crates in the lobby while a
+	-- game is happenin").
+	if player:GetAttribute("PP_InRound") == true and player:GetAttribute("PP_Alive") == true then
 		return false, "InRound"
 	end
 	if (showing[player] or 0) > os.clock() then
@@ -500,7 +503,7 @@ local DENIED = {
 	NoCrates = "No crates left! Play a round to earn one.",
 	InRound = "Crates open in the lobby, after the round.",
 	Busy = "Your crate is still opening!",
-	AltarBusy = "That altar's busy. Try another, or OPEN HERE.",
+	AltarBusy = "That spot at the pile is taken. Try another, or OPEN HERE.",
 	TooFar = "Walk up to the altar to open it.",
 }
 

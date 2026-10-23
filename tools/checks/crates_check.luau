@@ -276,10 +276,17 @@ function __runCrates()
 	check("coins from crates paid", data(Ann).Seasons[season.Id].Coins > 0)
 	task.wait(Config.Crates.ShowTimeMany + 0.3)
 	Cy:SetAttribute("PP_InRound", true)
+	Cy:SetAttribute("PP_Alive", true)
 	CrateService.TestGive(Cy, 1, 1)
 	local _, inRound = CrateService.Open(Cy, 1, 0)
-	check("never in a round", inRound == "InRound", inRound)
+	check("never while playing a round", inRound == "InRound", inRound)
+	-- Out of the round (back in the lobby while it goes on): crates open (owner: "Bug: cant open
+	-- crates in the lobby while a game is happenin").
+	Cy:SetAttribute("PP_Alive", false)
+	local outOpened, outWhy = CrateService.Open(Cy, 1, 0)
+	check("out of the round, in the lobby: opens", outOpened == true, outWhy)
 	Cy:SetAttribute("PP_InRound", false)
+	task.wait(Config.Crates.ShowTime + 0.3)
 	data(Di).Keys = 0
 	local _, noKeys = CrateService.Open(Di, 1, 0)
 	check("no keys: refused (the key shop opens)", noKeys == "NoKeys", noKeys)
