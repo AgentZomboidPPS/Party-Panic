@@ -1346,8 +1346,9 @@ end
 
 -- 3d. The crate season (Controllers/CrateController, Crates/*): a player 241 crates in, with 12
 -- crates and 7 keys, six of the 23 items found, on the Top Unboxers board at 48th; the window's
--- tabs ("Crates", "Crates Collection", "Crates Top", "Crates Odds", "Crates Keys", and the key shop
--- for a player Roblox restricts: "Crates Keys locked"), a pet banner FIRST IN THE WORLD and the
+-- tabs ("Crates", "Crates Collection", "Crates Top", "Crates Odds", "Crates Keys", a pet's details
+-- in the collection: "Crates Item", the key shop's gift picker: "Crates Gift", and the key shop for a player Roblox restricts: "Crates Keys
+-- locked"), a pet banner FIRST IN THE WORLD and the
 -- title's ("Crate banner"), keys given ("Crate gift"), the player's own opening over their head and
 -- its prize card ("Crate prize"), Open 5's card ("Crate prize 5") and the season's welcome
 -- ("Crate welcome", "Crate welcome card"). The result's "crateChecks" says what the chip read.
@@ -1419,7 +1420,17 @@ do
 		task.wait(0.8)
 		snap(if tab == "Crates" then "Crates" else "Crates " .. tab)
 	end
+	step = "Crates Item"
+	__require("Client/Crates/CrateMenu").ShowItem("Pet_HarvestOwl")
+	task.wait(0.6)
+	snap("Crates Item")
+	step = "Crates Gift"
+	__require("Client/Crates/CrateMenu").ShowGift("Keys5")
+	task.wait(0.6)
+	snap("Crates Gift")
+	pcall(__require("Client/UI/Modal").CloseAll) -- (closing the window puts the picker away)
 	__player:SetAttribute("PP_KeysLocked", true)
+	State.OpenScreen:Fire("Crates", "Keys")
 	task.wait(0.4)
 	snap("Crates Keys locked")
 	__player:SetAttribute("PP_KeysLocked", false)

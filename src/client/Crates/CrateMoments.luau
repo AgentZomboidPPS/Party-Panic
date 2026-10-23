@@ -34,7 +34,7 @@ local season = Seasons.CurrentSeason()
 local colors = CrateTheme.Colors(season)
 local TITLE_FONT = Enum.Font.GrenzeGotisch
 
-local BANNER_Y = 200
+local BANNER_Y = 208 -- (under the top bar, the first-join tips and the chips, with a gap)
 
 local touch = false
 local gui: ScreenGui
@@ -63,14 +63,18 @@ local function showBanner(banner: { [string]: any }, hurry: boolean): number
 	local title = tier == "Title"
 	local mine = banner.UserId == player.UserId
 	local width = if title then 760 else 640
+	-- Who, what, then FIRST IN THE WORLD under it (a line of its own, inside the banner).
+	local firstLine = if banner.First then 30 else 0
 	local frame = UIKit.Panel({
 		Name = "Banner",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, BANNER_Y), -- (under the top bar, the first-join tips and the chips)
-		Size = UDim2.fromOffset(width, if title then 124 else 92),
+		Position = UDim2.new(0.5, 0, 0, BANNER_Y),
+		Size = UDim2.fromOffset(width, (if title then 124 else 92) + firstLine),
 		CornerRadius = 22,
 		Parent = bannerHolder,
 	}, color:Lerp(colors.Deep, 0.35), colors.Deep)
+	-- A few seconds, and nothing on it takes a tap (the UI checks let it cross the thumbstick's corner).
+	frame:SetAttribute("PP_Popup", true)
 	local stroke = frame:FindFirstChildOfClass("UIStroke")
 	if stroke then
 		stroke.Color = color
@@ -133,9 +137,9 @@ local function showBanner(banner: { [string]: any }, hurry: boolean): number
 			TextColor3 = colors.Deep,
 			BackgroundTransparency = 0,
 			BackgroundColor3 = colors.Gold,
-			AnchorPoint = Vector2.new(1, 1), -- (sitting on the banner's top edge, clear of the name)
-			Position = UDim2.new(1, -14, 0, 8),
-			Size = UDim2.fromOffset(250, 30),
+			TextWrapped = false,
+			Position = UDim2.fromOffset(if title then 128 else 96, if title then 102 else 80),
+			Size = UDim2.fromOffset(260, 30),
 			Parent = frame,
 			Children = { UIKit.Round() },
 		})
@@ -223,6 +227,7 @@ local function cardFrame(height: number, color: Color3): Frame
 		stroke.Thickness = 3
 		stroke.Transparency = 0
 	end
+	frame:SetAttribute("PP_Popup", true) -- a few seconds; nothing on it takes a tap
 	UIKit.PopIn(frame, 0.35)
 	return frame
 end
@@ -299,7 +304,7 @@ function CrateMoments.Prize(show: { [string]: any })
 				else
 					UIKit.Label({ Text = Theme.CoinIcon, TextScaled = true, Size = UDim2.fromScale(1, 1), Parent = art })
 				end
-				UIKit.Label({
+				local name = UIKit.Label({
 					Text = if result.Item then CrateTheme.NameOf(result.Item) else `+{result.Coins}`,
 					Font = Theme.Fonts.Display,
 					TextSize = 16,
@@ -310,6 +315,7 @@ function CrateMoments.Prize(show: { [string]: any })
 					Parent = cell,
 					Children = { UIKit.new("UITextSizeConstraint", { MaxTextSize = 18 }) },
 				})
+				name:SetAttribute("PP_Lines", 2) -- (a two-word name takes two lines)
 			end
 			fadeAway(frame, 4.5)
 			return 4.9

@@ -264,11 +264,11 @@ local function renderCrates()
 	local page = pages.Crates
 	clear(page)
 	crateViewport(page)
-	-- Phones: the window's content is about 380 tall, so the column packs tighter and the how-to-get-
-	-- keys line moves to the key shop.
+	-- Your crates and keys, what they are, the meter, then OPEN. Phones: the window's content is about
+	-- 375 tall, so the how-to-get-keys line is the key shop's alone.
 	local L = if touch
-		then { Season = 44, Pills = 72, Pill = 48, Meter = 126, Open = 212, Gap = 8 }
-		else { Season = 48, Pills = 82, Pill = 52, Meter = 146, Open = 236, Gap = 10 }
+		then { Pill = 60, Rule = 68, Meter = 108, Open = 206, Gap = 10 }
+		else { Pill = 60, Rule = 70, Meter = 112, Open = 214, Gap = 10 }
 	UIKit.Label({
 		Text = "Crates and keys never expire",
 		TextSize = textSize(16),
@@ -285,24 +285,27 @@ local function renderCrates()
 		BackgroundTransparency = 1,
 		Parent = page,
 	})
-	headline({ Text = season.Name, Size = UDim2.fromOffset(width, if touch then 42 else 50), Parent = column })
+	local half = (width - 10) / 2
+	pill(column, `📦 {CrateTheme.Count(crates(), "CRATE", "CRATES")}`, {
+		Position = UDim2.fromOffset(0, 0),
+		Size = UDim2.fromOffset(half, L.Pill),
+		TextSize = textSize(26),
+	})
+	pill(column, `🔑 {CrateTheme.Count(keys(), "KEY", "KEYS")}`, {
+		Position = UDim2.fromOffset(half + 10, 0),
+		Size = UDim2.fromOffset(half, L.Pill),
+		TextSize = textSize(26),
+	})
 	UIKit.Label({
-		Text = `{season.Time} SEASON · open crates at the pile`,
+		Text = "A crate every round · 1 key opens 1 crate",
 		Font = Theme.Fonts.Display,
 		TextSize = textSize(18),
 		TextColor3 = colors.Glow,
-		Position = UDim2.fromOffset(0, L.Season),
-		Size = UDim2.fromOffset(width, 24),
+		TextWrapped = false,
+		Position = UDim2.fromOffset(0, L.Rule),
+		Size = UDim2.fromOffset(width, 26),
 		Parent = column,
-	})
-	local half = (width - 10) / 2
-	pill(column, `📦 {CrateTheme.Count(crates(), "CRATE", "CRATES")}`, {
-		Position = UDim2.fromOffset(0, L.Pills),
-		Size = UDim2.fromOffset(half, L.Pill),
-	})
-	pill(column, `🔑 {CrateTheme.Count(keys(), "KEY", "KEYS")}`, {
-		Position = UDim2.fromOffset(half + 10, L.Pills),
-		Size = UDim2.fromOffset(half, L.Pill),
+		Children = { UIKit.TextStroke(0.5) },
 	})
 	meterBar(column, L.Meter, width)
 
@@ -310,11 +313,13 @@ local function renderCrates()
 	local canOpen = crates() >= 1 and keys() >= 1
 	local inRound = State.InRound()
 	local y = L.Open
+	-- Each button says what it does: with no keys, it's the key shop.
+	local noKeys = not inRound and crates() >= 1 and keys() < 1
 	local openText = if inRound
 		then "OPENS IN THE LOBBY"
 		elseif crates() < 1 then "PLAY A ROUND FOR A CRATE"
-		elseif keys() < 1 then "NO KEYS YET"
-		else "OPEN AT AN ALTAR"
+		elseif noKeys then "🔑 GET KEYS"
+		else "OPEN AT THE PILE"
 	UIKit.Button(
 		{
 			Text = openText,
@@ -327,12 +332,12 @@ local function renderCrates()
 			if canOpen and not inRound and CrateMenu.OnOpen then
 				modal:Close()
 				CrateMenu.OnOpen(1, false)
-			elseif keys() < 1 then
+			elseif noKeys then
 				CrateMenu.Show("Keys")
 			end
 		end,
-		if canOpen and not inRound then colors.Glow else Theme.Colors.PanelLight,
-		if canOpen and not inRound then colors.Main else Theme.Colors.PanelDark
+		if (canOpen and not inRound) or noKeys then colors.Glow else Theme.Colors.PanelLight,
+		if (canOpen and not inRound) or noKeys then colors.Main else Theme.Colors.PanelDark
 	)
 	y += h + L.Gap
 	local many = crates() >= CrateLogic.OpenMany and keys() >= CrateLogic.OpenMany
@@ -365,8 +370,8 @@ local function renderCrates()
 			if many and not inRound and CrateMenu.OnOpen then
 				modal:Close()
 				CrateMenu.OnOpen(CrateLogic.OpenMany, false)
-			elseif not many then
-				CrateMenu.Show("Keys")
+			elseif not inRound and crates() >= CrateLogic.OpenMany then
+				CrateMenu.Show("Keys") -- (the crates are there, the keys aren't)
 			end
 		end,
 		if many and not inRound then colors.Gold else Theme.Colors.PanelLight,
@@ -413,10 +418,16 @@ end
 
 local detail: Frame? = nil
 
+-- An item's details take the collection's place (a page of its own, BACK to the grid), so nothing
+-- of the grid shows round it.
 local function closeDetail()
 	detailItem = nil
 	if detail then
 		detail.Visible = false
+	end
+	local page = pages[current]
+	if page then
+		page.Visible = true
 	end
 end
 
@@ -428,69 +439,81 @@ local function showDetail(itemId: string)
 	detailItem = itemId
 	clear(frame)
 	frame.Visible = true
-	UIKit.PopIn(frame, 0.25)
+	local page = pages[current]
+	if page then
+		page.Visible = false
+	end
 	local item = Seasons.ItemById[itemId]
 	local tier = CrateTheme.TierOf(itemId)
-	local tierColor = CrateTheme.TierColor(tier, season)
+	local tierColor = CrateTheme.TierColor(tier, Seasons.SeasonOf(itemId))
 	local stroke = frame:FindFirstChildOfClass("UIStroke")
 	if stroke then
 		stroke.Color = tierColor
 		stroke.Transparency = 0.1
 	end
+	-- The picture on the left; what it is, what it does and where it came from on the right; EQUIP
+	-- and BACK along the bottom.
+	local artSize = if touch then 196 else 240
 	local art = UIKit.new("Frame", {
 		Position = UDim2.fromOffset(20, 20),
-		Size = UDim2.fromOffset(150, 150),
+		Size = UDim2.fromOffset(artSize, artSize),
 		BackgroundColor3 = colors.Deep,
-		ZIndex = 41,
 		Parent = frame,
 		Children = { UIKit.Corner(18), UIKit.Stroke(tierColor, 2, 0.3) },
 	})
-	CrateTheme.Picture(itemId, art, { Size = UDim2.fromScale(0.8, 0.8), ZIndex = 42 })
+	UIKit.new("UIGradient", {
+		Color = ColorSequence.new(tierColor:Lerp(colors.Deep, 0.55), colors.Deep),
+		Rotation = 90,
+		Parent = art,
+	})
+	CrateTheme.Picture(itemId, art, { Size = UDim2.fromScale(0.82, 0.82) })
+	local x = 20 + artSize + 24
 	local kind = if tier == "Effect" then CrateTheme.KindOf(itemId) else CrateTheme.Tiers[tier].Word
 	UIKit.Label({
-		Text = kind,
+		Text = `{CrateTheme.Tiers[tier].Icon} {kind}`,
 		Font = Theme.Fonts.Display,
-		TextSize = textSize(18),
+		TextSize = textSize(20),
 		TextColor3 = tierColor,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(186, 22),
-		Size = UDim2.new(1, -206, 0, 24),
-		ZIndex = 41,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(x, 24),
+		Size = UDim2.new(1, -(x + 20), 0, 26),
 		Parent = frame,
+		Children = { UIKit.TextStroke(0.4) },
 	})
 	UIKit.Label({
 		Text = if item then item.Name else itemId,
 		Font = if tier == "Title" then TITLE_FONT else Theme.Fonts.Display,
-		TextSize = 34,
+		TextSize = 44,
 		TextScaled = true,
+		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(186, 46),
-		Size = UDim2.new(1, -206, 0, 44),
-		ZIndex = 41,
+		Position = UDim2.fromOffset(x, 52),
+		Size = UDim2.new(1, -(x + 20), 0, 52),
 		Parent = frame,
-		Children = { UIKit.TextStroke(0.3), UIKit.new("UITextSizeConstraint", { MaxTextSize = 34 }) },
+		Children = { UIKit.TextStroke(0.3), UIKit.new("UITextSizeConstraint", { MaxTextSize = 44 }) },
 	})
-	UIKit.Label({
+	local description = UIKit.Label({
 		Text = if item then item.Description else "",
-		TextSize = textSize(18),
+		TextSize = textSize(19),
 		TextColor3 = Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		Position = UDim2.fromOffset(186, 94),
-		Size = UDim2.new(1, -206, 0, 50),
-		ZIndex = 41,
+		Position = UDim2.fromOffset(x, 110),
+		Size = UDim2.new(1, -(x + 20), 0, 76),
 		Parent = frame,
 	})
+	description:SetAttribute("PP_Lines", 3)
 	local have = owned()[itemId] == true
 	UIKit.Label({
 		Text = if have then `📦 {foundLine(seasonShown, itemId)}` else "🧪 Creator test: worn this visit only",
 		Font = Theme.Fonts.Display,
-		TextSize = textSize(18),
+		TextSize = textSize(19),
 		TextColor3 = colors.Glow,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(186, 146),
-		Size = UDim2.new(1, -206, 0, 26),
-		ZIndex = 41,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(x, 192),
+		Size = UDim2.new(1, -(x + 20), 0, 28),
 		Parent = frame,
 	})
 	local p = profile()
@@ -502,9 +525,8 @@ local function showDetail(itemId: string)
 			Text = "TRY ON",
 			TextSize = textSize(22),
 			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, 20, 1, -18),
-			Size = UDim2.fromOffset(200, h),
-			ZIndex = 42,
+			Position = UDim2.new(0, x, 1, -18),
+			Size = UDim2.fromOffset(220, h),
 			Parent = frame,
 		}, function()
 			remote:FireServer("TryOn", itemId)
@@ -517,9 +539,8 @@ local function showDetail(itemId: string)
 			Text = if wearing then "TAKE OFF" else "EQUIP",
 			TextSize = textSize(22),
 			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, 20, 1, -18),
-			Size = UDim2.fromOffset(200, h),
-			ZIndex = 42,
+			Position = UDim2.new(0, x, 1, -18),
+			Size = UDim2.fromOffset(220, h),
 			Parent = frame,
 		},
 		function()
@@ -534,10 +555,10 @@ local function showDetail(itemId: string)
 		TextSize = textSize(22),
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -20, 1, -18),
-		Size = UDim2.fromOffset(160, h),
-		ZIndex = 42,
+		Size = UDim2.fromOffset(170, h),
 		Parent = frame,
 	}, closeDetail, Theme.Colors.Lavender, Theme.Colors.Purple)
+	UIKit.PopIn(frame, 0.2)
 end
 
 local function card(parent: Instance, itemId: string, order: number, have: boolean, vaulted: boolean): TextButton
@@ -668,9 +689,9 @@ local function renderCollection()
 		local info = Seasons.Get(id)
 		if info and not several then
 			UIKit.Label({
-				Text = `{info.Time} SEASON · {info.Name}`,
+				Text = `📖 {found} OF {total} FOUND`,
 				Font = Theme.Fonts.Display,
-				TextSize = textSize(20),
+				TextSize = textSize(22),
 				TextColor3 = colors.Glow,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextWrapped = false,
@@ -702,7 +723,7 @@ local function renderCollection()
 		end
 	end
 	UIKit.Label({
-		Text = `{found} of {total} · {UIKit.FormatNumber(progress.Opened or 0)} crates opened · {UIKit.FormatNumber(
+		Text = `{if several then `{found} of {total} · ` else ""}{UIKit.FormatNumber(progress.Opened or 0)} crates opened · {UIKit.FormatNumber(
 			progress.Coins or 0
 		)} coins`,
 		Font = Theme.Fonts.Display,
@@ -1043,7 +1064,7 @@ local function renderOdds()
 	end
 	order += 1
 	UIKit.Label({
-		Text = "Your odds for your next crate. No duplicates: you never get an item twice, so your odds change as you collect, and a tier you've finished pays coins instead.",
+		Text = "Your next crate. You never get the same item twice, so these change as you collect.",
 		TextSize = textSize(17),
 		TextColor3 = Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -1075,6 +1096,9 @@ local function renderOdds()
 			elseif missing == 0 then `{info.Icon} {string.lower(info.Word)}s: all found, coins instead`
 			else `{info.Icon} A {string.lower(info.Word)} you don't own ({missing} left)`
 		line(heading, CrateLogic.Percent(tierTotal), color, true)
+		if tier == "Title" then
+			continue -- (one item: its heading says it)
+		end
 		for _, row in tierRows do
 			local label = if string.find(row.Key, "Jackpot", 1, true) or row.Tier == "Coins"
 				then row.Label
@@ -1111,10 +1135,15 @@ local function shop(): { [string]: any }?
 	return if type(data) == "table" then data else nil
 end
 
+-- The gift picker takes the key shop's place, as an item's details do the collection's.
 local function closeGift()
 	giftPack = nil
 	if giftPicker then
 		giftPicker.Visible = false
+	end
+	local page = pages[current]
+	if page then
+		page.Visible = true
 	end
 end
 
@@ -1126,7 +1155,11 @@ local function openGift(pack: { [string]: any })
 	giftPack = pack.Key
 	clear(frame)
 	frame.Visible = true
-	UIKit.PopIn(frame, 0.25)
+	local page = pages[current]
+	if page then
+		page.Visible = false
+	end
+	UIKit.PopIn(frame, 0.2)
 	UIKit.Label({
 		Text = `🎁 GIFT {CrateTheme.Count(pack.Keys, "KEY")} TO...`,
 		Font = Theme.Fonts.Display,
@@ -1196,11 +1229,21 @@ local function renderKeys()
 		local panel =
 			UIKit.Panel({ Size = UDim2.new(1, 0, 0, 200), CornerRadius = 16, Parent = page }, colors.Panel, colors.Deep)
 		UIKit.Label({
-			Text = "🔒 Keys aren't for sale where you are. Keys you win in PARTY CUPS, with levels and weekly quests still open crates!",
+			Text = "🔒 Keys aren't for sale where you are",
 			Font = Theme.Fonts.Display,
-			TextSize = textSize(22),
-			Position = UDim2.fromOffset(20, 20),
-			Size = UDim2.new(1, -40, 1, -40),
+			TextSize = textSize(26),
+			TextWrapped = false,
+			Position = UDim2.fromOffset(20, 34),
+			Size = UDim2.new(1, -40, 0, 36),
+			Parent = panel,
+			Children = { UIKit.TextStroke(0.3) },
+		})
+		UIKit.Label({
+			Text = "Keys you win in PARTY CUPS, with levels and weekly quests still open crates!",
+			TextSize = textSize(19),
+			TextColor3 = Theme.Colors.TextDim,
+			Position = UDim2.fromOffset(20, 84),
+			Size = UDim2.new(1, -40, 0, 70),
 			Parent = panel,
 		})
 		return
@@ -1400,6 +1443,8 @@ local function render()
 	end
 	if detailItem then
 		showDetail(detailItem)
+	elseif giftPack and pages[current] then
+		pages[current].Visible = false -- (the gift picker is still up in its place)
 	end
 end
 
@@ -1418,6 +1463,25 @@ function CrateMenu.Show(tab: string?)
 	render()
 end
 
+-- Opens the key shop's gift picker for a pack (the UI checks show it this way).
+function CrateMenu.ShowGift(packKey: string)
+	CrateMenu.Show("Keys")
+	local data = shop()
+	for _, pack in (if data and type(data.Packs) == "table" then data.Packs else {}) do
+		if pack.Key == packKey then
+			openGift(pack)
+		end
+	end
+end
+
+-- Opens the collection on one item's details (the UI checks show it this way).
+function CrateMenu.ShowItem(itemId: string)
+	local itemSeason = Seasons.SeasonOf(itemId)
+	seasonShown = if itemSeason then itemSeason.Id else season.Id
+	CrateMenu.Show("Collection")
+	showDetail(itemId)
+end
+
 function CrateMenu.IsOpen(): boolean
 	return modal ~= nil and modal.IsOpen
 end
@@ -1432,6 +1496,30 @@ function CrateMenu.Build(context)
 	touch = UIKit.IsTouch()
 	modal = Modal.new(context.Overlay, season.Name, "🎃", Vector2.new(980, 600))
 	CrateTheme.Dress(modal.Window, season)
+	-- The season's name, once: the title bar wears its blackletter and embers (the pages don't repeat
+	-- it).
+	local titleBar = modal.Window:FindFirstChild("TitleBar")
+	local titleLabel = titleBar and titleBar:FindFirstChildOfClass("TextLabel")
+	if titleLabel then
+		titleLabel.Text = season.Name
+		titleLabel.Font = TITLE_FONT
+		titleLabel.TextSize = if touch then 40 else 44
+		titleLabel.TextColor3 = Color3.new(1, 1, 1)
+		local stroke = titleLabel:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Color = Color3.fromRGB(70, 20, 10)
+			stroke.Transparency = 0.1
+		end
+		UIKit.new("UIGradient", {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, colors.Gold),
+				ColorSequenceKeypoint.new(0.55, colors.Glow),
+				ColorSequenceKeypoint.new(1, colors.Main),
+			}),
+			Rotation = 90,
+			Parent = titleLabel,
+		})
+	end
 	local content = modal.Content
 	local tabGap = if touch then 6 else 10
 	local tabs = UIKit.new(if touch then "ScrollingFrame" else "Frame", {
@@ -1466,22 +1554,19 @@ function CrateMenu.Build(context)
 		})
 		pages[tab.Key] = page
 	end
-	-- The overlays: an item's details (the collection) and the gift picker (the key shop).
+	-- An item's details (in the collection's place) and the gift picker (over the key shop).
 	detail = UIKit.Panel({
 		Name = "Detail",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 93, 0.5, 0),
-		Size = UDim2.fromOffset(600, if touch then 300 else 270),
+		Position = UDim2.fromOffset(186, 0),
+		Size = UDim2.new(1, -186, 1, 0),
 		CornerRadius = 20,
 		Visible = false,
-		ZIndex = 40,
 		Parent = content,
 	}, colors.Panel, colors.Deep)
 	giftPicker = UIKit.Panel({
 		Name = "Gift",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 93, 0.5, 0),
-		Size = UDim2.fromOffset(460, 440),
+		Position = UDim2.fromOffset(186, 0),
+		Size = UDim2.new(1, -186, 1, 0),
 		CornerRadius = 20,
 		Visible = false,
 		ZIndex = 40,

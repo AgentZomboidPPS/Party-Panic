@@ -177,7 +177,7 @@ local function open(count: number, here: boolean)
 	local altars = freeAltars(root.Position)
 	local best = altars[1]
 	if not best then
-		NotificationController.Show("Every altar's busy: opening it right here!", "info", 3)
+		NotificationController.Show("The pile is busy: opening it right here!", "info", 3)
 		openAt(count, 0)
 		return
 	end
