@@ -468,26 +468,33 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 		BackgroundTransparency = 1,
 		Parent = gui,
 	})
-	-- The lobby dims behind it (the HUD too), between letterbox bars.
+	-- The lobby dims behind it (the HUD too, as for a full-screen moment), between letterbox bars.
+	-- Both reach past the safe area to the screen's edges (a phone's notch side too), as a modal's
+	-- backdrop does (UI/Modal).
 	local dim = UIKit.new("Frame", {
-		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromOffset(-300, -300),
+		Size = UDim2.new(1, 600, 1, 600),
 		BackgroundColor3 = Color3.fromRGB(10, 4, 16),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Parent = holder,
 	})
-	UIKit.Tween(dim, 0.8, { BackgroundTransparency = 0.45 })
+	UIKit.Tween(dim, 0.8, { BackgroundTransparency = 0.3 })
 	local bars = {}
+	local function barAt(anchor: number, shown: boolean): UDim2
+		local out = if shown then 0 elseif anchor == 0 then -0.14 else 0.14
+		return UDim2.new(0, -300, anchor + out, if anchor == 0 then -300 else 300)
+	end
 	for index, anchor in { 0, 1 } do
 		bars[index] = UIKit.new("Frame", {
 			AnchorPoint = Vector2.new(0, anchor),
-			Position = UDim2.fromScale(0, anchor + (if anchor == 0 then -0.14 else 0.14)),
-			Size = UDim2.fromScale(1, 0.14),
+			Position = barAt(anchor, false),
+			Size = UDim2.new(1, 600, 0.14, 300),
 			BackgroundColor3 = Color3.fromRGB(8, 4, 12),
 			BorderSizePixel = 0,
 			Parent = holder,
 		})
-		UIKit.Tween(bars[index], 0.6, { Position = UDim2.fromScale(0, anchor) })
+		UIKit.Tween(bars[index], 0.6, { Position = barAt(anchor, true) })
 	end
 	local text = UIKit.new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -542,7 +549,8 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 	end)
 	task.delay(5.6, function()
 		flicker:Disconnect()
-		UIKit.Tween(text, 0.5, { Position = UDim2.fromScale(0.5, 0.3) })
+		-- Up out of the card's way, still clear of Roblox's buttons on a small phone.
+		UIKit.Tween(text, 0.5, { Position = UDim2.fromScale(0.5, 0.32) })
 		onSeen()
 		local p = State.Profile
 		local keys = if p then p.Keys or 0 else 0
@@ -560,7 +568,7 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 			stroke.Transparency = 0
 			stroke.Thickness = 3
 		end
-		UIKit.Label({
+		local headline = UIKit.Label({
 			Text = `Your first {season.Crate} is waiting{if keys > 0
 				then `, with {CrateTheme.Count(keys, season.Key)}`
 				else ""}!`,
@@ -571,6 +579,7 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 			Parent = card,
 			Children = { UIKit.TextStroke(0.3) },
 		})
+		headline:SetAttribute("PP_Lines", 2) -- room for two (the UI checks)
 		UIKit.Label({
 			Text = "A crate every round you play. Keys on the PARTY CUP podium. 5 pets, 5 hats, 12 effects and one title.",
 			TextSize = 18,
@@ -582,8 +591,8 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 		local h = if touch then Theme.Touch.Target else 56
 		local function close()
 			UIKit.Tween(dim, 0.5, { BackgroundTransparency = 1 })
-			UIKit.Tween(bars[1], 0.5, { Position = UDim2.fromScale(0, -0.14) })
-			UIKit.Tween(bars[2], 0.5, { Position = UDim2.fromScale(0, 1.14) })
+			UIKit.Tween(bars[1], 0.5, { Position = barAt(0, false) })
+			UIKit.Tween(bars[2], 0.5, { Position = barAt(1, false) })
 			card:Destroy()
 			text:Destroy()
 			task.delay(0.6, function()
