@@ -32,6 +32,7 @@ local SeasonArt = require(Shared.SeasonArt)
 local Seasons = require(Shared.Seasons)
 
 local State = require(script.Parent.Parent.State)
+local HubTabs = require(script.Parent.Parent.UI.HubTabs)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -1596,29 +1597,8 @@ function CrateMenu.Build(context)
 	touch = UIKit.IsTouch()
 	modal = Modal.new(context.Overlay, season.Name, "🎃", Vector2.new(980, 600))
 	CrateTheme.Dress(modal.Window, season)
-	-- The season's name, once: the title bar wears its embers (the pages don't repeat it).
-	local titleBar = modal.Window:FindFirstChild("TitleBar")
-	local titleLabel = titleBar and titleBar:FindFirstChildOfClass("TextLabel")
-	if titleLabel then
-		titleLabel.Text = string.upper(season.Name)
-		titleLabel.Font = TITLE_FONT
-		titleLabel.TextSize = if touch then 32 else 36
-		titleLabel.TextColor3 = Color3.new(1, 1, 1)
-		local stroke = titleLabel:FindFirstChildOfClass("UIStroke")
-		if stroke then
-			stroke.Color = Color3.fromRGB(70, 20, 10)
-			stroke.Transparency = 0.1
-		end
-		UIKit.new("UIGradient", {
-			Color = ColorSequence.new({
-				ColorSequenceKeypoint.new(0, colors.Gold),
-				ColorSequenceKeypoint.new(0.55, colors.Glow),
-				ColorSequenceKeypoint.new(1, colors.Main),
-			}),
-			Rotation = 90,
-			Parent = titleLabel,
-		})
-	end
+	-- The hub's tabs in the title bar (UI/HubTabs): this one wears the season's name.
+	HubTabs.Attach(modal, "Season")
 	local content = modal.Content
 	local tabGap = if touch then 6 else 10
 	local tabs = UIKit.new(if touch then "ScrollingFrame" else "Frame", {

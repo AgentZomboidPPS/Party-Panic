@@ -21,13 +21,13 @@
 --
 -- The menu column's Settings button wore the panels' dark purple and looked switched off (owner:
 -- "why are the close menu buttons and the invite friend button so dark?"): it's lavender to purple
--- now (Theme's neutral button), apart from Shop's pink, Quests' yellow and Emotes' cyan.
+-- now (Theme's neutral button), apart from Shop's pink, the Season hub's orange and Emotes' cyan.
 --
 -- More of the game on screen in a round (owner: "During the mini games, any way we can save UI space
 -- so they can see more of the game at one time?"):
 --   * While the player is playing a round (State.PlayingRound: its rules card to its end, still in)
 --     the menu column slides off the right edge and a small ☰ button waits in the top right corner,
---     in Roblox's top bar row, with the Quests "!" on it. A tap brings the column back until a menu
+--     in Roblox's top bar row, with the column's "!" on it. A tap brings the column back until a menu
 --     is opened and closed, or 5 seconds pass. It comes back on its own for the results, for anyone
 --     knocked out and watching or sitting out, and in the lobby. The ☰ is three drawn bars: the
 --     character measures as a missing-glyph box in FredokaOne and Builder Sans, like ★ and ✕.
@@ -62,6 +62,7 @@ local Teams = require(Shared.Teams)
 
 local GoldPassController = require(script.Parent.GoldPassController)
 local State = require(script.Parent.Parent.State)
+local HubTabs = require(script.Parent.Parent.UI.HubTabs)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local SitOutSwitch = require(script.Parent.Parent.UI.SitOutSwitch)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -1111,7 +1112,7 @@ local function menuButton(
 	bottom: Color3
 ): TextButton
 	local touch = isTouch()
-	local size = if touch then Theme.Touch.Target else 70
+	local size = if touch then Theme.Touch.Target else 74
 	local button = UIKit.Button({
 		Name = name,
 		Text = icon,
@@ -1156,14 +1157,14 @@ local function buildMenu(parent: Instance): Frame
 	-- PC: the middle of the right edge. Touch: down from the top right corner, where it can't be
 	-- hit by mistake when reaching for the jump button.
 	local touch = isTouch()
-	local gap = if touch then 12 else 12
+	local gap = if touch then 12 else 14
 	local menu = UIKit.new("Frame", {
 		Name = "Menu",
 		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(1, 0.5),
-		Position = if touch then UDim2.new(1, -8, 0, 6) else UDim2.new(1, -14, 0.55, 0),
+		Position = if touch then UDim2.new(1, -8, 0, 6) else UDim2.new(1, -14, 0.5, 0),
 		Size = if touch
 			then UDim2.fromOffset(Theme.Touch.Target + 20, 4 * Theme.Touch.Target + 3 * gap + 6)
-			else UDim2.fromOffset(80, 5 * 70 + 4 * gap + 6),
+			else UDim2.fromOffset(80, 360),
 		BackgroundTransparency = 1,
 		Parent = parent,
 		Children = {
@@ -1177,20 +1178,21 @@ local function buildMenu(parent: Instance): Frame
 	})
 	UIKit.AutoScale(menu)
 	menuButton(menu, "Shop", "🛍️", "Shop", 1, Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
-	menuButton(menu, "Quests", "📜", "Quests", 2, Theme.Colors.Yellow, Theme.Colors.Orange)
+	-- The season hub (owner: "Do we not have a button to open the season rewards?", then "What if we
+	-- rolled season/event/quests into one button?"): the season's crates, the event and the quests,
+	-- one window with their tabs (UI/HubTabs), with a "!" when a quest or event reward is ready.
+	menuButton(menu, "Hub", "🎃", "Season", 2, Theme.Colors.Orange, Color3.fromRGB(205, 92, 24))
 	menuButton(menu, "Emotes", "🕺", "Emotes", 3, Theme.Colors.Cyan, Color3.fromRGB(50, 120, 230))
 	menuButton(menu, "Settings", "⚙️", "Settings", 4, Theme.Colors.Lavender, Theme.Colors.Purple)
-	-- The season's crate window (owner: "Do we not have a button to open the season rewards?"). PC:
-	-- a fifth tile; phones: a fifth tile would reach the jump button, so it's up in the top bar's right
-	-- corner in the lobby (buildSeasonButton).
-	if not touch then
-		menuButton(menu, "Crates", "🎃", "Season", 5, Theme.Colors.Orange, Color3.fromRGB(205, 92, 24))
-	end
 
 	State.ProfileChanged:Connect(function(profile)
-		local claimable = profile.Daily.CanClaim
-		badges.Quests.Visible = claimable
+		HubTabs.SetBadge("Quests", profile.Daily.CanClaim == true)
 	end)
+	local function hubBadge()
+		badges.Hub.Visible = HubTabs.AnyBadge()
+	end
+	HubTabs.Changed:Connect(hubBadge)
+	hubBadge()
 	return menu
 end
 
@@ -1355,33 +1357,6 @@ local function followMenu(hud: Instance, menu: Frame, topBar: ScreenGui)
 		refresh()
 	end
 	toggle = buildMenuToggle(topBar, HudController.ToggleMenu)
-	if isTouch() then
-		-- Phones: the season's button in the ☰'s corner of the top bar row while the ☰ isn't there.
-		local season = UIKit.new("Frame", {
-			Name = "SeasonButton",
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -8, 0, 34), -- level with Roblox's buttons (12 to 55)
-			Size = UDim2.fromOffset(TOGGLE_SIZE, TOGGLE_SIZE),
-			BackgroundTransparency = 1,
-			Parent = topBar,
-		})
-		UIKit.AutoScale(season, 0.8)
-		UIKit.Button({
-			Name = "Button",
-			Text = "🎃",
-			TextSize = 38,
-			Size = UDim2.fromScale(1, 1),
-			CornerRadius = 22,
-			Parent = season,
-		}, function()
-			State.OpenScreen:Fire("Crates")
-		end, Theme.Colors.Orange, Color3.fromRGB(205, 92, 24))
-		local function follow()
-			season.Visible = not toggle.Visible
-		end
-		toggle:GetPropertyChangedSignal("Visible"):Connect(follow)
-		follow()
-	end
 
 	State.OnPlayingChanged(refresh)
 	Modal.AnyOpenChanged:Connect(function(open)
@@ -1627,6 +1602,8 @@ function HudController.Start(context)
 	State.OpenScreen:Connect(function(name)
 		if name == "Settings" then
 			settings:Toggle()
+		elseif name == "Hub" then
+			State.OpenScreen:Fire(HubTabs.Last())
 		end
 	end)
 

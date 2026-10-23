@@ -19,6 +19,7 @@ local Modal = {}
 Modal.__index = Modal
 
 local openModal = nil
+local skipPop = false
 
 -- Room left around a window that has been shrunk to fit the screen (screen pixels).
 local FIT_MARGIN = 8
@@ -168,8 +169,21 @@ function Modal.Open(self: Modal)
 	self.IsOpen = true
 	Modal.AnyOpenChanged:Fire(true)
 	self.Root.Visible = true
-	UIKit.PopIn(self.Window, 0.3)
+	if skipPop then
+		skipPop = false
+	else
+		UIKit.PopIn(self.Window, 0.3)
+	end
 	self.Opened:Fire()
+end
+
+-- The next window to open (this frame) appears in place, without its pop: UI/HubTabs swaps one
+-- window for another, and they read as tabs of one window.
+function Modal.SkipNextPop()
+	skipPop = true
+	task.defer(function()
+		skipPop = false
+	end)
 end
 
 function Modal.Close(self: Modal)

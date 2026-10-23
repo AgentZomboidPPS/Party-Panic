@@ -457,6 +457,8 @@ local function __seedProfiles()
 		end
 		before[player] = {
 			coins = data.Coins,
+			keys = data.Keys,
+			crates = data.Crates and data.Crates.Count,
 			xp = data.XP,
 			level = LevelCurve.FromTotalXP(data.XP),
 			owned = owned,
@@ -512,6 +514,8 @@ local function __grantRewards(definition, results, before)
 		report.players[player.Name] = {
 			place = places[player],
 			coins = `{was.coins} -> {data.Coins}`,
+			keys = `{was.keys} -> {data.Keys}`, -- (the top 3 win 3 / 2 / 1)
+			crates = `{was.crates} -> {data.Crates and data.Crates.Count}`,
 			xp = `{was.xp} -> {data.XP}`,
 			level = `{was.level} -> {LevelCurve.FromTotalXP(data.XP)}`,
 			migrated = was.migrated,

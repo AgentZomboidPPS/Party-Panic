@@ -109,7 +109,9 @@ before every publish (the game is public).
 **Since version 49, not published yet** (the owner's notes after playing it): 21 s of lobby before the vote and
 crates open in the lobby while a round goes on; the crate window brighter with the display font and no dark
 buttons; key pack pictures; bots without a tag; keys 3/2/1 for the top 3 of every round (and the cup podium);
-the starter pack at 49 Robux; a Season button; the stag walks on the ground; Prime Cut's steaks no longer lose
+the starter pack at 49 Robux; one 🎃 Season button in the menu column for the season's crates, the event and the
+quests (owner: "What if we rolled season/event/quests into one button?": `UI/HubTabs`, their windows share a tab
+strip in the title bar, same size, no pop between them; it replaced the Quests tile); the stag walks on the ground; Prime Cut's steaks no longer lose
 pieces when the next one drops in (owner: "some steaks dont render properly": the client's drop moved the model
 by its pivot, and a steak whose pieces came a frame apart kept its seared body sunk under the grate; now each
 piece drops from where the server put it, and the round's steaks are shared up front so devices download them
@@ -156,7 +158,9 @@ latest commits): they create it in Creator Hub, add it to the API key, and send 
   item's details and the gift picker are pages in the tab's place, never pop-overs; `CrateMenu.ShowItem` /
   `ShowGift` open them for the checks). Keys and crates show as currencies under the coins on PC
   (`HudController`: tap to open the window); phones show them on the lobby's crate chip (under the coins is the
-  thumbstick's corner). Buttons are never dark (owner: "Stop making all of the buttons so dark."; Theme:
+  thumbstick's corner). The menu column's 🎃 Season button opens the season hub (`UI/HubTabs`: the crate window,
+  the event's and the quests' with one tab strip in their title bars; the event's tab only while one is on; a
+  "!" on the button and the tab when a quest or event reward is ready). Buttons are never dark (owner: "Stop making all of the buttons so dark."; Theme:
   Lavender to Purple neutral, Muted to MutedDark for one that can't be used yet).
   `Crates/CrateShow`
   (the opening everyone around sees), `Crates/CrateMoments` (banners, the season's welcome),

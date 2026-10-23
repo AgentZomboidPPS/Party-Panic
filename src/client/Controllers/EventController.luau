@@ -37,6 +37,7 @@ local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 
 local State = require(script.Parent.Parent.State)
+local HubTabs = require(script.Parent.Parent.UI.HubTabs)
 local LobbyRibbon = require(script.Parent.Parent.UI.LobbyRibbon)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -95,11 +96,14 @@ local function claimable(): boolean
 end
 
 local function refreshChip()
+	-- The season hub's event tab, there while an event is on, with the chip's "!".
+	local definition = event()
+	HubTabs.SetEvent(if definition then definition.Icon else nil, if definition then definition.Short else nil)
+	HubTabs.SetBadge("Event", definition ~= nil and claimable())
 	local ribbonChip = chip
 	if not ribbonChip or os.clock() < popUntil then
 		return
 	end
-	local definition = event()
 	local state = current
 	if badge then
 		badge.Visible = claimable()
@@ -465,9 +469,10 @@ local function buildScreen(context)
 		context.Overlay,
 		if definition then definition.Name else "EVENT",
 		if definition then definition.Icon else "🎃",
-		Vector2.new(980, 560)
+		Vector2.new(980, 600) -- (the season hub's size: UI/HubTabs)
 	)
 	modal = window
+	HubTabs.Attach(window, "Event")
 	body = UIKit.new("Frame", {
 		Name = "Body",
 		Size = UDim2.fromScale(1, 1),

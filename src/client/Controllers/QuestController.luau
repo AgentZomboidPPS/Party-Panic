@@ -11,6 +11,7 @@ local QuestDefinitions = require(Shared.QuestDefinitions)
 local Remotes = require(Shared.Remotes)
 
 local State = require(script.Parent.Parent.State)
+local HubTabs = require(script.Parent.Parent.UI.HubTabs)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -183,7 +184,8 @@ local function render()
 end
 
 function QuestController.Start(context)
-	modal = Modal.new(context.Overlay, "Quests", "📜", Vector2.new(700, 600))
+	modal = Modal.new(context.Overlay, "Quests", "📜", Vector2.new(980, 600)) -- (the season hub's size)
+	HubTabs.Attach(modal, "Quests")
 	list = UIKit.new("ScrollingFrame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
