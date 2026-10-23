@@ -11,8 +11,10 @@ from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes fro
 - **Live: version 47** (published 2026-10-23 03:25 UTC from `b8eadaa`, owner: "Can you push the update for minecart
   mayhem"): Minecart Mayhem out of the rotation (`Enabled = false` in GameDefinitions; the code stays). Version 46
   was published by someone else between 45 and 47 (Studio, or another chat that pushed nothing to GitHub); 47
-  replaced it, so ask the owner what 46 was.
-- **Waiting for the owner's yes:** `7f9b436`, the fun-and-staying data (owner: "What information should we collect
+  replaced it. Checked: 46 was 45 plus the empty HttpService and ServiceVisibilityService Studio adds when it saves
+  (HttpEnabled false): a Studio save, nothing lost; the owner published nothing.
+- **Live: version 48** (published 03:38 UTC from `65eb25e`, owner: "Lets publish that then."): `7f9b436`, the
+  fun-and-staying data (owner: "What information should we collect
   to gage if players are having fun and staying?", then "lets do 1-7."): every funnel step's custom fields
   (`Funnels.FIELDS`: device from each screen's "Device" step, Party / Friends / Solo, people in the round),
   `FirstRoundWait` (seconds from joining to the first GO), `LeftDuring`'s streak field, coins to Roblox's economy
