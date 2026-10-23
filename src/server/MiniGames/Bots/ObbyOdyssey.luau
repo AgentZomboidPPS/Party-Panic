@@ -11,6 +11,11 @@
 -- Skill makes the difference: clumsier bots react later, misjudge the balls and the bars now and then,
 -- and sometimes take off too early and splash. Nobody is out in this mode, so a bot that falls just goes
 -- back to its checkpoint and tries again. Once at the crown it hops about on the summit.
+--
+-- Fun pass (owner: "Make sure this is super sick and actually super fun."): bots take the tower's
+-- SHORTCUT of tiny pillars now and then (the better ones more often), half of them go for the hop row's
+-- launch pad, they keep still while the server flies them off a pad, and they jump the barrels rolling
+-- across the pyramid as they come, like the bars.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -23,6 +28,8 @@ local JUMP_WITHIN = 1.3 -- jump once this close to the take-off spot (it stops t
 local LAND_IN = 2 -- aim this far into the piece it jumps onto
 local BALL_CLEAR = Course.Body + 1.3 -- waits this far from a ball's path
 local ARRIVED = 1.2 -- this close to a spot it walked to counts as there
+-- A blinking block is worth jumping for if it's there from just before the landing until a little after.
+local SAFE_FROM, SAFE_TO = 0.25, 1.2
 
 local function flat(a: Vector3, b: Vector3): number
 	return Vector2.new(a.X - b.X, a.Z - b.Z).Magnitude
@@ -74,8 +81,14 @@ local function pick(bot, here: Course.Piece, p: Vector3, t: number): Course.Piec
 		if memory.Lane then
 			score += math.abs(to.X - memory.Lane) * 0.12
 		end
-		if to.Blink and not solidThrough(to, t + 0.4, t + 1.9) then
+		if to.Blink and not solidThrough(to, t + SAFE_FROM, t + SAFE_TO) then
 			score += 100
+		end
+		if to.Shortcut then
+			score += if memory.Brave then -8 else 60
+		end
+		if to.Launch and to.Section == 1 then
+			score += if memory.Launchy then -6 else 2
 		end
 		if score < bestScore then
 			best, bestScore = to, score
@@ -144,6 +157,9 @@ function ObbyOdyssey.Step(bot, ctx, mode, _dt)
 	if not root or not humanoid or not runner or humanoid.PlatformStand or not mode.origin then
 		return
 	end
+	if root.Anchored or runner.Flight then
+		return -- flying off a launch pad: the server has it
+	end
 	local memory = bot.Memory
 	local origin = mode.origin
 	local p = root.Position - origin
@@ -151,6 +167,10 @@ function ObbyOdyssey.Step(bot, ctx, mode, _dt)
 	local t = ctx:Now() - mode.epoch
 	local skill = bot.Skill
 	memory.Lane = memory.Lane or bot.Rng:NextNumber(-12, 12)
+	if memory.Brave == nil then
+		memory.Brave = bot:Chance(0.1 + 0.55 * bot.Skill ^ 2) -- the shortcut's tiny pillars
+		memory.Launchy = bot:Chance(0.5)
+	end
 	memory.Side = memory.Side or (if bot:Chance(0.5) then -1 else 1)
 
 	local function walkTo(x: number, y: number, z: number)
@@ -215,9 +235,23 @@ function ObbyOdyssey.Step(bot, ctx, mode, _dt)
 		end
 	end
 
+	-- The barrels on the pyramid: jump as one comes (on a tier, before it reaches the bot).
+	if here.Section == 6 and not here.Finish then
+		memory.BarrelError = memory.BarrelError or bot.Rng:NextNumber(-1, 1) * 0.14 * (1 - skill) ^ 1.2
+		local wait = Course.BarrelNext(t, p.X, here.Top, p.Z, 0.4)
+		if wait >= 0.05 + memory.BarrelError and wait <= 0.27 + memory.BarrelError then
+			memory.BarrelError = nil
+			memory.Hop = t + 0.35
+			bot:Jump()
+			return
+		end
+	end
+
 	-- Where to next: a piece in the next row (blinking blocks re-picked while waiting for a good one).
 	local target = memory.Target
-	if not target or (target.Blink and not solidThrough(target, t + 0.3, t + 1.5)) then
+	if
+		not target or (target.Row > here.Row and target.Blink and not solidThrough(target, t + SAFE_FROM, t + SAFE_TO))
+	then
 		target = pick(bot, here, p, t)
 		memory.Target = target
 	end
@@ -226,14 +260,22 @@ function ObbyOdyssey.Step(bot, ctx, mode, _dt)
 		return
 	end
 
-	-- Waiting for a blinking block: stay on a solid one while none ahead is safe (unless this one is about
-	-- to go too).
-	if target.Blink and not solidThrough(target, t + 0.3, t + 1.5) then
+	-- Waiting for a blinking block: stay on a solid one while none ahead is safe. If the one under it is
+	-- about to go too, hop sideways onto a neighbour in its row that stays (a short hop), and look again.
+	if target.Row > here.Row and target.Blink and not solidThrough(target, t + SAFE_FROM, t + SAFE_TO) then
 		local _, _, left = Course.BlinkState(here, t)
-		if not here.Blink or left > 0.9 then
+		if not here.Blink or left > 0.8 then
 			memory.Waiting = true
 			bot:Stop()
 			return
+		end
+		-- (the course always leaves one of these: Course.Setup)
+		for _, other in Course.BlinkEscapes(here) do
+			if other.Row == here.Row and solidThrough(other, t + 0.2, t + 1.2) then
+				target = other
+				memory.Target = other
+				break
+			end
 		end
 	end
 	memory.Waiting = false

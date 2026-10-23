@@ -27,6 +27,7 @@ return function(env)
 	end
 
 	local orderChecks = 0
+	local launched = 0
 	local fallsNoted = 0
 	local lastFall = {}
 	return function(elapsed)
@@ -178,7 +179,16 @@ return function(env)
 				here = Course.Rows[runner.Row][1] -- (put back on a pad)
 			end
 			local ways = Course.WaysOn(here)
-			local to = if #ways > 0 then ways[env.rng:NextInteger(1, #ways)].To else row[1]
+			local way = if #ways > 0 then ways[env.rng:NextInteger(1, #ways)] else nil
+			local to = if way then way.To else row[1]
+			if way and way.Launch then
+				-- A launch pad: no client here to fly the stand-in, so it lands where the flight would.
+				local x, y, z = Course.LaunchLanding(here, runner.Slot)
+				put(player, x, y, z)
+				at[player] = to
+				launched += 1
+				continue
+			end
 			if to.Blink and not Course.Solid(to, t + 0.05) then
 				continue -- wait for it
 			end
@@ -222,7 +232,14 @@ return function(env)
 					finished += 1
 				end
 			end
-			env.note(`t {math.floor(elapsed)}: {finished} at the crown, close {tostring(mode.closeAt ~= nil)}`)
+			local flights = 0
+			for _, runner in mode.runners do
+				flights += runner.Launches or 0
+			end
+			env.note(
+				`t {math.floor(elapsed)}: {finished} at the crown, close {tostring(mode.closeAt ~= nil)}, `
+					.. `launches {flights} (stand-ins put across {launched})`
+			)
 		end
 	end
 end

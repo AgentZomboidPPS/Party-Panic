@@ -15,7 +15,9 @@ test("every piece has a way on, with reach to spare, and nothing is walked up or
 			expectTrue(#ways > 0, `{from.Id} (row {index}) has no way on`)
 			for _, jump in ways do
 				local name = `{from.Id} > {jump.To.Id}`
-				if jump.Walk then
+				if jump.Launch then
+					continue -- a flight (checked below)
+				elseif jump.Walk then
 					expectTrue(jump.Gap < 0.15 and math.abs(jump.Rise) < 0.15, `{name} is a walk`)
 				else
 					expectTrue(
@@ -305,4 +307,184 @@ test("progress grows along the route and respawns are on their pads", function()
 	expectEqual(row, pad.Row, "its row")
 	stage = ObbyOdyssey.Step(3, 8, pad.X, pad.Z, pad.Top)
 	expectEqual(stage, 3, "a later pad stays")
+end)
+
+test("launch pads fly you onto their target, never through anything", function()
+	expectEqual(#ObbyOdyssey.Launchers, 2, "two launch pads")
+	for _, pad in ObbyOdyssey.Launchers do
+		local launch = pad.Launch :: ObbyOdyssey.Launch
+		local to = ObbyOdyssey.ById[launch.To]
+		expectTrue(to ~= nil and to.Row > pad.Row + 1, `{pad.Id} flies on past the next row`)
+		expectTrue(to.Stage >= pad.Stage, `{pad.Id} never goes back a checkpoint`)
+		for slot = 1, 12 do
+			local x1, y1, z1 = ObbyOdyssey.LaunchLanding(pad, slot)
+			local landed = ObbyOdyssey.PieceAt(x1, z1, y1)
+			expectEqual(landed, to, `{pad.Id} slot {slot} lands on {launch.To}`)
+			expectTrue(ObbyOdyssey.DistanceTo(to, x1 + 1.2, z1 + 1.2) == 0, `{pad.Id} slot {slot}: well inside`)
+			expectTrue(ObbyOdyssey.DistanceTo(to, x1 - 1.2, z1 - 1.2) == 0, `{pad.Id} slot {slot}: well inside`)
+			-- from anywhere on the pad, the body (a stud each side) stays over every top it passes
+			for _, corner in { { -1, -1 }, { 1, 1 }, { 0, 0 }, { 1, -1 } } do
+				local x0 = pad.X + corner[1] * (pad.W / 2 - 0.5)
+				local z0 = pad.Z + corner[2] * (pad.D / 2 - 0.5)
+				for step = 1, 99 do
+					local x, y, z = ObbyOdyssey.FlightAt(launch, x0, pad.Top, z0, x1, y1, z1, step / 100)
+					for _, piece in ObbyOdyssey.Pieces do
+						if piece ~= pad and piece ~= to and ObbyOdyssey.DistanceTo(piece, x, z) < 1 then
+							expectTrue(y >= piece.Top - 0.05, `{pad.Id} flies through {piece.Id} at {step}%`)
+						end
+					end
+					if ObbyOdyssey.DistanceTo(to, x, z) < 1 and step < 90 then
+						expectTrue(y >= to.Top - 0.05, `{pad.Id} flies into {to.Id}'s side at {step}%`)
+					end
+				end
+			end
+		end
+	end
+end)
+
+test("the shortcut: three tiny pillars off the main route, then the tower launcher", function()
+	local shortcut = {}
+	for _, piece in ObbyOdyssey.Pieces do
+		if piece.Shortcut then
+			table.insert(shortcut, piece)
+		end
+	end
+	expectEqual(#shortcut, 4, "three pillars and a pad")
+	local reached = false
+	for _, way in ObbyOdyssey.WaysOn(ObbyOdyssey.Checkpoints[2]) do
+		if way.To.Id == "Pillar1" then
+			reached = true
+		end
+	end
+	expectTrue(reached, "the first pillar is a jump from the second pad")
+	for _, piece in shortcut do
+		expectTrue(piece.Section == 3 and piece.Stage == 2, `{piece.Id} is in the tower section`)
+		if not piece.Launch then
+			expectTrue(piece.W <= 3, `{piece.Id} is tiny`)
+		end
+	end
+	-- the main route's middle line ignores it
+	local x = ObbyOdyssey.RowMiddle(10)
+	expectEqual(x, 0, "row 10's middle is the first step's")
+end)
+
+test("barrels roll along the three lower tiers into the lava, and a jump clears them", function()
+	local r = ObbyOdyssey.BarrelRadius
+	expectEqual(#ObbyOdyssey.BarrelTracks, 3, "a track on each lower tier")
+	for number, track in ObbyOdyssey.BarrelTracks do
+		local tier = ObbyOdyssey.ById[track.Tier]
+		-- it rolls on the tier's front strip, all the way across, then sinks
+		local onTier, age = 0, 0
+		while true do
+			local x, y, z = ObbyOdyssey.BarrelPath(track, age)
+			if not x then
+				break
+			end
+			if ObbyOdyssey.PieceAt(x :: number, z :: number, (y :: number) - r) == tier then
+				onTier += 1
+			end
+			age += 0.01
+		end
+		expectTrue(onTier * 0.01 * ObbyOdyssey.BarrelSpeed > tier.W - 1, `track {number} rolls across {track.Tier}`)
+		local _, y = ObbyOdyssey.BarrelPath(track, age - 0.01)
+		expectTrue((y :: number) < 0, `track {number} ends in the lava`)
+		-- the strip is in front of the next tier up
+		local above = ObbyOdyssey.Rows[tier.Row + 1][1]
+		expectTrue(
+			track.Z + ObbyOdyssey.BarrelLength / 2 < above.Z - above.D / 2,
+			`track {number} is clear of the riser`
+		)
+		-- someone on the strip is hit now and then, never with their feet over the barrel; the sides are clear
+		local hits, cleared = 0, true
+		for step = 0, 2999 do
+			local t = ObbyOdyssey.BarrelFrom + step * 0.01
+			if ObbyOdyssey.BarrelHits(t, 0, tier.Top, track.Z) then
+				hits += 1
+			end
+			if ObbyOdyssey.BarrelHits(t, 0, tier.Top + 2 * r + 0.05, track.Z) then
+				cleared = false
+			end
+			expectTrue(
+				not ObbyOdyssey.BarrelHits(t, 0, tier.Top, tier.Z + tier.D / 2 - 2),
+				`track {number}: the back of the tier is clear`
+			)
+		end
+		expectTrue(hits > 0, `track {number}: barrels come through`)
+		expectTrue(cleared, `track {number}: feet over a barrel aren't hit`)
+		-- BarrelNext says when one comes
+		local t = ObbyOdyssey.BarrelFrom
+		local wait = ObbyOdyssey.BarrelNext(t, 0, tier.Top, track.Z, 12)
+		expectTrue(wait < 12, `track {number}: one comes within 12 s`)
+		expectTrue((ObbyOdyssey.BarrelHits(t + wait, 0, tier.Top, track.Z)), "when BarrelNext says")
+	end
+	-- a jump takes long enough over the bar... and over a barrel: the feet stay over it most of the way up
+	local v0 = math.sqrt(2 * ObbyOdyssey.Gravity * ObbyOdyssey.JumpHeight)
+	local inside = v0 * v0 - 2 * ObbyOdyssey.Gravity * 2 * r
+	expectTrue(2 * math.sqrt(inside) / ObbyOdyssey.Gravity > 0.35, "a jump is over a barrel for long enough")
+end)
+
+test("every round's shuffle keeps the course fair", function()
+	for seed = 1, 25 do
+		ObbyOdyssey.Setup(seed * 7919)
+		for _, spinner in ObbyOdyssey.Spinners do
+			local period = math.abs(spinner.Period)
+			expectTrue(period >= 2.7 and period <= 3.7, `seed {seed}: {spinner.Id} turns once in {period}s`)
+		end
+		for _, ball in ObbyOdyssey.Balls do
+			expectTrue(ball.Period >= 3 and ball.Period <= 3.6, `seed {seed}: {ball.Id}`)
+			expectTrue(ball.Phase >= 0 and ball.Phase < 1, `seed {seed}: {ball.Id}'s phase`)
+		end
+		for row = 24, 28 do
+			for step = 0, 41 do
+				local t = step * 0.1 + 0.01
+				local gone = 0
+				for _, block in ObbyOdyssey.Rows[row] do
+					if not ObbyOdyssey.Solid(block, t) then
+						gone += 1
+					end
+				end
+				expectEqual(gone, 1, `seed {seed}: row {row} at {t}s`)
+			end
+		end
+		-- from any blinking block about to go there's always somewhere safe to go: a neighbour in its row or
+		-- the block straight ahead, there from just after you'd leave until well after you'd land
+		for row = 24, 28 do
+			for _, block in ObbyOdyssey.Rows[row] do
+				for step = 0, 83 do
+					local t = step * 0.05 + 0.01
+					local solid, _, left = ObbyOdyssey.BlinkState(block, t)
+					if solid and left <= 0.8 then
+						local safe = false
+						for _, other in ObbyOdyssey.BlinkEscapes(block) do
+							local ok = true
+							for check = 0, 9 do
+								if not ObbyOdyssey.Solid(other, t + 0.3 + check * 0.1) then
+									ok = false
+								end
+							end
+							safe = safe or ok
+						end
+						expectTrue(safe, `seed {seed}: no way off {block.Id} at {t}s`)
+					end
+				end
+			end
+		end
+		for number in ObbyOdyssey.BarrelTracks do
+			local count, last = 0, nil
+			for index = 0, 39 do
+				local release = ObbyOdyssey.Barrel(number, index)
+				if release then
+					count += 1
+					expectTrue(last == nil or release - last > 1, `seed {seed}: track {number}'s barrels are apart`)
+					last = release
+				end
+			end
+			expectTrue(count >= 25, `seed {seed}: track {number} gets barrels`)
+		end
+	end
+	-- different seeds, different rounds
+	ObbyOdyssey.Setup(1)
+	local a = ObbyOdyssey.Spinners[1].Period
+	ObbyOdyssey.Setup(2)
+	expectTrue(ObbyOdyssey.Spinners[1].Period ~= a, "the shuffle changes things")
 end)

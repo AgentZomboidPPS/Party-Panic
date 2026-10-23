@@ -22,8 +22,17 @@
 -- Course space (studs): +Z runs from the start to the crown, +X is to the right as you run, and heights
 -- are above the pool's surface (0). The server places it at the arena's origin, unturned.
 --
--- Times are seconds since the round's GO (the schedule's epoch, shared with clients), so the balls, bars and
--- blinking blocks are in the same place on every screen and on the server.
+-- Times are seconds since the schedule's epoch (shared with clients), so the balls, bars, blinking blocks and
+-- barrels are in the same place on every screen and on the server.
+--
+-- Fun pass (owner: "Make sure this is super sick and actually super fun."):
+--   * LAUNCH PADS throw you on a set flight (with a flip) to a spot further on: one in the middle of the
+--     hops flies you to the first pad, and a SHORTCUT of tiny pillars beside the tower (a few hard jumps
+--     instead of seven easy ones) ends on a pad that rockets you onto the tower's top.
+--   * ROLLING BARRELS tumble down the pyramid's front from a chute on the summit: the last dash is a
+--     jump over them (a hit knocks you down the tiers).
+--   * Every round is a little different: Setup(seed) shuffles the balls' timing, the bars' speeds and
+--     ways round, which block of each blinking row goes when, and the barrels' lanes.
 
 local ObbyOdyssey = {}
 
@@ -71,6 +80,17 @@ export type Piece = {
 	Color: string, -- a name from the server's palette
 	Blink: number?, -- a blinking block's group (0-2): which third of the cycle it's gone in
 	Spinner: number?, -- a spinner's disc: its index in ObbyOdyssey.Spinners
+	Launch: Launch?, -- a launch pad: stepping on it flies you there
+	Shortcut: boolean?, -- off the main route (the tower's shortcut)
+}
+
+export type Launch = {
+	To: string, -- the piece it flies you onto
+	X: number, -- where on it: the middle of the landing spots
+	Z: number,
+	Spread: number, -- how far apart the landing spots are across (people land side by side)
+	Apex: number, -- how far over the straight line between take-off and landing the flight rises
+	Time: number, -- seconds in the air
 }
 
 export type Ball = {
@@ -135,8 +155,9 @@ for index = 1, 5 do
 	local z = 8 + (index - 1) * 11.5
 	local xs: { number } = if index % 2 == 1 then { -12, 0, 12 } else { -18, -6, 6, 18 }
 	for column, x in ipairs(xs) do
+		local launcher = index == 3 and x == 0 -- the middle of the third row: a launch pad to the first pad
 		add(1 + index, {
-			Id = `Hop{index}_{column}`,
+			Id = if launcher then "HopLauncher" else `Hop{index}_{column}`,
 			Section = 1,
 			Stage = 0,
 			X = x,
@@ -144,7 +165,8 @@ for index = 1, 5 do
 			W = 7,
 			D = 7,
 			Top = LOW,
-			Color = BLOCK_COLORS[(index + column) % #BLOCK_COLORS + 1],
+			Color = if launcher then "Launch" else BLOCK_COLORS[(index + column) % #BLOCK_COLORS + 1],
+			Launch = if launcher then { To = "Checkpoint1", X = 0, Z = 66, Spread = 9, Apex = 14, Time = 1.1 } else nil,
 		})
 	end
 end
@@ -193,6 +215,26 @@ for index, step in steps do
 		D = 6,
 		Top = LOW + RISE * index,
 		Color = "Step",
+	})
+end
+-- The SHORTCUT, to the left of the steps: three tiny pillars, 2.8 square and a flat jump apart, then a
+-- launch pad beside the tower that rockets you onto its top. Three hard jumps instead of seven easy ones.
+-- They bend away from the tower, so the launch has room to go up before it goes over.
+local SHORTCUT = { { -18, 147 }, { -20, 154.3 }, { -21.5, 161.6 }, { -21.5, 169.8 } }
+for index, spot in SHORTCUT do
+	local pad = index == 4
+	add(9 + index, {
+		Id = if pad then "TowerLauncher" else `Pillar{index}`,
+		Section = 3,
+		Stage = 2,
+		Shortcut = true,
+		X = spot[1],
+		Z = spot[2],
+		W = if pad then 4 else 2.8,
+		D = if pad then 4 else 2.8,
+		Top = LOW,
+		Color = if pad then "Launch" else "Pillar",
+		Launch = if pad then { To = "Checkpoint3", X = -9, Z = 170, Spread = 4, Apex = 32, Time = 1.5 } else nil,
 	})
 end
 add(17, {
@@ -324,6 +366,14 @@ for _, piece in pieces do
 	end
 end
 ObbyOdyssey.Bridge = rows[8][1]
+ObbyOdyssey.ById = {} :: { [string]: Piece }
+ObbyOdyssey.Launchers = {} :: { Piece }
+for _, piece in pieces do
+	ObbyOdyssey.ById[piece.Id] = piece
+	if piece.Launch then
+		table.insert(ObbyOdyssey.Launchers, piece)
+	end
+end
 
 -- The swinging balls over the bridge: five of them, 10 apart, out of step with each other, the last well
 -- before the bridge's end (the jump to the next pad is taken clear of it).
@@ -346,6 +396,246 @@ end
 ObbyOdyssey.BlinkPeriod = 4.2
 ObbyOdyssey.BlinkGone = 1.4 -- a third of the period: the three groups take turns being gone
 ObbyOdyssey.BlinkWarn = 0.8
+
+-- Rolling barrels: on each of the pyramid's three lower tiers, barrels roll out of a pipe at one end, along
+-- the tier's front strip (the 5 studs in front of the next tier up) and off the other end into the lava,
+-- the next tier up the other way. They always roll on the tier, so a jump at the right moment clears them;
+-- the sides of the pyramid are clear of them, the long way round.
+ObbyOdyssey.BarrelRadius = 1.5
+ObbyOdyssey.BarrelLength = 3.4 -- along z (it rolls along x)
+ObbyOdyssey.BarrelSpeed = 15
+ObbyOdyssey.BarrelEvery = 1.9 -- on each tier, a barrel about this often (some are left out)
+ObbyOdyssey.BarrelFrom = 20 -- seconds after the epoch the first ones roll (nobody's near the peak before)
+local LAVA_BOTTOM = -8 -- a barrel is gone once it has sunk this far
+
+export type Track = {
+	Tier: string, -- the tier it rolls along
+	Top: number,
+	Z: number, -- the middle of its front strip
+	From: number, -- x it comes out of the pipe at
+	To: number, -- x it rolls off at
+	Way: number, -- +1 or -1 in x
+	Offset: number, -- its first barrel's head start in the schedule
+}
+ObbyOdyssey.BarrelTracks = {} :: { Track }
+for tier = 1, 3 do
+	local piece = rows[28 + tier][1]
+	local half = piece.W / 2
+	local way = if tier % 2 == 1 then 1 else -1
+	table.insert(ObbyOdyssey.BarrelTracks, {
+		Tier = piece.Id,
+		Top = piece.Top,
+		Z = piece.Z - piece.D / 2 + 2.5,
+		From = -way * (half + 1.5),
+		To = way * half,
+		Way = way,
+		Offset = (tier - 1) * 0.63,
+	})
+end
+local function trackLife(track: Track): number
+	local rolling = math.abs(track.To - track.From) / ObbyOdyssey.BarrelSpeed
+	return rolling + math.sqrt(2 * (track.Top + ObbyOdyssey.BarrelRadius - LAVA_BOTTOM) / ObbyOdyssey.Gravity)
+end
+ObbyOdyssey.BarrelLife = 0
+for _, track in ObbyOdyssey.BarrelTracks do
+	ObbyOdyssey.BarrelLife = math.max(ObbyOdyssey.BarrelLife, trackLife(track))
+end
+
+-- The round's shuffle --------------------------------------------------------------------------------
+
+local seed = 0
+
+-- A number in [0, 1) from the round's seed and `n` (the same on the server and every client).
+local function chance(n: number): number
+	local x = bit32.bxor(seed % 4294967296, (n * 2654435761) % 4294967296)
+	for _ = 1, 4 do
+		x = bit32.bxor(x, bit32.lshift(x, 13))
+		x = bit32.bxor(x, bit32.rshift(x, 17))
+		x = bit32.bxor(x, bit32.lshift(x, 5))
+	end
+	return x / 4294967296
+end
+
+-- Shuffles the round: the balls' timing, the bars' speed and way round, which block of each blinking row
+-- goes when, and the barrels. The server picks the seed and shares it; every client calls this with it.
+function ObbyOdyssey.Setup(newSeed: number)
+	seed = math.floor(newSeed) % 4294967296
+	for index, ball in ObbyOdyssey.Balls do
+		ball.Phase = chance(10 + index)
+		ball.Period = 3 + 0.6 * chance(20 + index)
+	end
+	for index, spinner in ObbyOdyssey.Spinners do
+		local period = 2.7 + chance(30 + index)
+		spinner.Period = if chance(40 + index) < 0.5 then period else -period
+		spinner.Phase = chance(50 + index)
+	end
+	-- The blinking rows: a shuffle of the three groups in each (one block gone at a time, as ever), always
+	-- with a way out. From a block you can jump straight ahead or hop sideways; a side block about to go while
+	-- the middle one is gone (the other side is far) needs the block straight ahead to be the fresh one.
+	-- Group g goes after group g - 1 (BlinkState), so that's the group of the other side of its row.
+	local previous: { number }? = nil
+	for row, list in rows do
+		local blinking = {}
+		for _, piece in list do
+			if piece.Blink then
+				table.insert(blinking, piece)
+			end
+		end
+		if #blinking ~= 3 then
+			continue
+		end
+		local options = {}
+		for _, groups in { { 0, 1, 2 }, { 0, 2, 1 }, { 1, 0, 2 }, { 1, 2, 0 }, { 2, 0, 1 }, { 2, 1, 0 } } do
+			local fair = true
+			local before = previous
+			if before then
+				local middle = before[2]
+				local going = (middle + 1) % 3 -- the side that goes right after the middle one
+				for _, side in { 1, 3 } do
+					if before[side] == going and groups[side] ~= before[4 - side] then
+						fair = false
+					end
+				end
+			end
+			if fair then
+				table.insert(options, groups)
+			end
+		end
+		local groups = options[math.floor(chance(100 + row) * #options) + 1]
+		for index, piece in blinking do
+			piece.Blink = groups[index]
+		end
+		previous = groups
+	end
+end
+
+-- The ways out of a blinking block `piece` (its row's neighbours and the block straight ahead), for the tests
+-- and the bots.
+function ObbyOdyssey.BlinkEscapes(piece: Piece): { Piece }
+	local list = {}
+	for _, other in rows[piece.Row] do
+		if other ~= piece and ObbyOdyssey.Gap(piece, other) < 4 then
+			table.insert(list, other)
+		end
+	end
+	for _, way in ObbyOdyssey.WaysOn(piece) do
+		table.insert(list, way.To)
+	end
+	return list
+end
+
+-- When barrel `index` on track `track` is let go, or nil if this one is left out (now and then, so the
+-- rhythm isn't steady).
+function ObbyOdyssey.Barrel(track: number, index: number): number?
+	local release = ObbyOdyssey.BarrelFrom
+		+ ObbyOdyssey.BarrelTracks[track].Offset
+		+ index * ObbyOdyssey.BarrelEvery
+		+ (chance(2000 + track * 997 + index) - 0.5) * 0.7
+	if index > 0 and chance(5000 + track * 997 + index) < 0.15 then
+		return nil
+	end
+	return release
+end
+
+-- Where a barrel on `track` is `age` seconds after it was let go (its middle; nil once it's gone).
+function ObbyOdyssey.BarrelPath(track: Track, age: number): (number?, number?, number?)
+	if age < 0 or age > trackLife(track) then
+		return nil, nil, nil
+	end
+	local r = ObbyOdyssey.BarrelRadius
+	local x = track.From + track.Way * ObbyOdyssey.BarrelSpeed * age
+	local y = track.Top + r
+	local edge = math.abs(track.To - track.From) / ObbyOdyssey.BarrelSpeed
+	if age > edge then -- off the end, down into the lava
+		y = math.max(track.Top + r - 0.5 * ObbyOdyssey.Gravity * (age - edge) ^ 2, LAVA_BOTTOM)
+	end
+	return x, y, track.Z
+end
+
+-- Every barrel rolling at time `t`: { Track, Index, X, Y, Z, Age }.
+function ObbyOdyssey.BarrelsAt(
+	t: number
+): { { Track: number, Index: number, X: number, Y: number, Z: number, Age: number } }
+	local list = {}
+	local every = ObbyOdyssey.BarrelEvery
+	for number, track in ObbyOdyssey.BarrelTracks do
+		local start = ObbyOdyssey.BarrelFrom + track.Offset
+		local last = math.floor((t - start + 0.4) / every)
+		local first = math.max(0, math.floor((t - start - trackLife(track) - 0.4) / every))
+		for index = first, last do
+			local release = ObbyOdyssey.Barrel(number, index)
+			if release then
+				local x, y, z = ObbyOdyssey.BarrelPath(track, t - release)
+				if x and y and z then
+					table.insert(list, { Track = number, Index = index, X = x, Y = y, Z = z, Age = t - release })
+				end
+			end
+		end
+	end
+	return list
+end
+
+-- Whether a barrel overlaps a character standing at (x, z) with its feet at `feet` at time `t`, and which
+-- way it was rolling (+1 or -1 in x).
+function ObbyOdyssey.BarrelHits(t: number, x: number, feet: number, z: number): (boolean, number)
+	local body = ObbyOdyssey.Body
+	local r = ObbyOdyssey.BarrelRadius
+	local low, high = feet + body, feet + ObbyOdyssey.Height - body
+	for _, barrel in ObbyOdyssey.BarrelsAt(t) do
+		if math.abs(barrel.Z - z) > ObbyOdyssey.BarrelLength / 2 + body then
+			continue
+		end
+		local cy = math.clamp(barrel.Y, low, high)
+		if (barrel.X - x) ^ 2 + (barrel.Y - cy) ^ 2 < (r + body) ^ 2 then
+			return true, ObbyOdyssey.BarrelTracks[barrel.Track].Way
+		end
+	end
+	return false, 0
+end
+
+-- Seconds until a barrel reaches someone standing at (x, z) from time `t`, looking `within` seconds ahead
+-- (math.huge if none does).
+function ObbyOdyssey.BarrelNext(t: number, x: number, feet: number, z: number, within: number): number
+	local wait = 0
+	while wait <= within do
+		if ObbyOdyssey.BarrelHits(t + wait, x, feet, z) then
+			return wait
+		end
+		wait += 0.02
+	end
+	return math.huge
+end
+
+-- Launch pads ----------------------------------------------------------------------------------------
+
+-- Where a flight from `pad` lands (feet, course space): a spot by its landing point, `slot` (1-12) spreading
+-- people out side by side.
+function ObbyOdyssey.LaunchLanding(pad: Piece, slot: number?): (number, number, number)
+	local launch = pad.Launch :: Launch
+	local to = ObbyOdyssey.ById[launch.To]
+	local index = ((slot or 1) - 1) % 12
+	local across = (index % 4 - 1.5) / 3 * launch.Spread
+	local along = (math.floor(index / 4) - 1) * 1.5
+	return launch.X + across, to.Top, launch.Z + along
+end
+
+-- A flight's feet `u` (0..1) of the way from (x0, y0, z0) to (x1, y1, z1): up first, over, and down onto
+-- the landing (the flat part eases in and out, the height follows an arc Apex over the straight line).
+function ObbyOdyssey.FlightAt(
+	launch: Launch,
+	x0: number,
+	y0: number,
+	z0: number,
+	x1: number,
+	y1: number,
+	z1: number,
+	u: number
+): (number, number, number)
+	local a = math.clamp(u, 0, 1)
+	local flat = a * a * (3 - 2 * a)
+	local y = y0 + (y1 - y0) * a + 4 * launch.Apex * a * (1 - a)
+	return x0 + (x1 - x0) * flat, y, z0 + (z1 - z0) * flat
+end
 
 -- Geometry -------------------------------------------------------------------------------------------
 
@@ -475,12 +765,16 @@ end
 local path: { { number } } = {}
 local arc: { number } = {}
 for index, list in rows do
-	local x, z = 0, 0
+	local x, z, count, top = 0, 0, 0, nil
 	for _, piece in list do
-		x += piece.X
-		z += piece.Z
+		if not piece.Shortcut then -- (the main route's middle line)
+			x += piece.X
+			z += piece.Z
+			count += 1
+			top = top or piece.Top
+		end
 	end
-	path[index] = { x / #list, list[1].Top, z / #list }
+	path[index] = { x / count, top :: number, z / count }
 	if index == 1 then
 		arc[index] = 0
 	else
@@ -628,12 +922,27 @@ export type Jump = {
 	Reach: number,
 	Margin: number,
 	Walk: boolean,
+	Launch: boolean?, -- a launch pad's flight
 }
 
 -- Every way on from a piece: the pieces in the next row it can get onto (a walk, or a jump with reach to
 -- spare), with what each needs.
 function ObbyOdyssey.WaysOn(from: Piece): { Jump }
 	local list = {}
+	if from.Launch then
+		local to = ObbyOdyssey.ById[from.Launch.To]
+		table.insert(list, {
+			From = from,
+			To = to,
+			Gap = ObbyOdyssey.Gap(from, to),
+			Rise = to.Top - from.Top,
+			Need = 0,
+			Reach = math.huge,
+			Margin = math.huge,
+			Walk = false,
+			Launch = true,
+		})
+	end
 	local next: { Piece } = rows[from.Row + 1] or {}
 	for _, to in next do
 		local gap = ObbyOdyssey.Gap(from, to)
@@ -649,6 +958,7 @@ function ObbyOdyssey.WaysOn(from: Piece): { Jump }
 			Reach = reach,
 			Margin = reach - need,
 			Walk = to.Walk == true or (from.Walk == true and gap < 0.15 and math.abs(rise) < 0.15),
+			Launch = false,
 		}
 		if jump.Walk or jump.Margin >= ObbyOdyssey.MinMargin then
 			table.insert(list, jump)

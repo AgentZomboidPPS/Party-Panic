@@ -22,12 +22,24 @@ then the average mini game too."). Built as **Obby Odyssey** (`ObbyOdyssey`, Rac
   screen showed them (half their ping back; bars swept between checks), with ctx:Knockback.
 - **Look:** all parts and CSG rounded blocks (the photo is blocky), no new meshes, so nothing to upload or approve.
   Scenery never collides.
-- **Checks (2026-10-23, on the pushed code):** code checks clean (259 tests); `mode_check.sh ObbyOdyssey`: 12 players,
-  0 errors; 10 real bots, 0 errors, all 12 reached the crown (35-47 s); phone HUD 0 errors, 0 layout problems;
-  `colliders.py`: nothing invisible to stand on. Blender renders of every section looked right.
+- **Fun pass** (owner: "Make sure this is super sick and actually super fun."):
+  - LAUNCH PADS: a set flight with a front flip that always lands (`Course.FlightAt`, tested never to pass
+    through anything). The HOP LAUNCHER in the middle of the hops flies you to pad 1. A SHORTCUT of three
+    tiny pillars left of the steps ends on the TOWER LAUNCHER, which rockets you onto the tower's top. A
+    person's own device flies them and sends `Launch`; the server flies bots (anchored, `_fly`).
+  - ROLLING BARRELS roll sideways along the pyramid's three lower tiers out of green pipes and into the
+    lava. They're always on the ground, so a timed jump clears them; the pyramid's sides are clear.
+  - Every round is shuffled (`Course.Setup(seed)`, seed in `MG_Course.S`): ball timing, bar speed and
+    direction, blink order and barrel rhythm. The blink order always leaves a way off a vanishing block
+    (tested for 25 seeds).
+  - Juice: BONK!/WHACK!/POW! pops, water splashes and lava flares, confetti at checkpoints, section-name
+    arches over the pads, a start gate that lifts at GO, bobbing balloons, lava embers, a "final stretch"
+    call, and the crown flying off the summit onto the winner's head for the rest of the round.
+- **Checks:** see the latest commit message for this branch's test-server results (code checks, `mode_check.sh
+  ObbyOdyssey` with 12 players, 10 real bots and the phone HUD, and `colliders.py`).
 - **Not done yet:** a portal preview (`make_preview.py ObbyOdyssey`, the portal shows its icon until then); its own
   song (it plays Panic Mode; a new pack costs one of the owner's audio uploads); a real-device playtest (jump feel,
-  ball and bar knockbacks, the blinking blocks on a phone). Not published.
+  the knockbacks, launch flights, barrels and blinking blocks on a phone). Not published.
 
 ## Session B in flight (2026-10-22 03:15 UTC)
 

@@ -20,6 +20,14 @@
 -- bots). The blinking blocks go solid and see-through on the same schedule on every device, and here for
 -- the bots. Runners pass through each other (one collision group), so twelve on a bridge never block or
 -- shove anyone off.
+--
+-- Fun pass (owner: "Make sure this is super sick and actually super fun."): LAUNCH PADS (a flight with a
+-- front flip, on a set arc so it always lands: a person's own device flies them and tells the server, which
+-- flies the bots), a SHORTCUT of tiny pillars to the tower launcher, ROLLING BARRELS across the pyramid's
+-- tiers (judged like the balls), a new shuffle of the hazards every round (Course.Setup with the round's
+-- seed, shared in MG_Course), arches naming each section over the pads, a start gate that lifts at GO,
+-- balloons and lava embers, a "final stretch" call, and on clients BONK pops, splashes and the crown
+-- flying onto the winner's head.
 
 local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,6 +37,7 @@ local Course = require(ReplicatedStorage.Shared.Logic.ObbyOdyssey)
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
 local Notifier = require(script.Parent.Parent.Services.Notifier)
+local CollectionService = game:GetService("CollectionService")
 local Build = require(script.Parent.Parent.World.Build)
 local Shapes = require(script.Parent.Parent.World.Shapes)
 
@@ -39,6 +48,8 @@ local MAX_PING = 0.5 -- round trips above this are judged as this
 local HIT_COOLDOWN = 1.4 -- after a hit, no new one for this long (they're flying)
 local BALL_PUSH, BALL_LIFT, BALL_STUN = 62, 34, 0.9
 local BAR_PUSH, BAR_LIFT, BAR_STUN = 44, 36, 0.7
+local BARREL_PUSH, BARREL_LIFT, BARREL_BACK, BARREL_STUN = 40, 34, 18, 0.8
+local LAUNCH_REACH = 6 -- a person may say they launched from this close to the pad (ping and a step)
 local SHARE_EVERY = 0.25
 -- Runners pass through each other; people also pass through anything still in the lobby's group.
 local RUNNER_GROUP, PEOPLE_GROUP = "PP_ObbyRunners", "PP_Players"
@@ -79,6 +90,8 @@ local PALETTE = {
 	Tower = rgb(55, 120, 235),
 	Disc = rgb(250, 248, 240),
 	Pipe = rgb(225, 45, 50),
+	Pillar = rgb(255, 150, 40),
+	Launch = rgb(255, 70, 160),
 	Blink = rgb(170, 110, 255),
 	Tier = rgb(80, 200, 80),
 	Summit = rgb(255, 214, 70),
@@ -103,9 +116,20 @@ type Runner = {
 	SeenT: number?, -- the course time of the last hazard check, as their screen showed it
 	Falls: number,
 	FellAt: Vector3?, -- the last fall: x, the row it fell from, z
+	Flight: Flight?, -- on a launch pad's flight
+	Launches: number,
 	Hits: number,
 	Shown: number, -- the score last given
 	Gone: boolean,
+}
+
+type Flight = {
+	Pad: Course.Piece,
+	From: Vector3, -- feet, course space
+	To: Vector3,
+	Start: number, -- server time
+	Time: number,
+	Bot: boolean, -- the server flies a bot; a person's own device flies them
 }
 
 -- How far behind the server a runner's position arrives: half a person's round trip; a bot is the server's.
@@ -282,6 +306,10 @@ function ObbyOdyssey:_buildPiece(piece: Course.Piece, folders: { [string]: Insta
 	if piece.Id == "Checkpoint3" then
 		return -- the tower's top (built with the tower)
 	end
+	if piece.Launch then
+		self:_buildLauncher(piece)
+		return
+	end
 	if piece.Section == 6 then
 		-- A pyramid tier: a block on the one below, with a blue band up the middle of its front.
 		local tier = piece.Row - 28
@@ -333,6 +361,7 @@ function ObbyOdyssey:_buildPiece(piece: Course.Piece, folders: { [string]: Insta
 		part:SetAttribute("Checkpoint", piece.Checkpoint)
 		if piece.Checkpoint > 0 then
 			self:_checkpointFlag(piece)
+			self:_sectionArch(piece)
 		end
 	elseif piece.Kind == "Box" and piece.Section == 1 then
 		part = Shapes.RoundedBox(Vector3.new(piece.W, top - DEEP, piece.D), 0.7, {
@@ -382,6 +411,201 @@ function ObbyOdyssey:_buildPiece(piece: Course.Piece, folders: { [string]: Insta
 		})
 	end
 	part:SetAttribute("Piece", piece.Id)
+end
+
+-- A launch pad: a pink block with a glowing trampoline top, chevrons pointing up, and springs round it. The
+-- top plate is a model the clients bounce when someone takes off.
+function ObbyOdyssey:_buildLauncher(piece: Course.Piece)
+	local arena = self.context.Arena
+	local x, z, top = piece.X, piece.Z, piece.Top
+	local block = Shapes.RoundedBox(Vector3.new(piece.W, top - DEEP, piece.D), 0.6, {
+		Name = piece.Id,
+		CFrame = self:_at(x, (top + DEEP) / 2, z),
+		Color = PALETTE.Launch,
+		Parent = arena,
+	})
+	block:SetAttribute("Piece", piece.Id)
+	local spring = Build.Model(`Spring_{piece.Id}`)
+	local size = math.min(piece.W, piece.D) - 0.8
+	local plate = self:_decor({
+		Name = "Plate",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.3, size, size),
+		CFrame = upright(self.origin + Vector3.new(x, top + 0.06, z)),
+		Color = rgb(70, 230, 255),
+		Material = Enum.Material.Neon,
+		Parent = spring,
+	})
+	Build.SurfaceText(plate, Enum.NormalId.Right, "⏫", {
+		PixelsPerStud = 12,
+		TextColor3 = rgb(255, 255, 255),
+		TextStrokeTransparency = 0.4,
+	})
+	spring:SetAttribute("Pad", piece.Id)
+	spring.Parent = self.folders.Springs
+	for _, corner in { { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } } do
+		self:_decor({
+			Name = "Coil",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(1.6, 0.9, 0.9),
+			CFrame = upright(
+				self.origin
+					+ Vector3.new(x + corner[1] * (piece.W / 2 - 0.3), top + 0.5, z + corner[2] * (piece.D / 2 - 0.3))
+			),
+			Color = rgb(250, 250, 250),
+			Material = Enum.Material.Metal,
+		})
+	end
+	local glow =
+		self:_decor({ Name = "LaunchGlow", Size = Vector3.one, Transparency = 1, CFrame = self:_at(x, top + 2, z) })
+	Build.Light(glow, rgb(90, 230, 255), 14, 1.5)
+end
+
+-- An arch over a pad's way out with the next section's name.
+function ObbyOdyssey:_sectionArch(pad: Course.Piece)
+	local section = Course.Sections[(pad.Checkpoint :: number) + 1]
+	if not section then
+		return
+	end
+	local width = math.min(pad.W - 4, 26)
+	local exit = pad.Z + pad.D / 2 - 1
+	local color = rgb(section.Color[1], section.Color[2], section.Color[3])
+	local arch = Shapes.Arch(width, 13, 1.6, 1.6, self:_at(pad.X, pad.Top, exit), {
+		Name = "SectionArch",
+		Color = color,
+		Parent = self.context.Arena,
+	})
+	arch.CanCollide = false
+	arch.CanQuery = false
+	arch.CanTouch = false
+	local sign = self:_decor({
+		Name = "SectionSign",
+		Size = Vector3.new(width - 2, 3.6, 0.8),
+		CFrame = self:_at(pad.X, pad.Top + 15, exit),
+		Color = rgb(40, 28, 90),
+	})
+	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
+		Build.SurfaceText(sign, face, `{section.Icon} {section.Name}`, {
+			PixelsPerStud = 14,
+			Font = SIGN_FONT,
+			TextColor3 = color:Lerp(rgb(255, 255, 255), 0.35),
+			TextStrokeTransparency = 0.3,
+		})
+	end
+end
+
+-- The barrels' pipes (where they come out on each tier) and the clients' barrel.
+function ObbyOdyssey:_buildBarrels()
+	local r = Course.BarrelRadius
+	for _, track in Course.BarrelTracks do
+		local mouth = self:_at(track.From - track.Way * 1.2, track.Top + r + 0.2, track.Z)
+		self:_decor({
+			Name = "BarrelPipe",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(3, r * 2 + 1.4, r * 2 + 1.4),
+			CFrame = mouth,
+			Color = rgb(60, 140, 70),
+		})
+		self:_decor({
+			Name = "BarrelPipeRim",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.8, r * 2 + 2.2, r * 2 + 2.2),
+			CFrame = mouth * CFrame.new(track.Way * 1.4, 0, 0),
+			Color = rgb(90, 190, 100),
+		})
+	end
+	local barrel = Build.Model("ObbyOdysseyBarrel")
+	local body = Build.Decor({
+		Name = "Body",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(Course.BarrelLength, r * 2, r * 2),
+		CFrame = CFrame.identity,
+		Color = rgb(170, 100, 50),
+		Material = Enum.Material.Wood,
+		Parent = barrel,
+	})
+	for _, offset in { -1.1, 0, 1.1 } do
+		Build.Decor({
+			Name = "Band",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.35, r * 2 + 0.08, r * 2 + 0.08),
+			CFrame = CFrame.new(offset, 0, 0),
+			Color = if offset == 0 then rgb(235, 60, 60) else rgb(80, 80, 90),
+			Material = Enum.Material.Metal,
+			Parent = barrel,
+		})
+	end
+	barrel.PrimaryPart = body
+	self.context:ShareTemplate("ObbyOdysseyBarrel", barrel)
+end
+
+-- The start gate: a striped bar across the start line, lifted on every client at GO.
+function ObbyOdyssey:_buildGate()
+	local start = Course.Start
+	local gate = Build.Model("Gate")
+	local z = start.Z + start.D / 2 - 0.4
+	for index = 0, 9 do
+		self:_decor({
+			Name = "Bar",
+			Size = Vector3.new(start.W / 10, 1.2, 0.6),
+			CFrame = self:_at(start.X - start.W / 2 + (index + 0.5) * start.W / 10, start.Top + 3, z),
+			Color = if index % 2 == 0 then rgb(235, 50, 60) else rgb(250, 250, 250),
+			Parent = gate,
+		})
+	end
+	gate.Parent = self.context.Arena
+end
+
+-- Balloon bunches round the course (clients bob them) and embers over the lava.
+function ObbyOdyssey:_buildAir()
+	local rng = Random.new(11)
+	local colors = { rgb(255, 84, 150), rgb(64, 196, 255), rgb(255, 204, 64), rgb(110, 226, 140), rgb(165, 95, 255) }
+	for index = 0, 13 do
+		local side = if index % 2 == 0 then -1 else 1
+		local x = side * rng:NextNumber(32, 46)
+		local z = -10 + index * 29 + rng:NextNumber(-6, 6)
+		local y = rng:NextNumber(18, 34) + (if z > 160 then 30 else 0)
+		local bunch = Build.Model("Balloons")
+		for b = 0, 2 do
+			local angle = b / 3 * math.pi * 2
+			self:_decor({
+				Name = "Balloon",
+				Shape = Enum.PartType.Ball,
+				Size = Vector3.new(3, 3.4, 3),
+				CFrame = self:_at(x + math.cos(angle) * 1.4, y + b * 0.6, z + math.sin(angle) * 1.4),
+				Color = colors[rng:NextInteger(1, #colors)],
+				Parent = bunch,
+			})
+		end
+		self:_decor({
+			Name = "String",
+			Size = Vector3.new(0.12, 8, 0.12),
+			CFrame = self:_at(x, y - 5, z),
+			Color = rgb(250, 250, 250),
+			Parent = bunch,
+		})
+		bunch.Parent = self.folders.Balloons
+	end
+	for index = 0, 5 do
+		local anchor = self:_decor({
+			Name = "Embers",
+			Size = Vector3.new(60, 1, 40),
+			Transparency = 1,
+			CFrame = self:_at(if index % 2 == 0 then -45 else 45, 1, Course.LavaFrom + 25 + index * 45),
+		})
+		local embers = Instance.new("ParticleEmitter")
+		embers.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		embers.Color = ColorSequence.new(rgb(255, 180, 60), rgb(255, 80, 30))
+		embers.LightEmission = 1
+		embers.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0) })
+		embers.Lifetime = NumberRange.new(2, 4)
+		embers.Speed = NumberRange.new(3, 7)
+		embers.SpreadAngle = Vector2.new(25, 25)
+		embers.EmissionDirection = Enum.NormalId.Top
+		embers.Rate = 5
+		embers.Parent = anchor
+		CollectionService:AddTag(embers, "PP_Ambient")
+	end
 end
 
 -- A pad's flag: a pole at its left front corner with a green flag and the pad's number.
@@ -480,6 +704,7 @@ function ObbyOdyssey:_buildTower()
 		Color = GOLD,
 	})
 	self:_checkpointFlag(pad)
+	self:_sectionArch(pad)
 	-- Battlements round the back and sides (out of reach of the course: decoration).
 	for index = 0, 7 do
 		self:_decor({
@@ -843,7 +1068,13 @@ function ObbyOdyssey:Prepare()
 		Balls = Build.Folder("Balls", arena),
 		Bars = Build.Folder("Bars", arena),
 		Blinks = Build.Folder("Blinks", arena),
+		Springs = Build.Folder("Springs", arena),
+		Balloons = Build.Folder("Balloons", arena),
 	}
+	-- This round's shuffle of the hazards (every client makes the same one from the seed).
+	self.seed = Random.new():NextInteger(1, 1000000000)
+	Course.Setup(self.seed)
+	self.stretch = false
 	self:_buildScenery()
 	self:_buildStart()
 	self:_buildTower()
@@ -852,6 +1083,9 @@ function ObbyOdyssey:Prepare()
 	end
 	self:_buildGantry()
 	self:_buildCrown()
+	self:_buildBarrels()
+	self:_buildGate()
+	self:_buildAir()
 
 	local roster = {}
 	for index, player in ctx:GetPlayers() do
@@ -867,6 +1101,7 @@ function ObbyOdyssey:Prepare()
 			SeenT = nil,
 			Falls = 0,
 			Hits = 0,
+			Launches = 0,
 			Shown = 0,
 			Gone = false,
 		}
@@ -882,6 +1117,7 @@ function ObbyOdyssey:Prepare()
 	ctx:SetSharedJSON("Course", {
 		O = { self.origin.X, self.origin.Y, self.origin.Z },
 		E = self.epoch,
+		S = self.seed,
 		Riders = roster,
 	})
 	ctx:SetShared("Stage", "Ready")
@@ -892,6 +1128,31 @@ function ObbyOdyssey:Prepare()
 	ctx.Hooks.CharacterReady = function(_player, character)
 		self:_joinGroup(character)
 	end
+	-- A person's own device flies them off a launch pad and says so: no hits while they fly, and everyone
+	-- sees the pad bounce. (A bot's flight is the server's: _launchBot.)
+	ctx:OnAction("Launch", function(player, padId)
+		local runner = self.runners[player]
+		local pad = if type(padId) == "string" then Course.ById[padId] else nil
+		local _, _, root = ctx:GetCharacter(player)
+		if not runner or not pad or not pad.Launch or not root or BotRegistry.IsBot(player) or runner.Flight then
+			return
+		end
+		local p = root.Position - self.origin
+		if Course.DistanceTo(pad, p.X, p.Z) > LAUNCH_REACH or math.abs(p.Y - pad.Top) > LAUNCH_REACH + 3 then
+			return
+		end
+		local x1, y1, z1 = Course.LaunchLanding(pad, runner.Slot)
+		runner.Flight = {
+			Pad = pad,
+			From = Vector3.new(p.X, pad.Top, p.Z),
+			To = Vector3.new(x1, y1, z1),
+			Start = ctx:Now(),
+			Time = (pad.Launch :: Course.Launch).Time,
+			Bot = false,
+		}
+		runner.Launches += 1
+		ctx:Fire(nil, "Launched", player.UserId, pad.Id)
+	end, { Interval = 0.5 })
 	ctx.Hooks.PlayerLeft = function(player)
 		local runner = self.runners[player]
 		if runner then
@@ -955,6 +1216,7 @@ function ObbyOdyssey:_respawnAt(player): CFrame?
 	end
 	runner.SeenT = nil
 	runner.HitUntil = os.clock() + 0.5
+	runner.Flight = nil
 	if started then
 		ctx:Fire(player, "Respawned", runner.Stage)
 		if not runner.Finish then
@@ -1015,6 +1277,18 @@ function ObbyOdyssey:_step()
 		if not humanoid or not root then
 			continue
 		end
+		local flight = runner.Flight
+		if flight then
+			if flight.Bot then
+				self:_fly(player, runner, flight, now)
+			elseif now > flight.Start + flight.Time + 0.3 then
+				runner.Flight = nil
+			end
+			if runner.Flight then
+				runner.SeenT = nil
+				continue -- in the air: nothing to hit, nothing to stand on
+			end
+		end
 		local p = root.Position - self.origin
 		local feet = feetOf(humanoid, root) - self.origin.Y
 		local seen = t - oneWay(player)
@@ -1030,6 +1304,14 @@ function ObbyOdyssey:_step()
 			ctx:Fire(player, "Checkpoint", stage)
 			local section = Course.Sections[stage + 1]
 			Notifier.Send(player, `CHECKPOINT {stage}! Next: {section.Icon} {section.Name}`, "success", 2.5)
+			if stage == #Course.Checkpoints and not self.stretch then
+				self.stretch = true
+				ctx:Announce(`🔥 {player.DisplayName} is on the final stretch!`, "info", 3)
+			end
+		end
+		-- A bot stepping onto a launch pad takes off (a person's own device does that itself).
+		if piece and piece.Launch and BotRegistry.IsBot(player) and not runner.Finish then
+			self:_launchBot(player, runner, piece, p, now)
 		end
 		runner.Row = row
 		runner.Progress = Course.Progress(runner.Row, p.X, feet, p.Z)
@@ -1049,25 +1331,79 @@ function ObbyOdyssey:_hazards(player, runner: Runner, p: Vector3, feet: number, 
 		end
 		if Course.BallHits(ball, seen, p.X, feet, p.Z) then
 			local heading = Course.BallHeading(ball, seen)
-			self:_hit(player, runner, Vector3.new(heading * BALL_PUSH, BALL_LIFT, 0), BALL_STUN, p)
+			self:_hit(player, runner, Vector3.new(heading * BALL_PUSH, BALL_LIFT, 0), BALL_STUN, p, "Ball")
 			return
 		end
 	end
 	for _, spinner in Course.Spinners do
 		local hit, px, pz = Course.SpinnerHits(spinner, last, seen, p.X, feet, p.Z)
 		if hit then
-			self:_hit(player, runner, Vector3.new(px * BAR_PUSH, BAR_LIFT, pz * BAR_PUSH), BAR_STUN, p)
+			self:_hit(player, runner, Vector3.new(px * BAR_PUSH, BAR_LIFT, pz * BAR_PUSH), BAR_STUN, p, "Bar")
 			return
+		end
+	end
+	if p.Z > Course.Summit.Z - 30 then
+		local hit, way = Course.BarrelHits(seen, p.X, feet, p.Z)
+		if hit then
+			local push = Vector3.new(way * BARREL_PUSH, BARREL_LIFT, -BARREL_BACK)
+			self:_hit(player, runner, push, BARREL_STUN, p, "Barrel")
 		end
 	end
 end
 
-function ObbyOdyssey:_hit(player, runner: Runner, velocity: Vector3, stun: number, p: Vector3)
+-- A bot on a launch pad: the server flies it (anchored, on the pad's arc) and lets it go where it lands.
+function ObbyOdyssey:_launchBot(player, runner: Runner, pad: Course.Piece, p: Vector3, now: number)
+	local _, _, root = self.context:GetCharacter(player)
+	if not root then
+		return
+	end
+	local x1, y1, z1 = Course.LaunchLanding(pad, runner.Slot)
+	runner.Flight = {
+		Pad = pad,
+		From = Vector3.new(p.X, pad.Top, p.Z),
+		To = Vector3.new(x1, y1, z1),
+		Start = now,
+		Time = (pad.Launch :: Course.Launch).Time,
+		Bot = true,
+	}
+	runner.Launches += 1
+	(player :: any):Stop()
+	root.Anchored = true
+	self.context:Fire(nil, "Launched", player.UserId, pad.Id)
+end
+
+-- One step of a bot's flight, with a front flip; it lands upright and is the server's again.
+function ObbyOdyssey:_fly(player, runner: Runner, flight: Flight, now: number)
+	local character, humanoid, root = self.context:GetCharacter(player)
+	if not character or not humanoid or not root then
+		runner.Flight = nil
+		return
+	end
+	local u = math.clamp((now - flight.Start) / flight.Time, 0, 1)
+	local from, to = flight.From, flight.To
+	local launch = flight.Pad.Launch :: Course.Launch
+	local x, y, z = Course.FlightAt(launch, from.X, from.Y, from.Z, to.X, to.Y, to.Z, u)
+	local lift = if humanoid.RigType == Enum.HumanoidRigType.R15 then humanoid.HipHeight + root.Size.Y / 2 else 3
+	local position = self.origin + Vector3.new(x, y + lift, z)
+	local heading = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
+	local facing = if heading.Magnitude > 0.1 then heading.Unit else Vector3.zAxis
+	local flip = -math.pi * 2 * (u * u * (3 - 2 * u))
+	character:PivotTo(CFrame.lookAt(position, position + facing) * CFrame.Angles(flip, 0, 0))
+	if u >= 1 then
+		character:PivotTo(CFrame.lookAt(position, position + facing))
+		root.Anchored = false
+		root.AssemblyLinearVelocity = Vector3.zero
+		pcall(root.SetNetworkOwner, root, nil) -- (anchoring dropped it: keep the server moving the bot)
+		runner.Flight = nil
+	end
+end
+
+function ObbyOdyssey:_hit(player, runner: Runner, velocity: Vector3, stun: number, p: Vector3, kind: string)
 	local ctx = self.context
 	runner.HitUntil = os.clock() + HIT_COOLDOWN
 	runner.Hits += 1
 	ctx:Knockback(player, velocity, stun)
-	ctx:Fire(nil, "Bonk", player.UserId, p.X, p.Y, p.Z)
+	ctx:Fire(nil, "Bonk", player.UserId, p.X, p.Y, p.Z, kind)
 end
 
 -- A runner reached the crown: their place, the cheer, the finish clock for everyone else.
@@ -1160,11 +1496,22 @@ function ObbyOdyssey:_checkDone()
 	self:_end("Finished")
 end
 
+-- Bots still in the air when the round ends land where they were going (none hangs there for the results).
+function ObbyOdyssey:_landBots()
+	for player, runner in self.runners or {} do
+		local flight = runner.Flight
+		if flight and flight.Bot then
+			self:_fly(player, runner, flight, flight.Start + flight.Time)
+		end
+	end
+end
+
 function ObbyOdyssey:_end(reason: string)
 	if self.ending then
 		return
 	end
 	self.ending = true
+	self:_landBots()
 	local ctx = self.context
 	self:_score()
 	self:_share()
@@ -1178,6 +1525,7 @@ end
 function ObbyOdyssey:Stop(_reason)
 	if self.runners and not self.ending then
 		self.ending = true
+		self:_landBots()
 		self:_score()
 		self:_share()
 		self.context:SetShared("Stage", "Done")
