@@ -265,7 +265,7 @@ local function renderCrates()
 	clear(page)
 	crateViewport(page)
 	-- Your crates and keys, what they are, the meter, then OPEN. Phones: the window's content is about
-	-- 375 tall, so the how-to-get-keys line is the key shop's alone.
+	-- 375 tall, so where keys come from goes under the crate there.
 	local L = if touch
 		then { Pill = 60, Rule = 68, Meter = 108, Open = 206, Gap = 10 }
 		else { Pill = 60, Rule = 70, Meter = 112, Open = 214, Gap = 10 }
@@ -277,6 +277,19 @@ local function renderCrates()
 		Size = UDim2.fromOffset(280, 24),
 		Parent = page,
 	})
+	if touch then
+		-- Where keys come from, in short, under the crate (the column has no room under the buttons on
+		-- a phone; the whole line is in the key shop).
+		local keysLine = UIKit.Label({
+			Text = "🔑 Win keys on the PARTY CUP podium, every 5th level and in weekly quests.",
+			TextSize = textSize(16),
+			TextColor3 = colors.Glow,
+			Position = UDim2.fromOffset(0, 280),
+			Size = UDim2.fromOffset(280, 72),
+			Parent = page,
+		})
+		keysLine:SetAttribute("PP_Lines", 3)
+	end
 	local x = 300
 	local width = 450 -- (the page is 754 wide: the crate's 280, a gap, then this column)
 	local column = UIKit.new("Frame", {

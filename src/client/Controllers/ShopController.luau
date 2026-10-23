@@ -24,7 +24,7 @@
 -- bring two tabs, Pets and Auras, and crate items in the others: never for coins, they come last,
 -- on a card in the season's dusk colours with a rim in their tier's colour (pink pets, purple
 -- hats, blue effects, the title in the season's own), the season's name in its corner. One that
--- isn't theirs says where it comes from ("📦 From Hollow Crates": a tap opens the crate menu's
+-- isn't theirs says where it comes from ("📦 From crates": a tap opens the crate menu's
 -- collection); the starter pack's trail opens its key shop; a past season's that wasn't found in
 -- time is VAULTED. Theirs equip like any other. With eight tabs the tab column scrolls on PC too.
 
@@ -376,7 +376,7 @@ local function render()
 			local starter = season ~= nil and season.Starter == item.Id
 			if season and (season.Id == Seasons.Current or starter) then
 				local colors = season.Colors
-				actionText = if starter then "🔑 Starter pack" else `📦 From {season.Crate}s`
+				actionText = if starter then "🔑 Starter pack" else "📦 From crates"
 				top, bottom = rgb(colors.Main), rgb(colors.Crimson)
 				onClick = function()
 					State.OpenScreen:Fire("Crates", if starter then "Keys" else "Collection")

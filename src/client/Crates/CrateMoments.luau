@@ -34,7 +34,10 @@ local season = Seasons.CurrentSeason()
 local colors = CrateTheme.Colors(season)
 local TITLE_FONT = Enum.Font.GrenzeGotisch
 
-local BANNER_Y = 208 -- (under the top bar, the first-join tips and the chips, with a gap)
+-- Where the banners hang: under the top bar, the first-join tip and the lobby's chips, with a gap.
+-- On a phone the chips share the top row with the profile chip; on PC they're a row of their own
+-- under the phase banner, so the banners hang lower there (clear of them from a 1024-wide window up).
+local BANNER_Y = { Touch = 208, PC = 268 }
 
 local touch = false
 local gui: ScreenGui
@@ -62,13 +65,13 @@ local function showBanner(banner: { [string]: any }, hurry: boolean): number
 	local color = CrateTheme.TierColor(tier, Seasons.SeasonOf(item))
 	local title = tier == "Title"
 	local mine = banner.UserId == player.UserId
-	local width = if title then 760 else 640
+	local width = 620 -- (on a 1280-wide screen, clear of the first-join tip on the left)
 	-- Who, what, then FIRST IN THE WORLD under it (a line of its own, inside the banner).
 	local firstLine = if banner.First then 30 else 0
 	local frame = UIKit.Panel({
 		Name = "Banner",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, BANNER_Y),
+		Position = UDim2.new(0.5, 0, 0, if touch then BANNER_Y.Touch else BANNER_Y.PC),
 		Size = UDim2.fromOffset(width, (if title then 124 else 92) + firstLine),
 		CornerRadius = 22,
 		Parent = bannerHolder,
