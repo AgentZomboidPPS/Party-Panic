@@ -640,7 +640,8 @@ local function fillPodium(data: Cup)
 		if mine.Place == 1 then
 			yours = `👑 You won the PARTY CUP! +{prize} {Theme.CoinIcon}{keyText}`
 		elseif prize > 0 then
-			yours = `{MEDALS[mine.Place]} You finished {Placement.Ordinal(mine.Place)}! +{prize} {Theme.CoinIcon}{keyText}`
+			yours =
+				`{MEDALS[mine.Place]} You finished {Placement.Ordinal(mine.Place)}! +{prize} {Theme.CoinIcon}{keyText}`
 		elseif myKeys > 0 then
 			yours = `You finished {Placement.Ordinal(mine.Place)}: +{myKeys} 🔑 for playing the cup!`
 		else
