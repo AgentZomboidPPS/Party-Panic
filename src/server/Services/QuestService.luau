@@ -1,5 +1,6 @@
 -- Daily and weekly quests. Gameplay systems call QuestService.Track with an event name;
--- completed quests pay out automatically with a toast that says exactly what was earned.
+-- completed quests pay out automatically with a toast that says exactly what was earned. A weekly
+-- quest also pays a key for the season's crates (Services/CrateService).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -9,6 +10,7 @@ local DailyLogic = require(Shared.Logic.DailyLogic)
 local QuestDefinitions = require(Shared.QuestDefinitions)
 local QuestLogic = require(Shared.Logic.QuestLogic)
 
+local CrateService = require(script.Parent.CrateService)
 local DataService = require(script.Parent.DataService)
 local Economy = require(script.Parent.Economy)
 local Notifier = require(script.Parent.Notifier)
@@ -67,7 +69,14 @@ function QuestService.Track(player: Player, eventName: string, amount: number?, 
 	for _, def in completed do
 		Economy.AddCoins(player, def.RewardCoins, "Quest")
 		Economy.AddXP(player, def.RewardXP)
-		Notifier.Send(player, `Quest complete: {def.Text}! +{def.RewardCoins} coins, +{def.RewardXP} XP`, "reward", 6)
+		local keys = CrateService.QuestKeys(player, def.Period) -- a weekly quest's Lantern Key
+		local keyText = if keys > 0 then `, +{keys} key{if keys == 1 then "" else "s"}` else ""
+		Notifier.Send(
+			player,
+			`Quest complete: {def.Text}! +{def.RewardCoins} coins, +{def.RewardXP} XP{keyText}`,
+			"reward",
+			6
+		)
 		Telemetry.PlayerEvent(player, "QuestCompleted", 1, def.Id)
 	end
 	DataService.Changed(player)

@@ -21,6 +21,10 @@
 -- glowing ring that floats above the head: a hat that sits up off it, Sink below 0), the GILDED TOP
 -- HAT and the SUN KING CROWN (a bright gem, a warm light and gold glitter). Glitter is a slow
 -- sparkle emitter on the hat (PP_GoldGlitter: off on a device with reduced effects).
+--
+-- HOLLOW NIGHT's hats (the first crate season, from its crates): the LEAF CROWN, the SCARECROW HAT
+-- (a crow on the brim), the ANTLER CIRCLET (glowing ember-wood antlers and fireflies), the ACORN HELM
+-- and the CRESCENT MOON (a glowing moon floating over the head with two bats).
 
 local CollectionService = game:GetService("CollectionService")
 
@@ -81,7 +85,35 @@ local LOOKS: { [string]: Look } = {
 		Light = { Color = Color3.fromRGB(255, 200, 90), Brightness = 1.2, Range = 6 },
 		Glitter = { Color = Color3.fromRGB(255, 220, 110), Rate = 7 },
 	},
+	-- HOLLOW NIGHT's hats (the first crate season, Shared/Seasons; meshes in World/Props/HollowNight,
+	-- fitted from the export by tools/meshgen/season/write_props.py).
+	Hat_LeafCrown = { Prop = "LeafCrown", Handle = "Bark", Width = 1.24, Sink = 0.09 },
+	Hat_Scarecrow = { Prop = "ScarecrowHat", Handle = "Straw", Width = 2.1, Sink = 0.05 },
+	Hat_AntlerCirclet = {
+		Prop = "AntlerCirclet",
+		Handle = "Leaf",
+		Width = 2.05,
+		Sink = 0.08,
+		Glow = "AntlerOrange2",
+		Light = { Color = Color3.fromRGB(255, 150, 60), Brightness = 0.8, Range = 4.5 },
+		Glitter = { Color = Color3.fromRGB(255, 220, 110), Rate = 3 }, -- (its fireflies)
+	},
+	Hat_AcornHelm = { Prop = "AcornHelm", Handle = "AcornRidge", Width = 1.37, Sink = 0.24 },
+	Hat_CrescentMoon = {
+		Prop = "CrescentMoon",
+		Handle = "Crow",
+		Width = 1.78,
+		Sink = -0.11,
+		Glow = "MoonhatOrange",
+		Light = { Color = Color3.fromRGB(255, 214, 130), Brightness = 0.9, Range = 5 },
+	},
 }
+
+-- The prop a hat is made from (the devices' copies for the crate openings: World/SeasonWorld).
+function Hats.PropOf(itemId: string): string?
+	local look = LOOKS[itemId]
+	return look and look.Prop
+end
 
 -- Whether there's a hat to build for this cosmetic.
 function Hats.Has(itemId: string): boolean

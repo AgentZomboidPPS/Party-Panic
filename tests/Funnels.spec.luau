@@ -28,6 +28,14 @@ test("Funnels: the step names never change (new steps go on the end)", function(
 		Funnels.GoldPass,
 		{ Name = "GoldPass", Steps = { "Saw the offer", "Pressed GET GOLD PASS", "Bought it" } }
 	)
+	expectEqual(Funnels.Crates, {
+		Name = "Crates",
+		Steps = { "First crate", "First open", "Opened 10", "Opened 50", "Bought keys" },
+	})
+	expectEqual(Funnels.CrateStep(1), 2)
+	expectEqual(Funnels.CrateStep(10), 3)
+	expectEqual(Funnels.CrateStep(50), 4)
+	expectEqual(Funnels.CrateStep(2), nil)
 end)
 
 test("Funnels: finishing a round count reaches its ladder step", function()

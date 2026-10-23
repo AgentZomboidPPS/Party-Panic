@@ -296,6 +296,23 @@ function DataService.Get(player: Player): Profile?
 	return profiles[player]
 end
 
+-- Saves `player`'s profile now (a Robux purchase is granted only once it's saved: CrateService's
+-- ProcessReceipt). True when it's safely saved, or when this profile never saves (no DataStores, the
+-- check tools); false when it can't be saved (no profile, its lock was lost, the save failed).
+function DataService.SaveNow(player: Player): boolean
+	local profile = profiles[player]
+	if not profile or profile.Released then
+		return false
+	end
+	if not store then
+		return true
+	end
+	if not profile.CanSave then
+		return workspace:GetAttribute("PP_Harness") == true
+	end
+	return saveRecord(profile, false) and profile.CanSave
+end
+
 function DataService.WaitFor(player: Player, timeout: number?): Profile?
 	local deadline = os.clock() + (timeout or 30)
 	while not profiles[player] and player.Parent and os.clock() < deadline do
@@ -357,6 +374,12 @@ function DataService.BuildSnapshot(profile: Profile)
 		Events = data.Events,
 		-- The GOLD PASS (Services/GoldPassService): whether they own it (the old VIP flag's place).
 		GoldPass = { Owned = data.GoldPass.Owned == true },
+		-- Crate seasons (Services/CrateService): keys, unopened crates, each season's progress (crates
+		-- opened, the Lantern Meter, what was found when), and the flags (welcome seen, starter pack).
+		Keys = data.Keys,
+		Crates = data.Crates,
+		Seasons = data.Seasons,
+		CrateFlags = data.CrateFlags,
 		CanSave = profile.CanSave,
 	}
 end

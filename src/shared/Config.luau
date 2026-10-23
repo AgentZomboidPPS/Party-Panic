@@ -91,6 +91,7 @@ Config.RateLimits = {
 	Tutorial = { 5, 5 },
 	ClientReport = { 5, 60 }, -- mesh, sound and (each round) bot reports: Services/ClientReports
 	SitOut = { 4, 4 }, -- the sit-out switch: a few quick changes of mind, not a stream
+	Crate = { 8, 4 }, -- the crates: open, buy keys, the season's welcome (Services/CrateService)
 }
 
 Config.EmoteCooldown = 1.5
@@ -107,6 +108,30 @@ Config.ConfettiCannonCooldown = 8
 Config.Monetization = {
 	GoldPassId = 2048378768,
 	GoldPassPrice = 399, -- Robux: shown only if Roblox can't be asked for the price
+	-- Lantern Keys for Robux (the crate seasons' design: "we also need to be able to sell keys for
+	-- Robux"; Services/KeyShopService): developer products. Price is what's shown only if Roblox can't
+	-- be asked (the game asks Roblox for each one's price and whether it's on sale, so changing them on
+	-- Roblox needs no update). A pack's Gift is the same pack bought for someone else in the server.
+	-- The starter pack is once per player: 5 keys and the season's banner trail, sold only there. Keys
+	-- never expire and work in every season. An id of 0 is a pack that isn't made: it isn't shown.
+	KeyPacks = {
+		{ Key = "Keys1", Keys = 1, Price = 25, Id = 0, GiftId = 0 },
+		{ Key = "Keys5", Keys = 5, Price = 99, Id = 0, GiftId = 0, Badge = "POPULAR" },
+		{ Key = "Keys15", Keys = 15, Price = 249, Id = 0, GiftId = 0, Badge = "BEST VALUE" },
+		{ Key = "Keys40", Keys = 40, Price = 549, Id = 0, GiftId = 0 },
+	},
+	StarterPack = { Key = "Starter", Keys = 5, Price = 79, Id = 0 },
+}
+
+-- The crate seasons' openings (Shared/Seasons, Services/CrateService): how long the show at an
+-- altar lasts (the burst, the reel, the reveal; Open 5 a little longer), how close to an altar its
+-- opener must be, and how long the HUD waits before saying the crates are ready.
+Config.Crates = {
+	ShowTime = 5.2,
+	ShowTimeMany = 6.6,
+	RevealAt = 3.4, -- when the prize shows (the reel ends): banners and the pet wait for it
+	RevealAtMany = 4.4,
+	AltarRange = 16,
 }
 -- The gold lane's coins and XP boost (Logic/GoldLane): a level without a gold cosmetic pays Base
 -- coins plus PerTen for every ten levels (6 at level 3, 15 at level 99: 733 over the lane's 67 coin

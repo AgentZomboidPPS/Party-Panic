@@ -12,6 +12,8 @@
 --
 -- Spawns face the vote stage, the one obvious landmark. Colored walkways run from the fountain to
 -- each zone. Trees, hedges and hills close the view so the plaza feels full, not like a field.
+-- While a crate season is on (always: Shared/Seasons), its crate pile stands where the fountain
+-- was, with its altars and board, and the lobby wears the season (World/SeasonWorld).
 --
 -- Look: rounded CSG shapes (World/Shapes), mesh props (World/MeshLibrary) and terrain scenery
 -- (World/Environment). Screens showing live or per-player data (vote cards, quest board, podium
@@ -29,6 +31,7 @@ local HallOfFame = require(script.Parent.HallOfFame)
 local LobbyObby = require(script.Parent.LobbyObby)
 local MedalWall = require(script.Parent.MedalWall)
 local MeshLibrary = require(script.Parent.MeshLibrary)
+local SeasonWorld = require(script.Parent.SeasonWorld)
 local Shapes = require(script.Parent.Shapes)
 
 local LobbyBuilder = {}
@@ -524,12 +527,16 @@ local function buildFountain(root: Model)
 		Parent = center,
 	})
 	Build.Light(glow, rgb(120, 220, 255), 18, 1.2)
+end
 
-	-- Benches facing the fountain, between the walkways (seating from §5).
+-- Benches facing the middle (the fountain, or the season's crate pile), between the walkways
+-- (seating from §5).
+local function buildBenches(root: Model)
+	local benches = Build.Model("Benches", root)
 	for _, degrees in { 0, 50, 130, 180, 200, 340 } do
 		local angle = math.rad(degrees)
 		local position = Vector3.new(math.cos(angle) * 31, 0, math.sin(angle) * 31)
-		MeshLibrary.Get("Bench", { CFrame = facing(position + Vector3.new(0, 0.2, 0), Vector3.zero), Parent = center })
+		MeshLibrary.Get("Bench", { CFrame = facing(position + Vector3.new(0, 0.2, 0), Vector3.zero), Parent = benches })
 	end
 end
 
@@ -1640,7 +1647,12 @@ function LobbyBuilder.Build(): LobbyRefs
 	buildGround(root)
 	buildSpawns(root)
 	Environment.Build(PLAZA_RADIUS)
-	buildFountain(root)
+	-- The crate season's pile, altars and board take the fountain's place (World/SeasonWorld); the
+	-- fountain comes back if no season has a lobby.
+	if not SeasonWorld.Build(root) then
+		buildFountain(root)
+	end
+	buildBenches(root)
 	buildVoteStage(root)
 	buildPodium(root)
 	buildShop(root)
@@ -1657,6 +1669,7 @@ function LobbyBuilder.Build(): LobbyRefs
 	HallOfFame.Build(root) -- last week's leaders, by the winner podium (east)
 	MedalWall.Build(root) -- every game's medal, by the shop gallery (west)
 	EventDecor.Build(root) -- the limited-time event's decorations, if one is on
+	SeasonWorld.Dress(root) -- the season's autumn: trees, grass, lanterns, pumpkins, leaf heaps, crows
 	softenFoliage(root)
 
 	return {

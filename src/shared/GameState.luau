@@ -22,6 +22,11 @@
 --                 from the end of those results until the replay's own results ("" if none)
 --   Parties       JSON of every party's look and streak, by party id (a player's PP_Party):
 --                 { Name, Color, Emblem, Streak } ("" with no parties): see Services/PartyService
+--   CrateBoard    JSON of the crate season's Top Unboxers: the season's and this week's top 10 by crates
+--                 opened, this server's, and the first in the world to find each pet and the title
+--                 ("" until loaded): see Services/CrateBoardService
+--   KeyShop       JSON of the Robux key packs on sale: { Packs = { { Key, Keys, Price, Gift } }, Starter }
+--                 ("" until Roblox has been asked): see Services/KeyShopService
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -59,6 +64,8 @@ function GameState.Folder(): Folder
 			created:SetAttribute("ReplayVote", "")
 			created:SetAttribute("Replay", "")
 			created:SetAttribute("Parties", "")
+			created:SetAttribute("CrateBoard", "")
+			created:SetAttribute("KeyShop", "")
 			created.Parent = ReplicatedStorage
 			folder = created
 		end

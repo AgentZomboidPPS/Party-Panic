@@ -122,6 +122,7 @@ local HOLLOW_NIGHT: Season = {
 }
 
 Seasons.ById = { HollowNight = HOLLOW_NIGHT } :: { [string]: Season }
+Seasons.Order = { "HollowNight" } -- oldest first (the collection log's season tabs)
 
 -- Every season's crate items (and the starter pack's trail), as cosmetics.
 Seasons.Items = {

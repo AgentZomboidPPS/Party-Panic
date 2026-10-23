@@ -68,14 +68,15 @@ return {
 	-- per match. Keys to open the crate are available to be awarded upon winning"; Shared/Seasons,
 	-- Logic/CrateLogic, Services/CrateService). Keys open any season's crates and never expire.
 	-- Crates are the unopened ones, for the season named (a new season takes them over, one for one).
-	-- Seasons keeps each season's progress: crates opened, coins they paid, the Lantern Meter, and
-	-- when each item was first found (crate number and UTC day). Flags: the 3 starter keys were given,
-	-- the season's welcome was seen, the UTC day of the daily cup key, the starter pack was bought.
+	-- Seasons keeps each season's progress: crates earned and opened, coins they paid, the Lantern
+	-- Meter, crates opened this week (Week: its number) and when each item was first found (crate
+	-- number and UTC day). Flags: the 3 starter keys were given, the season's welcome was seen, the
+	-- UTC day of the daily cup key, the starter pack was bought, Robux key purchases so far.
 	-- Receipts: the latest Robux purchases already granted (so none is ever granted twice).
 	Keys = 0,
 	Crates = { Season = "", Count = 0 },
 	Seasons = {} :: { [string]: { [string]: any } },
-	CrateFlags = { StarterKeys = false, Welcome = "", DailyKeyDay = 0, StarterPack = false },
+	CrateFlags = { StarterKeys = false, Welcome = "", DailyKeyDay = 0, StarterPack = false, Bought = 0 },
 	Receipts = {} :: { string },
 	Tutorial = { Done = false },
 	-- The new-player funnel (Services/FunnelService): the last step logged for this player, -1 for

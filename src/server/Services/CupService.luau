@@ -34,6 +34,8 @@
 --              points the latest round gave them)
 --   Champion   who wears the crown now (a person, still here): { UserId, Name, Cup }; absent if nobody
 --   Last       the last finished cup's podium: { Number, Podium = rows like Standings' }; absent at first
+--   Keys       with Done: the crate keys each person gets, by UserId (as text); the podium shows them
+--              (the crate seasons: "3 keys for 1st place, 2 keys for second, and 1 key for third")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -44,6 +46,7 @@ local GameState = require(Shared.GameState)
 local PartyCup = require(Shared.Logic.PartyCup)
 
 local BotRegistry = require(script.Parent.BotRegistry)
+local CrateService = require(script.Parent.CrateService)
 local DataService = require(script.Parent.DataService)
 local Economy = require(script.Parent.Economy)
 local MedalService = require(script.Parent.MedalService)
@@ -100,8 +103,9 @@ local function publish()
 	})
 end
 
--- A finished cup's final standings, out with its last round's results: the podium's news.
-local function publishFinal(finished: PartyCup.Cup, standings: { PartyCup.Standing })
+-- A finished cup's final standings, out with its last round's results: the podium's news. `keys`:
+-- the crate keys each person in it gets (by UserId, as text for the JSON), shown on the podium.
+local function publishFinal(finished: PartyCup.Cup, standings: { PartyCup.Standing }, keys: { [string]: number })
 	GameState.SetJSON("Cup", {
 		Number = finished.Number,
 		Round = PartyCup.Rounds,
@@ -112,6 +116,7 @@ local function publishFinal(finished: PartyCup.Cup, standings: { PartyCup.Standi
 		Standings = PartyCup.Rows(standings),
 		Champion = championInfo(),
 		Last = last,
+		Keys = keys,
 	})
 end
 
@@ -198,8 +203,27 @@ local function waitForResultsCard()
 	end
 end
 
+-- The crate keys a finished cup gives each person in its standings (Services/CrateService: 3 / 2 / 1
+-- on the podium, 1 for playing every round, a GOLD PASS owner's 1 on the podium, the day's first cup).
+local function cupKeys(finished: PartyCup.Cup, standings: { PartyCup.Standing }): { [string]: number }
+	local keys = {}
+	for _, standing in standings do
+		local player = members[standing.UserId]
+		if standing.IsBot or not player or isBot(player) or not player.Parent then
+			continue
+		end
+		local entry = finished.Entries[standing.UserId]
+		local wholeCup = entry ~= nil and entry.Rounds >= PartyCup.Rounds
+		local ok, count = pcall(CrateService.CupKeysFor, player, standing.Place, wholeCup)
+		if ok and count > 0 then
+			keys[tostring(standing.UserId)] = count
+		end
+	end
+	return keys
+end
+
 -- Prizes, stats and medals for the people in a finished cup's standings who are still here.
-local function payOut(standings: { PartyCup.Standing })
+local function payOut(standings: { PartyCup.Standing }, keys: { [string]: number })
 	for _, standing in standings do
 		local player = members[standing.UserId]
 		if standing.IsBot or not player or isBot(player) or not player.Parent then
@@ -224,6 +248,13 @@ local function payOut(standings: { PartyCup.Standing })
 		local coins = PartyCup.PrizeFor(standing.Place)
 		if coins > 0 then
 			Economy.AddCoins(player, coins, "PartyCup")
+		end
+		local cupKeyCount = keys[tostring(standing.UserId)]
+		if cupKeyCount then
+			local ok, err = pcall(CrateService.GiveCupKeys, player, cupKeyCount, standing.Place)
+			if not ok then
+				Telemetry.Error("CupKeys", tostring(err))
+			end
 		end
 		if standing.Place == 1 then
 			local ok, err = pcall(MedalService.Award, player, "CupChampion")
@@ -264,10 +295,11 @@ local function finish()
 	cup = PartyCup.New(finished.Number + 1) -- the next cup counts from the next round on
 	table.clear(away)
 	finishing = true
-	publishFinal(finished, standings)
+	local keys = cupKeys(finished, standings)
+	publishFinal(finished, standings, keys)
 	task.spawn(function()
 		waitForResultsCard()
-		local okPay, payErr = pcall(payOut, standings)
+		local okPay, payErr = pcall(payOut, standings, keys)
 		if not okPay then
 			Telemetry.Error("CupPayout", tostring(payErr))
 		end

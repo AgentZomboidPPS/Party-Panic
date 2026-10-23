@@ -2,7 +2,8 @@
 -- Coins are on the low scale (owner: "I want low currency not high"): 2 for playing, up to 6.
 -- The first win of each day pays a bonus, and the lifetime (career) stats feed the career
 -- milestones, which ProgressionService celebrates (owner: "Also we need cool payoffs for players
--- that keep playing the game.").
+-- that keep playing the game."). Every round played to the end also gives the season's crate
+-- (Services/CrateService), on the results card with the rest.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -17,6 +18,7 @@ local RewardLogic = require(Shared.Logic.RewardLogic)
 
 local Boosts = require(script.Parent.Boosts)
 local CosmeticService = require(script.Parent.CosmeticService)
+local CrateService = require(script.Parent.CrateService)
 local DataService = require(script.Parent.DataService)
 local Economy = require(script.Parent.Economy)
 local ProgressionService = require(script.Parent.ProgressionService)
@@ -125,6 +127,12 @@ local function grantOne(
 	Economy.AddXP(player, reward.XP)
 	ProgressionService.CheckMilestones(player)
 	local levelAfter = LevelCurve.FromTotalXP(data.XP)
+	-- The round's crate (the crate seasons: one for every round played to the end; Services/CrateService).
+	local okCrate, crate = pcall(CrateService.RoundCrate, player)
+	if not okCrate then
+		Telemetry.Error("Crates", `round crate: {crate}`)
+		crate = nil
+	end
 
 	resultsRemote:FireClient(player, {
 		GameId = definition.Id,
@@ -140,6 +148,7 @@ local function grantOne(
 		Standings = standings,
 		WinningTeam = winningTeam,
 		MyTeam = entry.Team,
+		Crate = crate, -- { Count, Name, Season, Total, Keys } (nil: none)
 	})
 	Telemetry.PlayerEvent(player, "RoundPlacement", item.Place, definition.Id)
 	DataService.Changed(player)

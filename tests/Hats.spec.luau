@@ -122,3 +122,24 @@ test("its look and its prop point at each other, and the prop's mesh is uploaded
 	expectTrue(string.find(spec :: string, "HatGlow = Enum.Material.Neon", 1, true) ~= nil, "the glow is Neon")
 	expectTrue(fs.isFile(`assets/meshes/{prop}.glb`), "its mesh file is in assets/meshes")
 end)
+
+test("HOLLOW NIGHT's hats: each look and its prop point at each other, and the meshes are uploaded", function()
+	local seasonProps = fs.readFile("src/server/World/Props/HollowNight.luau")
+	for _, id in { "Hat_LeafCrown", "Hat_Scarecrow", "Hat_AntlerCirclet", "Hat_AcornHelm", "Hat_CrescentMoon" } do
+		local look = string.match(hatsSource, id .. " = (%b{})")
+		expectTrue(look ~= nil, `World/Hats has a look for {id}`)
+		local prop = string.match(look :: string, 'Prop = "(%w+)"') :: string
+		local handle = string.match(look :: string, 'Handle = "(%w+)"')
+		local glow = string.match(look :: string, 'Glow = "(%w+)"')
+		local spec = string.match(seasonProps, "\n\t\t" .. prop .. " = (%b{})")
+		expectTrue(spec ~= nil, `World/Props/HollowNight defines {prop}`)
+		local assetId = tonumber(string.match(spec :: string, "AssetId = (%d+)"))
+		expectTrue(assetId ~= nil and assetId > 0, `{prop}'s mesh is uploaded`)
+		for _, piece in { handle, glow } do
+			if piece then
+				expectTrue(string.find(spec :: string, `{piece} = rgb`, 1, true) ~= nil, `{prop} colours {piece}`)
+			end
+		end
+		expectTrue(fs.isFile(`assets/meshes/{prop}.glb`), `{prop}'s mesh file is in assets/meshes`)
+	end
+end)

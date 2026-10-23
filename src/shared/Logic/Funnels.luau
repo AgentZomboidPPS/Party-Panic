@@ -71,6 +71,17 @@ Funnels.GoldPass = {
 	Steps = { "Saw the offer", "Pressed GET GOLD PASS", "Bought it" },
 }
 
+-- Crate seasons ("Crates"; Services/CrateService): once per player, ever (its run is the UserId):
+-- their first crate, their first open, 10 and 50 opened, then their first keys bought with Robux.
+Funnels.Crates = {
+	Name = "Crates",
+	Steps = { "First crate", "First open", "Opened 10", "Opened 50", "Bought keys" },
+}
+-- The Crates step that opening the `opened`th crate reaches (nil: not a step).
+function Funnels.CrateStep(opened: number): number?
+	return if opened == 1 then 2 elseif opened == 10 then 3 elseif opened == 50 then 4 else nil
+end
+
 -- The step of the round ladders (Onboarding, Session) that finishing `rounds` rounds reaches: step 3
 -- for the first, then one for each of RoundMarks. Nil when `rounds` isn't one of the marks.
 function Funnels.FinishedStep(rounds: number): number?
@@ -90,6 +101,7 @@ Funnels.FIELDS = {
 	Round = { "Game", "Friends", "People" },
 	Shop = { "Item or tab", "Device" },
 	GoldPass = { "", "Device" },
+	Crates = { "Season" },
 	LeftDuring = { "Where", "Device", "Streak" },
 	FirstRoundWait = { "New or returning", "Device", "People" },
 }
@@ -143,6 +155,7 @@ Funnels.CoinKinds = {
 	Daily = "TimedReward",
 	GoldPass = "IAP",
 	Shop = "Shop",
+	Crate = "Gameplay", -- coins out of a season crate (Services/CrateService)
 }
 
 -- What someone was doing when they left, for the "LeftDuring" event: the round's phase if they were

@@ -180,7 +180,7 @@ test("Crates: the Lantern Meter guarantees a pet at 150, then starts again", fun
 	expectTrue(longest < CrateLogic.Meter, `longest dry run {longest}`)
 end)
 
-test("Crates: keys from a Party Cup", function()
+test("Crates: keys from a Party Cup, levels and milestones", function()
 	expectEqual(CrateLogic.CupKeys(1, true, false, false), 4)
 	expectEqual(CrateLogic.CupKeys(2, true, false, false), 3)
 	expectEqual(CrateLogic.CupKeys(3, false, false, false), 1)
@@ -191,6 +191,15 @@ test("Crates: keys from a Party Cup", function()
 	expectEqual(CrateLogic.CupKeys(1, true, true, true), 0) -- bots never
 	expectEqual(CrateLogic.MilestoneAt(50), 50)
 	expectEqual(CrateLogic.MilestoneAt(51), nil)
+	expectEqual(CrateLogic.FrameFor(9), 0)
+	expectEqual(CrateLogic.FrameFor(10), 10)
+	expectEqual(CrateLogic.FrameFor(260), 250)
+	expectEqual(CrateLogic.FrameFor(9999), 500)
+	-- A key for every 5th level reached, however many levels at once.
+	expectEqual(CrateLogic.LevelKeys(4, 5), 1)
+	expectEqual(CrateLogic.LevelKeys(5, 6), 0)
+	expectEqual(CrateLogic.LevelKeys(3, 16), 3)
+	expectEqual(CrateLogic.LevelKeys(1, 1), 0)
 end)
 
 test("Seasons: Hollow Night's items are real, distinct and in their slots", function()

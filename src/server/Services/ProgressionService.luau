@@ -8,6 +8,7 @@
 -- waits until everyone is back in the lobby (Cleanup, after the new characters have spawned).
 -- The GOLD PASS (owner: "the paid one should also be insane"): an owner's level-up also gives the
 -- gold lane's reward, its cosmetics (CosmeticService) or its gold coins (GoldCoins on the card).
+-- Every 5th level also gives a key for the season's crates (Services/CrateService; Keys on the card).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,6 +19,7 @@ local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 
 local CosmeticService = require(script.Parent.CosmeticService)
+local CrateService = require(script.Parent.CrateService)
 local Notifier = require(script.Parent.Notifier)
 local Telemetry = require(script.Parent.Telemetry)
 
@@ -39,6 +41,7 @@ export type Celebration = {
 	Coins: number, -- coins this paid (already added)
 	GoldCoins: number?, -- LevelUp: the gold lane's coins on top (already added; GOLD PASS owners)
 	Items: { string }, -- cosmetics this unlocked (already owned)
+	Keys: number?, -- LevelUp: crate keys for every 5th level reached (already added; Services/CrateService)
 }
 
 local function ids(items: { Cosmetics.Cosmetic }): { string }
@@ -97,6 +100,7 @@ function ProgressionService.LevelUp(player: Player, before: number, after: numbe
 	local unlocked = CosmeticService.CheckUnlocks(player, true)
 	CosmeticService.Refresh(player) -- the name tag shows the new level and its color
 	milestoneTelemetry(player, unlocked)
+	local okKeys, keys = pcall(CrateService.LevelKeys, player, before, after)
 	local payload: Celebration = {
 		Kind = "LevelUp",
 		Level = after,
@@ -104,6 +108,7 @@ function ProgressionService.LevelUp(player: Player, before: number, after: numbe
 		Coins = coins,
 		GoldCoins = if goldCoins and goldCoins > 0 then goldCoins else nil,
 		Items = ids(unlocked),
+		Keys = if okKeys and keys > 0 then keys else nil,
 	}
 	celebrateRemote:FireClient(player, payload)
 	if HOLD_IN[GameState.Get("Phase") or "Waiting"] then

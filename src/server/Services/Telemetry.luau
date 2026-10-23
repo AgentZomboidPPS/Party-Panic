@@ -119,6 +119,36 @@ function Telemetry.Coins(player: Player, amount: number, balance: number, reason
 	end
 end
 
+-- Lantern Keys in (`amount` > 0: earned, bought) or out (< 0: crates opened) for Roblox's economy
+-- report, as their own currency, with the balance after it (Services/CrateService, KeyShopService).
+function Telemetry.Keys(player: Player, amount: number, balance: number, reason: string, sku: string?)
+	bump(if amount >= 0 then "Keys:in" else "Keys:out")
+	if skip(player) or amount == 0 then
+		return
+	end
+	local kind = if reason == "Bought"
+			or reason == "Gift"
+			or reason == "Starter pack"
+		then "IAP"
+		elseif reason == "Open" then "Gameplay"
+		elseif reason == "Starter" then "Onboarding"
+		else "Gameplay"
+	local ok, err = pcall(function()
+		AnalyticsService:LogEconomyEvent(
+			player,
+			if amount > 0 then Enum.AnalyticsEconomyFlowType.Source else Enum.AnalyticsEconomyFlowType.Sink,
+			"Keys",
+			math.abs(amount),
+			balance,
+			kind,
+			sku or reason
+		)
+	end)
+	if not ok then
+		warn(`[Telemetry] LogEconomyEvent keys {reason} failed: {err}`)
+	end
+end
+
 -- Levels completed for Roblox's progression report: every level from `before` to `after` - 1.
 function Telemetry.Levels(player: Player, before: number, after: number)
 	bump("Levels")

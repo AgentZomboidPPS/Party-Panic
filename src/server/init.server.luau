@@ -34,6 +34,10 @@ local order = {
 	"MedalService",
 	"LeaderboardService",
 	"EventService",
+	-- The crate seasons (Shared/Seasons): after the lobby (its altars) and the services they pay into.
+	"CrateBoardService",
+	"CrateService",
+	"KeyShopService", -- Robux keys: the game's only ProcessReceipt
 	"NoSitService", -- before the bots arrive: no character sits (Shared/NoSitting)
 	"BotService", -- after the lobby exists (spawns, vote pads)
 	"RoundManager",

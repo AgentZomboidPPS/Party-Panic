@@ -185,9 +185,12 @@ function ProfileMigration.Crates(data: { [string]: any })
 			data.Seasons[id] = nil
 			continue
 		end
+		progress.Earned = whole(progress.Earned)
 		progress.Opened = whole(progress.Opened)
 		progress.Coins = whole(progress.Coins)
 		progress.Meter = whole(progress.Meter)
+		progress.Week = whole(progress.Week)
+		progress.WeekOpened = whole(progress.WeekOpened)
 		if type(progress.Found) ~= "table" then
 			progress.Found = {}
 		end
@@ -200,6 +203,7 @@ function ProfileMigration.Crates(data: { [string]: any })
 	flags.StarterPack = flags.StarterPack == true
 	flags.Welcome = if type(flags.Welcome) == "string" then flags.Welcome else ""
 	flags.DailyKeyDay = whole(flags.DailyKeyDay)
+	flags.Bought = whole(flags.Bought)
 	local receipts = {}
 	if type(data.Receipts) == "table" then
 		for _, id in data.Receipts do

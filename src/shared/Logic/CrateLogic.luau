@@ -21,7 +21,8 @@
 -- plan for when, so keys stay scarce and earnable by everyone): the Party Cup podium pays 3 / 2 / 1
 -- to people (bots never get keys), everyone who played the whole cup gets 1 more, a GOLD PASS owner
 -- on the podium 1 more, every new player 3 to start, and the first cup finished each day (UTC) 1.
--- Crates: 1 for every round a person plays to the end.
+-- Crates: 1 for every round a person plays to the end. More keys (the design page's "More ways to earn
+-- keys"): 1 for each weekly quest finished and 1 for every 5th level reached on the Rewards Road.
 -- Leaf module: no requires, no Roblox APIs.
 
 local CrateLogic = {}
@@ -76,6 +77,8 @@ CrateLogic.DailyCupKeys = 1
 CrateLogic.CratesPerRound = 1
 CrateLogic.OpenMany = 5 -- "Open 5"
 CrateLogic.FriendRadius = 20 -- a friend this close when you open adds a point to the meter
+CrateLogic.QuestKeys = 1 -- for each weekly quest finished
+CrateLogic.LevelKeysEvery = 5 -- a key for every 5th level reached
 
 -- Crates opened that earn a medal.
 CrateLogic.Milestones = { 10, 50, 100, 250, 500 }
@@ -288,9 +291,26 @@ function CrateLogic.CupKeys(place: number?, wholeCup: boolean, goldPass: boolean
 	return keys
 end
 
+-- The keys for going from level `before` to `after`: one for every multiple of LevelKeysEvery passed.
+function CrateLogic.LevelKeys(before: number, after: number): number
+	local every = CrateLogic.LevelKeysEvery
+	return math.max(0, math.floor(after / every) - math.floor(before / every))
+end
+
 -- The milestone a count of crates opened just reached (the count itself), or nil.
 function CrateLogic.MilestoneAt(opened: number): number?
 	return if table.find(CrateLogic.Milestones, opened) then opened else nil
+end
+
+-- The best milestone `opened` crates have reached (0 below the first): the nameplate's frame.
+function CrateLogic.FrameFor(opened: number): number
+	local best = 0
+	for _, mark in CrateLogic.Milestones do
+		if opened >= mark then
+			best = mark
+		end
+	end
+	return best
 end
 
 return CrateLogic
