@@ -402,6 +402,10 @@ local list: { GameDefinition } = {
 		MinPlayers = 1,
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
+		-- Out of the rotation (owner, 2026-10-23: "Can we take minecart mayham out of rotation"), after
+		-- "Minecart mayham is still terrible. Iam not sure how we can fix it. I cant see when to jump."
+		-- The code stays: Enabled = true (or this line gone) brings it back.
+		Enabled = false,
 	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
