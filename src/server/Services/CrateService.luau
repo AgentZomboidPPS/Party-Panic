@@ -95,6 +95,9 @@ type Altar = { Index: number, Model: Model, Prompt: ProximityPrompt?, Position: 
 
 local altars: { Altar } = {}
 local showing: { [Player]: number } = {} -- os.clock() their show ends
+-- The day (UTC) each player's coming cup keys counted the day's first cup key for (CupKeysFor at the
+-- cup's end, GiveCupKeys when they're paid a few seconds later, maybe past midnight).
+local cupDays: { [Player]: number } = {}
 local shows = 0
 local limiter = RateLimiter.new(Config.RateLimits.Crate[1], Config.RateLimits.Crate[2])
 
@@ -234,8 +237,12 @@ function CrateService.CupKeysFor(player: Player, place: number?, wholeCup: boole
 	end
 	local data = profile.Data :: any
 	local keys = CrateLogic.CupKeys(place, wholeCup, data.GoldPass.Owned == true, false)
-	if data.CrateFlags.DailyKeyDay < today() then
+	local day = today()
+	if data.CrateFlags.DailyKeyDay < day then
 		keys += CrateLogic.DailyCupKeys
+		cupDays[player] = day
+	else
+		cupDays[player] = nil
 	end
 	return keys
 end
@@ -246,8 +253,11 @@ function CrateService.GiveCupKeys(player: Player, keys: number, place: number?)
 		return
 	end
 	local data = profile.Data :: any
-	if data.CrateFlags.DailyKeyDay < today() then
-		data.CrateFlags.DailyKeyDay = today()
+	-- (the day the keys counted the day's first cup key for, not the day they're paid)
+	local day = cupDays[player]
+	cupDays[player] = nil
+	if day and data.CrateFlags.DailyKeyDay < day then
+		data.CrateFlags.DailyKeyDay = day
 	end
 	CrateService.GiveKeys(player, keys, "PartyCup", if place and place <= 3 then `Place {place}` else "Played")
 end
@@ -472,9 +482,11 @@ function CrateService.Open(player: Player, count: number, altarIndex: number): (
 	}
 	showing[player] = os.clock() + duration
 	if altar then
-		setAltar(altar, player, os.clock() + duration + 0.4)
+		local free = os.clock() + duration + 0.4
+		setAltar(altar, player, free)
 		task.delay(duration + 0.4, function()
-			if altar.Busy == player then
+			-- (unless they've started another show here since: that one frees it)
+			if altar.Busy == player and altar.Until == free then
 				setAltar(altar, nil, 0)
 			end
 		end)
@@ -626,6 +638,7 @@ function CrateService.Init()
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		showing[player] = nil
+		cupDays[player] = nil
 		for _, altar in altars do
 			if altar.Busy == player then
 				setAltar(altar, nil, 0)

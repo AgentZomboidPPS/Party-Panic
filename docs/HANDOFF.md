@@ -102,8 +102,9 @@ owner before publishing (the game is public).
   the stag 3.6.
 - **Checks**: `tools/checks/pets_check.py` (41 checks on a real server with the uploaded meshes: every hinge
   holds standing, running and mid-flourish; the moves happen; no errors),
-  `tools/checks/crates_check.py` (53 checks on a real server: the lobby, grants, opening, bots get
-  nothing, the board, the shop with a stand-in for Roblox's purchases; never touches real DataStores),
+  `tools/checks/crates_check.py` (63 checks on a real server: the lobby, grants, opening, bots get
+  nothing, the board, the shop with a stand-in for Roblox's purchases, purchases whose saves fail or whose
+  buyer or gift friend leaves mid-save; never touches real DataStores),
   `client_harness.py --touch --skip SkeeBall` (section 3d is the crates; `--skip` keeps the script under Open
   Cloud's 1 MiB) then `ui_render.py` for phone/tablet renders, and `tests/CrateLogic.spec.luau` in Lune.
 

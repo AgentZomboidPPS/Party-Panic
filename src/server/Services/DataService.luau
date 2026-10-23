@@ -195,16 +195,19 @@ local function loadRecord(player: Player, session: number): (any, boolean)
 end
 
 -- One save of a profile (`release`: and give up our lock). True when it's done with: saved, not
--- saved on purpose (another server owns it now, or this profile never saves), false on an error.
-local function saveRecord(profile: Profile, release: boolean): boolean
+-- saved on purpose (another server owns it now, the player left while it waited, or this profile
+-- never saves), false on an error. Second: whether this save wrote the data.
+local function saveRecord(profile: Profile, release: boolean): (boolean, boolean)
 	local dataStore = store
 	if not profile.CanSave or not dataStore then
-		return true
+		return true, false
 	end
 	local lostLock = false
+	local wrote = false
 	inFlight += 1
 	local ok, err = pcall(function()
 		dataStore:UpdateAsync(profile.Key, function(stored)
+			wrote = false -- (UpdateAsync may run this more than once: the last run is what's written)
 			stored = stored or {}
 			local lock = stored.Lock
 			if lock and not ownsLock(lock, profile.Session) then
@@ -223,19 +226,20 @@ local function saveRecord(profile: Profile, release: boolean): boolean
 			ProfileMigration.Stamp(profile.Data)
 			stored.Data = profile.Data
 			stored.Lock = if release then nil else { JobId = game.JobId, Time = os.time(), Session = profile.Session }
+			wrote = true
 			return stored
 		end)
 	end)
 	inFlight -= 1
 	if not ok then
 		Telemetry.Error("DataSave", `{profile.Key}: {err}`)
-		return false
+		return false, false
 	end
 	if lostLock then
 		Telemetry.Error("DataSave", `{profile.Key}: session lock lost, save skipped`)
 		profile.CanSave = false
 	end
-	return true
+	return true, wrote
 end
 
 -- Tries `attempt` (true when done) a few times with growing waits, never waiting past the server's
@@ -260,7 +264,7 @@ local function releaseProfile(profile: Profile)
 	profile.Released = true
 	markBusy(profile.Key, 1)
 	if not withRetries(function()
-		return saveRecord(profile, true)
+		return (saveRecord(profile, true))
 	end) then
 		Telemetry.Error("DataSave", `{profile.Key}: release failed after retries`)
 	end
@@ -296,21 +300,27 @@ function DataService.Get(player: Player): Profile?
 	return profiles[player]
 end
 
--- Saves `player`'s profile now (a Robux purchase is granted only once it's saved: CrateService's
--- ProcessReceipt). True when it's safely saved, or when this profile never saves (no DataStores, the
--- check tools); false when it can't be saved (no profile, its lock was lost, the save failed).
-function DataService.SaveNow(player: Player): boolean
+-- Saves `player`'s profile now (a Robux purchase is granted only once it's saved: KeyShopService's
+-- ProcessReceipt). "Saved": it's on the DataStore (or this profile never saves: no DataStores, the
+-- check tools). "Left": they left first, so this save wrote nothing and their leave save carries
+-- the data. "Failed": it can't be saved (no profile, its lock was lost, the save failed).
+export type SaveResult = "Saved" | "Left" | "Failed"
+function DataService.SaveNow(player: Player): SaveResult
 	local profile = profiles[player]
-	if not profile or profile.Released then
-		return false
+	if not profile then
+		return "Failed"
+	elseif profile.Released then
+		return "Left"
+	elseif not store then
+		return "Saved"
+	elseif not profile.CanSave then
+		return if workspace:GetAttribute("PP_Harness") == true then "Saved" else "Failed"
 	end
-	if not store then
-		return true
+	local done, wrote = saveRecord(profile, false)
+	if not done or not profile.CanSave then
+		return "Failed"
 	end
-	if not profile.CanSave then
-		return workspace:GetAttribute("PP_Harness") == true
-	end
-	return saveRecord(profile, false) and profile.CanSave
+	return if wrote then "Saved" else "Left"
 end
 
 function DataService.WaitFor(player: Player, timeout: number?): Profile?

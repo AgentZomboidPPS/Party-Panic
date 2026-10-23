@@ -35,6 +35,7 @@ function __runCrates()
 	GameState.Set("Phase", "Intermission")
 	local Config = __require("Shared/Config")
 	local CrateLogic = __require("Shared/Logic/CrateLogic")
+	local ProfileMigration = __require("Shared/Logic/ProfileMigration")
 	local Seasons = __require("Shared/Seasons")
 	local DataService = __require("Server/Services/DataService")
 	local Notifier = __require("Server/Services/Notifier")
@@ -351,6 +352,81 @@ function __runCrates()
 	check("the starter pack only once", #bought == 2, bought)
 	local unknown = KeyShopService.Harness.Receipt(Ann.UserId, 12345, "receipt-4")
 	check("a product that isn't ours waits", unknown == Enum.ProductPurchaseDecision.NotProcessedYet)
+
+	-- 11. Purchases whose saves go wrong (the pre-release sweep): only that purchase is ever taken
+	-- back, a buyer who leaves mid-save isn't told it went through, a gift is delivered once.
+	local Receipt, Saves = KeyShopService.Harness.Receipt, KeyShopService.Harness.Saves
+	local GRANTED, WAITS = Enum.ProductPurchaseDecision.PurchaseGranted, Enum.ProductPurchaseDecision.NotProcessedYet
+	local annData = data(Ann)
+	table.clear(annData.Receipts)
+	for k = 1, ProfileMigration.MaxReceipts do
+		table.insert(annData.Receipts, `old-{k}`)
+	end
+	local before = annData.Keys
+	Saves[Ann.UserId] = "Failed"
+	local failed = Receipt(Ann.UserId, 9000005, "receipt-5")
+	check(
+		"a failed save: not granted, Roblox asks again",
+		failed == WAITS and annData.Keys == before,
+		annData.Keys - before
+	)
+	check(
+		"a failed save takes back just its own receipt (a full list keeps its oldest)",
+		#annData.Receipts == ProfileMigration.MaxReceipts
+			and annData.Receipts[1] == "old-1"
+			and table.find(annData.Receipts, "receipt-5") == nil,
+		{ #annData.Receipts, annData.Receipts[1] }
+	)
+	Saves[Ann.UserId] = nil
+	local retried = Receipt(Ann.UserId, 9000005, "receipt-5")
+	check("Roblox's retry grants it", retried == GRANTED and annData.Keys == before + 5, annData.Keys - before)
+	local spentFrom = annData.Keys
+	Saves[Ann.UserId] = function()
+		annData.Keys -= 1 -- (a crate opened while the save waits)
+		return "Failed"
+	end
+	Receipt(Ann.UserId, 9000005, "receipt-6")
+	check("a failed save keeps keys spent meanwhile spent", annData.Keys == spentFrom - 1, annData.Keys - spentFrom)
+	Saves[Ann.UserId] = "Left"
+	local leftFrom = annData.Keys
+	local left = Receipt(Ann.UserId, 9000005, "receipt-7")
+	check("a buyer who left mid-save isn't told it went through", left == WAITS and annData.Keys == leftFrom)
+	Saves[Ann.UserId] = nil
+	task.wait(10.5) -- (the shop's buttons: 4 presses in 10 s)
+	fire:Fire(__playerKey(Ann), "Buy", "Keys15", Di.UserId)
+	task.wait(0.3)
+	local diBefore, annBefore = data(Di).Keys, annData.Keys
+	Saves[Di.UserId] = "Left"
+	local giftLeft = Receipt(Ann.UserId, 9100015, "receipt-8")
+	Saves[Di.UserId] = nil
+	local giftAgain = Receipt(Ann.UserId, 9100015, "receipt-8")
+	check(
+		"a gift whose friend left mid-save is theirs, once",
+		giftLeft == GRANTED and giftAgain == GRANTED and data(Di).Keys == diBefore + 15 and annData.Keys == annBefore,
+		{ data(Di).Keys - diBefore, annData.Keys - annBefore }
+	)
+	fire:Fire(__playerKey(Ann), "Buy", "Keys15", Di.UserId)
+	task.wait(0.3)
+	local diFrom = data(Di).Keys
+	Saves[Di.UserId] = "Failed"
+	local giftFailed = Receipt(Ann.UserId, 9100015, "receipt-9")
+	Saves[Di.UserId] = nil
+	check("a gift whose save failed isn't granted", giftFailed == WAITS and data(Di).Keys == diFrom)
+	local giftRetry = Receipt(Ann.UserId, 9100015, "receipt-9")
+	check(
+		"its retry still goes to the friend",
+		giftRetry == GRANTED and data(Di).Keys == diFrom + 15,
+		data(Di).Keys - diFrom
+	)
+	local prompts = #bought
+	fire:Fire(__playerKey(Ann), "Buy", "Keys5", Cy.UserId)
+	task.wait(0.3)
+	check("no gift for a player keys can't be sold to", #bought == prompts, bought)
+	fire:Fire(__playerKey(Bo), "Buy", "Starter")
+	task.wait(0.3)
+	fire:Fire(__playerKey(Bo), "Buy", "Starter")
+	task.wait(0.3)
+	check("the starter pack can't be prompted twice before its receipt", #bought == prompts + 1, bought)
 
 	summary.toasts = toasts
 	summary.sent = #sent

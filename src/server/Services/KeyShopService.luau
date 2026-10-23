@@ -13,15 +13,25 @@
 --     shown. A check that fails twice counts as restricted. Keys they earn by playing still open
 --     crates. There's no trading in the game, and crate items never become tradeable.
 --   * Safe purchases: keys are granted in ProcessReceipt, saved to the DataStore before Roblox is
---     told the purchase went through (DataService.SaveNow; a save that fails undoes the grant and
---     Roblox asks again later), and a receipt already granted (its PurchaseId in the profile's
---     Receipts) is never granted twice.
+--     told the purchase went through (DataService.SaveNow; a save that fails takes back just that
+--     purchase, never other purchases or keys spent meanwhile, and Roblox asks again later), and a
+--     receipt already granted (its PurchaseId in the profile's Receipts) is never granted twice. A
+--     buyer who leaves while their save waits isn't told it went through: their leave save either
+--     carries it (with the PurchaseId, so Roblox's retry on their next visit grants nothing more)
+--     or doesn't (and the retry grants it).
 -- Prices and whether each product is on sale are Roblox's (GetProductInfo, asked at start and every
 -- 10 minutes): GameState KeyShop has what the screens show; a pack whose id is 0 isn't shown.
 --
--- Gifts: GIFT on a pack names a person in the server; the buyer pays, the friend gets the keys and a
--- banner saying who sent them. If the friend has left by the time the receipt arrives (or it arrives
--- on another server), the keys go to the buyer instead, and they're told.
+-- Gifts: GIFT on a pack names a person in the server who may have paid random items; the buyer pays,
+-- the friend gets the keys and a banner saying who sent them. The friend's keys are saved first,
+-- straight after they're added (a friend who leaves meanwhile takes them in their leave save), and
+-- once they're on the friend's record the purchase is delivered. If the friend has left by the time
+-- the receipt arrives (or it arrives on another server), the keys go to the buyer instead, and
+-- they're told.
+--
+-- The starter pack can't be prompted again while one is on its way (between the prompt and its
+-- receipt), so it's bought once. A second receipt (bought on another server meanwhile) still grants
+-- its keys: it was paid for.
 --
 -- Tests: SetRobloxForTests stands in for Roblox (the purchase prompt, product info, policy) in the
 -- check tools' runs, which can't buy anything; Harness.Receipt hands ProcessReceipt a made-up receipt.
@@ -58,8 +68,11 @@ local season = Seasons.CurrentSeason()
 -- What a product gives.
 type Product = { Key: string, Keys: number, Gift: boolean, Starter: boolean }
 
+local STARTER_PENDING = 120 -- seconds a starter pack prompt blocks another (until its receipt)
+
 local products: { [number]: Product } = {} -- product id -> what it gives
 local gifts: { [Player]: { UserId: number, Key: string, At: number } } = {}
+local starterPrompted: { [Player]: number } = {} -- when each player was last shown the starter pack
 local known = false
 
 export type Roblox = {
@@ -205,10 +218,20 @@ local function prompt(player: Player, key: any, giftTo: any)
 			Notifier.Send(player, "You have the starter pack already!", "info", 4)
 			return
 		end
+		local prompted = starterPrompted[player]
+		if prompted and os.clock() - prompted < STARTER_PENDING then
+			Notifier.Send(player, "Your starter pack is on its way!", "info", 4)
+			return
+		end
+		starterPrompted[player] = os.clock()
 	elseif type(giftTo) == "number" then
 		local friend = Players:GetPlayerByUserId(giftTo)
 		if not friend or friend == player or not isPerson(friend) or not DataService.Get(friend) then
 			Notifier.Send(player, "They aren't in this server any more.", "warning", 4)
+			return
+		end
+		if friend:GetAttribute("PP_KeysLocked") ~= false then
+			Notifier.Send(player, `Keys can't be gifted to {friend.DisplayName} where they are.`, "info", 5)
 			return
 		end
 		id = pack.GiftId
@@ -222,43 +245,87 @@ local function prompt(player: Player, key: any, giftTo: any)
 	roblox.Prompt(player, id)
 end
 
--- What a grant changed, so a failed save can undo it.
-type Undo = {
-	Profile: DataService.Profile,
-	Keys: number,
-	Receipts: number,
-	Starter: boolean,
-	Owned: boolean?,
-	Bought: number,
-}
-
-local function remember(profile: DataService.Profile): Undo
-	local data = profile.Data :: any
-	return {
-		Profile = profile,
-		Keys = data.Keys,
-		Receipts = #data.Receipts,
-		Starter = data.CrateFlags.StarterPack,
-		Owned = data.Owned[season.Starter],
-		Bought = data.CrateFlags.Bought,
-	}
-end
-
-local function undo(saved: Undo)
-	local data = saved.Profile.Data :: any
-	data.Keys = saved.Keys
-	while #data.Receipts > saved.Receipts do
-		table.remove(data.Receipts)
-	end
-	data.CrateFlags.StarterPack = saved.Starter
-	data.Owned[season.Starter] = saved.Owned
-	data.CrateFlags.Bought = saved.Bought
-end
-
-local function noteReceipt(data: any, purchaseId: string)
+-- Notes a granted receipt on a profile (its newest MaxReceipts are kept): the ids it pushed out.
+local function noteReceipt(data: any, purchaseId: string): { string }
 	table.insert(data.Receipts, purchaseId)
+	local dropped: { string } = {}
 	while #data.Receipts > ProfileMigration.MaxReceipts do
-		table.remove(data.Receipts, 1)
+		table.insert(dropped, tostring(table.remove(data.Receipts, 1)))
+	end
+	return dropped
+end
+
+-- Takes back just one receipt's grant (other purchases and keys spent meanwhile stay): its keys,
+-- its id, and the old ids its note pushed out.
+local function takeBack(data: any, purchaseId: string, keys: number, dropped: { string })
+	data.Keys = math.max(0, data.Keys - keys)
+	local at = table.find(data.Receipts, purchaseId)
+	if at then
+		table.remove(data.Receipts, at)
+	end
+	for index = #dropped, 1, -1 do
+		table.insert(data.Receipts, 1, dropped[index])
+	end
+end
+
+-- Saves a profile now (a check run can make a save fail, find the player gone, or do something
+-- while it waits).
+local function save(player: Player): DataService.SaveResult
+	local forced = KeyShopService.Harness.Saves[player.UserId]
+	if forced and workspace:GetAttribute("PP_Harness") == true then
+		return if type(forced) == "function" then forced() else forced
+	end
+	return DataService.SaveNow(player)
+end
+
+-- The friend a gift receipt goes to: the one picked, still here (and not just leaving), who may
+-- have paid random items. Nil: the keys go to the buyer.
+local function giftFriend(buyer: Player, product: Product): Player?
+	local pending = gifts[buyer]
+	if not pending or pending.Key ~= product.Key or os.clock() - pending.At >= GIFT_KEPT then
+		return nil
+	end
+	local other = Players:GetPlayerByUserId(pending.UserId)
+	local otherProfile = other and DataService.Get(other)
+	if
+		not other
+		or not isPerson(other)
+		or not otherProfile
+		or otherProfile.Released
+		or other:GetAttribute("PP_KeysLocked") ~= false
+	then
+		return nil
+	end
+	return other
+end
+
+local function announce(buyer: Player, receiver: Player, product: Product, wasGift: boolean)
+	local receiverData = (DataService.Get(receiver) :: DataService.Profile).Data :: any
+	local friend = if receiver ~= buyer then receiver else nil
+	local reason = if product.Starter then "Starter pack" elseif friend then "Gift" else "Bought"
+	Telemetry.PlayerEvent(buyer, "KeysBought", product.Keys, product.Key)
+	Telemetry.Keys(receiver, product.Keys, receiverData.Keys, reason, product.Key)
+	if friend then
+		remote:FireClient(friend, "Gift", { Keys = product.Keys, Reason = "Gift", From = buyer.DisplayName })
+		Notifier.Send(buyer, `🎁 You sent {friend.DisplayName} {product.Keys} {season.Key}s!`, "success", 6)
+		Notifier.All(`🎁 {buyer.DisplayName} gifted {friend.DisplayName} {product.Keys} keys!`, "reward", 5)
+	else
+		remote:FireClient(buyer, "Gift", {
+			Keys = product.Keys,
+			Reason = reason,
+			Item = if product.Starter then season.Starter else nil,
+		})
+		if wasGift then
+			Notifier.Send(buyer, "Your friend had left, so the keys are yours!", "info", 6)
+		end
+	end
+	if product.Starter then
+		CosmeticService.Refresh(buyer)
+	end
+	Notifier.Sound({ receiver }, "Purchase")
+	DataService.Changed(buyer)
+	if receiver ~= buyer then
+		DataService.Changed(receiver)
 	end
 end
 
@@ -281,84 +348,67 @@ function KeyShopService.ProcessReceipt(receipt: { [string]: any }): Enum.Product
 	if table.find(data.Receipts, purchaseId) then
 		return Enum.ProductPurchaseDecision.PurchaseGranted -- already granted (a repeat from Roblox)
 	end
+	local firstBuy = data.CrateFlags.Bought == 0
 
-	-- Who gets the keys: the buyer, or the friend they picked if it's a gift and the friend is here.
-	local friend: Player? = nil
-	if product.Gift then
-		local pending = gifts[buyer]
-		if pending and pending.Key == product.Key and os.clock() - pending.At < GIFT_KEPT then
-			local other = Players:GetPlayerByUserId(pending.UserId)
-			if other and isPerson(other) and DataService.Get(other) then
-				friend = other
-			end
+	-- A gift: the friend's keys and the receipt go on their record and are saved at once (nothing
+	-- waits in between, so a friend who leaves meanwhile takes them in their leave save). Once
+	-- they're there the purchase is delivered; the buyer's note of it is saved after.
+	local friend = if product.Gift then giftFriend(buyer, product) else nil
+	if friend then
+		local friendData = (DataService.Get(friend) :: DataService.Profile).Data :: any
+		friendData.Keys += product.Keys
+		local dropped = noteReceipt(friendData, purchaseId)
+		if save(friend) == "Failed" then
+			takeBack(friendData, purchaseId, product.Keys, dropped)
+			Telemetry.Error("KeyShop", `{receipt.PlayerId} {purchaseId}: gift save failed, not granted yet`)
+			return Enum.ProductPurchaseDecision.NotProcessedYet -- (the friend is still remembered)
 		end
 		gifts[buyer] = nil
+		noteReceipt(data, purchaseId)
+		data.CrateFlags.Bought += 1
+		task.spawn(save, buyer)
+		if firstBuy then
+			CrateService.FunnelStep(buyer, 5)
+		end
+		announce(buyer, friend, product, true)
+		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
-	local receiver = friend or buyer
-	local receiverProfile = DataService.Get(receiver) :: DataService.Profile
-	local undos = { remember(profile) }
-	if receiverProfile ~= profile then
-		table.insert(undos, remember(receiverProfile))
+	if product.Gift then
+		gifts[buyer] = nil
 	end
 
-	local receiverData = receiverProfile.Data :: any
-	receiverData.Keys += product.Keys
-	noteReceipt(data, purchaseId)
-	if receiverProfile ~= profile then
-		noteReceipt(receiverData, purchaseId)
-	end
+	-- The buyer's own keys (or a gift whose friend has gone): saved before Roblox hears it went
+	-- through. Not saved by this call: just this purchase is taken back, and Roblox asks again.
+	data.Keys += product.Keys
+	local dropped = noteReceipt(data, purchaseId)
 	data.CrateFlags.Bought += 1
-	local firstBuy = data.CrateFlags.Bought == 1
+	local setStarter = product.Starter and not data.CrateFlags.StarterPack
+	local ownedBefore = data.Owned[season.Starter]
 	if product.Starter then
 		data.CrateFlags.StarterPack = true
 		data.Owned[season.Starter] = true
 	end
-
-	-- Saved before Roblox hears it went through; a save that fails undoes it (Roblox asks again).
-	local saved = DataService.SaveNow(buyer)
-	if saved and receiver ~= buyer then
-		saved = DataService.SaveNow(receiver)
-	end
-	if not saved then
-		for _, entry in undos do
-			undo(entry)
+	local result = save(buyer)
+	if result ~= "Saved" then
+		takeBack(data, purchaseId, product.Keys, dropped)
+		data.CrateFlags.Bought = math.max(0, data.CrateFlags.Bought - 1)
+		if setStarter then
+			data.CrateFlags.StarterPack = false
+			data.Owned[season.Starter] = ownedBefore
 		end
-		Telemetry.Error("KeyShop", `{receipt.PlayerId} {purchaseId}: save failed, not granted yet`)
+		Telemetry.Error("KeyShop", `{receipt.PlayerId} {purchaseId}: {result}, not granted yet`)
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
-
-	local reason = if product.Starter then "Starter pack" elseif friend then "Gift" else "Bought"
-	Telemetry.PlayerEvent(buyer, "KeysBought", product.Keys, product.Key)
-	Telemetry.Keys(receiver, product.Keys, receiverData.Keys, reason, product.Key)
 	if firstBuy then
 		CrateService.FunnelStep(buyer, 5)
 	end
-	if friend then
-		remote:FireClient(friend, "Gift", { Keys = product.Keys, Reason = "Gift", From = buyer.DisplayName })
-		Notifier.Send(buyer, `🎁 You sent {friend.DisplayName} {product.Keys} {season.Key}s!`, "success", 6)
-		Notifier.All(`🎁 {buyer.DisplayName} gifted {friend.DisplayName} {product.Keys} keys!`, "reward", 5)
-	else
-		remote:FireClient(buyer, "Gift", {
-			Keys = product.Keys,
-			Reason = reason,
-			Item = if product.Starter then season.Starter else nil,
-		})
-		if product.Gift then
-			Notifier.Send(buyer, "Your friend had left, so the keys are yours!", "info", 6)
-		end
-	end
-	if product.Starter then
-		CosmeticService.Refresh(buyer)
-	end
-	Notifier.Sound({ receiver }, "Purchase")
-	DataService.Changed(buyer)
-	if receiver ~= buyer then
-		DataService.Changed(receiver)
-	end
+	announce(buyer, buyer, product, product.Gift)
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
--- Test runs only (workspace PP_Harness): hands ProcessReceipt a made-up receipt.
+-- Test runs only (workspace PP_Harness): hands ProcessReceipt a made-up receipt; Saves[UserId] makes
+-- that player's purchase saves fail or find them gone ("Failed" / "Left"), or is a function run as
+-- the save (what happens while it waits) that says how it went.
 KeyShopService.Harness = {
 	Receipt = function(userId: number, productId: number, purchaseId: string): Enum.ProductPurchaseDecision?
 		if workspace:GetAttribute("PP_Harness") ~= true then
@@ -367,6 +417,7 @@ KeyShopService.Harness = {
 		return KeyShopService.ProcessReceipt({ PlayerId = userId, ProductId = productId, PurchaseId = purchaseId })
 	end,
 	Index = index,
+	Saves = {} :: { [number]: DataService.SaveResult | () -> DataService.SaveResult },
 }
 
 function KeyShopService.Init()
@@ -394,8 +445,18 @@ function KeyShopService.Init()
 	for _, player in Players:GetPlayers() do
 		joined(player)
 	end
+	-- (a starter pack prompt closed without buying lets them ask again)
+	MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId, productId, purchased)
+		if not purchased and productId == Config.Monetization.StarterPack.Id then
+			local player = Players:GetPlayerByUserId(userId)
+			if player then
+				starterPrompted[player] = nil
+			end
+		end
+	end)
 	Players.PlayerRemoving:Connect(function(player)
 		gifts[player] = nil
+		starterPrompted[player] = nil
 	end)
 end
 
