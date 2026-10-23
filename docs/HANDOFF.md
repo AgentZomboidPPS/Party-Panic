@@ -4,6 +4,49 @@ Last updated: **2026-10-22 ~20:05 UTC** by Session C (branch **`claude/friendly-
 from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes from 19:00 UTC and Session A's sections
 0-9, still accurate except where a newer block says otherwise.
 
+## Game 31: OBBY ODYSSEY (2026-10-23, branch `claude/admiring-albattani-dds3xp`, merged into `claude/friendly-ramanujan-2dtfr2`)
+
+The owner sent a photo of a bright blocky obby ("Can you make an Oby obstacle course similar to this photo? I want it
+to be a mini game for the game.", then "Also think of a cool name for the oby mini game. you can make it a bit longer
+then the average mini game too."). Built as **Obby Odyssey** (`ObbyOdyssey`, Race, 👑, Duration 150, `IsNew`):
+
+- **The course** (`Shared/Logic/ObbyOdyssey`: layout, hazard schedule, hit tests, checkpoints, progress; tests in
+  `tests/ObbyOdyssey.spec.luau`, jump table `lune run tools/checks/obby_odyssey_jumps`): six sections over one long
+  pool, water then lava: SPLASH HOPS (block rows), BALL BRIDGE (five red balls swinging from a pink gantry), TOWER
+  CLIMB (yellow steps up a blue tower), SPIN CYCLE (three spinning-bar discs joined by red pipes), BLINK BLOCKS (one
+  block in three gone at a time, flashing first), CROWN PEAK (pyramid tiers to a spinning gold crown between
+  checkered flags). Every jump keeps 3.2 studs or more of reach to spare; nothing can be walked up or skipped.
+- **Rules:** nobody is out; a fall puts you on your last of 4 checkpoints. First to the summit wins. The round ends at
+  5 minutes (Duration 300) or once more than half of its people (never bots, as for PLAY AGAIN) are at the crown
+  (owner: "this mini game either ends in 5 minutes or when more then half of the people make it to the top.").
+  Ranking: finish order, then checkpoint and distance. Runners pass through each other (`PP_ObbyRunners`).
+  Balls and bars are drawn on clients from the shared schedule and judged on the server against each runner as their
+  screen showed them (half their ping back; bars swept between checks), with ctx:Knockback.
+- **Look:** all parts and CSG rounded blocks (the photo is blocky), no new meshes, so nothing to upload or approve.
+  Scenery never collides.
+- **Fun pass** (owner: "Make sure this is super sick and actually super fun."):
+  - LAUNCH PADS: a set flight with a front flip that always lands (`Course.FlightAt`, tested never to pass
+    through anything). The HOP LAUNCHER in the middle of the hops flies you to pad 1. A SHORTCUT of three
+    tiny pillars left of the steps ends on the TOWER LAUNCHER, which rockets you onto the tower's top. A
+    person's own device flies them and sends `Launch`; the server flies bots (anchored, `_fly`).
+  - ROLLING BARRELS roll sideways along the pyramid's three lower tiers out of green pipes and into the
+    lava. They're always on the ground, so a timed jump clears them; the pyramid's sides are clear.
+  - Every round is shuffled (`Course.Setup(seed)`, seed in `MG_Course.S`): ball timing, bar speed and
+    direction, blink order and barrel rhythm. The blink order always leaves a way off a vanishing block
+    (tested for 25 seeds).
+  - Juice: BONK!/WHACK!/POW! pops, water splashes and lava flares, confetti at checkpoints, section-name
+    arches over the pads, a start gate that lifts at GO, bobbing balloons, lava embers, a "final stretch"
+    call, and the crown flying off the summit onto the winner's head for the rest of the round.
+- **Checks:** see the latest commit message for this branch's test-server results (code checks, `mode_check.sh
+  ObbyOdyssey` with 12 players, 10 real bots and the phone HUD, and `colliders.py`).
+- **Its own song** (owner: "Make the custom song for it"): "Bounce to the Crown" (`tools/music/songs/ObbyOdyssey.py`,
+  150 bpm bubblegum electro-pop, 14.4 s intro, -11 LUFS), alone in ModePack7, uploaded as 89946863953014 and approved.
+  That used the owner's 7th of 10 audio uploads this month.
+- **Portal preview** (owner: "portal preview video"): runners lining up for the BALL BRIDGE under a swinging ball
+  (`make_preview.py ObbyOdyssey --dump-at 4`, its camera in CAMERAS), image 129333029357941, approved.
+- **Not done yet:** a real-device playtest (jump feel, the knockbacks, launch flights, barrels and blinking blocks on
+  a phone). Not published.
+
 ## THE GAME IS PUBLIC now (seen 2026-10-22 21:33 UTC): ask the owner before every publish
 
 `tools/publish_place.py` refuses while it's public (pass `--allow-public` only once the owner says yes).
@@ -374,8 +417,13 @@ Branch **`claude/quirky-hopper-5yk8zk`**. Session B merges it before publishing 
   - no double coins after Halloween: only on the weekends during the HALLOWEEN PARTY (24-25 Oct, 31 Oct-1 Nov UTC;
     done, 6d89d31);
   - the pumpkin hat now: done (see the HALLOWEEN line above; mesh model 82691154142514, approved).
-- **Songs for games 27-29** (Hot Potato, Dice Dash, Minecart Mayhem): being written. They'll go up as a 6th pack
-  (one more audio upload, which needs the owner's OK; 5 left this month). Until then those games play Panic Mode.
+- **Songs for games 27-29**, uploaded on the owner's "Upload now" as ModePack6 111377793680965 (approved):
+  - Hot Potato: "Mambo Kaboom";
+  - Minecart Mayhem: "Crystal Cave Express";
+  - Dice Dash: "Lucky Roll Cha-Cha".
+
+  All 30 games have their own song. 6 of the owner's 10 audio uploads this month are used. A new game's song goes in
+  a new pack: `modes.py pack` never changes an uploaded one.
 
 ## 0. Start here (the first 10 minutes)
 

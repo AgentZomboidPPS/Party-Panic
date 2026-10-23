@@ -107,6 +107,9 @@ CAMERAS: dict[str, dict] = {
                        "sway": 6},
     # From high over the kettle grill, down at players running round the lawn (one holding a sizzling
     # potato), the picnic tables and the fence with its string lights.
+    # Behind the pack on the hops, looking up the course like the owner's photo: the colourful blocks
+    # over the water, the pink gantry's swinging balls and the blue tower ahead.
+    "ObbyOdyssey": {"yaw": 192, "pitch": 24, "distance": 30, "fov": 64, "sway": 9, "raise": 9, "shift": [0, 0, 8]},
     "HotPotato": {"look_at": "Lawn", "yaw": 240, "pitch": 40, "distance": 30, "fov": 60, "sway": 8, "raise": 6,
                   "shift": [19.9, 3, 9.3]},
     # A team pumping its balloon (with a face), a rival team's balloon beside it.

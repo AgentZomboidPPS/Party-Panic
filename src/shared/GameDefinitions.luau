@@ -407,6 +407,23 @@ local list: { GameDefinition } = {
 		-- The code stays: Enabled = true (or this line gone) brings it back.
 		Enabled = false,
 	},
+	{
+		-- The owner's obby, longer than the others (owner: "you can make it a bit longer then the average
+		-- mini game too", then "this mini game either ends in 5 minutes or when more then half of the people
+		-- make it to the top."): a good run takes about a minute; the round ends at 5 minutes, or once more
+		-- than half of its people have reached the crown.
+		Id = "ObbyOdyssey",
+		Name = "Obby Odyssey",
+		Category = "Race",
+		Icon = "👑",
+		Color = Color3.fromRGB(255, 190, 60),
+		Objective = "Race the giant obby! Ride the launch pads, dodge balls, bars and barrels, and grab the 👑 crown first!",
+		Controls = "Run and jump. Fall in and you're back on your last ✓ checkpoint. Brave? Take the shortcut by the tower!",
+		Duration = 300,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
