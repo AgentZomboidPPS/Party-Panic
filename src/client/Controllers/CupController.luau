@@ -29,6 +29,7 @@ local PartyCup = require(Shared.Logic.PartyCup)
 local Placement = require(Shared.Logic.Placement)
 
 local AudioController = require(script.Parent.AudioController)
+local PetController = require(script.Parent.PetController)
 local Participants = require(script.Parent.Parent.Participants)
 local State = require(script.Parent.Parent.State)
 local LobbyRibbon = require(script.Parent.Parent.UI.LobbyRibbon)
@@ -49,6 +50,7 @@ type Cup = {
 	Standings: { Row },
 	Champion: { UserId: number, Name: string, Cup: number }?,
 	Last: { Number: number, Podium: { Row } }?,
+	Keys: { [string]: number }?, -- with Done: the crate keys each person gets, by UserId (Services/CupService)
 }
 
 local MEDALS = { "🥇", "🥈", "🥉" }
@@ -511,7 +513,7 @@ end
 
 -- One step of the podium: who's on it (if anyone), their points and prize, on a step as tall as
 -- their place.
-local function podiumStep(parent: Instance, row: Row?, slot: number, x: number)
+local function podiumStep(parent: Instance, row: Row?, slot: number, x: number, keys: number)
 	local width, floor = STEP_W, STEP_FLOOR
 	local place = if row then row.Place else slot
 	local tier = math.clamp(place, 1, 3)
@@ -547,7 +549,8 @@ local function podiumStep(parent: Instance, row: Row?, slot: number, x: number)
 	if prize > 0 then
 		label({
 			Name = "Prize",
-			Text = `+{prize} {Theme.CoinIcon}`,
+			-- The crate season's keys too (3 / 2 / 1, and the rest: Services/CrateService).
+			Text = if keys > 0 then `+{prize} {Theme.CoinIcon}  +{keys} 🔑` else `+{prize} {Theme.CoinIcon}`,
 			Font = Theme.Fonts.Display,
 			TextSize = 22,
 			TextWrapped = false,
@@ -613,8 +616,18 @@ local function fillPodium(data: Cup)
 		ZIndex = 23,
 		Parent = podiumBody,
 	})
+	local keysBy = if type(data.Keys) == "table" then data.Keys else {}
+	local function keysOf(row: Row?): number
+		return if row then tonumber(keysBy[tostring(row.UserId)]) or 0 else 0
+	end
 	for position, slot in { 2, 1, 3 } do
-		podiumStep(steps, data.Standings[slot], slot, (position - 1) * (STEP_W + STEP_GAP))
+		local row = data.Standings[slot]
+		podiumStep(steps, row, slot, (position - 1) * (STEP_W + STEP_GAP), keysOf(row))
+		-- The podium's pets celebrate in the lobby too (the crate season's "Pet on the podium").
+		local who = row and not row.IsBot and Players:GetPlayerByUserId(row.UserId)
+		if who then
+			pcall(PetController.Celebrate, who)
+		end
 	end
 	local floor = STEP_FLOOR
 	-- You, then the crown, then what's next.
@@ -622,10 +635,14 @@ local function fillPodium(data: Cup)
 	local yours
 	if mine then
 		local prize = PartyCup.PrizeFor(mine.Place)
+		local myKeys = keysOf(mine)
+		local keyText = if myKeys > 0 then `  +{myKeys} 🔑` else ""
 		if mine.Place == 1 then
-			yours = `👑 You won the PARTY CUP! +{prize} {Theme.CoinIcon}`
+			yours = `👑 You won the PARTY CUP! +{prize} {Theme.CoinIcon}{keyText}`
 		elseif prize > 0 then
-			yours = `{MEDALS[mine.Place]} You finished {Placement.Ordinal(mine.Place)}! +{prize} {Theme.CoinIcon}`
+			yours = `{MEDALS[mine.Place]} You finished {Placement.Ordinal(mine.Place)}! +{prize} {Theme.CoinIcon}{keyText}`
+		elseif myKeys > 0 then
+			yours = `You finished {Placement.Ordinal(mine.Place)}: +{myKeys} 🔑 for playing the cup!`
 		else
 			yours = `You finished {Placement.Ordinal(mine.Place)} with {mine.Points} pts. Next cup!`
 		end

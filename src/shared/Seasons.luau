@@ -60,6 +60,9 @@ export type Item = {
 	-- "Sparkle", TextureLength, Emission, Width, Lifetime, Glitter and Light {r, g, b}, and Particles
 	-- "Leaves" (leaves flutter off behind) or "Wisp" (spirit flames in the footprints).
 	Trail: { [string]: any }?,
+	-- A title with a look of its own on the name tag (Shared/NameTag, Controllers/TitleController):
+	-- "Harvester" is THE HARVESTER's blackletter that burns like a candle.
+	Look: string?,
 }
 
 Seasons.Current = "HollowNight"
@@ -123,6 +126,15 @@ local HOLLOW_NIGHT: Season = {
 
 Seasons.ById = { HollowNight = HOLLOW_NIGHT } :: { [string]: Season }
 Seasons.Order = { "HollowNight" } -- oldest first (the collection log's season tabs)
+-- The meshes the seasons' hats are made of (World/Props/<season>; World/Hats fits them to heads):
+-- each device shows them rising out of a crate.
+Seasons.HatProps = {
+	Hat_LeafCrown = "LeafCrown",
+	Hat_Scarecrow = "ScarecrowHat",
+	Hat_AntlerCirclet = "AntlerCirclet",
+	Hat_AcornHelm = "AcornHelm",
+	Hat_CrescentMoon = "CrescentMoon",
+} :: { [string]: string }
 
 -- Every season's crate items (and the starter pack's trail), as cosmetics.
 Seasons.Items = {
@@ -136,6 +148,7 @@ Seasons.Items = {
 		Icon = "🌾",
 		Tier = "Title",
 		Colors = { { 255, 241, 194 }, { 255, 181, 48 }, { 255, 106, 31 }, { 184, 38, 26 } },
+		Look = "Harvester",
 	},
 	-- Pets (a new slot): they float behind you in the lobby and in every mini-game.
 	{
@@ -375,6 +388,25 @@ Seasons.Items = {
 Seasons.ItemById = {} :: { [string]: Item }
 for _, item in Seasons.Items do
 	Seasons.ItemById[item.Id] = item
+end
+
+-- Each tier's colour, the same every season (the design: "Gold coins, blue effects, purple hats and
+-- pink pets every season, so a pink beam means a pet whatever the season. Only the title's beam
+-- takes the season's color"): the beams, the cards and the collection log. The title's is the
+-- season's own (its Colors.Title).
+Seasons.TierColors = {
+	Coins = { 255, 204, 64 },
+	Effect = { 74, 168, 255 },
+	Hat = { 168, 108, 255 },
+	Pet = { 255, 92, 170 },
+} :: { [string]: RGB }
+
+-- The colour of a tier (the title's from `season`).
+function Seasons.TierColor(tier: string, season: Season?): RGB
+	if tier == "Title" then
+		return (season or Seasons.ById[Seasons.Current]).Colors.Title
+	end
+	return Seasons.TierColors[tier] or Seasons.TierColors.Coins
 end
 
 function Seasons.Get(id: string): Season?

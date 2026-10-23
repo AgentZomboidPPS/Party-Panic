@@ -145,7 +145,10 @@ function AmbienceController.Start(_context)
 		end
 		for model, item in spinning do
 			if (item.base.Position - cameraPosition).Magnitude < 260 then
-				model:PivotTo(item.base * CFrame.Angles(0, now * 0.5 + item.phase, 0))
+				-- (PP_SpinSpeed: radians a second, for one that turns slower or the other way)
+				local speed = model:GetAttribute("PP_SpinSpeed")
+				local rate = if type(speed) == "number" then speed else 0.5
+				model:PivotTo(item.base * CFrame.Angles(0, now * rate + item.phase, 0))
 			end
 		end
 		-- Big, slow and far away: drift up and down a few studs and turn gently.

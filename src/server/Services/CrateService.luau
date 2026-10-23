@@ -98,11 +98,14 @@ local showing: { [Player]: number } = {} -- os.clock() their show ends
 local shows = 0
 local limiter = RateLimiter.new(Config.RateLimits.Crate[1], Config.RateLimits.Crate[2])
 
+-- A person who's still here (bots look like players but are flagged; the check tools' stand-ins are
+-- tables like bots, with a UserId above 0).
 local function isPerson(player: any): boolean
-	return typeof(player) == "Instance"
-		and player:IsA("Player")
+	return player ~= nil
 		and player.Parent ~= nil
 		and not BotRegistry.IsBot(player)
+		and type(player.UserId) == "number"
+		and player.UserId > 0
 end
 
 local function harness(): boolean

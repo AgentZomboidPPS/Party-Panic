@@ -511,12 +511,13 @@ if not okInit then
 	__note("State.Init failed: " .. tostring(initErr))
 end
 local order = {
-	"AudioController", "NotificationController", "EffectsController", "AmbienceController",
+	"AudioController", "NotificationController", "EffectsController", "PetController", "AuraController",
+	"AmbienceController",
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
 	"RoundController", "ResultsController", "ShopController", "QuestController",
-	"RewardsController", "CelebrationController", "GoldPassController",
+	"RewardsController", "CelebrationController", "GoldPassController", "TitleController",
 	"CupController", "InviteController", "PartyController", "SquadController", "PartyWorldController", "MedalController",
-	"HallOfFameController", "EventController",
+	"HallOfFameController", "EventController", "SeasonWorldController", "CrateController",
 	"EmoteController", "SpectateController", "OnboardingController", "SkeeBallController", "AssetReportController",
 	"BotWatchController",
 }
@@ -829,7 +830,9 @@ do
 		task.wait(0.3)
 	end
 	-- Name tags (Shared/NameTag, the server's PP_Nameplate): a player's; an owner's with the GOLD
-	-- badge and VIP Partier shimmering; a long-named top-tier owner wearing THE GOLDEN ONE.
+	-- badge and VIP Partier shimmering; a long-named top-tier owner wearing THE GOLDEN ONE. Then the
+	-- crate seasons': THE HARVESTER (plain, and on a GOLD tag), and the frames for crates opened
+	-- (bronze, gold, harvest moon) and for a finished season.
 	step = "gold: name tags"
 	local folder = Instance.new("Folder")
 	local screen = Instance.new("ScreenGui")
@@ -840,10 +843,15 @@ do
 		{ "Pancake", 12, false, "Title_Pro" },
 		{ "Harness", 26, true, "Title_VIP" },
 		{ "SuperLongDisplayNm20", 100, true, "Title_GoldenOne" },
+		{ "LeafPileLeo", 31, false, "Title_Harvester", { CrateFrame = 250 } },
+		{ "Harvester", 64, true, "Title_Harvester", { CrateFrame = 500 } },
+		{ "Bronze", 8, false, "Title_Rookie", { CrateFrame = 10 } },
+		{ "Golden", 44, false, "Title_Pro", { CrateFrame = 100 } },
+		{ "CompletedIt", 52, false, "Title_Harvester", { CrateFrame = 500, SeasonComplete = "HollowNight" } },
 	}
 	local nameChecks = {}
 	for index, tag in tags do
-		local okTag, gui = pcall(NameTag.Build, tag[1], tag[2], tag[3], Cosmetics.Get(tag[4]))
+		local okTag, gui = pcall(NameTag.Build, tag[1], tag[2], tag[3], Cosmetics.Get(tag[4]), tag[5])
 		if not okTag then
 			__note("NameTag.Build failed: " .. tostring(gui))
 			continue
@@ -852,7 +860,7 @@ do
 		frame.Name = `Tag{index}`
 		frame.BackgroundTransparency = 1
 		frame.Size = gui.Size
-		frame.Position = UDim2.fromOffset(60 + (index - 1) * 260, 120)
+		frame.Position = UDim2.fromOffset(60 + ((index - 1) % 4) * 260, 120 + math.floor((index - 1) / 4) * 110)
 		local parts = {}
 		for _, child in gui:GetChildren() do
 			child:Clone().Parent = frame
@@ -862,6 +870,10 @@ do
 				table.insert(parts, item.Name .. "=" .. item.Text)
 			elseif item:IsA("UIGradient") and item:GetAttribute("PP_Shimmer") then
 				table.insert(parts, `{item.Parent and item.Parent.Name} shimmers ({item:GetAttribute("PP_Shimmer")})`)
+			elseif item:IsA("Frame") and item:GetAttribute("PP_Frame") then
+				table.insert(parts, `frame {item:GetAttribute("PP_Frame")} {item.Size.X.Offset} wide`)
+			elseif item.Name == "MoonLeft" or item.Name == "MoonRight" then
+				table.insert(parts, item.Name)
 			end
 		end
 		table.insert(nameChecks, `{tag[1]} ({gui.Size.Y.Offset} tall): {table.concat(parts, "; ")}`)

@@ -129,6 +129,7 @@ local function buildPile(root: Model)
 		Parent = pile,
 	})
 	top.Name = "TopCrate"
+	top:SetAttribute("PP_SpinSpeed", 0.22) -- (slowly: a turn about every half a minute)
 	tag(top, "PP_Spin")
 	local keys = Build.Model("Keys", pile)
 	for index = 1, 3 do
@@ -143,7 +144,7 @@ local function buildPile(root: Model)
 	end
 	keys.WorldPivot = CFrame.new(0, TOP_CRATE_Y + 3.5, 0)
 	tag(keys, "PP_Spin")
-	keys:SetAttribute("PP_SpinSpeed", -0.35) -- (they circle the other way, a little faster)
+	keys:SetAttribute("PP_SpinSpeed", -0.6) -- (they circle the other way, faster)
 
 	-- Steps to climb it: the stump, the leaf mound, the crate rings, and the giant crate's lid.
 	local colliders = Build.Model("Colliders", pile)
@@ -440,7 +441,7 @@ local function templates()
 		table.insert(names, season.PetInfo[pet].Prop)
 	end
 	for _, hat in season.Hats do
-		local prop = Hats.PropOf(hat)
+		local prop = Seasons.HatProps[hat] or Hats.PropOf(hat)
 		if prop then
 			table.insert(names, prop)
 		end

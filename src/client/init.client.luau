@@ -55,6 +55,8 @@ local order = {
 	"AudioController",
 	"NotificationController",
 	"EffectsController",
+	"PetController", -- the crate season's pets, on every character (Shared/Seasons)
+	"AuraController", -- ... and its auras, in the lobby
 	"AmbienceController",
 	"MovementController",
 	"ArrivalController",
@@ -69,6 +71,7 @@ local order = {
 	"RewardsController", -- after HudController: it adds to the profile chip
 	"CelebrationController",
 	"GoldPassController", -- the GOLD PASS's UNLOCKED card, and the gold shimmer on name tags
+	"TitleController", -- THE HARVESTER's flicker and embers on name tags, and its chat tag
 	-- What keeps players coming back.
 	"CupController",
 	"InviteController",
@@ -78,6 +81,9 @@ local order = {
 	"MedalController",
 	"HallOfFameController",
 	"EventController",
+	-- The crate season (Shared/Seasons): the lobby's season, then the crates (they use the lobby's wisps).
+	"SeasonWorldController",
+	"CrateController",
 	"EmoteController",
 	"SpectateController",
 	"OnboardingController",

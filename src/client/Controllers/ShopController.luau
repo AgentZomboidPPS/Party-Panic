@@ -20,6 +20,13 @@
 -- Since the second shop pass (owner: "Yes lets add more items after everything else is finished") a
 -- tab can hold twice as many cards, so a tab you switch to starts at its top, not where the last one
 -- was scrolled to.
+-- The crate seasons (Shared/Seasons; owner: "Hollow night comes first ... I want it to look insane.")
+-- bring two tabs, Pets and Auras, and crate items in the others: never for coins, they come last,
+-- on a card in the season's dusk colours with a rim in their tier's colour (pink pets, purple
+-- hats, blue effects, the title in the season's own), the season's name in its corner. One that
+-- isn't theirs says where it comes from ("📦 From Hollow Crates": a tap opens the crate menu's
+-- collection); the starter pack's trail opens its key shop; a past season's that wasn't found in
+-- time is VAULTED. Theirs equip like any other. With eight tabs the tab column scrolls on PC too.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -29,6 +36,8 @@ local EventLogic = require(Shared.Logic.EventLogic)
 local Events = require(Shared.Events)
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
+local SeasonArt = require(Shared.SeasonArt)
+local Seasons = require(Shared.Seasons)
 
 local State = require(script.Parent.Parent.State)
 local Modal = require(script.Parent.Parent.UI.Modal)
@@ -79,7 +88,117 @@ local function eventSource(item: Cosmetics.Cosmetic): (string?, boolean)
 	return "🔒 EVENT OVER", false
 end
 
+local function rgb(c: { number }): Color3
+	return Color3.fromRGB(c[1], c[2], c[3])
+end
+
+-- The tier a crate item is in ("Title", "Pet", "Hat", "Effect"; the starter pack's trail: "Starter").
+local function tierOf(item: Cosmetics.Cosmetic): string
+	local entry = Seasons.ItemById[item.Id]
+	return if entry then entry.Tier else "Effect"
+end
+
+-- A crate item's picture (under the season's name): its cell of the season's icon sheet once that's
+-- uploaded, else its emoji.
+local SEASON_LABEL = 20 -- the season's name across the top of the swatch
+local function seasonIcon(parent: GuiObject, item: Cosmetics.Cosmetic)
+	local cell = SeasonArt.IconCells[item.Id]
+	if SeasonArt.Icons ~= "" and cell then
+		local size = SeasonArt.IconSize
+		UIKit.new("ImageLabel", {
+			Name = "Icon",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, SEASON_LABEL / 2),
+			Size = UDim2.fromOffset(68, 68),
+			BackgroundTransparency = 1,
+			Image = SeasonArt.Icons,
+			ImageRectOffset = Vector2.new(cell[1] * size, cell[2] * size),
+			ImageRectSize = Vector2.new(size, size),
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = parent,
+		})
+		return
+	end
+	UIKit.Label({
+		Name = "Icon",
+		Text = item.Icon,
+		TextSize = 46,
+		Position = UDim2.fromOffset(0, SEASON_LABEL),
+		Size = UDim2.new(1, 0, 1, -SEASON_LABEL),
+		Parent = parent,
+		Children = { UIKit.TextStroke(0.5) },
+	})
+end
+
+-- A crate item's preview: the season's dusk, a rim in its tier's colour, its picture, the season's
+-- name in the corner.
+local function seasonPreview(card: Frame, item: Cosmetics.Cosmetic)
+	local season = Seasons.Get(item.Season :: string)
+	local colors = if season then season.Colors else Seasons.CurrentSeason().Colors
+	local tier = tierOf(item)
+	local tierColor = rgb(if tier == "Starter" then colors.Gold else Seasons.TierColor(tier, season))
+	local swatch = UIKit.new("Frame", {
+		Name = "Swatch",
+		Position = UDim2.fromOffset(10, 10),
+		Size = UDim2.new(1, -20, 0, 92),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		ClipsDescendants = true,
+		Parent = card,
+		Children = {
+			UIKit.Corner(14),
+			UIKit.new("UIGradient", {
+				Color = ColorSequence.new(rgb(colors.Panel), rgb(colors.Deep)),
+				Rotation = 90,
+			}),
+			UIKit.new("UIStroke", {
+				Color = tierColor,
+				Thickness = 3,
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			}),
+		},
+	})
+	-- A soft glow of the tier's colour behind the picture.
+	UIKit.new("Frame", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, SEASON_LABEL / 2 + 6),
+		Size = UDim2.fromOffset(84, 84),
+		BackgroundColor3 = tierColor,
+		BackgroundTransparency = 0.55,
+		Parent = swatch,
+		Children = {
+			UIKit.Corner(42),
+			UIKit.new("UIGradient", {
+				Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 0),
+					NumberSequenceKeypoint.new(1, 1),
+				}),
+				Rotation = 90,
+			}),
+		},
+	})
+	seasonIcon(swatch, item)
+	if season then
+		UIKit.Label({
+			Name = "Season",
+			Text = season.Name,
+			Font = Theme.Fonts.Display,
+			TextSize = if touch then Theme.Touch.MinText else 14,
+			TextWrapped = false,
+			TextColor3 = rgb(colors.Glow),
+			Position = UDim2.fromOffset(6, 1),
+			Size = UDim2.new(1, -12, 0, SEASON_LABEL),
+			Parent = swatch,
+			Children = { UIKit.TextStroke(0.3) },
+		})
+	end
+end
+
 local function preview(card: Frame, item: Cosmetics.Cosmetic)
+	if item.Season then
+		seasonPreview(card, item)
+		return
+	end
 	local swatch = UIKit.new("Frame", {
 		Position = UDim2.fromOffset(10, 10),
 		Size = UDim2.new(1, -20, 0, 92),
@@ -130,9 +249,14 @@ local function render()
 		end
 	end
 	-- Free items, then what coins buy (cheapest first), then the rewards coins can't buy: the
-	-- Rewards Road by level, career milestones, the GOLD PASS's lane by level, then events.
+	-- Rewards Road by level, career milestones, the GOLD PASS's lane by level, events, then the
+	-- crate seasons' (the newest season first, rarest first).
+	local tierRank = { Title = 1, Pet = 2, Hat = 3, Effect = 4, Starter = 5 }
 	local function rank(item: Cosmetics.Cosmetic): (number, number)
-		if item.Default then
+		if item.Season then
+			local season = Seasons.Get(item.Season)
+			return 6, -(if season then season.Number else 0) * 10 + (tierRank[tierOf(item)] or 4)
+		elseif item.Default then
 			return 0, 0
 		elseif item.Price then
 			return 1, item.Price
@@ -245,6 +369,21 @@ local function render()
 			onClick = function()
 				State.OpenScreen:Fire("Rewards", "Road")
 			end
+		elseif item.Season then
+			-- A crate season's: from its crates (the crate menu), the starter pack's from its key shop,
+			-- a past season's VAULTED.
+			local season = Seasons.Get(item.Season)
+			local starter = season ~= nil and season.Starter == item.Id
+			if season and (season.Id == Seasons.Current or starter) then
+				local colors = season.Colors
+				actionText = if starter then "🔑 Starter pack" else `📦 From {season.Crate}s`
+				top, bottom = rgb(colors.Main), rgb(colors.Crimson)
+				onClick = function()
+					State.OpenScreen:Fire("Crates", if starter then "Keys" else "Collection")
+				end
+			else
+				actionText, top, bottom = "🔒 VAULTED", Theme.Colors.PanelLight, Theme.Colors.PanelDark
+			end
 		else
 			actionText, top, bottom = lockReason(item) or "Locked", Theme.Colors.PanelLight, Theme.Colors.PanelDark
 		end
@@ -296,24 +435,24 @@ function ShopController.Start(context)
 		Parent = content,
 	})
 
-	local tabGap = if touch then 6 else 10
-	local tabs = UIKit.new(if touch then "ScrollingFrame" else "Frame", {
+	-- The tabs scroll (eight of them, with the crate seasons' Pets and Auras, don't fit a short window).
+	local tabGap = if touch then 6 else 8
+	local tabs = UIKit.new("ScrollingFrame", {
 		Size = UDim2.new(0, 170, 1, 0),
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
 		Parent = content,
 		Children = { UIKit.List(Enum.FillDirection.Vertical, tabGap) },
 	})
-	if touch then
-		tabs.BorderSizePixel = 0
-		tabs.ScrollBarThickness = 4
-		tabs.AutomaticCanvasSize = Enum.AutomaticSize.Y
-		tabs.CanvasSize = UDim2.new()
-	end
 	for order, tab in Cosmetics.ShopTabs do
 		tabButtons[tab.Slot] = UIKit.Button({
 			Text = `{tab.Icon} {tab.Label}`,
 			TextSize = 21,
-			Size = UDim2.new(1, if touch then -6 else 0, 0, if touch then 66 else 54),
+			Size = UDim2.new(1, -6, 0, if touch then 66 else 48),
 			LayoutOrder = order,
 			Parent = tabs,
 		}, function()
@@ -328,7 +467,7 @@ function ShopController.Start(context)
 		Text = "Cosmetics only - no gameplay advantages.",
 		TextSize = if touch then Theme.Touch.MinText else 17,
 		TextColor3 = Theme.Colors.TextDim,
-		Size = UDim2.new(1, if touch then -6 else 0, 0, if touch then 60 else 40),
+		Size = UDim2.new(1, -6, 0, if touch then 60 else 40),
 		LayoutOrder = 99,
 		Parent = tabs,
 	})

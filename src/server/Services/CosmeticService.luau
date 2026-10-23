@@ -16,6 +16,8 @@
 --   * A gold trail can have a Style (Shared/GoldPass): a texture, more glow, a wider ribbon that
 --     tapers, a longer tail, glitter shed behind it (PP_GoldGlitter: off on a device with reduced
 --     effects) and a soft light.
+-- The crate seasons (Shared/Seasons): the pet, aura and title someone has on go in player attributes
+-- (PP_Pet, PP_Aura, PP_Title), and every device draws them itself; nothing moving is sent.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -26,6 +28,7 @@ local Cosmetics = require(Shared.Cosmetics)
 local LevelCurve = require(Shared.Logic.LevelCurve)
 local NameTag = require(Shared.NameTag)
 local Remotes = require(Shared.Remotes)
+local SeasonArt = require(Shared.SeasonArt)
 
 local CupCrown = require(script.Parent.Parent.World.CupCrown)
 local Hats = require(script.Parent.Parent.World.Hats)
@@ -40,6 +43,9 @@ local GLITTER = "PP_TrailGlitter"
 local GLOW = "PP_TrailLight"
 local GLITTER_TAG = "PP_GoldGlitter" -- emitters a device with reduced effects switches off
 local SPARKLE = "rbxasset://textures/particles/sparkles_main.dds"
+local FIRE = "rbxasset://textures/particles/fire_main.dds"
+local TRAIL_LEAVES = "PP_TrailLeaves" -- a season trail's leaves (an attachment of emitters)
+local TRAIL_FEET = "PP_TrailFeet" -- a season trail's footprint flames
 
 local function equippedItem(player: Player, slot: string): Cosmetics.Cosmetic?
 	local profile = DataService.Get(player)
@@ -61,7 +67,97 @@ local function buildNameplate(player: Player, head: BasePart)
 	local profile = DataService.Get(player)
 	local level = if profile then LevelCurve.FromTotalXP(profile.Data.XP) else 1
 	local gold = profile ~= nil and (profile.Data :: any).GoldPass.Owned == true
-	NameTag.Build(player.DisplayName, level, gold, equippedItem(player, "Title")).Parent = head
+	-- The crate seasons' frame (Services/CrateService keeps these attributes).
+	local marks: NameTag.Marks = {
+		CrateFrame = tonumber(player:GetAttribute("PP_CrateFrame")) or 0,
+		SeasonComplete = tostring(player:GetAttribute("PP_SeasonComplete") or ""),
+	}
+	NameTag.Build(player.DisplayName, level, gold, equippedItem(player, "Title"), marks).Parent = head
+end
+
+-- The name tag again, when a crate milestone or a finished season changes its frame.
+local function refreshNameplate(player: Player)
+	local character = player.Character
+	local head = character and character:FindFirstChild("Head") :: BasePart?
+	if head then
+		buildNameplate(player, head)
+	end
+end
+
+-- A crate season's particle trail (Shared/Seasons' Trail.Particles): "Leaves" flutter down behind
+-- its wearer as they run (an emitter per leaf colour, left where they fell), "Wisp" leaves little
+-- green spirit flames flickering in their footprints (at the feet). Both switch off with reduced
+-- effects like the gold glitter (GLITTER_TAG).
+local function trailParticles(character: Model, root: BasePart, kind: string, colors: { Color3 })
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local feet = if humanoid and humanoid.RigType == Enum.HumanoidRigType.R15
+		then humanoid.HipHeight + root.Size.Y / 2
+		else 3
+	if kind == "Leaves" then
+		local holder = Instance.new("Attachment")
+		holder.Name = TRAIL_LEAVES
+		holder.Position = Vector3.new(0, 0.6, 0.6)
+		holder.Parent = root
+		for _, color in colors do
+			local leaves = Instance.new("ParticleEmitter")
+			leaves.Name = "Leaves"
+			if SeasonArt.Leaves ~= "" then
+				leaves.Texture = SeasonArt.Leaves
+				leaves.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid2x2
+				leaves.FlipbookMode = Enum.ParticleFlipbookMode.Random
+			else
+				leaves.Texture = SPARKLE
+				leaves.Squash = NumberSequence.new(0.5)
+			end
+			leaves.Color = ColorSequence.new(color)
+			leaves.LightEmission = 0.1
+			leaves.Size = NumberSequence.new(0.5, 0.35)
+			leaves.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(0.8, 0.15),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			leaves.Lifetime = NumberRange.new(1.2, 1.8)
+			leaves.Rate = 2.5
+			leaves.Speed = NumberRange.new(0.5, 1.5)
+			leaves.SpreadAngle = Vector2.new(70, 70)
+			leaves.Acceleration = Vector3.new(0.3, -3.5, 0.2)
+			leaves.Drag = 1.2
+			leaves.Rotation = NumberRange.new(0, 360)
+			leaves.RotSpeed = NumberRange.new(-220, 220)
+			leaves.EmissionDirection = Enum.NormalId.Back
+			leaves.Parent = holder
+			CollectionService:AddTag(leaves, GLITTER_TAG)
+		end
+	elseif kind == "Wisp" then
+		local holder = Instance.new("Attachment")
+		holder.Name = TRAIL_FEET
+		holder.Position = Vector3.new(0, -feet + 0.25, 0)
+		holder.Parent = root
+		local flames = Instance.new("ParticleEmitter")
+		flames.Name = "WispFlames"
+		flames.Texture = FIRE
+		flames.Color = ColorSequence.new(colors[1] or Color3.fromRGB(216, 255, 240), colors[2] or colors[1])
+		flames.LightEmission = 1
+		flames.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.2),
+			NumberSequenceKeypoint.new(0.3, 0.55),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+		flames.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.6),
+			NumberSequenceKeypoint.new(0.25, 0.1),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		flames.Lifetime = NumberRange.new(0.5, 0.85)
+		flames.Rate = 12
+		flames.Speed = NumberRange.new(0.3, 0.8)
+		flames.SpreadAngle = Vector2.new(8, 8)
+		flames.Acceleration = Vector3.new(0, 2.5, 0)
+		flames.EmissionDirection = Enum.NormalId.Top
+		flames.Parent = holder
+		CollectionService:AddTag(flames, GLITTER_TAG)
+	end
 end
 
 local function applyTrail(player: Player, character: Model)
@@ -69,7 +165,7 @@ local function applyTrail(player: Player, character: Model)
 	if not root then
 		return
 	end
-	for _, name in { TRAIL, GLITTER, GLOW, "PP_TrailTop", "PP_TrailBottom" } do
+	for _, name in { TRAIL, GLITTER, GLOW, "PP_TrailTop", "PP_TrailBottom", TRAIL_LEAVES, TRAIL_FEET } do
 		local attachment = root:FindFirstChild(name)
 		if attachment then
 			attachment:Destroy()
@@ -139,6 +235,9 @@ local function applyTrail(player: Player, character: Model)
 		light.Shadows = false
 		light.Parent = root
 	end
+	if style.Particles then
+		trailParticles(character, root, style.Particles, item.Colors)
+	end
 end
 
 -- The hat this character should wear now: the equipped one, in the lobby (not in a round its wearer
@@ -186,7 +285,21 @@ local function applyHat(player: Player, character: Model?)
 	end)
 end
 
+-- What every device draws for this player itself (the crate seasons' pets, auras and the animated
+-- title: Controllers/PetController, AuraController, TitleController): the item ids they have on, as
+-- player attributes ("" for none). Set even before their character is in.
+local function markWorn(player: Player)
+	for slot, attribute in { Pet = "PP_Pet", Aura = "PP_Aura", Title = "PP_Title" } do
+		local item = equippedItem(player, slot)
+		local id = if item then item.Id else ""
+		if player:GetAttribute(attribute) ~= id then
+			player:SetAttribute(attribute, id)
+		end
+	end
+end
+
 function CosmeticService.Refresh(player: Player)
+	markWorn(player)
 	local character = player.Character
 	if not character then
 		return
@@ -299,6 +412,12 @@ function CosmeticService.Init()
 		player:GetAttributeChangedSignal("PP_InRound"):Connect(function()
 			applyHat(player, player.Character)
 		end)
+		-- A new crate frame (Services/CrateService) goes on the tag at once.
+		for _, attribute in { "PP_CrateFrame", "PP_SeasonComplete" } do
+			player:GetAttributeChangedSignal(attribute):Connect(function()
+				refreshNameplate(player)
+			end)
+		end
 		if player.Character then
 			task.spawn(onCharacterAdded, player, player.Character)
 		end

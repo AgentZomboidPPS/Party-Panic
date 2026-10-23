@@ -55,6 +55,7 @@ export type Cosmetic = {
 	Looped: boolean?,
 	Effect: string?, -- visual effect played by emotes / victory / elimination
 	Season: string?, -- a crate season's item (Shared/Seasons id): found in its crates, never sold for coins
+	Look: string?, -- a title with a look of its own on the name tag ("Harvester": Shared/NameTag)
 }
 
 -- Every game, for the Game Explorer milestone ("play every game once").
@@ -943,6 +944,7 @@ for _, entry in Seasons.Items do
 		Colors = colors,
 		Style = style,
 		Season = season and season.Id,
+		Look = entry.Look,
 	})
 end
 

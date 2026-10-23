@@ -43,6 +43,8 @@
 -- lane's reward too: its gold coins on a gold chip of their own ("+7 GOLD") and its cosmetics on gold
 -- chips, the best first; "Next up" can be a gold reward. (Buying the pass has its own card:
 -- Controllers/GoldPassController.)
+-- The crate seasons (Shared/Seasons): every 5th level also gives a key for the season's crates
+-- (Services/CrateService), on a chip of its own in the season's colours ("+1 KEY").
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -54,6 +56,7 @@ local GameState = require(Shared.GameState)
 local GoldPass = require(Shared.GoldPass)
 local Progression = require(Shared.Progression)
 local Remotes = require(Shared.Remotes)
+local Seasons = require(Shared.Seasons)
 
 local AudioController = require(script.Parent.AudioController)
 local GoldPassController = require(script.Parent.GoldPassController)
@@ -70,6 +73,7 @@ type Celebration = {
 	From: number?,
 	Coins: number,
 	GoldCoins: number?, -- LevelUp: the gold lane's coins (GOLD PASS owners)
+	Keys: number?, -- LevelUp: crate keys (every 5th level; Services/CrateService)
 	Items: { string },
 }
 
@@ -137,6 +141,9 @@ local function merge(list: { Celebration }): Celebration
 		merged.Coins += entry.Coins or 0
 		if entry.GoldCoins and entry.GoldCoins > 0 then
 			merged.GoldCoins = (merged.GoldCoins or 0) + entry.GoldCoins
+		end
+		if entry.Keys and entry.Keys > 0 then
+			merged.Keys = (merged.Keys or 0) + entry.Keys
 		end
 		for _, id in entry.Items or {} do
 			if not seen[id] and Cosmetics.Get(id) then
@@ -213,6 +220,55 @@ local function goldCoinChip(parent: Instance, coins: number, order: number): Fra
 			child.Text = `{GoldPass.Icon} GOLD`
 		end
 	end
+	return chip
+end
+
+-- Crate keys: a chip in the season's colours with the key on it.
+local function keyChip(parent: Instance, keys: number, order: number): Frame
+	local colors = Seasons.CurrentSeason().Colors
+	local chip = UIKit.Panel(
+		{
+			Name = "Keys",
+			Size = UDim2.fromOffset(COIN_CHIP_W, CHIP_H),
+			LayoutOrder = order,
+			CornerRadius = 18,
+			ZIndex = 3,
+			Parent = parent,
+		},
+		Color3.fromRGB(colors.Main[1], colors.Main[2], colors.Main[3]),
+		Color3.fromRGB(colors.Crimson[1], colors.Crimson[2], colors.Crimson[3])
+	)
+	label({
+		Text = "🔑",
+		TextSize = 40,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(0, 8),
+		Size = UDim2.new(1, 0, 0, 48),
+		ZIndex = 4,
+		Parent = chip,
+	})
+	label({
+		Text = `+{keys}`,
+		Font = Theme.Fonts.Display,
+		TextSize = 36,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(0, 56),
+		Size = UDim2.new(1, 0, 0, 40),
+		ZIndex = 4,
+		Parent = chip,
+		Children = { UIKit.TextStroke(0.1) },
+	})
+	label({
+		Text = if keys == 1 then "KEY" else "KEYS",
+		Font = Theme.Fonts.Display,
+		TextSize = 20,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(0, 96),
+		Size = UDim2.new(1, 0, 0, 24),
+		ZIndex = 4,
+		Parent = chip,
+		Children = { UIKit.TextStroke(0.2) },
+	})
 	return chip
 end
 
@@ -520,6 +576,10 @@ local function show(celebration: Celebration)
 	if goldCoins > 0 then
 		table.insert(chips, goldCoinChip(row, goldCoins, 2))
 	end
+	local keys = celebration.Keys or 0
+	if keys > 0 then
+		table.insert(chips, keyChip(row, keys, 3))
+	end
 	-- As many item chips as fit beside the coins (3 less one per coin chip), the rest as "+2 more!"
 	-- (every one is on the Rewards screen). At most 576 of the card's 600 units.
 	local room = 3 - #chips
@@ -528,7 +588,7 @@ local function show(celebration: Celebration)
 			table.insert(chips, moreChip(row, #items - room, 10))
 			break
 		end
-		table.insert(chips, itemChip(row, item, 2 + index))
+		table.insert(chips, itemChip(row, item, 3 + index))
 	end
 	-- Each chip sits in a slot of its own size that is in the row from the start, so the row is
 	-- laid out once and the chips pop in one by one without moving the others.
@@ -793,6 +853,7 @@ function CelebrationController.Start(context)
 			From = tonumber(payload.From),
 			Coins = tonumber(payload.Coins) or 0,
 			GoldCoins = tonumber(payload.GoldCoins),
+			Keys = tonumber(payload.Keys),
 			Items = if type(payload.Items) == "table" then payload.Items else {},
 		})
 		CelebrationController.Pump()

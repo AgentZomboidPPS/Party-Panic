@@ -427,7 +427,8 @@ local function show(data)
 	clear(rewards)
 	-- Six or more lines (the boosts: a friend in the round, a double coins weekend) draw a little
 	-- tighter, and the personal best is left to its own line, so the card still fits a phone.
-	local compact = #data.Lines >= COMPACT_LINES
+	local crate = if type(data.Crate) == "table" then data.Crate else nil -- the round's season crate
+	local compact = #data.Lines + (if crate then 1 else 0) >= COMPACT_LINES
 	local list = rewards:FindFirstChildOfClass("UIListLayout")
 	if list then
 		list.Padding = UDim.new(0, if compact then 4 else 6)
@@ -463,6 +464,38 @@ local function show(data)
 			Parent = row,
 		})
 		UIKit.PopIn(row, 0.25 + index * 0.08)
+	end
+	if crate then
+		-- The crate season (Services/CrateService): one crate for every round played to the end, in
+		-- the season's ember colours, with the keys they have to open it.
+		local row = UIKit.new("Frame", {
+			Size = UDim2.new(1, 0, 0, if compact then 26 else 34),
+			BackgroundColor3 = Color3.fromRGB(110, 46, 30),
+			BackgroundTransparency = 0.2,
+			LayoutOrder = #data.Lines + 1,
+			Parent = rewards,
+			Children = { UIKit.Corner(10), UIKit.Stroke(Color3.fromRGB(255, 150, 60), 1.5, 0.3) },
+		})
+		UIKit.Label({
+			Text = `📦 +{crate.Count or 1} {crate.Name or "Crate"}`,
+			Font = Theme.Fonts.Display,
+			TextSize = if compact then 18 else 19,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(0.6, 0, 1, 0),
+			Position = UDim2.fromOffset(12, 0),
+			Parent = row,
+		})
+		local keys = tonumber(crate.Keys) or 0
+		UIKit.Label({
+			Text = if keys > 0 then `🔑 {keys} to open it` else "🔑 win keys in the PARTY CUP",
+			TextSize = if compact then 17 else 18,
+			TextColor3 = Color3.fromRGB(255, 196, 92),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			Size = UDim2.new(0.4, -12, 1, 0),
+			Position = UDim2.fromScale(0.6, 0),
+			Parent = row,
+		})
+		UIKit.PopIn(row, 0.25 + (#data.Lines + 1) * 0.08)
 	end
 	UIKit.Label({
 		Text = `Total: +{data.Coins} {Theme.CoinIcon}   +{data.XP} XP`,
