@@ -106,7 +106,7 @@ your ideas. This has to be sick. This will be players first season. I want it to
 spooky. Commits `632645b`..`8b649e3` on this branch. **Live in version 49** (2026-10-23 21:42 UTC); ask the owner
 before every publish (the game is public).
 
-**Since version 49, not published yet** (the owner's notes after playing it): 21 s of lobby before the vote and
+**Live in version 50** (2026-10-23 23:35 UTC, the owner: "Push it"; the owner's notes after playing version 49): 21 s of lobby before the vote and
 crates open in the lobby while a round goes on; the crate window brighter with the display font and no dark
 buttons; key pack pictures; bots without a tag; keys 3/2/1 for the top 3 of every round (and the cup podium);
 the starter pack at 49 Robux; one 🎃 Season button in the menu column for the season's crates, the event and the
