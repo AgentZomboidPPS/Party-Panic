@@ -139,9 +139,10 @@ function CrateTheme.Dress(window: Frame, season: Seasons.Season?)
 	end
 end
 
--- "1 key", "5 keys".
+-- "1 key", "5 keys" ("5 KEYS" for "KEY").
 function CrateTheme.Count(count: number, one: string, many: string?): string
-	return if count == 1 then `1 {one}` else `{UIKit.FormatNumber(count)} {many or (one .. "s")}`
+	local plural = many or (one .. (if string.upper(one) == one then "S" else "s"))
+	return if count == 1 then `1 {one}` else `{UIKit.FormatNumber(count)} {plural}`
 end
 
 return CrateTheme

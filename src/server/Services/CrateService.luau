@@ -554,6 +554,8 @@ local function onLoaded(player: Player)
 	DataService.Changed(player)
 end
 
+CrateService.ProfileReady = onLoaded -- (the check tools' stand-ins have no ProfileLoaded of their own)
+
 -- The altars the lobby built (World/SeasonWorld), with their prompts.
 local function hookAltars()
 	for index, built in SeasonWorld.Altars() do

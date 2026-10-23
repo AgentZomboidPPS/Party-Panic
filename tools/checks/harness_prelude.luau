@@ -289,6 +289,14 @@ __playersShim = setmetatable({
 	GetPlayerFromCharacter = function(_, model)
 		return __byCharacter[model]
 	end,
+	GetPlayerByUserId = function(_, userId)
+		for _, player in __fakePlayers do
+			if player.UserId == userId then
+				return player
+			end
+		end
+		return nil
+	end,
 	GetUserThumbnailAsync = function()
 		return "", true
 	end,

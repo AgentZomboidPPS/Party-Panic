@@ -8,6 +8,9 @@ Errors and warnings from all of it come back in the result.
     python3 tools/checks/ui_render.py client.json /tmp/screens    # draw every screen and phase
 
 --touch makes the stand-in client a phone (touch, no keyboard), for the phone layouts.
+--skip SkeeBall leaves the Skee-Ball section and its controller out: the whole client is within a few
+KB of Open Cloud's 1 MiB script cap, so a run checking something else (the crate season's screens,
+"Crates ...", "Crate ...") makes room that way.
 --sizes lists the screens every snapshot is laid out on by the ENGINE (gui_dump.luau: real sizes,
 text measurements and wrapping, with the fonts loaded); default: the touch sizes with --touch, else
 the PC ones. The result's "textReport" lists every text that doesn't fit on one of them.
@@ -1028,6 +1031,7 @@ end
 -- game (PLAY AGAIN / DONE) and leaves; then starts again and is taken into a round. A stand-in
 -- machine, board and ball when the place's lobby is older than this client.
 local skeeChecks = {}
+--@section SkeeBall
 do
 	local CollectionService = game:GetService("CollectionService")
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1297,6 +1301,7 @@ do
 		machineModel:SetAttribute(key, value)
 	end
 end
+--@end SkeeBall
 
 -- 3c. The weekly leaderboard (HallOfFameController): this week's board and last week's top three
 -- with long names, the player 14th with 35 points, so its chip is in the lobby's row from here on,
@@ -1337,6 +1342,152 @@ do
 	snap("Weekly")
 	pcall(__require("Client/UI/Modal").CloseAll)
 	task.wait(0.3)
+end
+
+-- 3d. The crate season (Controllers/CrateController, Crates/*): a player 241 crates in, with 12
+-- crates and 7 keys, six of the 23 items found, on the Top Unboxers board at 48th; the window's
+-- tabs ("Crates", "Crates Collection", "Crates Top", "Crates Odds", "Crates Keys", and the key shop
+-- for a player Roblox restricts: "Crates Keys locked"), a pet banner FIRST IN THE WORLD and the
+-- title's ("Crate banner"), keys given ("Crate gift"), the player's own opening over their head and
+-- its prize card ("Crate prize"), Open 5's card ("Crate prize 5") and the season's welcome
+-- ("Crate welcome", "Crate welcome card"). The result's "crateChecks" says what the chip read.
+do
+	local Seasons = require(Shared.Seasons)
+	local season = Seasons.CurrentSeason()
+	local DailyLogicModule = __require("Shared/Logic/DailyLogic")
+	local today = DailyLogicModule.DayNumber(os.time())
+	local week = DailyLogicModule.WeekNumber(os.time())
+	local found = { "Pet_HarvestOwl", "Hat_LeafCrown", "Aura_LeafWhirl", "Trail_Embers", "Elim_CrowScatter", "Victory_Bonfire" }
+	local foundMap = {}
+	for index, id in found do
+		foundMap[id] = { Crate = 20 + index * 31, Day = today - 6 + index }
+	end
+	local checks = {}
+	if okSnap then
+		snapshot.Keys = 7
+		snapshot.Crates = { Season = season.Id, Count = 12 }
+		snapshot.Seasons = {
+			[season.Id] = { Earned = 253, Opened = 241, Coins = 3100, Meter = 77, Week = week, WeekOpened = 40, Found = foundMap },
+		}
+		snapshot.CrateFlags = { StarterKeys = true, Welcome = season.Id, DailyKeyDay = 0, StarterPack = false, Bought = 0 }
+		for _, id in found do
+			snapshot.Owned[id] = true
+		end
+		snapshot.Equipped.Pet = "Pet_HarvestOwl"
+		__fire("ProfileData", snapshot)
+	end
+	local rows = {}
+	for index = 1, 10 do
+		table.insert(rows, {
+			UserId = 400 + index,
+			Name = if index % 2 == 1 then "SuperLongDisplayNm20" else "LeafPileLeo",
+			Opened = 1300 - index * 97,
+		})
+	end
+	GameState.SetJSON("CrateBoard", {
+		Season = season.Id,
+		Week = week,
+		Top = rows,
+		WeekTop = rows,
+		Server = { { UserId = __player.UserId, Name = __player.DisplayName, Opened = 12 } },
+		Firsts = { Pet_HarvestOwl = { UserId = 401, Name = "SuperLongDisplayNm20", Day = today - 2 } },
+	})
+	GameState.SetJSON("KeyShop", {
+		Packs = {
+			{ Key = "Keys1", Keys = 1, Price = 25, Gift = true },
+			{ Key = "Keys5", Keys = 5, Price = 99, Gift = true, Badge = "POPULAR" },
+			{ Key = "Keys15", Keys = 15, Price = 249, Gift = true, Badge = "BEST VALUE" },
+			{ Key = "Keys40", Keys = 40, Price = 549, Gift = true },
+		},
+		Starter = { Key = "Starter", Keys = 5, Price = 79, Item = season.Starter },
+	})
+	__player:SetAttribute("PP_CrateRank", 48)
+	__player:SetAttribute("PP_CrateWeekRank", 12)
+	__player:SetAttribute("PP_KeysLocked", false)
+	task.wait(0.6)
+	local ribbonChip = nil
+	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+	for _, item in (if hud then hud:GetDescendants() else {}) do
+		if item:IsA("TextButton") and string.find(item.Text, "🔑", 1, true) then
+			ribbonChip = item.Text
+		end
+	end
+	checks.chip = ribbonChip or "(not in the row)"
+	for _, tab in { "Crates", "Collection", "Top", "Odds", "Keys" } do
+		step = "OpenScreen Crates " .. tab
+		State.OpenScreen:Fire("Crates", tab)
+		task.wait(0.8)
+		snap(if tab == "Crates" then "Crates" else "Crates " .. tab)
+	end
+	__player:SetAttribute("PP_KeysLocked", true)
+	task.wait(0.4)
+	snap("Crates Keys locked")
+	__player:SetAttribute("PP_KeysLocked", false)
+	pcall(__require("Client/UI/Modal").CloseAll)
+	task.wait(0.3)
+	step = "Crate banner"
+	__fire("Crate", "Banner", { Name = "SuperLongDisplayNm20", UserId = 401, Item = "Pet_LanternWisp", Tier = "Pet", Season = season.Id, First = true })
+	__fire("Crate", "Banner", { Name = "LeafPileLeo", UserId = 402, Item = season.Title, Tier = "Title", Season = season.Id, Elsewhere = true })
+	task.wait(1)
+	snap("Crate banner")
+	task.wait(6.5)
+	step = "Crate gift"
+	__fire("Crate", "Gift", { Keys = 4, Reason = "PartyCup", Detail = "Place 1" })
+	task.wait(1)
+	snap("Crate gift")
+	task.wait(4)
+	step = "Crate prize"
+	local now = workspace:GetServerTimeNow()
+	__fire("Crate", "Show", {
+		Id = 1, UserId = __player.UserId, Name = __player.DisplayName, Altar = 0, Season = season.Id, At = now,
+		Duration = 5.2, RevealAt = 3.4, Friend = false, Meter = 0,
+		Results = { { Tier = "Pet", Item = "Pet_EmberStag", Coins = 0, Jackpot = false, Guaranteed = true, Crate = 242 } },
+	})
+	task.wait(3.9)
+	snap("Crate prize")
+	task.wait(5)
+	step = "Crate prize 5"
+	local five = {}
+	for index, tier in { "Coins", "Effect", "Coins", "Hat", "Coins" } do
+		table.insert(five, {
+			Tier = tier,
+			Item = if tier == "Effect" then "Trail_WispSteps" elseif tier == "Hat" then "Hat_CrescentMoon" else nil,
+			Coins = if tier == "Coins" then index * 10 else 0,
+			Jackpot = false,
+			Guaranteed = false,
+			Crate = 242 + index,
+		})
+	end
+	__fire("Crate", "Show", {
+		Id = 2, UserId = __player.UserId, Name = __player.DisplayName, Altar = 0, Season = season.Id,
+		At = workspace:GetServerTimeNow(), Duration = 6.6, RevealAt = 4.4, Friend = true, Meter = 12, Results = five,
+	})
+	task.wait(4.9)
+	snap("Crate prize 5")
+	task.wait(6)
+	step = "Crate welcome"
+	if okSnap then
+		snapshot.CrateFlags.Welcome = ""
+		snapshot.TutorialDone = true
+		GameState.Set("Phase", "Intermission")
+		__fire("ProfileData", snapshot)
+	end
+	task.wait(3)
+	snap("Crate welcome")
+	task.wait(4)
+	snap("Crate welcome card")
+	local welcome = __playerGui:FindFirstChild("PartyPanicCrates")
+	checks.welcome = welcome ~= nil and welcome:FindFirstChild("Welcome") ~= nil
+	local card = welcome and welcome:FindFirstChild("Welcome")
+	if card then
+		card:Destroy() -- (LATER, as far as the rest of the run is concerned)
+	end
+	if okSnap then
+		snapshot.CrateFlags.Welcome = season.Id
+		__fire("ProfileData", snapshot)
+	end
+	__crateChecks = checks
+	task.wait(0.5)
 end
 
 -- 4. A whole round, phase by phase, with three toasts on screen in the lobby. The vote shows the
@@ -2137,6 +2288,8 @@ phase("Results", 8, function()
 		FirstWin = place == 1,
 		LevelUp = 7, -- the round took the player to a new level
 		Standings = standings,
+		-- The crate season's crate (Services/CrateService): one more line on the card.
+		Crate = { Count = 1, Name = "Hollow Crate", Season = "HollowNight", Total = 13, Keys = 7 },
 	})
 	GameState.SetJSON("Champions", champions)
 	-- PLAY AGAIN? on the card (Services/ReplayService): the people who played vote (bots don't).
@@ -2774,6 +2927,7 @@ return game:GetService("HttpService"):JSONEncode({
 	replayChecks = replayChecks,
 	ratingChecks = ratingChecks,
 	goldChecks = goldChecks,
+	crateChecks = __crateChecks,
 	textReport = __textReport,
 	portals = __portals,
 })
@@ -2804,6 +2958,9 @@ def main():
                         "playing ones to compare) instead of every screen")
     parser.add_argument("--shots", help="only these snapshots, comma-separated (e.g. Intermission,LevelUp,Rewards): "
                         "a run with every screen at several sizes is over Open Cloud's result cap")
+    parser.add_argument("--skip", help="leave these sections (and their controllers) out of the run, comma-separated: "
+                        "SkeeBall. The whole client is close to Open Cloud's 1 MiB script cap; a run checking "
+                        "something else can make room this way")
     parser.add_argument("--sizes", help="screens to lay the UI out on with the engine (ui_render.py's names or "
                         "groups; default: touch with --touch, else pc; none to skip)")
     args = parser.parse_args()
@@ -2826,9 +2983,24 @@ def main():
     available = {}
     for module, path in module_paths().items():
         body = rewrite(module, path.read_text())
-        # Blank comment-only lines (line numbers stay put): Open Cloud caps a script at 1 MiB.
-        available[module] = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", body)
+        # Comments and indentation dropped (line numbers stay put): Open Cloud caps a script at 1 MiB,
+        # and the whole client with the crate season's screens is over it with them in.
+        body = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", body)
+        body = re.sub(r"(?m)^([^\"'`\[\n]*?\S)[ \t]+--(?!\[)[^\n]*$", r"\1", body)
+        available[module] = re.sub(r"(?m)[ \t]+$", "", re.sub(r"(?m)^[ \t]+", "", body))
     main_luau = shared_requires(MAIN)
+    # Sections left out (--skip): their lines blanked (the rest keep their line numbers), and their
+    # controller not started, so its modules aren't bundled.
+    for name in (args.skip.split(",") if args.skip else []):
+        pattern = re.compile(r"--@section " + re.escape(name) + r"\n.*?--@end " + re.escape(name) + r"\n", re.S)
+        if not pattern.search(main_luau):
+            sys.exit(f"client_harness: no section {name} to skip")
+        main_luau = pattern.sub(lambda m: "\n" * m.group(0).count("\n"), main_luau)
+        main_luau = main_luau.replace(f'"{name}Controller", ', "")
+    # The run's own script too, the same way (its lines stay where they are, for the error lines).
+    main_luau = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", main_luau)
+    main_luau = re.sub(r"(?m)^([^\"'`\[\n]*?\S)[ \t]+--(?!\[)[^\n]*$", r"\1", main_luau)
+    main_luau = re.sub(r"(?m)^[ \t]+", "", main_luau)
     # Only what the run can load (tools/checks/bundling.py): the modules this script asks for and
     # everything they reach. A require the bundler can't follow stops the build here.
     try:

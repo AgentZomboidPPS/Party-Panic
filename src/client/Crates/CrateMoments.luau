@@ -34,13 +34,14 @@ local season = Seasons.CurrentSeason()
 local colors = CrateTheme.Colors(season)
 local TITLE_FONT = Enum.Font.GrenzeGotisch
 
+local BANNER_Y = 200
+
 local touch = false
 local gui: ScreenGui
 local bannerHolder: Frame
 local cardHolder: Frame
 local queue: { () -> number } = {} -- cards waiting for the screen (each returns how long it shows)
 local cardBusy = false
-local banners = 0
 
 local function screenTaken(): boolean
 	return player:GetAttribute("PP_ResultsShowing") == true
@@ -50,22 +51,22 @@ end
 
 -- Banners ---------------------------------------------------------------------------------------
 
--- A banner across the top: `banner` is the server's (Name, Item, Tier, First, Elsewhere).
-function CrateMoments.Banner(banner: { [string]: any })
+-- A banner across the top: `banner` is the server's (Name, Item, Tier, First, Elsewhere). Returns how
+-- long it stays (shorter while others wait: `hurry`).
+local function showBanner(banner: { [string]: any }, hurry: boolean): number
 	local item = banner.Item
 	if type(item) ~= "string" then
-		return
+		return 0
 	end
 	local tier = CrateTheme.TierOf(item)
 	local color = CrateTheme.TierColor(tier, Seasons.SeasonOf(item))
 	local title = tier == "Title"
-	banners += 1
 	local mine = banner.UserId == player.UserId
 	local width = if title then 760 else 640
 	local frame = UIKit.Panel({
 		Name = "Banner",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, if touch then 96 else 110),
+		Position = UDim2.new(0.5, 0, 0, BANNER_Y), -- (under the top bar, the first-join tips and the chips)
 		Size = UDim2.fromOffset(width, if title then 124 else 92),
 		CornerRadius = 22,
 		Parent = bannerHolder,
@@ -132,8 +133,8 @@ function CrateMoments.Banner(banner: { [string]: any })
 			TextColor3 = colors.Deep,
 			BackgroundTransparency = 0,
 			BackgroundColor3 = colors.Gold,
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -14, 0, 0),
+			AnchorPoint = Vector2.new(1, 1), -- (sitting on the banner's top edge, clear of the name)
+			Position = UDim2.new(1, -14, 0, 8),
 			Size = UDim2.fromOffset(250, 30),
 			Parent = frame,
 			Children = { UIKit.Round() },
@@ -141,7 +142,7 @@ function CrateMoments.Banner(banner: { [string]: any })
 	end
 	UIKit.PopIn(frame, 0.4)
 	local born = os.clock()
-	local life = if title then 7 else 5
+	local life = if title then (if hurry then 5 else 7) else (if hurry then 3.2 else 5)
 	local connection
 	connection = RunService.Heartbeat:Connect(function()
 		local t = os.clock() - born
@@ -158,14 +159,38 @@ function CrateMoments.Banner(banner: { [string]: any })
 			frame:Destroy()
 		end
 	end)
-	-- Banners stack: a newer one pushes the older ones down a little.
-	local index = 0
-	for _, child in bannerHolder:GetChildren() do
-		if child:IsA("GuiObject") and child ~= frame then
-			index += 1
-			child.Position = UDim2.new(0.5, 0, 0, (if touch then 96 else 110) + index * 70)
+	return life
+end
+
+-- Banners take turns (a burst of them, an Open 5 with two pets in it, never piles up on screen); a
+-- few wait at most, the title always.
+local waiting: { { [string]: any } } = {}
+local bannerUp = false
+
+local function nextBanner()
+	if bannerUp or #waiting == 0 then
+		return
+	end
+	local banner = table.remove(waiting, 1) :: { [string]: any }
+	bannerUp = true
+	local life = showBanner(banner, #waiting > 0)
+	task.delay(life + 0.15, function()
+		bannerUp = false
+		nextBanner()
+	end)
+end
+
+function CrateMoments.Banner(banner: { [string]: any })
+	if #waiting >= 4 then
+		for index, queued in waiting do
+			if queued.Tier ~= "Title" then
+				table.remove(waiting, index)
+				break
+			end
 		end
 	end
+	table.insert(waiting, banner)
+	nextBanner()
 end
 
 -- Cards (one at a time) ---------------------------------------------------------------------------
@@ -361,6 +386,16 @@ function CrateMoments.Prize(show: { [string]: any })
 	pump()
 end
 
+-- "Place 2" (the server's detail for a cup's keys) as "2ND PLACE"; "Played": "YOU PLAYED IT".
+local function cupPlace(detail: any): string
+	local place = tonumber(string.match(tostring(detail or ""), "Place (%d+)"))
+	if place then
+		local suffix = if place == 1 then "ST" elseif place == 2 then "ND" elseif place == 3 then "RD" else "TH"
+		return `{place}{suffix} PLACE`
+	end
+	return "YOU PLAYED IT"
+end
+
 -- Keys or crates given (the server's "Gift": Keys?, Crates?, Reason, Detail?, From?, Item?).
 function CrateMoments.Gift(gift: { [string]: any })
 	local keys = tonumber(gift.Keys) or 0
@@ -389,7 +424,7 @@ function CrateMoments.Gift(gift: { [string]: any })
 		local what = if keys > 0 then CrateTheme.Count(keys, "KEY") else CrateTheme.Count(crates, "CRATE")
 		local top = if gift.From
 			then `🎁 {gift.From} sent you`
-			elseif reason == "PartyCup" then `PARTY CUP {string.upper(tostring(gift.Detail or ""))}`
+			elseif reason == "PartyCup" then `PARTY CUP · {cupPlace(gift.Detail)}`
 			elseif reason == "Road" then `REWARDS ROAD · {string.upper(tostring(gift.Detail or ""))}`
 			elseif reason == "Quest" then "WEEKLY QUEST"
 			elseif reason == "Starter pack" then `{season.Name} STARTER PACK`
@@ -401,7 +436,7 @@ function CrateMoments.Gift(gift: { [string]: any })
 			Text = if gift.Item
 				then `and the {CrateTheme.NameOf(gift.Item)} trail!`
 				else "Open crates at the pile in the middle of the lobby.",
-			TextSize = 17,
+			TextSize = 18,
 			TextColor3 = Theme.Colors.TextDim,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Position = UDim2.fromOffset(150, 88),
@@ -425,12 +460,23 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 		return
 	end
 	welcomeShowing = true
+	-- The lobby's chips and the first-join tip step aside meanwhile (UI/LobbyRibbon).
+	player:SetAttribute("PP_Celebrating", true)
 	local holder = UIKit.new("Frame", {
 		Name = "Welcome",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
 		Parent = gui,
 	})
+	-- The lobby dims behind it (the HUD too), between letterbox bars.
+	local dim = UIKit.new("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(10, 4, 16),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Parent = holder,
+	})
+	UIKit.Tween(dim, 0.8, { BackgroundTransparency = 0.45 })
 	local bars = {}
 	for index, anchor in { 0, 1 } do
 		bars[index] = UIKit.new("Frame", {
@@ -496,13 +542,13 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 	end)
 	task.delay(5.6, function()
 		flicker:Disconnect()
-		UIKit.Tween(text, 0.5, { Position = UDim2.fromScale(0.5, 0.26) })
+		UIKit.Tween(text, 0.5, { Position = UDim2.fromScale(0.5, 0.3) })
 		onSeen()
 		local p = State.Profile
 		local keys = if p then p.Keys or 0 else 0
 		local card = UIKit.Panel({
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.62),
+			Position = UDim2.fromScale(0.5, 0.66),
 			Size = UDim2.fromOffset(620, if touch then 250 else 230),
 			CornerRadius = 24,
 			Parent = holder,
@@ -535,6 +581,7 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 		})
 		local h = if touch then Theme.Touch.Target else 56
 		local function close()
+			UIKit.Tween(dim, 0.5, { BackgroundTransparency = 1 })
 			UIKit.Tween(bars[1], 0.5, { Position = UDim2.fromScale(0, -0.14) })
 			UIKit.Tween(bars[2], 0.5, { Position = UDim2.fromScale(0, 1.14) })
 			card:Destroy()
@@ -542,6 +589,7 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 			task.delay(0.6, function()
 				holder:Destroy()
 				welcomeShowing = false
+				player:SetAttribute("PP_Celebrating", false)
 			end)
 		end
 		UIKit.Button({

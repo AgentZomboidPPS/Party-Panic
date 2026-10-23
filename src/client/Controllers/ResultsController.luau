@@ -488,7 +488,7 @@ local function show(data)
 		local keys = tonumber(crate.Keys) or 0
 		UIKit.Label({
 			Text = if keys > 0 then `🔑 {keys} to open it` else "🔑 win keys in the PARTY CUP",
-			TextSize = if compact then 17 else 18,
+			TextSize = 18,
 			TextColor3 = Color3.fromRGB(255, 196, 92),
 			TextXAlignment = Enum.TextXAlignment.Right,
 			Size = UDim2.new(0.4, -12, 1, 0),

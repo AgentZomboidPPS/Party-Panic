@@ -50,6 +50,8 @@ local TABS = {
 	{ Key = "Keys", Label = "Get Keys", Icon = "🔑" },
 }
 local MEDALS = { "🥇", "🥈", "🥉" }
+local KEYS_HOW =
+	"🔑 Keys: 3 · 2 · 1 on the PARTY CUP podium, +1 for playing all 5 rounds, +1 for your first cup each day, every 5th level and weekly quests."
 local TITLE_FONT = Enum.Font.GrenzeGotisch
 
 local touch = false
@@ -164,8 +166,8 @@ local viewportModel: Model? = nil
 local function crateViewport(parent: Instance)
 	local frame = UIKit.new("ViewportFrame", {
 		Name = "Crate",
-		Size = UDim2.fromOffset(280, 280),
-		Position = UDim2.fromOffset(0, 10),
+		Size = if touch then UDim2.fromOffset(240, 240) else UDim2.fromOffset(280, 280),
+		Position = UDim2.fromOffset(if touch then 20 else 0, 10),
 		BackgroundTransparency = 1,
 		Ambient = Color3.fromRGB(150, 110, 120),
 		LightColor = Color3.fromRGB(255, 200, 150),
@@ -258,11 +260,16 @@ local function renderCrates()
 	local page = pages.Crates
 	clear(page)
 	crateViewport(page)
+	-- Phones: the window's content is about 380 tall, so the column packs tighter and the how-to-get-
+	-- keys line moves to the key shop.
+	local L = if touch
+		then { Season = 44, Pills = 72, Pill = 48, Meter = 126, Open = 212, Gap = 8 }
+		else { Season = 48, Pills = 82, Pill = 52, Meter = 146, Open = 236, Gap = 10 }
 	UIKit.Label({
 		Text = "Crates and keys never expire",
 		TextSize = textSize(16),
 		TextColor3 = Theme.Colors.TextDim,
-		Position = UDim2.fromOffset(0, 292),
+		Position = UDim2.fromOffset(0, if touch then 250 else 292),
 		Size = UDim2.fromOffset(280, 24),
 		Parent = page,
 	})
@@ -274,31 +281,31 @@ local function renderCrates()
 		BackgroundTransparency = 1,
 		Parent = page,
 	})
-	headline({ Text = season.Name, Size = UDim2.fromOffset(width, 50), Parent = column })
+	headline({ Text = season.Name, Size = UDim2.fromOffset(width, if touch then 42 else 50), Parent = column })
 	UIKit.Label({
 		Text = `SEASON {season.Number} · open crates at the pile`,
 		Font = Theme.Fonts.Display,
 		TextSize = textSize(18),
 		TextColor3 = colors.Glow,
-		Position = UDim2.fromOffset(0, 48),
+		Position = UDim2.fromOffset(0, L.Season),
 		Size = UDim2.fromOffset(width, 24),
 		Parent = column,
 	})
 	local half = (width - 10) / 2
-	pill(column, `📦 {CrateTheme.Count(crates(), "CRATE")}`, {
-		Position = UDim2.fromOffset(0, 82),
-		Size = UDim2.fromOffset(half, 52),
+	pill(column, `📦 {CrateTheme.Count(crates(), "CRATE", "CRATES")}`, {
+		Position = UDim2.fromOffset(0, L.Pills),
+		Size = UDim2.fromOffset(half, L.Pill),
 	})
-	pill(column, `🔑 {CrateTheme.Count(keys(), "KEY")}`, {
-		Position = UDim2.fromOffset(half + 10, 82),
-		Size = UDim2.fromOffset(half, 52),
+	pill(column, `🔑 {CrateTheme.Count(keys(), "KEY", "KEYS")}`, {
+		Position = UDim2.fromOffset(half + 10, L.Pills),
+		Size = UDim2.fromOffset(half, L.Pill),
 	})
-	meterBar(column, 146, width)
+	meterBar(column, L.Meter, width)
 
 	local h = buttonHeight()
 	local canOpen = crates() >= 1 and keys() >= 1
 	local inRound = State.InRound()
-	local y = 236
+	local y = L.Open
 	local openText = if inRound
 		then "OPENS IN THE LOBBY"
 		elseif crates() < 1 then "PLAY A ROUND FOR A CRATE"
@@ -323,7 +330,7 @@ local function renderCrates()
 		if canOpen and not inRound then colors.Glow else Theme.Colors.PanelLight,
 		if canOpen and not inRound then colors.Main else Theme.Colors.PanelDark
 	)
-	y += h + 10
+	y += h + L.Gap
 	local many = crates() >= CrateLogic.OpenMany and keys() >= CrateLogic.OpenMany
 	UIKit.Button(
 		{
@@ -361,9 +368,12 @@ local function renderCrates()
 		if many and not inRound then colors.Gold else Theme.Colors.PanelLight,
 		if many and not inRound then colors.Main else Theme.Colors.PanelDark
 	)
+	if touch then
+		return
+	end
 	y += h + 12
 	UIKit.Label({
-		Text = "🔑 Keys: 3 · 2 · 1 on the PARTY CUP podium, +1 for playing all 5 rounds, +1 for your first cup each day, every 5th level and weekly quests.",
+		Text = KEYS_HOW,
 		TextSize = textSize(16),
 		TextColor3 = Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -536,10 +546,11 @@ local function card(parent: Instance, itemId: string, order: number, have: boole
 			Parent = button,
 		})
 	end
+	-- Phones: 11 pt text at the least, so the name gets two lines and the picture a little less room.
 	local art = UIKit.new("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0.15, 0.06),
-		Size = UDim2.fromScale(0.7, 0.56),
+		Position = UDim2.fromScale(0.15, 0.05),
+		Size = UDim2.fromScale(0.7, if touch then 0.5 else 0.56),
 		Parent = button,
 	})
 	if have then
@@ -554,23 +565,26 @@ local function card(parent: Instance, itemId: string, order: number, have: boole
 		Text = if have then CrateTheme.NameOf(itemId) else "???",
 		Font = Theme.Fonts.Display,
 		TextSize = textSize(17),
-		TextScaled = true,
-		TextWrapped = false,
-		Position = UDim2.new(0, 6, 0.64, 0),
-		Size = UDim2.new(1, -12, 0.17, 0),
+		TextScaled = not touch,
+		TextWrapped = touch,
+		LineHeight = 0.9,
+		Position = UDim2.new(0, 6, if touch then 0.56 else 0.64, 0),
+		Size = UDim2.new(1, -12, if touch then 0.25 else 0.17, 0),
 		Parent = button,
-		Children = { UIKit.TextStroke(0.4), UIKit.new("UITextSizeConstraint", { MaxTextSize = 18 }) },
+		Children = if touch
+			then { UIKit.TextStroke(0.4) }
+			else { UIKit.TextStroke(0.4), UIKit.new("UITextSizeConstraint", { MaxTextSize = 18 }) },
 	})
 	UIKit.Label({
 		Text = if wearing then "ON" elseif have then "TAP TO SEE" elseif vaulted then "VAULTED" else itemOdds(itemId),
 		Font = Theme.Fonts.Display,
 		TextSize = textSize(15),
-		TextScaled = true,
+		TextScaled = not touch,
 		TextColor3 = if wearing then Theme.Colors.Green elseif have then Theme.Colors.TextDim else tierColor,
 		Position = UDim2.new(0, 6, 0.81, 0),
 		Size = UDim2.new(1, -12, 0.15, 0),
 		Parent = button,
-		Children = { UIKit.new("UITextSizeConstraint", { MaxTextSize = 16 }) },
+		Children = if touch then {} else { UIKit.new("UITextSizeConstraint", { MaxTextSize = 16 }) },
 	})
 	button.Activated:Connect(function()
 		if have then
@@ -620,17 +634,31 @@ local function renderCollection()
 	local have = owned()
 	local found, total = CrateLogic.Progress(shown, have)
 	local progress = progressOf(shown.Id)
-	-- The season tabs (past seasons are vaulted), then the summary.
+	-- The season tabs (past seasons are vaulted; with one season, just its name), then the summary.
+	local several = #Seasons.Order > 1
+	local headerHeight = if several and touch then Theme.Touch.Target else 44
 	local header = UIKit.new("Frame", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 44),
+		Size = UDim2.new(1, 0, 0, headerHeight),
 		Parent = page,
 		Children = { UIKit.List(Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Left) },
 	})
 	for order = #Seasons.Order, 1, -1 do
 		local id = Seasons.Order[order]
 		local info = Seasons.Get(id)
-		if info then
+		if info and not several then
+			UIKit.Label({
+				Text = `SEASON {info.Number} · {info.Name}`,
+				Font = Theme.Fonts.Display,
+				TextSize = textSize(20),
+				TextColor3 = colors.Glow,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextWrapped = false,
+				Size = UDim2.new(0.45, 0, 1, 0),
+				Parent = header,
+				Children = { UIKit.TextStroke(0.3) },
+			})
+		elseif info then
 			local label = if id == Seasons.Current then info.Name else `{info.Name} · VAULTED`
 			UIKit.Button(
 				{
@@ -638,7 +666,7 @@ local function renderCollection()
 					TextSize = textSize(18),
 					Size = UDim2.fromOffset(
 						math.ceil(UIKit.TextWidth(label, textSize(18), Theme.Fonts.Display)) + 36,
-						44
+						headerHeight
 					),
 					LayoutOrder = #Seasons.Order - order,
 					Parent = header,
@@ -668,8 +696,8 @@ local function renderCollection()
 	})
 
 	local list = UIKit.new("ScrollingFrame", {
-		Position = UDim2.fromOffset(0, 52),
-		Size = UDim2.new(1, 0, 1, -52),
+		Position = UDim2.fromOffset(0, headerHeight + 8),
+		Size = UDim2.new(1, 0, 1, -(headerHeight + 8)),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 8,
@@ -759,7 +787,7 @@ local function renderTop()
 	local page = pages.Top
 	clear(page)
 	local data = board()
-	local h = if touch then 60 else 46
+	local h = if touch then Theme.Touch.Target else 46
 	local kinds = {
 		{ Key = "Season", Label = "SEASON", Rows = "Top" },
 		{ Key = "Week", Label = "THIS WEEK", Rows = "WeekTop" },
@@ -919,7 +947,7 @@ local function renderTop()
 			Size = UDim2.new(1, -66, 0, 22),
 			Parent = right,
 		})
-		UIKit.Label({
+		local firstLine = UIKit.Label({
 			Text = if type(first) == "table"
 				then `{first.Name} · {os.date("!%b %d", (tonumber(first.Day) or 0) * 86400)}`
 				else "Not found yet!",
@@ -932,6 +960,7 @@ local function renderTop()
 			Size = UDim2.new(1, -66, 0, 20),
 			Parent = right,
 		})
+		firstLine:SetAttribute("PP_TruncateOk", true) -- (a long name ends in "...")
 	end
 end
 renderers.Top = renderTop
@@ -977,7 +1006,7 @@ local function renderOdds()
 			TextWrapped = false,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			Position = UDim2.fromOffset(if bold then 10 else 30, 0),
-			Size = UDim2.new(1, -140, 1, 0),
+			Size = UDim2.new(1, -(if bold then 10 else 30) - 140, 1, 0),
 			Parent = row,
 		})
 		UIKit.Label({
@@ -1138,6 +1167,8 @@ local function openGift(pack: { [string]: any })
 	}, closeGift, Theme.Colors.Lavender, Theme.Colors.Purple)
 end
 
+local giftMode = false
+
 local function renderKeys()
 	local page = pages.Keys
 	clear(page)
@@ -1145,7 +1176,7 @@ local function renderKeys()
 		local panel =
 			UIKit.Panel({ Size = UDim2.new(1, 0, 0, 200), CornerRadius = 16, Parent = page }, colors.Panel, colors.Deep)
 		UIKit.Label({
-			Text = "🔒 Keys aren't for sale where you are.\nKeys you win on the PARTY CUP podium, with levels and weekly quests still open crates!",
+			Text = "🔒 Keys aren't for sale where you are. Keys you win in PARTY CUPS, with levels and weekly quests still open crates!",
 			Font = Theme.Fonts.Display,
 			TextSize = textSize(22),
 			Position = UDim2.fromOffset(20, 20),
@@ -1158,43 +1189,59 @@ local function renderKeys()
 	local packs = data and data.Packs or {}
 	local starter = data and data.Starter
 	local p = profile()
-	local y = 0
-	if type(starter) == "table" and not (p and p.CrateFlags and p.CrateFlags.StarterPack) then
+	local h = buttonHeight()
+	-- Phones: the content is about 380 tall: the starter pack (or how to get keys), the packs, then
+	-- VIEW ODDS and GIFT.
+	local top = if touch then 92 else 96
+	local bottomRow = h + 8
+	local starterShown = type(starter) == "table" and not (p and p.CrateFlags and p.CrateFlags.StarterPack)
+	if starterShown then
 		local banner = UIKit.Panel({
-			Size = UDim2.new(1, 0, 0, if touch then 110 else 96),
+			Size = UDim2.new(1, 0, 0, top),
 			CornerRadius = 16,
 			Parent = page,
 		}, colors.Main, colors.Crimson)
 		UIKit.Label({
 			Text = `🏮 {season.Name} STARTER`,
 			Font = Theme.Fonts.Display,
-			TextSize = textSize(24),
+			TextSize = textSize(22),
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.fromOffset(16, 10),
-			Size = UDim2.new(1, -220, 0, 32),
+			TextWrapped = false,
+			Position = UDim2.fromOffset(16, 8),
+			Size = UDim2.new(1, -220, 0, 30),
 			Parent = banner,
 			Children = { UIKit.TextStroke(0.2) },
 		})
 		UIKit.Label({
-			Text = `{CrateTheme.Count(starter.Keys, "key")} + the {CrateTheme.NameOf(starter.Item or season.Starter)} trail, only here. Once per player.`,
+			Text = `{CrateTheme.Count(starter.Keys, "key")} + the {CrateTheme.NameOf(starter.Item or season.Starter)} trail, sold only here. Once per player.`,
 			TextSize = textSize(17),
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.fromOffset(16, 44),
-			Size = UDim2.new(1, -220, 0, 44),
+			TextYAlignment = Enum.TextYAlignment.Top,
+			Position = UDim2.fromOffset(16, 40),
+			Size = UDim2.new(1, -220, 0, top - 44),
 			Parent = banner,
 		})
 		UIKit.Button({
 			Text = `R$ {starter.Price}`,
 			TextSize = textSize(24),
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -14, 0.5, 0),
-			Size = UDim2.fromOffset(180, buttonHeight()),
+			Position = UDim2.new(1, -12, 0.5, 0),
+			Size = UDim2.fromOffset(180, math.min(h, top - 12)),
 			Parent = banner,
 		}, function()
 			remote:FireServer("Buy", starter.Key)
 		end, Theme.Colors.Green, Color3.fromRGB(60, 160, 90))
-		y += (if touch then 110 else 96) + 12
+	else
+		UIKit.Label({
+			Text = KEYS_HOW,
+			TextSize = textSize(17),
+			TextColor3 = Theme.Colors.TextDim,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, 0, 0, top),
+			Parent = page,
+		})
 	end
+	local y = top + 10
 	if #packs == 0 then
 		UIKit.Label({
 			Text = if data then "Key packs are coming soon!" else "Asking Roblox for the prices...",
@@ -1208,7 +1255,7 @@ local function renderKeys()
 	local row = UIKit.new("Frame", {
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(0, y),
-		Size = UDim2.new(1, 0, 0, if touch then 250 else 230),
+		Size = UDim2.new(1, 0, 1, -(y + bottomRow + 6)),
 		Parent = page,
 		Children = { UIKit.List(Enum.FillDirection.Horizontal, 10, Enum.HorizontalAlignment.Left) },
 	})
@@ -1235,71 +1282,81 @@ local function renderKeys()
 				BackgroundColor3 = colors.Gold,
 				AnchorPoint = Vector2.new(0.5, 0),
 				Position = UDim2.new(0.5, 0, 0, 6),
-				Size = UDim2.fromOffset(120, 24),
+				Size = UDim2.new(1, -20, 0, 24),
 				Parent = cardFrame,
 				Children = { UIKit.Round() },
 			})
 		end
+		-- (Short enough for the smallest phone: the badge, the keys, the saving, then BUY.)
 		UIKit.Label({
-			Text = "🔑",
-			TextSize = 46,
-			Position = UDim2.fromOffset(0, 32),
-			Size = UDim2.new(1, 0, 0, 52),
-			Parent = cardFrame,
-		})
-		UIKit.Label({
-			Text = CrateTheme.Count(pack.Keys, "KEY"),
+			Text = `🔑 {CrateTheme.Count(pack.Keys, "KEY", "KEYS")}`,
 			Font = Theme.Fonts.Display,
-			TextSize = textSize(22),
-			Position = UDim2.fromOffset(0, 86),
-			Size = UDim2.new(1, 0, 0, 28),
+			TextSize = textSize(24),
+			Position = UDim2.fromOffset(0, 32),
+			Size = UDim2.new(1, 0, 0, 30),
 			Parent = cardFrame,
 			Children = { UIKit.TextStroke(0.3) },
 		})
 		local save = if onePrice and pack.Keys > 1
 			then math.floor((1 - pack.Price / (pack.Keys * onePrice)) * 100 + 0.5)
 			else 0
-		UIKit.Label({
-			Text = if save > 0 then `save {save}%` else " ",
-			TextSize = textSize(16),
-			TextColor3 = colors.Glow,
-			Position = UDim2.fromOffset(0, 114),
-			Size = UDim2.new(1, 0, 0, 22),
-			Parent = cardFrame,
-		})
-		UIKit.Button({
-			Text = `R$ {pack.Price}`,
-			TextSize = textSize(20),
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, if pack.Gift then -(buttonHeight() * 0.75 + 16) else -10),
-			Size = UDim2.new(1, -16, 0, buttonHeight() * 0.85),
-			Parent = cardFrame,
-		}, function()
-			remote:FireServer("Buy", pack.Key)
-		end, Theme.Colors.Green, Color3.fromRGB(60, 160, 90))
-		if pack.Gift then
-			UIKit.Button({
-				Text = "🎁 GIFT",
-				TextSize = textSize(17),
+		if save > 0 then
+			UIKit.Label({
+				Text = `save {save}%`,
+				TextSize = textSize(16),
+				TextColor3 = colors.Glow,
+				Position = UDim2.fromOffset(0, 62),
+				Size = UDim2.new(1, 0, 0, 22),
+				Parent = cardFrame,
+			})
+		end
+		local gifting = giftMode and pack.Gift
+		UIKit.Button(
+			{
+				Text = if gifting then `🎁 R$ {pack.Price}` else `R$ {pack.Price}`,
+				TextSize = textSize(20),
 				AnchorPoint = Vector2.new(0.5, 1),
 				Position = UDim2.new(0.5, 0, 1, -8),
-				Size = UDim2.new(1, -16, 0, buttonHeight() * 0.7),
+				Size = UDim2.new(1, -14, 0, h),
 				Parent = cardFrame,
-			}, function()
-				openGift(pack)
-			end, Theme.Colors.Lavender, Theme.Colors.Purple)
-		end
+			},
+			function()
+				if gifting then
+					openGift(pack)
+				else
+					remote:FireServer("Buy", pack.Key)
+				end
+			end,
+			if gifting then Theme.Colors.Lavender else Theme.Colors.Green,
+			if gifting then Theme.Colors.Purple else Color3.fromRGB(60, 160, 90)
+		)
 	end
 	UIKit.Button({
 		Text = "VIEW ODDS FOR EVERY OUTCOME",
-		TextSize = textSize(20),
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, 0),
-		Size = UDim2.fromOffset(440, buttonHeight()),
+		TextSize = textSize(19),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.new(0.62, -6, 0, h),
 		Parent = page,
 	}, function()
 		CrateMenu.Show("Odds")
 	end, colors.Glow, colors.Main)
+	UIKit.Button(
+		{
+			Text = if giftMode then "BUY FOR ME" else "🎁 GIFT KEYS",
+			TextSize = textSize(19),
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.fromScale(1, 1),
+			Size = UDim2.new(0.38, -6, 0, h),
+			Parent = page,
+		},
+		function()
+			giftMode = not giftMode
+			renderKeys()
+		end,
+		if giftMode then Theme.Colors.Green else Theme.Colors.Lavender,
+		if giftMode then Color3.fromRGB(60, 160, 90) else Theme.Colors.Purple
+	)
 end
 renderers.Keys = renderKeys
 
