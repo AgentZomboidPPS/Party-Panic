@@ -294,6 +294,11 @@ end
 
 function AudioController.Start(_context)
 	local function effectVolume(name: string): number
+		-- The lobby's crows and leaf heaps are background (heard flat, from wherever they are): under
+		-- the game's own effects.
+		if name == "CrowCaw" or name == "LeafRustle" then
+			return 0.3
+		end
 		return if name == "Click" or name == "VoteClick" or name == "CrateTick" then 0.4 else 0.6
 	end
 	local sprite = Sounds.Sprite

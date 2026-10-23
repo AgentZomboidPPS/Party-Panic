@@ -6,7 +6,7 @@ return {
 	SfxSprite = 135145103433440,
 	-- The crate season's effects in a sprite of their own (src/shared/SeasonSfxSprite.luau; tools/music/
 	-- compose.py --season). 0 until uploaded: the crates use the effects above meanwhile.
-	SeasonSprite = 0,
+	SeasonSprite = 71236754603032,
 	Music = {
 		Lobby = 125330857433697,
 		Lobby2 = 101866514278416,

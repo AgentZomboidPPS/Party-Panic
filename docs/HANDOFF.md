@@ -138,10 +138,12 @@ latest commits): they create it in Creator Hub, add it to the API key, and send 
   the file), the art in `Shared/SeasonArt` (leaf flipbook, ember, moon, icon sheet `126681471772772`), and the
   developer products in `Config.Monetization`: Keys1 / 5 / 15 / 40 at 25 / 99 / 249 / 549 Robux (each with a gift
   twin) and the Starter Pack (79: 5 keys + the Harvest Banner trail).
-- **Not uploaded**: the season's sounds, `assets/audio/sfx/SeasonSprite.ogg` (one audio upload; the owner has to OK
-  it, the month's audio uploads are nearly spent). Until `AudioAssets.SeasonSprite` has its id the crates play the
-  game's existing sounds (`AudioController.PlayOr`). Upload: `tools/upload_assets.py --what audio` style, then set
-  the id.
+- **The season's sounds**: `assets/audio/sfx/SeasonSprite.ogg`, uploaded with the owner's OK as 71236754603032
+  (`tools/upload_assets.py --user-id 11690979745 --what season`; approved at once; the owner's 8th of 10 audio
+  uploads this month). A stinger per tier on the opener's reveal (coins jingle, effect shimmer, hat a step higher,
+  pet owl hoots, the title's boom and bells), the lid's creak, the reel's ticks, crows and leaf heaps (those two
+  quieter: background). A season whose sprite isn't uploaded plays the game's own effects instead
+  (`AudioController.PlayOr`).
 - **Meshes**: built in Blender by `tools/meshgen/season/` (`hollow_night.py`, `hollow_night_pets.py`), then
   `export.py --only <Name>` -> `write_props.py` (keeps AssetIds; stylua the file after) -> `generate_meshes.py
   --only <Name>` -> `upload_assets.py --user-id 11690979745 --what meshes --only <Name>` (uploads only when the

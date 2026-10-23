@@ -6,6 +6,7 @@ resulting asset ids into the game config, so the next build uses the real meshes
     python3 tools/upload_assets.py --user-id 12345678 --dry-run  # show what would happen
     python3 tools/upload_assets.py --user-id 12345678 --what meshes --only Pump,Balloon
     python3 tools/upload_assets.py --user-id 12345678 --what modes   # the mini-game song packs
+    python3 tools/upload_assets.py --user-id 12345678 --what season  # the crate season's effects
 
 A mini-game's own props (defined in src/server/World/Props/<Game>.luau) get their asset id written
 into that file's spec (AssetId = ...); older props use assets/uploaded.json and MeshAssets.luau.
@@ -158,7 +159,7 @@ def main():
     who = parser.add_mutually_exclusive_group(required=True)
     who.add_argument("--user-id", help="upload as this Roblox user (must own the game)")
     who.add_argument("--group-id", help="upload as this group (must own the game)")
-    parser.add_argument("--what", choices=["all", "meshes", "audio", "modes"], default="all")
+    parser.add_argument("--what", choices=["all", "meshes", "audio", "modes", "season"], default="all")
     parser.add_argument("--only", help="comma-separated mesh names (default: every mesh)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -175,6 +176,9 @@ def main():
         for name, title in MUSIC.items():
             jobs.append(("music", name, ROOT / "assets" / "audio" / "music" / f"{name}.ogg", "Audio", "audio/ogg", f"Party Panic - {title} (original soundtrack)"))
         jobs.append(("sprite", "SfxSprite", ROOT / "assets" / "audio" / "sfx" / "SfxSprite.ogg", "Audio", "audio/ogg", "Party Panic - sound effects"))
+    if args.what in ("all", "audio", "season"):
+        # The crate season's effects, a sprite of their own (tools/music/compose.py --season).
+        jobs.append(("seasonsprite", "SeasonSprite", ROOT / "assets" / "audio" / "sfx" / "SeasonSprite.ogg", "Audio", "audio/ogg", "Party Panic - season sound effects"))
     if args.what in ("all", "audio", "modes"):
         # The mini-games' own round songs, packed several to a file (tools/music/modes.py pack).
         for pack in sorted((ROOT / "build" / "music" / "packs").glob("ModePack*.ogg"), key=lambda p: int(re.sub(r"\D", "", p.stem) or 0)):
@@ -217,6 +221,8 @@ def main():
             set_luau_value(AUDIO_CONFIG, ["Music", name], asset_id)
         elif kind == "modepack":
             set_luau_value(AUDIO_CONFIG, ["ModeMusic", name], asset_id)
+        elif kind == "seasonsprite":
+            set_luau_value(AUDIO_CONFIG, ["SeasonSprite"], asset_id)
         else:
             set_luau_value(AUDIO_CONFIG, ["SfxSprite"], asset_id)
 
