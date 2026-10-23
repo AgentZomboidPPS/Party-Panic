@@ -8,9 +8,10 @@
 --
 -- The odds are per tier (the design page's recommendation, so coins stay the most common result and
 -- a pet feels rare): the title 1 in 500, a pet 1 in 100, a hat 1 in 50, an effect 1 in 25, coins the
--- rest (92.8%). Hitting a tier gives an item of that tier the player doesn't own yet, picked evenly;
--- a tier they've finished pays a coin jackpot instead (750 / 300 / 150 / 75), so nobody ever gets a
--- duplicate. The Lantern Meter is the bad-luck guarantee: every crate without a pet or the title adds
+-- rest (92.8%). Hitting a tier gives an item of that tier the player doesn't own yet, picked evenly,
+-- so nobody ever gets a duplicate; a tier they've finished is out of the roll, its share going to the
+-- coins (owner: "Remove the jackpot for coins. It feels bad to hit a 'jackpot' and only get 150
+-- coins."). The Lantern Meter is the bad-luck guarantee: every crate without a pet or the title adds
 -- one, and at 150 the next crate is a pet they don't own (while any are left).
 --
 -- PersonalOdds is the odds screen Roblox requires before anyone pays for a random item: every
@@ -40,22 +41,22 @@ export type Result = {
 	Tier: Tier,
 	Item: string?, -- the item won (nil for coins)
 	Coins: number, -- coins won (0 when an item was won)
-	Jackpot: boolean, -- the tier was finished, so coins came instead
 	Guaranteed: boolean, -- the Lantern Meter gave this pet
 	Meter: number, -- the Lantern Meter after this crate
 }
 
 export type OddsRow = { Key: string, Tier: Tier, Label: string, Chance: number }
 
--- Per tier, rarest first: the chance of hitting it and the coins paid when it's finished.
+-- Per tier, rarest first: the chance of hitting it (while the player has something in it to find).
 CrateLogic.Tiers = {
-	{ Tier = "Title" :: Tier, Chance = 0.002, Jackpot = 750 },
-	{ Tier = "Pet" :: Tier, Chance = 0.01, Jackpot = 300 },
-	{ Tier = "Hat" :: Tier, Chance = 0.02, Jackpot = 150 },
-	{ Tier = "Effect" :: Tier, Chance = 0.04, Jackpot = 75 },
+	{ Tier = "Title" :: Tier, Chance = 0.002 },
+	{ Tier = "Pet" :: Tier, Chance = 0.01 },
+	{ Tier = "Hat" :: Tier, Chance = 0.02 },
+	{ Tier = "Effect" :: Tier, Chance = 0.04 },
 }
 
--- The coin results, of the whole crate (they add up to 92.8%).
+-- The coin results, of the whole crate (they add up to 92.8%; more of the crate, in the same
+-- proportions, once a tier is finished).
 CrateLogic.Coins = {
 	{ Coins = 5, Chance = 0.4 },
 	{ Coins = 10, Chance = 0.28 },
@@ -163,8 +164,8 @@ function CrateLogic.Roll(
 	bonus: number?
 ): Result
 	local function finish(result: Result): Result
-		local resets = result.Tier == "Title" or (result.Tier == "Pet" and not result.Jackpot)
-		local left = #missing(season, "Pet", owned) - (if result.Tier == "Pet" and not result.Jackpot then 1 else 0)
+		local resets = result.Tier == "Title" or result.Tier == "Pet"
+		local left = #missing(season, "Pet", owned) - (if result.Tier == "Pet" then 1 else 0)
 		if resets or left <= 0 then
 			result.Meter = 0
 		else
@@ -176,41 +177,27 @@ function CrateLogic.Roll(
 	if CrateLogic.Guaranteed(season, owned, meter) then
 		local pets = missing(season, "Pet", owned)
 		local pick = pets[math.clamp(math.floor(random() * #pets) + 1, 1, #pets)]
-		return finish({ Tier = "Pet", Item = pick, Coins = 0, Jackpot = false, Guaranteed = true, Meter = 0 })
+		return finish({ Tier = "Pet", Item = pick, Coins = 0, Guaranteed = true, Meter = 0 })
 	end
 
+	-- A finished tier is out of the roll: its share falls through to the coins.
 	local r = random()
 	local acc = 0
 	for _, tier in CrateLogic.Tiers do
-		acc += tier.Chance
-		if r < acc then
-			local choices = missing(season, tier.Tier, owned)
-			if #choices == 0 then
-				return finish({
-					Tier = tier.Tier,
-					Item = nil,
-					Coins = tier.Jackpot,
-					Jackpot = true,
-					Guaranteed = false,
-					Meter = 0,
-				})
+		local choices = missing(season, tier.Tier, owned)
+		if #choices > 0 then
+			acc += tier.Chance
+			if r < acc then
+				local pick = choices[math.clamp(math.floor(random() * #choices) + 1, 1, #choices)]
+				return finish({ Tier = tier.Tier, Item = pick, Coins = 0, Guaranteed = false, Meter = 0 })
 			end
-			local pick = choices[math.clamp(math.floor(random() * #choices) + 1, 1, #choices)]
-			return finish({ Tier = tier.Tier, Item = pick, Coins = 0, Jackpot = false, Guaranteed = false, Meter = 0 })
 		end
 	end
-	return finish({
-		Tier = "Coins",
-		Item = nil,
-		Coins = coinsAt(random()),
-		Jackpot = false,
-		Guaranteed = false,
-		Meter = 0,
-	})
+	return finish({ Tier = "Coins", Item = nil, Coins = coinsAt(random()), Guaranteed = false, Meter = 0 })
 end
 
 -- The odds of every outcome for this player's next crate, adding up to exactly 1. Item rows give
--- each item still to find its own chance; a finished tier shows its jackpot instead.
+-- each item still to find its own chance; a finished tier has none (its share is in the coins).
 function CrateLogic.PersonalOdds(season: Season, owned: { [string]: any }, meter: number): { OddsRow }
 	local rows: { OddsRow } = {}
 	if CrateLogic.Guaranteed(season, owned, meter) then
@@ -222,16 +209,9 @@ function CrateLogic.PersonalOdds(season: Season, owned: { [string]: any }, meter
 	end
 	local tiers = 0
 	for _, tier in CrateLogic.Tiers do
-		tiers += tier.Chance
 		local choices = missing(season, tier.Tier, owned)
-		if #choices == 0 then
-			table.insert(rows, {
-				Key = tier.Tier .. "Jackpot",
-				Tier = tier.Tier,
-				Label = `{tier.Jackpot} coins`,
-				Chance = tier.Chance,
-			})
-		else
+		if #choices > 0 then
+			tiers += tier.Chance
 			for _, item in choices do
 				table.insert(rows, { Key = item, Tier = tier.Tier, Label = item, Chance = tier.Chance / #choices })
 			end
@@ -265,8 +245,7 @@ end
 function CrateLogic.TierOdds(season: Season, owned: { [string]: any }, meter: number): { [string]: number }
 	local out: { [string]: number } = { Title = 0, Pet = 0, Hat = 0, Effect = 0, Coins = 0 }
 	for _, row in CrateLogic.PersonalOdds(season, owned, meter) do
-		local tier: string = if string.find(row.Key, "Jackpot", 1, true) then "Coins" else row.Tier
-		out[tier] += row.Chance
+		out[row.Tier] += row.Chance
 	end
 	return out
 end

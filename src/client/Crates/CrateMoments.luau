@@ -5,7 +5,7 @@
 --     WORLD when they're the first anyone found), and the title one on every other server too ("on
 --     another server"). The title's is bigger and burns like a candle.
 --   * THE PRIZE CARD: the opener's own card when the reel ends: what came out (NEW PET! and that
---     it's on now, a hat, an effect, the coins, a jackpot), or the five of an Open 5.
+--     it's on now, a hat, an effect, the coins), or the five of an Open 5.
 --   * GIFTS: keys or crates someone was just given, and why ("3 FREE KEYS to start", "+3 KEYS ·
 --     PARTY CUP 1ST", "🎁 Bo sent you 5 keys!", the starter pack's trail).
 --   * THE WELCOME: the season's first moment for each player ("Season trailer moment: On the first
@@ -359,12 +359,10 @@ function CrateMoments.Prize(show: { [string]: any })
 				Parent = frame,
 			})
 		else
-			headline(if result.Jackpot then "JACKPOT!" else "COINS!", color, frame, 18, 26)
+			headline("COINS!", color, frame, 18, 26)
 			headline(`+{result.Coins} COINS`, Theme.Colors.Coin, frame, 50, 42)
 			UIKit.Label({
-				Text = if result.Jackpot
-					then `You have every {string.lower(CrateTheme.Tiers[tier].Word)}, so it paid coins!`
-					else `Lantern Meter {show.Meter}/150`,
+				Text = `Lantern Meter {show.Meter}/150`,
 				TextSize = 18,
 				TextColor3 = Theme.Colors.TextDim,
 				TextXAlignment = Enum.TextXAlignment.Left,
@@ -388,7 +386,7 @@ function CrateMoments.Prize(show: { [string]: any })
 				Children = { UIKit.Round() },
 			})
 		end
-		local life = if tier == "Coins" and not result.Jackpot then 2.6 else 4.2
+		local life = if tier == "Coins" then 2.6 else 4.2
 		fadeAway(frame, life)
 		return life + 0.4
 	end)

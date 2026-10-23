@@ -86,7 +86,7 @@ export type Show = {
 	At: number, -- server time (workspace:GetServerTimeNow()) it started
 	Duration: number,
 	RevealAt: number, -- seconds in: the prize shows
-	Results: { { Tier: string, Item: string?, Coins: number, Jackpot: boolean, Guaranteed: boolean, Crate: number } },
+	Results: { { Tier: string, Item: string?, Coins: number, Guaranteed: boolean, Crate: number } },
 	Friend: boolean, -- a friend nearby added to the meter
 	Meter: number, -- the Lantern Meter after it
 }
@@ -346,6 +346,8 @@ local function reveal(player: Player, show: Show)
 		DataService.Changed(player)
 	end
 	refreshMarks(player)
+	-- (Coins are the opener's own news: no server-wide "jackpot" for them. Owner: "Remove the jackpot
+	-- for coins. It feels bad to hit a 'jackpot' and only get 150 coins.")
 	for _, result in show.Results do
 		if result.Tier == "Pet" or result.Tier == "Title" then
 			if result.Item then
@@ -362,8 +364,6 @@ local function reveal(player: Player, show: Show)
 					CrateBoardService.TellEveryServer(show.Name, show.UserId, result.Item)
 				end
 			end
-		elseif result.Tier == "Coins" and result.Coins >= CrateLogic.Coins[#CrateLogic.Coins].Coins then
-			Notifier.All(`💰 {show.Name} unboxed the {result.Coins} coin jackpot!`, "reward", 5)
 		end
 	end
 end
@@ -444,7 +444,6 @@ function CrateService.Open(player: Player, count: number, altarIndex: number): (
 			Tier = roll.Tier :: string,
 			Item = roll.Item,
 			Coins = roll.Coins,
-			Jackpot = roll.Jackpot,
 			Guaranteed = roll.Guaranteed,
 			Crate = progress.Opened,
 		})

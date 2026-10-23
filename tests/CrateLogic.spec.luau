@@ -1,6 +1,7 @@
 -- The crate seasons (owner: "seasonal crates ... crate loot consists of multiple tiers ... no dupes",
 -- then "Hollow night comes first ... Also do all of your ideas."): the odds add up, a roll never gives
--- an item twice, a finished tier pays its jackpot, the Lantern Meter guarantees a pet at 150, the
+-- an item twice, a finished tier is out of the roll (owner: "Remove the jackpot for coins"), its share
+-- going to the coins, the Lantern Meter guarantees a pet at 150, the
 -- odds screen is right for every collection, keys are paid by the rules, and Hollow Night's items
 -- are all real, distinct and in the right slots. Shared/Seasons and Logic/CrateLogic.
 local TestKit = require("./TestKit")
@@ -83,9 +84,10 @@ test("Crates: rolls follow the odds and never give an item twice", function()
 	local owned: { [string]: boolean } = {}
 	local counts = { Title = 0, Pet = 0, Hat = 0, Effect = 0, Coins = 0 }
 	local meter = 0
-	local jackpots = 0
 	local opened = 200000
+	local afterAll = 0
 	for _ = 1, opened do
+		local done = CrateLogic.Progress(season, owned) == 23
 		local result = CrateLogic.Roll(season, owned, meter, random)
 		counts[result.Tier] += 1
 		if result.Item then
@@ -93,10 +95,12 @@ test("Crates: rolls follow the odds and never give an item twice", function()
 			owned[result.Item] = true
 			expectEqual(result.Coins, 0)
 		else
+			expectEqual(result.Tier, "Coins")
 			expectTrue(result.Coins > 0, "coins")
 		end
-		if result.Jackpot then
-			jackpots += 1
+		if done then
+			afterAll += 1
+			expectEqual(result.Tier, "Coins") -- everything found: only coins, never a "jackpot"
 		end
 		meter = result.Meter
 		expectTrue(meter >= 0 and meter < CrateLogic.Meter, `meter {meter}`)
@@ -105,30 +109,61 @@ test("Crates: rolls follow the odds and never give an item twice", function()
 	local have, total = CrateLogic.Progress(season, owned)
 	expectEqual(have, total)
 	expectEqual(total, 23)
-	expectTrue(jackpots > 0, "jackpots after the set is done")
-	-- About the right share of each tier (tiers keep their odds; finished ones pay jackpots).
-	expectTrue(math.abs(counts.Effect / opened - 0.04) < 0.004, `effects {counts.Effect}`)
-	expectTrue(math.abs(counts.Hat / opened - 0.02) < 0.003, `hats {counts.Hat}`)
-	expectTrue(math.abs(counts.Title / opened - 0.002) < 0.001, `titles {counts.Title}`)
+	expectTrue(afterAll > 0, "crates opened after the set was done")
 end)
 
-test("Crates: a finished tier pays its jackpot, never an item", function()
+test("Crates: each tier is hit at its odds while it has something to find", function()
+	-- Nothing owned and the meter low (no guarantee): every roll is a fresh draw at the tiers' odds.
+	-- (Luau's own generator, seeded: the simple one above skews the shares when a crate takes two
+	-- draws in a row.)
+	math.randomseed(11)
+	local random = function(): number
+		return math.random()
+	end
+	local counts = { Title = 0, Pet = 0, Hat = 0, Effect = 0, Coins = 0 }
+	local opened = 200000
+	for _ = 1, opened do
+		counts[CrateLogic.Roll(season, {}, 0, random).Tier] += 1
+	end
+	expectTrue(math.abs(counts.Effect / opened - 0.04) < 0.003, `effects {counts.Effect}`)
+	expectTrue(math.abs(counts.Hat / opened - 0.02) < 0.002, `hats {counts.Hat}`)
+	expectTrue(math.abs(counts.Pet / opened - 0.01) < 0.0015, `pets {counts.Pet}`)
+	expectTrue(math.abs(counts.Title / opened - 0.002) < 0.001, `titles {counts.Title}`)
+	expectTrue(math.abs(counts.Coins / opened - 0.928) < 0.004, `coins {counts.Coins}`)
+end)
+
+test("Crates: a finished tier is out of the roll, its share going to the coins", function()
 	local owned = {}
 	for _, pet in season.Pets do
 		owned[pet] = true
 	end
-	-- 0.0021 lands in the pet tier (after the title's 0.002).
+	-- 0.0021 is just past the title's 0.002: with every pet found, that's the hats now (their own
+	-- 2%, from 0.002 to 0.022), never a pet and never a "jackpot".
 	local sequence = { 0.0021, 0.5 }
 	local index = 0
 	local result = CrateLogic.Roll(season, owned, 10, function()
 		index += 1
 		return sequence[index]
 	end)
-	expectEqual(result.Tier, "Pet")
-	expectEqual(result.Item, nil)
-	expectEqual(result.Jackpot, true)
-	expectEqual(result.Coins, 300)
+	expectEqual(result.Tier, "Hat")
+	expectTrue(result.Item ~= nil and table.find(season.Hats, result.Item) ~= nil, "a hat")
+	expectEqual(result.Coins, 0)
 	expectEqual(result.Meter, 0) -- no pets left to wait for
+	-- The odds: no pets, the other tiers unchanged, the coins 1% more (in the same proportions).
+	local tiers = CrateLogic.TierOdds(season, owned, 10)
+	expectTrue(close(tiers.Pet, 0), `pet {tiers.Pet}`)
+	expectTrue(close(tiers.Hat, 0.02), `hat {tiers.Hat}`)
+	expectTrue(close(tiers.Coins, 0.938), `coins {tiers.Coins}`)
+	for _, row in CrateLogic.PersonalOdds(season, owned, 10) do
+		if row.Key == "Coins150" then
+			expectTrue(close(row.Chance, 0.008 * 0.938 / 0.928), `150 coins {row.Chance}`)
+		end
+	end
+	-- A roll past every item tier is coins.
+	local coins = CrateLogic.Roll(season, owned, 10, function()
+		return 0.95
+	end)
+	expectEqual(coins.Tier, "Coins")
 end)
 
 test("Crates: the Lantern Meter guarantees a pet at 150, then starts again", function()

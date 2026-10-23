@@ -1096,26 +1096,36 @@ local function renderOdds()
 				tierTotal += row.Chance
 			end
 		end
-		if #tierRows == 0 then
-			continue
-		end
-		total += tierTotal
 		local info = CrateTheme.Tiers[tier]
 		local color = CrateTheme.TierColor(tier, season)
 		local missing = if tier ~= "Coins" then #CrateLogic.Missing(season, tier :: any, have) else 0
+		if #tierRows == 0 then
+			-- A finished tier is out of the roll (its share is in the coins): say so, with no odds.
+			if tier ~= "Coins" and missing == 0 then
+				line(
+					if tier == "Title"
+						then `{info.Icon} {CrateTheme.NameOf(season.Title)}: yours!`
+						else `{info.Icon} {string.upper(string.sub(info.Word, 1, 1))}{string.lower(
+							string.sub(info.Word, 2)
+						)}s: all found!`,
+					"✓",
+					color,
+					true
+				)
+			end
+			continue
+		end
+		total += tierTotal
 		local heading = if tier == "Title"
 			then `{info.Icon} {CrateTheme.NameOf(season.Title)} (the title)`
 			elseif tier == "Coins" then `{info.Icon} Coins (5 to 150)`
-			elseif missing == 0 then `{info.Icon} {string.lower(info.Word)}s: all found, coins instead`
 			else `{info.Icon} A {string.lower(info.Word)} you don't own ({missing} left)`
 		line(heading, CrateLogic.Percent(tierTotal), color, true)
 		if tier == "Title" then
 			continue -- (one item: its heading says it)
 		end
 		for _, row in tierRows do
-			local label = if string.find(row.Key, "Jackpot", 1, true) or row.Tier == "Coins"
-				then row.Label
-				else CrateTheme.NameOf(row.Key)
+			local label = if row.Tier == "Coins" then row.Label else CrateTheme.NameOf(row.Key)
 			line(label, CrateLogic.Percent(row.Chance), Theme.Colors.Text, false)
 		end
 	end

@@ -114,9 +114,11 @@ latest commits): they create it in Creator Hub, add it to the API key, and send 
   Hollow Crates (1 per round a person plays to the end) opened with Lantern Keys (Party Cup podium 3/2/1, +1 for
   playing the whole cup, +1 GOLD PASS on the podium, 3 to start, 1 for the first cup a day, 1 per weekly quest, 1
   every 5th Rewards Road level, or Robux). Tiers: THE HARVESTER title 1/500, 5 pets 1/100, 5 hats 1/50, 12
-  effects 1/25, coins the rest; no duplicates (a finished tier pays a coin jackpot); the Lantern Meter gives a pet at
-  150 crates without one. `Seasons.Current` just stays "HollowNight": the season always runs, and a winter event
-  runs beside it (`Seasons.Order` is the collection log's tabs, oldest first).
+  effects 1/25, coins the rest; no duplicates (a finished tier is out of the roll, its share going to the coins;
+  owner: "Remove the jackpot for coins. It feels bad to hit a "jackpot" and only get 150 coins.": no coin jackpot,
+  and no server-wide news of a coin result); the Lantern Meter gives a pet at 150 crates without one.
+  `Seasons.Current` just stays "HollowNight": the season always runs, and a winter event runs beside it
+  (`Seasons.Order` is the collection log's tabs, oldest first).
 - **Server**: `Services/CrateService` (grants, `Open` at an altar, the reveal, banners, the welcome),
   `CrateBoardService` (Top Unboxers: OrderedDataStores `PP_Crates_<season>` and weekly
   `PP_CratesWeek_<season>_<week>`, first-in-the-world claims in `PP_CrateFirsts`, MessagingService topic

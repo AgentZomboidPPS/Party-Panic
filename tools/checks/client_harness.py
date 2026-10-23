@@ -1458,7 +1458,7 @@ do
 	__fire("Crate", "Show", {
 		Id = 1, UserId = __player.UserId, Name = __player.DisplayName, Altar = 0, Season = season.Id, At = now,
 		Duration = 5.2, RevealAt = 3.4, Friend = false, Meter = 0,
-		Results = { { Tier = "Pet", Item = "Pet_EmberStag", Coins = 0, Jackpot = false, Guaranteed = true, Crate = 242 } },
+		Results = { { Tier = "Pet", Item = "Pet_EmberStag", Coins = 0, Guaranteed = true, Crate = 242 } },
 	})
 	task.wait(3.9)
 	snap("Crate prize")
@@ -1470,7 +1470,6 @@ do
 			Tier = tier,
 			Item = if tier == "Effect" then "Trail_WispSteps" elseif tier == "Hat" then "Hat_CrescentMoon" else nil,
 			Coins = if tier == "Coins" then index * 10 else 0,
-			Jackpot = false,
 			Guaranteed = false,
 			Crate = 242 + index,
 		})
