@@ -99,6 +99,17 @@ your ideas. This has to be sick. This will be players first season. I want it to
 spooky. Commits `632645b`..`23f90de` on this branch, plus whatever is newer than this note. **Not live**: ask the
 owner before publishing (the game is public).
 
+**The owner's plan for seasons and events** (2026-10-23): "Also we can have events/holidays run along side seasons.
+Also seasons are actually spring summer fall and winter". So the crate seasons are the year's four: HOLLOW NIGHT is
+the **fall** season (`Seasons` `Time = "FALL"`; screens say "FALL SEASON", "THE FALL SEASON HAS BEGUN"), and
+**winter** is next, once Hollow Night is fully done with no bugs (owner: "We can work on the winter season after this
+one is fully implemented and no bugs."). Events and holidays (`Shared/Events`) run alongside whichever season is on.
+**Waiting on the owner's word:** "When we are done. Can we remake the Halloween event to match the current fall/winter
+event? (I'll tell you when to redo the Halloween event)". Don't start the Halloween remake until they say so. The bar
+is this season's look: the pets rebuilt from their pictures, with glowing leaf meshes and real animations.
+The owner also wants **a private test experience** to publish to before production (see the playtest notes in the
+latest commits): they create it in Creator Hub, add it to the API key, and send its universe and place ids.
+
 - **What it is** (`Shared/Seasons`, `Shared/Logic/CrateLogic`; the odds and key rules are in CrateLogic's header):
   Hollow Crates (1 per round a person plays to the end) opened with Lantern Keys (Party Cup podium 3/2/1, +1 for
   playing the whole cup, +1 GOLD PASS on the podium, 3 to start, 1 for the first cup a day, 1 per weekly quest, 1

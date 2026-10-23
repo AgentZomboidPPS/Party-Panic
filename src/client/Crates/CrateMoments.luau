@@ -498,7 +498,7 @@ function CrateMoments.Welcome(turnTrees: (number) -> (), onSeen: () -> (), onOpe
 	})
 	UIKit.AutoScale(text)
 	local small = UIKit.Label({
-		Text = `SEASON {season.Number} HAS BEGUN`,
+		Text = `THE {season.Time} SEASON HAS BEGUN`,
 		Font = Theme.Fonts.Display,
 		TextSize = 30,
 		TextColor3 = colors.Glow,

@@ -287,7 +287,7 @@ local function renderCrates()
 	})
 	headline({ Text = season.Name, Size = UDim2.fromOffset(width, if touch then 42 else 50), Parent = column })
 	UIKit.Label({
-		Text = `SEASON {season.Number} · open crates at the pile`,
+		Text = `{season.Time} SEASON · open crates at the pile`,
 		Font = Theme.Fonts.Display,
 		TextSize = textSize(18),
 		TextColor3 = colors.Glow,
@@ -668,7 +668,7 @@ local function renderCollection()
 		local info = Seasons.Get(id)
 		if info and not several then
 			UIKit.Label({
-				Text = `SEASON {info.Number} · {info.Name}`,
+				Text = `{info.Time} SEASON · {info.Name}`,
 				Font = Theme.Fonts.Display,
 				TextSize = textSize(20),
 				TextColor3 = colors.Glow,

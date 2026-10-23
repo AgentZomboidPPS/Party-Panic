@@ -7,11 +7,13 @@
 -- your ideas. This has to be sick. This will be players first season. I want it to look insane.").
 --
 -- A season always runs: there's no end date, `Current` names the one players are in, and limited-time
--- events (Shared/Events) run alongside it. Changing `Current` to a new season turns everyone's
+-- events and holidays (Shared/Events: Halloween first) run alongside it. The seasons are the year's
+-- (owner: "Also seasons are actually spring summer fall and winter"): HOLLOW NIGHT is the fall
+-- season, winter's comes next; `Time` names it on screen ("FALL SEASON"). Changing `Current` to a new season turns everyone's
 -- unopened crates into the new season's (one for one), keeps their keys, and vaults the old season's
 -- items (nobody can get them any more; the collection log keeps them).
 --
--- Season 1 is HOLLOW NIGHT: autumn at harvest-moon dusk, cozy rather than spooky. Its 23 crate
+-- The first is HOLLOW NIGHT, the fall season: autumn at harvest-moon dusk, cozy rather than spooky. Its 23 crate
 -- items (the title, 5 pets, 5 hats, 12 effects) are listed here and become ordinary cosmetics in
 -- Shared/Cosmetics (Season = "HollowNight", never sold for coins); the Harvest Banner trail is the
 -- one thing the Robux starter pack sells outright. The crate rules are Logic/CrateLogic, the server
@@ -32,7 +34,8 @@ export type PetInfo = {
 
 export type Season = {
 	Id: string,
-	Number: number,
+	Number: number, -- (order: 1 for the first)
+	Time: string, -- the time of year it is: "FALL", "WINTER", "SPRING" or "SUMMER"
 	Name: string, -- "HOLLOW NIGHT"
 	Crate: string, -- what one crate is called
 	Key: string,
@@ -70,6 +73,7 @@ Seasons.Current = "HollowNight"
 local HOLLOW_NIGHT: Season = {
 	Id = "HollowNight",
 	Number = 1,
+	Time = "FALL",
 	Name = "HOLLOW NIGHT",
 	Crate = "Hollow Crate",
 	Key = "Lantern Key",
