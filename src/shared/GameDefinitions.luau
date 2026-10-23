@@ -403,6 +403,21 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		-- The owner's obby, longer than the others (owner: "you can make it a bit longer then the average
+		-- mini game too"): a good run takes about a minute, and once someone has the crown the rest get 25 s.
+		Id = "ObbyOdyssey",
+		Name = "Obby Odyssey",
+		Category = "Race",
+		Icon = "👑",
+		Color = Color3.fromRGB(255, 190, 60),
+		Objective = "Race the giant obby! Hop the blocks, dodge the swinging balls, jump the spinning bars and grab the 👑 crown first!",
+		Controls = "Run and jump. Fall in and you're back on your last ✓ checkpoint. Watch for blocks that blink away!",
+		Duration = 150,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 

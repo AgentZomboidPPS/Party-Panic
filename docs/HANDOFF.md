@@ -4,6 +4,31 @@ Last updated: **2026-10-22 03:15 UTC** by Session B (branch **`claude/upbeat-gal
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
+## Game 31: OBBY ODYSSEY (2026-10-23, branch `claude/admiring-albattani-dds3xp`)
+
+The owner sent a photo of a bright blocky obby ("Can you make an Oby obstacle course similar to this photo? I want it
+to be a mini game for the game.", then "Also think of a cool name for the oby mini game. you can make it a bit longer
+then the average mini game too."). Built as **Obby Odyssey** (`ObbyOdyssey`, Race, 👑, Duration 150, `IsNew`):
+
+- **The course** (`Shared/Logic/ObbyOdyssey`: layout, hazard schedule, hit tests, checkpoints, progress; tests in
+  `tests/ObbyOdyssey.spec.luau`, jump table `lune run tools/checks/obby_odyssey_jumps`): six sections over one long
+  pool, water then lava: SPLASH HOPS (block rows), BALL BRIDGE (five red balls swinging from a pink gantry), TOWER
+  CLIMB (yellow steps up a blue tower), SPIN CYCLE (three spinning-bar discs joined by red pipes), BLINK BLOCKS (one
+  block in three gone at a time, flashing first), CROWN PEAK (pyramid tiers to a spinning gold crown between
+  checkered flags). Every jump keeps 3.2 studs or more of reach to spare; nothing can be walked up or skipped.
+- **Rules:** nobody is out; a fall puts you on your last of 4 checkpoints. First to the summit wins; then the rest have
+  25 s. Ranking: finish order, then checkpoint and distance. Runners pass through each other (`PP_ObbyRunners`).
+  Balls and bars are drawn on clients from the shared schedule and judged on the server against each runner as their
+  screen showed them (half their ping back; bars swept between checks), with ctx:Knockback.
+- **Look:** all parts and CSG rounded blocks (the photo is blocky), no new meshes, so nothing to upload or approve.
+  Scenery never collides.
+- **Checks (2026-10-23):** code checks clean; `mode_check.sh ObbyOdyssey`: 12 players, 0 errors; 10 real bots, 0
+  errors, all 12 reached the crown; phone HUD 0 errors (only the race strip's dots touching, as in Minecart);
+  `colliders.py`: nothing invisible to stand on.
+- **Not done yet:** a portal preview (`make_preview.py ObbyOdyssey`, the portal shows its icon until then); its own
+  song (it plays Panic Mode; a new pack costs one of the owner's audio uploads); a real-device playtest (jump feel,
+  ball and bar knockbacks, the blinking blocks on a phone). Not published.
+
 ## Session B in flight (2026-10-22 03:15 UTC)
 
 - **Live version 34** (published 02:38 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `1f08776`, on the
