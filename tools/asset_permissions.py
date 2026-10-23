@@ -5,11 +5,12 @@ sees them in their own game, but other players' devices aren't allowed to load t
 an empty world (the props, trees and arena pieces are invisible to everyone but the owner). See
 https://create.roblox.com/docs/projects/assets/privacy . Two grants fix it:
 
-- the game (universe) may Use every model and sound it loads, and
-- every mesh file inside those models is Open Use (subject "All"), the way meshes worked before
-  asset privacy, so any device can load it whatever account or test mode it's in.
+- the game (universe) may Use every model, sound and image it loads, and
+- every mesh file inside those models, and every image, is Open Use (subject "All"), the way they
+  worked before asset privacy, so any device can load it whatever account or test mode it's in.
 
     python3 tools/asset_permissions.py                  # all of it (loads the models on a test server)
+                                                        # (models, sounds, and the images in src/)
     python3 tools/asset_permissions.py --quick          # skip the mesh files (no test server)
     python3 tools/asset_permissions.py --ids 123,456    # grant the game just these
 
@@ -94,17 +95,13 @@ def open_use(mesh_ids: list[int]) -> tuple[list[int], list]:
 
 
 def inner_meshes(model_ids: dict[str, int]) -> list[int]:
-    """The mesh files inside these uploaded models (loads them on a Roblox test server)."""
+    """The mesh files (and textures) inside these uploaded models (loads them on a Roblox test server)."""
     sys.path.insert(0, str(ROOT / "tools" / "checks"))
     sys.path.insert(0, str(ROOT / "tools" / "preview"))
-    from asset_status import INNER_SCRIPT
-    from luau_task import run
+    from asset_status import inner_meshes as load
 
-    task, _ = run(INNER_SCRIPT % json.dumps(model_ids))
-    results = (task.get("output") or {}).get("results") or []
-    loaded = json.loads(results[0]) if results else {}
     ids: list[int] = []
-    for entry in loaded.values():
+    for entry in load(model_ids).values():
         for _, mesh_id, texture in (entry or {}).get("meshes", []):
             for content in (mesh_id, texture):
                 number = "".join(ch for ch in (content or "") if ch.isdigit())
@@ -113,20 +110,30 @@ def inner_meshes(model_ids: dict[str, int]) -> list[int]:
     return ids
 
 
-def grant_all(universe_id: int = UNIVERSE, meshes: bool = True) -> tuple[str, list]:
-    """Both grants for everything the game uses. Returns a summary line and any errors."""
+def grant_all(universe_id: int = UNIVERSE, meshes: bool = True, inner: list[int] | None = None) -> tuple[str, list, list[int]]:
+    """Both grants for everything the game uses: the game may Use every model, sound and image (and
+    what they hold), and every mesh file inside the models and every image is Open Use. `inner`: the
+    mesh files, if they're known already (else the models are loaded on a test server to find them).
+    Returns a summary line, any errors, and the ids Roblox didn't confirm (all must be, for every
+    player to see everything)."""
     sys.path.insert(0, str(ROOT / "tools" / "checks"))
-    from asset_status import collect
+    from asset_status import collect, collect_images
 
-    ids = collect()
-    granted, errors = grant(list(ids.values()), universe_id)
-    summary = f"the game may use {len(granted)} of {len(set(ids.values()))} models and sounds"
+    ids = {**collect(), **collect_images()}
+    wanted = set(ids.values())
+    granted, errors = grant(list(wanted), universe_id)
+    missing = sorted(wanted - set(granted))
+    summary = f"the game may use {len(wanted & set(granted))} of {len(wanted)} models, sounds and images"
     if meshes:
-        mesh_ids = inner_meshes({key: value for key, value in ids.items() if key.startswith("mesh:")})
-        opened, open_errors = open_use(mesh_ids)
+        if inner is None:
+            inner = inner_meshes({key: value for key, value in ids.items() if key.startswith("mesh:")})
+        images = {value for key, value in ids.items() if key.startswith("image:")}
+        to_open = set(inner) | images
+        opened, open_errors = open_use(sorted(to_open))
         errors += open_errors
-        summary += f"; {len(opened)} of {len(set(mesh_ids))} mesh files are Open Use"
-    return summary, errors
+        missing += sorted(to_open - set(opened))
+        summary += f"; {len(to_open & set(opened))} of {len(to_open)} mesh files and images are Open Use"
+    return summary, errors, missing
 
 
 def main():
@@ -140,8 +147,11 @@ def main():
         granted, errors = grant(ids, args.universe_id)
         print(f"Game {args.universe_id} may now use {len(granted)} of {len(set(ids))} assets.")
     else:
-        summary, errors = grant_all(args.universe_id, meshes=not args.quick)
+        summary, errors, missing = grant_all(args.universe_id, meshes=not args.quick)
         print(summary[0].upper() + summary[1:] + ".")
+        if missing:
+            print(f"Not confirmed by Roblox: {missing[:50]}")
+            return 1
     if errors:
         print("Errors:", json.dumps(errors)[:2000])
         return 1

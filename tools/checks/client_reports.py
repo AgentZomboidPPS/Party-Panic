@@ -6,6 +6,13 @@ e.g. what held a Shark Bait player who got stuck, and each device's bot reports 
 
     python3 tools/checks/client_reports.py           # everything
     python3 tools/checks/client_reports.py --bots    # only the bot reports
+    python3 tools/checks/client_reports.py --version 48   # what devices on place version 48 couldn't
+                                                          # load, and a count of the devices that reported
+
+After a publish, --version <new version> is the check that everyone sees everything: each device
+reports the meshes and images it couldn't load, and each server keeps a tally of those reports for
+its version of the place (Services/ClientReports, keys v<version>_<server>, saved about once a
+minute). This reads the tallies and the reports of any player whose device couldn't load something.
 
     python3 tools/checks/client_reports.py
 """
@@ -34,6 +41,69 @@ while true do
 end
 return game:GetService("HttpService"):JSONEncode(out)
 """
+
+# --version: the servers' tallies for that version, and the reports of players they name.
+VERSION_SCRIPT = """
+local store = game:GetService("DataStoreService"):GetDataStore("PP_ClientReports")
+local out = {}
+local pages = store:ListKeysAsync("v%d_")
+while true do
+	for _, key in pages:GetCurrentPage() do
+		local ok, value = pcall(store.GetAsync, store, key.KeyName)
+		out[key.KeyName] = if ok then value else tostring(value)
+	end
+	if pages.IsFinished then
+		break
+	end
+	pages:AdvanceToNextPageAsync()
+end
+local asked = 0
+for _, tally in table.clone(out) do
+	for _, userId in (if type(tally) == "table" and type(tally.Players) == "table" then tally.Players else {}) do
+		local key = "u" .. tostring(userId)
+		if out[key] == nil and asked < 40 then
+			asked += 1
+			local ok, value = pcall(store.GetAsync, store, key)
+			out[key] = if ok then value else tostring(value)
+		end
+	end
+end
+return game:GetService("HttpService"):JSONEncode(out)
+"""
+
+if "--version" in sys.argv[1:]:
+    wanted = int(sys.argv[sys.argv.index("--version") + 1])
+    task, _ = run(VERSION_SCRIPT % wanted)
+    results = (task.get("output") or {}).get("results") or []
+    if not results:
+        sys.exit(f"Couldn't read the reports: {json.dumps(task.get('error'))[:500]}")
+    found = json.loads(results[0]) or {}
+    if isinstance(found, list):
+        found = {}
+    tallies = {k: v for k, v in found.items() if k.startswith("v") and isinstance(v, dict)}
+    devices = sum(t.get("Devices") or 0 for t in tallies.values())
+    phones = sum(t.get("Touch") or 0 for t in tallies.values())
+    checked = sum(t.get("Checked") or 0 for t in tallies.values())
+    trouble = sum(t.get("Trouble") or 0 for t in tallies.values())
+    failed: dict[str, str] = {}
+    for t in tallies.values():
+        failed.update(t.get("Failed") or {})
+    print(f"Place version {wanted}: {len(tallies)} servers, {devices} players' devices reported "
+          f"({phones} phones or tablets), {checked} mesh and image loads checked.")
+    if not tallies:
+        print("No tallies yet: a server saves its tally about a minute after its first report "
+              "(a device reports ~15 s after joining, then in each new arena).")
+    elif trouble == 0:
+        print("Every device loaded every mesh and image.")
+    else:
+        print(f"{trouble} players' devices couldn't load something:")
+        for content, status in list(failed.items())[:40]:
+            print(f"    {content}  {status}")
+        for key, entry in found.items():
+            if key.startswith("u") and isinstance(entry, dict):
+                print(f"  {key}: {len(entry.get('Failed') or {})} of {entry.get('Checked')} failed "
+                      f"({entry.get('Where')}, touch={entry.get('Touch')}, place v{entry.get('PlaceVersion')})")
+    sys.exit(1 if trouble else 0)
 
 task, _ = run(SCRIPT)
 results = (task.get("output") or {}).get("results") or []
@@ -86,6 +156,10 @@ for key, entry in sorted(reports.items(), key=newest):
         continue
     if only_bots:
         continue
+    if entry.get("Kind") == "Tally":
+        print(f"{key}: a server's tally on place v{entry.get('PlaceVersion')}: {entry.get('Devices')} devices, "
+              f"{entry.get('Trouble')} couldn't load something")
+        continue
     failed = entry.get("Failed") or {}
     if entry.get("Kind") == "Mode":
         # A mini-game's own trouble report (ClientReports.Record): e.g. what held someone who got stuck.
@@ -106,6 +180,7 @@ for key, entry in sorted(reports.items(), key=newest):
         if entry.get("Policy"):
             print(f"    policy: {entry.get('Policy')}")
     else:
-        print(f"{key}: {len(failed)} of {entry.get('Checked')} meshes failed ({entry.get('Where')}, touch={entry.get('Touch')}, place v{entry.get('PlaceVersion')})")
+        print(f"{key}: {len(failed)} of {entry.get('Checked')} meshes and images failed ({entry.get('Where')}, touch={entry.get('Touch')}, place v{entry.get('PlaceVersion')})")
     for content, status in list(failed.items())[:20]:
         print(f"    {content}  {status}")
+

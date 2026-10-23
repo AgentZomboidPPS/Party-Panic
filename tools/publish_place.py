@@ -15,7 +15,17 @@ If Studio has the place open with Collaborative Editing, Roblox refuses with 409
 ends (up to ~20 minutes after everyone leaves); --wait-minutes keeps retrying until then.
 
 Safety: this refuses to publish when the experience is public, so a test build can't go live by
-accident. Pass --allow-public to publish to a public experience on purpose.
+accident. Pass --allow-public to publish to a public experience on purpose (a --dry-run publishes
+nothing, so it needs no --allow-public).
+
+Every player must see everything (owner: "We also need to make sure when we push the update that
+everyone can see all the meshes. We've had that problem twice now."). Before publishing (and in a
+dry run) the asset gate checks that every model, sound and image the game uses, and every mesh file
+inside the models, is approved by moderation, and grants the game the use of all of it with every
+mesh file and image Open Use (tools/asset_permissions.py; grants are safe to repeat). It refuses to
+publish if anything isn't approved or Roblox doesn't confirm a grant, or if the check itself can't
+run. --skip-asset-gate only with the owner's OK. After publishing, players' devices report what they
+couldn't load: tools/checks/client_reports.py --version <new version>.
 """
 
 from __future__ import annotations
@@ -67,6 +77,32 @@ def build():
     subprocess.run(["rojo", "build", "-o", str(PLACE_FILE)], cwd=ROOT, check=True)
 
 
+def asset_gate(universe_id: int):
+    """Every model, sound, image and mesh file approved, and the game granted all of it; else exits.
+    (Asset privacy: uploads are Restricted, and only the owner sees them until the game may use them;
+    a pending or rejected one shows for nobody.)"""
+    sys.path.insert(0, str(ROOT / "tools"))
+    sys.path.insert(0, str(ROOT / "tools" / "checks"))
+    from asset_permissions import grant_all
+    from asset_status import audit
+
+    print("Asset gate: is every model, sound, image and mesh file approved? (a few minutes)", flush=True)
+    try:
+        problems, ids, inner = audit(meshes=True, quiet=True)
+    except Exception as error:
+        sys.exit(f"Refusing to publish: the asset check couldn't run ({error}). Run it again.")
+    if problems:
+        sys.exit(f"Refusing to publish: not approved yet, players wouldn't see them: {', '.join(problems)[:1500]}")
+    print(f"  approved: {len(ids)} models, sounds and images, and {len(inner)} mesh files inside the models")
+    summary, errors, missing = grant_all(universe_id, inner=inner)
+    print("  " + summary)
+    if errors or missing:
+        sys.exit(
+            f"Refusing to publish: Roblox didn't confirm every grant (missing {missing[:30]}, "
+            f"errors {json.dumps(errors)[:800]}). Run it again."
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--universe-id", type=int, required=True)
@@ -75,6 +111,7 @@ def main():
     parser.add_argument("--allow-public", action="store_true", help="allow publishing to a public experience")
     parser.add_argument("--dry-run", action="store_true", help="check everything, publish nothing")
     parser.add_argument("--wait-minutes", type=float, default=0, help="keep retrying while Studio holds the place")
+    parser.add_argument("--skip-asset-gate", action="store_true", help="publish without the asset gate (owner's OK only)")
     args = parser.parse_args()
 
     description = read_description()
@@ -84,7 +121,7 @@ def main():
     universe = request("GET", universe_url)
     visibility = universe.get("visibility", "UNKNOWN")
     print(f"Experience: {universe.get('displayName')!r}, visibility {visibility}")
-    if visibility != "PRIVATE" and not args.allow_public:
+    if visibility != "PRIVATE" and not args.allow_public and not args.dry_run:
         sys.exit(f"Refusing to publish: the experience is {visibility}, not PRIVATE (use --allow-public).")
 
     place = request("GET", place_url)
@@ -97,23 +134,14 @@ def main():
     size_mb = PLACE_FILE.stat().st_size / 1e6
     print(f"Place file: {PLACE_FILE.relative_to(ROOT)} ({size_mb:.1f} MB), description {len(description)} chars")
 
+    if args.skip_asset_gate:
+        print("Asset gate SKIPPED: nobody checked that every player can see everything.")
+    else:
+        asset_gate(args.universe_id)
+
     if args.dry_run:
         print("Dry run: nothing published.")
         return
-
-    # Asset privacy: uploads are Restricted, and only the owner sees them. On every publish, let the
-    # game use every model and sound, and make every mesh file inside them Open Use, so all players
-    # see everything (tools/asset_permissions.py).
-    sys.path.insert(0, str(ROOT / "tools"))
-    from asset_permissions import grant_all
-
-    try:
-        summary, grant_errors = grant_all(args.universe_id)
-    except Exception as error:  # the mesh scan needs a test server; earlier grants still stand
-        summary, grant_errors = f"asset permissions not refreshed ({error})", []
-    print(summary[0].upper() + summary[1:])
-    if grant_errors:
-        sys.exit(f"Refusing to publish: couldn't grant asset permissions: {json.dumps(grant_errors)[:1000]}")
 
     # 409 "Server is busy" means a Collaborative Editing session still holds the place. It can stay
     # alive for up to ~20 minutes after everyone leaves Studio, so retry with backoff.

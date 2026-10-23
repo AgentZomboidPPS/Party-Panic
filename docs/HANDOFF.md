@@ -600,7 +600,7 @@ LinearVelocity never moves. There is no way to step physics in a test; the bot r
 - Meshes: `python3 tools/checks/mesh_orientation.py` (inside-out or half-flipped parts; must report 0),
   `tools/checks/regen_compare.py`, `tools/checks/merge_check.sh <Id>` after `git merge --no-ff --no-commit <branch>`.
 - Assets for other players: `python3 tools/checks/asset_status.py --meshes` and `tools/asset_permissions.py`
-  (`publish_place.py` runs the grants every time). An "NOT APPROVED" from asset_status can be HTTP 429: re-check.
+  (`publish_place.py`'s asset gate runs both every time; see 7. Publishing). Rate limits (HTTP 429) are re-asked.
 - What players' devices load: `python3 tools/checks/client_reports.py` (mesh and sound reports from each device, with
   the place version they're on). `--bots`: each device's bot reports from its last 6 rounds
   (Controllers/BotWatchController: snaps, hovers, anyone sitting, anchored time, the server's retakes, drops
@@ -633,6 +633,18 @@ LinearVelocity never moves. There is no way to step physics in a test; the bot r
 `python3 tools/publish_place.py --universe-id 10772087888 --place-id 78868713931081` builds, publishes, grants asset
 permissions and prints the new version (the settings warning at the end is expected). Then push the branch, tell the
 owner the version number, and remind them to restart servers.
+
+**Everyone must see every mesh** (owner, 2026-10-23: "We also need to make sure when we push the update that everyone
+can see all the meshes. We've had that problem twice now."). Before it publishes (and in a `--dry-run`, which needs
+no `--allow-public`), `publish_place.py`'s asset gate checks every model, sound and image the game uses, and every
+mesh file inside the models, is approved (an HTTP 429 is asked again, never taken as a verdict), grants the game the
+use of all of it with every mesh file and image Open Use, and refuses to publish if anything isn't approved, Roblox
+doesn't confirm a grant, or the check can't run (`--skip-asset-gate` only with the owner's OK). Images are every
+`rbxassetid://` in `src/` the owner uploaded (`asset_status.collect_images`). After publishing, players' devices
+report what they couldn't load (`Controllers/AssetReportController`: the world's meshes and images, the season's
+art, the portal previews), each server keeps a tally per place version (`Services/ClientReports`, keys
+`v<version>_<server>`), and **15-30 minutes after a publish** `python3 tools/checks/client_reports.py --version <new
+version>` says how many devices reported and whether any couldn't load something (exit 1 if so).
 
 ## 8. History (what each version added)
 

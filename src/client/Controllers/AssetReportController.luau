@@ -1,7 +1,10 @@
--- Tells the server which of the game's uploaded meshes this device couldn't load, with Roblox's
--- reason (Services/ClientReports keeps it). A mesh Roblox won't let a player load just isn't drawn
--- for them, so this is how we find out without asking anyone for their F9 console (owner: "My
--- friend still cant see shit"). Checked once in the lobby and once in each new arena.
+-- Tells the server which of the game's uploaded meshes and images this device couldn't load, with
+-- Roblox's reason (Services/ClientReports keeps it). A mesh or image Roblox won't let a player load
+-- just isn't drawn for them, so this is how we find out without asking anyone for their F9 console
+-- (owner: "My friend still cant see shit", and "We also need to make sure when we push the update
+-- that everyone can see all the meshes. We've had that problem twice now."). Checked once in the
+-- lobby and once in each new arena: the meshes and images in the world, plus the season's art and
+-- the portal previews (on screen only when a menu or the vote shows them).
 -- The music gets the same check, plus whether it is really playing and how loud, and the player's
 -- Roblox volume (owner: "Music isn't working for my friend"): once in the lobby, once in a round.
 
@@ -14,8 +17,10 @@ local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
+local GamePreviews = require(Shared.GamePreviews)
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
+local SeasonArt = require(Shared.SeasonArt)
 
 local AudioController = require(script.Parent.AudioController)
 
@@ -31,8 +36,25 @@ local reported: { [string]: boolean } = {} -- content ids already checked on thi
 
 local function check(where: string)
 	-- One MeshPart per mesh: PreloadAsync must get the part itself (a bare id string is loaded as an
-	-- image, which "fails" for every mesh).
-	local parts = {}
+	-- image, which "fails" for every mesh). Images go in as their ids.
+	local parts: { any } = {}
+	local function addImage(content: any)
+		if
+			#parts < MAX_CHECKED
+			and type(content) == "string"
+			and string.find(content, "rbxassetid://", 1, true)
+			and not reported[content]
+		then
+			reported[content] = true
+			table.insert(parts, content)
+		end
+	end
+	for _, value in SeasonArt do
+		addImage(value)
+	end
+	for _, preview in GamePreviews do
+		addImage(preview.Image)
+	end
 	for _, descendant in workspace:GetDescendants() do
 		if #parts >= MAX_CHECKED then
 			break
@@ -43,6 +65,12 @@ local function check(where: string)
 				reported[id] = true
 				table.insert(parts, descendant)
 			end
+		elseif descendant:IsA("Decal") then -- (Textures too)
+			addImage(descendant.Texture)
+		elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Beam") or descendant:IsA("Trail") then
+			addImage(descendant.Texture)
+		elseif descendant:IsA("ImageLabel") or descendant:IsA("ImageButton") then
+			addImage(descendant.Image)
 		end
 	end
 	if #parts == 0 then

@@ -12,6 +12,12 @@
 -- moved on its screen (snaps, hovers, time held anchored, the server's own counts on them) and what
 -- happened to the player's own character (Controllers/BotWatchController). The last few rounds'
 -- are kept per player (key b<UserId>). Never from a test run (workspace attribute PP_Harness).
+-- Each server also keeps a tally of the mesh and image reports on its version of the place (key
+-- v<PlaceVersion>_<server>, saved about once a minute): how many devices reported, how many were
+-- phones or tablets, and any that couldn't load something, with what. After a publish,
+-- client_reports.py --version <n> reads those few keys to say whether every player sees everything
+-- (owner: "We also need to make sure when we push the update that everyone can see all the meshes.
+-- We've had that problem twice now.").
 
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,6 +32,9 @@ local RateLimiter = require(script.Parent.RateLimiter)
 local ClientReports = {}
 
 local MAX_FAILED = 60
+local TALLY_SAVE_GAP = 60
+local TALLY_FAILED = 40 -- different ids a server's tally keeps
+local TALLY_PLAYERS = 20 -- players with trouble it names
 
 local function number(value: any): number?
 	return if type(value) == "number" and value == value then math.floor(value * 100 + 0.5) / 100 else nil
@@ -189,6 +198,69 @@ function ClientReports.Init()
 	local limit = Config.RateLimits.ClientReport
 	local limiter = RateLimiter.new(limit[1], limit[2])
 	local store = if RunService:IsStudio() then nil else DataStoreService:GetDataStore("PP_ClientReports")
+	-- This server's tally of the mesh and image reports (see the top).
+	local tally = {
+		Kind = "Tally",
+		PlaceVersion = game.PlaceVersion,
+		Devices = 0,
+		Touch = 0,
+		Checked = 0,
+		Trouble = 0,
+		Players = {},
+		Failed = {},
+		Time = 0,
+	}
+	local counted: { [number]: boolean } = {}
+	local troubled: { [number]: boolean } = {}
+	local failedCount = 0
+	local dirty = false
+	local function noteTally(player: Player, entry: { [string]: any })
+		if workspace:GetAttribute("PP_Harness") then
+			return
+		end
+		if not counted[player.UserId] then
+			counted[player.UserId] = true
+			tally.Devices += 1
+			if entry.Touch then
+				tally.Touch += 1
+			end
+		end
+		tally.Checked += entry.Checked
+		if entry.FailedCount > 0 then
+			if not troubled[player.UserId] then
+				troubled[player.UserId] = true
+				tally.Trouble += 1
+				if #tally.Players < TALLY_PLAYERS then
+					table.insert(tally.Players, player.UserId)
+				end
+			end
+			for id, status in entry.Failed do
+				if tally.Failed[id] == nil and failedCount < TALLY_FAILED then
+					tally.Failed[id] = status
+					failedCount += 1
+				end
+			end
+		end
+		dirty = true
+	end
+	local tallyKey = `v{game.PlaceVersion}_{string.sub(game.JobId, 1, 8)}`
+	local function saveTally()
+		if not dirty or not store then
+			return
+		end
+		dirty = false
+		tally.Time = os.time()
+		pcall(function()
+			store:SetAsync(tallyKey, tally)
+		end)
+	end
+	task.spawn(function()
+		while true do
+			task.wait(TALLY_SAVE_GAP)
+			saveTally()
+		end
+	end)
+	game:BindToClose(saveTally)
 	Remotes.Get("ClientReport").OnServerEvent:Connect(function(player, report)
 		if not limiter:Check(player) then
 			return
@@ -220,22 +292,49 @@ function ClientReports.Init()
 		end
 		local sound = entry.Kind == "Sound"
 		if entry.FailedCount > 0 then
-			local what = if sound then "sounds" else "meshes"
+			local what = if sound then "sounds" else "meshes and images"
 			warn(
 				`[ClientReports] {player.Name} couldn't load {entry.FailedCount} of {entry.Checked} {what} ({entry.Where})`
 			)
 		end
-		-- Mesh reports keep the latest per player; sound reports one from the lobby and one from a round.
-		local key = if sound
-			then `s{player.UserId}_{if entry.Where == "Lobby" then "lobby" else "round"}`
-			else `u{player.UserId}`
-		if store then
+		-- Sound reports: one from the lobby and one from a round. Mesh and image reports: one per player,
+		-- adding up everything that player's device checked on this version of the place (the lobby,
+		-- then each arena), so a clean arena can't hide the lobby's failures.
+		if not store then
+			return
+		end
+		if sound then
+			local key = `s{player.UserId}_{if entry.Where == "Lobby" then "lobby" else "round"}`
 			task.spawn(function()
 				pcall(function()
 					store:SetAsync(key, entry)
 				end)
 			end)
+			return
 		end
+		noteTally(player, entry)
+		task.spawn(function()
+			pcall(function()
+				store:UpdateAsync(`u{player.UserId}`, function(old)
+					if type(old) ~= "table" or old.PlaceVersion ~= entry.PlaceVersion then
+						return entry
+					end
+					local merged = table.clone(entry)
+					merged.Failed = table.clone(entry.Failed)
+					local count = entry.FailedCount
+					for id, status in (if type(old.Failed) == "table" then old.Failed else {}) do
+						if merged.Failed[id] == nil and count < MAX_FAILED then
+							merged.Failed[id] = status
+							count += 1
+						end
+					end
+					merged.FailedCount = count
+					merged.Checked = (tonumber(old.Checked) or 0) + entry.Checked
+					merged.Where = string.sub(`{old.Where or "?"}+{entry.Where}`, -48)
+					return merged
+				end)
+			end)
+		end)
 	end)
 end
 
