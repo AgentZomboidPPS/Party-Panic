@@ -232,5 +232,16 @@
     "end": 289.875
    }
   ]
+ },
+ "ModePack7": {
+  "songs": [
+   {
+    "id": "ObbyOdyssey",
+    "title": "Bounce to the Crown",
+    "start": 0.0,
+    "drop": 13.5,
+    "end": 83.9
+   }
+  ]
  }
 }

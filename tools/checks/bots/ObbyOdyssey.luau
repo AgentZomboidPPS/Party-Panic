@@ -237,7 +237,7 @@ return function(env)
 				flights += runner.Launches or 0
 			end
 			env.note(
-				`t {math.floor(elapsed)}: {finished} at the crown, close {tostring(mode.closeAt ~= nil)}, `
+				`t {math.floor(elapsed)}: {finished} at the crown, `
 					.. `launches {flights} (stand-ins put across {launched})`
 			)
 		end

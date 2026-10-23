@@ -5,8 +5,12 @@
 -- colourful blocks over the water, time the swinging red balls on the bridge, climb the yellow steps up
 -- the blue tower, jump the spinning bars over the lava, cross the blinking blocks and climb the pyramid to
 -- the gold crown. Fall in and you're back on your last checkpoint (nobody is knocked out). First to the
--- crown wins; once someone has it, the rest have FINISH_CLOCK seconds. The rest rank by finish order,
--- then by how far along they got.
+-- crown wins; the rest rank by finish order, then by how far along they got.
+--
+-- When it ends (owner: "this mini game either ends in 5 minutes or when more then half of the people make it
+-- to the top."): at the 5 minutes (the definition's Duration), or as soon as more than half of the round's
+-- people (never bots, as for the PLAY AGAIN vote) have reached the crown. One person on their own ends it
+-- when they get there. People who leave stop counting.
 --
 -- How it works: the layout, the hazards' schedule and the rules are in Shared/Logic/ObbyOdyssey, so the
 -- server, the clients, the bots and the tests all use the same numbers. Everyone runs and jumps with
@@ -43,7 +47,6 @@ local Shapes = require(script.Parent.Parent.World.Shapes)
 
 local ObbyOdyssey = MiniGame.Define("ObbyOdyssey")
 
-local FINISH_CLOCK = 25 -- seconds the others get once someone has the crown
 local MAX_PING = 0.5 -- round trips above this are judged as this
 local HIT_COOLDOWN = 1.4 -- after a hit, no new one for this long (they're flying)
 local BALL_PUSH, BALL_LIFT, BALL_STUN = 62, 34, 0.9
@@ -1056,7 +1059,6 @@ function ObbyOdyssey:Prepare()
 	self.blinks = {} :: { [string]: { Part: BasePart, Piece: Course.Piece } }
 	self.grouped = {} :: { [Model]: boolean }
 	self.finished = 0
-	self.closeAt = nil :: number?
 	self.ending = false
 	self.racing = false
 	-- The hazards run from now, so they're moving while the rules card shows; hits count from GO.
@@ -1319,9 +1321,6 @@ function ObbyOdyssey:_step()
 			self:_finish(player, runner, now)
 		end
 	end
-	if self.closeAt and now >= self.closeAt then
-		self:_end("CrownClosed")
-	end
 end
 
 function ObbyOdyssey:_hazards(player, runner: Runner, p: Vector3, feet: number, last: number, seen: number)
@@ -1432,8 +1431,6 @@ function ObbyOdyssey:_finish(player, runner: Runner, now: number)
 	if self.finished == 1 then
 		ctx:Announce(`👑 {player.DisplayName} reached the crown!`, "success", 3)
 		ctx:Sound("Victory")
-		self.closeAt = now + FINISH_CLOCK
-		ctx:SetShared("CloseAt", self.closeAt)
 	end
 	self:_checkDone()
 end
@@ -1459,12 +1456,27 @@ function ObbyOdyssey:_score()
 			leader, best = player, score
 		end
 	end
-	if self.closeAt then
-		local left = math.max(0, math.ceil(self.closeAt - ctx:Now()))
-		ctx:SetStatus(`👑 The crown closes in {left}s!`)
+	local people, home = self:_people()
+	if home > 0 then
+		ctx:SetStatus(`👑 {home} of {math.floor(people / 2) + 1} needed at the crown!`)
 	elseif leader and self.racing and ctx:Now() - (self.startAt or 0) > 6 then
 		ctx:SetStatus(`🏃 {leader.DisplayName} leads!`)
 	end
+end
+
+-- The people (not bots) still in the round, and how many of them are at the crown.
+function ObbyOdyssey:_people(): (number, number)
+	local people, home = 0, 0
+	for player, runner in self.runners do
+		if runner.Gone or BotRegistry.IsBot(player) or not self.context:State(player) then
+			continue
+		end
+		people += 1
+		if runner.Finish then
+			home += 1
+		end
+	end
+	return people, home
 end
 
 -- Every runner for the clients' race strip.
@@ -1484,16 +1496,15 @@ function ObbyOdyssey:_share()
 	self.context:SetSharedJSON("Runners", { T = self.context:Now(), R = list })
 end
 
+-- The round ends once more than half of its people are at the crown (bots don't count).
 function ObbyOdyssey:_checkDone()
 	if not self.racing or self.ending then
 		return
 	end
-	for player, runner in self.runners do
-		if not runner.Gone and not runner.Finish and self.context:State(player) then
-			return
-		end
+	local people, home = self:_people()
+	if people > 0 and home > people / 2 then
+		self:_end("Finished")
 	end
-	self:_end("Finished")
 end
 
 -- Bots still in the air when the round ends land where they were going (none hangs there for the results).

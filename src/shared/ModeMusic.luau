@@ -25,6 +25,7 @@ return {
 		Drop = 122.500,
 		End = 212.500,
 	},
+	ObbyOdyssey = { Pack = "ModePack7", Title = "Bounce to the Crown", Start = 0.000, Drop = 13.500, End = 83.900 },
 	ParasolPlummet = { Pack = "ModePack5", Title = "Breezy Does It", Start = 228.875, Drop = 242.375, End = 278.375 },
 	PrimeCut = { Pack = "ModePack4", Title = "High Steaks", Start = 70.000, Drop = 83.500, End = 139.500 },
 	PumpAndPop = { Pack = "ModePack5", Title = "Balloon Bandstand", Start = 62.000, Drop = 75.500, End = 119.500 },

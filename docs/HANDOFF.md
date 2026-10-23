@@ -16,8 +16,10 @@ then the average mini game too."). Built as **Obby Odyssey** (`ObbyOdyssey`, Rac
   CLIMB (yellow steps up a blue tower), SPIN CYCLE (three spinning-bar discs joined by red pipes), BLINK BLOCKS (one
   block in three gone at a time, flashing first), CROWN PEAK (pyramid tiers to a spinning gold crown between
   checkered flags). Every jump keeps 3.2 studs or more of reach to spare; nothing can be walked up or skipped.
-- **Rules:** nobody is out; a fall puts you on your last of 4 checkpoints. First to the summit wins; then the rest have
-  25 s. Ranking: finish order, then checkpoint and distance. Runners pass through each other (`PP_ObbyRunners`).
+- **Rules:** nobody is out; a fall puts you on your last of 4 checkpoints. First to the summit wins. The round ends at
+  5 minutes (Duration 300) or once more than half of its people (never bots, as for PLAY AGAIN) are at the crown
+  (owner: "this mini game either ends in 5 minutes or when more then half of the people make it to the top.").
+  Ranking: finish order, then checkpoint and distance. Runners pass through each other (`PP_ObbyRunners`).
   Balls and bars are drawn on clients from the shared schedule and judged on the server against each runner as their
   screen showed them (half their ping back; bars swept between checks), with ctx:Knockback.
 - **Look:** all parts and CSG rounded blocks (the photo is blocky), no new meshes, so nothing to upload or approve.
@@ -37,9 +39,11 @@ then the average mini game too."). Built as **Obby Odyssey** (`ObbyOdyssey`, Rac
     call, and the crown flying off the summit onto the winner's head for the rest of the round.
 - **Checks:** see the latest commit message for this branch's test-server results (code checks, `mode_check.sh
   ObbyOdyssey` with 12 players, 10 real bots and the phone HUD, and `colliders.py`).
-- **Not done yet:** a portal preview (`make_preview.py ObbyOdyssey`, the portal shows its icon until then); its own
-  song (it plays Panic Mode; a new pack costs one of the owner's audio uploads); a real-device playtest (jump feel,
-  the knockbacks, launch flights, barrels and blinking blocks on a phone). Not published.
+- **Its own song** (owner: "Make the custom song for it"): "Bounce to the Crown" (`tools/music/songs/ObbyOdyssey.py`,
+  150 bpm bubblegum electro-pop, 14.4 s intro, -11 LUFS), alone in ModePack7, uploaded as 89946863953014 and approved.
+  That used the owner's 7th of 10 audio uploads this month.
+- **Not done yet:** a real-device playtest (jump feel, the knockbacks, launch flights, barrels and blinking blocks on
+  a phone). Not published.
 
 ## Session B in flight (2026-10-22 03:15 UTC)
 
