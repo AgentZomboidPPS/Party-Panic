@@ -45,8 +45,10 @@ function __runCrates()
 
 	-- Fake product ids, so the key shop has something to sell (before it's required: it indexes them).
 	local packs = Config.Monetization.KeyPacks
+	packs[1].Id, packs[1].GiftId = 9000001, 9100001
 	packs[2].Id, packs[2].GiftId = 9000005, 9100005
 	packs[3].Id, packs[3].GiftId = 9000015, 9100015
+	packs[4].Id, packs[4].GiftId = 9000040, 9100040
 	Config.Monetization.StarterPack.Id = 9000099
 
 	-- Every message the crate remote sends, with its payload (the prelude's recorder keeps only kinds).
@@ -84,14 +86,21 @@ function __runCrates()
 	local root = if okLobby then refs.Root else workspace
 	local pile = root:FindFirstChild("CratePile", true)
 	check("the pile stands where the fountain was", pile ~= nil and root:FindFirstChild("Fountain", true) == nil)
-	check("the pile's top crate turns and its keys circle", pile and pile:FindFirstChild("TopCrate") ~= nil and pile:FindFirstChild("Keys") ~= nil)
+	check(
+		"the pile's top crate turns and its keys circle",
+		pile and pile:FindFirstChild("TopCrate") ~= nil and pile:FindFirstChild("Keys") ~= nil
+	)
 	local board = root:FindFirstChild("TopUnboxers", true)
 	check("the Top Unboxers board", board ~= nil and board:FindFirstChild("Screen") ~= nil)
 	local counts = {}
 	for _, tagName in { "PP_Crow", "PP_LeafHeap", "PP_AutumnTree", "PP_CrateAltar", "PP_CrateBoard" } do
 		counts[tagName] = #CollectionService:GetTagged(tagName)
 	end
-	check("crows, leaf heaps, autumn trees", counts.PP_Crow >= 5 and counts.PP_LeafHeap == 5 and counts.PP_AutumnTree > 20, counts)
+	check(
+		"crows, leaf heaps, autumn trees",
+		counts.PP_Crow >= 5 and counts.PP_LeafHeap == 5 and counts.PP_AutumnTree > 20,
+		counts
+	)
 	local lanterns = root:FindFirstChild("Lanterns", true)
 	check("lantern posts", lanterns ~= nil and #lanterns:GetChildren() == 12)
 	local sky = root:FindFirstChild("FallingLeaves", true)
@@ -114,7 +123,11 @@ function __runCrates()
 	for _, name in { "HollowCrate", "HollowPile", "HarvestOwl", "LanternWisp", "CrescentMoon" } do
 		sources[name] = MeshLibrary.Source(name)
 	end
-	check("meshes come from the uploads, not the stand-ins", sources.HollowCrate ~= "Fallback" and sources.HarvestOwl ~= "Fallback", sources)
+	check(
+		"meshes come from the uploads, not the stand-ins",
+		sources.HollowCrate ~= "Fallback" and sources.HarvestOwl ~= "Fallback",
+		sources
+	)
 
 	-- 2. People: starter keys once, last season's crates carried over.
 	for index = 1, 4 do
@@ -136,7 +149,8 @@ function __runCrates()
 			table.insert(bought, `{player.Name}:{productId}`)
 		end,
 		Info = function(productId)
-			return { PriceInRobux = if productId == 9000005 then 99 elseif productId == 9000015 then 249 else 79, IsForSale = true }
+			local prices = { [9000001] = 25, [9000005] = 99, [9000015] = 249, [9000040] = 549 }
+			return { PriceInRobux = prices[productId] or 79, IsForSale = true }
 		end,
 		Restricted = function(player)
 			return player.Name == "Bot3"
@@ -152,7 +166,11 @@ function __runCrates()
 	check("3 starter keys each", data(Ann).Keys == 3 and data(Bo).Keys == 3, { data(Ann).Keys, data(Bo).Keys })
 	CrateService.ProfileReady(Ann)
 	check("starter keys only once", data(Ann).Keys == 3, data(Ann).Keys)
-	check("last season's crates are this season's", data(Di).Crates.Season == season.Id and data(Di).Crates.Count == 4, data(Di).Crates)
+	check(
+		"last season's crates are this season's",
+		data(Di).Crates.Season == season.Id and data(Di).Crates.Count == 4,
+		data(Di).Crates
+	)
 
 	-- 3. A crate a round, never for a bot.
 	local line = CrateService.RoundCrate(Ann)
@@ -180,7 +198,11 @@ function __runCrates()
 	task.wait(0.2)
 	fire:Fire(__playerKey(Bo), "Welcome")
 	task.wait(0.2)
-	check("the welcome's crate once", data(Bo).Crates.Count == 1 and data(Bo).CrateFlags.Welcome == season.Id, data(Bo).Crates)
+	check(
+		"the welcome's crate once",
+		data(Bo).Crates.Count == 1 and data(Bo).CrateFlags.Welcome == season.Id,
+		data(Bo).Crates
+	)
 
 	-- 6. Opening at an altar.
 	local altar = altars[1]
@@ -196,11 +218,18 @@ function __runCrates()
 	check("opens at the altar", ok, why)
 	local show = lastSent("Show")
 	local pet = season.Pets[1]
-	check("the show says what came out", show and show.Results[1].Tier == "Pet" and show.Results[1].Item == pet, show and show.Results)
-	check("saved before the show: owned, found, a key and a crate used", data(Ann).Owned[pet] == true
-		and data(Ann).Keys == keysBefore - 1
-		and data(Ann).Crates.Count == cratesBefore - 1
-		and data(Ann).Seasons[season.Id].Found[pet] ~= nil)
+	check(
+		"the show says what came out",
+		show and show.Results[1].Tier == "Pet" and show.Results[1].Item == pet,
+		show and show.Results
+	)
+	check(
+		"saved before the show: owned, found, a key and a crate used",
+		data(Ann).Owned[pet] == true
+			and data(Ann).Keys == keysBefore - 1
+			and data(Ann).Crates.Count == cratesBefore - 1
+			and data(Ann).Seasons[season.Id].Found[pet] ~= nil
+	)
 	check("the altar's busy", altar.Model:GetAttribute("PP_AltarBusy") == Ann.UserId and altar.Prompt.Enabled == false)
 	local ok2, why2 = CrateService.Open(Ann, 1, 2)
 	check("one show at a time", not ok2 and why2 == "Busy", why2)
@@ -213,7 +242,11 @@ function __runCrates()
 	check("the pet goes on at the reveal", data(Ann).Equipped.Pet == pet, data(Ann).Equipped.Pet)
 	check("PP_Pet tells every device", Ann:GetAttribute("PP_Pet") == pet)
 	local banner = lastSent("Banner")
-	check("a banner for every screen, first in the world", banner and banner.Item == pet and banner.First == true, banner)
+	check(
+		"a banner for every screen, first in the world",
+		banner and banner.Item == pet and banner.First == true,
+		banner
+	)
 	task.wait(Config.Crates.ShowTime - Config.Crates.RevealAt + 0.6)
 	check("the altar frees up", altar.Model:GetAttribute("PP_AltarBusy") == 0 and altar.Prompt.Enabled == true)
 
@@ -234,7 +267,11 @@ function __runCrates()
 	local okMany = CrateService.Open(Ann, CrateLogic.OpenMany, 0)
 	local many = lastSent("Show")
 	check("Open 5 over the head", okMany and many.Altar == 0 and #many.Results == 5, many and #many.Results)
-	check("a friend nearby: +2 on the meter a crate", data(Ann).Seasons[season.Id].Meter == meterBefore + 10 and many.Friend == true, { meterBefore, data(Ann).Seasons[season.Id].Meter })
+	check(
+		"a friend nearby: +2 on the meter a crate",
+		data(Ann).Seasons[season.Id].Meter == meterBefore + 10 and many.Friend == true,
+		{ meterBefore, data(Ann).Seasons[season.Id].Meter }
+	)
 	check("coins from crates paid", data(Ann).Seasons[season.Id].Coins > 0)
 	task.wait(Config.Crates.ShowTimeMany + 0.3)
 	Cy:SetAttribute("PP_InRound", true)
@@ -249,33 +286,66 @@ function __runCrates()
 	-- 9. Top Unboxers.
 	CrateBoardService.Harness.Refresh()
 	local crateBoard = GameState.GetJSON("CrateBoard")
-	check("the board: Ann on top this season, this week and here", crateBoard and crateBoard.Top[1] and crateBoard.Top[1].UserId == Ann.UserId
-		and crateBoard.WeekTop[1].UserId == Ann.UserId and crateBoard.Server[1].UserId == Ann.UserId, crateBoard and crateBoard.Top)
-	check("first in the world on the board", crateBoard and crateBoard.Firsts[pet] and crateBoard.Firsts[pet].UserId == Ann.UserId)
+	check(
+		"the board: Ann on top this season, this week and here",
+		crateBoard
+			and crateBoard.Top[1]
+			and crateBoard.Top[1].UserId == Ann.UserId
+			and crateBoard.WeekTop[1].UserId == Ann.UserId
+			and crateBoard.Server[1].UserId == Ann.UserId,
+		crateBoard and crateBoard.Top
+	)
+	check(
+		"first in the world on the board",
+		crateBoard and crateBoard.Firsts[pet] and crateBoard.Firsts[pet].UserId == Ann.UserId
+	)
 	check("Ann's place", Ann:GetAttribute("PP_CrateRank") == 1, Ann:GetAttribute("PP_CrateRank"))
 
 	-- 10. The key shop.
 	task.wait(4) -- (the policy checks)
 	KeyShopService.AskInfo()
 	local shop = GameState.GetJSON("KeyShop")
-	check("packs on sale with Roblox's prices", shop and #shop.Packs == 2 and shop.Packs[1].Price == 99 and shop.Starter ~= nil, shop)
-	check("a restricted player is locked out", Cy:GetAttribute("PP_KeysLocked") == true and Ann:GetAttribute("PP_KeysLocked") == false)
+	check(
+		"packs on sale with Roblox's prices",
+		shop
+			and #shop.Packs == 4
+			and shop.Packs[1].Price == 25
+			and shop.Packs[2].Price == 99
+			and shop.Packs[4].Price == 549
+			and shop.Starter ~= nil,
+		shop
+	)
+	check(
+		"a restricted player is locked out",
+		Cy:GetAttribute("PP_KeysLocked") == true and Ann:GetAttribute("PP_KeysLocked") == false
+	)
 	fire:Fire(__playerKey(Cy), "Buy", "Keys5")
 	fire:Fire(__playerKey(Ann), "Buy", "Keys5")
 	task.wait(0.3)
 	check("only the unrestricted player is prompted", #bought == 1 and bought[1] == `{Ann.Name}:9000005`, bought)
 	local keys0 = data(Ann).Keys
 	local decision = KeyShopService.Harness.Receipt(Ann.UserId, 9000005, "receipt-1")
-	check("a receipt grants 5 keys", decision == Enum.ProductPurchaseDecision.PurchaseGranted and data(Ann).Keys == keys0 + 5, data(Ann).Keys - keys0)
+	check(
+		"a receipt grants 5 keys",
+		decision == Enum.ProductPurchaseDecision.PurchaseGranted and data(Ann).Keys == keys0 + 5,
+		data(Ann).Keys - keys0
+	)
 	local repeatDecision = KeyShopService.Harness.Receipt(Ann.UserId, 9000005, "receipt-1")
 	check("never twice", repeatDecision == Enum.ProductPurchaseDecision.PurchaseGranted and data(Ann).Keys == keys0 + 5)
 	fire:Fire(__playerKey(Ann), "Buy", "Keys15", Di.UserId)
 	task.wait(0.3)
 	local diKeys = data(Di).Keys
 	KeyShopService.Harness.Receipt(Ann.UserId, 9100015, "receipt-2")
-	check("a gift goes to the friend", data(Di).Keys == diKeys + 15 and lastSent("Gift", "Bot4").From == Ann.DisplayName, data(Di).Keys - diKeys)
+	check(
+		"a gift goes to the friend",
+		data(Di).Keys == diKeys + 15 and lastSent("Gift", "Bot4").From == Ann.DisplayName,
+		data(Di).Keys - diKeys
+	)
 	KeyShopService.Harness.Receipt(Ann.UserId, 9000099, "receipt-3")
-	check("the starter pack: keys and the banner trail", data(Ann).CrateFlags.StarterPack == true and data(Ann).Owned[season.Starter] == true)
+	check(
+		"the starter pack: keys and the banner trail",
+		data(Ann).CrateFlags.StarterPack == true and data(Ann).Owned[season.Starter] == true
+	)
 	fire:Fire(__playerKey(Ann), "Buy", "Starter")
 	task.wait(0.3)
 	check("the starter pack only once", #bought == 2, bought)

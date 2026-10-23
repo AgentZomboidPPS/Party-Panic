@@ -48,6 +48,52 @@ from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes fro
     and tosses, by design).
   - After the owner's next session with bots, read `python3 tools/checks/client_reports.py --bots`.
 
+## HOLLOW NIGHT, the first crate season (2026-10-23, NOT published yet)
+
+Owner: "Hollow night comes first I want you to actually work on adding it to the game right now. The season should
+always run (so when winter hits the winter event can take place) ... 4 doesn't need to be spooky ... Also do all of
+your ideas. This has to be sick. This will be players first season. I want it to look insane." Cozy autumn, not
+spooky. Commits `632645b`..`23f90de` on this branch, plus whatever is newer than this note. **Not live**: ask the
+owner before publishing (the game is public).
+
+- **What it is** (`Shared/Seasons`, `Shared/Logic/CrateLogic`; the odds and key rules are in CrateLogic's header):
+  Hollow Crates (1 per round a person plays to the end) opened with Lantern Keys (Party Cup podium 3/2/1, +1 for
+  playing the whole cup, +1 GOLD PASS on the podium, 3 to start, 1 for the first cup a day, 1 per weekly quest, 1
+  every 5th Rewards Road level, or Robux). Tiers: THE HARVESTER title 1/500, 5 pets 1/100, 5 hats 1/50, 12
+  effects 1/25, coins the rest; no duplicates (a finished tier pays a coin jackpot); the Lantern Meter gives a pet at
+  150 crates without one. `Seasons.Current` just stays "HollowNight": the season always runs, and a winter event
+  runs beside it (`Seasons.Order` is the collection log's tabs, oldest first).
+- **Server**: `Services/CrateService` (grants, `Open` at an altar, the reveal, banners, the welcome),
+  `CrateBoardService` (Top Unboxers: OrderedDataStores `PP_Crates_<season>` and weekly
+  `PP_CratesWeek_<season>_<week>`, first-in-the-world claims in `PP_CrateFirsts`, MessagingService topic
+  `PP_CrateTitle` for THE HARVESTER's every-server announcement), `KeyShopService` (ProcessReceipt saves before it
+  grants and never grants twice; gifts to friends; the starter pack once; PolicyService-restricted players see the
+  shop locked). Lobby: `World/SeasonWorld` puts the crate pile where the fountain was (24 real crate meshes, from
+  `tools/meshgen/season/pile_crates.py`), three altars, the board, autumn trees, lanterns, pumpkins, leaf heaps,
+  crows, falling leaves.
+- **Client**: `Crates/CrateMenu` (Crates / Collection / Top / Odds / Keys tabs, phone-fitted), `Crates/CrateShow`
+  (the opening everyone around sees), `Crates/CrateMoments` (banners, the season's welcome),
+  `Controllers/CrateController` (the ribbon chip; walks you to an altar), `SeasonWorldController` (moon, wisps,
+  crows, leaf heaps, the board), `PetController`, `AuraController`, `TitleController` (THE HARVESTER's burning
+  blackletter name tag).
+- **On Roblox already** (uploaded under the owner, 11690979745): every mesh in `World/Props/HollowNight` (AssetIds in
+  the file), the art in `Shared/SeasonArt` (leaf flipbook, ember, moon, icon sheet `126681471772772`), and the
+  developer products in `Config.Monetization`: Keys1 / 5 / 15 / 40 at 25 / 99 / 249 / 549 Robux (each with a gift
+  twin) and the Starter Pack (79: 5 keys + the Harvest Banner trail).
+- **Not uploaded**: the season's sounds, `assets/audio/sfx/SeasonSprite.ogg` (one audio upload; the owner has to OK
+  it, the month's audio uploads are nearly spent). Until `AudioAssets.SeasonSprite` has its id the crates play the
+  game's existing sounds (`AudioController.PlayOr`). Upload: `tools/upload_assets.py --what audio` style, then set
+  the id.
+- **Meshes**: built in Blender by `tools/meshgen/season/` (`hollow_night.py`, `hollow_night_pets.py`), then
+  `export.py --only <Name>` -> `write_props.py` (keeps AssetIds; stylua the file after) -> `generate_meshes.py
+  --only <Name>` -> `upload_assets.py --user-id 11690979745 --what meshes --only <Name>` (uploads only when the
+  AssetId is 0, so zero it to re-upload) -> `tools/checks/mesh_orientation.py`. Piece names come from material
+  names; a group's `piece_prefix` (WingL / WingR / Head / Lantern...) is what PetController animates.
+- **Checks**: `tools/checks/crates_check.py` (53 checks on a real server: the lobby, grants, opening, bots get
+  nothing, the board, the shop with a stand-in for Roblox's purchases; never touches real DataStores),
+  `client_harness.py --touch --skip SkeeBall` (section 3d is the crates; `--skip` keeps the script under Open
+  Cloud's 1 MiB) then `ui_render.py` for phone/tablet renders, and `tests/CrateLogic.spec.luau` in Lune.
+
 ## Session C, later still: version 43 (nobody floats over the lobby)
 
 - **Live: version 43** (from `20dff14`, still PRIVATE). Owner: "Friend spawned above the lobby floating. We need to
