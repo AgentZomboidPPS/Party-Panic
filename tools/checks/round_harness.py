@@ -191,6 +191,17 @@ def other_mode(module: str, game: str) -> bool:
 # would go over Luau execution's 1 MB script limit as the game list grows.
 LOBBY_MODES = {"FireRope", "HexMeltdown", "HoneyTrap", "BumperBallers"}
 
+# A single mode's round never builds the lobby (RoundManager and CrateService only require these;
+# the LOBBY run and tools/checks/crates_check.py build it): the lobby's builder and the crate season's
+# world are stand-ins that say so if anything asks, and the season's lobby props stay out. Open
+# Cloud's 1 MiB cap on a script: with the lobby, a round's bundle passed it.
+LOBBY_ONLY = {"Server/World/LobbyBuilder", "Server/World/SeasonWorld"}
+LOBBY_ONLY_PROPS = {"HollowNight"}
+LOBBY_STAND_IN = (
+    'return setmetatable({{}}, {{ __index = function(_, key) error("[harness] {name}." .. tostring(key)'
+    ' .. ": the lobby isn\'t built in a mode round", 2) end }})'
+)
+
 # CUP: the modes a cup's rounds play by default (a survival, a team, a score and a versus mode).
 CUP_MODES = "FireRope,PumpAndPop,CrazyCutters,ArrowAmbush,HexMeltdown"
 
@@ -321,6 +332,7 @@ def main():
         paths.update(client_paths())
     lobby = args.game in ("LOBBY", "SKEEBALL")
     cup_modes = args.modes.split(",") if args.game == "CUP" else []
+    mode_round = not lobby and not cup_modes and not args.replay
     available = {}
     for module, path in paths.items():
         if module == "Shared/Remotes":
@@ -332,6 +344,11 @@ def main():
         if (lobby and other_mode(module, "") and all(other_mode(module, mode) for mode in LOBBY_MODES)
                 and module.removeprefix("Server/World/Props/") not in lobby_props()):
             continue  # the lobby keeps LOBBY_MODES only (and the props its own World code borrows)
+        if mode_round and module in LOBBY_ONLY:
+            available[module] = LOBBY_STAND_IN.format(name=module)
+            continue
+        if mode_round and module.removeprefix("Server/World/Props/") in LOBBY_ONLY_PROPS:
+            continue
         available[module] = slim(rewrite(module, path.read_text(), path.name == "init.luau"))
     # Only what this run can load (tools/checks/bundling.py): the modules the harness's own Luau asks
     # for and everything they reach. A require the bundler can't follow stops the build here.
