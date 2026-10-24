@@ -24,6 +24,13 @@
   put their spots 3 studs over the floor on top of RoundContext's own lift; and a device that has the whole arena
   (`PP_Parts`) never holds a character in mid-air (`ArrivalController`). `tools/checks/scenarios/SpawnGap.luau` measures
   every mode.
+- **Suggestion box** (owner: "Can we add a suggestion box?"): the Settings window's 💡 SUGGESTION BOX button and a blue
+  mailbox at the front of the quest patio open a window (`Controllers/SuggestionController`): New game / Improve / Bug /
+  Other and 8-300 characters. `Services/SuggestionService` keeps them in their own data store, `PP_Suggestions` (one key
+  per UTC hour; never the profile store, never shown to other players), one a minute and 6 a server session per player;
+  test runs write `PP_Suggestions_Test`. **Read them with `python3 tools/checks/suggestions.py`** (`--days 30`, `--kind
+  Bug`). The client harness bundle is now about 900 bytes under Open Cloud's 1 MiB cap: the next client addition needs a
+  `--skip` (or a smaller bundle).
 - **Eatsa Pizza bite spots** (owner: "can we make players run around while eating"): eat only on your team's glowing spots
   (one per player, about 6 bites, the next lights up about a second's run away).
 - **Big Bad Vacuum can be lost** (owner: "how do you loose this? maybe after 3 hits or something?"): 3 hearts, knocked out at

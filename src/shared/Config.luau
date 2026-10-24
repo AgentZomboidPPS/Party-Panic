@@ -94,6 +94,7 @@ Config.RateLimits = {
 	ClientReport = { 5, 60 }, -- mesh, sound and (each round) bot reports: Services/ClientReports
 	SitOut = { 4, 4 }, -- the sit-out switch: a few quick changes of mind, not a stream
 	Crate = { 8, 4 }, -- the crates: open, buy keys, the season's welcome (Services/CrateService)
+	Suggest = { 3, 10 }, -- the suggestion box (Services/SuggestionService adds one a minute on top)
 }
 
 Config.EmoteCooldown = 1.5

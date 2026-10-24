@@ -1124,6 +1124,53 @@ local function buildQuestCorner(root: Model): ProximityPrompt
 	)
 	sparkleEmitter(machineBase, rgb(255, 220, 120), 5)
 	balloonCluster(corner, base + toCenter * 8 + side * 11, 5)
+
+	-- The suggestion box (owner: "Can we add a suggestion box?"): a mailbox at the patio's front edge,
+	-- in front of the balloons (seen from the plaza), flag up. Its prompt opens the window
+	-- (SuggestionController); the Settings window's 💡 button does too.
+	local mailbox = base + toCenter * 11 + side * 8
+	local mailFrame = facing(mailbox, Vector3.zero)
+	Build.Part({
+		Name = "MailPost",
+		Size = Vector3.new(0.6, 4, 0.6),
+		CFrame = mailFrame * CFrame.new(0, 2, 0),
+		Color = rgb(150, 100, 60),
+		Material = Enum.Material.Wood,
+		Parent = corner,
+	})
+	local box = Shapes.RoundedBox(Vector3.new(2.6, 2.2, 3.6), 0.6, {
+		Name = "SuggestionBox",
+		CFrame = mailFrame * CFrame.new(0, 5.1, 0),
+		Color = rgb(70, 130, 240),
+		Parent = corner,
+	})
+	Build.Decor({
+		Name = "Slot",
+		Size = Vector3.new(1.6, 0.25, 0.1),
+		CFrame = mailFrame * CFrame.new(0, 5.5, -1.82),
+		Color = rgb(30, 30, 50),
+		Parent = corner,
+	})
+	Build.Decor({
+		Name = "FlagPole",
+		Size = Vector3.new(0.15, 1.6, 0.15),
+		CFrame = mailFrame * CFrame.new(1.4, 6.1, 0.8),
+		Color = rgb(230, 230, 235),
+		Parent = corner,
+	})
+	Build.Decor({
+		Name = "Flag",
+		Size = Vector3.new(0.12, 0.7, 1),
+		CFrame = mailFrame * CFrame.new(1.4, 6.6, 0.35),
+		Color = rgb(255, 70, 80),
+		Parent = corner,
+	})
+	Build.Billboard(
+		box,
+		"💡 Suggestion Box",
+		{ StudsOffset = Vector3.new(0, 3.2, 0), Size = UDim2.fromOffset(240, 50), MaxDistance = 60 }
+	)
+	prompt(box, "Suggest an idea", "Suggestion Box", "OpenSuggestions")
 	return prompt(machineBase, "Claim Daily Reward", "Daily Gift")
 end
 

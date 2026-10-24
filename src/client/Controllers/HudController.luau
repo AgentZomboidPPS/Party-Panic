@@ -1434,6 +1434,10 @@ local function followMenu(hud: Instance, menu: Frame, toggleParent: Instance)
 	refresh()
 end
 
+-- Phones: the Settings window's rows (scaled units), five of them on the shortest phone with their 44 pt
+-- buttons (the suggestion box's is the fifth).
+local SETTINGS_ROW = 70
+
 local function toggleRow(
 	parent: Instance,
 	order: number,
@@ -1443,7 +1447,7 @@ local function toggleRow(
 )
 	local touch = isTouch()
 	local row = UIKit.new("Frame", {
-		Size = UDim2.new(1, 0, 0, if touch then 76 else 64),
+		Size = UDim2.new(1, 0, 0, if touch then SETTINGS_ROW else 64),
 		BackgroundTransparency = 1,
 		LayoutOrder = order,
 		Parent = parent,
@@ -1484,7 +1488,7 @@ local MUSIC_LEVELS = {
 local function musicRow(parent: Instance, order: number, setSetting: RemoteEvent)
 	local touch = isTouch()
 	local row = UIKit.new("Frame", {
-		Size = UDim2.new(1, 0, 0, if touch then 76 else 64),
+		Size = UDim2.new(1, 0, 0, if touch then SETTINGS_ROW else 64),
 		BackgroundTransparency = 1,
 		LayoutOrder = order,
 		Parent = parent,
@@ -1533,7 +1537,7 @@ end
 -- The sit-out switch again, first in Settings: "Next round: PLAYING / SITTING OUT".
 local function sitOutRow(parent: Instance, order: number)
 	local row = UIKit.new("Frame", {
-		Size = UDim2.new(1, 0, 0, 76),
+		Size = UDim2.new(1, 0, 0, if isTouch() then SETTINGS_ROW else 76),
 		BackgroundTransparency = 1,
 		LayoutOrder = order,
 		Parent = parent,
@@ -1608,7 +1612,7 @@ local function buildSettings(overlay: Instance)
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
 		Parent = modal.Content,
-		Children = { UIKit.List(Enum.FillDirection.Vertical, 10) },
+		Children = { UIKit.List(Enum.FillDirection.Vertical, if touch then 6 else 10) },
 	})
 	local setSetting = Remotes.Get("SetSetting")
 	sitOutRow(list, 0)
@@ -1637,17 +1641,37 @@ local function buildSettings(overlay: Instance)
 		end)
 	end
 	goldTeaser(modal)
+	-- The suggestion box (owner: "Can we add a suggestion box?"; SuggestionController), where the
+	-- "Your progress saves automatically." line was: that line now only shows when it isn't saving.
+	local bottom = UIKit.new("Frame", {
+		Size = UDim2.new(1, 0, 0, if touch then Theme.Touch.Target else 54),
+		BackgroundTransparency = 1,
+		LayoutOrder = 6,
+		Parent = list,
+	})
+	UIKit.Button({
+		Name = "Suggest",
+		Text = "💡 SUGGESTION BOX",
+		TextSize = 22,
+		TextWrapped = false,
+		Size = UDim2.fromOffset(250, if touch then Theme.Touch.Target else 54),
+		CornerRadius = "round",
+		Parent = bottom,
+	}, function()
+		modal:Close()
+		State.OpenScreen:Fire("Suggestions")
+	end, Theme.Colors.Yellow, Theme.Colors.Orange)
 	local saveNote = UIKit.Label({
 		Text = "",
 		TextSize = 18,
 		TextColor3 = Theme.Colors.TextDim,
-		LayoutOrder = 6,
-		Parent = list,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Position = UDim2.fromOffset(262, 0),
+		Size = UDim2.new(1, -262, 1, 0),
+		Parent = bottom,
 	})
 	State.ProfileChanged:Connect(function(profile)
-		saveNote.Text = if profile.CanSave
-			then "Your progress saves automatically."
-			else "⚠️ Progress isn't saving this session."
+		saveNote.Text = if profile.CanSave then "" else "⚠️ Progress isn't saving this session."
 	end)
 	return modal
 end
@@ -1686,6 +1710,8 @@ function HudController.Start(context)
 			State.OpenScreen:Fire("Shop")
 		elseif action == "OpenQuests" then
 			State.OpenScreen:Fire("Quests")
+		elseif action == "OpenSuggestions" then
+			State.OpenScreen:Fire("Suggestions") -- (the mailbox by the quest board)
 		end
 	end)
 

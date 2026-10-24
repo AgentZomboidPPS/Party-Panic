@@ -36,6 +36,7 @@ local NAMES = {
 	"MedalEarned", -- (medalId: string, earlier: boolean?) a new medal for the collection; see Services/MedalService
 	"GoldPass", -- both ways: "Prompt" (buy the GOLD PASS), "Unlocked" (what it gave); see Services/GoldPassService
 	"Crate", -- both ways: open crates, buy and gift keys; the openings everyone sees; see Services/CrateService
+	"Suggest", -- both ways: (kind, text) the suggestion box, and (ok, words) back; see Services/SuggestionService
 }
 
 local Remotes = {}

@@ -101,6 +101,7 @@ local order = {
 	"CrateController",
 	"EmoteController",
 	"SpectateController",
+	"SuggestionController", -- the suggestion box (Settings' 💡, the lobby's mailbox)
 	"OnboardingController",
 	"MiniGameController",
 	"SkeeBallController",

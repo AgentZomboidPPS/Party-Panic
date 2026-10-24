@@ -527,7 +527,7 @@ local order = {
 	"RewardsController", "CelebrationController", "GoldPassController", "TitleController",
 	"CupController", "InviteController", "PartyController", "SquadController", "PartyWorldController", "MedalController",
 	"HallOfFameController", "EventController", "SeasonWorldController", "CrateController",
-	"EmoteController", "SpectateController", "OnboardingController", "SkeeBallController", "AssetReportController",
+	"EmoteController", "SpectateController", "SuggestionController", "OnboardingController", "SkeeBallController", "AssetReportController",
 	"BotWatchController",
 }
 -- The ScreenGuis, made with init.client.luau's own properties (see screen_guis() in the script).
@@ -635,12 +635,21 @@ end
 
 -- 3. Screens opened by the lobby prompts and the HUD (the profile chip opens Rewards; its Career
 -- tab is a second snapshot).
-for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Rewards", "Rewards Career" } do
+for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Suggestions", "Rewards", "Rewards Career" } do
 	step = "OpenScreen " .. screen
 	if screen == "Rewards Career" then
 		State.OpenScreen:Fire("Rewards", "Career")
 	else
 		State.OpenScreen:Fire(screen)
+	end
+	if screen == "Suggestions" then
+		-- The suggestion box with an idea typed in (Controllers/SuggestionController).
+		task.wait(0.3)
+		for _, item in __playerGui:GetDescendants() do
+			if item:IsA("TextBox") and item.Name == "Words" then
+				item.Text = "A go-kart racing game with item boxes and a big ramp at the end!"
+			end
+		end
 	end
 	task.wait(1)
 	snap(screen)
