@@ -225,19 +225,20 @@ function Slaparazzi:Prepare()
 	})
 	self:_publishFrame()
 
-	-- Everyone starts the same distance from the frame's middle, just outside it.
+	-- Everyone starts the same distance from the frame's middle, just outside it, on the stage
+	-- (RoundContext lifts each root over its spot: owner, "Also I did spawn hovering").
 	local players = ctx:GetPlayers()
 	local count = #players
 	local spawns = {}
 	for index = 1, count do
 		local angle = (index - 0.5) / count * math.pi * 2
-		local at = center + Vector3.new(math.cos(angle) * 14, FLOOR_Y + 3, math.sin(angle) * 12.5)
+		local at = center + Vector3.new(math.cos(angle) * 14, FLOOR_Y, math.sin(angle) * 12.5)
 		table.insert(spawns, CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z)))
 	end
 	ctx:SpawnAll(spawns, true)
 	ctx.Hooks.Respawn = function()
 		local angle = rng:NextNumber(0, math.pi * 2)
-		local at = center + Vector3.new(math.cos(angle) * 22, FLOOR_Y + 3, math.sin(angle) * 14)
+		local at = center + Vector3.new(math.cos(angle) * 22, FLOOR_Y, math.sin(angle) * 14)
 		return CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z))
 	end
 	for _, player in players do

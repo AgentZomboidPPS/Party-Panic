@@ -39,6 +39,14 @@
 -- round, or out of it) the floor is the lobby's, which every device has from the start: there a
 -- character waits only while there's nothing solid at all under it for LOBBY_DEPTH studs (the lobby
 -- still downloading), and at most LOBBY_LIMIT seconds. Anything solid further down: it just drops.
+--
+-- Never in mid-air over an arena this device already has (owner: "Also I did spawn hovering. Ive had
+-- reports of that. can we fix that?", at the start of a mini-game): Big Bad Vacuum put everyone 3
+-- studs over its rug, a hair more than REACH from their soles, so every device held them up there
+-- through the rules card and the countdown, arena loaded or not. The server says how many parts the
+-- arena holds once it's built (PP_Parts, RoundContext.MarkBuilt): a device that has them all has
+-- every floor there is, so there's nothing to wait for; whatever is under the character (a little way
+-- down, or nothing at all) is where the server meant it to land.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -76,6 +84,10 @@ overlap.RespectCanCollide = true
 local hold: Hold? = nil
 local lastRoot: BasePart? = nil
 local lastAt: Vector3? = nil -- where the root was after the last physics step
+-- The round's arena once this device has had every part of it (and how many the server said).
+local loaded: { Arena: Instance, Parts: number }? = nil
+local countedAt = -math.huge -- when this device last counted the arena's parts (not every step)
+local COUNT_EVERY = 0.25 -- seconds
 
 -- How far below the root's middle a character's soles are.
 local function legs(humanoid: Humanoid, root: BasePart): number
@@ -90,7 +102,36 @@ local function inArena(): boolean
 	return player:GetAttribute("PP_InRound") == true and player:GetAttribute("PP_Alive") == true
 end
 
+-- Whether this device has the whole of the round's arena: as many parts as the server built it with.
+local function arenaLoaded(): boolean
+	for _, arena in workspace:GetChildren() do
+		local expected = arena:GetAttribute("PP_Parts")
+		if arena:IsA("Model") and string.sub(arena.Name, 1, 6) == "Arena_" and type(expected) == "number" then
+			if loaded and loaded.Arena == arena and loaded.Parts == expected then
+				return true
+			elseif os.clock() - countedAt < COUNT_EVERY then
+				return false
+			end
+			countedAt = os.clock()
+			local count = 0
+			for _, descendant in arena:GetDescendants() do
+				if descendant:IsA("BasePart") then
+					count += 1
+				end
+			end
+			if count >= expected then
+				loaded = { Arena = arena, Parts = expected }
+				return true
+			end
+		end
+	end
+	return false
+end
+
 local function probe(character: Model, humanoid: Humanoid, root: BasePart): boolean
+	if inArena() and arenaLoaded() then
+		return true -- every floor there is is here: wherever it lands is where it was meant to
+	end
 	rays.FilterDescendantsInstances = { character }
 	rays.CollisionGroup = root.CollisionGroup
 	local reach = if inArena() then legs(humanoid, root) + REACH else LOBBY_DEPTH
@@ -107,7 +148,8 @@ local function probe(character: Model, humanoid: Humanoid, root: BasePart): bool
 end
 
 -- Whether this device has something solid under the character's feet (within REACH of its soles,
--- among the parts its root collides with). A probe that fails says yes: never hold on a guess.
+-- among the parts its root collides with), or in a round, the whole arena. A probe that fails says
+-- yes: never hold on a guess.
 function ArrivalController.GroundUnder(character: Model, humanoid: Humanoid, root: BasePart): boolean
 	local ok, found = pcall(probe, character, humanoid, root)
 	return not ok or found == true

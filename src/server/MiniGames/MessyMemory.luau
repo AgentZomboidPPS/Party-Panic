@@ -141,10 +141,12 @@ function MessyMemory:Prepare()
 end
 
 -- Where a player stands in front of their booth, facing the shelf.
+-- (On the floor: RoundContext lifts the root over it. 3 studs more here left a small avatar held in
+-- the air: owner, "Also I did spawn hovering".)
 function MessyMemory:_standFrame(frame: CFrame): CFrame
 	local stand = frame * Vector3.new(0, 0, Rules.STAND_Z)
 	local look = frame * Vector3.new(0, 0, Rules.SHELF_Z)
-	return CFrame.lookAt(stand + Vector3.new(0, 3, 0), Vector3.new(look.X, stand.Y + 3, look.Z))
+	return CFrame.lookAt(stand, Vector3.new(look.X, stand.Y, look.Z))
 end
 
 -- A toy shop: a round wooden floor with a star rug, a ring of twelve booths, striped walls behind

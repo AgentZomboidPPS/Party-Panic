@@ -130,13 +130,15 @@ function BigBadVacuum:Prepare()
 
 	self:_buildArena()
 
-	-- Everyone starts on a ring near the wall, facing the middle (where the boss will land).
+	-- Everyone starts on a ring near the wall, facing the middle (where the boss will land), on the
+	-- rug: RoundContext lifts each root over its spot, and another 3 studs here left them all hanging
+	-- in the air through the rules card (owner: "Also I did spawn hovering").
 	local spawns = {}
 	local count = math.max(#players, 1)
 	local ring = self.radius * 0.8
 	for index = 1, count do
 		local angle = (index - 0.5) / count * math.pi * 2
-		local at = self.center + Vector3.new(math.cos(angle) * ring, 3, math.sin(angle) * ring)
+		local at = self.center + Vector3.new(math.cos(angle) * ring, 0, math.sin(angle) * ring)
 		table.insert(spawns, CFrame.lookAt(at, Vector3.new(self.center.X, at.Y, self.center.Z)))
 	end
 	ctx:SpawnAll(spawns, true)
@@ -144,7 +146,7 @@ function BigBadVacuum:Prepare()
 	ctx.Hooks.Respawn = function(_player)
 		local angle = rng:NextNumber(0, math.pi * 2)
 		local at = self.center
-			+ Vector3.new(math.cos(angle) * self.radius * 0.7, 3, math.sin(angle) * self.radius * 0.7)
+			+ Vector3.new(math.cos(angle) * self.radius * 0.7, 0, math.sin(angle) * self.radius * 0.7)
 		return CFrame.lookAt(at, Vector3.new(self.center.X, at.Y, self.center.Z))
 	end
 	ctx.Hooks.PlayerLeft = function(player)

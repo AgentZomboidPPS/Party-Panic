@@ -354,11 +354,13 @@ function RakeItIn:Prepare()
 		table.insert(ordered, spawnAt[player])
 	end
 	ctx:SpawnAll(ordered, true)
+	-- Back on the stand where the round started them (RoundContext lifts the root over it; another 3
+	-- studs here left them in the air over it: owner, "Also I did spawn hovering").
 	ctx.Hooks.Respawn = function(player)
 		local station = self.stations[player]
 		return if station
-			then CFrame.lookAt(station.Stand + Vector3.new(0, 3, 0), origin + Vector3.new(0, 3, 0))
-			else CFrame.new(origin + Vector3.new(0, 3, STAND))
+			then CFrame.lookAt(station.Stand + Vector3.new(0, 0.6, 0), origin + Vector3.new(0, 0.6, 0))
+			else CFrame.new(origin + Vector3.new(0, 0.6, STAND))
 	end
 
 	for _, kind in RakeItIn.Kinds do

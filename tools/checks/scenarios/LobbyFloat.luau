@@ -6,7 +6,9 @@
 -- (LobbyService.Floating):
 --   lobby, 5 up        as a respawn on top of a bot: never held (it drops to the floor)
 --   lobby, nothing     no floor under it for 80 studs (the lobby still downloading): held
---   arena, 5 up        in the round, nothing within reach of its soles: held (the arena loading)
+--   arena, 5 up        in the round, nothing within reach of its soles, the arena all here: never
+--                      held (owner: "Also I did spawn hovering"): it drops
+--   arena, 5 up, loading   the same with the arena not all here yet (PP_Parts more than it has): held
 --   arena, on floor    never held
 --   lobby, 9 up / on floor / heel on the edge   the server's watch: floating / not / not
 -- "PROBLEM" marks any that came out wrong. Then it goes back where it was.
@@ -75,9 +77,16 @@ return function(env)
 			place(true, over + Vector3.new(900, 0, 0))
 			check("lobby, nothing under it", true)
 			place(false, over + Vector3.new(0, 5, 0))
-			check("arena, 5 up", true)
+			check("arena, 5 up", false)
 			place(false, over)
 			check("arena, on the floor", false)
+			-- (a device still loading the arena: the server says it holds more parts than are here; from
+			-- the floor, so the move up is an arrival)
+			local parts = env.ctx.Arena:GetAttribute("PP_Parts")
+			env.ctx.Arena:SetAttribute("PP_Parts", (parts or 0) + 1000)
+			place(false, over + Vector3.new(0, 5, 0))
+			check("arena, 5 up, loading", true)
+			env.ctx.Arena:SetAttribute("PP_Parts", parts)
 			for _, case in
 				{
 					{ "lobby watch, 9 up", over + Vector3.new(0, 9, 0), true },

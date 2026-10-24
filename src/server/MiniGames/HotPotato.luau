@@ -152,13 +152,15 @@ function HotPotato:Prepare()
 
 	self:_buildArena()
 
-	-- Everyone starts on a ring near the fence, facing the grill.
+	-- Everyone starts on a ring near the fence, facing the grill, on the lawn (RoundContext lifts each
+	-- root over its spot; 3 studs more here left a small avatar held in the air: owner, "Also I did
+	-- spawn hovering").
 	local spawns = {}
 	local count = math.max(#players, 1)
 	local ring = self.radius - 4.5
 	for index = 1, count do
 		local angle = (index - 0.5) / count * math.pi * 2
-		local at = self.center + Vector3.new(math.cos(angle) * ring, 3, math.sin(angle) * ring)
+		local at = self.center + Vector3.new(math.cos(angle) * ring, 0, math.sin(angle) * ring)
 		table.insert(spawns, CFrame.lookAt(at, Vector3.new(self.center.X, at.Y, self.center.Z)))
 	end
 	ctx:SpawnAll(spawns, true)
