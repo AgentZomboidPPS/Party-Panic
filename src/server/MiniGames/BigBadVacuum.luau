@@ -299,7 +299,9 @@ function BigBadVacuum:_buildArena()
 	for index = 0, blocks - 1 do
 		local angle = index / blocks * math.pi * 2
 		local color = palette[index % #palette + 1]
-		local at = center + Vector3.new(math.cos(angle) * ringRadius, -0.3, math.sin(angle) * ringRadius)
+		-- (resting 0.1 into the rug's outer band, on its shadow: at -0.3 the wall floated over both)
+		local at = center
+			+ Vector3.new(math.cos(angle) * ringRadius, bandTop(1) - 0.1 - center.Y, math.sin(angle) * ringRadius)
 		local facing = CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z))
 		local stacked = index % 3 == 1
 		MeshLibrary.Get("BigBadVacuumBlock", {
@@ -353,7 +355,9 @@ function BigBadVacuum:_buildArena()
 	-- The room beyond the wall: a floor lamp, a TV and a couch at three sides, so the arena has a
 	-- backdrop in every direction.
 	local function backdrop(name: string, angle: number, distance: number, turnBy: number?)
-		local at = center + Vector3.new(math.cos(angle) * distance, -0.3, math.sin(angle) * distance)
+		-- (standing on the wooden floor, whose top is origin.Y - 0.9: they used to float 0.8 over it)
+		local floorTop = origin.Y - 0.9
+		local at = Vector3.new(center.X + math.cos(angle) * distance, floorTop, center.Z + math.sin(angle) * distance)
 		MeshLibrary.Get(name, {
 			CFrame = CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z)) * CFrame.Angles(0, turnBy or 0, 0),
 			Parent = arena,
