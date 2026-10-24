@@ -1,0 +1,29 @@
+newmtl Leg
+Kd 0.588 0.392 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Seat
+Kd 0.745 0.510 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Back
+Kd 0.745 0.510 0.314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Arm
+Kd 0.376 0.118 0.188
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cushion
+Kd 0.784 0.235 0.235
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

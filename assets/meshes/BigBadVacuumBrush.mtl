@@ -1,0 +1,29 @@
+newmtl Boom
+Kd 0.282 0.306 0.392
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Hub
+Kd 1.000 0.769 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl BoomTop
+Kd 1.000 0.353 0.353
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Head
+Kd 0.471 0.494 0.549
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Bristles
+Kd 0.980 0.902 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

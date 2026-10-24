@@ -461,6 +461,12 @@ function BigBadVacuum.Start(api)
 		for _, entry in group("SideBrushR") do
 			table.insert(sideR, entry)
 		end
+		for _, entry in group("BristlesL") do -- (the mesh's; the Fallback's are all "Bristles")
+			table.insert(sideL, entry)
+		end
+		for _, entry in group("BristlesR") do
+			table.insert(sideR, entry)
+		end
 		for _, entry in group("Bristles") do
 			if math.abs(entry.Rel.Position.X) > 8 then
 				table.insert(if entry.Rel.Position.X < 0 then sideL else sideR, entry)

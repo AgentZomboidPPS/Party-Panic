@@ -1,15 +1,16 @@
 -- Props for Big Bad Vacuum: the boss itself (a squat robot vacuum with an angry eye, a hungry mouth, a
 -- hatch on top that opens onto its glowing core, a swinging brush arm, a dust bag, a power cord and plug),
 -- the toy bricks (carried, thrown, piled), the giant toy blocks of the arena wall, and the living room
--- beyond it (a floor lamp, a TV and a couch). Everything is built from primitives here, as few pieces as
--- the look allows; a mesh in tools/meshgen/props/BigBadVacuum.py can replace any of them later by
--- filling in its AssetId (the client finds the boss's parts by name, so a mesh keeps the same names).
+-- beyond it (a floor lamp, a TV and a couch). The meshes come from tools/meshgen/props/BigBadVacuum.py
+-- (the client finds the boss's parts by name, so the meshes keep the same names); the primitive
+-- Fallbacks here stand in until an AssetId loads.
 --
 -- Nothing solid where nothing is drawn: only the wall blocks collide, and they are drawn blocks.
 --
 -- The boss faces -Z. Its parts are found by name on the client (client/MiniGames/BigBadVacuum): Eye,
 -- Iris, Pupil (the eye), BrowL / BrowR, FlapL / FlapR (the core's hatch), Orb (the core), Stripe and
--- VentGlow (they glow with its mood), SideBrushL / SideBrushR and their Bristles (they spin).
+-- VentGlow (they glow with its mood), SideBrushL / SideBrushR and their bristles (they spin: BristlesL /
+-- BristlesR on the mesh, Bristles left and right of the middle on the Fallback).
 return function(h)
 	local rgb = h.rgb
 	local Build = h.Build
@@ -44,7 +45,7 @@ return function(h)
 		-- The boss ------------------------------------------------------------------------------------------
 		BigBadVacuumBody = {
 			Height = 20.2,
-			AssetId = 0, -- tools/upload_assets.py --only BigBadVacuumBody fills this in
+			AssetId = 133394569829714, -- tools/upload_assets.py --only BigBadVacuumBody fills this in
 			Palette = {
 				Skirt = rgb(24, 24, 30),
 				Base = rgb(40, 42, 54),
@@ -76,6 +77,8 @@ return function(h)
 				SideBrushL = rgb(255, 90, 90),
 				SideBrushR = rgb(255, 90, 90),
 				Bristles = rgb(250, 230, 120),
+				BristlesL = rgb(250, 230, 120),
+				BristlesR = rgb(250, 230, 120),
 			},
 			Materials = {
 				Skirt = Enum.Material.SmoothPlastic,
@@ -96,6 +99,9 @@ return function(h)
 				FlapL = Enum.Material.Metal,
 				FlapR = Enum.Material.Metal,
 				Teeth = Enum.Material.SmoothPlastic,
+				Handle = Enum.Material.SmoothPlastic,
+				BristlesL = Enum.Material.Fabric,
+				BristlesR = Enum.Material.Fabric,
 			},
 			Fallback = function(m)
 				-- The body: a wide base with a rubber bumper (hazard-striped), under a steel dome. (A plain block
@@ -176,11 +182,15 @@ return function(h)
 				m.PrimaryPart = m:FindFirstChild("Hull") :: BasePart? -- (turns the bounding box with the model, not with a cylinder)
 			end,
 			PostProcess = function(model)
-				-- Pivot on the boss's middle (the handle and mouth make the box lopsided), on the floor.
+				-- Pivot on the boss's middle (the handle and mouth make the box lopsided), on the floor: the
+				-- round Hull's centre line.
 				local primary = model.PrimaryPart
-				if primary then
+				local hull = model:FindFirstChild("Hull") :: BasePart?
+				if primary and hull then
 					local box, size = model:GetBoundingBox()
-					primary.PivotOffset = primary.CFrame:ToObjectSpace(CFrame.new(0, box.Position.Y - size.Y / 2, 0))
+					primary.PivotOffset = primary.CFrame:ToObjectSpace(
+						CFrame.new(hull.Position.X, box.Position.Y - size.Y / 2, hull.Position.Z)
+					)
 				end
 			end,
 		},
@@ -188,7 +198,7 @@ return function(h)
 		-- The brush arm: a boom with a spinning brush at its tip, pivoting on the boss's middle.
 		BigBadVacuumBrush = {
 			Height = 3.05,
-			AssetId = 0,
+			AssetId = 82119850954142,
 			Palette = {
 				Hub = rgb(255, 196, 60),
 				Boom = rgb(72, 78, 100),
@@ -231,7 +241,7 @@ return function(h)
 		-- The dust bag: a big translucent bag on a collar, hung from the handle.
 		BigBadVacuumBag = {
 			Height = 14.3,
-			AssetId = 0,
+			AssetId = 79386099331121,
 			Shadow = false,
 			Palette = {
 				Bag = rgb(236, 236, 250),
@@ -252,7 +262,7 @@ return function(h)
 
 		BigBadVacuumCordLink = {
 			Height = 2.2,
-			AssetId = 0,
+			AssetId = 85126924426452,
 			Shadow = false,
 			Palette = { Cord = rgb(250, 250, 244), Band = rgb(255, 90, 90) },
 			Fallback = function(m)
@@ -264,7 +274,7 @@ return function(h)
 
 		BigBadVacuumPlug = {
 			Height = 6.5,
-			AssetId = 0,
+			AssetId = 107707103445449,
 			Palette = { Plug = rgb(250, 250, 244), Prong = rgb(210, 214, 224), Glow = rgb(255, 230, 90) },
 			Materials = { Prong = Enum.Material.Metal, Glow = Enum.Material.Neon },
 			Fallback = function(m)
@@ -279,7 +289,7 @@ return function(h)
 		-- The toy bricks ---------------------------------------------------------------------------------
 		BigBadVacuumBrick = {
 			Height = 2.4,
-			AssetId = 0,
+			AssetId = 113646589451518,
 			Palette = { Body = rgb(250, 90, 80), Stud = rgb(250, 120, 110) },
 			Fallback = function(m)
 				h.block(m, "Body", Vector3.new(3.4, 1.9, 2.0), Vector3.new(0, 0.95, 0))
@@ -291,7 +301,7 @@ return function(h)
 
 		BigBadVacuumPile = {
 			Height = 5.7,
-			AssetId = 0,
+			AssetId = 139407645212840,
 			Palette = {
 				Red = rgb(232, 76, 84),
 				Blue = rgb(70, 140, 235),
@@ -324,7 +334,7 @@ return function(h)
 
 		BigBadVacuumDebris = {
 			Height = 1.9,
-			AssetId = 0,
+			AssetId = 72683840240434,
 			Shadow = false,
 			Palette = { Chunk = rgb(78, 84, 110), Spark = rgb(255, 160, 60) },
 			Materials = { Chunk = Enum.Material.Metal, Spark = Enum.Material.Neon },
@@ -338,7 +348,7 @@ return function(h)
 		-- The arena ----------------------------------------------------------------------------------------
 		BigBadVacuumBlock = {
 			Height = 15.8,
-			AssetId = 0,
+			AssetId = 80906435565292,
 			Collide = true,
 			Palette = { Body = rgb(232, 76, 84), Face = rgb(240, 130, 136), Stud = rgb(255, 255, 255) },
 			Materials = { Body = Enum.Material.SmoothPlastic, Face = Enum.Material.SmoothPlastic },
@@ -357,50 +367,62 @@ return function(h)
 
 		BigBadVacuumLamp = {
 			Height = 47,
-			AssetId = 0,
+			AssetId = 120987859160114,
 			Shadow = false,
 			Palette = { Pole = rgb(50, 48, 58), Foot = rgb(36, 34, 44), Shade = rgb(255, 214, 140) },
 			Materials = { Pole = Enum.Material.Metal, Shade = Enum.Material.Neon },
 			Fallback = function(m)
 				h.block(m, "Foot", Vector3.new(12, 1.5, 12), Vector3.new(0, 0.75, 0))
 				h.pillar(m, "Pole", 2, 32, Vector3.new(0, 17.5, 0))
-				local shade = h.pillar(m, "Shade", 20, 14, Vector3.new(0, 40, 0))
-				shade.Transparency = 0.15
-				Build.Light(shade, rgb(255, 200, 120), 80, 2.4)
+				h.pillar(m, "Shade", 20, 14, Vector3.new(0, 40, 0))
 				m.PrimaryPart = m:FindFirstChild("Foot") :: BasePart?
+			end,
+			PostProcess = function(model)
+				local shade = model:FindFirstChild("Shade") :: BasePart?
+				if shade then
+					shade.Transparency = 0.15
+					Build.Light(shade, rgb(255, 200, 120), 80, 2.4)
+				end
 			end,
 		},
 
 		BigBadVacuumTV = {
 			Height = 36,
-			AssetId = 0,
+			AssetId = 88103386342478,
 			Shadow = false,
 			Palette = { Frame = rgb(24, 24, 30), Screen = rgb(70, 130, 255), Stand = rgb(40, 40, 50) },
 			Materials = { Screen = Enum.Material.Neon, Stand = Enum.Material.Metal },
 			Fallback = function(m)
 				h.block(m, "Stand", Vector3.new(24, 3, 10), Vector3.new(0, 1.5, 0))
 				h.block(m, "Frame", Vector3.new(56, 32, 4), Vector3.new(0, 20, 0))
-				local screen = h.block(m, "Screen", Vector3.new(51, 27, 0.6), Vector3.new(0, 20, -2.2))
-				Build.Light(screen, rgb(110, 160, 255), 90, 1.6)
+				h.block(m, "Screen", Vector3.new(51, 27, 0.6), Vector3.new(0, 20, -2.2))
 				m.PrimaryPart = m:FindFirstChild("Stand") :: BasePart?
+			end,
+			PostProcess = function(model)
+				local screen = model:FindFirstChild("Screen") :: BasePart?
+				if screen then
+					Build.Light(screen, rgb(110, 160, 255), 90, 1.6)
+				end
 			end,
 		},
 
 		BigBadVacuumCouch = {
 			Height = 31,
-			AssetId = 0,
+			AssetId = 73568888582023,
 			Shadow = false,
 			Palette = {
 				Seat = rgb(120, 40, 60),
 				Back = rgb(104, 34, 52),
 				Arm = rgb(96, 30, 48),
 				Cushion = rgb(140, 52, 72),
+				Leg = rgb(92, 62, 40),
 			},
 			Materials = {
 				Seat = Enum.Material.Fabric,
 				Back = Enum.Material.Fabric,
 				Arm = Enum.Material.Fabric,
 				Cushion = Enum.Material.Fabric,
+				Leg = Enum.Material.Wood,
 			},
 			Fallback = function(m)
 				h.block(m, "Seat", Vector3.new(72, 12, 26), Vector3.new(0, 6, 0))

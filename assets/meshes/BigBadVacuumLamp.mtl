@@ -1,0 +1,17 @@
+newmtl Foot
+Kd 1.000 0.769 0.251
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Pole
+Kd 0.902 0.902 0.902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Shade
+Kd 0.839 0.894 0.973
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
