@@ -36,6 +36,7 @@ local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 local MechaMarathon = MiniGame.Define("MechaMarathon", { Results = "Score", ScoreUnit = "m" })
 
 local LANE = 9 -- lane width (studs)
+local LAWN = 0.35 -- the grass round the track sits this far under the track's top
 local FIELD_METERS = 80 -- the field's length; the best possible flight is just under 75 m
 local STAND_BACK = 6 -- where players stand behind their pads
 local MAX_LEEWAY = 0.35 -- the most lag leeway a press gets after the winding ends
@@ -187,7 +188,7 @@ local function buildField(ctx, origin: Vector3, laneCount: number)
 	Build.Part({
 		Name = "Grass",
 		Size = Vector3.new(1200, 4, 960),
-		CFrame = CFrame.new(origin.X, ground - 0.35 - 2, origin.Z - 320),
+		CFrame = CFrame.new(origin.X, ground - LAWN - 2, origin.Z - 320),
 		Color = rgb(104, 186, 80),
 		Material = Enum.Material.Grass,
 		CastShadow = false,
@@ -262,7 +263,9 @@ local function buildField(ctx, origin: Vector3, laneCount: number)
 				ground + 0.13,
 				white
 			)
-			local base = Vector3.new(origin.X + side * (half + 4.5), ground, markZ)
+			-- (on the grass, whose top is LAWN under the track's: at the track's height the boards
+			-- floated over it)
+			local base = Vector3.new(origin.X + side * (half + 4.5), ground - LAWN, markZ)
 			local sign = MeshLibrary.Get("MechaMarathonSign", {
 				Colors = { Frame = if (meters // Flight.MARKER) % 2 == 0 then rgb(255, 190, 40) else rgb(255, 110, 80) },
 				CFrame = CFrame.new(base) * CFrame.Angles(0, math.pi, 0), -- the board faces the start
@@ -304,10 +307,10 @@ local function buildField(ctx, origin: Vector3, laneCount: number)
 	-- The start gantry: striped towers either side with a banner high over the pads.
 	for _, side in { -1, 1 } do
 		MeshLibrary.Get("MechaMarathonTower", {
-			CFrame = CFrame.new(origin.X + side * (half + 3), ground, origin.Z - 3),
+			CFrame = CFrame.new(origin.X + side * (half + 3), ground - LAWN, origin.Z - 3), -- (on the grass too)
 			Parent = field,
 		})
-		balloonBunch(field, Vector3.new(origin.X + side * (half + 3), ground + 18.2, origin.Z - 3), 3)
+		balloonBunch(field, Vector3.new(origin.X + side * (half + 3), ground - LAWN + 18.2, origin.Z - 3), 3)
 	end
 
 	-- Grandstands full of fans along the first stretch, facing the track.

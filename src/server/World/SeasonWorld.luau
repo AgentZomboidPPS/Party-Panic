@@ -507,10 +507,12 @@ local function pumpkins(root: Model)
 	end
 end
 
--- Leaf heaps on the lawn: jump in and they burst (each device sees it: PP_LeafHeap).
+-- Leaf heaps on the lawn: jump in and they burst (each device sees it: PP_LeafHeap). Each spot is
+-- open lawn: the heaps used to stand in the shooting range's booth, on the quest patio, in the shop's
+-- stand, on the podium's trophy and half through the emote stage's dance floor.
 local function leafHeaps(root: Model)
 	local folder = Build.Model("LeafHeaps", root)
-	for index, spot in { { 40, 52 }, { 140, 51 }, { 200, 50 }, { 340, 52 }, { 98, 47 } } do
+	for index, spot in { { 24, 49 }, { 153, 49 }, { 219, 51 }, { 318, 51 }, { 63, 47.5 } } do
 		local position = onGround(spot[1], spot[2]) - Vector3.new(0, GROUND, 0)
 		local heap = MeshLibrary.Get("LeafHeap", {
 			Scale = 1.15,
