@@ -333,8 +333,10 @@ function SinkingSands:_buildArena(kingCount: number)
 	swirl.Name = "SandSwirl"
 	local showFloor = MeshLibrary.Source("SandPit") == "Fallback"
 	pit.Name = "SandPit"
-	-- The temple courtyard's paving round the funnel (its stones stand a hair proud of the sand).
-	MeshLibrary.Get("SandMosaic", { CFrame = CFrame.new(center - Vector3.new(0, 0.24, 0)), Parent = arena })
+	-- The temple courtyard's paving round the funnel (its stones stand a hair proud of the sand: a
+	-- full 0.1 over its lumps, as at 0.24 down its inlay and trim were 0.01-0.06 over the sand and
+	-- flickered there).
+	MeshLibrary.Get("SandMosaic", { CFrame = CFrame.new(center - Vector3.new(0, 0.12, 0)), Parent = arena })
 
 	-- Walkable collision on the same profile as the mesh: tilted slabs in rings round the funnel and
 	-- a flat ring for the mesa top. The sinkhole itself has no floor.

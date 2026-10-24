@@ -259,18 +259,24 @@ function BigBadVacuum:_buildArena()
 		{ radius * 0.25, rgb(240, 186, 70), Enum.Material.Fabric },
 		{ radius * 0.12, rgb(190, 78, 70), Enum.Material.Fabric },
 	}
-	for index, band in bands do
-		disc(`Rug{index}`, band[1] * 2, 1, center.Y + (index - 1) * 0.07 - 0.5, band[2], band[3], true)
+	-- Each band's top is 0.1 over the one under it (at 0.07 neighbouring bands flickered where they
+	-- meet: z-fighting), with the cream band the spawn and respawn rings stand on (the 4th) where it was.
+	local function bandTop(index: number): number
+		return center.Y - 0.29 + (index - 4) * 0.1
 	end
-	-- Spokes on the cream band, like a woven pattern.
-	local top = center.Y + #bands * 0.07 - 0.5
+	for index, band in bands do
+		disc(`Rug{index}`, band[1] * 2, 1, bandTop(index), band[2], band[3], true)
+	end
+	-- Spokes on the cream band, like a woven pattern, lying on it (they used to float 0.4 over it, at
+	-- the height of the rug's middle).
+	local spokeY = bandTop(4) + 0.04 -- (0.12 thick: its top a full 0.1 over the band's)
 	for index = 0, 15 do
 		local angle = index / 16 * math.pi * 2
 		local at = center + Vector3.new(math.cos(angle) * radius * 0.74, 0, math.sin(angle) * radius * 0.74)
 		Build.Decor({
 			Name = "Spoke",
 			Size = Vector3.new(radius * 0.14, 0.12, 2.2),
-			CFrame = CFrame.lookAt(Vector3.new(at.X, top + 0.07, at.Z), Vector3.new(center.X, top + 0.07, center.Z))
+			CFrame = CFrame.lookAt(Vector3.new(at.X, spokeY, at.Z), Vector3.new(center.X, spokeY, center.Z))
 				* CFrame.Angles(0, math.rad(90), 0),
 			Color = if index % 2 == 0 then rgb(52, 110, 130) else rgb(190, 78, 70),
 			Material = Enum.Material.Fabric,
@@ -318,7 +324,9 @@ function BigBadVacuum:_buildArena()
 		end
 	end
 
-	-- The brick piles, evenly round the rug.
+	-- The brick piles, evenly round the rug, on the band under them (the 5th: they too used to sit at
+	-- the rug's middle's height, floating).
+	local pileY = bandTop(5)
 	local piles = Rules.PilesFor(self.count)
 	local turn = rng:NextNumber(0, math.pi * 2)
 	for index = 0, piles - 1 do
@@ -326,14 +334,14 @@ function BigBadVacuum:_buildArena()
 		local at = center + Vector3.new(math.cos(angle) * radius * 0.6, 0, math.sin(angle) * radius * 0.6)
 		table.insert(self.piles, { Id = index + 1, X = at.X, Z = at.Z, ReadyAt = 0 })
 		MeshLibrary.Get("BigBadVacuumPile", {
-			CFrame = CFrame.new(at.X, top, at.Z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+			CFrame = CFrame.new(at.X, pileY, at.Z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
 			Parent = arena,
 		})
 		local glow = Build.Decor({
 			Name = "PileGlow",
 			Shape = Enum.PartType.Cylinder,
 			Size = Vector3.new(0.2, Rules.PICKUP * 2, Rules.PICKUP * 2),
-			CFrame = CFrame.new(at.X, top + 0.12, at.Z) * CFrame.Angles(0, 0, math.rad(90)),
+			CFrame = CFrame.new(at.X, pileY + 0.12, at.Z) * CFrame.Angles(0, 0, math.rad(90)),
 			Color = rgb(255, 214, 90),
 			Material = Enum.Material.Neon,
 			Transparency = 0.6,

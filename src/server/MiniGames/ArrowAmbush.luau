@@ -484,9 +484,11 @@ function ArrowAmbush:_buildArena()
 	end
 	for _, side in { -1, 1 } do
 		for k = 0, 1 do
+			-- (0.1 lower than the curtain walls: where they meet at the corners, tops in one plane
+			-- flickered)
 			MeshLibrary.Get("ArrowAmbushCastleWall", {
 				Colors = { Banner = if k == 0 then red else blue },
-				CFrame = CFrame.new(at(side * castleX, castleZ + 8 + k * 16, grass - 0.05))
+				CFrame = CFrame.new(at(side * castleX, castleZ + 8 + k * 16, grass - 0.15))
 					* CFrame.Angles(0, side * math.pi / 2, 0),
 				Parent = ctx.Arena,
 			})

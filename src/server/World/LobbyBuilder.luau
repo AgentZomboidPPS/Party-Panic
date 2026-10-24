@@ -546,10 +546,11 @@ local function buildVoteStage(root: Model)
 	local stage = Build.Model("VoteStage", root)
 	local backZ = STAGE_Z - 13
 
-	-- Platform with two wide steps in front.
-	Shapes.Slab(Vector3.new(90, STAGE_TOP, 26), 6, {
+	-- Platform with two wide steps in front. (Its front 0.1 proud of StageFrontZ: the promenade's
+	-- pavers end in a ring 0.05 behind that line, and their edge flickered through the stage's foot.)
+	Shapes.Slab(Vector3.new(90, STAGE_TOP, 26.1), 6, {
 		Name = "StageFloor",
-		CFrame = CFrame.new(0, STAGE_TOP / 2, STAGE_Z),
+		CFrame = CFrame.new(0, STAGE_TOP / 2, STAGE_Z + 0.05),
 		Color = PALETTE.Stage,
 		Parent = stage,
 	})
