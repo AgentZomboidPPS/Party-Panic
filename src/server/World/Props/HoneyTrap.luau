@@ -15,7 +15,7 @@ return function(h)
 		-- The tree. "Anchor" is the tip of the front branch, where the vine hangs.
 		HoneyOak = {
 			Height = 64.189,
-			AssetId = 88558606527722,
+			AssetId = 116208370202706,
 			Collide = true,
 			-- Collision that follows the drawing only for what Honey Trap keeps solid (its OAK_SOLID):
 			-- the canopy alone would keep the server's one rebuild busy for 20 s.
@@ -114,7 +114,7 @@ return function(h)
 		-- The clearing: lawn, sand crescent, stepping stones, flower beds, toadstools, tufts.
 		HoneyGlade = {
 			Height = 2.493,
-			AssetId = 102847449948310,
+			AssetId = 108456937178900,
 			Shadow = false,
 			Palette = {
 				Lawn = h.rgb(136, 206, 90),

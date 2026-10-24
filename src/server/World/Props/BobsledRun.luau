@@ -76,7 +76,7 @@ return function(h)
 			Track = "S",
 		},
 		BobsledKicker = {
-			AssetId = 105400705129786,
+			AssetId = 71317524619282,
 			Track = "J",
 		},
 		BobsledCurveL = {

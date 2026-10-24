@@ -47,7 +47,7 @@ return function(h)
 		},
 		ParasolPlummetCoin = {
 			Height = 2.8,
-			AssetId = 100830698162882,
+			AssetId = 83973970419591,
 			Shadow = false,
 			Palette = { Coin = gold, Emblem = h.rgb(255, 238, 140) },
 			Materials = { Coin = Enum.Material.Metal, Emblem = Enum.Material.Metal },
@@ -64,7 +64,7 @@ return function(h)
 		},
 		ParasolPlummetBag = {
 			Height = 3.6,
-			AssetId = 99372427279332,
+			AssetId = 91151826153193,
 			Shadow = false,
 			Palette = { Sack = h.rgb(196, 140, 84), Tie = h.rgb(120, 70, 40), Emblem = gold },
 			Materials = { Sack = Enum.Material.Fabric, Emblem = Enum.Material.Metal },
@@ -76,7 +76,7 @@ return function(h)
 		},
 		ParasolPlummetHammer = {
 			Height = 4.2,
-			AssetId = 117076517085122,
+			AssetId = 101736149021985,
 			Shadow = false,
 			Palette = { Head = h.rgb(120, 126, 140), Handle = h.rgb(150, 98, 58), Band = gold },
 			Materials = { Head = Enum.Material.Metal, Handle = Enum.Material.Wood, Band = Enum.Material.Metal },

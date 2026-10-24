@@ -19,7 +19,7 @@ return function(h)
 	return {
 		-- Backdrop centerpiece; faces -Z (turn it to face the bridge).
 		DragonTemple = {
-			AssetId = 101828887502674,
+			AssetId = 106143423849449,
 			Height = 97.5,
 			BlocksCamera = true,
 			Shadow = false,
@@ -60,7 +60,7 @@ return function(h)
 		-- Holds a sun wheel's axle; the medallion at 35.4 studs up on its front (-Z) face is where the
 		-- axle goes in. Fire bowl on top.
 		RopeTower = {
-			AssetId = 101851055954832,
+			AssetId = 89239174801545,
 			Height = 43.3,
 			BlocksCamera = true,
 			Palette = {

@@ -69,7 +69,7 @@ return function(h)
 		},
 		SandCoin = {
 			Height = 2.3,
-			AssetId = 108661375244125,
+			AssetId = 107912823175611,
 			Shadow = false,
 			Palette = { Coin = h.rgb(255, 196, 40), Emblem = h.rgb(255, 238, 140) },
 			Materials = { Coin = Enum.Material.Metal, Emblem = Enum.Material.Neon },
@@ -137,7 +137,7 @@ return function(h)
 		-- where the mode stands the King (in front of the seat: SinkingSands' THRONE_STAND).
 		SandThrone = {
 			Height = 11.2,
-			AssetId = 130607562047963,
+			AssetId = 104625713439871,
 			Collide = true,
 			Palette = { Stone = stone, Gold = gold, Paint = paint, Cushion = h.rgb(200, 60, 60), Glow = glow },
 			Materials = {
@@ -214,7 +214,7 @@ return function(h)
 		-- A tall painted column with a royal banner down its front (-Z).
 		SandColumn = {
 			Height = 27.89,
-			AssetId = 90343959477598,
+			AssetId = 98630751814424,
 			Collide = true,
 			Palette = { Stone = stone, Paint = paint, Gold = gold, Cloth = cloth },
 			Materials = { Stone = Sandstone, Gold = Metal, Cloth = Enum.Material.Fabric },
@@ -240,7 +240,7 @@ return function(h)
 		-- A gateway: two columns under a lintel with a turquoise cornice and a gold winged sun.
 		SandArch = {
 			Height = 32.97,
-			AssetId = 127413289720150,
+			AssetId = 72021900109255,
 			Collide = true,
 			Palette = { Stone = stone, Paint = paint, Gold = gold, Glow = glow },
 			Materials = { Stone = Sandstone, Gold = Metal, Glow = Neon },
@@ -258,7 +258,7 @@ return function(h)
 		-- The golden step-temple behind the arena, with its grand stair, obelisks and banners.
 		SandTemple = {
 			Height = 88.58,
-			AssetId = 130718627517346,
+			AssetId = 138420745387419,
 			Shadow = false,
 			Palette = {
 				Stone = stone,
@@ -348,7 +348,7 @@ return function(h)
 		-- An oasis pond with a damp bank, rocks, grass, reeds and lilies (on the desert floor).
 		SandOasis = {
 			Height = 6.33,
-			AssetId = 92709425112819,
+			AssetId = 103697397538672,
 			Shadow = false,
 			Palette = {
 				Water = h.rgb(36, 206, 226),
@@ -372,7 +372,7 @@ return function(h)
 		-- A heap of treasure: coins, an open chest and big gems.
 		SandHoard = {
 			Height = 4.77,
-			AssetId = 132200581160288,
+			AssetId = 83828763545428,
 			Shadow = false,
 			Palette = { Gold = gold, Wood = h.rgb(150, 88, 46), Gem = h.rgb(230, 60, 90) },
 			Materials = { Gold = Metal, Wood = Enum.Material.Wood, Gem = Neon },

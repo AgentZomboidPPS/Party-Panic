@@ -54,7 +54,7 @@ return function(h)
 		},
 		DiceDashTileSlip = {
 			Height = TILE_HEIGHT,
-			AssetId = 122713995573076,
+			AssetId = 123977914482805,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(80, 120, 210), Icon = h.rgb(255, 222, 70) },
@@ -63,7 +63,7 @@ return function(h)
 		},
 		DiceDashTileCannon = {
 			Height = TILE_HEIGHT,
-			AssetId = 140531788477320,
+			AssetId = 103489491237469,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(255, 150, 60), Icon = h.rgb(45, 42, 58) },
@@ -72,7 +72,7 @@ return function(h)
 		},
 		DiceDashTileSwap = {
 			Height = TILE_HEIGHT,
-			AssetId = 115196170081614,
+			AssetId = 78737161462120,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(255, 205, 50), Icon = h.rgb(255, 255, 250) },
@@ -81,7 +81,7 @@ return function(h)
 		},
 		DiceDashTileEvent = {
 			Height = TILE_HEIGHT,
-			AssetId = 73764926600017,
+			AssetId = 114749537808222,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(170, 110, 255), Icon = h.rgb(255, 255, 255) },
@@ -90,7 +90,7 @@ return function(h)
 		},
 		DiceDashTileTrap = {
 			Height = TILE_HEIGHT,
-			AssetId = 91734989495227,
+			AssetId = 90587810467421,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(230, 70, 80), Icon = h.rgb(70, 46, 36) },
@@ -103,7 +103,7 @@ return function(h)
 		},
 		DiceDashPadStart = {
 			Height = TILE_HEIGHT,
-			AssetId = 94361141570426,
+			AssetId = 135414053964641,
 			Collide = true,
 			Precise = { "Base", "Top" },
 			Palette = { Base = base, Top = h.rgb(70, 160, 255), Icon = h.rgb(255, 215, 60) },
@@ -139,7 +139,7 @@ return function(h)
 		},
 		DiceDashArchFinish = {
 			Height = 17,
-			AssetId = 102507023173870,
+			AssetId = 83868574789999,
 			Palette = {
 				Posts = h.rgb(245, 245, 250),
 				Beam = h.rgb(255, 90, 100),
@@ -221,7 +221,7 @@ return function(h)
 		},
 		DiceDashCards = {
 			Height = 1.6,
-			AssetId = 127539608589812,
+			AssetId = 91706938473131,
 			Palette = { Face = h.rgb(252, 250, 245), Mark = h.rgb(230, 50, 70), Back = h.rgb(60, 90, 200) },
 			Fallback = function(m)
 				h.block(m, "Face", Vector3.new(8, 0.2, 12), Vector3.new(0, 0.1, -4))

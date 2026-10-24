@@ -41,7 +41,7 @@ return function(h)
 		},
 		MessyMemoryBooth = {
 			Height = 14.9,
-			AssetId = 111819152207980,
+			AssetId = 75660626916862,
 			BlocksCamera = { "Wall", "Roof" },
 			Palette = {
 				Wall = h.rgb(255, 240, 228),
@@ -79,7 +79,7 @@ return function(h)
 		-- One half of a booth's curtain (the client stretches it shut or bunches it open).
 		MessyMemoryCurtain = {
 			Height = 12.5,
-			AssetId = 139907732869068,
+			AssetId = 74775599182505,
 			Shadow = false,
 			Palette = { Cloth = h.rgb(210, 40, 70), Trim = h.rgb(255, 205, 80) },
 			Materials = { Cloth = fabric, Trim = fabric },
@@ -151,7 +151,7 @@ return function(h)
 		},
 		MessyMemoryRobot = {
 			Height = 1.92,
-			AssetId = 81356842930611,
+			AssetId = 120953408177684,
 			Palette = {
 				Metal = h.rgb(150, 185, 225),
 				Screen = h.rgb(40, 50, 72),
@@ -201,7 +201,7 @@ return function(h)
 		},
 		MessyMemoryBlock = {
 			Height = 1.52,
-			AssetId = 91132748217251,
+			AssetId = 129823878854519,
 			Palette = { Block = h.rgb(90, 200, 110), Star = h.rgb(255, 225, 80) },
 			Materials = { Block = smooth, Star = smooth },
 			Fallback = function(m)
@@ -230,7 +230,7 @@ return function(h)
 		-- The shop's centrepiece: an open toy chest with toys spilling out of the top.
 		MessyMemoryToyBox = {
 			Height = 6.53,
-			AssetId = 129942540977277,
+			AssetId = 134003038844939,
 			BlocksCamera = { "Chest", "Lid" },
 			Palette = {
 				Chest = h.rgb(255, 150, 190),

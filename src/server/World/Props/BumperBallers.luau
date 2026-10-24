@@ -155,7 +155,7 @@ return function(h)
 		},
 		BumperDonutFloat = {
 			Height = 1.69,
-			AssetId = 136782505793706,
+			AssetId = 134467364506689,
 			Palette = { Dough = h.rgb(236, 178, 110), Frosting = h.rgb(255, 136, 204), Sprinkles = h.rgb(80, 205, 255) },
 			Fallback = function(m)
 				h.pillar(m, "Dough", 5.1, 1.0, Vector3.new(0, 0.5, 0))
@@ -173,7 +173,7 @@ return function(h)
 		-- The beach bar on the party islet: deck on stilts, bamboo counter, thatched roof, bottles.
 		BumperTikiBar = {
 			Height = 13.9,
-			AssetId = 114373899397541,
+			AssetId = 96184342144657,
 			Palette = {
 				Wood = h.rgb(168, 108, 62),
 				Bamboo = h.rgb(222, 196, 112),
@@ -200,7 +200,7 @@ return function(h)
 		},
 		BumperTikiTotem = {
 			Height = 7.26,
-			AssetId = 111668152639851,
+			AssetId = 94904228462477,
 			Palette = {
 				Wood = h.rgb(150, 96, 58),
 				Paint = h.rgb(236, 72, 52),

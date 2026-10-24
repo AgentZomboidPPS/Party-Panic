@@ -51,7 +51,7 @@ return function(h)
 		},
 		SnowballSummitPine = {
 			Height = 15.6,
-			AssetId = 123253399380273,
+			AssetId = 109560386222080,
 			Palette = { Trunk = rgb(112, 76, 52), Needles = rgb(36, 96, 82), Snow = SNOW },
 			Materials = { Trunk = Enum.Material.Wood, Needles = Enum.Material.Grass, Snow = Enum.Material.Snow },
 			Fallback = function(m)

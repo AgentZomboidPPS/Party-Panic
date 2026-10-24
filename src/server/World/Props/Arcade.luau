@@ -62,7 +62,7 @@ return function(h)
 	return {
 		ArcadeSkeeMachine = {
 			Height = 12.09,
-			AssetId = 73784669582654,
+			AssetId = 112826002219090,
 			-- Doesn't collide: World/Arcade fits invisible colliders to its shape. It stops the
 			-- camera, which would otherwise slide inside the cabinet.
 			BlocksCamera = true,

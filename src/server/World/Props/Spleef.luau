@@ -46,7 +46,7 @@ return function(h)
 		},
 		SpleefPine = {
 			Height = 16,
-			AssetId = 123535835931172,
+			AssetId = 112861653788348,
 			Palette = { Trunk = rgb(112, 76, 52), Needles = rgb(38, 98, 80), Snow = SNOW },
 			Materials = { Trunk = Enum.Material.Wood, Needles = Enum.Material.Grass, Snow = Enum.Material.Snow },
 			Fallback = function(m)

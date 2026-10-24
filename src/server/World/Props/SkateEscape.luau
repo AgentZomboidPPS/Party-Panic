@@ -56,7 +56,7 @@ return function(h)
 		},
 		SkateBoost = {
 			Height = 0.3,
-			AssetId = 114012835317318,
+			AssetId = 74096622751844,
 			Shadow = false,
 			Palette = { Pad = h.rgb(40, 36, 60), Rim = h.rgb(90, 80, 120), Arrows = h.rgb(255, 220, 60) },
 			Materials = { Arrows = Enum.Material.Neon },

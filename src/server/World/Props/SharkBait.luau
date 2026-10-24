@@ -21,7 +21,7 @@ return function(h)
 		-- A cartoon great white, snout at -Z. The game floats it with y = 2.6 at the waterline.
 		SharkBaitShark = {
 			Height = 6,
-			AssetId = 99900036698603,
+			AssetId = 85687481303149,
 			Palette = {
 				Body = h.rgb(110, 130, 160),
 				Tail = h.rgb(110, 130, 160),
@@ -113,7 +113,7 @@ return function(h)
 		},
 		SharkBaitChest = {
 			Height = 2.4,
-			AssetId = 136486848365204,
+			AssetId = 83587868832052,
 			Palette = {
 				Wood = h.rgb(150, 90, 50),
 				Trim = h.rgb(255, 200, 60),
@@ -131,7 +131,7 @@ return function(h)
 		-- An inflatable swim ring, worn by swimmers while they're in the water.
 		SharkBaitFloatie = {
 			Height = 1,
-			AssetId = 105609274155626,
+			AssetId = 111216191960173,
 			Shadow = false,
 			Palette = { Ring = h.rgb(255, 120, 60), Stripes = h.rgb(255, 255, 255) },
 			Fallback = level(function(m)
@@ -207,7 +207,7 @@ return function(h)
 		-- Under the water: coral heads, kelp and starfish on the lagoon floor.
 		SharkBaitCoral = {
 			Height = 6,
-			AssetId = 78476909007682,
+			AssetId = 80018572634296,
 			Palette = {
 				Rock = h.rgb(150, 140, 130),
 				CoralA = h.rgb(255, 110, 140),
@@ -273,7 +273,7 @@ return function(h)
 		-- A lifeguard tower on stilts, its warning sign facing -Z.
 		SharkBaitHut = {
 			Height = 18,
-			AssetId = 91252373330148,
+			AssetId = 86054696318321,
 			Palette = {
 				Stilts = h.rgb(235, 235, 230),
 				Cabin = h.rgb(230, 70, 60),
@@ -336,7 +336,7 @@ return function(h)
 		},
 		SharkBaitShipwreck = {
 			Height = 34,
-			AssetId = 137835985045864,
+			AssetId = 85059793282972,
 			Palette = {
 				Hull = h.rgb(110, 70, 45),
 				Planks = h.rgb(150, 100, 60),

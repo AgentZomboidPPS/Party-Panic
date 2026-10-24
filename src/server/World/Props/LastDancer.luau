@@ -18,7 +18,7 @@ return function(h)
 		-- Three speaker cabinets stacked, the cones facing the front (-Z).
 		LastDancerSpeaker = {
 			Height = 13.1,
-			AssetId = 71243214692819, -- (see above)
+			AssetId = 102236463569054, -- (see above)
 			Palette = { Body = h.rgb(28, 26, 42), Cone = h.rgb(70, 70, 92), Rim = h.rgb(150, 150, 170) },
 			Materials = {
 				Body = Enum.Material.Slate,

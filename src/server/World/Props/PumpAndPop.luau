@@ -66,7 +66,7 @@ return function(h)
 		},
 		AirTank = {
 			Height = 4.7,
-			AssetId = 92699226368322,
+			AssetId = 128017673837909,
 			Collide = true,
 			Palette = {
 				Feet = rgb(70, 60, 90),
@@ -94,7 +94,7 @@ return function(h)
 		},
 		Plunger = {
 			Height = 4.18,
-			AssetId = 96075152171242,
+			AssetId = 76097238862834,
 			Palette = {
 				PumpBase = rgb(60, 55, 75),
 				Barrel = rgb(255, 80, 95),
@@ -268,7 +268,7 @@ return function(h)
 		-- A string of pennants 24 studs long (both ends at the top), sagging 3 studs.
 		PumpBunting = {
 			Height = 5.02,
-			AssetId = 98727303733230,
+			AssetId = 72673172315705,
 			Shadow = false,
 			Palette = {
 				String = rgb(250, 250, 250),

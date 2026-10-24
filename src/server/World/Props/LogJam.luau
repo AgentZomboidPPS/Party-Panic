@@ -32,7 +32,7 @@ return function(h)
 	return {
 		LogJamStump = {
 			Height = 2.53,
-			AssetId = 134000315340316,
+			AssetId = 113356385952596,
 			Palette = {
 				Bark = rgb(116, 78, 50),
 				Top = rgb(228, 188, 130),
@@ -48,7 +48,7 @@ return function(h)
 		},
 		LogJamLog = {
 			Height = 2.24,
-			AssetId = 128883571182692,
+			AssetId = 128357736741659,
 			Palette = { Bark = rgb(126, 86, 54), Wood = rgb(232, 196, 140), Rings = rgb(186, 136, 86) },
 			Materials = { Bark = wood, Wood = wood },
 			Fallback = function(m)
@@ -58,7 +58,7 @@ return function(h)
 		},
 		LogJamHalf = {
 			Height = 2.2,
-			AssetId = 135735332701957,
+			AssetId = 84770704513994,
 			Palette = { Bark = rgb(126, 86, 54), Wood = rgb(238, 204, 150) },
 			Materials = { Bark = wood, Wood = wood },
 			Fallback = function(m)
@@ -106,7 +106,7 @@ return function(h)
 		},
 		LogJamRack = {
 			Height = 5.66,
-			AssetId = 81371512284222,
+			AssetId = 116589379952434,
 			Palette = {
 				Frame = rgb(140, 94, 58),
 				Peg = rgb(104, 70, 44),
@@ -144,7 +144,7 @@ return function(h)
 		},
 		LogJamMill = {
 			Height = 20.9,
-			AssetId = 92963898106491,
+			AssetId = 85625047939574,
 			Palette = {
 				Walls = rgb(198, 142, 90),
 				Trim = rgb(118, 76, 46),
@@ -171,7 +171,7 @@ return function(h)
 		},
 		LogJamLumber = {
 			Height = 4.83,
-			AssetId = 122362294471873,
+			AssetId = 119056430769061,
 			Palette = {
 				Planks = rgb(228, 186, 126),
 				Straps = rgb(62, 66, 74),

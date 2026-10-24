@@ -37,7 +37,7 @@ return function(h)
 		},
 		HotPotatoFence = {
 			Height = 13.5,
-			AssetId = 75081713699876,
+			AssetId = 94628294732623,
 			Collide = true,
 			Palette = { Pickets = h.rgb(250, 246, 236), Rails = h.rgb(232, 224, 208), Posts = h.rgb(240, 234, 220) },
 			Materials = { Pickets = Enum.Material.Wood, Rails = Enum.Material.Wood, Posts = Enum.Material.Wood },
@@ -65,7 +65,7 @@ return function(h)
 		},
 		HotPotatoGrill = {
 			Height = 10, -- its rim 9 studs up: out of a jump's reach from the lawn
-			AssetId = 125271739096064,
+			AssetId = 140617924315501,
 			Collide = true,
 			Palette = {
 				Bowl = h.rgb(200, 50, 45),
@@ -91,7 +91,7 @@ return function(h)
 		},
 		HotPotatoTable = {
 			Height = 3.6,
-			AssetId = 136455383692499,
+			AssetId = 138462760688401,
 			Collide = true,
 			Palette = {
 				Top = h.rgb(176, 112, 64),

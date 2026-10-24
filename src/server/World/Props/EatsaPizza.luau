@@ -58,7 +58,7 @@ return function(h)
 	return {
 		EatsaPizzaSlice = {
 			Height = 1.114,
-			AssetId = 135441890518273,
+			AssetId = 123724239399894,
 			Shadow = false,
 			Palette = slicePalette,
 			Materials = sliceMaterials,
@@ -66,7 +66,7 @@ return function(h)
 		},
 		EatsaPizzaSlice1 = {
 			Height = 0.515,
-			AssetId = 83316228710576,
+			AssetId = 83370433670693,
 			Shadow = false,
 			Palette = slicePalette,
 			Materials = sliceMaterials,
@@ -74,7 +74,7 @@ return function(h)
 		},
 		EatsaPizzaSlice2 = {
 			Height = 0.515,
-			AssetId = 126890954416685,
+			AssetId = 115943892909418,
 			Shadow = false,
 			Palette = slicePalette,
 			Materials = sliceMaterials,
@@ -82,7 +82,7 @@ return function(h)
 		},
 		EatsaPizzaSlice3 = {
 			Height = 0.515,
-			AssetId = 112429256776267,
+			AssetId = 91418390951827,
 			Shadow = false,
 			Palette = slicePalette,
 			Materials = sliceMaterials,
@@ -144,7 +144,7 @@ return function(h)
 		},
 		EatsaPizzaBoxes = {
 			Height = 3.28,
-			AssetId = 92008186134295,
+			AssetId = 89714901035774,
 			Palette = { Box = h.rgb(214, 176, 120), Print = h.rgb(210, 40, 40), Dots = h.rgb(210, 40, 40) },
 			Materials = { Box = Enum.Material.Cardboard, Print = smooth, Dots = smooth },
 			Fallback = function(m)
@@ -179,7 +179,7 @@ return function(h)
 		},
 		EatsaPizzaVent = {
 			Height = 3.95,
-			AssetId = 120742053459073,
+			AssetId = 82686878352126,
 			Palette = {
 				Body = h.rgb(212, 216, 222),
 				Feet = h.rgb(90, 94, 100),
