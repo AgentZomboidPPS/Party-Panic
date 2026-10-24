@@ -348,10 +348,19 @@ return function(h)
 		-- The arena ----------------------------------------------------------------------------------------
 		BigBadVacuumBlock = {
 			Height = 15.8,
-			AssetId = 80906435565292,
+			AssetId = 85182417111828,
 			Collide = true,
-			Palette = { Body = rgb(232, 76, 84), Face = rgb(240, 130, 136), Stud = rgb(255, 255, 255) },
-			Materials = { Body = Enum.Material.SmoothPlastic, Face = Enum.Material.SmoothPlastic },
+			Palette = {
+				Body = rgb(232, 76, 84),
+				Face = rgb(240, 130, 136),
+				Emblem = rgb(250, 206, 208), -- the raised star (the arena tints it per block, lighter than Face)
+				Stud = rgb(255, 255, 255),
+			},
+			Materials = {
+				Body = Enum.Material.SmoothPlastic,
+				Face = Enum.Material.SmoothPlastic,
+				Emblem = Enum.Material.SmoothPlastic,
+			},
 			Fallback = function(m)
 				h.block(m, "Body", Vector3.new(15, 15.2, 14), Vector3.new(0, 7.6, 0))
 				-- The inward face (-Z) gets a raised panel.

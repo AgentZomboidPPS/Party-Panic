@@ -360,7 +360,9 @@ def block():
     studs = [post(1.7, 15.1, 15.8, x, z, bevel=0.2, segments=28) for x in (-3.4, 3.4) for z in (-3.0, 3.0)]
     panel = rbox(10.6, 10.6, 0.9, 0.45, 0, 7.6, -7.0, n=7)
     emblem = extrude(star(3.6, 1.55, 5), 0.6).translate(0, 7.4, -7.55)
-    return {"Body": merge(body, *studs), "Face": merge(panel, emblem)}
+    # (the star is a piece of its own, tinted lighter than the panel: one the panel's colour only showed
+    # by its shading, and from below, as the stacked row is seen, it read as a squinting face)
+    return {"Body": merge(body, *studs), "Face": panel, "Emblem": emblem}
 
 
 def lamp():
@@ -435,7 +437,7 @@ COLORS = {  # preview colours only (the game colours pieces by name: Props/BigBa
     "Bag": (236, 236, 250), "Collar": (255, 90, 90), "Cord": (250, 250, 244), "Band": (255, 90, 90),
     "Plug": (250, 250, 244), "Prong": (210, 214, 224), "Glow": (255, 230, 90), "Body": (250, 90, 80), "Stud": (250, 120, 110),
     "Red": (232, 76, 84), "Blue": (70, 140, 235), "Yellow": (250, 200, 60), "Green": (86, 200, 120), "Orange": (250, 140, 60),
-    "Purple": (160, 110, 230), "Chunk": (78, 84, 110), "Spark": (255, 160, 60), "Face": (240, 130, 136),
+    "Purple": (160, 110, 230), "Chunk": (78, 84, 110), "Spark": (255, 160, 60), "Face": (240, 130, 136), "Emblem": (250, 206, 208),
     "Pole": (50, 48, 58), "Foot": (36, 34, 44), "Shade": (255, 214, 140), "Frame": (24, 24, 30), "Screen": (70, 130, 255),
     "Stand": (40, 40, 50), "Seat": (120, 40, 60), "Back": (104, 34, 52), "Arm": (96, 30, 48), "Cushion": (140, 52, 72),
     "Leg": (92, 62, 40),

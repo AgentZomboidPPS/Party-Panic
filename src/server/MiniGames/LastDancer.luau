@@ -177,7 +177,8 @@ local function buildFloor(ctx, origin: Vector3, count: number): (number, { CFram
 		Color = rgb(200, 200, 215),
 		Parent = arena,
 	})
-	-- Speaker stacks and spotlights round the edge, the cones facing the stage.
+	-- Speaker stacks and spotlights round the edge, the cones facing the stage. Each stack stands on a
+	-- pillar rising out of the pit, its spotlight on top (they floated over the pit before).
 	for index = 0, 5 do
 		local angle = (index + 0.5) / 6 * math.pi * 2
 		local at = origin + Vector3.new(math.cos(angle) * (ring + 12), 0, math.sin(angle) * (ring + 12))
@@ -185,10 +186,19 @@ local function buildFloor(ctx, origin: Vector3, count: number): (number, { CFram
 			CFrame = CFrame.lookAt(at, Vector3.new(origin.X, at.Y, origin.Z)),
 			Parent = arena,
 		})
+		Build.Decor({
+			Name = "SpeakerPillar",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(PIT_DEPTH, 4.2, 4.2),
+			CFrame = upright(at - Vector3.new(0, PIT_DEPTH / 2 + 0.05, 0)),
+			Color = rgb(24, 20, 40),
+			Material = Enum.Material.Metal,
+			Parent = arena,
+		})
 		local spot = Build.Decor({
 			Name = "Spot",
 			Size = Vector3.new(1.6, 1.6, 1.6),
-			Position = at + Vector3.new(0, 16, 0),
+			Position = at + Vector3.new(0, 13.9, 0),
 			Color = HUES[(index * 2) % #HUES + 1],
 			Material = Enum.Material.Neon,
 			Parent = arena,

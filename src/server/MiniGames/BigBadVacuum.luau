@@ -260,7 +260,11 @@ function BigBadVacuum:_buildArena()
 		local stacked = index % 3 == 1
 		MeshLibrary.Get("BigBadVacuumBlock", {
 			CFrame = facing,
-			Colors = { Body = color, Face = color:Lerp(Color3.new(1, 1, 1), 0.28) },
+			Colors = {
+				Body = color,
+				Face = color:Lerp(Color3.new(1, 1, 1), 0.28),
+				Emblem = color:Lerp(Color3.new(1, 1, 1), 0.7),
+			},
 			Parent = arena,
 		})
 		if stacked then
@@ -269,6 +273,7 @@ function BigBadVacuum:_buildArena()
 				Colors = {
 					Body = palette[(index + 2) % #palette + 1],
 					Face = palette[(index + 2) % #palette + 1]:Lerp(Color3.new(1, 1, 1), 0.28),
+					Emblem = palette[(index + 2) % #palette + 1]:Lerp(Color3.new(1, 1, 1), 0.7),
 				},
 				Parent = arena,
 			})
