@@ -24,17 +24,31 @@
 -- spectate the floor.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Chart = require(ReplicatedStorage.Shared.LastDancerChart)
+local GameDefinitions = require(ReplicatedStorage.Shared.GameDefinitions)
 local GameState = require(ReplicatedStorage.Shared.GameState)
 local Logic = require(ReplicatedStorage.Shared.Logic.LastDancer)
+local Sounds = require(ReplicatedStorage.Shared.Sounds)
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
 local Build = require(script.Parent.Parent.World.Build)
 
 local LastDancer = MiniGame.Define("LastDancer", { Results = "Survival" })
+
+-- A rhythm game is half a game without its own song, and the song waits for the owner's go-ahead to be
+-- uploaded (ModePack7, tools/music/modes.py). Until its id is in AudioAssets the mode stays out of the
+-- vote on live servers (no code to flip afterwards: the next publish after the upload has it in the vote);
+-- Studio testing and the round harness ignore this, and play with the tick that keeps the beat.
+if Sounds.ModeSongs.LastDancer == nil and not RunService:IsStudio() then
+	local definition = GameDefinitions.Get("LastDancer")
+	if definition then
+		definition.Enabled = false
+	end
+end
 
 LastDancer.Chart = Chart
 LastDancer.WARN = 0.3 -- the cut is decided and shown this long before the tiles drop

@@ -3,10 +3,14 @@
 -- beat; it taps through ctx:BotAction exactly like a client's tap, so the server judges it by the same
 -- rules (a wrong lane is a stray that costs groove for a bot too, and a note it skips is a miss).
 --
--- Skill (0.35-0.9) sets how many notes it hits (a sharp bot ~95%, a clumsy one ~83%, a little less as the
--- chart gets busier), how far off the beat it taps (a sharp bot ~35 ms, a clumsy one ~70 ms) and how
--- often it taps the wrong pad. Now and then a bot loses the beat for a bar and hits almost nothing, so
--- the cuts aren't the same every round and a dancer with a bad stretch can be the one that falls.
+-- Skill (0.35-0.9) sets how many notes it hits (a sharp bot ~89%, a clumsy one ~72%, a little fewer as the
+-- chart gets busier), how far off the beat it taps (a sharp bot ~47 ms, a clumsy one ~85 ms) and how often
+-- it taps the wrong pad. Measured against the chart with the real judging (Logic/LastDancer), that is a
+-- groove of about 80% for the sharpest bot and 50% for the clumsiest: a good human (92% of the notes, 55 ms
+-- off) reaches ~82% and beats nearly all of them, a casual one (80%, 85 ms) ~60% and lands mid-pack, a
+-- beginner (60%) ~40% and is cut first. Now and then a bot loses the beat for a couple of seconds and hits
+-- almost nothing, so the cuts aren't the same every round and a dancer with a bad stretch can be the one
+-- that falls.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -16,7 +20,7 @@ local Logic = require(ReplicatedStorage.Shared.Logic.LastDancer)
 local LastDancerBrain = {}
 
 local AHEAD = 0.4 -- plans notes this far ahead (seconds)
-local LAPSE_CHANCE = 0.012 -- per note: loses the beat
+local LAPSE_CHANCE = 0.01 -- per note: loses the beat
 local LAPSE_LENGTH = 2 -- seconds
 
 local function gauss(rng: Random, sigma: number): number
@@ -45,13 +49,13 @@ function LastDancerBrain.Step(bot, ctx, mode, _dt)
 			memory.LapseUntil = note.T + LAPSE_LENGTH
 		end
 		local difficulty = (Logic.PhraseAt(note.T) - 1) / (Logic.PHRASES - 1)
-		local hit = 0.8 + 0.17 * skill - 0.12 * difficulty * (1 - skill)
+		local hit = 0.62 + 0.3 * skill - 0.15 * difficulty * (1 - skill)
 		if note.T < memory.LapseUntil then
 			hit = 0.12
 		end
 		local lane = note.Lane
 		if bot:Chance(hit) then
-			local sigma = 0.095 - 0.065 * skill
+			local sigma = 0.11 - 0.07 * skill
 			local offset = math.clamp(gauss(bot.Rng, sigma) + 0.008, -0.15, 0.15)
 			if bot:Chance((1 - skill) * 0.04) then
 				lane = (lane + bot.Rng:NextInteger(0, 1) * 2) % Logic.LANES + 1 -- a neighbouring pad

@@ -167,3 +167,43 @@ bots read the hints, clumsy ones sometimes take the TNT) and time jumps and lean
 Race, Duration 75-90 (a time-out), MinPlayers 1, IsTeam false. Props as real meshes: riveted mine carts with each
 player's colour trim and badge, curved rail segments (merged into few meshes for phones), wooden trestles and supports,
 TNT crates, junction signs, glowing crystals, lanterns, a cave entrance and a sunlit exit with a FINISH banner.
+
+## 31. Last Dancer (`LastDancer`, Survival)
+
+Added on 2026-10-24 from Claude's own pitch ("If you could make any mini game to add to the game. What would it be?"),
+built when the owner said "Let's make it". The first rhythm game in the lineup. Everyone stands on a glowing tile of a
+disco floor and taps the pad under each falling note on the beat of the round's own song ("Mirror Ball Showdown", 120 bpm);
+at the end of each 8-second phrase from the second to the seventh the dancers with the lowest groove fall through the
+floor, enough to leave two for the final duel; at the buzzer the highest groove wins. Survival, 64 s, MinPlayers 1, up to 12.
+
+- **The chart is the song.** `tools/music/songs/LastDancer.py` lists the notes (`CHART_BARS`: 32 bars of 16 steps, a digit
+  for a lane 1-4); its lead plays every one of them (a chord tone per lane), and `python3 tools/music/lastdancer_chart.py`
+  writes the same notes to `src/shared/LastDancerChart.luau`. Everyone gets the same chart. Change a bar, re-render the
+  song (`modes.py render LastDancer`), re-export the chart and re-pack (`modes.py pack`, which never touches an uploaded
+  pack: a changed song needs `--replace ModePack7` and a new upload).
+- **Judging** is `src/shared/Logic/LastDancer.luau` (pure, unit-tested in `tests/LastDancer.spec.luau`): the nearest waiting
+  note in the tapped lane within 170 ms (Perfect 65, Great 115, Ok 170), else a stray; a note nobody hit is a miss. The
+  server judges every tap by the time the player's device says it was made (less its SYNC setting), never later than it
+  arrived and not earlier than half the ping + 0.4 s. The client judges the same taps with the same module for instant
+  PERFECT / GREAT text; the server's numbers are the ones that count.
+- **Groove** (what the cuts go by) is a moving average of recent outcomes, 0-1: a Perfect pulls it towards 1, a Great 0.8,
+  an Ok 0.5, a miss or stray towards 0 (a stray pulls half as hard as a miss, but mashing four pads gives ~8 strays a hit).
+  It can't pile up past the top and a bad stretch can be danced out of.
+- **The cuts.** 12 dancers go 10, 9, 7, 5, 4, 2 (`Logic.Target`: the surplus over two is spread evenly over the six cuts).
+  The cut is decided 0.3 s before the downbeat, in the last beat of the phrase that the chart leaves empty: the doomed tiles
+  flash red, then drop. Ties: lower groove, then fewer points, then a draw made once per round.
+- **Controls.** Four pads (▲ ■ ● ◆, each its own colour): tap them (phones take the touch the moment it lands, so two
+  fingers work) or D F J K. SYNC - / + under the meters shifts the picture and the taps' time in 25 ms steps (the sound
+  reaches some players, Bluetooth speakers especially, late); the setting lasts for the visit. If the song isn't playing, a
+  quiet tick keeps the beat.
+- **Bots** (`Bots/LastDancer.luau`) tap the same chart through `ctx:BotAction`: skill 0.35-0.9 gives ~72-89% of the notes,
+  47-85 ms off, and the odd wrong pad; now and then one loses the beat for 2 s. Measured with the real judging, groove is
+  ~50% for the clumsiest bot and ~80% for the sharpest; a good human (92%, 55 ms) reaches ~82%, a casual one (80%, 85 ms) ~60%.
+- **Look.** A ring of lit tiles (one per dancer, a neon pad on each, the dancer's name above) round a glass stage under a
+  mirror ball, speaker stacks and spotlights, a glowing pit below. Every dancer, bots too, dances on this device only
+  (R15 joint offsets, hops and sways on the beat, arms up when in form, slack when not, flailing when about to fall).
+  Everything is primitive parts for now; real meshes would go in `World/Props/LastDancer.luau` / `tools/meshgen/props/LastDancer.py`.
+- **Ships dark.** The mode keeps itself out of the live vote until its song is in the game (`Sounds.ModeSongs.LastDancer`,
+  i.e. ModePack7's id in `AudioAssets`): upload with `python3 tools/upload_assets.py --user-id 11690979745 --what modes`
+  (uses 1 of the owner's 10 audio uploads a month: 6 are used), publish, and it is in the vote. Studio and the round
+  harness ignore that.

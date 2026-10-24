@@ -92,6 +92,79 @@ local function playSound(api, name: string, speed: number, volume: number)
 	end)
 end
 
+-- The dance ----------------------------------------------------------------------------------------------
+-- Every dancer, bots too, moves to the beat on their tile, drawn on this device only: the character's R15
+-- joints get an offset on their C0 (animations only write Transform, so they don't undo it) that hops, sways,
+-- nods and lifts the arms in time. A dancer in form (a high groove) dances big; one losing the beat droops;
+-- one whose tile is flashing red flails. Everything is put back when the round ends.
+
+type Joint = { Motor: Motor6D, Base: CFrame }
+type Rig = { Root: Joint, Waist: Joint?, Neck: Joint?, LeftArm: Joint?, RightArm: Joint?, All: { Joint } }
+
+local function joint(character: Model, parent: string, name: string): Joint?
+	local part = character:FindFirstChild(parent)
+	local motor = part and part:FindFirstChild(name)
+	if motor and motor:IsA("Motor6D") then
+		return { Motor = motor, Base = motor.C0 }
+	end
+	return nil
+end
+
+local function rigOf(character: Model): Rig?
+	local root = joint(character, "LowerTorso", "Root")
+	if not root then
+		return nil -- (not an R15 rig)
+	end
+	local rig: Rig = {
+		Root = root,
+		Waist = joint(character, "UpperTorso", "Waist"),
+		Neck = joint(character, "Head", "Neck"),
+		LeftArm = joint(character, "UpperTorso", "LeftShoulder"),
+		RightArm = joint(character, "UpperTorso", "RightShoulder"),
+		All = {},
+	}
+	for _, entry in { rig.Root, rig.Waist, rig.Neck, rig.LeftArm, rig.RightArm } do
+		table.insert(rig.All, entry)
+	end
+	return rig
+end
+
+local function restore(rig: Rig)
+	for _, entry in rig.All do
+		if entry.Motor.Parent then
+			entry.Motor.C0 = entry.Base
+		end
+	end
+end
+
+local function pose(entry: Joint?, offset: CFrame)
+	if entry then
+		entry.Motor.C0 = entry.Base * offset
+	end
+end
+
+-- One frame of dancing for a rig: `beat` counts beats, `energy` is 0-1, `phase` offsets this dancer from
+-- the others, `panic` is true for a dancer about to fall.
+local function dance(rig: Rig, beat: number, energy: number, phase: number, panic: boolean)
+	local t = beat + phase
+	local hop = math.abs(math.sin(math.pi * (t % 1))) -- up on the beat, down between
+	local sway = math.sin(t * math.pi) -- side to side every two beats
+	local e = if panic then 1 else energy
+	pose(rig.Root, CFrame.new(0, 0.3 * e * hop, 0) * CFrame.Angles(0, sway * 0.3 * e, 0))
+	pose(rig.Waist, CFrame.Angles(-0.12 * e * hop, 0, sway * 0.12 * e))
+	pose(rig.Neck, CFrame.Angles((0.15 * hop - 0.25 * (1 - e)) * (if panic then 0.2 else 1), 0, -sway * 0.1 * e))
+	-- arms: alternately up on the beat when in form, hanging slack when not (flailing when about to fall)
+	local lift = 0.15 + 1.9 * e * e
+	local right = lift * math.max(0, sway) + 0.12 * e
+	local left = lift * math.max(0, -sway) + 0.12 * e
+	if panic then
+		local flail = math.sin(os.clock() * 20)
+		right, left = 2.6 + flail * 0.5, 2.6 - flail * 0.5
+	end
+	pose(rig.RightArm, CFrame.Angles(0, 0, right))
+	pose(rig.LeftArm, CFrame.Angles(0, 0, -left))
+end
+
 local function percentText(groove: number): string
 	return `{math.clamp(math.floor(groove + 0.5), 0, 100)}%`
 end
@@ -727,6 +800,15 @@ function LastDancer.Start(api)
 	-- Every frame ---------------------------------------------------------------------------------------
 	local scanStart = 1
 	local displayed = 60
+	local dancing = effects
+	local danceCheck = 1
+	local rigs: { [Model]: { Rig: Rig, UserId: number, Phase: number } } = {}
+	api:Track(function()
+		for _, entry in rigs do
+			restore(entry.Rig)
+		end
+		table.clear(rigs)
+	end)
 	api:RenderStep(function(dt)
 		local rel = relNow()
 		local chartRel = rel - sync -- the chart's time as this player hears it
@@ -819,6 +901,46 @@ function LastDancer.Start(api)
 					target = if flash then Color3.fromRGB(255, 40, 50) else Color3.fromRGB(90, 0, 10)
 				end
 				t.Pad.Color = target
+			end
+		end
+
+		-- the dancers, in time with the beat (this device only; off with reduced effects)
+		if dancing then
+			danceCheck += dt
+			if danceCheck > 0.5 then
+				danceCheck = 0
+				for _, participant in api:Participants() do
+					local character = participant:Character()
+					if
+						character
+						and character.Parent
+						and not rigs[character]
+						and participant:GetAttribute("PP_Alive") ~= false
+					then
+						local rig = rigOf(character)
+						if rig then
+							rigs[character] =
+								{ Rig = rig, UserId = participant.UserId, Phase = (participant.UserId % 7) / 14 }
+						end
+					end
+				end
+			end
+			local grooves = {}
+			for _, standing in board do
+				grooves[standing[1]] = if standing[4] == 1 then standing[2] else nil
+			end
+			for character, entry in rigs do
+				local groove = grooves[entry.UserId]
+				if not character.Parent or groove == nil then
+					restore(entry.Rig)
+					rigs[character] = nil
+				elseif phase == "InRound" or phase == "Preparing" then
+					local energy = 0.3 + 0.7 * math.clamp(groove / 100, 0, 1)
+					if phase == "Preparing" then
+						energy = 0.6
+					end
+					pcall(dance, entry.Rig, beat, energy, entry.Phase, doomed[entry.UserId] == true)
+				end
 			end
 		end
 
