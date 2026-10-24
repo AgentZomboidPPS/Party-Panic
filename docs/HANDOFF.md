@@ -1,6 +1,11 @@
 # Handoff: Party Panic (for the next Claude)
 
-**On this branch since version 56 (not published yet):**
+**On this branch since version 57:** the last five meshes' fights (ArrowBarrel's vanes turned 30 degrees off the shaft's
+faces; Honeycomb, HoneyGlade, TanksTank's hubs and MinecartMayhemRailStart by unfight, which now moves a face 0.1 in front
+of the furthest face it fought), uploaded again. A clipping pass on the arenas the last one didn't cover is with the map
+agent.
+
+**Live in version 57 (2026-10-24, on the owner's "Push and keep working."):**
 - **Capy Go Boom is back in the rotation** (owner: "Reenable it."): its three live bugs were fixed after version 53 (below).
 - **PC lobby chips right under the banner** (owner: "Why is there a gap?"): `LobbyRibbon` PC.Top was 137, room for the
   banner's status line, which only shows during a round, when the chips are away; now 80.

@@ -191,7 +191,7 @@ return function(h)
 		},
 		ArrowBarrel = {
 			Height = 4.14,
-			AssetId = 107614183157636,
+			AssetId = 92377268659248,
 			Palette = {
 				Barrel = h.rgb(160, 105, 62),
 				Hoops = h.rgb(80, 80, 92),

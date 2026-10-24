@@ -7,7 +7,7 @@ return function(h)
 	return {
 		TanksTank = {
 			Height = 5.76,
-			AssetId = 129884398121730,
+			AssetId = 104079569508206,
 			Collide = false,
 			Palette = {
 				Body = h.rgb(232, 64, 58),

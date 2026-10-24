@@ -114,7 +114,7 @@ return function(h)
 		-- The clearing: lawn, sand crescent, stepping stones, flower beds, toadstools, tufts.
 		HoneyGlade = {
 			Height = 2.493,
-			AssetId = 108456937178900,
+			AssetId = 113741775865575,
 			Shadow = false,
 			Palette = {
 				Lawn = h.rgb(136, 206, 90),

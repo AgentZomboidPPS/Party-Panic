@@ -131,7 +131,7 @@ return function(h)
 		-- The rail tiles share everything but their shape (filled in below); each keeps its own block
 		-- with its AssetId, which is where the upload and permission tools look.
 		MinecartMayhemRailStart = {
-			AssetId = 107049905523280,
+			AssetId = 125462732044679,
 			Rail = true,
 		},
 		MinecartMayhemRailBendL = {
