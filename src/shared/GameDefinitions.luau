@@ -403,6 +403,19 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "CapyGoBoom",
+		Name = "Capy Go Boom",
+		Category = "Versus",
+		Icon = "💥",
+		Color = Color3.fromRGB(235, 160, 70),
+		Objective = "Gobble snacks to grow, then BOOM your rivals so they spill theirs! The biggest capy when time's up wins.",
+		Controls = "Walk over snacks to eat them. Tap BOOM (or press E) to fire your snack cannon: it goes the way you face, or at your mouse on PC.",
+		Duration = 75,
+		MinPlayers = 2,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 

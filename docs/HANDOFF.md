@@ -4,6 +4,40 @@ Last updated: **2026-10-22 03:15 UTC** by Session B (branch **`claude/upbeat-gal
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
+## Capy Go Boom: game 31 (2026-10-24, branch `claude/quirky-hopper-5yk8zk`)
+
+Owner: "Can you take Capy to boom. Make it into a mini game for party panic?" CAPY GO BOOM is the owner's other game
+(repo `AgentZomboidPPS/Capy-Go-Boom`: capybaras eat snacks to grow, blast each other, a popped capy spills food). It is
+now `CapyGoBoom` (Versus, 75 s, 2-12, bots fill): everyone is a 20 KG capybara on a hedged lawn; walk over snacks to eat
+(cookie 2, cupcake 4, melon 9, golden melon 25 KG) and grow; BOOM fires the snack cannon, a hit spills a fifth of the
+victim's weight (a quarter for the leader, never below 10 KG) as snacks anyone can eat; nobody is out; the biggest capy
+at the buzzer wins. Two SNACK DROPS (a beam 2.5 s ahead, then a golden melon falls) and a last-12-seconds FEAST (lawn
+snacks count double; spills never do, pops only move weight around) give comebacks. The brief is in `docs/MINIGAME_BACKLOG.md` 30.
+
+- **Files:** `src/server/MiniGames/CapyGoBoom.luau` (the rules), `src/client/MiniGames/CapyGoBoom.luau` (a capybara drawn on
+  everyone's character, snacks, shells, HUD, BOOM button), `src/server/MiniGames/Bots/CapyGoBoom.luau` (bot brain),
+  `src/shared/Logic/CapyGoBoom.luau` (numbers and hit tests both sides use), `src/server/World/Props/CapyGoBoom.luau`
+  (props), `tools/checks/bots/CapyGoBoom.luau` (harness bot), the `GameDefinitions` entry, the store description (31
+  games) and this note. Shared files touched: only `GameDefinitions.luau`.
+- **How it works, in short:** weight is the score and drives size, hit circle, eating reach and speed
+  (`Logic/CapyGoBoom.ScaleOf`). Snacks and shells are server records the client draws on the server's clock ("Snacks",
+  "Spawn", "Eat", "Shot", "Pop", "ShellEnd" cues). A shell is judged against where the shooter saw each rival
+  (history rewound by ping/2 + interpolation, like Struggle) and stops at the standing stones and the hedge; a jump over
+  it dodges it. PC fires toward the mouse, phones the way you face (bent up to 26 degrees toward a rival). The real avatar
+  is hidden locally and the capy (the original game's look: potato body, square head, orange on its head, snack cannon,
+  a scarf in the player's colour) follows its root.
+- **Checked on a real server (Open Cloud):** 12-player round with the client half, 2 people + 10 bots, phone HUD at five
+  sizes: see the mode_check lines in the report. Test bots are far better eaters than people, so their 400+ KG finals are
+  not a balance signal (a capy stops growing visually at about 160 KG).
+- **Not done / owner's calls:**
+  - No uploaded meshes yet: the capy, snacks, shell and stones are rounded-part fallbacks (ellipsoids), as the original game's
+    own fallback capy is. A mesh pass (`tools/meshgen/props/CapyGoBoom.py`, then `upload_assets.py`) is optional.
+  - No portal preview yet (`tools/preview/make_preview.py CapyGoBoom`), so its portal shows the icon-and-name card.
+  - No round song yet, so it plays "Panic Mode" (a new song needs a new pack: one of the owner's monthly audio uploads).
+  - `IsNew = true` (a vote boost while new; 4 of 31 games).
+  - Only a real playtest can confirm: the feel of BOOM and the aim on phones, how the avatar-hiding and the capy look on
+    different devices, the camera with a big capy, and the balance (final weights, how often pops happen).
+
 ## Session B in flight (2026-10-22 03:15 UTC)
 
 - **Live version 34** (published 02:38 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `1f08776`, on the

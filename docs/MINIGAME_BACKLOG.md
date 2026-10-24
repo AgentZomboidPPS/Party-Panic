@@ -167,3 +167,22 @@ bots read the hints, clumsy ones sometimes take the TNT) and time jumps and lean
 Race, Duration 75-90 (a time-out), MinPlayers 1, IsTeam false. Props as real meshes: riveted mine carts with each
 player's colour trim and badge, curved rail segments (merged into few meshes for phones), wooden trestles and supports,
 TNT crates, junction signs, glowing crystals, lanterns, a cave entrance and a sunlit exit with a FINISH banner.
+
+## 30. Capy Go Boom (`CapyGoBoom`, Versus)
+
+Added by the owner on 2026-10-24: "Can you take Capy to boom. Make it into a mini game for party panic?" CAPY GO BOOM is
+the owner's other Roblox game (repo Capy-Go-Boom): capybaras eat snacks to grow huge and blast each other with snack
+cannons, and a popped capy spills about half its size as food. This is that loop as a 75 second round. Everyone is a
+20 KG capybara (drawn on the player's own character, the avatar is hidden on each screen) on a hedged lawn with a hot
+spring, standing stones and snacks lying about. Walking over a snack eats it (cookie 2, cupcake 4, melon 9, golden melon
+25 KG) and the capy grows; its drawn size, hit circle and eating reach follow its weight and a bigger capy is a little
+slower. BOOM (a button, E, or a click on PC) fires the snack cannon: a shell flies 64 studs at 80 studs/s, one every 0.9 s, bent toward a
+rival close to the aim (phones: the way you face, a 26 degree cone; PC: where the mouse points). A hit "pops" the victim:
+a fifth of its weight (a quarter for the leader, at least 3, never below 10 KG) spills as snacks that fly back toward the
+shooter, the victim is thrown, staggers 0.45 s and blinks safe for 1.5 s. Nobody is ever out. Two SNACK DROPS (a beam of
+light 2.5 s ahead, then a golden melon and a dozen snacks fall there) and, for the last 12 s, a FEAST (every snack on
+the lawn counts double; a spill never does, so pops only move weight around) give comebacks. The biggest capy at the buzzer wins (ties: most pops). The server owns weights, snacks,
+shells and hits (judged against where the shooter saw each rival, like Struggle); bots use the same controls with
+skill-based aim, leading and dodging. Category Versus, Duration 75, MinPlayers 2, IsTeam false. Props (rounded-part
+fallbacks, no uploaded meshes yet): the capybara from the original game (potato body, square head, an orange on its
+head, a snack cannon on its side, a scarf in the player's colour), the four snacks, the shell and the standing stones.
