@@ -1,6 +1,20 @@
 # Handoff: Party Panic (for the next Claude)
 
-**On this branch since version 58 (not published yet):**
+**On this branch since version 59 (not published yet):**
+- **Server merging** (owner: "Is there a way to merge severs automatically that are getting low?", then "Also push"; I
+  proposed a STAY button, 3 real players and an on/off switch). `Services/MergeService` with the rules in
+  `Shared/Logic/ServerMerge` (tested) and the card in `Controllers/ServerMoveController`. Every public server lists itself
+  in the memory store sorted map `PP_Servers` (real players, place version) every 30 s. A server with 1 to 3 real players
+  for 2 lobbies in a row finds the fullest server on its version with room for everyone plus a spare seat, and bigger
+  than it, shows a 10 s "Moving you to a busier party!" card with STAY HERE, then teleports everyone who didn't press it
+  (`TeleportAsync` with `ServerInstanceId`). Parties are put back together on arrival (`PartyLogic.Reunite`). Who moved
+  is in the memory store `PP_Moves`; the teleport data carries only that entry's key, because teleport data passes
+  through the player's device and could be made up. Someone who pressed STAY isn't asked again on that server; a server
+  people just moved to doesn't move anyone for 5 minutes. A round starting during the countdown calls it off. Off with
+  `Config.Merge.Enabled = false`; never in Studio, harness runs or private servers. **Not testable here** (Open Cloud
+  servers can't teleport): after the push, watch for `[PartyPanic:Merge]` warnings in the live console.
+
+**Live in version 59 (2026-10-24, on the owner's "Also push"):**
 - **Last Dancer's standings showed twice on PC** (owner, with a screenshot: "Why is this duplicated?"): the mode's own
   STANDINGS (for anyone out or watching: groove %, ranked as the cut ranks) sat where the round's board (points) is. The
   mode sets the client attribute `PP_OwnStandings` while its board shows and `RoundController` hides its own meanwhile

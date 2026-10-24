@@ -527,7 +527,7 @@ local order = {
 	"RewardsController", "CelebrationController", "GoldPassController", "TitleController",
 	"CupController", "InviteController", "PartyController", "SquadController", "PartyWorldController", "MedalController",
 	"HallOfFameController", "EventController", "SeasonWorldController", "CrateController",
-	"EmoteController", "SpectateController", "SuggestionController", "OnboardingController", "SkeeBallController", "AssetReportController",
+	"EmoteController", "SpectateController", "SuggestionController", "ServerMoveController", "OnboardingController", "SkeeBallController", "AssetReportController",
 	"BotWatchController",
 }
 -- The ScreenGuis, made with init.client.luau's own properties (see screen_guis() in the script).
@@ -1536,6 +1536,15 @@ do
 	__crateChecks = checks
 	task.wait(0.5)
 end
+
+-- 3e. "Moving you to a busier party!" with STAY (Controllers/ServerMoveController; Services/MergeService
+-- sends it to a quiet server's players), then called off.
+step = "ServerMove"
+__fire("ServerMove", "Countdown", 10)
+task.wait(1)
+snap("Server move")
+__fire("ServerMove", "Cancel")
+task.wait(0.3)
 
 -- 4. A whole round, phase by phase, with three toasts on screen in the lobby. The vote shows the
 -- fullest cards: the two longest names and the longest objective (that game is the one played).

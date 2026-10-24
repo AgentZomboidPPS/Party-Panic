@@ -35,6 +35,19 @@ Config.Session = {
 	RecentGameMemory = 2,
 }
 
+-- Merging quiet servers (owner: "Is there a way to merge severs automatically that are getting
+-- low?"; Services/MergeService, Logic/ServerMerge): a server with Low real players or fewer for
+-- Lobbies lobbies in a row moves them, after a Countdown-second card with STAY, to the fullest busier
+-- server on the same version with room. Enabled = false turns it off.
+Config.Merge = {
+	Enabled = true,
+	Low = 3, -- real players at most for a server to count as quiet
+	Lobbies = 2, -- quiet lobbies in a row before it moves its people
+	Countdown = 10, -- seconds of the card (with STAY) before the move
+	Interval = 30, -- seconds between listing this server's player count for the others
+	Cooldown = 300, -- seconds after a move (or a try) before it tries again
+}
+
 -- Bots: friendly AI players that fill empty spots so every round feels full. They fade in when
 -- someone leaves and fade out when someone joins (after their round if they're playing one).
 Config.Bots = {
@@ -95,6 +108,7 @@ Config.RateLimits = {
 	SitOut = { 4, 4 }, -- the sit-out switch: a few quick changes of mind, not a stream
 	Crate = { 8, 4 }, -- the crates: open, buy keys, the season's welcome (Services/CrateService)
 	Suggest = { 3, 10 }, -- the suggestion box (Services/SuggestionService adds one a minute on top)
+	ServerMove = { 3, 10 }, -- STAY on the "moving you to a busier party" card (Services/MergeService)
 }
 
 Config.EmoteCooldown = 1.5

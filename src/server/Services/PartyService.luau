@@ -317,6 +317,28 @@ function PartyService.Init()
 	RoundEvents.Finished:Connect(onRoundFinished)
 end
 
+-- The user ids of `player`'s party, leader first (nil when they're on their own): MergeService takes
+-- parties along when it moves people to another server.
+function PartyService.MembersOf(player: Player): { number }?
+	local party = model:PartyOf(player)
+	if not party then
+		return nil
+	end
+	local ids = {}
+	for _, member in party.Members do
+		table.insert(ids, member.UserId)
+	end
+	return ids
+end
+
+-- `player` arrived from another server with `mateId`, their party there: they're in one again here.
+function PartyService.Reunite(player: Player, mateId: number)
+	local mate = personHere(mateId)
+	if mate and mate ~= player and model:Reunite(mate, player) then
+		handle()
+	end
+end
+
 -- Each party's look and streak as everyone sees it (the harness checks read it).
 function PartyService.Looks(): { [string]: any }
 	local ok, decoded = pcall(HttpService.JSONDecode, HttpService, published)

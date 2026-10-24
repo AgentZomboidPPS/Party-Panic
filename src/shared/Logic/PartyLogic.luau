@@ -114,6 +114,20 @@ local function emit(self: Model, event: Event)
 	table.insert(self.Events, event)
 end
 
+-- Puts `to` (in no party) in `from`'s party, or starts one with `from` leading.
+local function seat(self: Model, from: any, to: any): Party
+	local joined: Party = self.ByMember[from] or { Id = 0, Members = { from } }
+	if joined.Id == 0 then
+		self.NextId += 1
+		joined.Id = self.NextId
+		self.ByMember[from] = joined
+	end
+	table.insert(joined.Members, to)
+	self.ByMember[to] = joined
+	emit(self, { Kind = "Joined", Party = joined, Member = to })
+	return joined
+end
+
 -- Removes the invites `drop` says to, telling why.
 local function dropInvites(self: Model, why: string, drop: (Invite) -> boolean)
 	for index = #self.Invites, 1, -1 do
@@ -216,15 +230,7 @@ function PartyLogic.Answer(self: Model, to: any, from: any, join: boolean): stri
 	end
 	emit(self, { Kind = "InviteGone", Invite = invite, Why = "Joined" })
 	PartyLogic.Leave(self, to)
-	local joined: Party = party or { Id = 0, Members = { from } }
-	if not party then
-		self.NextId += 1
-		joined.Id = self.NextId
-		self.ByMember[from] = joined
-	end
-	table.insert(joined.Members, to)
-	self.ByMember[to] = joined
-	emit(self, { Kind = "Joined", Party = joined, Member = to })
+	local joined = seat(self, from, to)
 	-- Invites between people now in one party mean nothing any more, and a party that's full can't
 	-- take anyone its people asked.
 	local full = #joined.Members >= PartyLogic.MaxSize
@@ -235,6 +241,20 @@ function PartyLogic.Answer(self: Model, to: any, from: any, join: boolean): stri
 		return full and self.ByMember[other.From] == joined
 	end)
 	return "Joined"
+end
+
+-- Puts `member` in `with`'s party, or starts one with `with` leading, without an invite: people who
+-- were a party on another server and moved here together (Services/MergeService). Returns whether
+-- it did (not when `member` is in a party already or `with`'s is full).
+function PartyLogic.Reunite(self: Model, with: any, member: any): boolean
+	if with == member or self.ByMember[member] then
+		return false
+	end
+	if sizeOf(self, with) >= PartyLogic.MaxSize then
+		return false
+	end
+	seat(self, with, member)
+	return true
 end
 
 -- Someone left the server: out of their party, and every invite from or to them is gone.

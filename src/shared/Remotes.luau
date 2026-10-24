@@ -37,6 +37,7 @@ local NAMES = {
 	"GoldPass", -- both ways: "Prompt" (buy the GOLD PASS), "Unlocked" (what it gave); see Services/GoldPassService
 	"Crate", -- both ways: open crates, buy and gift keys; the openings everyone sees; see Services/CrateService
 	"Suggest", -- both ways: (kind, text) the suggestion box, and (ok, words) back; see Services/SuggestionService
+	"ServerMove", -- both ways: ("Countdown", seconds) / ("Cancel") the move to a busier server, ("Stay"); see Services/MergeService
 }
 
 local Remotes = {}

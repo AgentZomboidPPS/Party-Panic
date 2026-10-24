@@ -32,6 +32,7 @@ local order = {
 	"CupService",
 	"FriendsService",
 	"PartyService", -- parties: same team in team games (RoundContext reads its PP_Party)
+	"MergeService", -- quiet servers move their people to busier ones (after PartyService: parties go too)
 	"MedalService",
 	"LeaderboardService",
 	"EventService",

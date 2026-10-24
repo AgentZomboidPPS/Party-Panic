@@ -102,6 +102,7 @@ local order = {
 	"EmoteController",
 	"SpectateController",
 	"SuggestionController", -- the suggestion box (Settings' 💡, the lobby's mailbox)
+	"ServerMoveController", -- "Moving you to a busier party!" with STAY (Services/MergeService)
 	"OnboardingController",
 	"MiniGameController",
 	"SkeeBallController",

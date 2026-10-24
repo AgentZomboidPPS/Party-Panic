@@ -190,4 +190,15 @@ test("PartyLogic: crossing invites, one answered: the other one goes", function(
 	expectEqual(names((model:PartyOf(ann) :: PartyLogic.Party).Members), { "Bo", "Ann" })
 end)
 
+test("PartyLogic: a party that moved servers together is put back without invites", function()
+	local model = PartyLogic.new()
+	local ann, bo, cy = people("Ann", "Bo", "Cy")
+	expectTrue(model:Reunite(ann, bo), "Bo joins Ann")
+	expectEqual(kinds(model:Drain()), { "Joined" })
+	expectTrue(model:Reunite(bo, cy), "Cy joins Bo's party")
+	expectEqual(names((model:PartyOf(ann) :: PartyLogic.Party).Members), { "Ann", "Bo", "Cy" })
+	expectEqual(model:Reunite(ann, cy), false, "already in it")
+	expectEqual(model:Reunite(ann, ann), false)
+end)
+
 return nil
