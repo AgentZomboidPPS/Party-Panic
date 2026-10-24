@@ -1,3 +1,5 @@
+local fs = require("@lune/fs")
+
 local TestKit = require("./TestKit")
 local LastDancer = require("../src/shared/Logic/LastDancer")
 local Chart = require("../src/shared/LastDancerChart")
@@ -288,6 +290,26 @@ test("a perfect player in every cut stays in; a player who never taps is cut fir
 		{ Key = "idle", Groove = idle.Groove, Score = idle.Score, Order = 2 },
 	}, 1)
 	expectEqual(cut[1], "idle")
+end)
+
+test("every Logic.X the mode's files use exists (these files aren't type checked strictly)", function()
+	local types = { Dancer = true, Entry = true, Note = true, Chart = true, Outcome = true }
+	for _, path in
+		{
+			"src/server/MiniGames/LastDancer.luau",
+			"src/server/MiniGames/Bots/LastDancer.luau",
+			"src/client/MiniGames/LastDancer.luau",
+			"tools/checks/bots/LastDancer.luau",
+		}
+	do
+		local source = string.gsub(fs.readFile(path), "[^\n]*require%([^\n]*", "") -- (not the require lines)
+		for member in string.gmatch(source, "Logic%.([%w_]+)") do
+			expectTrue(
+				(LastDancer :: any)[member] ~= nil or types[member],
+				`{path} uses Logic.{member}, which doesn't exist`
+			)
+		end
+	end
 end)
 
 return nil
