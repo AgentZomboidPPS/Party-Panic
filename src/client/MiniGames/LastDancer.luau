@@ -433,14 +433,16 @@ function LastDancer.Start(api)
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.15) },
 	})
-	-- Announcements (who is about to fall, who fell) and, before the first one, the hint.
+	-- Announcements (who is about to fall, who fell) and, before the first one, the hint. On phones it's
+	-- only as wide as its words and a little right of the middle, towards the highway, clear of the
+	-- thumbstick's corner (and the hint is shown here too, for the same reason).
 	local banner = UIKit.Label({
 		Name = "Banner",
 		Text = "",
 		Font = Theme.Fonts.Display,
 		TextSize = 28,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, y + 96),
+		Position = UDim2.new(0.5, if touch then 50 else 0, 0, y + 96),
 		Size = UDim2.fromOffset(600, 34),
 		TextTransparency = 1,
 		Parent = hud,
@@ -451,15 +453,18 @@ function LastDancer.Start(api)
 			api:Hint("", y + 96)
 		end
 	end
-	local function showBanner(text: string, color: Color3?)
+	local function showBanner(text: string, color: Color3?, life: number?)
 		hideHint()
+		if touch then
+			banner.Size = UDim2.fromOffset(math.min(520, UIKit.TextWidth(text, 28, Theme.Fonts.Display) + 24), 34)
+		end
 		banner.Text = text
 		banner.TextColor3 = color or Color3.new(1, 1, 1)
 		banner.TextTransparency = 0
 		UIKit.PopIn(banner, 0.25)
 		local stamp = os.clock()
 		banner:SetAttribute("Stamp", stamp)
-		task.delay(2.6, function()
+		task.delay(life or 2.6, function()
 			if banner.Parent and banner:GetAttribute("Stamp") == stamp then
 				UIKit.Tween(banner, 0.4, { TextTransparency = 1 })
 			end
@@ -947,7 +952,11 @@ function LastDancer.Start(api)
 		applyMode() -- (who is still dancing may have changed: it also updates the standings)
 	end
 
-	api:Hint("Step on each arrow as it lands!", y + 96)
+	if touch then
+		showBanner("Step on each arrow as it lands!", nil, 7)
+	else
+		api:Hint("Step on each arrow as it lands!", y + 96)
+	end
 	task.delay(9, hideHint)
 
 	-- Every frame ---------------------------------------------------------------------------------------

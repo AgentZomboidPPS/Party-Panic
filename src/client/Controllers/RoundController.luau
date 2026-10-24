@@ -42,6 +42,7 @@ local GameState = require(Shared.GameState)
 local RoundHud = require(Shared.Logic.RoundHud)
 local Teams = require(Shared.Teams)
 
+local Haptics = require(script.Parent.Parent.Haptics)
 local Participants = require(script.Parent.Parent.Participants)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -502,13 +503,15 @@ function refreshBoard()
 	-- about half the board; names give way and are shortened if they must.
 	local textSize = if touch then 19 else 18
 	local scoreWidth = if touch then 60 else 76
+	local needs: { [number]: number } = {}
 	for _, index in shown do
 		local entry = entries[index]
 		local plain = if entry.text ~= "" then entry.text else tostring(entry.score)
 		local ok, bounds =
 			pcall(TextService.GetTextSize, TextService, plain, textSize, Theme.Fonts.Bold, Vector2.new(1000, 100))
 		if ok then
-			scoreWidth = math.max(scoreWidth, math.ceil(bounds.X) + 8)
+			needs[index] = math.ceil(bounds.X) + 8
+			scoreWidth = math.max(scoreWidth, needs[index])
 		end
 	end
 	scoreWidth = math.min(scoreWidth, if touch then 120 else 140)
@@ -545,10 +548,13 @@ function refreshBoard()
 			Parent = row,
 		})
 		nameLabel:SetAttribute("PP_TruncateOk", true)
+		-- (a score longer than the column, "16 dmg · 2 saved", shrinks to fit rather than being cut off)
+		local tight = (needs[index] or 0) > scoreWidth
 		UIKit.Label({
 			Text = detail,
 			RichText = true,
 			TextSize = textSize,
+			TextScaled = tight,
 			TextWrapped = false,
 			TextXAlignment = Enum.TextXAlignment.Right,
 			TextColor3 = color,
@@ -556,6 +562,7 @@ function refreshBoard()
 			Position = UDim2.fromScale(1, 0),
 			Size = UDim2.new(0, scoreWidth, 1, 0),
 			Parent = row,
+			Children = if tight then { UIKit.new("UITextSizeConstraint", { MaxTextSize = textSize }) } else nil,
 		})
 	end
 end
@@ -696,6 +703,7 @@ function RoundController.Start(context)
 			showRules()
 		elseif phase == "InRound" and State.InRound() then
 			flashCountdown("GO!", Theme.Colors.Green)
+			Haptics.Play("Pulse")
 		end
 		boardRoot.Visible = phase == "InRound"
 		boardOpenUntil = 0
@@ -715,6 +723,7 @@ function RoundController.Start(context)
 		if GameState.Get("Phase") == "InRound" and State.InRound() and not State.Alive() then
 			outPanel.Visible = true
 			UIKit.PopIn(outPanel, 0.35)
+			Haptics.Play("Thud")
 		end
 	end)
 	-- A bot fading in or out shows up in the standings right away.

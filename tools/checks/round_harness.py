@@ -242,7 +242,20 @@ def slim(text: str) -> str:
     1 MiB, and the biggest bundles come within a few dozen KB of it."""
     text = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", text)
     text = re.sub(r"(?m)^([^\"'`\[\n]*?\S)[ \t]+--(?!\[)[^\n]*$", r"\1", text)
+    text = "\n".join(_cut_after_strings(line) for line in text.split("\n"))
     return re.sub(r"(?m)^[ \t]+", "", text)
+
+
+def _cut_after_strings(line: str) -> str:
+    """A comment after code on a line with strings, when its "--" comes after the line's last quote
+    (so it can't be inside a string; a quote in the comment itself keeps the line as it is)."""
+    if "--" not in line or "[[" in line or "[=" in line:
+        return line
+    last = max(line.rfind('"'), line.rfind("'"), line.rfind("`"))
+    at = line.find("--", last + 1) if last >= 0 else -1
+    if at > 0 and line[at - 1] in " \t" and line[at + 2 : at + 3] != "[" and line[:at].strip():
+        return line[:at].rstrip()
+    return line
 
 
 PRELUDE_RAW = (Path(__file__).resolve().parent / "gui_dump.luau").read_text() + (

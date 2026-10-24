@@ -85,6 +85,7 @@ return {
 	Settings = {
 		ReducedEffects = false,
 		MusicVolume = 0.5, -- 0 = off; the client also starts quiet and fades in
+		Vibration = true, -- phones and gamepads buzz at GO, a win, a knockout, a mode's button (client/Haptics)
 	},
 	Meta = {
 		FirstJoin = 0,

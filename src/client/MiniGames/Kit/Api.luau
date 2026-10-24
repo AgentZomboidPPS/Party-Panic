@@ -46,6 +46,7 @@ local Signal = require(Shared.Signal)
 
 local AudioController = require(script.Parent.Parent.Parent.Controllers.AudioController)
 local EffectsController = require(script.Parent.Parent.Parent.Controllers.EffectsController)
+local Haptics = require(script.Parent.Parent.Parent.Haptics)
 local Participants = require(script.Parent.Parent.Parent.Participants)
 local State = require(script.Parent.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.Parent.UI.Theme)
@@ -83,6 +84,9 @@ local eventRemote = Remotes.Get("MiniGameEvent")
 local HINT_FADE = 6 -- seconds a hint is on screen before it fades (a new hint comes back)
 local HINT_FADE_TIME = 0.6
 local HINT_STROKE = 0.2
+-- A hint's words: on phones a size up, as the mode HUDs are drawn at 3/4 there (about 14 points on a
+-- phone instead of 12: owner, "I want playing on mobile to feel really good.").
+local HINT_SIZE, HINT_TOUCH_SIZE = 26, 31
 local SHIFT_TIME = 0.25 -- the TopHud's move with the status line (HudController's team pill's too)
 
 function Api.new(id: string)
@@ -420,15 +424,29 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 	end
 	local scale = UIKit.new("UIScale", { Parent = button })
 
+	-- On a phone a hold lasts until that finger lifts, wherever it slides meanwhile (owner: "I want
+	-- playing on mobile to feel really good."): a thumb drifting off the button's edge mid-pump or
+	-- mid-dive no longer lets go.
+	local holdingTouch: InputObject? = nil
+	local touchWatch: RBXScriptConnection? = nil
+	local function forgetTouch()
+		holdingTouch = nil
+		if touchWatch then
+			touchWatch:Disconnect()
+			touchWatch = nil
+		end
+	end
 	local function press()
 		if not enabled or isDown or not canAct then
 			return
 		end
 		isDown = true
 		scale.Scale = 0.9
+		Haptics.Play("Tap")
 		pressed:Fire()
 	end
 	local function release()
+		forgetTouch()
 		if not isDown then
 			return
 		end
@@ -447,9 +465,39 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 		canAct = value
 		refreshShown()
 	end)
+	self.Janitor:Add(button.InputBegan:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.Touch or holdingTouch then
+			return
+		end
+		press()
+		if isDown then
+			holdingTouch = input
+			touchWatch = input.Changed:Connect(function()
+				local state = input.UserInputState
+				if state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
+					release()
+				end
+			end)
+		end
+	end))
+	self.Janitor:Add(UserInputService.TouchEnded:Connect(function(touch)
+		if touch == holdingTouch then
+			release()
+		end
+	end))
+	self.Janitor:Add(forgetTouch)
+	-- (A mouse, or a touch the InputBegan above didn't take: the button's own edges.)
 	self.Janitor:Add(button.MouseButton1Down:Connect(press))
-	self.Janitor:Add(button.MouseButton1Up:Connect(release))
-	self.Janitor:Add(button.MouseLeave:Connect(release))
+	self.Janitor:Add(button.MouseButton1Up:Connect(function()
+		if not holdingTouch then
+			release()
+		end
+	end))
+	self.Janitor:Add(button.MouseLeave:Connect(function()
+		if not holdingTouch then
+			release()
+		end
+	end))
 	if options.Key then
 		local key = options.Key
 		self.Janitor:Add(UserInputService.InputBegan:Connect(function(input, processed)
@@ -651,7 +699,7 @@ function Api.Hint(self: Api, text: string, y: number?)
 			Name = "Hint",
 			Text = "",
 			Font = Theme.Fonts.Display,
-			TextSize = 26,
+			TextSize = if self:IsTouch() then HINT_TOUCH_SIZE else HINT_SIZE,
 			AnchorPoint = Vector2.new(0.5, 0),
 			Size = UDim2.fromOffset(620, 64),
 			TextYAlignment = Enum.TextYAlignment.Top,
@@ -684,9 +732,9 @@ function Api.Hint(self: Api, text: string, y: number?)
 	if self:IsTouch() then
 		-- Phones: only as wide (and as tall) as the words, so the line stays clear of the thumbstick's
 		-- corner and of anything a mode shows under it.
-		local width = UIKit.TextWidth(text, 26, Theme.Fonts.Display) + 24
+		local width = UIKit.TextWidth(text, HINT_TOUCH_SIZE, Theme.Fonts.Display) + 24
 		local oneLine = width <= 620 and not string.find(text, "\n", 1, true)
-		hint.Size = UDim2.fromOffset(math.min(620, math.ceil(width)), if oneLine then 36 else 64)
+		hint.Size = UDim2.fromOffset(math.min(620, math.ceil(width)), if oneLine then 42 else 76)
 	end
 end
 

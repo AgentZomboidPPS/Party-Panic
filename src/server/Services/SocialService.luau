@@ -23,6 +23,7 @@ local lastEmote: { [Player]: number } = {}
 local SETTINGS_SCHEMA = {
 	ReducedEffects = "boolean",
 	MusicVolume = "number",
+	Vibration = "boolean",
 }
 
 local function rootOf(player: Player): BasePart?

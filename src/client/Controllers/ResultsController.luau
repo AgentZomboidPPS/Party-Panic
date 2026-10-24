@@ -64,6 +64,7 @@ local Placement = require(Shared.Logic.Placement)
 local Remotes = require(Shared.Remotes)
 
 local AudioController = require(script.Parent.AudioController)
+local Haptics = require(script.Parent.Parent.Haptics)
 local Participants = require(script.Parent.Parent.Participants)
 local State = require(script.Parent.Parent.State)
 local Modal = require(script.Parent.Parent.UI.Modal)
@@ -556,6 +557,9 @@ local function show(data)
 	refreshRating()
 	modal:Open()
 	AudioController.Play(if data.Place == 1 then "Victory" else "Results")
+	if data.Place == 1 then
+		Haptics.Play("Pulse")
+	end
 end
 
 function ResultsController.Start(context)
