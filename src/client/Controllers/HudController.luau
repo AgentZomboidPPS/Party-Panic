@@ -510,19 +510,9 @@ local function followStatusRow(row: StatusRow)
 		-- The room: kept while there's something to say (the line, even faded, or a callout), let go
 		-- a few seconds after there's nothing; decided before and during the round only, so the mode
 		-- HUD is already in place at GO and stays put through the results.
-		-- Phones: the standings strip (RoundController) while the round is on. For its players it takes
-		-- the line's place once the line has faded (or has nothing to say), so the mode HUDs keep their
-		-- spot; for anyone watching it sits above their line.
-		local board = row.Holder and row.Holder:FindFirstChild("Leaderboard")
-		local boardOn = false
-		if board and board:IsA("GuiObject") then
-			boardOn = phase == "InRound" and (not participant or not (label.Visible or calloutUp))
-			board.Visible = boardOn
-		end
-		local boardHeight = if board and board:IsA("GuiObject") then board.Size.Y.Offset else 0
 
 		if phase == "Preparing" or phase == "InRound" then
-			local wanted = calloutUp or boardOn or (if participant then rest ~= "" else true)
+			local wanted = calloutUp or (if participant then rest ~= "" else true)
 			if wanted then
 				reserved = true
 				emptySince = nil
@@ -534,6 +524,18 @@ local function followStatusRow(row: StatusRow)
 			end
 		end
 
+		-- Phones: the standings strip (RoundController) while the round is on. For its players it takes
+		-- the line's room once the line has faded, so the mode HUDs keep their spot: not when the line
+		-- has no room (a mode with nothing to say there has its own HUD up top), nor in a team round
+		-- (the team pill is the race there). For anyone watching it sits above their line.
+		local board = row.Holder and row.Holder:FindFirstChild("Leaderboard")
+		local boardOn = false
+		if board and board:IsA("GuiObject") then
+			local lineBusy = label.Visible or calloutUp or row.Teams.Visible
+			boardOn = phase == "InRound" and (not participant or (reserved and not lineBusy))
+			board.Visible = boardOn
+		end
+		local boardHeight = if board and board:IsA("GuiObject") then board.Size.Y.Offset else 0
 		-- (Watchers: the line under the strip.)
 		local below = if boardOn and not participant then boardHeight + 4 else 0
 		if row.LineTop + below ~= lineY then

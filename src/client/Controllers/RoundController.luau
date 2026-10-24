@@ -343,7 +343,7 @@ end
 
 -- PC: the standings sit under the profile card, clear of the tips panel now that bots keep the
 -- board full. Phones: the strip (scaled units, in the round status row; a long name is shortened).
-local STRIP_H, STRIP_TEXT, STRIP_NAME = 40, 20, 92
+local STRIP_H, STRIP_TEXT, STRIP_NAME, STRIP_SCORE = 34, Theme.Touch.MinText, 96, 84
 local SCORE_MAX = 104 -- PC: the score column's widest (the board's rows are 246 wide)
 local PLACE_COLORS = { Color3.fromRGB(255, 200, 60), Color3.fromRGB(205, 210, 225), Color3.fromRGB(215, 135, 75) }
 
@@ -397,6 +397,22 @@ end
 
 local boardKey = ""
 
+-- A score for the strip: its words if they fit, else their first part ("22 · 1 saved": "22"), else
+-- the first number in them ("Tagged at 7s": "7s").
+local function stripScore(text: string): string
+	local function fits(words: string): boolean
+		return UIKit.TextWidth(words, STRIP_TEXT, Theme.Fonts.Display) <= STRIP_SCORE
+	end
+	if fits(text) then
+		return text
+	end
+	local first = string.match(text, "^(.-)%s*[•·]") or text
+	if first ~= "" and fits(first) then
+		return first
+	end
+	return string.match(text, "%d[%d,%.]*%%?%a?") or first
+end
+
 -- Phones: the strip's words, laid out left to right (LIVE, then each place's number, name and score).
 local function drawStrip(entries: { any })
 	local mine = nil
@@ -411,7 +427,7 @@ local function drawStrip(entries: { any })
 		Name = "Live",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, x, 0.5, 0),
-		Size = UDim2.fromOffset(60, 26),
+		Size = UDim2.fromOffset(56, 24),
 		BackgroundColor3 = Theme.Colors.Red,
 		LayoutOrder = 0,
 		Parent = board,
@@ -425,7 +441,7 @@ local function drawStrip(entries: { any })
 		Size = UDim2.fromScale(1, 1),
 		Parent = live,
 	})
-	x += 60 + 10
+	x += 56 + 10
 	for _, index in shown do
 		local entry = entries[index]
 		local who = entry.who
@@ -436,16 +452,17 @@ local function drawStrip(entries: { any })
 			elseif teamColor then teamColor
 			elseif entry.alive then Theme.Colors.Text
 			else Theme.Colors.TextDim
-		local score = Participants.Escape(if entry.text ~= "" then entry.text else tostring(entry.score))
+		local score = Participants.Escape(stripScore(if entry.text ~= "" then entry.text else tostring(entry.score)))
 		local plainName = string.gsub(name, "<[^>]+>", "")
 		local plainScore = string.gsub(score, "<[^>]+>", "")
 		local nameWidth = math.min(STRIP_NAME, math.ceil(UIKit.TextWidth(plainName, STRIP_TEXT, Theme.Fonts.Bold)) + 2)
-		local scoreWidth = math.min(80, math.ceil(UIKit.TextWidth(plainScore, STRIP_TEXT, Theme.Fonts.Display)) + 2)
+		local scoreWidth =
+			math.min(STRIP_SCORE, math.ceil(UIKit.TextWidth(plainScore, STRIP_TEXT, Theme.Fonts.Display)) + 2)
 		local place = UIKit.new("Frame", {
 			Name = `Place{index}`,
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, x, 0.5, 0),
-			Size = UDim2.fromOffset(28 + 6 + nameWidth + 6 + scoreWidth, STRIP_H),
+			Size = UDim2.fromOffset(26 + 6 + nameWidth + 6 + scoreWidth, STRIP_H),
 			BackgroundTransparency = 1,
 			LayoutOrder = index,
 			Parent = board,
@@ -454,7 +471,7 @@ local function drawStrip(entries: { any })
 			Name = "Badge",
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.fromScale(0, 0.5),
-			Size = UDim2.fromOffset(28, 28),
+			Size = UDim2.fromOffset(26, 26),
 			BackgroundColor3 = PLACE_COLORS[index] or Theme.Colors.PanelDark,
 			Parent = place,
 			Children = { UIKit.Round(), UIKit.Stroke(nil, 1.5, 0.4) },
@@ -476,26 +493,27 @@ local function drawStrip(entries: { any })
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = color,
-			Position = UDim2.fromOffset(34, 0),
+			Position = UDim2.fromOffset(32, 0),
 			Size = UDim2.new(0, nameWidth, 1, 0),
 			Parent = place,
 			Children = { UIKit.TextStroke(0.3) },
 		})
 		nameLabel:SetAttribute("PP_TruncateOk", true)
-		UIKit.Label({
+		local scoreLabel = UIKit.Label({
 			Text = score,
 			RichText = true,
 			Font = Theme.Fonts.Display,
 			TextSize = STRIP_TEXT,
 			TextWrapped = false,
-			TextScaled = scoreWidth >= 80,
+			TextTruncate = Enum.TextTruncate.AtEnd,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = Theme.Colors.Yellow,
-			Position = UDim2.fromOffset(34 + nameWidth + 6, 0),
+			Position = UDim2.fromOffset(32 + nameWidth + 6, 0),
 			Size = UDim2.new(0, scoreWidth, 1, 0),
 			Parent = place,
-			Children = { UIKit.TextStroke(0.3), UIKit.new("UITextSizeConstraint", { MaxTextSize = STRIP_TEXT }) },
+			Children = { UIKit.TextStroke(0.3) },
 		})
+		scoreLabel:SetAttribute("PP_TruncateOk", true) -- (a last resort: stripScore has shortened it)
 		x += place.Size.X.Offset + 14
 	end
 	board.Size = UDim2.fromOffset(x - 14 + 12, STRIP_H)
