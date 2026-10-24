@@ -61,12 +61,20 @@ snacks count double; spills never do, pops only move weight around) give comebac
 - **Not done / owner's calls:**
   - The shell and the standing stones are still rounded parts (the original game has no such pieces); the capy and the
     snacks are real meshes. Their look in the game itself is unconfirmed: the preview tools can't draw plain meshes.
-  - No portal preview yet (`tools/preview/make_preview.py CapyGoBoom`), so its portal shows the icon-and-name card.
+  - **Portal preview:** made with `tools/preview/make_preview.py CapyGoBoom` (a round on a test server snapshotted at 8 s,
+    24 frames of a camera swaying round the lawn, `assets/previews/CapyGoBoom.jpg`, image 138566127435964, approved) and
+    recorded in `GamePreviews.luau`. The renderer can't draw plain uploaded meshes, so the capybaras, cannons and snacks
+    in it are stand-in shapes (`tools/preview/make_standins.py` writes them to `assets/previews/standins/`; the renderer
+    uses them when `assets/meshes/` has no `.glb`). **Never put those in `assets/meshes/`**: `tools/upload_assets.py`
+    uploads everything there and would swap the real art in the game for the stand-ins. The preview also needed
+    `make_preview.py` to find players that are drawn as figures (`DRAWN_PLAYERS`) rather than avatar rigs. An earlier
+    upload of the sheet with a wrong frame count (decal 111480877783246 / image 95247191577986) is unused; it can be
+    deleted from the owner's Creator Hub.
   - **Song:** "Boom Boom Capybara" (`tools/music/songs/CapyGoBoom.py`: a 118 bpm tropical calypso; steel pans, marimba,
     congas, brass; the finale starts as the FEAST does) is packed as ModePack7 and was uploaded on the owner's "Finish all
-    of the stuff": asset 114585791757431, 7 of the owner's 10 audio uploads this month. It was still in Roblox's review
-    when this was written; until it is approved the game keeps playing "Panic Mode" for this mode by itself
-    (`python3 tools/checks/asset_status.py` shows the state). The song check passes (intro 16.3 s, 81 s after the drop,
+    of the stuff": asset 114585791757431, 7 of the owner's 10 audio uploads this month. Roblox's review has
+    approved it (checked on 2026-10-24: Audio, Approved, Active), so it plays; if it ever isn't approved the game keeps
+    playing "Panic Mode" for this mode by itself (`python3 tools/checks/asset_status.py` shows the state). The song check passes (intro 16.3 s, 81 s after the drop,
     -11.0 LUFS, -1.6 dBTP).
   - `IsNew = true` (a vote boost while new; 4 of 31 games).
   - Only a real playtest can confirm: the feel of BOOM and the aim on phones, how the avatar-hiding and the capy look on

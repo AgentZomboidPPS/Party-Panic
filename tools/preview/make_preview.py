@@ -70,6 +70,8 @@ DEFAULT_CAMERA = {"yaw": 0, "pitch": 30, "distance": 40, "fov": 50, "sway": 10, 
 CAMERAS: dict[str, dict] = {
     # Behind the line of jumpers, looking out over the lava at the Dragon Temple, the rope sweeping
     # along the bridge.
+    # Low over the lawn among the capybaras: blasters out, snacks lying about, the hedge and hills behind.
+    "CapyGoBoom": {"yaw": -30, "pitch": 32, "distance": 40, "fov": 56, "shift": [0, 1, 0], "raise": 4},
     "FireRope": {"yaw": 14, "pitch": 9, "distance": 30, "shift": [0, 2, 0], "raise": 13, "fov": 62},
     # Players on the hexes of the called color, the other colors sinking into the lava, the
     # referee's flag behind.
@@ -244,6 +246,16 @@ def dress_players(parts: list[dict]) -> list[list[float]]:
     return heads
 
 
+# Games that draw each player as their own figure (the client hides the avatar): the prop and the part
+# of it that stands for the player's head.
+DRAWN_PLAYERS = {"CapyBoomCapy": "CapyHead"}
+
+
+def drawn_players(parts: list[dict]) -> list[list[float]]:
+    """The head position of every player a game draws as its own figure instead of an avatar."""
+    return [part["cf"][:3] for part in parts if DRAWN_PLAYERS.get(part.get("prop")) == part["n"]]
+
+
 def player_focus(heads: list[list[float]]) -> list[float]:
     """The middle of the biggest bunch of players (knocked-out ones are back in the lobby, and a
     race spreads out)."""
@@ -290,7 +302,7 @@ def camera_path(cam: dict, focus: list[float], frames: int) -> dict[str, list]:
 def render_frames(game: str, dump: Path, frames: int, samples: int, python: str) -> list[Path]:
     """Step 2: the frames, rendered with Blender."""
     data = json.loads(dump.read_text())
-    heads = dress_players(data["parts"])
+    heads = dress_players(data["parts"]) or drawn_players(data["parts"])
     if not heads:
         raise SystemExit("No players in the snapshot - is the round over already? Try an earlier --dump-at.")
     camera = camera_settings(game)
