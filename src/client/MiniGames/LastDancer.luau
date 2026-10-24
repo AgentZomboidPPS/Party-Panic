@@ -472,12 +472,18 @@ function LastDancer.Start(api)
 		banner.Text = text
 		banner.TextColor3 = color or Color3.new(1, 1, 1)
 		banner.TextTransparency = 0
+		banner.Visible = true
 		UIKit.PopIn(banner, 0.25)
 		local stamp = os.clock()
 		banner:SetAttribute("Stamp", stamp)
 		task.delay(life or 2.6, function()
 			if banner.Parent and banner:GetAttribute("Stamp") == stamp then
 				UIKit.Tween(banner, 0.4, { TextTransparency = 1 })
+				task.delay(0.45, function()
+					if banner:GetAttribute("Stamp") == stamp then
+						banner.Visible = false -- (gone, not just see-through)
+					end
+				end)
 			end
 		end)
 	end
