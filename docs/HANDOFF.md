@@ -46,10 +46,18 @@ snacks count double; spills never do, pops only move weight around) give comebac
   (a thrown error is reported once instead of silently ending eating); a refused press no longer costs a second
   reload; landed snacks update at 30 Hz, the gulp no longer resizes the whole capy; the hint shows at GO; the FEAST
   banner (redundant with the status line, and 8.8 pt on phones) is gone.
-- **Left as they are (design calls / platform-wide):** a capy at 2.1x or bigger can't jump over a shell; the hit
-  circle is smaller than a big capy's drawn long axis (`Rules.HitRadius` is `BODY_R * scale^0.85` on purpose); presses
-  and eats in the last 0.1 s and shells in flight at the buzzer don't count (no HoldEnd); the reload can be beaten by
-  about 6% with ping jitter; no speed or teleport validation (same as the other modes).
+- **Bots are deliberately gentle** (owner: "dont make bots overpowered"). Measured with the test harness (a competent
+  stand-in player among bots; the `GROUPS` line in the round log): the first bot brain hit about 80% of its shots and led
+  every round, on par with a competent person. The tuned one fires a shot every ~6 s, misses by a wide angle with only
+  a partial lead and no aim assist (the server skips assist for bots), dodges rarely and late, dithers and idles,
+  doesn't gang up on the leader, and a bot well ahead of the others holds fire and slows down. Result: one competent
+  person among seven bots finishes ahead in most rounds at about 1.6x their weight; with several people in the lobby
+  they mostly shoot each other and the bots come out about average. The knobs are at the top of `Step` in
+  `Bots/CapyGoBoom.luau` (`skill = bot.Skill * 0.65`, the reaction factor, the fire interval and probability, the aim
+  error, the dither).
+- **Left as they are (design calls / platform-wide):** the hit circle is smaller than a big capy's drawn long axis
+  (`Rules.HitRadius` is `BODY_R * scale^0.85` on purpose); presses and eats in the last 0.1 s and shells in flight at the
+  buzzer don't count (no HoldEnd); no speed or teleport validation (same as the other modes).
 - **Not done / owner's calls:**
   - The shell and the standing stones are still rounded parts (the original game has no such pieces); the capy and the
     snacks are real meshes. Their look in the game itself is unconfirmed: the preview tools can't draw plain meshes.
