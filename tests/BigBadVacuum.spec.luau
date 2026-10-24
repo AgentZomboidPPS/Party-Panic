@@ -1,6 +1,8 @@
 -- Pins Big Bad Vacuum's shared rules (Shared/Logic/BigBadVacuum): sizes scale sanely, every phase's
--- attack menu is fair (never the same twice, a Charge so the core opens), and the geometry the server
--- judges hits with, the bots read and the client draws agrees with itself.
+-- attack menu is fair (never the same twice, a Charge so the core opens), the geometry the server
+-- judges hits with, the bots read and the client draws agrees with itself, and the hearts (owner: "how
+-- do you loose this? maybe after 3 hits or something?"): three each, one per attack that lands, out at
+-- none, and the Vacuum wins once no person is left standing.
 local TestKit = require("./TestKit")
 local Rules = require("../src/shared/Logic/BigBadVacuum")
 
@@ -204,6 +206,43 @@ test("volleys hit harder up to x1.6, and scores add up", function()
 	expectEqual(Rules.Volley(0), 1)
 	expectEqual(Rules.Score(95.4, 2, 15), 95 + 16 + 15)
 	expectEqual(Rules.Score(0, 0, 0), 0)
+end)
+
+test("three hearts: each hit costs one, the third knocks you out, and nothing goes below none", function()
+	expectEqual(Rules.HEARTS, 3)
+	local hearts, out = Rules.HEARTS, false
+	local knockedAt = nil
+	for hit = 1, 5 do
+		hearts, out = Rules.Hurt(hearts)
+		if out and not knockedAt then
+			knockedAt = hit
+		end
+	end
+	expectEqual(knockedAt, 3)
+	expectEqual(hearts, 0)
+	local left, last = Rules.Hurt(2)
+	expectTrue(left == 1 and not last, "two hearts: one left")
+	expectTrue(Rules.CAREFUL_AT >= 1 and Rules.CAREFUL_AT < Rules.HEARTS, "bots get careful before the end")
+	expectTrue(Rules.KO_SHOW > 0 and Rules.KO_SHOW < Rules.DAZE + Rules.SAFE, "the knockout show is short")
+end)
+
+test("one attack costs one heart however long it overlaps you", function()
+	local record = {}
+	expectTrue(Rules.FirstStrike(record, "atk7"), "the swing reaches you")
+	expectTrue(not Rules.FirstStrike(record, "atk7"), "the same swing again: no second heart")
+	expectTrue(Rules.FirstStrike(record, "ring3"), "a different attack does")
+	expectTrue(Rules.FirstStrike(record, "bomb9.1") and Rules.FirstStrike(record, "bomb9.2"), "two bombs, two blasts")
+	expectTrue(not Rules.FirstStrike(record, "ring3"), "the slam's own shockwave doesn't hit twice")
+	-- The grace after a hit is longer than any one attack's hit lasts, so a single hit never chains either.
+	local longest = math.max(Rules.Attacks.Sweep.Act, Rules.Attacks.Whirl.Act, Rules.Attacks.Cord.Act)
+	expectTrue(Rules.DAZE + Rules.SAFE > longest, "grace outlasts a whirl")
+end)
+
+test("the vacuum wins once nobody (no person) is left standing", function()
+	expectTrue(Rules.WipedOut(0, 0), "everyone out")
+	expectTrue(Rules.WipedOut(4, 0), "only bots left: they don't fight on alone")
+	expectTrue(not Rules.WipedOut(1, 1), "one person still up")
+	expectTrue(not Rules.WipedOut(6, 2), "plenty up")
 end)
 
 test("a lobby that plays well can win: the health is within reach of the damage on offer", function()

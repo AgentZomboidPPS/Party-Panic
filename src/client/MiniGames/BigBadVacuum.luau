@@ -15,6 +15,15 @@
 --     they press, then adopts the server's timing); hits make floating numbers, VOLLEY! callouts and sparks.
 --   * The CAMERA gets a flyover during the 3-2-1 (everyone is frozen then), shakes and punches on impacts, and
 --     takes over for the finale. Big banners call out every attack, phase, rescue and the PANIC BLAST.
+--   * HEARTS (the owner played it live and asked: "how do you loose this? maybe after 3 hits or something?"):
+--     this player's three hearts sit right above their THROW button (inside its holder, so they go wherever
+--     Api.Button puts it: bottom middle on PC, beside the jump button on phones, and away when the player
+--     can't act). They are drawn from shapes, like UIKit.Coin, not a glyph. A hit pops the lost one white and
+--     shakes the row, the last one pulses ("LAST HEART!"), and the server's per-player "Hearts" value is
+--     what they show. Someone else's hit floats their hearts left over their head. A KNOCKOUT is a burst and a
+--     "K.O.!" where it happened for everyone, "KNOCKED OUT!" for that player (their buttons go at once; the
+--     round's spectate takes over when they leave), and a short line under the boss bar for the rest ("Mochi
+--     is knocked out! 7 left"). Everyone knocked out: "WIPED OUT!", then the same defeat show as time running out.
 --
 -- The suction's pull is applied here to this player's own character (smooth, like a conveyor), by the same
 -- Rules the server uses to judge who ends up in the bag. Everything made here goes in api.World or through
@@ -227,8 +236,10 @@ function BigBadVacuum.Start(api)
 	local function myRoot(): BasePart?
 		return rootOf(api:CharacterOf(me))
 	end
+	-- Knocked out: out of the fight at once (the round itself lets go of them a moment later, KO_SHOW).
+	local myKnocked = false
 	local function inRound(): boolean
-		return State.Phase() == "InRound" and api:CanAct()
+		return State.Phase() == "InRound" and api:CanAct() and not myKnocked
 	end
 
 	-- Little tools ---------------------------------------------------------------------------------------------------
@@ -1560,9 +1571,24 @@ function BigBadVacuum.Start(api)
 	local subLabel: TextLabel
 	local flashFrame: Frame
 	local callout: (text: string, color: Color3?, sub: string?, hold: number?, priority: number?) -> ()
+	local feed: (text: string) -> () -- a short line under the boss bar (someone else knocked out)
 
 	local function num(value: any): number?
 		return if type(value) == "number" and value == value then value else nil
+	end
+
+	-- A participant's name by UserId, kept short enough for a line under the boss bar.
+	local function nameOf(userId: any): string
+		for _, person in api:Participants() do
+			if person.UserId == userId then
+				local name = person.DisplayName
+				if utf8.len(name) and (utf8.len(name) :: number) > 14 then
+					name = string.sub(name, 1, (utf8.offset(name, 14) :: number) - 1) .. "..."
+				end
+				return name
+			end
+		end
+		return "Someone"
 	end
 
 	local function onEvent(name: string, handler: (...any) -> ())
@@ -1638,7 +1664,7 @@ function BigBadVacuum.Start(api)
 		playAt(SOUND_WHOOSH, at, 1.2, 0.3)
 		shake(1.6)
 		punchFov(7)
-		callout("BIG BAD VACUUM", DANGER, "Beat it together before time runs out!", 2.4, 5)
+		callout("BIG BAD VACUUM", DANGER, "Team up! 3 hits and you're out!", 2.4, 5)
 	end)
 	onEvent("Crash", function(x, z, face)
 		if not (num(x) and num(z) and num(face)) then
@@ -1790,9 +1816,19 @@ function BigBadVacuum.Start(api)
 			api:Sound("Boing")
 		end
 	end)
-	onEvent("Dazed", function(userId, x, y, z)
+	onEvent("Dazed", function(userId, x, y, z, _kind, left)
 		if num(x) and num(y) and num(z) then
 			local at = Vector3.new(x, y + 2, z)
+			-- Someone else's hearts left, over their head (so the lobby sees who is on their last).
+			if userId ~= me and num(left) and left > 0 then
+				floatText(
+					at + Vector3.new(0, 4, 0),
+					string.rep("♥", math.min(left, Rules.HEARTS)),
+					if left <= Rules.CAREFUL_AT then DANGER else Color3.fromRGB(255, 120, 140),
+					18,
+					5
+				)
+			end
 			emit(anchorAt(at, 2), {
 				Texture = SPARKLE,
 				Color = ColorSequence.new(GOLD),
@@ -1815,6 +1851,44 @@ function BigBadVacuum.Start(api)
 					UIKit.Tween(flashFrame, 0.5, { BackgroundTransparency = 1 })
 				end
 			end)
+		end
+	end)
+	-- A knockout: their last heart. A burst and "K.O.!" where it happened for everyone; "KNOCKED OUT!" for them
+	-- (their buttons go at once); a short line under the boss bar for the rest.
+	onEvent("KO", function(userId, x, y, z, _kind, standing)
+		if num(x) and num(y) and num(z) then
+			local at = Vector3.new(x, y + 2, z)
+			fireball(at, 16, Color3.fromRGB(255, 90, 110), 0.45)
+			sparks(at, 36, GOLD, 34)
+			emit(anchorAt(at, 2.5), {
+				Texture = SPARKLE,
+				Color = ColorSequence.new(WHITE, DANGER),
+				LightEmission = 1,
+				Size = NumberSequence.new(2.2, 0.2),
+				Lifetime = NumberRange.new(0.8, 1.4),
+				Speed = NumberRange.new(14, 26),
+				SpreadAngle = Vector2.new(180, 180),
+				Acceleration = Vector3.new(0, -26, 0),
+			}, 18)
+			floatText(at + Vector3.new(0, 5, 0), "K.O.!", DANGER, 34, 10)
+			playAt(SOUND_BOOM, at, 1.3, 0.75)
+			playAt(SOUND_HIT, at, 1, 0.45)
+			shake(1.1, at)
+		end
+		if userId == me then
+			myKnocked = true
+			callout("KNOCKED OUT!", DANGER, "Spectate your team from the HUD", 3, 8)
+			api:Sound("Eliminated")
+			punchFov(8)
+			UIKit.Tween(flashFrame, 0.05, { BackgroundTransparency = 0.35, BackgroundColor3 = DANGER })
+			task.delay(0.1, function()
+				if flashFrame.Parent then
+					UIKit.Tween(flashFrame, 0.9, { BackgroundTransparency = 1 })
+				end
+			end)
+		else
+			local left = num(standing)
+			feed(`{nameOf(userId)} is knocked out!{if left then ` {left} left` else ""}`)
 		end
 	end)
 	onEvent("Pickup", function(userId)
@@ -1954,9 +2028,13 @@ function BigBadVacuum.Start(api)
 		punchFov(6)
 		api:Sound("HazardWarning")
 	end)
-	onEvent("Defeat", function(t0)
+	onEvent("Defeat", function(t0, reason)
 		finale = { Kind = "Defeat", T0 = num(t0) or now() }
-		callout("TIME'S UP!", DANGER, "The vacuum is winning...", 2.5, 9)
+		if reason == "Wipe" then
+			callout("WIPED OUT!", DANGER, "It knocked everyone out...", 2.8, 9)
+		else
+			callout("TIME'S UP!", DANGER, "The vacuum is winning...", 2.5, 9)
+		end
 		api:Sound("Eliminated")
 		shake(1.2)
 	end)
@@ -2160,6 +2238,28 @@ function BigBadVacuum.Start(api)
 		Children = { UIKit.TextStroke(0) },
 	})
 	local coreScale = UIKit.new("UIScale", { Parent = coreLabel })
+	-- Someone else knocked out: a short line where the core's call goes (the core is never open while the
+	-- boss is attacking, so the two don't meet; if they do, the core's call wins).
+	local feedLabel = UIKit.Label({
+		Name = "Feed",
+		Text = "",
+		TextWrapped = false,
+		Font = Theme.Fonts.Display,
+		TextSize = 24,
+		TextColor3 = Color3.fromRGB(255, 150, 160),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 108),
+		Size = UDim2.fromOffset(barWidth, 30),
+		Visible = false,
+		Parent = panel,
+		Children = { UIKit.TextStroke(0) },
+	})
+	local feedUntil = 0
+	feed = function(text: string)
+		feedLabel.Text = text
+		feedUntil = now() + 3
+		UIKit.PopIn(feedLabel, 0.25)
+	end
 
 	-- Big banner words in the middle of the screen, and a full-screen flash.
 	local gui = api.Gui
@@ -2288,6 +2388,128 @@ function BigBadVacuum.Start(api)
 	bagButton:SetVisible(false)
 	panicButton:SetVisible(false)
 
+	-- Hearts ------------------------------------------------------------------------------------------------------------------------
+	-- Right above the THROW button, inside its holder (Api.Button names it "Action_THROW"), so the row goes wherever
+	-- the button goes on every screen (and the phone checks place it the same way) and hides with it when this
+	-- player can't act. Each heart is drawn from shapes (a square turned 45 degrees and two circles on its top
+	-- edges, over a slightly bigger dark copy for an outline), like UIKit.Coin: no glyph a phone might lack.
+	local HEART_FULL = Color3.fromRGB(255, 64, 96)
+	local HEART_EMPTY = Color3.fromRGB(70, 58, 92)
+	local HEART_EDGE = Color3.fromRGB(30, 15, 60)
+	local HEART_W = 36 -- each heart's width, in the button's (auto-scaled) units
+	local heartsHolder: Instance = api.Gui:FindFirstChild("Action_THROW") or api.Gui
+	local heartsRow = UIKit.new("Frame", {
+		Name = "Hearts",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = if heartsHolder == api.Gui then UDim2.new(0.5, 31, 1, -150) else UDim2.new(0.5, 0, 0, -8),
+		Size = UDim2.fromOffset(HEART_W * 3 + 14, HEART_W),
+		BackgroundTransparency = 1,
+		Parent = heartsHolder,
+	})
+	type Heart = { Holder: Frame, Scale: UIScale, Fill: { Frame }, Full: boolean }
+	local hearts: { Heart } = {}
+	local function heartShapes(parent: Instance, side: number, grow: number, color: Color3, z: number): { Frame }
+		-- (the square's side `side`; the heart is 1.707 sides wide and 1.56 tall; `grow` widens every shape for the outline)
+		local cx, cy = HEART_W / 2, HEART_W * 0.08 + side * 0.854
+		local lean = side * 0.3536
+		local shapes = {}
+		for _, spec in
+			{
+				{ cx, cy, 45, false },
+				{ cx - lean, cy - lean, 0, true },
+				{ cx + lean, cy - lean, 0, true },
+			}
+		do
+			table.insert(
+				shapes,
+				UIKit.new("Frame", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromOffset(spec[1], spec[2]),
+					Size = UDim2.fromOffset(side + grow, side + grow),
+					Rotation = spec[3],
+					BackgroundColor3 = color,
+					BorderSizePixel = 0,
+					ZIndex = z,
+					Parent = parent,
+					Children = if spec[4] then { UIKit.Round() } else { UIKit.Corner(math.floor(side * 0.12)) },
+				})
+			)
+		end
+		return shapes
+	end
+	for index = 1, Rules.HEARTS do
+		local holder = UIKit.new("Frame", {
+			Name = `Heart{index}`,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(HEART_W / 2 + (index - 1) * (HEART_W + 7), HEART_W / 2),
+			Size = UDim2.fromOffset(HEART_W, HEART_W),
+			BackgroundTransparency = 1,
+			Parent = heartsRow,
+		})
+		local scale = UIKit.new("UIScale", { Parent = holder })
+		local side = HEART_W / 1.707 * 0.94
+		heartShapes(holder, side, 5, HEART_EDGE, 1)
+		table.insert(
+			hearts,
+			{ Holder = holder, Scale = scale, Fill = heartShapes(holder, side, 0, HEART_FULL, 2), Full = true }
+		)
+	end
+	local function paintHeart(heart: Heart, color: Color3)
+		for _, shape in heart.Fill do
+			shape.BackgroundColor3 = color
+		end
+	end
+	local shownHearts = Rules.HEARTS
+	-- Shows `count` hearts; a lost one pops white and fades out, and the row shakes.
+	local function showHearts(count: number)
+		count = math.clamp(math.floor(count), 0, Rules.HEARTS)
+		local lost = count < shownHearts
+		shownHearts = count
+		for index, heart in hearts do
+			local full = index <= count
+			if heart.Full and not full then
+				heart.Full = false
+				paintHeart(heart, WHITE)
+				heart.Scale.Scale = 1.6
+				UIKit.Tween(heart.Scale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+				task.delay(0.12, function()
+					if not heart.Full and heartsRow.Parent then
+						for _, shape in heart.Fill do
+							UIKit.Tween(shape, 0.3, { BackgroundColor3 = HEART_EMPTY })
+						end
+					end
+				end)
+			elseif full and not heart.Full then
+				heart.Full = true
+				paintHeart(heart, HEART_FULL)
+			end
+		end
+		if lost and not State.ReducedEffects() then
+			task.spawn(function()
+				local base = heartsRow.Position
+				for step = 1, 6 do
+					if not heartsRow.Parent then
+						return
+					end
+					heartsRow.Position = base + UDim2.fromOffset(if step % 2 == 0 then 5 else -5, 0)
+					task.wait(0.04)
+				end
+				heartsRow.Position = base
+			end)
+		end
+		if lost and count == Rules.CAREFUL_AT and not myKnocked then
+			callout("LAST HEART!", DANGER, "One more hit and you're out!", 1.5, 6)
+		end
+	end
+	local function readHearts()
+		local value = api:Mine("Hearts")
+		if type(value) == "number" then
+			showHearts(value)
+		end
+	end
+	readHearts()
+	api:OnMine("Hearts", readHearts)
+
 	local lastThrow = 0
 	local function canThrow(): boolean
 		local t = now()
@@ -2382,6 +2604,19 @@ function BigBadVacuum.Start(api)
 			coreScale.Scale = 1 + 0.07 * math.sin(t * 12)
 			coreLabel.Text = if carrying[me] then "CORE OPEN! THROW!" else "CORE OPEN! GET BRICKS!"
 		end
+		feedLabel.Visible = not coreOpen and t < feedUntil and feedLabel.Text ~= ""
+		-- The last heart pulses (and glows a little brighter on each beat).
+		local lastHeart = hearts[1]
+		if lastHeart then
+			if shownHearts == Rules.CAREFUL_AT and not myKnocked then
+				local beat = math.abs(math.sin(t * 6))
+				lastHeart.Scale.Scale = 1 + 0.16 * beat
+				paintHeart(lastHeart, HEART_FULL:Lerp(Color3.fromRGB(255, 190, 200), 0.45 * beat))
+			elseif shownHearts > Rules.CAREFUL_AT and lastHeart.Scale.Scale ~= 1 then
+				lastHeart.Scale.Scale = 1
+				paintHeart(lastHeart, HEART_FULL)
+			end
+		end
 		local stroke = track:FindFirstChildOfClass("UIStroke")
 		if stroke then
 			stroke.Color = if coreOpen then CYAN else WHITE
@@ -2410,7 +2645,12 @@ function BigBadVacuum.Start(api)
 			and boss.S ~= "Done"
 		throwButton:SetEnabled(holding and free)
 		throwButton:SetText(
-			if holding then "THROW" elseif stuck then "STUCK!" elseif t < myDazedUntil then "DAZED" else "EMPTY"
+			if myKnocked
+				then "OUT"
+				elseif holding then "THROW"
+				elseif stuck then "STUCK!"
+				elseif t < myDazedUntil then "DAZED"
+				else "EMPTY"
 		)
 		bagButton:SetVisible(#trapList > 0 and holding and not stuck)
 		bagButton:SetFill(0)

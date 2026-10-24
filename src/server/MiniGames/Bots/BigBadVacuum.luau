@@ -8,6 +8,11 @@
 --     it waits for the core to open and throws, a beat apart from the others; some throw at the dust bag
 --     when someone is stuck in it; a few clumsy ones waste a brick on the armour now and then.
 --   * PANIC: when the party meter fills, bots press it after a human-like delay (a person usually wins).
+--   * Hearts (owner: "how do you loose this? maybe after 3 hits or something?"): bots have three like
+--     everyone and are knocked out the same way (the server does it; a knocked-out bot's brain stops). On
+--     their last heart (Rules.CAREFUL_AT) they play it safer, the way a person would: they notice a warning
+--     sooner, keep a wider berth round it and round the boss, never freeze up, jump the shockwave more
+--     surely, and skip a brick pile that is in the boss's reach.
 -- Throws and PANIC go through ctx:BotAction, so the server judges them exactly like a player's.
 -- The brain only reads the mode through its public methods (HasBrick, CoreOpen, Zones, RingAt...), so the
 -- round harness's test bot can run this very brain on its stand-in players.
@@ -116,6 +121,8 @@ function Brain.Step(bot, ctx, mode, _dt)
 	local position = root.Position
 	local x, z = position.X, position.Z
 	local floorY = mode.center.Y + Rules.STAND
+	-- On the last heart: safer (see the top of this file).
+	local careful = mode:HeartsOf(bot) <= Rules.CAREFUL_AT
 
 	if not memory.Init then
 		memory.Init = true
@@ -124,8 +131,14 @@ function Brain.Step(bot, ctx, mode, _dt)
 		memory.Spot = rng:NextNumber(0, math.pi * 2)
 	end
 
-	-- Nothing to do while stuck in the bag, dazed, or once the fight is over.
-	if mode:IsTrapped(bot) or mode:IsDazed(bot, now) or boss.State == "Dying" or boss.State == "Done" then
+	-- Nothing to do while stuck in the bag, dazed, knocked out, or once the fight is over.
+	if
+		mode:IsTrapped(bot)
+		or mode:IsDazed(bot, now)
+		or mode:IsKnockedOut(bot)
+		or boss.State == "Dying"
+		or boss.State == "Done"
+	then
 		bot:Stop()
 		memory.Threat = nil
 		return
@@ -157,7 +170,7 @@ function Brain.Step(bot, ctx, mode, _dt)
 		local arrives = (away - reach) / Rules.RING_SPEED
 		if arrives > -0.1 and arrives < 0.2 + 0.12 * (1 - skill) and not memory.Jumped then
 			memory.Jumped = now
-			if rng:NextNumber() < 0.55 + 0.45 * skill then
+			if rng:NextNumber() < 0.55 + 0.45 * skill + (if careful then 0.25 else 0) then
 				bot:Jump()
 			end
 		end
@@ -168,11 +181,11 @@ function Brain.Step(bot, ctx, mode, _dt)
 
 	-- Dodging: leave any warning zone we are in (or beside), after the reaction time.
 	local zones = mode:Zones(now)
-	local margin = 1.5 + 4.5 * skill
+	local margin = 1.5 + 4.5 * skill + (if careful then 3 else 0)
 	if #zones > 0 and inZone(zones, x, z, margin) then
 		if not memory.Threat then
-			memory.Threat = now + bot:Reaction()
-			if skill < 0.5 and bot:Chance(0.2) then
+			memory.Threat = now + bot:Reaction() * (if careful then 0.7 else 1)
+			if skill < 0.5 and not careful and bot:Chance(0.2) then
 				memory.FrozenUntil = now + rng:NextNumber(0.25, 0.7)
 			end
 		end
@@ -218,13 +231,14 @@ function Brain.Step(bot, ctx, mode, _dt)
 	-- Where to be: at a pile when empty-handed, otherwise loitering at a safe distance from the boss.
 	local goalX, goalZ
 	if not carrying then
-		local pile = mode:NearestPile(x, z, now)
+		-- (careful: not a pile the boss's sweep reaches)
+		local pile = mode:NearestPile(x, z, now, if careful then Rules.Attacks.Sweep.Reach + 3 else nil)
 		if pile then
 			goalX, goalZ = pile.X, pile.Z
 		end
 	end
 	if not goalX then
-		local ringRadius = math.min(mode.radius - 8, Rules.BODY_RADIUS + 18 + 8 * skill)
+		local ringRadius = math.min(mode.radius - 8, Rules.BODY_RADIUS + 18 + 8 * skill + (if careful then 7 else 0))
 		local angle = memory.Spot + math.sin(now * 0.35 + memory.Spot) * 0.6
 		goalX = boss.X + math.cos(angle) * ringRadius
 		goalZ = boss.Z + math.sin(angle) * ringRadius
@@ -239,7 +253,7 @@ function Brain.Step(bot, ctx, mode, _dt)
 		end
 	end
 	-- Don't walk into a warning on the way (wait outside it instead).
-	if #zones > 0 and inZone(zones, goalX, goalZ, 3) then
+	if #zones > 0 and inZone(zones, goalX, goalZ, if careful then 6 else 3) then
 		bot:Stop()
 		return
 	end

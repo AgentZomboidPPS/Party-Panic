@@ -17,6 +17,19 @@
 --     and learns cord slams (a shockwave ring to jump), then whirls and dust bombs.
 --   * Win by emptying its health before the fight clock runs out. Everyone shares first place on a win;
 --     otherwise the places go by contribution (damage + rescues).
+--   * Losing (the owner played it live and asked: "how do you loose this? maybe after 3 hits or
+--     something?"; until then nobody was ever out, so only the clock could beat the lobby): everyone, bots
+--     too, starts with 3 HEARTS. Each attack that lands (the hit that dazes you) costs one, once per attack
+--     (an attack instance key per swing, charge, slam with its shockwave, dust bomb: Rules.FirstStrike; the
+--     daze and grace after a hit still stop it chaining). The dust bag costs no heart (it is its own
+--     setback: see Shared/Logic/BigBadVacuum). At no hearts you are KNOCKED OUT: flung (a KO cue every
+--     client shows), then out of the round like any Survival mode's out (ctx:Eliminate, with KO_SHOW for the
+--     flight; the HUD's spectate takes over), your damage and rescues still in the results, a brick you
+--     threw before still counting when it lands. Once no person is left standing the Vacuum wins at once
+--     (Rules.WipedOut): the same defeat show and results as the clock running out. That last knockout is
+--     not eliminated (the round ends with the boss's show; RoundContext would otherwise cut it short two
+--     seconds after its last person went out). Knocked-out players stop throwing, so the fight gets harder
+--     as people drop: that is the point.
 --
 -- The server owns everything (the boss's position, every attack and hit, bricks, the bag, the meter);
 -- clients only ask (THROW, PANIC) and draw. The boss is drawn on clients from a shared snapshot
@@ -63,7 +76,15 @@ local function pingOf(player: any): number
 	return if ok and type(ping) == "number" and ping == ping then math.clamp(ping, 0, PING_MAX) else 0.1
 end
 
-type Stat = { Damage: number, Rescues: number, Bonus: number, Throws: number, Crits: number, Dazed: number }
+type Stat = {
+	Damage: number,
+	Rescues: number,
+	Bonus: number,
+	Throws: number,
+	Crits: number,
+	Dazed: number,
+	KnockedOut: boolean,
+}
 type Trap = { Since: number, Until: number, Slot: number }
 type Flight = { Id: number, Thrower: any, Kind: string, T0: number, T1: number }
 
@@ -73,7 +94,8 @@ local ATTACKS: { [string]: any } = {}
 
 function BigBadVacuum:Prepare()
 	local ctx = self.context
-	ctx.RespawnMode = "Respawn" -- nobody is ever out: the dust bag and daze are the setbacks
+	-- A fall (or a reset) puts you back on the rug: only losing your last heart puts you out (_knockOut).
+	ctx.RespawnMode = "Respawn"
 	ctx.KillY = ctx.Origin.Y - 40
 	local players = ctx:GetPlayers()
 	self.count = math.max(#players, 1)
@@ -86,6 +108,10 @@ function BigBadVacuum:Prepare()
 	self.bumped = {} :: { [any]: number } -- when each was last shoved out of the boss
 	self.safe = {} :: { [any]: number } -- can't be hit again until
 	self.traps = {} :: { [any]: Trap }
+	self.hearts = {} :: { [any]: number }
+	self.struck = {} :: { [any]: { [string]: boolean } } -- the attack instances that already cost each a heart
+	self.knocked = {} :: { [any]: number } -- knocked out (when)
+	self.knockouts = 0
 	self.freeSlots = {} :: { number }
 	self.flights = {} :: { Flight }
 	self.rings = {} :: { any }
@@ -130,6 +156,11 @@ function BigBadVacuum:Prepare()
 
 	self:_buildArena()
 
+	for _, player in players do
+		self.hearts[player] = Rules.HEARTS
+		ctx:SetPlayerShared(player, "Hearts", Rules.HEARTS)
+	end
+
 	-- Everyone starts on a ring near the wall, facing the middle (where the boss will land), on the
 	-- rug: RoundContext lifts each root over its spot, and another 3 studs here left them all hanging
 	-- in the air through the rules card (owner: "Also I did spawn hovering").
@@ -151,6 +182,10 @@ function BigBadVacuum:Prepare()
 	end
 	ctx.Hooks.PlayerLeft = function(player)
 		self:_letGo(player)
+		-- (the last one standing leaving, with the rest knocked out, loses the fight as a knockout would)
+		if self.knockouts > 0 then
+			self:_checkWipe(ctx:Now())
+		end
 	end
 
 	for _, name in
@@ -447,18 +482,17 @@ end
 function BigBadVacuum:_stat(player: any): Stat
 	local stat = self.stats[player]
 	if not stat then
-		stat = { Damage = 0, Rescues = 0, Bonus = 0, Throws = 0, Crits = 0, Dazed = 0 }
+		stat = { Damage = 0, Rescues = 0, Bonus = 0, Throws = 0, Crits = 0, Dazed = 0, KnockedOut = false }
 		self.stats[player] = stat
 	end
 	return stat
 end
 
+-- The standings' line during the fight. Short: the standings' score column on a phone is narrow, and
+-- "22 dmg · 1 saved" was squeezed under 11 pt there (the results card says it in full).
 function BigBadVacuum:_scoreText(player: any)
 	local stat = self:_stat(player)
-	local text = `{stat.Damage} dmg`
-	if stat.Rescues > 0 then
-		text ..= ` · {stat.Rescues} saved`
-	end
+	local text = if stat.Rescues > 0 then `{stat.Damage} · {stat.Rescues} saved` else `{stat.Damage} dmg`
 	self.context:SetScoreText(player, text)
 end
 
@@ -477,12 +511,13 @@ function BigBadVacuum:_where(player: any, root: BasePart): (number, number)
 	return position.X + velocity.X * lead, position.Z + velocity.Z * lead
 end
 
--- Everyone who can be hit or targeted: alive, in the arena, not in the bag.
+-- Everyone who can be hit or targeted: alive, in the arena, not in the bag, not knocked out (the last
+-- knockout of a lost fight is never eliminated: _knockOut).
 function BigBadVacuum:_targets(): { { Player: any, Root: BasePart } }
 	local list = {}
 	local ctx = self.context
 	for _, player in ctx:GetAlivePlayers() do
-		if self.traps[player] then
+		if self.traps[player] or self.knocked[player] then
 			continue
 		end
 		local _, _, root = ctx:GetCharacter(player)
@@ -501,6 +536,20 @@ function BigBadVacuum:IsTrapped(player: any): boolean
 	return self.traps[player] ~= nil
 end
 
+-- How many hearts `player` has left (bots play safer on their last: Bots/BigBadVacuum).
+function BigBadVacuum:HeartsOf(player: any): number
+	return self.hearts[player] or Rules.HEARTS
+end
+
+function BigBadVacuum:IsKnockedOut(player: any): boolean
+	return self.knocked[player] ~= nil
+end
+
+-- Whether `player` still gets credit for what they did: in the round (knocked out or not), not gone.
+function BigBadVacuum:_credited(player: any): boolean
+	return player ~= nil and self.context:State(player) ~= nil
+end
+
 function BigBadVacuum:HasBrick(player: any): boolean
 	return self.carry[player] ~= nil
 end
@@ -517,11 +566,14 @@ function BigBadVacuum:CoreOpen(now: number): boolean
 	return now < self.boss.CoreUntil and not self.boss.Shield
 end
 
--- The nearest pile that has a brick for `position`.
-function BigBadVacuum:NearestPile(x: number, z: number, now: number): any
+-- The nearest pile that has a brick for `position` (with `clear`, only one at least that far from the boss).
+function BigBadVacuum:NearestPile(x: number, z: number, now: number, clear: number?): any
 	local best, bestDistance = nil, math.huge
 	for _, pile in self.piles do
 		local distance = Rules.Distance(x, z, pile.X, pile.Z)
+		if clear and Rules.Distance(pile.X, pile.Z, self.boss.X, self.boss.Z) < clear then
+			continue
+		end
 		-- (a pile that is cooling down is back in a moment: still worth walking to)
 		if distance < bestDistance and pile.ReadyAt - now < 1.5 then
 			best, bestDistance = pile, distance
@@ -561,26 +613,107 @@ function BigBadVacuum:_dropBrick(player: any)
 	end
 end
 
--- `player` is hit by an attack: dazed, thrown away from (fromX, fromZ), brick dropped, then safe a while.
-function BigBadVacuum:_hit(player: any, kind: string, fromX: number, fromZ: number, force: number): boolean
+-- `player` is hit by attack instance `instance` (of `kind`): a heart gone, dazed, thrown away from
+-- (fromX, fromZ), brick dropped, then safe a while; on their last heart, knocked out. One instance costs
+-- one heart at most, however long it overlaps them (Rules.FirstStrike).
+function BigBadVacuum:_hit(
+	player: any,
+	kind: string,
+	instance: string,
+	fromX: number,
+	fromZ: number,
+	force: number
+): boolean
 	local ctx = self.context
 	local now = ctx:Now()
 	if self.boss.Shield or self.traps[player] or (self.safe[player] or 0) > now or not ctx:IsAlive(player) then
+		return false
+	end
+	if self.knocked[player] or self.outcome then
 		return false
 	end
 	local _, _, root = ctx:GetCharacter(player)
 	if not root then
 		return false
 	end
+	local record = self.struck[player]
+	if not record then
+		record = {}
+		self.struck[player] = record
+	end
+	if not Rules.FirstStrike(record, instance) then
+		return false
+	end
 	self.dazed[player] = now + Rules.DAZE
 	self.safe[player] = now + Rules.DAZE + Rules.SAFE
 	self:_stat(player).Dazed += 1
 	self:_dropBrick(player)
+	local left, out = Rules.Hurt(self:HeartsOf(player))
+	self.hearts[player] = left
+	ctx:SetPlayerShared(player, "Hearts", left)
 	local away = Vector3.new(root.Position.X - fromX, 0, root.Position.Z - fromZ)
 	away = if away.Magnitude > 0.1 then away.Unit else Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1)).Unit
-	ctx:Knockback(player, away * force + Vector3.new(0, 34, 0), Rules.DAZE)
-	ctx:Fire(nil, "Dazed", player.UserId, r2(root.Position.X), r2(root.Position.Y), r2(root.Position.Z), kind)
+	local at = root.Position
+	if out then
+		-- (higher and not as far as a daze: the flight plays out on the rug, not over the wall)
+		ctx:Knockback(player, away * math.min(force, 40) + Vector3.new(0, 62, 0), Rules.KO_SHOW)
+		self:_knockOut(player, kind, at, now)
+	else
+		ctx:Knockback(player, away * force + Vector3.new(0, 34, 0), Rules.DAZE)
+		ctx:Fire(nil, "Dazed", player.UserId, r2(at.X), r2(at.Y), r2(at.Z), kind, left)
+	end
+	self:_publishLists()
 	return true
+end
+
+-- Who is still fighting (not out, not knocked out), apart from `except`: everyone, and the people.
+function BigBadVacuum:_standing(except: any?): (number, number)
+	local standing, people = 0, 0
+	for _, player in self.context:GetAlivePlayers() do
+		if player ~= except and not self.knocked[player] then
+			standing += 1
+			if not BotRegistry.IsBot(player) then
+				people += 1
+			end
+		end
+	end
+	return standing, people
+end
+
+-- `player` lost their last heart: knocked out of the fight. Everyone sees it (the "KO" cue: an effect where
+-- they were hit, "KNOCKED OUT!" for them, a feed line for the rest), they leave the round after KO_SHOW
+-- like any Survival out (spectating from the HUD), and if nobody is left standing the Vacuum has won.
+function BigBadVacuum:_knockOut(player: any, kind: string, at: Vector3, now: number)
+	local ctx = self.context
+	self.knocked[player] = now
+	self.knockouts += 1
+	self.dazed[player] = now + Rules.KO_SHOW
+	self:_stat(player).KnockedOut = true
+	self:_dropBrick(player)
+	if BotRegistry.IsBot(player) and type(player.Stop) == "function" then
+		pcall(player.Stop, player) -- (its brain stops with the out; its legs shouldn't carry on to the last goal)
+	end
+	local standing, people = self:_standing(player)
+	ctx:Fire(nil, "KO", player.UserId, r2(at.X), r2(at.Y), r2(at.Z), kind, standing)
+	if Rules.WipedOut(standing, people) then
+		-- The last one down stays where they fell for the boss's show: the round ends with it.
+		self:_lose(now, "Wipe")
+		return
+	end
+	ctx:Eliminate(player, "KO", Rules.KO_SHOW)
+end
+
+-- After someone left: if knockouts have taken everyone who's still here, the Vacuum has won.
+function BigBadVacuum:_checkWipe(now: number)
+	local ctx = self.context
+	local boss = self.boss
+	if self.outcome or not ctx:IsRunning() or boss.State == "Intro" then
+		return
+	end
+	local standing, people = self:_standing(nil)
+	if Rules.WipedOut(standing, people) then
+		self:_lose(now, "Wipe")
+	end
 end
 
 -- Puts `player` in the dust bag (if there is room).
@@ -682,6 +815,7 @@ function BigBadVacuum:_letGo(player: any)
 	self.dazed[player] = nil
 	self.safe[player] = nil
 	self.bumped[player] = nil
+	self.struck[player] = nil
 	local trap = self.traps[player]
 	if trap then
 		self.traps[player] = nil
@@ -698,7 +832,7 @@ function BigBadVacuum:_tryThrow(player: any, hint: any)
 	local function refuse()
 		ctx:Fire(player, "Refused", "Throw")
 	end
-	if not ctx:IsRunning() or ctx:TimeIsUp() or not ctx:IsAlive(player) then
+	if not ctx:IsRunning() or ctx:TimeIsUp() or not ctx:IsAlive(player) or self.knocked[player] then
 		return
 	end
 	if not self.carry[player] or self.traps[player] or self:IsDazed(player, now) then
@@ -755,7 +889,7 @@ function BigBadVacuum:_landBrick(flight: Flight, now: number)
 		if count > 0 then
 			local at = self:_bagCenter()
 			self:_releaseAll(now)
-			if ctx:IsAlive(thrower) then
+			if self:_credited(thrower) then -- (thrown before a knockout: still theirs)
 				local stat = self:_stat(thrower)
 				stat.Rescues += count
 				ctx:AddScore(thrower, count * Rules.RESCUE_POINTS)
@@ -813,7 +947,7 @@ function BigBadVacuum:_damage(
 		return 0
 	end
 	boss.Hp -= dealt
-	if player and ctx:IsAlive(player) then
+	if self:_credited(player) then
 		self:_stat(player).Damage += dealt
 		ctx:AddScore(player, dealt)
 		self:_scoreText(player)
@@ -987,7 +1121,7 @@ function BigBadVacuum:_stepRings(now: number)
 					local feet = entry.Root.Position.Y - self.center.Y - Rules.STAND
 					if Rules.RingHits(ring.X, ring.Z, ring.Last, e1, x, z, feet) then
 						ring.Hit[player] = true
-						self:_hit(player, "Ring", ring.X, ring.Z, 42)
+						self:_hit(player, "Ring", `ring{ring.Id}`, ring.X, ring.Z, 42)
 					end
 				end
 			end
@@ -1156,7 +1290,7 @@ function BigBadVacuum:_stepBoss(now: number, dt: number)
 		return
 	end
 	if state ~= "Intro" and now >= self.fightEnds then
-		self:_lose(now)
+		self:_lose(now, "Time")
 		return
 	end
 	if state == "Intro" or state == "Break" then
@@ -1257,7 +1391,7 @@ function BigBadVacuum:_win(killer: any, now: number)
 	boss.Vx, boss.Vz, boss.Spin = 0, 0, 0
 	self:_releaseAll(now)
 	self.flights = {}
-	if killer and ctx:IsAlive(killer) then
+	if self:_credited(killer) then
 		self:_stat(killer).Bonus += Rules.FINISHER_POINTS
 		ctx:AddScore(killer, Rules.FINISHER_POINTS)
 		self:_scoreText(killer)
@@ -1270,8 +1404,9 @@ function BigBadVacuum:_win(killer: any, now: number)
 	end)
 end
 
--- The clock ran out: the boss wins.
-function BigBadVacuum:_lose(now: number)
+-- The boss wins: the clock ran out (`reason` "Time") or knockouts took everyone ("Wipe"). Either way the
+-- same show and the same results ("The Vacuum won").
+function BigBadVacuum:_lose(now: number, reason: string)
 	local ctx = self.context
 	local boss = self.boss
 	if self.outcome then
@@ -1286,7 +1421,15 @@ function BigBadVacuum:_lose(now: number)
 	self.flights = {}
 	self:_releaseAll(now) -- (as a win does: nobody hangs in the bag through the results)
 	self:_freezeEveryone(true)
-	ctx:Fire(nil, "Defeat", r2(now))
+	ctx:SetStatus(if reason == "Wipe" then "Everyone's knocked out!" else "Time's up!")
+	Telemetry.ServerEvent("BigBadVacuumLost", {
+		reason = reason,
+		knockouts = self.knockouts,
+		health = math.ceil(boss.Hp),
+		max = boss.Max,
+		phase = boss.Phase,
+	})
+	ctx:Fire(nil, "Defeat", r2(now), reason, self.knockouts)
 	self:_publishAll()
 	ctx:Delay(Rules.DEFEAT_SHOW, function()
 		ctx:End("Defeat")
@@ -1309,6 +1452,9 @@ function BigBadVacuum:_tryPanic(player: any)
 	local boss = self.boss
 	local now = ctx:Now()
 	if not self.meterReady or self.panicPending or not ctx:IsRunning() or self.traps[player] then
+		return
+	end
+	if self.knocked[player] or self.outcome then
 		return
 	end
 	if boss.Shield or boss.State == "Dying" or boss.State == "Done" or boss.State == "Intro" then
@@ -1471,7 +1617,7 @@ ATTACKS.Sweep = {
 		for _, entry in self:_targets() do
 			local x, z = self:_where(entry.Player, entry.Root)
 			if Rules.SweepHits(boss.X, boss.Z, plan.Face, plan.Prev, f1, x, z) then
-				self:_hit(entry.Player, "Sweep", boss.X, boss.Z, 52)
+				self:_hit(entry.Player, "Sweep", `atk{plan.Id}`, boss.X, boss.Z, 52)
 			end
 		end
 		plan.Prev = f1
@@ -1524,7 +1670,7 @@ ATTACKS.Whirl = {
 		for _, entry in self:_targets() do
 			local x, z = self:_where(entry.Player, entry.Root)
 			if Rules.WhirlHits(boss.X, boss.Z, plan.Base, plan.Prev, f1, x, z) then
-				self:_hit(entry.Player, "Whirl", boss.X, boss.Z, 52)
+				self:_hit(entry.Player, "Whirl", `atk{plan.Id}`, boss.X, boss.Z, 52)
 			end
 		end
 		plan.Prev = f1
@@ -1587,7 +1733,7 @@ ATTACKS.Charge = {
 			local x, z = self:_where(entry.Player, entry.Root)
 			if Rules.Distance(x, z, boss.X, boss.Z) <= Rules.BODY_RADIUS + 1.2 then
 				-- (flung to the side the body is passing, not along its path)
-				self:_hit(entry.Player, "Charge", boss.X - dz * 6, boss.Z + dx * 6, 70)
+				self:_hit(entry.Player, "Charge", `atk{plan.Id}`, boss.X - dz * 6, boss.Z + dx * 6, 70)
 			end
 		end
 		if done then
@@ -1673,7 +1819,7 @@ ATTACKS.Cord = {
 			local x, z = self:_where(entry.Player, entry.Root)
 			if Rules.Distance(x, z, zone.X, zone.Z) <= def.Radius then
 				ring.Hit[entry.Player] = true -- (the slam itself is the hit; the ring doesn't hit them again)
-				self:_hit(entry.Player, "Slam", zone.X, zone.Z, 55)
+				self:_hit(entry.Player, "Slam", `ring{ring.Id}`, zone.X, zone.Z, 55)
 			end
 		end
 	end,
@@ -1740,7 +1886,7 @@ ATTACKS.Bombs = {
 				z = self.center.Z + (z - self.center.Z) / fromMiddle * (self.radius - 4)
 			end
 			local t0 = now + (index - 1) * def.Stagger
-			local bomb = { X = x, Z = z, T0 = t0, T1 = t0 + 1.4, Done = false }
+			local bomb = { X = x, Z = z, T0 = t0, T1 = t0 + 1.4, Done = false, Key = `bomb{plan.Id}.{index}` }
 			table.insert(self.bombs, bomb)
 			table.insert(
 				plan.Zones,
@@ -1758,7 +1904,7 @@ ATTACKS.Bombs = {
 				for _, entry in self:_targets() do
 					local x, z = self:_where(entry.Player, entry.Root)
 					if Rules.Distance(x, z, bomb.X, bomb.Z) <= Rules.Attacks.Bombs.Radius then
-						self:_hit(entry.Player, "Bomb", bomb.X, bomb.Z, 50)
+						self:_hit(entry.Player, "Bomb", bomb.Key, bomb.X, bomb.Z, 50)
 					end
 				end
 			end

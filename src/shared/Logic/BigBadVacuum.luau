@@ -12,6 +12,19 @@
 -- bag, and a brick thrown at the bag pops it and frees them. Damage and rescues fill the PANIC METER;
 -- when it is full anyone can fire a PANIC BLAST. Three phases, each nastier than the last.
 --
+-- How you lose (the owner played it live and asked: "how do you loose this? maybe after 3 hits or
+-- something?"; until then nobody was ever out and only the clock could beat the lobby). Everyone starts
+-- the fight with HEARTS (3) hearts, bots too. Every attack that lands on you (the hit that dazes you)
+-- costs one, once per attack: one swing, one charge, one shockwave or one dust bomb is one heart however
+-- long it overlaps you (FirstStrike), and the daze and the grace after it still stop a hit from chaining.
+-- The dust bag is not a hit: being sucked up already costs you up to TRAP_TIME seconds of the fight and
+-- heals the boss, the lobby can pop you out, and it catches a few people at once, so a heart for it too
+-- would turn every SUCTION into a pile of knockouts at the end of a fight. At no hearts you are KNOCKED
+-- OUT (Hurt): out of the round like any Survival mode's out, spectating, your damage and rescues still in
+-- the results. Once nobody is left standing the Vacuum wins at once (WipedOut), with the same show and
+-- results as a fight lost on the clock. "Nobody" means no person: a round is for people (RoundContext ends
+-- a round whose people are all out a moment later), so bots never carry on a fight on their own.
+--
 -- Leaf module: no requires, no Roblox APIs (positions are plain x / z numbers), so it can be unit tested
 -- under Lune.
 
@@ -86,7 +99,7 @@ BigBadVacuum.BREAK = 3 -- a phase change: the boss roars and nobody can hurt it
 BigBadVacuum.VICTORY_SHOW = 5.2 -- the boss falls apart, then the results
 BigBadVacuum.DEFEAT_SHOW = 4.4
 BigBadVacuum.TRAP_TIME = 7 -- the dust bag spits someone out after this long
-BigBadVacuum.DAZE = 1.3 -- hit by an attack: stunned (and drops their brick) this long
+BigBadVacuum.DAZE = 1.3 -- hit by an attack: a heart gone, stunned (and drops their brick) this long
 BigBadVacuum.SAFE = 2 -- ... then can't be hit again for this long
 BigBadVacuum.PILE_WAIT = 0.9 -- a pile hands out a brick this often
 BigBadVacuum.THROW_WAIT = 0.45 -- the quickest a player throws again
@@ -117,6 +130,35 @@ end
 -- A player's score for the round: damage, rescues and one-off bonuses.
 function BigBadVacuum.Score(damage: number, rescues: number, bonus: number): number
 	return math.floor(damage + 0.5) + rescues * BigBadVacuum.RESCUE_POINTS + bonus
+end
+
+-- Hearts and knockouts (see the top of this file) -----------------------------------------------------------
+
+BigBadVacuum.HEARTS = 3 -- everyone starts the fight with this many (owner: "maybe after 3 hits or something?")
+BigBadVacuum.KO_SHOW = 1.6 -- a knocked-out player's flight plays out before they leave the arena
+BigBadVacuum.CAREFUL_AT = 1 -- bots play it safer with this many hearts left (or fewer)
+
+-- What an attack that lands leaves someone with: one heart fewer (never below none), and whether that was
+-- their last one (knocked out).
+function BigBadVacuum.Hurt(hearts: number): (number, boolean)
+	local left = math.max(0, math.floor(hearts + 0.5) - 1)
+	return left, left == 0
+end
+
+-- Whether attack instance `instance` (one swing, one charge, one slam and its shockwave, one dust bomb) may
+-- still cost the owner of `record` a heart: only the first time it reaches them. Remembers it.
+function BigBadVacuum.FirstStrike(record: { [string]: boolean }, instance: string): boolean
+	if record[instance] then
+		return false
+	end
+	record[instance] = true
+	return true
+end
+
+-- Whether knockouts have lost the fight: nobody left standing, or no person among them (bots never fight
+-- on alone: a round is for people).
+function BigBadVacuum.WipedOut(standing: number, peopleStanding: number): boolean
+	return standing <= 0 or peopleStanding <= 0
 end
 
 -- Attacks -----------------------------------------------------------------------------------------------

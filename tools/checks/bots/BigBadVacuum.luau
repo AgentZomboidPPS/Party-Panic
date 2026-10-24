@@ -4,7 +4,8 @@
 -- also does what a client does for them: it walks them (16 studs/s; Luau execution has no physics),
 -- jumps (a simulated arc), applies the suction's pull to anyone in the cone, and sends THROW / PANIC.
 -- The notes report the fight so a round can be checked from its summary: who threw, how the boss' health
--- went, what hit people, and how it ended.
+-- went, what hit people, every knockout (who, when, by what, how many still standing), and how it ended,
+-- with everyone's hearts left and hits taken ("hearts: ...": the balance checks read these).
 return function(env)
 	local ctx = env.ctx
 	local mode = env.game
@@ -76,8 +77,22 @@ return function(env)
 		env.note(
 			`{label}: boss {math.ceil(boss.Hp)}/{boss.Max} phase {boss.Phase} {boss.State}; `
 				.. `throws {throws} crits {crits} damage {damage} rescues {rescues} dazed {dazed}; `
-				.. `meter {math.floor(mode.meter)}, trapped now {mode:TrappedCount()}`
+				.. `meter {math.floor(mode.meter)}, trapped now {mode:TrappedCount()}, knocked out {mode.knockouts or 0}`
 		)
+	end
+	-- Each knockout as it happens (bots' too: the server knocks them out the same way).
+	local seenKnocked = {}
+	local function noteKnockouts(elapsed)
+		for who in mode.knocked or {} do
+			if not seenKnocked[who] then
+				seenKnocked[who] = true
+				local standing = mode:_standing(nil)
+				env.note(
+					`KO {who.Name} at {string.format("%.1f", elapsed)}s, phase {mode.boss.Phase}, `
+						.. `boss {math.ceil(mode.boss.Hp)}/{mode.boss.Max}; {standing} standing`
+				)
+			end
+		end
 	end
 
 	-- With four or more stand-ins, one stuck in the bag leaves, and later one holding a brick does: the round
@@ -105,6 +120,7 @@ return function(env)
 		if boss.State ~= lastState then
 			lastState = boss.State
 		end
+		noteKnockouts(elapsed)
 		if mode.outcome and mode.outcome ~= lastOutcome then
 			lastOutcome = mode.outcome
 			report(`outcome {mode.outcome} at {string.format("%.1f", elapsed)}s`)
@@ -118,6 +134,14 @@ return function(env)
 			end
 			table.sort(parts)
 			env.note("attacks: " .. table.concat(parts, ", "))
+			-- Everyone's hearts left / hits taken ("p" a stand-in person, "b" a bot).
+			local each = {}
+			for who, stat in mode.stats do
+				local kind = if table.find(env.players, who) then "p" else "b"
+				table.insert(each, `{who.Name}({kind}):{mode:HeartsOf(who)}/{stat.Dazed}`)
+			end
+			table.sort(each)
+			env.note(`hearts: {table.concat(each, " ")}`)
 		end
 		for _, mark in { 25, 50, 75 } do
 			if elapsed >= mark then
@@ -146,8 +170,8 @@ return function(env)
 		local plan = boss.Plan
 		local sucking = plan ~= nil and plan.Kind == "Suction" and boss.State == "Act"
 		for _, player in env.players do
-			if not env.Alive(player) then
-				continue
+			if not env.Alive(player) or mode:IsKnockedOut(player) then
+				continue -- (out; the last knockout of a lost fight stays in the round, where it fell)
 			end
 			local position = env.Root(player)
 			if not position then
