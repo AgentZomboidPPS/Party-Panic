@@ -24,8 +24,8 @@
 --
 -- The cuts. The song's phrases are 4 bars (PHRASE seconds). At the end of phrases FIRST_CUT to LAST_CUT
 -- the dancers with the lowest groove fall through the floor, as many as it takes to leave FINALISTS
--- dancers for the last phrase (the final duel), spread evenly over the cuts that are left: 12 dancers
--- lose 2, 2, 2, 2, 1 and 1. At the buzzer the highest groove wins.
+-- dancers for the last phrase (the final duel), spread evenly over the cuts: 12 dancers lose 2, 1, 2, 2, 1
+-- and 2. At the buzzer the highest groove wins.
 
 local LastDancer = {}
 
@@ -56,6 +56,7 @@ LastDancer.COMBO_CAP = 30
 -- the clock says (Bluetooth speakers), bounded so a made-up time can't reach far.
 LastDancer.SYNC_MAX = 0.3
 LastDancer.REACH = 0.1 -- like Buzzer.REACH
+LastDancer.WARMUP = 0.5 -- taps this long before the first note (and its window) are free: trying the pads
 
 export type Note = { T: number, Lane: number }
 export type Chart = { Notes: { Note } }
@@ -192,6 +193,13 @@ function LastDancer.Expire(chart: Chart, dancer: Dancer, rel: number): { number 
 	return missed
 end
 
+-- Whether a tap `rel` seconds after GO comes before the chart's first note and its warm-up: such a tap is
+-- ignored (not a stray), so nobody is punished for trying the pads while the count-in plays.
+function LastDancer.InWarmup(chart: Chart, rel: number): boolean
+	local first = chart.Notes[1]
+	return first ~= nil and rel < first.T - LastDancer.WINDOW.Ok - LastDancer.WARMUP
+end
+
 -- When a tap that reached the server at `now` was made: by the player's own clock (`sentAt`, synced to
 -- the server's, less their sync setting), but never after it arrived and never further back than half
 -- their round trip (`lag`) plus REACH plus the most a sync setting may shift it. Without a time (bots,
@@ -219,17 +227,24 @@ function LastDancer.CutTime(phrase: number): number?
 	return phrase * LastDancer.PHRASE
 end
 
--- How many of `alive` dancers fall at the end of `phrase`: enough to leave FINALISTS for the last phrase,
--- spread over the cuts still to come (never more than leaves FINALISTS; nobody is cut after the last cut).
-function LastDancer.CutCount(alive: number, phrase: number): number
+-- How many dancers should be left on the floor after the cut at the end of `phrase`, when `start` danced:
+-- the surplus over FINALISTS is cut evenly across the cuts (each cut's cumulative share, rounded to the
+-- nearest dancer): 12 dancers go 10, 9, 7, 5, 4, 2 and 3 dancers lose their third in the middle cut.
+-- Always FINALISTS at the last cut, so the final duel is between two.
+function LastDancer.Target(start: number, phrase: number): number
+	local cuts = LastDancer.LAST_CUT - LastDancer.FIRST_CUT + 1
+	local done = math.clamp(phrase - LastDancer.FIRST_CUT + 1, 0, cuts)
+	local surplus = math.max(0, start - LastDancer.FINALISTS)
+	return start - math.floor(surplus * done / cuts + 0.5)
+end
+
+-- How many of `alive` dancers fall at the end of `phrase` (`start` is how many danced at GO): enough to
+-- be down to the target, none if people have already left (or fallen) to reach it.
+function LastDancer.CutCount(alive: number, phrase: number, start: number): number
 	if phrase < LastDancer.FIRST_CUT or phrase > LastDancer.LAST_CUT then
 		return 0
 	end
-	local surplus = alive - LastDancer.FINALISTS
-	if surplus <= 0 then
-		return 0
-	end
-	return math.ceil(surplus / (LastDancer.LAST_CUT - phrase + 1))
+	return math.max(0, alive - LastDancer.Target(start, phrase))
 end
 
 export type Entry = { Key: any, Groove: number, Score: number, Order: number }

@@ -133,6 +133,14 @@ test("groove: mashing every pad never beats dancing it", function()
 	expectTrue(masher.Groove < 0.3, "the masher's groove is low: " .. masher.Groove)
 end)
 
+test("InWarmup: taps well before the first note are free", function()
+	local chart = small()
+	expectTrue(LastDancer.InWarmup(chart, -3), "the count-in")
+	expectTrue(LastDancer.InWarmup(chart, 0.2), "shortly before the first note's window")
+	expectTrue(not LastDancer.InWarmup(chart, 0.4), "just before the first note it counts")
+	expectTrue(not LastDancer.InWarmup(chart, 5), "in the song")
+end)
+
 test("PressTime: the device's time, within half the lag plus the reach and the sync limit", function()
 	expectTrue(near(LastDancer.PressTime(99.95, 100, 0.1), 99.95), "an honest time stands")
 	expectTrue(near(LastDancer.PressTime(100.5, 100, 0.1), 100), "never after it arrived")
@@ -154,31 +162,50 @@ test("PhraseAt and CutTime: the cuts fall at the end of phrases 2 to 7", functio
 	expectEqual(LastDancer.CutTime(8), nil)
 end)
 
--- Plays a whole round of cuts from `alive` dancers, nobody falling any other way.
-local function remaining(alive: number): { number }
+-- Plays a whole round of cuts from `start` dancers, nobody falling any other way.
+local function remaining(start: number): { number }
+	local alive = start
 	local history = { alive }
 	for phrase = LastDancer.FIRST_CUT, LastDancer.LAST_CUT do
-		alive -= LastDancer.CutCount(alive, phrase)
+		alive -= LastDancer.CutCount(alive, phrase, start)
 		table.insert(history, alive)
 	end
 	return history
 end
 
-test("CutCount: 12 dancers lose 2, 2, 2, 2, 1, 1 and two are left for the final duel", function()
-	expectEqual(table.concat(remaining(12), ","), "12,10,8,6,4,3,2")
+test("CutCount: 12 dancers go 10, 9, 7, 5, 4, 2 and two are left for the final duel", function()
+	expectEqual(table.concat(remaining(12), ","), "12,10,9,7,5,4,2")
 end)
 
-test("CutCount: any size leaves two for the final phrase, and never cuts into them", function()
-	for alive = 2, 24 do
-		local history = remaining(alive)
+test("CutCount: 8 dancers lose one a phrase; 3 lose their third in the middle cut", function()
+	expectEqual(table.concat(remaining(8), ","), "8,7,6,5,4,3,2")
+	expectEqual(table.concat(remaining(3), ","), "3,3,3,2,2,2,2")
+	expectEqual(table.concat(remaining(4), ","), "4,4,3,3,3,2,2")
+	expectEqual(table.concat(remaining(2), ","), "2,2,2,2,2,2,2")
+end)
+
+test("CutCount: any size leaves two for the final phrase, never cuts into them, and spreads the cuts", function()
+	for start = 2, 24 do
+		local history = remaining(start)
 		expectEqual(history[#history], 2)
 		for index = 2, #history do
-			expectTrue(history[index] >= 2, `{alive} dancers: {table.concat(history, ",")}`)
+			expectTrue(history[index] >= 2, `{start} dancers: {table.concat(history, ",")}`)
+			expectTrue(history[index] <= history[index - 1], `{start} dancers: {table.concat(history, ",")}`)
+		end
+		if start >= 7 then
+			expectTrue(history[2] < history[1], `{start} dancers: someone falls at the first cut`)
 		end
 	end
-	expectEqual(remaining(1)[7], 1)
-	expectEqual(LastDancer.CutCount(12, 1), 0)
-	expectEqual(LastDancer.CutCount(12, 8), 0)
+	expectEqual(table.concat(remaining(1), ","), "1,1,1,1,1,1,1")
+	expectEqual(LastDancer.CutCount(12, 1, 12), 0)
+	expectEqual(LastDancer.CutCount(12, 8, 12), 0)
+end)
+
+test("CutCount: dancers who left already count towards the target", function()
+	-- 12 started; by the second cut 3 have left, so the target of 11 is already beaten
+	expectEqual(LastDancer.CutCount(9, 2, 12), 0)
+	expectEqual(LastDancer.CutCount(9, 3, 12), 0) -- target 9
+	expectEqual(LastDancer.CutCount(9, 4, 12), 2) -- target 7
 end)
 
 test("PickCuts: the lowest groove falls, then the fewest points, then the unluckiest draw", function()
