@@ -117,7 +117,7 @@ by its pivot, and a steak whose pieces came a frame apart kept its seared body s
 piece drops from where the server put it, and the round's steaks are shared up front so devices download them
 before they're served).
 
-**Since version 50, not published yet:** the picnic tables stand on their legs (Hot Potato's and Prime Cut's legs
+**Live in version 51** (2026-10-24 01:45 UTC; the owner chose "Wait for the review, then push"): the picnic tables stand on their legs (Hot Potato's and Prime Cut's legs
 leaned the wrong way: a V on its point; owner: "This is not good claude."; re-uploaded), and bots pass for real
 players (owner: "Can we make the bots look more like real players?"): `Shared/Logic/BotLooks` dresses each one
 from the catalog (one of 12 dynamic heads or Roblox's default, hair or a hat, a shirt and pants, sometimes glasses
