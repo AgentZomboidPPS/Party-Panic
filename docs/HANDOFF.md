@@ -138,7 +138,7 @@ only shows on real devices. Cake Factory (owner: "I feel like its broken and not
 own press brings your machine down and shows its layer at once, instead of after the server's answer (on a
 phone the cake had moved on by then).
 
-**Live in version 52: hit boxes** (owner: "Can we also clean up all hit boxes after we push this
+**Live in version 52 (2026-10-24 02:26 UTC): hit boxes** (owner: "Can we also clean up all hit boxes after we push this
 latest hotfix."). Three read-only audits checked every mode's contact rules against what's drawn (22 of 31 clean);
 fixed: Hot Potato tags (TAG_REACH 4.6 → 3.5, CLIENT_TAG 3, TAG_UP 4.5: no tags across a gap or over a jumper),
 Struggle (the swing's height window ABOVE 2.8 / BELOW 2.0 instead of ±5; PICK 3.6 → 2.8), Parasol Plummet (the body
