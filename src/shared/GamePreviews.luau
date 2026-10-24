@@ -99,6 +99,13 @@ local previews: { [string]: Preview } = {
 		FrameSize = Vector2.new(168, 240),
 		Fps = 8,
 	},
+	LastDancer = {
+		Image = "rbxassetid://111218433907982",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
 	LogJam = {
 		Image = "rbxassetid://135440319616290",
 		Frames = 24,

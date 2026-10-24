@@ -114,6 +114,10 @@ CAMERAS: dict[str, dict] = {
     # and the living room behind.
     "BigBadVacuum": {"look_at": "Hull", "face": "Pupil", "yaw": 25, "pitch": 24, "distance": 62, "fov": 55, "sway": 9, "raise": 7,
                      "shift": [0, 6, 0]},
+    # The ring of dance mats round the stage, mid-dance, under the mirror ball; the camera stands between
+    # two speaker stacks (they're at 30, 90, 150... degrees round the stage), so none fills the frame.
+    "LastDancer": {"look_at": "Stage", "yaw": 30, "pitch": 30, "distance": 50, "fov": 55, "sway": 8, "raise": 6,
+                   "shift": [0, 3, 0]},
     "ObbyOdyssey": {"yaw": 192, "pitch": 24, "distance": 30, "fov": 64, "sway": 9, "raise": 9, "shift": [0, 0, 8]},
     "HotPotato": {"look_at": "Lawn", "yaw": 240, "pitch": 40, "distance": 30, "fov": 60, "sway": 8, "raise": 6,
                   "shift": [19.9, 3, 9.3]},
