@@ -1,6 +1,6 @@
 # Handoff: Party Panic (for the next Claude)
 
-**On this branch since version 55 (not published yet):**
+**Live in version 56 (2026-10-24 ~19:30 UTC, on the owner's "Lets push it"; nothing on the branch since):**
 - **The game's own UI art instead of an AI look** (owner, with a guide to the tells of an AI-made Roblox game: "Can we fix
   these issues? ... I want you to read it and solve the issues"). The guide's GUI tells and what replaced them:
   emoji as icons ("THE BIG ONE") -> 64 icons modelled and lit in Blender, outlined in ink like stickers
