@@ -53,6 +53,9 @@ local SkateEscape = MiniGame.Define("SkateEscape")
 local LANES = 12
 local SEGMENT = 24 -- deck pieces are at most this long (each crumbles on its own)
 local DECK_WIDTH = 100
+-- What lies on the deck between its red and white side curbs (SkateDeck's curbs' inner faces are
+-- 47.825 from the middle): the gap lips' row and the start line, 0.125 clear of them each side.
+local LIP_ROW = 95.4
 local DECK_MESH_LENGTH = 24
 local LAVA_DROP = 34 -- where a fallen skater is out (KillY)
 local START_BACK = 36 -- the start pad behind the line
@@ -250,7 +253,10 @@ function SkateEscape:_canyon()
 	-- Both ends closed by a wall facing down the canyon.
 	for _, ending in { { D = CANYON_BACK - 12, Turn = 0 }, { D = CANYON_END + 12, Turn = math.pi } } do
 		local back = if ending.Turn == 0 then 1 else -1 -- which way (in Z) the wall's pivot sits from its foot
-		local position = origin + Vector3.new(0, WALL_FOOT - 0.5, -ending.D + back * WALL_PIVOT * 1.04)
+		-- (the start's wall 0.1 further back: its rocks' faces were 0.06 from the side walls' ends there,
+		-- and flickered)
+		local nudge = if ending.Turn == 0 then 0.1 else 0
+		local position = origin + Vector3.new(0, WALL_FOOT - 0.5, -ending.D + back * WALL_PIVOT * 1.04 + nudge)
 		MeshLibrary.Get("SkateCanyonWall", {
 			Scale = 1.04,
 			CFrame = CFrame.new(position) * CFrame.Angles(0, ending.Turn, 0),
@@ -260,13 +266,15 @@ function SkateEscape:_canyon()
 
 	-- The plateau around the canyon's rim, out to the horizon (four slabs round the canyon, thick so
 	-- no gap shows under their edges).
-	local top = origin.Y + RIM_TOP
+	-- The side slabs reach 0.1 into the canyon walls' backs and sit 0.1 under the rim: flush with
+	-- the walls' backs and ledges, the two flickered (z-fighting).
+	local top = origin.Y + RIM_TOP - 0.1
 	local thick = 24
 	local rimY = top - thick / 2
 	local outer = 1000
 	for _, side in { -1, 1 } do
 		for _, half in { -1, 1 } do
-			local inner = WALL_X + 48
+			local inner = WALL_X + 47.9
 			Build.Part({
 				Name = "Plateau",
 				Size = Vector3.new(outer - inner, thick, (span + 1400) / 2),
@@ -378,17 +386,17 @@ function SkateEscape:_buildArena()
 		if cut and cursor >= cut[1] - 0.01 then
 			cursor = cut[2]
 			cutIndex += 1
-			-- A raised curb of yellow and black blocks on both lips, so the drop reads at speed.
+			-- A raised curb of yellow and black blocks on both lips, so the drop reads at speed. It
+			-- runs between the deck's red and white side curbs (LIP_ROW) rather than over them: there
+			-- their tops, bottoms and sides were within 0.08 of each other and flickered (z-fighting).
 			local blocks = 14
-			local width = (DECK_WIDTH - 2) / blocks
+			local width = LIP_ROW / blocks
 			for side, lip in { cut[1] - 0.8, cut[2] + 0.8 } do
 				for block = 0, blocks - 1 do
 					local curb = Build.Decor({
 						Name = "GapLip",
 						Size = Vector3.new(width, 0.3, 1.6),
-						CFrame = CFrame.new(
-							origin + Vector3.new(-(DECK_WIDTH - 2) / 2 + (block + 0.5) * width, 0.17, -lip)
-						),
+						CFrame = CFrame.new(origin + Vector3.new(-LIP_ROW / 2 + (block + 0.5) * width, 0.17, -lip)),
 						Color = if (block + side) % 2 == 0 then rgb(255, 200, 40) else rgb(34, 28, 34),
 						Material = if (block + side) % 2 == 0 then Enum.Material.Neon else Enum.Material.Metal,
 						Parent = arena,
@@ -424,10 +432,12 @@ function SkateEscape:_buildArena()
 				trim:SetAttribute("At", at)
 			end
 			for _, sideX in { -1, 1 } do
+				-- (just inside the side curbs: standing on them, their faces met the curbs' stripe ends;
+				-- and 0.1 over the top trim, whose ends they now hold)
 				local post = Build.Decor({
 					Name = "GapLip",
-					Size = Vector3.new(0.8, 18.2, 0.8),
-					CFrame = CFrame.new(origin + Vector3.new(sideX * (DECK_WIDTH / 2 - 1.5), 9.1, -at)),
+					Size = Vector3.new(0.8, 18.3, 0.8),
+					CFrame = CFrame.new(origin + Vector3.new(sideX * (LIP_ROW / 2 - 0.5), 9.15, -at)),
 					Color = rgb(52, 44, 50),
 					Material = Enum.Material.Metal,
 					Parent = arena,
@@ -619,9 +629,9 @@ function SkateEscape:_buildArena()
 		1
 	)
 	Build.Decor({
-		Name = "StartLine",
-		Size = Vector3.new(DECK_WIDTH - 4, 0.08, 1),
-		CFrame = CFrame.new(origin + Vector3.new(0, 0.05, 0.5)),
+		Name = "StartLine", -- (between the side curbs, its top a full 0.1 over the deck)
+		Size = Vector3.new(LIP_ROW, 0.08, 1),
+		CFrame = CFrame.new(origin + Vector3.new(0, 0.06, 0.5)),
 		Color = rgb(250, 250, 250),
 		Parent = start,
 	})
@@ -650,11 +660,12 @@ function SkateEscape:_buildArena()
 		Material = Enum.Material.Slate,
 		Parent = arena,
 	})
-	-- It stands on a rock pillar: a cliff face towards the racers, plain basalt behind it.
+	-- It stands on a rock pillar: a cliff face towards the racers, plain basalt behind it. (Its back
+	-- stops 0.1 short of where the canyon's end wall's rocks have faces: in their plane, it flickered.)
 	Build.Part({
 		Name = "GoalPillar",
-		Size = Vector3.new(DECK_WIDTH, LAVA_DEPTH, GOAL_DEPTH - 8),
-		CFrame = CFrame.new(origin + Vector3.new(0, -8 - LAVA_DEPTH / 2, -length - GOAL_DEPTH / 2)),
+		Size = Vector3.new(DECK_WIDTH, LAVA_DEPTH, GOAL_DEPTH - 8.1),
+		CFrame = CFrame.new(origin + Vector3.new(0, -8 - LAVA_DEPTH / 2, -length - GOAL_DEPTH / 2 + 0.05)),
 		Color = rgb(72, 50, 58),
 		Material = Enum.Material.Basalt,
 		Parent = arena,

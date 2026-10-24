@@ -52,7 +52,10 @@ local FINISH_CLOCK = 10 -- seconds the finish stays open after the first rider i
 local MAX_LEEWAY = 0.4
 local ROOT_Y = 3 -- a standing character's root above the ground
 local ROW_BACK = 4 -- a hurdle row's pivot (the middle of its footprint) sits this far before its bars
-local SINK = 0.05 -- panels and hurdle rows sit this far into the track (never in its plane)
+local SINK = 0.05 -- carrot panels sit this far into the track (never in its plane)
+-- Hurdle rows sit less deep: at 0.05 their feet's tops were 0.07 over the track and their outer feet
+-- 0.07 over the curbs, and flickered (z-fighting). At 0.02 every face is a clear 0.1 off.
+local ROW_SINK = 0.02
 
 -- Horse colours, one per lane (the lane number is the second cue).
 local COLORS = {
@@ -142,8 +145,9 @@ function RockinRaceway:_strip(
 	yaw: number?
 )
 	local origin = self.origin
-	-- (each kind sinks to its own depth, so buried bottoms never share a plane either)
-	local sink = if name == "Curb" then 0.2 elseif name == "Check" then 0.27 else 0.06
+	-- (each kind sinks to its own depth, so buried bottoms never share a plane either: lane lines to
+	-- 0.31, as at 0.06 their bottoms met the hurdle rows' feet's)
+	local sink = if name == "Curb" then 0.2 elseif name == "Check" then 0.27 elseif name == "LaneLine" then 0.31 else 0.06
 	local height = top + sink
 	return Build.Decor({
 		Name = name,
@@ -320,7 +324,7 @@ function RockinRaceway:_buildArena()
 			continue
 		end
 		MeshLibrary.Get("RockinRacewayHurdleRow", {
-			CFrame = self:_frame(panel.D - ROW_BACK, 0, -SINK),
+			CFrame = self:_frame(panel.D - ROW_BACK, 0, -ROW_SINK),
 			Parent = panels,
 		}).Name =
 			"HurdleRow"
