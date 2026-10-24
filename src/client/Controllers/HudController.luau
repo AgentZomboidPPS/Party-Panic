@@ -61,6 +61,7 @@ local RoundHud = require(Shared.Logic.RoundHud)
 local Teams = require(Shared.Teams)
 
 local GoldPassController = require(script.Parent.GoldPassController)
+local LootFly = require(script.Parent.Parent.Crates.LootFly)
 local State = require(script.Parent.Parent.State)
 local HubTabs = require(script.Parent.Parent.UI.HubTabs)
 local Modal = require(script.Parent.Parent.UI.Modal)
@@ -289,18 +290,30 @@ local function buildProfileChip(parent: Instance)
 		currency("Keys", "🔑", 0, Color3.fromRGB(120, 210, 255), Color3.fromRGB(60, 120, 230), "Keys")
 	local cratesPill, cratesLabel =
 		currency("Crates", "📦", 104, Color3.fromRGB(255, 170, 80), Color3.fromRGB(225, 95, 40), "Crates")
-	State.ProfileChanged:Connect(function(profile, previous)
-		local keys = profile.Keys or 0
-		local crates = if profile.Crates then profile.Crates.Count or 0 else 0
+	-- A round's keys and crate fly in here once its results card closes (Crates/LootFly): until they
+	-- land the pills show what the player had before it.
+	LootFly.Target("Keys", keysPill, 1)
+	LootFly.Target("Crates", cratesPill, 1)
+	local shownKeys, shownCrates = nil :: number?, nil :: number?
+	local function redraw()
+		local profile = State.Profile
+		if not profile then
+			return
+		end
+		local keys = LootFly.Shown("Keys", profile.Keys or 0)
+		local crates = LootFly.Shown("Crates", if profile.Crates then profile.Crates.Count or 0 else 0)
 		keysLabel.Text = UIKit.FormatNumber(keys)
 		cratesLabel.Text = UIKit.FormatNumber(crates)
-		if previous and keys > (previous.Keys or 0) then
+		if shownKeys and keys > shownKeys then
 			UIKit.PopIn(keysPill, 0.3)
 		end
-		if previous and crates > (if previous.Crates then previous.Crates.Count or 0 else 0) then
+		if shownCrates and crates > shownCrates then
 			UIKit.PopIn(cratesPill, 0.3)
 		end
-	end)
+		shownKeys, shownCrates = keys, crates
+	end
+	State.ProfileChanged:Connect(redraw)
+	LootFly.Changed:Connect(redraw)
 end
 
 -- Phones: a small pill (level badge, name, XP bar) with the coins tucked under it, in the top left

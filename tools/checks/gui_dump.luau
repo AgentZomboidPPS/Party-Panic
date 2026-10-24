@@ -493,6 +493,10 @@ function __dumpGui(playerGui, label)
 				e.img = inst.Image
 				e.ic = color(inst.ImageColor3)
 				e.it = inst.ImageTransparency
+				if inst.ImageRectSize.X > 0 then
+					-- (a cell of a sheet: ui_render.py draws just that part of a local copy)
+					e.irect = { inst.ImageRectOffset.X, inst.ImageRectOffset.Y, inst.ImageRectSize.X, inst.ImageRectSize.Y }
+				end
 			end
 			if inst:IsA("ScrollingFrame") then
 				e.canvas = udim2(inst.CanvasSize)

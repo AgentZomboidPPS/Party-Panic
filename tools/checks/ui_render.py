@@ -331,6 +331,53 @@ FACE_SKINS = [(255, 214, 170), (240, 190, 140), (200, 140, 95), (140, 95, 60), (
 FACE_HAIR = [(70, 45, 30), (30, 25, 25), (230, 180, 70), (190, 80, 40), (90, 60, 160), (40, 120, 200)]
 
 
+# Our own uploaded pictures, drawn from their local files (assets/images/season/uploaded.json: the
+# season's icon sheet, the key packs): rbxassetid -> path. Anything else is an outlined placeholder.
+_LOCAL_IMAGES: dict | None = None
+
+
+def local_images() -> dict:
+    global _LOCAL_IMAGES
+    if _LOCAL_IMAGES is None:
+        _LOCAL_IMAGES = {}
+        folder = Path(__file__).resolve().parents[2] / "assets" / "images" / "season"
+        try:
+            uploaded = json.loads((folder / "uploaded.json").read_text())
+        except (OSError, ValueError):
+            uploaded = {}
+        for name, entry in uploaded.items():
+            stem = name.split("_", 1)[1] if name.startswith("Shop_") else name.lower()
+            path = folder / "shop" / f"{stem}.png" if name.startswith("Shop_") else folder / f"{stem}.png"
+            if path.exists() and isinstance(entry, dict) and entry.get("image"):
+                _LOCAL_IMAGES[str(entry["image"])] = path
+    return _LOCAL_IMAGES
+
+
+def draw_local_image(layer: Image.Image, box: list, n: dict) -> bool:
+    """Draws an ImageLabel whose picture we have locally (its ImageRect cell, fitted to its box)."""
+    found = re.search(r"(\d{6,})", str(n.get("img", "")))
+    path = found and local_images().get(found.group(1))
+    if not path:
+        return False
+    picture = Image.open(path).convert("RGBA")
+    rect = n.get("irect")
+    if rect:
+        x, y, w, h = rect
+        picture = picture.crop((int(x), int(y), int(x + w), int(y + h)))
+    bw, bh = int(box[2] - box[0]), int(box[3] - box[1])
+    if bw < 2 or bh < 2:
+        return True
+    scale = min(bw / picture.width, bh / picture.height)  # (ScaleType Fit)
+    size = (max(1, int(picture.width * scale)), max(1, int(picture.height * scale)))
+    picture = picture.resize(size, Image.LANCZOS)
+    alpha = 1 - float(n.get("it", 0) or 0)
+    if alpha < 1:
+        picture.putalpha(picture.getchannel("A").point(lambda v: int(v * alpha)))
+    at = (int(box[0] + (bw - size[0]) / 2), int(box[1] + (bh - size[1]) / 2))
+    layer.alpha_composite(picture, at)
+    return True
+
+
 def draw_face(layer: Image.Image, box: list, radius: float, image: str, transparency: float):
     """A stand-in for a Roblox headshot (rbxthumb://...&id=N): a cartoon head on a soft backdrop,
     its colours picked by the user id, inside the image's own corners."""
@@ -772,6 +819,8 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
         if n.get("img"):
             if str(n["img"]).startswith("rbxthumb://"):
                 draw_face(layer, box, radius, n["img"], n.get("it", 0))
+            elif draw_local_image(layer, box, n):
+                pass
             else:
                 d.rounded_rectangle(box, radius=radius, outline=rgba(n.get("ic", [255, 255, 255]), 0.4), width=1)
         if border:

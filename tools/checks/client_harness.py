@@ -2306,9 +2306,24 @@ phase("Results", 8, function()
 		FirstWin = place == 1,
 		LevelUp = 7, -- the round took the player to a new level
 		Standings = standings,
-		-- The crate season's crate (Services/CrateService): one more line on the card.
-		Crate = { Count = 1, Name = "Hollow Crate", Season = "HollowNight", Total = 13, Keys = 7 },
+		-- The crate season's crate and the keys the place won (Services/CrateService): the card's
+		-- two loot tiles (3 keys for the win, 2 for second).
+		Crate = {
+			Count = 1,
+			Name = "Hollow Crate",
+			Season = "HollowNight",
+			Total = 13,
+			Keys = 7 + (4 - place),
+			KeysWon = 4 - place,
+		},
 	})
+	-- The server's profile catches up just after (Services/DataService): the 🔑 and 📦 counters keep
+	-- the old numbers until the loot has flown in (Crates/LootFly).
+	if okSnap and snapshot.Crates then
+		snapshot.Keys = 7 + (4 - place)
+		snapshot.Crates.Count = 13
+		__fire("ProfileData", snapshot)
+	end
 	GameState.SetJSON("Champions", champions)
 	-- PLAY AGAIN? on the card (Services/ReplayService): the people who played vote (bots don't).
 	local voters = { __player.UserId }
@@ -2456,11 +2471,52 @@ if #bots > 0 then
 	botChecks.headshotsAskedFor = __thumbnailIds
 end
 
+-- The round's crate and keys fly into their counters as the card closes (Crates/LootFly): the 🔑
+-- and 📦 pills under the coins on PC, the lobby's crate chip on phones. lootChecks: what the
+-- counters read with the card up (the old numbers), in the middle of the flight, and after it.
+local lootChecks = {}
+local function lootLook(label)
+	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+	local counters = {}
+	for _, item in (if hud then hud:GetDescendants() else {}) do
+		if (item.Name == "Keys" or item.Name == "Crates") and item:IsA("GuiObject") then
+			local texts = {}
+			for _, label in item:GetDescendants() do
+				if label:IsA("TextLabel") or label:IsA("TextButton") then
+					if label.Text ~= "" then
+						table.insert(texts, label.Text)
+					end
+				end
+			end
+			if #texts > 0 then
+				table.insert(counters, `{item.Name}{if item.Visible then "" else " (hidden)"}: {table.concat(texts, " ")}`)
+			end
+		end
+	end
+	local flying, plus = 0, {}
+	for _, item in __playerGui:GetDescendants() do
+		if item.Name == "LootFly" then
+			for _, child in item:GetChildren() do
+				if child:IsA("Frame") and child.Visible then
+					flying += 1
+				elseif child:IsA("TextLabel") then
+					table.insert(plus, child.Text)
+				end
+			end
+		end
+	end
+	lootChecks[label] = { counters = counters, flying = flying, plus = plus }
+end
 phase("Cleanup", 3, function()
 	for _, who in everyone() do
 		who:SetAttribute("PP_InRound", false)
 		who:SetAttribute("PP_Alive", false)
 	end
+	lootLook("cardUp")
+	task.delay(1.0, function()
+		lootLook("flying")
+		snap("Loot fly")
+	end)
 end)
 -- Back in the lobby the card shows while the last first-join tip is due: on phones the tip steps
 -- aside while the card is up and comes back after it, its 8 s counted only while it's on screen
@@ -2491,6 +2547,7 @@ do
 	look("cardUp")
 	task.wait(10) -- the card closes itself after 9 s
 	look("afterCard")
+	lootLook("landed")
 end
 phase("Waiting", 0)
 task.wait(1)
@@ -2944,6 +3001,7 @@ return game:GetService("HttpService"):JSONEncode({
 	partyChecks = partyChecks,
 	medalChecks = medalChecks,
 	replayChecks = replayChecks,
+	lootChecks = lootChecks,
 	ratingChecks = ratingChecks,
 	goldChecks = goldChecks,
 	crateChecks = __crateChecks,

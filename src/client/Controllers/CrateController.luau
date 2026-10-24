@@ -30,6 +30,8 @@ local LobbyRibbon = require(script.Parent.Parent.UI.LobbyRibbon)
 local CrateMenu = require(script.Parent.Parent.Crates.CrateMenu)
 local CrateMoments = require(script.Parent.Parent.Crates.CrateMoments)
 local CrateShow = require(script.Parent.Parent.Crates.CrateShow)
+local LootFly = require(script.Parent.Parent.Crates.LootFly)
+local Haptics = require(script.Parent.Parent.Haptics)
 local AudioController = require(script.Parent.AudioController)
 local NotificationController = require(script.Parent.NotificationController)
 local SeasonWorldController = require(script.Parent.SeasonWorldController)
@@ -50,12 +52,14 @@ local chip: LobbyRibbon.Chip? = nil
 local walking = 0 -- bumped for every walk, so a new one (or anything that stops it) ends the last
 local welcomed = false
 
+-- (Less a round's keys and crate still flying in from its results card: Crates/LootFly.)
 local function counts(): (number, number)
 	local profile = State.Profile
 	if not profile then
 		return 0, 0
 	end
-	return if profile.Crates then profile.Crates.Count or 0 else 0, profile.Keys or 0
+	return LootFly.Shown("Crates", if profile.Crates then profile.Crates.Count or 0 else 0),
+		LootFly.Shown("Keys", profile.Keys or 0)
 end
 
 local function refreshChip()
@@ -324,6 +328,14 @@ function CrateController.Start(context)
 	glow.Enabled = false
 	glow.Parent = (chip :: LobbyRibbon.Chip).Button
 	refreshChip()
+	-- A round's keys and crate land on the chip on phones (PC: the pills under the coins win).
+	LootFly.Target("Keys", (chip :: LobbyRibbon.Chip).Button, 2)
+	LootFly.Target("Crates", (chip :: LobbyRibbon.Chip).Button, 2)
+	LootFly.OnLand = function()
+		AudioController.PlayOr("CrateTick", "Pickup")
+		Haptics.Play("Tap")
+	end
+	LootFly.Changed:Connect(refreshChip)
 
 	remote.OnClientEvent:Connect(function(action, payload)
 		if action == "Show" and type(payload) == "table" then
