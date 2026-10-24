@@ -42,6 +42,10 @@ local HIT_WORDS = {
 	Bar = { "WHACK!", Color3.fromRGB(255, 170, 60) },
 	Barrel = { "POW!", Color3.fromRGB(255, 220, 80) },
 }
+-- A ball's shadow on the bridge: faint and dark while it's over heads, red once its middle is low
+-- enough to hit someone (it hangs 5 over the bridge at the bottom of its swing, 13 at the ends).
+local SHADOW_HIGH, SHADOW_LOW = 11, 6.5 -- studs over the bridge: starts turning red, fully red
+local SHADOW_DARK, SHADOW_DANGER = Color3.fromRGB(20, 10, 30), Color3.fromRGB(230, 30, 60)
 local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
 local SPARK = "rbxasset://textures/particles/sparkles_main.dds"
 
@@ -116,7 +120,7 @@ function ObbyOdyssey.Start(api)
 	-- The moving parts, found as the arena arrives ------------------------------------------------------
 
 	local arena = api:Arena(20)
-	local balls: { { Spec: Course.Ball, Mover: Mover } } = {}
+	local balls: { { Spec: Course.Ball, Mover: Mover, Shadow: BasePart } } = {}
 	local bars: { { Spec: Course.Spinner, Mover: Mover } } = {}
 	local blinks: { { Piece: Course.Piece, Parts: { BasePart }, Shown: string? } } = {}
 	local glows: { { Part: BasePart, Checkpoint: number, Lit: boolean } } = {}
@@ -146,7 +150,23 @@ function ObbyOdyssey.Start(api)
 			if spec and not found[model] and #model:GetChildren() >= 4 then
 				found[model] = true
 				local hinge = CFrame.new(o + Vector3.new(spec.X, spec.PivotY, spec.Z))
-				table.insert(balls, { Spec = spec, Mover = moverFor(model, hinge) })
+				-- Its shadow on the bridge, darker and redder as it swings low enough to hit (owner:
+				-- "the swinging balls on the OBBY obstacle is too hard for players on mobile"): where
+				-- it'll be is easy to read from any angle, even looking straight down at the runner.
+				local shadow = Instance.new("Part")
+				shadow.Name = "BallShadow"
+				shadow.Shape = Enum.PartType.Cylinder
+				shadow.Anchored = true
+				shadow.CanCollide = false
+				shadow.CanQuery = false
+				shadow.CanTouch = false
+				shadow.CastShadow = false
+				shadow.Material = Enum.Material.SmoothPlastic
+				shadow.Size = Vector3.new(0.05, spec.Radius * 2, spec.Radius * 2)
+				shadow.Transparency = 1
+				shadow.Parent = arena
+				api:Track(shadow)
+				table.insert(balls, { Spec = spec, Mover = moverFor(model, hinge), Shadow = shadow })
 			end
 		end
 		folder = arena:FindFirstChild("Bars")
@@ -590,10 +610,24 @@ function ObbyOdyssey.Start(api)
 				table.insert(moveFrames, frame * mover.Offsets[index])
 			end
 		end
+		local bridgeTop = Course.Bridge.Top
 		for _, entry in balls do
 			local spec = entry.Spec
 			local hinge = CFrame.new(o + Vector3.new(spec.X, spec.PivotY, spec.Z))
 			place(entry.Mover, hinge * CFrame.Angles(0, 0, Course.BallAngle(spec, t)))
+			local bx, by = Course.BallAt(spec, t)
+			-- (0 swinging high over heads, 1 low enough to hit a runner)
+			local low = math.clamp((bridgeTop + SHADOW_HIGH - by) / (SHADOW_HIGH - SHADOW_LOW), 0, 1)
+			local shadow = entry.Shadow
+			shadow.Color = SHADOW_DARK:Lerp(SHADOW_DANGER, low)
+			shadow.Transparency = 0.82 - 0.4 * low
+			local width = spec.Radius * (1.5 + 0.6 * low)
+			shadow.Size = Vector3.new(0.05, width, width)
+			table.insert(moveParts, shadow)
+			table.insert(
+				moveFrames,
+				CFrame.new(o + Vector3.new(bx, bridgeTop + 0.06, spec.Z)) * CFrame.Angles(0, 0, math.rad(90))
+			)
 		end
 		for _, entry in bars do
 			local spec = entry.Spec
@@ -825,7 +859,7 @@ function ObbyOdyssey.Start(api)
 			myStage = math.max(myStage, mine.S)
 		end
 		if not (mine and mine.F) and placeText ~= "" then
-			placeText ..= `  ·  ✓{myStage}/{#Course.Checkpoints}`
+			placeText ..= `  ·  🚩{myStage}/{#Course.Checkpoints}`
 		end
 		if placeText ~= lastPlace then
 			lastPlace = placeText

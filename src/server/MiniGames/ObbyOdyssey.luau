@@ -49,7 +49,9 @@ local ObbyOdyssey = MiniGame.Define("ObbyOdyssey")
 
 local MAX_PING = 0.5 -- round trips above this are judged as this
 local HIT_COOLDOWN = 1.4 -- after a hit, no new one for this long (they're flying)
-local BALL_PUSH, BALL_LIFT, BALL_STUN = 62, 34, 0.9
+-- A ball throws a runner sideways into the bridge's bumpers (and back a little), not into the water.
+local BALL_PUSH, BALL_LIFT, BALL_BACK, BALL_STUN = 40, 26, 12, 0.8
+local BUMPER_WIDTH, BUMPER_HEIGHT, BUMPER_AIR = 0.8, 1.3, 10
 local BAR_PUSH, BAR_LIFT, BAR_STUN = 44, 36, 0.7
 local BARREL_PUSH, BARREL_LIFT, BARREL_BACK, BARREL_STUN = 40, 34, 18, 0.8
 local LAUNCH_REACH = 6 -- a person may say they launched from this close to the pad (ping and a step)
@@ -630,7 +632,7 @@ function ObbyOdyssey:_checkpointFlag(piece: Course.Piece)
 		Color = CHECK_GREEN,
 	})
 	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
-		Build.SurfaceText(flag, face, `✓{piece.Checkpoint}`, {
+		Build.SurfaceText(flag, face, `🚩{piece.Checkpoint}`, {
 			PixelsPerStud = 20,
 			Font = SIGN_FONT,
 			TextColor3 = rgb(255, 255, 255),
@@ -746,6 +748,30 @@ function ObbyOdyssey:_buildGantry()
 			Size = Vector3.new(19.6, 1.6, 1.6),
 			CFrame = self:_at(bridge.X, pivotY + 1.4, z),
 			Color = PINK,
+		})
+	end
+	-- Bumpers down both sides of the bridge under the gantry (owner: "I think the swinging balls on the
+	-- OBBY obstacle is too hard for players on mobile."): a ball's BONK throws a runner against the
+	-- rail, and they get up on the bridge a moment later instead of falling in the water and going
+	-- back to the checkpoint. A low rail to see, and a wall of air over it that catches one thrown high
+	-- (see-through, so the camera never bumps into it).
+	for _, side in { -1, 1 } do
+		local x = bridge.X + side * (bridge.W / 2 + BUMPER_WIDTH / 2)
+		Build.Part({
+			Name = "Bumper",
+			Size = Vector3.new(BUMPER_WIDTH, BUMPER_HEIGHT, to - from),
+			CFrame = self:_at(x, bridge.Top + BUMPER_HEIGHT / 2, (from + to) / 2),
+			Color = PINK,
+			Parent = self.context.Arena,
+		})
+		Build.Part({
+			Name = "BumperAir",
+			Size = Vector3.new(BUMPER_WIDTH, BUMPER_AIR, to - from),
+			CFrame = self:_at(x, bridge.Top + BUMPER_HEIGHT + BUMPER_AIR / 2, (from + to) / 2),
+			Transparency = 1,
+			CanQuery = false,
+			CastShadow = false,
+			Parent = self.context.Arena,
 		})
 	end
 	for _, ball in Course.Balls do
@@ -1331,7 +1357,7 @@ function ObbyOdyssey:_hazards(player, runner: Runner, p: Vector3, feet: number, 
 		end
 		if Course.BallHits(ball, seen, p.X, feet, p.Z) then
 			local heading = Course.BallHeading(ball, seen)
-			self:_hit(player, runner, Vector3.new(heading * BALL_PUSH, BALL_LIFT, 0), BALL_STUN, p, "Ball")
+			self:_hit(player, runner, Vector3.new(heading * BALL_PUSH, BALL_LIFT, -BALL_BACK), BALL_STUN, p, "Ball")
 			return
 		end
 	end
@@ -1585,7 +1611,7 @@ function ObbyOdyssey:GetResults()
 				Player = player,
 				Rank = runner.Stage * 10000 + progress,
 				ScoreText = if runner.Stage > 0
-					then `✓{runner.Stage} · {percent}% of the way`
+					then `🚩{runner.Stage} · {percent}% of the way` -- (a ✓ before a number read as "√3")
 					else `{percent}% of the way`,
 				BestScore = percent,
 			})
