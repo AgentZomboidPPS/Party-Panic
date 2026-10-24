@@ -1,9 +1,19 @@
 # Handoff: Party Panic (for the next Claude)
 
-**On this branch since version 57:** the last five meshes' fights (ArrowBarrel's vanes turned 30 degrees off the shaft's
-faces; Honeycomb, HoneyGlade, TanksTank's hubs and MinecartMayhemRailStart by unfight, which now moves a face 0.1 in front
-of the furthest face it fought), uploaded again. A clipping pass on the arenas the last one didn't cover is with the map
-agent.
+**On this branch since version 57 (not published yet):**
+- The last five meshes' fights (ArrowBarrel's vanes turned 30 degrees off the shaft's faces; Honeycomb, HoneyGlade,
+  TanksTank's hubs and MinecartMayhemRailStart by unfight, which now moves a face 0.1 in front of the furthest face it
+  fought), uploaded again. `mesh_zfight.py` over every .glb: 0 meshes with fights.
+- Phones: the squad bar takes no taps (its left end reached into the MOVE stick's corner; the PARTY chip opens the window);
+  the lobby chips step aside while the emote picker is open (`PP_EmotesOpen`; they sat over its X on the smallest); the
+  profile card steps aside for a level-up or medal card (`PP_Celebrating`); every close button draws the X (✕ -> UI/Icons).
+- Clipping pass (map agent): the lobby's five Hollow Night leaf heaps sat on the shooting booth, quest patio, shop stand,
+  podium and half through the emote stage's floor (now on open lawn, `SeasonWorld.leafHeaps`); Mecha Marathon's distance
+  boards and start towers stand on the grass (`LAWN`, 0.35 under the track); Big Bad Vacuum's toy-block wall and the giant
+  TVs, couches and lamps rest on the floor. A scratch "resting on nothing" check (rays down from every part's lowest
+  points) found them; it isn't in the repo yet and wasn't run on the other ~25 arenas.
+- Phone UI checks: what's left is pop-ups over the HUD (the party invite card over the chips, the crate unbox banners
+  over the PARTY chip, the cup standings over the card), all older than this round. PC: 0.
 
 **Live in version 57 (2026-10-24, on the owner's "Push and keep working."):**
 - **Capy Go Boom is back in the rotation** (owner: "Reenable it."): its three live bugs were fixed after version 53 (below).
