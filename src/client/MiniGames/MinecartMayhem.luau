@@ -751,10 +751,19 @@ function MinecartMayhem.Start(api)
 	type Gate = { Lamps: { { BasePart } }, Beacons: { BasePart } }
 	local gates: { [number]: Gate } = {}
 	local gateShows: { [number]: number } = {}
+	-- (Gates are only looked at once the whole arena is here: a gate looked at while its parts were
+	-- still arriving kept the lamps it had, and the rest never lit; Kit/Api.Arena.)
+	local arenaHere = false
+	task.spawn(function()
+		api:Arena()
+		arenaHere = true
+	end)
 	local function gateOf(tileIndex: number): Gate?
 		local found = gates[tileIndex]
 		if found then
 			return found
+		elseif not arenaHere then
+			return nil
 		end
 		local arena = workspace:FindFirstChild("Arena_" .. api.Id)
 		local folder = arena and arena:FindFirstChild("JumpGate" .. tileIndex, true)

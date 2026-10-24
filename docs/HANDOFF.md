@@ -127,6 +127,16 @@ on a Roblox server (catalog items can be taken down: run it now and then); class
 bot's default dynamic head doesn't show them. If the catalog doesn't answer, a bot spawns in its skin on the
 plain body rather than not at all. Still a tell the owner may want gone: Roblox's own player list (Level, Wins)
 only lists real people.
+Skate Escape's bridge pieces turned up in the lobby (owner: "The skate peices are in the lobby"): a device starts
+a mode's client half as Preparing does, while the arena is still being built and sent, and a model that came
+before its parts read its pivot as the world's middle (the lobby). Now `RoundContext.MarkBuilt` (right after
+Prepare) puts the arena's part count on it and `Kit/Api.Arena` waits for all of them (through Preparing, then
+5 s more, 40 s at most); Skate Escape also stamps each section's pivot; Trace Race picks its crayons up and
+Minecart Mayhem its gates only after that wait. A read-only audit of every client half found the rest clean.
+The round harness runs client and server in one place, so nothing ever arrives late there: this kind of bug
+only shows on real devices. Cake Factory (owner: "I feel like its broken and not lining up properly"): your
+own press brings your machine down and shows its layer at once, instead of after the server's answer (on a
+phone the cake had moved on by then).
 
 **The owner's plan for seasons and events** (2026-10-23): "Also we can have events/holidays run along side seasons.
 Also seasons are actually spring summer fall and winter". So the crate seasons are the year's four: HOLLOW NIGHT is

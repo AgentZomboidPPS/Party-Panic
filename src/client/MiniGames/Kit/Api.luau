@@ -129,19 +129,28 @@ end
 -- (RoundContext.MarkBuilt) and this waits until this device has them, so nothing reads a model that
 -- came before its parts (its pivot then reads as the world's middle: Skate Escape's bridge pieces
 -- landed in the lobby; owner: "The skate peices are in the lobby"). The client half starts as
--- Preparing does, while the server is still building. It gives up waiting after ARENA_WAIT, or once
--- the count stops growing for a moment (the server may have taken parts out since).
-local ARENA_WAIT = 15
+-- Preparing does, while the server is still building. It waits as long as Preparing lasts (building
+-- can take most of it: first loads of the props, characters arriving) and ARENA_WAIT more, at most
+-- ARENA_MAX in all, or until the count stops growing for a moment (the server may have taken parts
+-- out since).
+local ARENA_WAIT, ARENA_MAX = 5, 40
 function Api.Arena(self: Api, timeout: number?): Model?
 	local arena = workspace:WaitForChild("Arena_" .. self.Id, timeout or 10) :: Model?
 	if not arena then
 		return nil
 	end
-	local deadline = os.clock() + ARENA_WAIT
+	local started = os.clock()
+	local deadline = started + ARENA_WAIT
 	local last, steadySince = -1, os.clock()
-	while os.clock() < deadline and arena.Parent do
+	while arena.Parent and os.clock() - started < ARENA_MAX do
 		local expected = arena:GetAttribute("PP_Parts")
-		if type(expected) == "number" then
+		if type(expected) ~= "number" then
+			if GameState.Get("Phase") == "Preparing" then
+				deadline = os.clock() + ARENA_WAIT -- (still being built)
+			elseif os.clock() >= deadline then
+				break
+			end
+		else
 			local count = 0
 			for _, descendant in arena:GetDescendants() do
 				if descendant:IsA("BasePart") then

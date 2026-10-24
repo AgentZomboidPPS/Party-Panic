@@ -473,8 +473,14 @@ function TraceRace.Start(api)
 			end
 		end
 	end
-	findCrayons()
-	api:Track(CollectionService:GetInstanceAddedSignal("TraceRaceCrayon"):Connect(findCrayons))
+	-- (Only once the whole arena is here: the crayons are built with it, and a crayon moved before
+	-- its biggest piece came was moved from the world's middle, pieces missing or off in the lobby;
+	-- Kit/Api.Arena.)
+	task.spawn(function()
+		api:Arena()
+		findCrayons()
+		api:Track(CollectionService:GetInstanceAddedSignal("TraceRaceCrayon"):Connect(findCrayons))
+	end)
 
 	-- Every frame ------------------------------------------------------------------------------------------
 	local lastState = ""
@@ -566,7 +572,7 @@ function TraceRace.Start(api)
 				else 0
 			local turned = tip * CFrame.Angles(0, yaw, 0)
 			local crayon = rider.Crayon
-			if crayon and crayon.Parent then
+			if crayon and crayon.Parent and crayon.PrimaryPart then
 				local toPivot = crayon:GetAttribute("TipToPivot")
 				crayon:PivotTo(
 					turned * CFrame.new(if typeof(toPivot) == "Vector3" then toPivot else Vector3.new(0, 0, TIP))
