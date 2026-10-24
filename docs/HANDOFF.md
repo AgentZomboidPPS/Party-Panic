@@ -19,7 +19,8 @@ until the owner says; no pull request. Full description: [MINIGAME_BACKLOG.md](M
   of 1/2/3/5 players, no z-fighting, the arena rendered with Blender, mesh orientation 0.
 - **Waiting on the owner (nothing was uploaded or published):**
   1. **The song:** `python3 tools/upload_assets.py --user-id 11690979745 --what modes` (ModePack7, built locally by
-     `modes.py pack`; uses the 7th of the owner's 10 audio uploads this month). Until its id is in `AudioAssets` the mode
+     `modes.py pack`; the .ogg is in `build/`, not in git, so in a fresh container run `modes.py render LastDancer` and `modes.py pack`
+     first; it uses the 7th of the owner's 10 audio uploads this month). Until its id is in `AudioAssets` the mode
      **keeps itself out of the live vote** (a rhythm game without its song is half a game); Studio and the harness ignore that.
   2. **The meshes** (mirror ball, speaker stack; `--what meshes --only LastDancerMirrorBall,LastDancerSpeaker`): until
      uploaded and approved the arena uses plain parts.

@@ -48,7 +48,8 @@ players, the phone HUD at five sizes (0 problems), no z-fighting, the arena rend
 ## Going live
 
 The mode keeps itself out of the vote on live servers until its song is in the game. To switch it on: upload the song
-(`python3 tools/upload_assets.py --user-id 11690979745 --what modes --dry-run`, then without `--dry-run`: it uses 1 of the
+(ModePack7's audio file lives in `build/`, which isn't in git: in a fresh container run `python3 tools/music/modes.py render
+LastDancer` and `python3 tools/music/modes.py pack` first, which rebuilds the same pack; then `python3 tools/upload_assets.py --user-id 11690979745 --what modes --dry-run`, then without `--dry-run`: it uses 1 of the
 owner's 10 audio uploads a month), optionally the meshes (`--what meshes --only LastDancerMirrorBall,LastDancerSpeaker`),
 publish, restart the servers. Then add "💃 LAST DANCER" to `docs/STORE_DESCRIPTION.txt` (31 mini-games) and make its portal
 preview (`tools/preview/make_preview.py LastDancer`).
