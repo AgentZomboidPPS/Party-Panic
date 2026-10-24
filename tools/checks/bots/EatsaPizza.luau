@@ -1,16 +1,27 @@
--- Test bot for Eatsa Pizza (tools/checks/round_harness.py): every stand-in player walks (env.Move)
--- to a slice of its team with food left and mashes "Eat" like a client, a little slower the further
--- down the list it is; the stand-in client (Bot1) is left to the client half. It notes the teams'
--- shares every few seconds, one stand-in leaves mid-round (with 3 or more), and at the start it lists
--- any collidable part in the arena that isn't a visible part (there should be none).
+-- Test bot for Eatsa Pizza (tools/checks/round_harness.py): every stand-in player runs (env.Move, a
+-- step at a time at walking speed) to a bite spot of its team, mashes "Eat" like a client while it
+-- stands on one (a little slower the further down the list it is), and when its spot pops runs to
+-- the next (the nearest one no other stand-in is heading for). The stand-in client (Bot1) is left to
+-- the client half. It notes the teams' shares and spots every few seconds, checks every spot is on
+-- its own team's slice with food on it, one stand-in leaves mid-round (with 3 or more), and at the
+-- start it lists any collidable part in the arena that isn't a visible part (there should be none).
 return function(env)
 	local ctx = env.ctx
 	local mode = env.game
 	local Logic = mode.Logic -- (this file is bundled as is: it reaches the shared rules through the mode)
-	local targets, stages = {}, {}
-	local bites = 0
+	local SPEED = 16 -- studs a second: a character's walk
+	local targets = {}
+	local bites, pops, badSpots = 0, 0, 0
 	local reported = {}
-	return function(elapsed)
+	local function find(id)
+		for _, spot in mode.spots or {} do
+			if spot.Id == id then
+				return spot
+			end
+		end
+		return nil
+	end
+	return function(elapsed, dt)
 		if not reported.collision and elapsed > 0.5 then
 			reported.collision = true
 			local suspicious = {}
@@ -26,40 +37,57 @@ return function(env)
 			env.note(`collidable parts: {solid}; invisible or mesh: {#suspicious} {table.concat(suspicious, "; ")}`)
 		end
 		if mode.phase == "Eat" then
+			-- Every spot is on its team's slice, inside what's left of it.
+			for _, spot in mode.spots do
+				local slice = mode.slices[spot.Slice]
+				local d = math.sqrt(spot.X * spot.X + spot.Z * spot.Z)
+				if
+					slice.Team ~= spot.Team
+					or slice.Left < spot.Left
+					or d > Logic.SpotOuter(slice.Stage, mode.radius) + 0.5 -- (as Server's _fixSpots allows)
+				then
+					badSpots += 1
+				end
+			end
+			local heading = {}
 			for index, player in env.players do
 				if (env.client and index == 1) or not env.Alive(player) then
 					continue
 				end
 				local member = mode.members[player]
-				local state = member and mode.teams[member.Team]
-				if not state then
+				local position = env.Root(player)
+				if not member or not position then
 					continue
 				end
-				local target = targets[player]
-				if not target or mode.slices[target].Left <= 0 then
-					target = nil
-					for k = 0, #state.Slices - 1 do
-						local slice = state.Slices[(index + k) % #state.Slices + 1]
-						if mode.slices[slice].Left > 0 then
-							target = slice
-							break
+				local target = targets[player] and find(targets[player])
+				if not target then
+					if targets[player] then
+						pops += 1
+					end
+					local best, bestCost = nil, math.huge
+					for _, spot in mode.spots do
+						if spot.Team == member.Team then
+							local goal = mode.center + Vector3.new(spot.X, 3, spot.Z)
+							local cost = (goal - position).Magnitude + (if heading[spot.Id] then 20 else 0)
+							if cost < bestCost then
+								best, bestCost = spot, cost
+							end
 						end
 					end
-					targets[player] = target
+					target = best
+					targets[player] = if best then best.Id else nil
 				end
-				-- (Steps in as the slice is bitten back towards its tip.)
-				local stage = target and mode.slices[target].Stage
-				if target and stages[player] ~= `{target}:{stage}` then
-					stages[player] = `{target}:{stage}`
-					do
-						local slice = mode.slices[target]
-						local spot = mode.center
-							+ Logic.StandSpot(target, slice.Stage, mode.radius, (index % 3) - 1)
-							+ Vector3.new(0, 3, 0)
-						env.Move(player, spot, mode.center + Vector3.new(0, 3, 0))
-					end
+				if not target then
+					continue
 				end
-				if target and env.rng:NextNumber() < 0.42 - index * 0.015 then
+				heading[target.Id] = true
+				local goal = mode.center + Vector3.new(target.X, 3, target.Z)
+				local flat = Vector3.new(goal.X - position.X, 0, goal.Z - position.Z)
+				if flat.Magnitude > 0.5 then
+					local step = flat.Unit * math.min(flat.Magnitude, SPEED * (dt or 0.05))
+					env.Move(player, Vector3.new(position.X + step.X, goal.Y, position.Z + step.Z), mode.center)
+				end
+				if mode:_spotUnder(player) and env.rng:NextNumber() < 0.42 - index * 0.015 then
 					env.Action(player, "Eat")
 					bites += 1
 				end
@@ -70,9 +98,17 @@ return function(env)
 			reported[second] = true
 			local parts = {}
 			for _, team in mode.order do
-				table.insert(parts, `{team} {math.floor(mode:_teamShare(team) * 100)}%`)
+				local count = 0
+				for _, spot in mode.spots or {} do
+					if spot.Team == team then
+						count += 1
+					end
+				end
+				table.insert(parts, `{team} {math.floor(mode:_teamShare(team) * 100)}% ({count} spots)`)
 			end
-			env.note(`{elapsed // 1}s: {table.concat(parts, ", ")}; {bites} bites sent; phase {mode.phase}`)
+			env.note(
+				`{elapsed // 1}s: {table.concat(parts, ", ")}; {bites} bites sent, {pops} spots eaten, {badSpots} bad spot checks; phase {mode.phase}`
+			)
 		end
 		if elapsed > 10 and #env.players >= 3 and not env.left then
 			local leaver = env.players[#env.players]

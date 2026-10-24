@@ -1,20 +1,29 @@
 -- Client half of Eatsa Pizza: the teams' shares eaten (a card each, with a bar and a big percent), the
--- EAT button (E), what the player's own slice is up to, a marker over the next slice to go to, and
--- the crumbs flying wherever someone chews.
+-- EAT button (E), the BITE SPOTS (a glowing ring on the cheese for every spot, a bobbing ▼ over each
+-- of my team's, "EAT HERE" over the nearest), what my spot is up to, and the crumbs flying wherever
+-- someone chews.
+--
+-- Run, chomp, run (owner: "eatza pizza is better. can we make players run around while eating instead
+-- of just sitting on the slice?"): you eat at your team's spots, not wherever you stand. Each spot's
+-- ring is a clock of its bites (its segments go out as it's eaten); when mine is eaten it pops here
+-- at once (the server's next one lights up a moment later, about a second's run away) and the status
+-- line and ▼ send me to the next. Pressing EAT off a spot says so ("Not on a spot!").
 --
 -- Every bite shows (owner: "can we make the eatsa pizza game more interactable? In mario party it
 -- feels and plays a ton better."): heads dip into the pizza with each chomp (Client/Pose; the
 -- player's own at once, everyone else's as their bites come in), the crunch changes pitch, a phone
--- taps back, a combo counts up with a cheer at 15 / 30 / 50 / 80, and each pepperoni the bites reach
--- flies into the eater's mouth ("Pep"). THE HOT PEPPER ("Chili") turns and glows over the pizza with
--- a timer over it; whoever grabs it ("Spicy") catches fire and eats two bites a press for a while.
+-- taps back, a combo counts up (it keeps going from one spot to the next if you run straight there)
+-- with a cheer at 12 / 24 / 40 / 60, and each pepperoni the bites reach flies into the eater's mouth
+-- ("Pep"). THE HOT PEPPER ("Chili") turns and glows over the pizza with a timer over it; whoever grabs
+-- it ("Spicy") catches fire and eats two bites a press for a while.
 --
 -- The server owns the pizza ("Pizza": the layout, who owns each slice, the phase and the winner;
--- "Slices": the bites left on each). This client works out which slice its character stands on with
--- the same rule the server judges bites by (Shared/Logic/EatsaPizza.Locate), so "CHOMP!" here means
--- the bite counts there. Each press goes to the server as "Eat"; the crunch, crumbs and button
--- squash play at once. Crumbs for everyone else come from the shared bites left: when a slice loses
--- bites, crumbs fly from the characters standing on it.
+-- "Slices": the bites left on each; "Spots": every spot, its team and bites left). This client works
+-- out which spot its character stands on with the same rule the server judges bites by
+-- (Shared/Logic/EatsaPizza.OnSpot), so "CHOMP!" here means the bite counts there. Each press goes to
+-- the server as "Eat"; the crunch, crumbs and button squash play at once, and my own presses count
+-- my spot down here (so it pops when it's eaten, not a ping later). Crumbs for everyone else come
+-- from the shared spots: when one loses bites, crumbs fly from the characters standing on it.
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,10 +42,13 @@ local SHAPES = { Red = "■", Blue = "●", Green = "▲", Yellow = "◆" }
 local CRUMB_COLORS = { Color3.fromRGB(236, 190, 120), Color3.fromRGB(255, 214, 102), Color3.fromRGB(200, 60, 40) }
 local CHOMP_TIME = 0.2 -- a head's dip into the pizza and back
 local NECK_DIP, WAIST_DIP = math.rad(-30), math.rad(-16)
-local COMBO_GAP = 0.9 -- seconds between bites that still keep a combo going
-local CHEERS = { [15] = "TASTY!", [30] = "YUMMY!", [50] = "MAMMA MIA!", [80] = "PIZZA MONSTER!" }
+local COMBO_GAP = 0.9 -- seconds between bites on a spot that still keep a combo going...
+local RUN_GAP = 2.8 -- ...and from eating a spot to the first bite of the next (a straight run there)
+local CHEERS = { [12] = "TASTY!", [24] = "YUMMY!", [40] = "MAMMA MIA!", [60] = "PIZZA MONSTER!" }
 local PEPPERONI = Color3.fromRGB(176, 42, 34)
 local SPICY = Color3.fromRGB(255, 110, 40)
+local SEGMENTS = 12 -- a spot's ring: one segment lit for each twelfth of its bites left
+local DONE_HOLD = 1.0 -- seconds a spot my presses ate stays eaten here before the server has the last word
 
 function EatsaPizza.Start(api)
 	local me = api.Player
@@ -77,19 +89,56 @@ function EatsaPizza.Start(api)
 	local myColor = if mine then Teams.Colors[mine] else Theme.Colors.Yellow
 
 	local slices = api:SharedJSON("Slices") or { L = {}, M = {} }
-	local function stageOf(index: number): number?
-		local left, max = slices.L[index], slices.M[index]
-		if owners[index] ~= mine or type(left) ~= "number" or left <= 0 then
-			return nil
+	local cheeseY = center.Y + Logic.MESH_CHEESE * radius / Logic.MESH_RADIUS
+
+	-- The spots: I (id), T (team), X, Z (offset from the middle), L (bites left), M (bites it had).
+	type SpotData = { I: number, T: string, X: number, Z: number, L: number, M: number }
+	local function readSpots(): { SpotData }
+		local fresh = api:SharedJSON("Spots")
+		local list = {}
+		if type(fresh) == "table" and type(fresh.S) == "table" then
+			for _, spot in fresh.S do
+				if
+					type(spot) == "table"
+					and type(spot.I) == "number"
+					and type(spot.T) == "string"
+					and type(spot.X) == "number"
+					and type(spot.Z) == "number"
+					and type(spot.L) == "number"
+					and type(spot.M) == "number"
+				then
+					table.insert(list, spot)
+				end
+			end
 		end
-		return Logic.Stage(left, max or 1)
+		return list
+	end
+	local spots = readSpots()
+	-- My own presses, counted here: the bites I think a spot has left, and the spots I've eaten up (a
+	-- moment before the server says so).
+	local predicted: { [number]: number } = {}
+	local doneAt: { [number]: number } = {}
+	local function leftAt(spot: SpotData): number
+		return math.min(spot.L, predicted[spot.I] or spot.L)
+	end
+	local function eatenHere(id: number): boolean
+		return doneAt[id] ~= nil and os.clock() - doneAt[id] < DONE_HOLD
+	end
+	local function mySpots(): { SpotData }
+		local list = {}
+		for _, spot in spots do
+			if spot.T == mine and not eatenHere(spot.I) then
+				table.insert(list, spot)
+			end
+		end
+		return list
 	end
 	local function myRoot(): BasePart?
 		local _, _, root = api:Character()
 		return root
 	end
-	-- The slice of mine I'm standing on (with food on it), by the server's rule.
-	local function standingOn(): number?
+	-- My team's spot I'm standing on, by the server's rule.
+	local function standingOn(): SpotData?
 		local root = myRoot()
 		if not root or not mine then
 			return nil
@@ -98,7 +147,9 @@ function EatsaPizza.Start(api)
 		if offset.Y < -2 or offset.Y > 9 then
 			return nil
 		end
-		return Logic.Locate(offset, radius, stageOf)
+		local list = mySpots()
+		local index = Logic.OnSpot(offset.X, offset.Z, list)
+		return if index then list[index] else nil
 	end
 
 	api:Mood({ Tint = Color3.fromRGB(255, 240, 222), Saturation = 0.14, Contrast = 0.05 })
@@ -221,7 +272,7 @@ function EatsaPizza.Start(api)
 		UIKit.PopIn(callout, 0.2)
 	end
 	if mine and not touch then
-		api:Hint("Stand on your team's slices and mash E to eat them!", hudY + 104)
+		api:Hint("Run to your team's glowing spots and mash E to eat them!", hudY + 104)
 	end
 	local hintShown = mine ~= nil and not touch
 
@@ -386,7 +437,194 @@ function EatsaPizza.Start(api)
 		Debris:AddItem(fire, seconds)
 	end
 
-	-- The marker over the slice to go to.
+	-- The spots' rings: a glowing disc on the cheese in the team's colour, a ring of segments round it
+	-- that go out as its bites do, and over each of my team's a bobbing ▼ with its mark (colour is
+	-- never the only cue). Kept in a pool: a spot that pops hands its parts to the next one.
+	type SpotView = {
+		Holder: Model,
+		Disc: Part,
+		Ring: { Part },
+		Anchor: Part,
+		Gui: BillboardGui,
+		Mark: TextLabel,
+		Arrow: TextLabel,
+		Id: number,
+		Team: string,
+		Base: Vector3,
+		Lit: number,
+		BornAt: number,
+	}
+	local views: { [number]: SpotView } = {}
+	local spare: { SpotView } = {}
+	local function plainPart(props: { [string]: any }): Part
+		props.Anchored = true
+		props.CanCollide = false
+		props.CanQuery = false
+		props.CanTouch = false
+		props.CastShadow = false
+		return UIKit.new("Part", props) :: Part
+	end
+	local function newView(): SpotView
+		local holder = UIKit.new("Model", { Name = "Spot", Parent = api.World }) :: Model
+		local disc = plainPart({
+			Name = "Disc",
+			Shape = Enum.PartType.Cylinder,
+			Material = Enum.Material.Neon,
+			Size = Vector3.new(0.12, Logic.SPOT_RADIUS * 2, Logic.SPOT_RADIUS * 2),
+			Parent = holder,
+		})
+		local ring = {}
+		local chord = 2 * Logic.SPOT_RADIUS * math.sin(math.pi / SEGMENTS) * 0.92
+		for k = 1, SEGMENTS do
+			ring[k] = plainPart({
+				Name = `Ring{k}`,
+				Material = Enum.Material.Neon,
+				Size = Vector3.new(chord, 0.22, 0.38),
+				Parent = holder,
+			})
+		end
+		local anchor = plainPart({
+			Name = "MarkerAnchor",
+			Transparency = 1,
+			Size = Vector3.new(0.2, 0.2, 0.2),
+			Parent = holder,
+		})
+		local gui = UIKit.new("BillboardGui", {
+			Name = "SpotMarker",
+			Size = UDim2.fromOffset(60, 70),
+			AlwaysOnTop = true,
+			LightInfluence = 0,
+			Enabled = false,
+			Parent = anchor,
+		}) :: BillboardGui
+		local mark = UIKit.Label({
+			Name = "Mark",
+			Text = "",
+			Font = Theme.Fonts.Display,
+			TextSize = 24,
+			TextWrapped = false,
+			Size = UDim2.new(1, 0, 0, 26),
+			Parent = gui,
+			Children = { UIKit.TextStroke(0) },
+		})
+		local arrow = UIKit.Label({
+			Name = "Arrow",
+			Text = "▼",
+			Font = Theme.Fonts.Display,
+			TextSize = 40,
+			TextWrapped = false,
+			Position = UDim2.fromOffset(0, 24),
+			Size = UDim2.new(1, 0, 0, 44),
+			Parent = gui,
+			Children = { UIKit.TextStroke(0) },
+		})
+		return {
+			Holder = holder,
+			Disc = disc,
+			Ring = ring,
+			Anchor = anchor,
+			Gui = gui,
+			Mark = mark,
+			Arrow = arrow,
+			Id = 0,
+			Team = "",
+			Base = Vector3.zero,
+			Lit = -1,
+			BornAt = 0,
+		}
+	end
+	local function showView(view: SpotView, spot: SpotData)
+		local color = Teams.Colors[spot.T] or Color3.new(1, 1, 1)
+		local own = spot.T == mine
+		local base = Vector3.new(center.X + spot.X, cheeseY + 0.08, center.Z + spot.Z)
+		view.Id, view.Team, view.Base, view.Lit, view.BornAt = spot.I, spot.T, base, -1, os.clock()
+		view.Disc.Color = color
+		view.Disc.Transparency = if own then 0.4 else 0.62
+		view.Disc.CFrame = CFrame.new(base) * CFrame.Angles(0, 0, math.pi / 2)
+		local bright = color:Lerp(Color3.new(1, 1, 1), 0.35)
+		for k, segment in view.Ring do
+			local a = (k - 0.5) / SEGMENTS * math.pi * 2
+			segment.Color = bright
+			segment.CFrame = CFrame.new(base + Vector3.new(0, 0.04, 0))
+				* CFrame.Angles(0, a, 0)
+				* CFrame.new(0, 0, -(Logic.SPOT_RADIUS - 0.2))
+		end
+		view.Mark.Text = SHAPES[spot.T] or ""
+		view.Mark.TextColor3 = color
+		view.Arrow.TextColor3 = color
+		view.Gui.Enabled = own and pizza.Ph ~= "Done"
+		view.Anchor.CFrame = CFrame.new(base + Vector3.new(0, 4.5, 0))
+		view.Holder.Parent = api.World
+	end
+	-- Lights a spot's ring segments for the bites it has left.
+	local function litView(view: SpotView, left: number, max: number)
+		local lit = if max > 0 then math.clamp(math.ceil(SEGMENTS * left / max - 1e-6), 0, SEGMENTS) else 0
+		if lit == view.Lit then
+			return
+		end
+		view.Lit = lit
+		local own = view.Team == mine
+		for k, segment in view.Ring do
+			segment.Transparency = if k <= lit then (if own then 0 else 0.3) else 0.85
+		end
+	end
+	local function hideView(view: SpotView)
+		view.Gui.Enabled = false
+		view.Holder.Parent = nil
+		table.insert(spare, view)
+	end
+	local function popAt(spot: SpotData)
+		local color = Teams.Colors[spot.T] or Color3.new(1, 1, 1)
+		api:Effect("Sparkles", Vector3.new(center.X + spot.X, cheeseY + 1, center.Z + spot.Z), { color })
+	end
+	-- Draws the spots as shared: new ones get a view, eaten ones pop (unless my presses popped it
+	-- already), the rest show their bites left.
+	local function syncSpots(fresh: { SpotData })
+		local seen = {}
+		for _, spot in fresh do
+			seen[spot.I] = true
+			local view = views[spot.I]
+			if not view then
+				view = table.remove(spare) or newView()
+				views[spot.I] = view
+				showView(view, spot)
+			end
+			if predicted[spot.I] then
+				predicted[spot.I] = math.min(predicted[spot.I], spot.L)
+			end
+			litView(view, leftAt(spot), spot.M)
+		end
+		for id, view in views do
+			if not seen[id] then
+				views[id] = nil
+				local was = nil
+				for _, spot in spots do
+					if spot.I == id then
+						was = spot
+						break
+					end
+				end
+				if was and pizza.Ph == "Eat" and not doneAt[id] then
+					popAt(was)
+				end
+				hideView(view)
+				predicted[id] = nil
+				doneAt[id] = nil
+			end
+		end
+		spots = fresh
+	end
+	syncSpots(spots)
+	api:Track(function()
+		for _, view in views do
+			view.Holder:Destroy()
+		end
+		for _, view in spare do
+			view.Holder:Destroy()
+		end
+	end)
+
+	-- The marker over the spot to go to.
 	local marker = UIKit.new("Part", {
 		Name = "Marker",
 		Anchored = true,
@@ -425,20 +663,34 @@ function EatsaPizza.Start(api)
 		Parent = markerGui,
 		Children = { UIKit.TextStroke(0) },
 	})
-	local function nextSlice(): number?
+	-- My team's spot to go to: the nearest no teammate stands on (one they do counts a run further).
+	local function nextSpot(): SpotData?
 		local root = myRoot()
 		if not root or not mine then
 			return nil
 		end
-		local best, bestDistance = nil, math.huge
-		for index = 1, Logic.SLICES do
-			local stage = stageOf(index)
-			if stage then
-				local spot = center + Logic.StandSpot(index, stage, radius)
-				local distance = (spot - root.Position).Magnitude
-				if distance < bestDistance then
-					best, bestDistance = index, distance
+		local mates = {}
+		for _, participant in api:Participants() do
+			if participant.UserId ~= myId and participant:GetAttribute("PP_Team") == mine then
+				local character = participant:Character()
+				local mate = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if mate then
+					table.insert(mates, mate.Position - center)
 				end
+			end
+		end
+		local best, bestCost = nil, math.huge
+		for _, spot in mySpots() do
+			local p = Vector3.new(center.X + spot.X, root.Position.Y, center.Z + spot.Z)
+			local cost = (p - root.Position).Magnitude
+			for _, offset in mates do
+				if Logic.OnSpot(offset.X, offset.Z, { spot }) then
+					cost += Logic.SPOT_RUN
+					break
+				end
+			end
+			if cost < bestCost then
+				best, bestCost = spot, cost
 			end
 		end
 		return best
@@ -448,6 +700,8 @@ function EatsaPizza.Start(api)
 	local eat = nil
 	local lastBite = -math.huge
 	local deniedAt = -math.huge
+	local deniedRival = false -- (that press was on another team's spot)
+	local spotDoneAt = -math.huge -- (os.clock) I ate a spot up
 	local spicyUntil = 0 -- (os.clock) my hot pepper's double bites
 	local combo, comboAt, bitesSeen = 0, 0, 0
 	-- (The server's bite rate, mirrored: presses over it don't land, so they don't chomp either.)
@@ -470,12 +724,14 @@ function EatsaPizza.Start(api)
 			end
 			api:Action("Eat")
 			local now = api:Now()
-			if standingOn() then
+			local spot = standingOn()
+			if spot then
 				if not spend() then
 					return
 				end
 				lastBite = now
 				local spicy = os.clock() < spicyUntil
+				local bites = math.min(if spicy then Logic.SPICY_BITES else 1, leftAt(spot))
 				api:Sound("Click", 0.85 + math.random() * 0.4)
 				local character = api:Character()
 				chomp(character)
@@ -487,13 +743,14 @@ function EatsaPizza.Start(api)
 				if bitesSeen % 2 == 0 then
 					Haptics.Play("Tap")
 				end
-				-- The combo: bites close together count up; a pause starts it again.
+				-- The combo: bites close together count up, and it carries on to the next spot if I run
+				-- straight there; a pause starts it again.
 				local clock = os.clock()
-				if clock - comboAt > COMBO_GAP then
+				if clock - comboAt > (if clock - spotDoneAt < RUN_GAP then RUN_GAP else COMBO_GAP) then
 					combo = 0
 				end
 				local before = combo
-				combo += if spicy then Logic.SPICY_BITES else 1
+				combo += bites
 				comboAt = clock
 				for at, cheer in CHEERS do
 					if before < at and combo >= at then
@@ -504,8 +761,38 @@ function EatsaPizza.Start(api)
 				if combo >= 5 then
 					showCallout(`x{combo} COMBO`, if spicy then SPICY else Color3.new(1, 1, 1), COMBO_GAP, 0)
 				end
+				-- My spot, counted down here: eaten up, it pops at once.
+				local left = leftAt(spot) - bites
+				predicted[spot.I] = left
+				local view = views[spot.I]
+				if view then
+					litView(view, left, spot.M)
+				end
+				if left <= 0 then
+					doneAt[spot.I] = clock
+					spotDoneAt = clock
+					popAt(spot)
+					if view then
+						view.Gui.Enabled = false
+						view.Holder.Parent = nil
+					end
+					api:Sound("Pickup", 1.15)
+					Haptics.Play("Pulse")
+				end
 			else
 				deniedAt = now
+				deniedRival = false
+				local root = myRoot()
+				if root then
+					local offset = root.Position - center
+					local rivals = {}
+					for _, other in spots do
+						if other.T ~= mine then
+							table.insert(rivals, other)
+						end
+					end
+					deniedRival = Logic.OnSpot(offset.X, offset.Z, rivals) ~= nil
+				end
 			end
 			if hintShown then
 				hintShown = false
@@ -517,46 +804,58 @@ function EatsaPizza.Start(api)
 	end
 
 	-- Shared state --------------------------------------------------------------------------------
-	local lastCrumbs: { [number]: number } = {}
 	api:OnShared("Slices", function()
 		local fresh = api:SharedJSON("Slices")
 		if not fresh then
 			return
 		end
-		local before = slices
 		slices = fresh
 		refreshCards()
-		-- Crumbs from whoever is chewing a slice that just lost bites.
+	end)
+	-- Crumbs from whoever is chewing a spot that just lost bites (or was just eaten up).
+	local lastCrumbs: { [number]: number } = {}
+	local function chewersOf(spot: SpotData)
 		local now = os.clock()
-		for index = 1, Logic.SLICES do
-			local was, is = before.L[index], slices.L[index]
-			if
-				type(was) == "number"
-				and type(is) == "number"
-				and is < was
-				and now - (lastCrumbs[index] or 0) > 0.15
-			then
-				lastCrumbs[index] = now
-				local team = owners[index]
-				for _, participant in api:Participants() do
-					if participant.UserId == myId then
-						continue
-					end
-					local character = participant:Character()
-					local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-					if root and participant:GetAttribute("PP_Team") == team then
-						local spot = Logic.Locate(root.Position - center, radius, function(other)
-							return if other == index then Logic.Stage(math.max(is, 1), slices.M[index] or 1) else nil
-						end)
-						local mouth = spot and mouthOf(character)
-						if mouth then
-							crumbsAt(mouth, 4)
-							chomp(character)
-						end
-					end
+		if now - (lastCrumbs[spot.I] or 0) < 0.15 then
+			return
+		end
+		lastCrumbs[spot.I] = now
+		for _, participant in api:Participants() do
+			if participant.UserId == myId or participant:GetAttribute("PP_Team") ~= spot.T then
+				continue
+			end
+			local character = participant:Character()
+			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local offset = root and root.Position - center
+			if offset and Logic.OnSpot(offset.X, offset.Z, { spot }) then
+				local mouth = mouthOf(character)
+				if mouth then
+					crumbsAt(mouth, 4)
+					chomp(character)
 				end
 			end
 		end
+	end
+	api:OnShared("Spots", function()
+		local fresh = readSpots()
+		local before = {}
+		for _, spot in spots do
+			before[spot.I] = spot
+		end
+		local still = {}
+		for _, spot in fresh do
+			still[spot.I] = true
+			local was = before[spot.I]
+			if was and spot.L < was.L then
+				chewersOf(spot)
+			end
+		end
+		for id, spot in before do
+			if not still[id] and pizza.Ph == "Eat" then
+				chewersOf(spot)
+			end
+		end
+		syncSpots(fresh)
 	end)
 	api:OnShared("Pizza", function()
 		local fresh = api:SharedJSON("Pizza")
@@ -687,11 +986,47 @@ function EatsaPizza.Start(api)
 	-- Every frame ---------------------------------------------------------------------------------
 	api:RenderStep(function(_dt)
 		local now = api:Now()
+		local clock = os.clock()
+		-- A spot my presses ate that the server still has after a moment: it wasn't (a press it
+		-- didn't take), so it's back.
+		for id, at in doneAt do
+			if clock - at >= DONE_HOLD then
+				doneAt[id] = nil
+				predicted[id] = nil
+			end
+		end
 		local on = standingOn()
 		local playing = mine ~= nil and api:CanAct() and pizza.Ph == "Eat"
-		local clock = os.clock()
 		if callout.Visible and clock >= calloutUntil then
 			callout.Visible = false
+		end
+
+		-- The spots: a new one grows in, mine pulse and their ▼ bob (hidden over the one EAT HERE is on).
+		local target = if playing and not on then nextSpot() else nil
+		for id, view in views do
+			local hidden = eatenHere(id) or pizza.Ph == "Done"
+			local parent = if hidden then nil else api.World
+			if view.Holder.Parent ~= parent then
+				view.Holder.Parent = parent
+			end
+			if hidden then
+				continue
+			end
+			local age = clock - view.BornAt
+			if age < 0.3 then
+				local grow = math.clamp(age / 0.3, 0.05, 1) * Logic.SPOT_RADIUS * 2
+				view.Disc.Size = Vector3.new(0.12, grow, grow)
+			elseif view.Disc.Size.Y < Logic.SPOT_RADIUS * 2 then
+				view.Disc.Size = Vector3.new(0.12, Logic.SPOT_RADIUS * 2, Logic.SPOT_RADIUS * 2)
+			end
+			if view.Team == mine then
+				-- (Over the countdown too, so I know where to run at GO.)
+				view.Disc.Transparency = 0.42 + 0.14 * math.sin(clock * 6 + id)
+				view.Gui.Enabled = not (target and target.I == id) and not (on and on.I == id)
+				if view.Gui.Enabled then
+					view.Anchor.CFrame = CFrame.new(view.Base + Vector3.new(0, 4.2 + math.sin(clock * 4 + id) * 0.5, 0))
+				end
+			end
 		end
 
 		-- The hot pepper turns and bobs where it floats, its timer running down over it.
@@ -716,7 +1051,7 @@ function EatsaPizza.Start(api)
 			chiliGui.Enabled = false
 		end
 
-		-- The status line: what my slice is up to, or where to go.
+		-- The status line: what my spot is up to, or where to go.
 		if pizza.Ph == "Done" then
 			local winner = pizza.W
 			-- (On phones the round's own status line under the team pill already says it.)
@@ -729,39 +1064,40 @@ function EatsaPizza.Start(api)
 			status.Text = if mine then "" else "Watch them chow down!"
 			status.TextColor3 = Color3.new(1, 1, 1)
 		elseif on then
-			local left = slices.L[on] or 0
+			local left = leftAt(on)
 			local chomping = now - lastBite < 0.35
 			local shape = if touch and mine then `{SHAPES[mine] or ""} ` else ""
 			if clock < spicyUntil then
 				status.Text = `🌶️ x2 BITES! {left} left · {math.ceil(spicyUntil - clock)}s`
 				status.TextColor3 = SPICY
 			else
-				status.Text = if chomping
-					then `{shape}CHOMP! {left} bites left`
-					else `{shape}MASH EAT! {left} bites left`
+				status.Text = if chomping then `{shape}CHOMP! {left} left` else `{shape}MASH EAT! {left} left`
 				status.TextColor3 = if chomping then Theme.Colors.Yellow else Color3.new(1, 1, 1)
 			end
+		elseif clock - spotDoneAt < 1.2 then
+			status.Text = "NOM! Next spot ▼ RUN!"
+			status.TextColor3 = Theme.Colors.Yellow
 		elseif now - deniedAt < 1.2 then
-			status.Text = "Not on your slice! Follow ▼"
+			status.Text = if deniedRival then "Not your spot! Run to ▼" else "Not on a spot! Run to ▼"
 			status.TextColor3 = Theme.Colors.Red
+		elseif teamShare(mine :: string) >= 1 then
+			status.Text = "ALL EATEN!"
+			status.TextColor3 = Color3.new(1, 1, 1)
 		else
-			status.Text = if teamShare(mine :: string) >= 1 then "ALL EATEN!" else "Go to a slice with ▼!"
+			status.Text = if target then "Run to a glowing spot ▼" else "A new spot is coming!"
 			status.TextColor3 = Color3.new(1, 1, 1)
 		end
 
-		-- The button fills as my slice goes.
+		-- The button fills as my spot goes.
 		if eat then
-			local max = on and slices.M[on]
-			eat:SetFill(if on and max and max > 0 then 1 - (slices.L[on] or 0) / max else 0, Color3.new(1, 1, 1))
+			eat:SetFill(if on and on.M > 0 then 1 - leftAt(on) / on.M else 0, Color3.new(1, 1, 1))
 		end
 
-		-- The marker over the next slice, while I'm not on one.
-		local target = if playing and not on then nextSlice() else nil
+		-- The marker over the spot to go to, while I'm not on one.
 		markerGui.Enabled = target ~= nil
 		if target then
-			local stage = stageOf(target) or 0
-			local spot = center + Logic.StandSpot(target, stage, radius)
-			marker.CFrame = CFrame.new(spot + Vector3.new(0, 7 + math.sin(now * 5) * 0.6, 0))
+			local spot = Vector3.new(center.X + target.X, cheeseY, center.Z + target.Z)
+			marker.CFrame = CFrame.new(spot + Vector3.new(0, 6.5 + math.sin(now * 5) * 0.6, 0))
 		end
 	end)
 end
