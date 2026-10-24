@@ -78,12 +78,14 @@ SinkingSands.Swirl = SandSwirl -- the flow math, for the test bot
 local KINGS, DIVERS = "SandKings", "Divers"
 
 -- Treasure kinds: value, how often (weight), how fast the sand carries it (heavier = slower), grab
--- reach (studs, measured from the player's middle) and the prop the client draws.
+-- reach (studs, measured from the player's middle: the treasure's drawn half width, half a body and
+-- half a stud; it was a stud more, older than the swept grab over the last ping, and Divers took
+-- treasure they had visibly run past: owner, "clean up all hit boxes") and the prop the client draws.
 SinkingSands.Kinds = {
-	{ Name = "Coin", Value = 1, Weight = 58, Factor = 1.5, Reach = 3.4, Prop = "SandCoin" },
-	{ Name = "Gem", Value = 3, Weight = 27, Factor = 1.4, Reach = 3.4, Prop = "SandGem" },
-	{ Name = "Bag", Value = 5, Weight = 15, Factor = 1.2, Reach = 3.7, Prop = "CoinBag" },
-	{ Name = "Idol", Value = 10, Weight = 0, Factor = 0.95, Reach = 3.9, Prop = "GoldenIdol" },
+	{ Name = "Coin", Value = 1, Weight = 58, Factor = 1.5, Reach = 2.7, Prop = "SandCoin" },
+	{ Name = "Gem", Value = 3, Weight = 27, Factor = 1.4, Reach = 2.6, Prop = "SandGem" },
+	{ Name = "Bag", Value = 5, Weight = 15, Factor = 1.2, Reach = 3.0, Prop = "CoinBag" },
+	{ Name = "Idol", Value = 10, Weight = 0, Factor = 0.95, Reach = 2.7, Prop = "GoldenIdol" },
 	-- The SUNKEN CHEST lands near the bottom and is so heavy it barely slides: only a whole PULL
 	-- sinks it. (Reach: its 2.8 x 1.9 lid plus half a body, as drawn.)
 	{ Name = "Chest", Value = 8, Weight = 0, Factor = 0.03, Reach = 2.9, Prop = "SandChest" },
@@ -181,9 +183,10 @@ local function segmentReach(ax: number, az: number, bx: number, bz: number): num
 	return math.sqrt(x * x + z * z)
 end
 
--- A Diver's middle vs a treasure lying on the sand: high enough to reach it, not hovering over it.
+-- A Diver's middle vs a treasure lying on the sand: high enough to reach it, not hovering over it
+-- (their feet at most about a stud over its top; it was 7.5, feet 2 studs over a coin).
 local function inHeight(dy: number): boolean
-	return dy > -2 and dy < 7.5
+	return dy > -2 and dy < 5.5
 end
 
 function SinkingSands:Prepare()

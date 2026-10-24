@@ -187,12 +187,14 @@ function RakeItIn.Start(api)
 	-- What a rake pressed now would take, judged like the server does (generous for produce over the
 	-- whole drag, strict for bombs), so what's lifted or outlined is exactly what you'd get.
 	local grace, bombInset, drag = layout.Grace or 0, layout.BombInset or 0, layout.Drag or { 0 }
+	local graces = if type(layout.Graces) == "table" then layout.Graces else {}
 	local function takes(station, item, t: number): boolean
 		if item.Kind == BOMB then
 			return inLane(station, item, t, -bombInset)
 		end
+		local itemGrace = tonumber(graces[item.Kind]) or grace -- (each kind's own: the server's Kinds)
 		for _, after in drag do
-			if inLane(station, item, t + after, grace) then
+			if inLane(station, item, t + after, itemGrace) then
 				return true
 			end
 		end

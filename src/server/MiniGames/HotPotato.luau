@@ -572,6 +572,7 @@ function HotPotato:_reached(player: any, target: any, heard: number, reach: numb
 	local ctx = self.context
 	local bot = BotRegistry.IsBot(player)
 	local seenLag = pingOf(player) + SEEN_LAG
+	local up = if facing then Rules.REACH_UP else Rules.TAG_UP -- (a throw reaches higher than a tag)
 	local froms: { Sample } = {}
 	if not bot then
 		local history = self.history[player]
@@ -628,7 +629,7 @@ function HotPotato:_reached(player: any, target: any, heard: number, reach: numb
 		if bot then
 			if
 				targetRoot
-				and Rules.Reaches(from.P, targetRoot.Position, reach)
+				and Rules.Reaches(from.P, targetRoot.Position, reach, up)
 				and ahead(from.P, targetRoot.Position)
 			then
 				return true
@@ -637,7 +638,7 @@ function HotPotato:_reached(player: any, target: any, heard: number, reach: numb
 		end
 		for _, shift in { -0.05, 0, 0.05 } do
 			local at = self:PositionAt(target, from.T - seenLag + shift)
-			if at and Rules.Reaches(from.P, at, reach) and ahead(from.P, at) then
+			if at and Rules.Reaches(from.P, at, reach, up) and ahead(from.P, at) then
 				return true
 			end
 		end

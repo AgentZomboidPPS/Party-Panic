@@ -489,7 +489,7 @@ function HotPotato.Start(api)
 				local best, bestDistance = nil, math.huge
 				for _, taker in takers(mine, now) do
 					local at = taker.Root.Position
-					if Rules.Reaches(root.Position, at, Rules.CLIENT_TAG) then
+					if Rules.Reaches(root.Position, at, Rules.CLIENT_TAG, Rules.TAG_UP) then
 						local distance = flat(at - root.Position).Magnitude
 						if distance < bestDistance then
 							best, bestDistance = taker.Id, distance

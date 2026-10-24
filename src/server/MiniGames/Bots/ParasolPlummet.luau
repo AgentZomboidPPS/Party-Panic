@@ -74,7 +74,7 @@ function Brain.Step(bot, ctx, mode, _dt)
 				break
 			end
 			local ix, iy = Sim.ItemAt(item, t)
-			if iy < Sim.Y_MIN + Sim.BODY_Y - Sim.BODY_R - kind.Radius then
+			if iy < Sim.Y_MIN + Sim.BODY_Y0 - Sim.BODY_R - kind.Radius then
 				break -- below anything a faller can reach: it only gets lower from here
 			end
 			if not Sim.Catchable(item, t) then

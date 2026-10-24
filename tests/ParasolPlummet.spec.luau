@@ -54,7 +54,10 @@ test("ParasolPlummetSim: catch shapes follow the drawn umbrella", function()
 	expectTrue(Sim.Touches(0, 0, true, Sim.CANOPY_W + r - 0.1, Sim.CANOPY_Y, r, 0), "canopy rim")
 	expectTrue(not Sim.Touches(0, 0, false, Sim.CANOPY_W + r - 0.1, Sim.CANOPY_Y, r, 0), "no canopy when shut")
 	expectTrue(Sim.Touches(0, 0, false, 0, Sim.FURL_Y1, r, 0), "furled umbrella")
-	expectTrue(Sim.Touches(0, 0, false, Sim.BODY_R + r - 0.1, Sim.BODY_Y, r, 0), "body")
+	expectTrue(Sim.Touches(0, 0, false, Sim.BODY_R + r - 0.1, 0, r, 0), "body")
+	-- As wide as the drawn hips: a hammer that flies a little past them misses.
+	expectTrue(not Sim.Touches(0, 0, false, Sim.BODY_R + r + 0.1, -0.4, r, 0), "past the hips")
+	expectTrue(Sim.Touches(0, 0, false, 0, Sim.BODY_Y0 - Sim.BODY_R - r + 0.1, r, 0), "the feet")
 	expectTrue(not Sim.Touches(0, 0, true, 0, -6, r, 0), "below the feet")
 	-- The canopy ellipse sits on the mesh: rim at base + 3.9, top at base + 5.4.
 	near(Sim.CANOPY_Y, Sim.UMBRELLA_BASE + (3.9 + 5.4) / 2 - 0.05, 0.1, "canopy middle on the mesh")

@@ -44,7 +44,9 @@ ObbyOdyssey.StepUp = 3.2 -- a rise under this can be walked up (tall avatars ste
 ObbyOdyssey.WalkGap = 4 -- a flat gap under this can be walked over without jumping
 ObbyOdyssey.Slack = 1 -- a jump's take-off before the edge plus its landing past the edge
 ObbyOdyssey.MinMargin = 2.5 -- every jump keeps this much reach to spare (phones)
-ObbyOdyssey.Body = 1 -- half a character's width: hazards hit within this of the body's middle
+ObbyOdyssey.Body = 0.8 -- hazards hit within this of the body's middle: a little under half its width (1)
+-- and over half its depth (0.5), so a ball or bar that just misses on screen misses (it was 1: a ball
+-- passing just in front of someone hit them; owner, "clean up all hit boxes")
 ObbyOdyssey.Height = 5.2 -- a character from its feet to the top of its head
 
 ObbyOdyssey.LavaFrom = 160 -- z where the water turns to lava

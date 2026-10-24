@@ -53,10 +53,10 @@ local SinkingSands = {}
 -- Must match the server's kinds (index = kind number).
 -- Mark is the landing marker's dot (the ring round it is always dark, so it reads on pale sand).
 local KINDS = {
-	{ Prop = "SandCoin", Value = 1, Factor = 1.5, Lift = 0.15, Reach = 3.4, Mark = Color3.fromRGB(255, 214, 60) },
-	{ Prop = "SandGem", Value = 3, Factor = 1.4, Lift = 0.5, Reach = 3.4, Mark = Color3.fromRGB(70, 200, 255) },
-	{ Prop = "CoinBag", Value = 5, Factor = 1.2, Lift = 0, Reach = 3.7, Mark = Color3.fromRGB(255, 170, 30) },
-	{ Prop = "GoldenIdol", Value = 10, Factor = 0.95, Lift = 0, Reach = 3.9, Mark = Color3.fromRGB(255, 170, 30) },
+	{ Prop = "SandCoin", Value = 1, Factor = 1.5, Lift = 0.15, Reach = 2.7, Mark = Color3.fromRGB(255, 214, 60) },
+	{ Prop = "SandGem", Value = 3, Factor = 1.4, Lift = 0.5, Reach = 2.6, Mark = Color3.fromRGB(70, 200, 255) },
+	{ Prop = "CoinBag", Value = 5, Factor = 1.2, Lift = 0, Reach = 3.0, Mark = Color3.fromRGB(255, 170, 30) },
+	{ Prop = "GoldenIdol", Value = 10, Factor = 0.95, Lift = 0, Reach = 2.7, Mark = Color3.fromRGB(255, 170, 30) },
 	{ Prop = "SandChest", Value = 8, Factor = 0.03, Lift = 0, Reach = 2.9, Mark = Color3.fromRGB(255, 110, 60) },
 }
 local IDOL, CHEST = 4, 5 -- (the CHEST sits on the slope: no spin, no bob; a "+8" floats over it)
@@ -1128,7 +1128,7 @@ function SinkingSands.Start(api)
 				end
 				local reach = math.min(segmentReach(before, rel), drawn)
 				item.Rel = rel
-				if reach < kind.Reach and dy > -2 and dy < 7.5 then
+				if reach < kind.Reach and dy > -2 and dy < 5.5 then -- (the server's inHeight)
 					item.Pending = now
 					item.PendingFrom = shown
 					item.Predicted = true

@@ -703,9 +703,13 @@ function SnowballSummit:_collide(now: number)
 				end
 				local at = self:BallAt(ball, t)
 				seen = seen or at
-				local gap = flat(at - position).Magnitude
-				local overBody = at.Y - ball.R < feet + BODY_H and at.Y + ball.R > feet
-				if gap < ball.R + BODY and overBody then
+				-- The ball (a sphere) against the body (an upright capsule BODY round, feet to head): a
+				-- jump whose feet clear the ball's curved top, off its middle, is a dodge. (It was a
+				-- cylinder, so feet that visibly cleared the ball still counted; owner: "clean up all
+				-- hit boxes".)
+				local cy = math.clamp(at.Y, feet + BODY, feet + BODY_H - BODY)
+				local offset = Vector3.new(at.X - position.X, at.Y - cy, at.Z - position.Z)
+				if offset.Magnitude < ball.R + BODY then
 					hits += 1
 				end
 				if heldAt and (at - heldAt).Magnitude < ball.R + (held :: Held).R then

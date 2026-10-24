@@ -67,8 +67,12 @@ Sim.MAX_LEAN = 0.05 -- radians a faller's drawn body (and umbrella) may lean whi
 -- its base (the handle's hook) UMBRELLA_BASE above the root; the mesh is 5.6 tall with the canopy's
 -- rim 3.9 up and its top at 5.4, 3.8 across either way, furled from 1.2 to 5.2.
 Sim.UMBRELLA_BASE = 2.6
-Sim.BODY_Y = -0.4
-Sim.BODY_R = 2.0
+-- The body: an upright capsule as wide as the faller's hips and legs (arms are up on the umbrella),
+-- from its feet to its shoulders with the round ends. It was a circle 2 studs round the middle, so a
+-- hammer that visibly flew past the hips still stunned (owner: "clean up all hit boxes").
+Sim.BODY_Y0 = -1.9 -- the capsule's core, from here...
+Sim.BODY_Y1 = 1.5 -- ...to here
+Sim.BODY_R = 1.1
 Sim.CANOPY_Y = 7.2 -- middle of the open canopy
 Sim.CANOPY_W = 3.8 -- its half width
 Sim.CANOPY_H = 0.9 -- its half height
@@ -159,8 +163,8 @@ end
 function Sim.Touches(fx: number, fy: number, open: boolean, x: number, y: number, radius: number, grow: number): boolean
 	local dx, dy = x - fx, y - fy
 	local body = Sim.BODY_R + radius + grow
-	local by = dy - Sim.BODY_Y
-	if dx * dx + by * by <= body * body then
+	local by = dy - math.clamp(dy, Sim.BODY_Y0, Sim.BODY_Y1)
+	if body > 0 and dx * dx + by * by <= body * body then
 		return true
 	end
 	if open then

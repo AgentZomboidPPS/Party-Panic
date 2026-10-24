@@ -11,6 +11,9 @@ local Slaparazzi = {}
 -- outer edge on these radii (measured: tools/meshgen/props/Slaparazzi.py).
 Slaparazzi.RINGS = { 3.6, 7.2, 11 }
 Slaparazzi.POINTS = { 3, 2, 1 }
+-- A body half over a ring's line counts as in it (the middle of a body is about this far from its
+-- side; owner: "clean up all hit boxes"). The HUD's IN THE SHOT uses the same rule.
+Slaparazzi.EDGE = 0.5
 
 -- A slap reaches this far, root to root (an arm and the big glove, plus half the other's body).
 Slaparazzi.REACH = 6.5
@@ -56,7 +59,7 @@ end
 -- Points for standing `distance` studs (flat) from the frame's middle: 3, 2, 1 or 0.
 function Slaparazzi.PointsFor(distance: number): number
 	for index, radius in Slaparazzi.RINGS do
-		if distance <= radius then
+		if distance <= radius + Slaparazzi.EDGE then
 			return Slaparazzi.POINTS[index]
 		end
 	end

@@ -38,10 +38,16 @@ Struggle.RANGE_CHARGED = 5.9
 Struggle.BODY = 1.1 -- a character's half width
 Struggle.ARC = math.rad(80) -- each side of where the swinger faces
 Struggle.CLOSE = 1.5 -- the circle round the swinger where any direction counts
-Struggle.HEIGHT = 5 -- at most this far above or below
+-- The bat swings level at the swinger's root height, so it meets someone whose root is at most
+-- ABOVE higher (their feet just under it) or BELOW lower (it passes at their head), a little short of
+-- the bodies touching. It was 5 either way: someone jumping clean over the bat still lost orbs
+-- (owner: "clean up all hit boxes").
+Struggle.ABOVE = 2.8
+Struggle.BELOW = 2.0
 
 Struggle.SAFE = 1.4 -- seconds a victim can't be hit again
-Struggle.PICK = 3.6 -- pick-up reach (root to orb, flat), the same for everyone
+Struggle.PICK = 2.8 -- pick-up reach (root to orb, flat), the same for everyone: touching it, and a
+-- little more (it was 3.6, and orbs flew to someone well short of them)
 Struggle.FLIGHT = 0.7 -- seconds an orb flies before it lands and can be picked up
 
 -- One colour and one shape per player slot (colour is never the only cue). Glyph is what the HUD
@@ -64,7 +70,7 @@ Struggle.SLOTS = {
 -- Whether a swing from `from`, facing `look` (flat), reaches someone standing at `at`.
 function Struggle.Reaches(from: Vector3, look: Vector3, at: Vector3, charged: boolean): boolean
 	local offset = at - from
-	if math.abs(offset.Y) > Struggle.HEIGHT then
+	if offset.Y > Struggle.ABOVE or offset.Y < -Struggle.BELOW then
 		return false
 	end
 	local flat = Vector3.new(offset.X, 0, offset.Z)

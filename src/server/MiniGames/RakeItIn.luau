@@ -45,7 +45,8 @@ local R_OUT = 20.6
 local R_SPAWN_IN = 11.0
 local R_SPAWN_OUT = 18.6
 local HALF = 2.6 -- half a lane's width (the rake head is 4.3 wide; a little generous)
-local PRODUCE_GRACE = 0.9 -- produce counts this far past the lane's lines and ends (about its radius)
+local PRODUCE_GRACE = 0.9 -- produce counts this far past the lane's lines and ends (about its radius;
+-- each kind's own, Kinds' Grace, wins: the golden pumpkin is twice a tomato's size)
 local BOMB_INSET = 0.5 -- a bomb's middle must be this far inside the lines to count
 local DRAG = { 0, 0.1, 0.2, 0.3 } -- seconds after the press while the rake still sweeps the lane
 local STAND = 23.4 -- where players stand, from the middle
@@ -61,11 +62,14 @@ local SEEN_FOR = 0.5 -- how long a raked item can still count for another press 
 local RUSH = 0.7 -- the share of the round after which the GOLDEN RUSH starts
 
 -- Produce kinds: index = the number shared with clients.
+-- Grace: how far past the lane's lines and ends it still counts, about its drawn radius (owner, "clean
+-- up all hit boxes": a golden pumpkin with a good part of it over your line didn't count, at 0.9 for
+-- every kind; a carrot lying across the line counts by more of its length).
 RakeItIn.Kinds = {
-	{ Name = "VeggieCarrot", Value = 1 },
-	{ Name = "VeggieTomato", Value = 1 },
-	{ Name = "VeggieBroccoli", Value = 1 },
-	{ Name = "GoldenPumpkin", Value = 3 },
+	{ Name = "VeggieCarrot", Value = 1, Grace = 1.5 },
+	{ Name = "VeggieTomato", Value = 1, Grace = 1.1 },
+	{ Name = "VeggieBroccoli", Value = 1, Grace = 1.0 },
+	{ Name = "GoldenPumpkin", Value = 3, Grace = 1.7 },
 	{ Name = "VeggieBomb", Value = -3 },
 }
 local PUMPKIN, BOMB = 4, 5
@@ -144,8 +148,9 @@ function RakeItIn:Takes(station: Station, item: Item, t: number): boolean
 	if item.Kind == BOMB then
 		return self:InLane(station, item, t, -BOMB_INSET)
 	end
+	local grace = RakeItIn.Kinds[item.Kind].Grace or PRODUCE_GRACE
 	for _, after in DRAG do
-		if self:InLane(station, item, t + after, PRODUCE_GRACE) then
+		if self:InLane(station, item, t + after, grace) then
 			return true
 		end
 	end
@@ -361,9 +366,10 @@ function RakeItIn:Prepare()
 	end
 	ctx:ShareTemplate("GardenRake", MeshLibrary.Get("GardenRake"))
 
-	local values = {}
+	local values, graces = {}, {}
 	for _, kind in RakeItIn.Kinds do
 		table.insert(values, kind.Value)
+		table.insert(graces, kind.Grace or PRODUCE_GRACE)
 	end
 	ctx:SetSharedJSON("Layout", {
 		Center = { origin.X, origin.Y, origin.Z },
@@ -374,6 +380,7 @@ function RakeItIn:Prepare()
 		ROut = R_OUT,
 		Half = HALF,
 		Grace = PRODUCE_GRACE,
+		Graces = graces, -- (each kind's, by its number)
 		BombInset = BOMB_INSET,
 		Drag = DRAG,
 		Flight = FLIGHT,

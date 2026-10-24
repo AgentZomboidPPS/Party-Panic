@@ -138,6 +138,18 @@ only shows on real devices. Cake Factory (owner: "I feel like its broken and not
 own press brings your machine down and shows its layer at once, instead of after the server's answer (on a
 phone the cake had moved on by then).
 
+**Since version 51, not published yet: hit boxes** (owner: "Can we also clean up all hit boxes after we push this
+latest hotfix."). Three read-only audits checked every mode's contact rules against what's drawn (22 of 31 clean);
+fixed: Hot Potato tags (TAG_REACH 4.6 → 3.5, CLIENT_TAG 3, TAG_UP 4.5: no tags across a gap or over a jumper),
+Struggle (the swing's height window ABOVE 2.8 / BELOW 2.0 instead of ±5; PICK 3.6 → 2.8), Parasol Plummet (the body
+an upright capsule 1.1 round instead of a 2-stud circle), Snowball Summit (ball vs body as a sphere against a
+capsule), Sinking Sands (treasure reach = drawn half width + half a body + 0.5; grab height 5.5), Rake It In (each
+produce kind's own lane grace, the golden pumpkin's 1.7), Slaparazzi (EDGE 0.5 on the photo rings), Obby Odyssey
+(Body 0.8). Left as is: Arrow Ambush / Sinking Sands' forgiving ring rule, Struggle's close circle (it's drawn).
+Open, the owner's call: Minecart Mayhem's TNT blows up a cart that visibly jumps clear over it. The colliders sweep
+(every arena + the lobby) found nothing new players can reach (Arrow Ambush's boards read rough at t=0, before
+their precise collision is built).
+
 **The owner's plan for seasons and events** (2026-10-23): "Also we can have events/holidays run along side seasons.
 Also seasons are actually spring summer fall and winter". So the crate seasons are the year's four: HOLLOW NIGHT is
 the **fall** season (`Seasons` `Time = "FALL"`; screens say "FALL SEASON", "THE FALL SEASON HAS BEGUN"), and

@@ -6,10 +6,16 @@
 
 local HotPotato = {}
 
--- A tag reaches this far, root to root, flat: two bodies touching (a shoulder and an arm each).
-HotPotato.TAG_REACH = 4.6
+-- A tag reaches this far, root to root, flat: two bodies touching, and a little more (they're about 2
+-- apart shoulder to shoulder; it was 4.6, and people were tagged across a 2-3 stud gap: owner, "clean
+-- up all hit boxes"). The server judges where the tagger's screen had the target, so the half stud
+-- over CLIENT_TAG covers what's still on its way.
+HotPotato.TAG_REACH = 3.5
 -- The client only tags people this close, so a tag it shows never comes back refused.
-HotPotato.CLIENT_TAG = 4
+HotPotato.CLIENT_TAG = 3
+-- ...and at most this far apart in height: two 5-tall bodies overlapping (someone jumping clear over
+-- the holder isn't tagged; throws reach up to REACH_UP).
+HotPotato.TAG_UP = 4.5
 -- THROW lobs the potato to the nearest empty-handed player in front within this range (aim-assist)...
 HotPotato.CLIENT_THROW = 12
 -- ... and the server takes throws up to this far (people keep moving while the press travels).
@@ -68,10 +74,10 @@ end
 -- tagged from beside it or thrown to.
 HotPotato.REACH_UP = 11
 
--- Whether b is within `reach` of a (flat) and at about the same height.
-function HotPotato.Reaches(a: Vector3, b: Vector3, reach: number): boolean
+-- Whether b is within `reach` of a (flat) and at most `up` apart in height (REACH_UP: a throw's).
+function HotPotato.Reaches(a: Vector3, b: Vector3, reach: number, up: number?): boolean
 	local dx, dz = a.X - b.X, a.Z - b.Z
-	return dx * dx + dz * dz <= reach * reach and math.abs(a.Y - b.Y) <= HotPotato.REACH_UP
+	return dx * dx + dz * dz <= reach * reach and math.abs(a.Y - b.Y) <= (up or HotPotato.REACH_UP)
 end
 
 return HotPotato
