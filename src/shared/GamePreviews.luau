@@ -22,6 +22,13 @@ local previews: { [string]: Preview } = {
 		FrameSize = Vector2.new(168, 240),
 		Fps = 8,
 	},
+	BigBadVacuum = {
+		Image = "rbxassetid://124849471004303",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
 	BobsledRun = {
 		Image = "rbxassetid://130864076429372",
 		Frames = 24,

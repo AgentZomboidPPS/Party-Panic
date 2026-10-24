@@ -65,7 +65,8 @@ FPS = 8
 # side looking toward -Z, 90 = on the +X side), pitch is how steeply it looks down, distance is
 # from the focus, fov is the vertical view angle, sway is how far the camera swings to each side
 # during the loop, and shift moves the focus (studs, x y z). raise tilts the view up so the focus
-# sits below the middle of the frame: the portal covers the top with the game's icon and name.
+# sits below the middle of the frame: the portal covers the top with the game's icon and name. face
+# names a part the focus faces (a boss's eye): yaw then counts from that way, so 0 is in front of it.
 DEFAULT_CAMERA = {"yaw": 0, "pitch": 30, "distance": 40, "fov": 50, "sway": 10, "raise": 8, "shift": [0, 0, 0]}
 CAMERAS: dict[str, dict] = {
     # Behind the line of jumpers, looking out over the lava at the Dragon Temple, the rope sweeping
@@ -109,6 +110,10 @@ CAMERAS: dict[str, dict] = {
     # potato), the picnic tables and the fence with its string lights.
     # Behind the pack on the hops, looking up the course like the owner's photo: the colourful blocks
     # over the water, the pink gantry's swinging balls and the blue tower ahead.
+    # The boss from the front, its eye on the squad round it, brick piles on the rug, the toy-block wall
+    # and the living room behind.
+    "BigBadVacuum": {"look_at": "Hull", "face": "Pupil", "yaw": 25, "pitch": 24, "distance": 62, "fov": 55, "sway": 9, "raise": 7,
+                     "shift": [0, 6, 0]},
     "ObbyOdyssey": {"yaw": 192, "pitch": 24, "distance": 30, "fov": 64, "sway": 9, "raise": 9, "shift": [0, 0, 8]},
     "HotPotato": {"look_at": "Lawn", "yaw": 240, "pitch": 40, "distance": 30, "fov": 60, "sway": 8, "raise": 6,
                   "shift": [19.9, 3, 9.3]},
@@ -298,6 +303,10 @@ def render_frames(game: str, dump: Path, frames: int, samples: int, python: str)
         raise SystemExit("No players in the snapshot - is the round over already? Try an earlier --dump-at.")
     camera = camera_settings(game)
     focus = find_focus(camera, data["parts"], heads)
+    facing = next((part for part in data["parts"] if part["n"] == camera.get("face")), None)
+    if facing:
+        # yaw counts from the way the focus faces (towards the part named "face"), not from +Z
+        camera["yaw"] += math.degrees(math.atan2(facing["cf"][0] - focus[0], facing["cf"][2] - focus[2]))
     out_dir = Path(f"/tmp/pv_{game}_frames")
     out_dir.mkdir(exist_ok=True)
     dressed = out_dir / "scene.json"
