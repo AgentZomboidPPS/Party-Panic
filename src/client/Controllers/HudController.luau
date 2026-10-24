@@ -53,6 +53,7 @@ local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
@@ -1676,7 +1677,24 @@ local function buildSettings(overlay: Instance)
 	return modal
 end
 
+-- PC: Roblox's chat window opens in the top left corner, over the profile card and the round's
+-- standings (owner, with a screenshot of it: "is there anything we can do about the chatbox?"). It
+-- goes to the bottom left instead, a little shorter, where the HUD has nothing. Phones keep Roblox's
+-- own place: there the chat starts closed and a player opens it on purpose.
+local function placeChat()
+	if isTouch() or TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
+		return
+	end
+	local window = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
+	if window then
+		window.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		window.VerticalAlignment = Enum.VerticalAlignment.Bottom
+		window.HeightScale = 0.8
+	end
+end
+
 function HudController.Start(context)
+	pcall(placeChat) -- (a chat setting Roblox renames must never stop the HUD)
 	if isTouch() then
 		-- (The edge ScreenGui: the whole screen, init.client.luau; a harness may not make one.)
 		local edge = context.Edge or context.Hud

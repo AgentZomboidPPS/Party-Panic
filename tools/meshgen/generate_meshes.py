@@ -1060,12 +1060,17 @@ def main():
         raise SystemExit(f"Unknown props: {', '.join(sorted(wanted - set(PROPS)))}")
     OUT.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(ROOT / "tools" / "checks"))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from mesh_orientation import inside_out_parts
+    from unfight import separate_meshes
 
     for name, build in PROPS.items():
         if wanted and name not in wanted:
             continue
         pieces = {piece: face_outward(mesh) for piece, mesh in build().items()}
+        # Faces of two shapes flush in one plane flicker in game (z-fighting): the smaller one's
+        # stands a hair proud (unfight.py).
+        separate_meshes(pieces)
         write_obj(OUT / f"{name}.obj", pieces)
         write_glb(OUT / f"{name}.glb", pieces)
         for piece, mesh in pieces.items():
