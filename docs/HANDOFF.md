@@ -4,6 +4,22 @@ Last updated: **2026-10-22 03:15 UTC** by Session B (branch **`claude/upbeat-gal
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
+## Big Bad Vacuum (game 30, 2026-10-24): built by hand on `claude/big-bad-vacuum`, not merged or published
+
+- The owner asked for "a mini game ... super sick and epic" and then "Make it": a co-op boss fight, the whole lobby against a giant
+  robot vacuum. Everything about it is in [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md) entry 30 (rules, how it is built, what is
+  left). Branched from `claude/quirky-hopper-5yk8zk` at a2f483b; new files only, plus small edits to `GameDefinitions` (its
+  entry, `IsNew`), `ResultsController` (a lost co-op fight says "The Vacuum won"), README and the store description.
+- Checked here: stylua, selene, luau-lsp (clean), `lune run tests/run` (265 passed), `tools/checks/mode_check.sh BigBadVacuum`
+  (12 players with the client, 10 real bots, a phone round: 0 errors, phone UI 0 problems), a solo round with 7 bots, a round
+  that makes someone leave from inside the dust bag and then pops it with a brick, forced single attacks (`tools/checks/scenarios/
+  BigBadVacuum_*.luau`), and Blender renders of the arena and the boss.
+- **Not checked (test servers have no physics):** the suction's pull and the dust bag's anchoring on a device, the camera work
+  (flyover during the 3-2-1, shake, finale) on phones, the night lighting, and difficulty against real people (tuned on bots:
+  `Shared/Logic/BigBadVacuum` `HealthFor`, `Think`, `WIND_SCALE`, the core windows). No song of its own (it plays the generic round
+  song), no portal preview, all props are primitive fallbacks (`AssetId = 0`); meshes, a song and a preview each need the owner's
+  say-so for an upload.
+
 ## Session B in flight (2026-10-22 03:15 UTC)
 
 - **Live version 34** (published 02:38 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `1f08776`, on the
