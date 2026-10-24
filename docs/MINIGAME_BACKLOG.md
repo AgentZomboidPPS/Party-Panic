@@ -301,7 +301,7 @@ cannons, and a popped capy spills about half its size as food. This is that loop
 spring, standing stones and snacks lying about. Walking over a snack eats it (small snacks 2, tasty ones 4, big ones 9,
 the golden apple 25 KG) and the capy grows; its drawn size, hit circle and eating reach follow its weight and a bigger capy is a little
 slower. BOOM (a button, E, or a click on PC) fires the snack cannon: a shell flies 64 studs at 80 studs/s, one every 0.9 s, bent toward a
-rival close to the aim (phones: the way you face, a 26 degree cone; PC: where the mouse points). A hit "pops" the victim:
+rival close to the aim (BOOM and E: the way you face, a 26 degree cone; a click on the lawn on PC: where it points). A hit "pops" the victim:
 a fifth of its weight (a quarter for the leader, at least 3, never below 10 KG) spills as snacks that fly back toward the
 shooter, the victim is thrown, staggers 0.45 s and blinks safe for 1.5 s. Nobody is ever out. Two SNACK DROPS (a beam of
 light 2.5 s ahead, then a golden apple and a dozen snacks fall there) and, for the last 12 s, a FEAST (every snack on

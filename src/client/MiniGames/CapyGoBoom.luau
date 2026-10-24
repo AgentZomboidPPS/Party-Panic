@@ -7,11 +7,12 @@
 -- Everyone has a colour (the scarf, the cannon's rim, the shell, the tag; Shared/Logic/CapyGoBoom
 -- COLORS) and a name tag, so colour is never the only cue. Your own capy stands in a coloured ring.
 --
--- Your press goes to the server with when you made it and, on PC, where the mouse points (the capy
--- turns that way for a moment); on a phone the shot goes the way you face and the server bends it
--- toward a rival close to that line. The shell appears from the server's "Shot" cue and flies on the
--- server's clock, so what you see is what is judged. The server turns a press down while you're
--- reloading or staggering ("Refused") and the button's ring says when you can fire again.
+-- Your press goes to the server with when you made it and, for a click on the lawn (PC), where it
+-- points (the capy turns that way for a moment); the BOOM button and E (and every press on a phone)
+-- fire the way you face, and the server bends the shot toward a rival close to that line. The shell
+-- appears from the server's "Shot" cue and flies on the server's clock, so what you see is what is
+-- judged. The server turns a press down while you're reloading or staggering ("Refused") and the
+-- button's ring says when you can fire again.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -21,6 +22,7 @@ local UserInputService = game:GetService("UserInputService")
 local GameState = require(ReplicatedStorage.Shared.GameState)
 local Rules = require(ReplicatedStorage.Shared.Logic.CapyGoBoom)
 
+local Api = require(script.Parent.Kit.Api)
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -37,6 +39,7 @@ local SNACK_SCALE = 1.3 -- snacks are drawn a little bigger than their meshes (e
 local FLY = 0.25 -- seconds an eaten snack takes to fly to its eater
 local FACE = 0.4 -- seconds a capy turns to where it fired
 local SHELL_LOOK = 1.25 -- shells are drawn a bit bigger than their hit circle, so they're easy to follow
+local TEMPLATE_WAIT = 10 -- seconds a shared model may take to bring all its parts (as Api.Template waits)
 
 local function partsOf(model: Instance): { BasePart }
 	local list = {}
@@ -81,6 +84,13 @@ local function sane(value: any): boolean
 	return type(value) == "number" and value == value and math.abs(value) < 1e6
 end
 
+-- A server time a cue may carry (when a shell was fired): close to this screen's copy of the server's
+-- clock. It is workspace:GetServerTimeNow(), seconds since 1970 (about 1.8 billion), so `sane` above
+-- turned every "Shot" away and no shell was ever drawn (owner, on version 53: "cant see bullets").
+local function onClock(value: any, now: number): boolean
+	return type(value) == "number" and value == value and math.abs(value - now) < 30
+end
+
 function CapyGoBoom.Start(api)
 	api:Mood({
 		Tint = Color3.fromRGB(255, 244, 222),
@@ -95,16 +105,28 @@ function CapyGoBoom.Start(api)
 	local myId = if localPlayer then localPlayer.UserId else 0
 	local reduced = State.ReducedEffects()
 
-	-- Models the server shared (looked up when first needed, so nothing here waits for them).
+	-- Models the server shared (looked up when first needed, so nothing here waits for them), copied
+	-- only once all their parts are here (Api.Arrived): this copy is kept for the round and every capy,
+	-- snack and shell is cloned from it, and a model can reach a device before all of its parts do.
+	-- Version 53 copied the capybara the first frame its model was there, while the round was still
+	-- being set up and its pieces were still coming in: every capy on that screen, players' and bots',
+	-- was the body alone with no head or legs, all round (owner: "Models are fucked"; the same as
+	-- Struggle's bats, "Friend cant see the bat."). A model still short of parts after TEMPLATE_WAIT
+	-- is copied as it is (as Api.Template does): a capy missing a piece beats an invisible player.
 	local templates: { [string]: Instance } = {}
+	local firstSeen: { [string]: number } = {}
 	local function template(name: string): Instance?
 		local found = templates[name]
 		if not found then
 			local folder = ReplicatedStorage:FindFirstChild("MiniGameAssets")
 			local shared = folder and folder:FindFirstChild(name)
 			if shared then
-				found = shared:Clone()
-				templates[name] = found :: Instance
+				local seen = firstSeen[name] or os.clock()
+				firstSeen[name] = seen
+				if Api.Arrived(shared) or os.clock() - seen > TEMPLATE_WAIT then
+					found = shared:Clone()
+					templates[name] = found :: Instance
+				end
 			end
 		end
 		return found
@@ -213,11 +235,9 @@ function CapyGoBoom.Start(api)
 	}
 	local capys: { [number]: Capy } = {}
 	local names: { [number]: string } = {}
-	local bots: { [number]: boolean } = {}
 	local function refreshNames()
 		for _, participant in api:Participants() do
 			names[participant.UserId] = participant.DisplayName
-			bots[participant.UserId] = participant.IsBot == true
 		end
 	end
 
@@ -358,10 +378,9 @@ function CapyGoBoom.Start(api)
 				label = names[userId] or "?"
 			end
 			local crown = if userId == leaderId and not tie then "👑 " else ""
-			local robot = if bots[userId] then "🤖 " else ""
-			capy.Name.Text = if userId == myId
-				then `{crown}YOU`
-				else `{crown}{robot}{string.sub(label :: string, 1, 14)}`
+			-- (no robot on bots' names: owner, "Lets remove the bot tag so people dont know they are
+			-- playing with a bot.")
+			capy.Name.Text = if userId == myId then `{crown}YOU` else `{crown}{string.sub(label :: string, 1, 14)}`
 			capy.Name.TextColor3 = if userId == myId then Theme.Colors.Yellow else Color3.new(1, 1, 1)
 		end
 	end
@@ -828,7 +847,7 @@ function CapyGoBoom.Start(api)
 		if
 			type(id) ~= "number"
 			or type(userId) ~= "number"
-			or not (sane(ox) and sane(oy) and sane(oz) and sane(dx) and sane(dz) and sane(t0))
+			or not (sane(ox) and sane(oy) and sane(oz) and sane(dx) and sane(dz) and onClock(t0, api:Now()))
 		then
 			return
 		end
@@ -910,7 +929,13 @@ function CapyGoBoom.Start(api)
 		return flatAim.Unit.X, flatAim.Unit.Z
 	end
 
-	local function fire()
+	-- Fires the cannon. `aimed`: a click on the lawn (PC), which aims where it points. The BOOM button
+	-- and E fire the way your capy faces, bent toward a rival near that line (the server's wide cone, as
+	-- on phones). Version 53 aimed every press at the mouse (owner: "shooting turns you weird"): a
+	-- click on the BOOM button, at the bottom of the screen below your capy, pointed at the lawn
+	-- between the camera and the capy, so the shot went backwards and the capy spun round to face it
+	-- every time; E fired wherever the cursor had been left.
+	local function fire(aimed: boolean)
 		if not api:CanAct() or GameState.Get("Phase") ~= "InRound" then
 			return
 		end
@@ -924,7 +949,10 @@ function CapyGoBoom.Start(api)
 			return
 		end
 		readyAt = now + Rules.RELOAD
-		local ax, az = mouseAim(root)
+		local ax, az = nil, nil
+		if aimed then
+			ax, az = mouseAim(root)
+		end
 		api:Action("Boom", now, ax, az)
 		playAsset(SFX.Boing, 0.6, 1.25)
 		local capy = capys[myId]
@@ -947,11 +975,14 @@ function CapyGoBoom.Start(api)
 			end
 		end
 	end
-	button.Pressed:Connect(fire)
+	button.Pressed:Connect(function()
+		fire(false)
+	end)
 	if not touch then
 		api:Track(UserInputService.InputBegan:Connect(function(input, processed)
+			-- (a click on the lawn, not on the HUD: Roblox marks those processed)
 			if not processed and input.UserInputType == Enum.UserInputType.MouseButton1 then
-				fire()
+				fire(true)
 			end
 		end))
 	end
