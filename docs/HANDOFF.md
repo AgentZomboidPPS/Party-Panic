@@ -26,7 +26,20 @@ now `CapyGoBoom` (Versus, 75 s, 2-12, bots fill): everyone is a 20 KG capybara o
 (small snacks 2, tasty ones 4, big ones 9, the golden apple 25 KG) and grow; BOOM fires the snack cannon, a hit spills a fifth of the
 victim's weight (a quarter for the leader, never below 10 KG) as snacks anyone can eat; nobody is out; the biggest capy
 at the buzzer wins. Two SNACK DROPS (a beam 2.5 s ahead, then a golden apple falls) and a last-12-seconds FEAST (lawn
-snacks count double; spills never do, pops only move weight around) give comebacks. The brief is in `docs/MINIGAME_BACKLOG.md` 30.
+snacks count double; spills never do, pops only move weight around) give comebacks. The brief is in `docs/MINIGAME_BACKLOG.md` 32.
+
+- **Broken on live in version 53, off since 54 (`Enabled = false`), fixed after it, still off until reviewed.** Owner: "Models
+  are fucked. shooting is fucked", "cant see bullets. shooting turns you weird". Three client bugs, none visible to the
+  harness: (1) the capybara template was copied the first frame its model reached the device, before all its parts had
+  (Struggle's bat bug; the Capy branch forked before `Api.Arrived` existed), so every capy was the body without head or legs
+  all round: shared models are now copied only once `Api.Arrived` says they're whole. (2) The "Shot" cue's launch time is
+  server time (about 1.8 billion seconds) and the client's `sane` check wanted under a million, so no shell was ever drawn:
+  it's now checked against the screen's own server clock. (3) Every press aimed at the mouse, so a click on the BOOM button
+  (below the capy on screen) fired backwards and spun the capy round: now only a click on the lawn aims, BOOM and E fire
+  the way you face. Bots' tags also lost their 🤖 (owner: "Lets remove the bot tag", also newer than the branch). The
+  owner's screenshot (every capy at 20 KG, "TIED!") was taken before GO: the profile card shows and the timer is yellow,
+  both of which change at GO; eating works in the harness and nothing showed it failing live. Unconfirmed: whether the
+  borrowed cannon meshes show the player's colour at all (they may carry colours of their own).
 
 - **Files:** `src/server/MiniGames/CapyGoBoom.luau` (the rules), `src/client/MiniGames/CapyGoBoom.luau` (a capybara drawn on
   everyone's character, snacks, shells, HUD, BOOM button), `src/server/MiniGames/Bots/CapyGoBoom.luau` (bot brain),
@@ -37,7 +50,7 @@ snacks count double; spills never do, pops only move weight around) give comebac
   (`Logic/CapyGoBoom.ScaleOf`). Snacks and shells are server records the client draws on the server's clock ("Snacks",
   "Spawn", "Eat", "Shot", "Pop", "ShellEnd" cues). A shell is judged against where the shooter saw each rival
   (history rewound by ping/2 + interpolation, like Struggle) and stops at the standing stones and the hedge; a jump over
-  it dodges it. PC fires toward the mouse, phones the way you face (bent up to 26 degrees toward a rival, judged where the shooter saw it). The real avatar
+  it dodges it. A click on the lawn (PC) fires where it points; BOOM and E fire the way you face (bent up to 26 degrees toward a rival, judged where the shooter saw it). The real avatar
   is hidden locally and the capy follows its root; a coloured pad on the lawn under each capy is its shadow and its colour.
 - **Art borrowed from CAPY GO BOOM** (owner: "Why don't you borrow assets from the capy go boom repo?"): the capybara is that
   game's `CapyMeshTemplate` (six textured meshes: body, head, four legs; the legs stride and the head dips to chomp), the
