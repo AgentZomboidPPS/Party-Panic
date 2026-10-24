@@ -33,9 +33,9 @@ MESH_DIR = ROOT / "assets" / "meshes"
 sys.path.insert(0, str(ROOT / "tools" / "preview"))
 from mesh_zfight import fights, shapes_of  # noqa: E402
 
-GAP = 0.05  # studs a shape moves out per round (Roblox flickers below about 0.04 at play distances)
-EPS = 0.04  # faces closer than this fight (mesh_zfight's default)
-ROUNDS = 6
+GAP = 0.1  # studs a face moves out per round (the game keeps faces 0.1 apart: closer ones can flicker)
+EPS = 0.08  # faces closer than this fight (mesh_zfight's and zfight's default)
+ROUNDS = 8
 
 
 def separate(pieces: dict) -> tuple[dict, int, int]:
@@ -73,7 +73,7 @@ def separate(pieces: dict) -> tuple[dict, int, int]:
             moved = points.copy()
             for n, plane in faces:
                 n = np.array(n) / np.linalg.norm(n)
-                on_face = np.abs(points @ n - plane) < 0.03
+                on_face = np.abs(points @ n - plane) < 0.02
                 moved[on_face] += n * GAP
             verts[piece][owned[k]] = moved
         found = fights(work, shapes, EPS)

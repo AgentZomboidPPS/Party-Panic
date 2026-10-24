@@ -452,9 +452,13 @@ def triangle_pairs(entries, eps):
     keep = area > 0.003
     tris, owner, cross, area = tris[keep], owner[keep], cross[keep], area[keep]
     normals = cross / (2 * area[:, None])
-    _, key = np.unique(np.round(normals, 2), axis=0, return_inverse=True)
+    planes = (normals * tris[:, 0]).sum(axis=1)  # each triangle's own plane: normals . x = planes
+    rounded, key = np.unique(np.round(normals, 2), axis=0, return_inverse=True)
     key = key.reshape(-1)
-    offsets = (normals * tris[:, 0]).sum(axis=1)
+    shared = rounded / np.linalg.norm(rounded, axis=1)[:, None]  # one normal per bucket
+    # Offsets along the bucket's normal (at the middles: arenas sit far from the origin, so a
+    # triangle's own, slightly tilted normal would put its offset studs away from its neighbours').
+    offsets = (shared[key] * tris.mean(axis=1)).sum(axis=1)
     # Only triangles with another part's triangle facing the same way within eps can fight.
     combined = key * 100000.0 + offsets
     order = np.argsort(combined, kind="stable")
@@ -467,11 +471,11 @@ def triangle_pairs(entries, eps):
     if len(order) == 0:
         return
     tris, owner, normals, key, offsets = tris[order], owner[order], normals[order], key[order], offsets[order]
+    planes = planes[order]
     for bucket in np.unique(key):
         members = np.flatnonzero(key == bucket)
         members = members[np.argsort(offsets[members])]
-        n = normals[members].mean(axis=0)
-        n /= np.linalg.norm(n)
+        n = shared[bucket]
         u, v = basis(n)
         t2 = np.stack([tris[members] @ u, tris[members] @ v], axis=2)  # M x 3 x 2
         box_lo, box_hi = t2.min(axis=1), t2.max(axis=1)
@@ -507,7 +511,8 @@ def triangle_pairs(entries, eps):
             poly = clip([tuple(p) for p in t2[i]], [tuple(p) for p in t2[j]])
             if len(poly) < 3 or polygon_area(poly) < 0.003:
                 continue
-            yield (who[i], who[j], n, d[i], d[j], poly, u, v)
+            mi, mj = members[i], members[j]
+            yield (who[i], who[j], n, d[i], d[j], poly, u, v, (normals[mi], planes[mi]), (normals[mj], planes[mj]))
 
 
 def main():
@@ -542,12 +547,22 @@ def main():
 
     found = {}
 
-    def verdict_for(ia, ib, n, points_a, sep, u, v):
+    def surface(index, points, n, u, v, plane):
+        """Offsets along n from `points` to part `index`'s surface there (a mesh's: its triangle's plane)."""
+        if index in solids:
+            return solids[index].flat_surface(points, n, u, v)
+        if plane is None:
+            return np.zeros(len(points))
+        normal, offset = plane
+        along = float(np.dot(normal, n))
+        return (offset - points @ normal) / along if abs(along) > 1e-6 else np.full(len(points), np.nan)
+
+    def verdict_for(ia, ib, n, points_a, sep, u, v, plane_a=None, plane_b=None):
         """'real' or why not, for spots `points_a` on A's plane (B's plane is `sep` further along n)."""
         pa, pb = everything[ia], everything[ib]
-        offset_a = solids[ia].flat_surface(points_a, n, u, v) if ia in solids else np.zeros(len(points_a))
+        offset_a = surface(ia, points_a, n, u, v, plane_a)
         points_b = points_a + n * sep
-        offset_b = solids[ib].flat_surface(points_b, n, u, v) if ib in solids else np.zeros(len(points_a))
+        offset_b = surface(ib, points_b, n, u, v, plane_b)
         both = ~np.isnan(offset_a) & ~np.isnan(offset_b)
         both &= np.abs(sep + offset_b - offset_a) <= args.eps
         if not both.any():
@@ -606,7 +621,7 @@ def main():
                     corners = corners[::-1]
                 quads += [[corners[0], corners[1], corners[2]], [corners[0], corners[2], corners[3]]]
             entries.append((-1 - part["_id"], np.array(quads)))  # (negative: a part's face)
-        for oa, ob, n, da, db, poly, u, v in triangle_pairs(entries, args.eps):
+        for oa, ob, n, da, db, poly, u, v, plane_a, plane_b in triangle_pairs(entries, args.eps):
             if oa < 0 and ob < 0:
                 continue  # part against part: checked above
             ia, ib = (oa if oa >= 0 else -1 - oa), (ob if ob >= 0 else -1 - ob)
@@ -614,7 +629,8 @@ def main():
                 continue
             flat = polygon_samples(poly)
             points = flat[:, :1] * u + flat[:, 1:] * v + n * da
-            record(ia, ib, n, db - da, verdict_for(ia, ib, n, points, db - da, u, v))
+            # (a part's side is checked against its own shape; a mesh's against its triangle's plane)
+            record(ia, ib, n, db - da, verdict_for(ia, ib, n, points, db - da, u, v, plane_a, plane_b))
 
     real = sorted(line for verdict, line in found.values() if verdict == "real")
     in_mesh = sorted(line for verdict, line in found.values() if verdict == "in the mesh")
