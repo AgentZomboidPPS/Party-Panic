@@ -30,6 +30,16 @@ local function stoneBetween(mode, a: Vector3, b: Vector3, margin: number): (numb
 	return nil, nil
 end
 
+local function inside(mode, point: Vector3): Vector3
+	local origin = mode.center
+	local offset = flat(point - origin)
+	local limit = mode.radius - 4
+	if offset.Magnitude > limit then
+		offset = offset.Unit * limit
+	end
+	return Vector3.new(origin.X + offset.X, point.Y, origin.Z + offset.Z)
+end
+
 -- A waypoint round a stone that is in the way from `from` to `to` (or `to` itself).
 local function around(mode, from: Vector3, to: Vector3): Vector3
 	local Rules = mode.Rules
@@ -47,17 +57,7 @@ local function around(mode, from: Vector3, to: Vector3): Vector3
 		nx, nz, n = -dz, dx, math.max(math.sqrt(dx * dx + dz * dz), 1e-3)
 	end
 	local reach = Rules.ROCK_R + 5
-	return Vector3.new(cx + nx / n * reach, from.Y, cz + nz / n * reach)
-end
-
-local function inside(mode, point: Vector3): Vector3
-	local origin = mode.center
-	local offset = flat(point - origin)
-	local limit = mode.radius - 4
-	if offset.Magnitude > limit then
-		offset = offset.Unit * limit
-	end
-	return Vector3.new(origin.X + offset.X, point.Y, origin.Z + offset.Z)
+	return inside(mode, Vector3.new(cx + nx / n * reach, from.Y, cz + nz / n * reach))
 end
 
 function Brain.Step(bot, ctx, mode, _dt)

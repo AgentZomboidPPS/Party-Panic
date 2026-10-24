@@ -23,7 +23,7 @@ snacks count double; spills never do, pops only move weight around) give comebac
   (`Logic/CapyGoBoom.ScaleOf`). Snacks and shells are server records the client draws on the server's clock ("Snacks",
   "Spawn", "Eat", "Shot", "Pop", "ShellEnd" cues). A shell is judged against where the shooter saw each rival
   (history rewound by ping/2 + interpolation, like Struggle) and stops at the standing stones and the hedge; a jump over
-  it dodges it. PC fires toward the mouse, phones the way you face (bent up to 26 degrees toward a rival). The real avatar
+  it dodges it. PC fires toward the mouse, phones the way you face (bent up to 26 degrees toward a rival, judged where the shooter saw it). The real avatar
   is hidden locally and the capy follows its root; a coloured pad on the lawn under each capy is its shadow and its colour.
 - **Art borrowed from CAPY GO BOOM** (owner: "Why don't you borrow assets from the capy go boom repo?"): the capybara is that
   game's `CapyMeshTemplate` (six textured meshes: body, head, four legs; the legs stride and the head dips to chomp), the
@@ -37,6 +37,19 @@ snacks count double; spills never do, pops only move weight around) give comebac
 - **Checked on a real server (Open Cloud):** 12-player round with the client half, 2 people + 10 bots, phone HUD at five
   sizes: see the mode_check lines in the report. Test bots are far better eaters than people, so their 400+ KG finals are
   not a balance signal (a capy stops growing visually at about 160 KG).
+- **Independent review (a fresh reviewer read it cold; no blockers) and what changed:** pooled snack models came back
+  shrunk from their eaten-flight (spills and the golden apple were drawn tiny): fixed; a huge or NaN aim from a client could give
+  a zero or NaN shell direction: the aim is range-checked, normalised in doubles and the final direction verified; the
+  leave/respawn hooks now go on before `SpawnAll`; aim assist uses the same rewound positions as the hit test; the
+  shell starts at the capy and is drawn from the cannon's muzzle, with a local muzzle flash on press; spills add up
+  exactly (`Rules.Pieces`: even spills only, so pops never create weight); each loop step runs under its own `pcall`
+  (a thrown error is reported once instead of silently ending eating); a refused press no longer costs a second
+  reload; landed snacks update at 30 Hz, the gulp no longer resizes the whole capy; the hint shows at GO; the FEAST
+  banner (redundant with the status line, and 8.8 pt on phones) is gone.
+- **Left as they are (design calls / platform-wide):** a capy at 2.1x or bigger can't jump over a shell; the hit
+  circle is smaller than a big capy's drawn long axis (`Rules.HitRadius` is `BODY_R * scale^0.85` on purpose); presses
+  and eats in the last 0.1 s and shells in flight at the buzzer don't count (no HoldEnd); the reload can be beaten by
+  about 6% with ping jitter; no speed or teleport validation (same as the other modes).
 - **Not done / owner's calls:**
   - The shell and the standing stones are still rounded parts (the original game has no such pieces); the capy and the
     snacks are real meshes. Their look in the game itself is unconfirmed: the preview tools can't draw plain meshes.

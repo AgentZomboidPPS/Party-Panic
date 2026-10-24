@@ -43,6 +43,7 @@ local Rules = require(ReplicatedStorage.Shared.Logic.CapyGoBoom)
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
+local Telemetry = require(script.Parent.Parent.Services.Telemetry)
 local Build = require(script.Parent.Parent.World.Build)
 local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 
@@ -57,7 +58,6 @@ local HISTORY = 16 -- position samples kept (every 0.05 s)
 local GROUP = "PP_CapyGoBoom" -- every participant's character (see setUpGroup)
 local SNACK_SNAPSHOT = 3 -- seconds between full lists of snacks (Spawn / Eat events carry the moments)
 local MASS_SHARE = 0.25 -- seconds between the weights being shared
-local FALL_SAFE = 3.8 -- a root this far above the lawn is in the air (standing is about 3)
 local BOT_MAX_FLAT, BOT_MAX_UP = 80, 45 -- a bot never goes faster than its hardest knock
 
 local rng = Random.new()
@@ -68,6 +68,15 @@ end
 
 local function finite(value: any): boolean
 	return type(value) == "number" and value == value and math.abs(value) < math.huge
+end
+
+-- How far a character's root is above the ground standing (an avatar with its own proportions differs from
+-- the default 3).
+local function standHeight(humanoid: Humanoid?, root: BasePart): number
+	if humanoid and humanoid.RigType == Enum.HumanoidRigType.R15 and humanoid.HipHeight > 0.5 then
+		return humanoid.HipHeight + root.Size.Y / 2
+	end
+	return 3
 end
 
 local function flat(v: Vector3): Vector3
@@ -130,6 +139,7 @@ function CapyGoBoom:Prepare()
 	self.feast = false
 	self.dropWarned = {} :: { [number]: boolean }
 	self.dropSpot = nil :: Vector3?
+	self.failed = {} :: { [string]: boolean }
 	self.refillTokens = 0
 	self.lastRefill = os.clock()
 	self.massDirty = true
@@ -161,7 +171,8 @@ function CapyGoBoom:Prepare()
 	local ringRadius = self.radius * 0.62
 	local points = Build.Ring(origin + Vector3.new(0, 0.5, 0), ringRadius, math.max(count, 1))
 	self:_buildArena(points)
-	ctx:SpawnAll(points, true)
+	-- (the hooks first: placing everyone can take seconds, and someone who leaves or can't be placed in that
+	-- time must not stay behind as a frozen entry)
 	ctx.Hooks.Respawn = function(_player)
 		local x, z = self:_spot(0.8)
 		local spot = origin + Vector3.new(x, 0.5, z)
@@ -176,6 +187,7 @@ function CapyGoBoom:Prepare()
 	ctx.Hooks.PlayerLeft = function(player)
 		self:_onLeave(player)
 	end
+	ctx:SpawnAll(points, true)
 
 	for _, kind in Rules.SNACKS do
 		for _, prop in kind.Props do
@@ -599,7 +611,7 @@ end
 
 -- Throws snacks worth `amount` from `at` (a world position) to spots around it, toward `toward` and
 -- out to the sides (never the way a popped capy is thrown), or all round if there is no direction.
-function CapyGoBoom:_spill(amount: number, at: Vector3, toward: Vector3?, reserve: any)
+function CapyGoBoom:_spill(amount: number, at: Vector3, toward: Vector3?, reserve: any, maxPieces: number?)
 	if amount <= 0 then
 		return
 	end
@@ -615,7 +627,7 @@ function CapyGoBoom:_spill(amount: number, at: Vector3, toward: Vector3?, reserv
 		then math.atan2((toward :: Vector3).Z, (toward :: Vector3).X)
 		else rng:NextNumber(0, math.pi * 2)
 	local half = if aimed then 1.75 else math.pi -- each side of `toward` (about 100 degrees)
-	local pieces = Rules.Pieces(amount)
+	local pieces = Rules.Pieces(amount, maxPieces)
 	local made = {}
 	for index, kind in pieces do
 		local angle = base - half + 2 * half * (index - 0.5) / #pieces + rng:NextNumber(-0.2, 0.2)
@@ -674,7 +686,7 @@ function CapyGoBoom:_pickUps()
 			end
 			local dx, dz = eater.X - snack[3], eater.Z - snack[4]
 			local distance = math.sqrt(dx * dx + dz * dz)
-			if distance <= eater.Reach and distance < bestDistance and math.abs(eater.Y) < 9 then
+			if distance <= eater.Reach and distance < bestDistance and math.abs(eater.Y) < 8 then
 				best, bestDistance = eater.Player, distance
 			end
 		end
@@ -848,8 +860,10 @@ function CapyGoBoom:_refuse(player: any)
 	end
 end
 
--- Bends a shot toward the rival nearest to where it points, if one is within the cone.
-function CapyGoBoom:_assist(shooter: any, from: Vector3, dir: Vector3, aimed: boolean): Vector3
+-- Bends a shot toward the rival nearest to where it points, if one is within the cone. Rivals are where the
+-- shooter saw them (rewound, like the hit test): aiming at where a moving rival is now would snap the shot to a
+-- spot it has already left.
+function CapyGoBoom:_assist(shooter: any, from: Vector3, dir: Vector3, aimed: boolean, rewind: number): Vector3
 	local ctx = self.context
 	local now = ctx:Now()
 	local arc = if aimed then Rules.ASSIST_AIMED else Rules.ASSIST_FREE
@@ -863,7 +877,8 @@ function CapyGoBoom:_assist(shooter: any, from: Vector3, dir: Vector3, aimed: bo
 		if not root then
 			continue
 		end
-		local offset = flat(root.Position - from)
+		local seen = if rewind > 0 then self:_positionAt(other, now - rewind) else nil
+		local offset = flat((seen or root.Position) - from)
 		local distance = offset.Magnitude
 		if distance < 0.5 or distance > Rules.SHELL_RANGE - 4 then
 			continue
@@ -898,17 +913,22 @@ function CapyGoBoom:_boom(player: any, claimed: any, ax: any, az: any)
 		return
 	end
 	-- Where it points: the mouse on PC (a direction the client sent), else the way the capy faces.
+	-- (normalised in doubles, and only from sane numbers: a huge value would square to infinity as a Vector3)
 	local aim: Vector3? = nil
-	if finite(ax) and finite(az) then
-		local v = Vector3.new(ax, 0, az)
-		if v.Magnitude > 0.1 then
-			aim = v.Unit
+	if finite(ax) and finite(az) and math.abs(ax) < 1e4 and math.abs(az) < 1e4 then
+		local length = math.sqrt(ax * ax + az * az)
+		if length > 0.1 then
+			aim = Vector3.new(ax / length, 0, az / length)
 		end
 	end
 	local look = flat(root.CFrame.LookVector)
 	local dir = aim or (if look.Magnitude > 0.01 then look.Unit else -Vector3.zAxis)
 	local position = root.Position
-	dir = self:_assist(player, position, dir, aim ~= nil)
+	local rewind = math.min(pingOf(player) / 2 + (if BotRegistry.IsBot(player) then 0 else INTERP), REWIND_CAP)
+	dir = self:_assist(player, position, dir, aim ~= nil, rewind)
+	if not (finite(dir.X) and finite(dir.Z)) or math.abs(dir.Magnitude - 1) > 0.01 then
+		dir = if look.Magnitude > 0.01 then look.Unit else -Vector3.zAxis
+	end
 
 	local scale = Rules.ScaleOf(self.mass[player])
 	-- (counted from when the press was made, like the client counts it, so a steady tapper isn't turned
@@ -919,7 +939,8 @@ function CapyGoBoom:_boom(player: any, claimed: any, ax: any, az: any)
 		ctx:SetPlayerShared(player, "ReadyAt", round2(ready))
 	end
 	self.nextShell += 1
-	local origin = Vector3.new(position.X, position.Y - 0.4, position.Z) + dir * Rules.Muzzle(scale)
+	-- (from the capy itself: whoever stands in front of the cannon is hit; clients draw it from the muzzle)
+	local origin = Vector3.new(position.X, position.Y - 0.9, position.Z)
 	local shell = {
 		Id = self.nextShell,
 		Owner = player,
@@ -929,7 +950,7 @@ function CapyGoBoom:_boom(player: any, claimed: any, ax: any, az: any)
 		T0 = now,
 		Age = 0,
 		-- What the shooter saw of each rival: one way back plus Roblox's interpolation, capped.
-		Rewind = math.min(pingOf(player) / 2 + (if BotRegistry.IsBot(player) then 0 else INTERP), REWIND_CAP),
+		Rewind = rewind,
 	}
 	table.insert(self.shells, shell)
 	ctx:Fire(
@@ -1070,7 +1091,7 @@ function CapyGoBoom:_pop(shell: { [string]: any }, victim: any, at: Vector3)
 	if mass == nil then
 		return
 	end
-	local _, _, root = ctx:GetCharacter(victim)
+	local _, victimHumanoid, root = ctx:GetCharacter(victim)
 	local position = if root then root.Position else at
 	local spill = Rules.SpillOf(mass, self:_leader() == victim)
 	self.safeUntil[victim] = now + Rules.SAFE
@@ -1086,7 +1107,10 @@ function CapyGoBoom:_pop(shell: { [string]: any }, victim: any, at: Vector3)
 	end
 	-- Someone already in the air gets no extra lift.
 	local airborne = root ~= nil
-		and (root.Position.Y - self.center.Y > FALL_SAFE or math.abs(root.AssemblyLinearVelocity.Y) > 2)
+		and (
+			root.Position.Y - self.center.Y > standHeight(victimHumanoid, root) + 0.8
+			or math.abs(root.AssemblyLinearVelocity.Y) > 2
+		)
 	local lift = if airborne then 0 else Rules.KNOCK_UP
 	ctx:Knockback(victim, shell.Dir * Rules.KNOCK + Vector3.new(0, lift, 0), Rules.STUN)
 	ctx:Fire(
@@ -1116,11 +1140,21 @@ function CapyGoBoom:_onLeave(player: any)
 	self.pops[player] = nil
 	self.history[player] = nil
 	for index = #self.shells, 1, -1 do
-		if self.shells[index].Owner == player then
+		local shell = self.shells[index]
+		if shell.Owner == player then
 			table.remove(self.shells, index)
+			self.context:Fire(
+				nil,
+				"ShellEnd",
+				shell.Id,
+				round2(shell.Origin.X),
+				round2(shell.Y),
+				round2(shell.Origin.Z),
+				2
+			)
 		end
 	end
-	self:_spill(mass, at, nil, nil)
+	self:_spill(mass, at, nil, nil, 14)
 	local roster = {}
 	for _, entry in self.roster do
 		if entry[1] ~= player.UserId then
@@ -1202,6 +1236,16 @@ function CapyGoBoom:_limitBots()
 	end
 end
 
+-- Runs one step of the round's loops. ctx:Loop and ctx:Heartbeat stop for good at the first error, which
+-- would quietly end eating (or the shells); here an error is reported once and the other steps carry on.
+function CapyGoBoom:_safely(label: string, step: (any) -> ())
+	local ok, err = pcall(step, self)
+	if not ok and not self.failed[label] then
+		self.failed[label] = true
+		Telemetry.Error("CapyGoBoom", `{label}: {err}`)
+	end
+end
+
 function CapyGoBoom:Start()
 	local ctx = self.context
 	self.groupReady = setUpGroup()
@@ -1237,21 +1281,21 @@ function CapyGoBoom:Start()
 				end
 			end
 		end
-		self:_stepShells()
+		self:_safely("shells", self._stepShells)
 	end)
 
 	ctx:Loop(function(): number?
-		self:_groupCharacters()
-		self:_keepInside()
-		self:_pickUps()
-		self:_limitBots()
-		self:_events()
-		self:_refill()
+		self:_safely("group", self._groupCharacters)
+		self:_safely("inside", self._keepInside)
+		self:_safely("pickUps", self._pickUps)
+		self:_safely("limitBots", self._limitBots)
+		self:_safely("events", self._events)
+		self:_safely("refill", self._refill)
 		if self.massDirty and os.clock() - self.lastMassShare >= MASS_SHARE then
-			self:_shareMass()
+			self:_safely("shareMass", self._shareMass)
 		end
 		if self.snacksDirty and os.clock() - self.lastSnackShare >= SNACK_SNAPSHOT then
-			self:_shareSnacks()
+			self:_safely("shareSnacks", self._shareSnacks)
 		end
 		return 0.1
 	end)

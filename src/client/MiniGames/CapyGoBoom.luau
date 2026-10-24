@@ -76,6 +76,11 @@ local function flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
 end
 
+-- A number a server cue may carry: not NaN, not absurd.
+local function sane(value: any): boolean
+	return type(value) == "number" and value == value and math.abs(value) < 1e6
+end
+
 function CapyGoBoom.Start(api)
 	api:Mood({
 		Tint = Color3.fromRGB(255, 244, 222),
@@ -134,7 +139,6 @@ function CapyGoBoom.Start(api)
 	local center: Vector3? = nil
 	local slots: { [number]: number } = {} -- UserId -> colour slot
 	local mass: { [number]: { number } } = {} -- UserId -> { weight, pops }
-	local feast = false
 	local function readField()
 		local field = api:SharedJSON("Field")
 		if type(field) == "table" and type(field.Center) == "table" then
@@ -431,19 +435,6 @@ function CapyGoBoom.Start(api)
 		Parent = leadPill,
 		Children = { UIKit.TextStroke(0.15) },
 	})
-	local feastLabel = UIKit.Label({
-		Name = "Feast",
-		Text = "🍉 FEAST! LAWN SNACKS COUNT DOUBLE! 🍉",
-		Font = Theme.Fonts.Display,
-		TextSize = 26,
-		TextColor3 = Theme.Colors.Yellow,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, y + 62),
-		Size = UDim2.fromOffset(if touch then 330 else 460, 34),
-		Visible = false,
-		Parent = hud,
-		Children = { UIKit.TextStroke(0.1) },
-	})
 
 	local function refreshHud()
 		local mine = mass[myId]
@@ -523,13 +514,6 @@ function CapyGoBoom.Start(api)
 	api:OnShared("Roster", readRoster)
 	api:OnShared("Mass", readMass)
 
-	api:OnShared("Feast", function(value)
-		feast = value == true
-		feastLabel.Visible = feast
-	end)
-	feast = api:Shared("Feast") == true
-	feastLabel.Visible = feast
-
 	-- Floating words (rise and fade) -------------------------------------------------------------------
 	type Floater = { Anchor: Part, Label: TextLabel, Born: number, Life: number, From: Vector3, Rise: number }
 	local floaters: { Floater } = {}
@@ -570,6 +554,7 @@ function CapyGoBoom.Start(api)
 		Model: Model?,
 		Kind: number,
 		Prop: string,
+		Sized: boolean?, -- drawn at its full size since it was last made (a pooled model comes back shrunk)
 		Added: number,
 		Beam: Part?,
 		TakenAt: number?,
@@ -774,7 +759,15 @@ function CapyGoBoom.Start(api)
 	end)
 
 	-- Shells --------------------------------------------------------------------------------------------------
-	type Shell = { Id: number, Origin: Vector3, Dir: Vector3, T0: number, Model: Model, Owner: number }
+	type Shell = {
+		Id: number,
+		Origin: Vector3,
+		Dir: Vector3,
+		T0: number,
+		Muzzle: number,
+		Model: Model,
+		Owner: number,
+	}
 	local shells: { [number]: Shell } = {}
 	local shellPool: { Model } = {}
 	local MAX_AGE = Rules.SHELL_RANGE / Rules.SHELL_SPEED
@@ -831,16 +824,11 @@ function CapyGoBoom.Start(api)
 		return ready
 	end
 
-	api:OnEvent("Shot", function(id, userId, ox, oy, oz, dx, dz, t0, _scale)
+	api:OnEvent("Shot", function(id, userId, ox, oy, oz, dx, dz, t0, scale)
 		if
 			type(id) ~= "number"
 			or type(userId) ~= "number"
-			or type(ox) ~= "number"
-			or type(oy) ~= "number"
-			or type(oz) ~= "number"
-			or type(dx) ~= "number"
-			or type(dz) ~= "number"
-			or type(t0) ~= "number"
+			or not (sane(ox) and sane(oy) and sane(oz) and sane(dx) and sane(dz) and sane(t0))
 		then
 			return
 		end
@@ -849,11 +837,21 @@ function CapyGoBoom.Start(api)
 			return
 		end
 		dir = dir.Unit
+		-- The shell is the server's, from the capy's middle; it is drawn from the cannon's muzzle.
+		local muzzle = Rules.Muzzle(if sane(scale) then math.clamp(scale, 0.5, 3) else 1)
+		local origin = Vector3.new(ox, oy, oz)
 		local color = colorOf(userId)
 		local model = newShell(color)
 		if model then
-			shells[id] =
-				{ Id = id, Origin = Vector3.new(ox, oy, oz), Dir = dir, T0 = t0, Model = model, Owner = userId }
+			shells[id] = {
+				Id = id,
+				Origin = origin,
+				Dir = dir,
+				T0 = t0,
+				Muzzle = muzzle,
+				Model = model,
+				Owner = userId,
+			}
 		end
 		local capy = capys[userId]
 		if capy then
@@ -862,7 +860,7 @@ function CapyGoBoom.Start(api)
 			capy.FaceAt = os.clock()
 		end
 		if not reduced then
-			api:Effect("Sparkles", Vector3.new(ox, oy, oz), { color, Color3.new(1, 1, 1) })
+			api:Effect("Sparkles", origin + dir * muzzle, { color, Color3.new(1, 1, 1) })
 		end
 	end)
 
@@ -930,6 +928,17 @@ function CapyGoBoom.Start(api)
 		api:Action("Boom", now, ax, az)
 		playAsset(SFX.Boing, 0.6, 1.25)
 		local capy = capys[myId]
+		-- A flash at the muzzle at once (the shell itself comes from the server a moment later).
+		if not reduced then
+			local aim = if ax and az then Vector3.new(ax, 0, az) else flat(root.CFrame.LookVector)
+			if aim.Magnitude > 0.01 then
+				local muzzle = Rules.Muzzle(if capy then capy.Scale else 1)
+				api:Effect("Sparkles", root.Position + Vector3.new(0, -0.9, 0) + aim.Unit * muzzle, {
+					colorOf(myId),
+					Color3.new(1, 1, 1),
+				})
+			end
+		end
 		if capy then
 			capy.Recoil = os.clock()
 			if ax and az then
@@ -946,18 +955,14 @@ function CapyGoBoom.Start(api)
 			end
 		end))
 	end
-	api:Hint(
-		if touch then "Walk over snacks to grow. Tap BOOM to fire!" else "Eat snacks to grow! Click or press E to BOOM.",
-		y + 66
-	)
-	task.delay(6, function()
-		api:Hint("", y + 66)
-	end)
+	local hintText = if touch
+		then "Walk over snacks to grow. Tap BOOM to fire!"
+		else "Eat snacks to grow! Click or press E to BOOM."
 
 	-- The server turned our press down: say when we can try again.
 	api:OnEvent("Refused", function(until_)
 		if type(until_) == "number" then
-			readyAt = math.max(readyAt, until_)
+			readyAt = until_ -- (the server's word: a press it turned down doesn't cost a whole new reload)
 		end
 	end)
 
@@ -999,6 +1004,8 @@ function CapyGoBoom.Start(api)
 
 	-- Every frame ----------------------------------------------------------------------------------------------------
 	local lastClock = os.clock()
+	local frame = 0
+	local hintShown = false
 	local minZoomSaved: number? = nil
 	local zoomFor = 1
 	api:RenderStep(function()
@@ -1051,7 +1058,9 @@ function CapyGoBoom.Start(api)
 			-- The look of the moment: a gulp after eating, a squash after a pop, a bounce on the move.
 			local gulp = math.max(0, 1 - (clock - c.Chomp) / 0.25)
 			local squash = math.max(0, 1 - (clock - c.Squash) / 0.3)
-			local drawn = c.Scale * (1 + 0.09 * gulp * gulp - 0.12 * squash)
+			-- (a capy with a head to dip gulps with its head; resizing the whole model every frame costs a phone)
+			local gulpScale = if c.Rig and c.Rig.Head then 0 else 0.09 * gulp * gulp
+			local drawn = c.Scale * (1 + gulpScale - 0.12 * squash)
 
 			local velocity = flat(root.AssemblyLinearVelocity)
 			local moving = velocity.Magnitude > 2
@@ -1142,8 +1151,22 @@ function CapyGoBoom.Start(api)
 		end
 
 		-- Snacks: flying, lying (bobbing and turning), or flying to whoever ate them.
+		-- The hint comes up at GO (not under the rules card) and goes after a few seconds.
+		if not hintShown and GameState.Get("Phase") == "InRound" then
+			hintShown = true
+			api:Hint(hintText, y + 66)
+			task.delay(6, function()
+				api:Hint("", y + 66)
+			end)
+		end
+		frame += 1
 		for id, snack in snacks do
 			local model = snack.Model
+			if not model and not snack.TakenAt then
+				-- (its template hadn't reached this screen yet)
+				model = borrow(snack.Prop)
+				snack.Model = model
+			end
 			if snack.TakenAt then
 				local k = (clock - snack.TakenAt) / FLY
 				local character = snack.TakenBy and api:CharacterOf(snack.TakenBy)
@@ -1165,15 +1188,18 @@ function CapyGoBoom.Start(api)
 				if position then
 					local data = snack.Data
 					local landed = Rules.Landed(data, now)
+					if landed and snack.Sized and (frame + id) % 2 == 1 then
+						continue -- (a snack lying still turns at 30 a second: a hundred of them cost a phone)
+					end
 					local spin = clock * (if landed then 1.6 else 7) + id
 					model:PivotTo(CFrame.new(position) * CFrame.Angles(0, spin, 0))
 					-- A sprouting snack grows in; others are at full size once drawn.
 					if data[8] == Rules.SPROUT and now - data[7] < Rules.FLIGHT[0] then
 						scaleBy(model, SNACK_SCALE * math.clamp((now - data[7]) / Rules.FLIGHT[0], 0.05, 1))
 						snack.Added = math.min(snack.Added, clock)
-					elseif model:GetAttribute("PP_Sized") ~= true then
+					elseif not snack.Sized then
 						scaleBy(model, SNACK_SCALE)
-						model:SetAttribute("PP_Sized", true)
+						snack.Sized = true
 					end
 					if snack.Beam and center then
 						snack.Beam.CFrame = CFrame.new(position + Vector3.new(0, 34, 0))
@@ -1195,7 +1221,9 @@ function CapyGoBoom.Start(api)
 			if age >= MAX_AGE + 0.05 then
 				endShell(id)
 			elseif age >= 0 then
-				shell.Model:PivotTo(CFrame.new(Rules.ShellAt(shell.Origin, shell.Dir, age)))
+				-- (it leaves the cannon's muzzle, which is ahead of the capy's middle where the server's shell starts)
+				local travelled = math.max(Rules.SHELL_SPEED * age, shell.Muzzle)
+				shell.Model:PivotTo(CFrame.new(shell.Origin + shell.Dir * travelled))
 			end
 		end
 
@@ -1226,10 +1254,7 @@ function CapyGoBoom.Start(api)
 			end
 		end
 
-		-- The FEAST banner and the BOOM button.
-		if feast then
-			feastLabel.TextColor3 = Theme.Colors.Yellow:Lerp(Color3.new(1, 1, 1), 0.5 + 0.5 * math.sin(clock * 8))
-		end
+		-- The BOOM button's reload ring (the FEAST is announced by the status line and a toast).
 		local wait = readyAt - now
 		button:SetFill(if wait > 0 then math.clamp(wait / Rules.RELOAD, 0, 1) else 0)
 	end)

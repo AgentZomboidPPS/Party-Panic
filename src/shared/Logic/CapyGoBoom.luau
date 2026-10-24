@@ -108,14 +108,35 @@ Rules.FLIGHT = { [0] = 0.4, [1] = 0.7, [2] = 1.5 }
 Rules.SKY_HEIGHT = 34
 Rules.ARC_HEIGHT = 4.5
 
--- The snacks that make up `amount` of weight (a spill): at most 8 pieces, big snacks for the big ones.
-function Rules.Pieces(amount: number): { number }
+-- The snacks that make up exactly `amount` of weight (a spill), at most `maxPieces` (8): big snacks (9) in
+-- pairs for the big spills, then tasty (4) and small (2) ones, so an even amount adds up exactly and a pop
+-- only ever moves weight around. An odd amount (a leaver's) takes one big snack first; weight past the
+-- piece limit, or a last odd 1, is lost.
+function Rules.Pieces(amount: number, maxPieces: number?): { number }
 	local list = {}
+	local limit = maxPieces or 8
 	local left = amount
-	while left > 0 and #list < 8 do
-		local kind = if left >= 14 then Rules.BIG elseif left >= 6 then Rules.TASTY else Rules.SMALL
-		table.insert(list, kind)
-		left -= Rules.SNACKS[kind].Mass
+	if left % 2 == 1 then
+		if left >= 9 then
+			table.insert(list, Rules.BIG)
+			left -= 9
+		else
+			left -= 1
+		end
+	end
+	while left >= 22 and #list + 2 <= limit do
+		table.insert(list, Rules.BIG)
+		table.insert(list, Rules.BIG)
+		left -= 18
+	end
+	while left > 0 and #list < limit do
+		if left >= 4 then
+			table.insert(list, Rules.TASTY)
+			left -= 4
+		else
+			table.insert(list, Rules.SMALL)
+			left -= 2
+		end
 	end
 	return list
 end
@@ -144,9 +165,11 @@ Rules.ASSIST_FREE = math.rad(26) -- touch: the way you face, bent toward a rival
 Rules.ASSIST_AIMED = math.rad(6) -- PC: where the mouse points, bent a little
 Rules.MAX_SHELLS = 40
 
--- How far in front of the capy's middle a shell leaves (the cannon sticks out).
+-- How far in front of the capy's middle the cannon's muzzle is drawn (the original's starter blaster sits
+-- 3.8 studs ahead of the pivot at scale 1). The server's shell starts at the capy itself, so whoever is in
+-- front of the cannon is hit; clients draw it from the muzzle.
 function Rules.Muzzle(scale: number): number
-	return 2.0 + 1.6 * scale
+	return 3.6 * scale
 end
 
 -- A pop ----------------------------------------------------------------------------------------------
@@ -157,10 +180,12 @@ Rules.KNOCK_UP = 16
 Rules.OWN_SPILL = 1.6 -- seconds before a popped capy can eat its own spill
 
 -- How much a pop knocks off: a fifth of the weight (a quarter for the leader, so the front can be
--- caught), 3 at least, 40 at most, and never below MIN_MASS.
+-- caught), 4 at least, 40 at most, and never below MIN_MASS.
+-- (always an even number, so the snacks it becomes add up to it exactly: Pieces)
 function Rules.SpillOf(mass: number, leader: boolean): number
-	local amount = math.clamp(math.floor(mass * (if leader then 0.26 else 0.2) + 0.5), 3, 40)
-	return math.max(0, math.min(amount, mass - Rules.MIN_MASS))
+	local amount = math.clamp(math.floor(mass * (if leader then 0.26 else 0.2) + 0.5), 4, 40)
+	amount = math.max(0, math.min(amount, mass - Rules.MIN_MASS))
+	return amount - amount % 2
 end
 
 -- Rounds ---------------------------------------------------------------------------------------------
