@@ -12,7 +12,7 @@ checked before anything is uploaded.
 A "shape" is a piece's connected run of triangles (a box, a lathe, a tube), so two boxes merged into
 one piece count as two. A spot only counts where it can be seen: not where the face is buried inside
 another closed shape of the prop (two blocks sunk into each other), and not a sliver under 0.003
-square studs, nor bottoms flat on the ground the prop stands on (its lowest point). --eps (default 0.08 studs, as tools/preview/zfight.py: the game keeps faces 0.1 apart) is
+square studs, nor bottoms within 0.1 of the ground the prop stands on (its lowest point). --eps (default 0.08 studs, as tools/preview/zfight.py: the game keeps faces 0.1 apart) is
 how far apart two faces may be and still fight.
 """
 
@@ -104,8 +104,8 @@ def fights(pieces: dict, shapes: list, eps: float):
     found = {}
     for item in triangle_pairs(list(enumerate(tri_sets)), eps):
         a, b, n, d, d_b, poly, u, v = item[:8]
-        if n[1] < -0.95 and abs(-d - base) < 0.05:
-            continue  # (bottoms resting on the ground the prop stands on: never seen)
+        if n[1] < -0.95 and -d - base < 0.11:
+            continue  # (bottoms on or just over the ground the prop stands on: never seen)
         samples = polygon_samples(poly, 5)
         if len(samples) == 0:
             continue
