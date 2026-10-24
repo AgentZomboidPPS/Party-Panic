@@ -1546,7 +1546,7 @@ end
 
 local function buildSettings(overlay: Instance)
 	local touch = isTouch()
-	local modal = Modal.new(overlay, "Settings", "⚙️", Vector2.new(560, if touch then 530 else 420))
+	local modal = Modal.new(overlay, "Settings", "⚙️", Vector2.new(560, if touch then 480 else 420))
 	local list = UIKit.new("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
@@ -1561,15 +1561,17 @@ local function buildSettings(overlay: Instance)
 	end, function(value)
 		setSetting:FireServer("ReducedEffects", value)
 	end)
-	UIKit.Label({
-		Text = "Reduced effects tones down particles, flashes and motion.",
-		TextSize = 18,
-		TextColor3 = Theme.Colors.TextDim,
-		Size = UDim2.new(1, 0, 0, 44),
-		LayoutOrder = 3,
-		Parent = list,
-	})
-	if touch then
+	if not touch then
+		UIKit.Label({
+			Text = "Reduced effects tones down particles, flashes and motion.",
+			TextSize = 18,
+			TextColor3 = Theme.Colors.TextDim,
+			Size = UDim2.new(1, 0, 0, 44),
+			LayoutOrder = 3,
+			Parent = list,
+		})
+	else
+		-- (Phones: the Vibration switch in the explanation's place, so the window still fits a small phone.)
 		-- (Haptics: a tap for a mode's button, a pulse at GO and for a win, a thud when you're out.)
 		toggleRow(list, 4, "📳 Vibration", function()
 			return State.Setting("Vibration") ~= false

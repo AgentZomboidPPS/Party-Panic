@@ -434,15 +434,15 @@ function LastDancer.Start(api)
 		Children = { UIKit.TextStroke(0.15) },
 	})
 	-- Announcements (who is about to fall, who fell) and, before the first one, the hint. On phones it's
-	-- only as wide as its words and a little right of the middle, towards the highway, clear of the
-	-- thumbstick's corner (and the hint is shown here too, for the same reason).
+	-- only as wide as its words, clear of the judgement over the highway and of the thumbstick's corner
+	-- (and the hint is shown here too, for the same reason).
 	local banner = UIKit.Label({
 		Name = "Banner",
 		Text = "",
 		Font = Theme.Fonts.Display,
 		TextSize = 28,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, if touch then 50 else 0, 0, y + 96),
+		Position = UDim2.new(0.5, 0, 0, y + 96),
 		Size = UDim2.fromOffset(600, 34),
 		TextTransparency = 1,
 		Parent = hud,
@@ -943,7 +943,8 @@ function LastDancer.Start(api)
 		end
 		holder.Visible = playing
 		meter.Visible = playing
-		standings.Visible = not playing
+		-- (not on phones: there it would cover the thumbstick, and the HUD's own standings are a tap away)
+		standings.Visible = not playing and not touch
 		combo.Visible = playing
 	end
 	applyMode()

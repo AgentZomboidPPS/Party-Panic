@@ -131,7 +131,7 @@ def motor(length, start, end):
     f = start * (end / start) ** (x ** 1.4)
     whine = ins.eq(s.saw(f, n) * 0.5 + s.sine(f * 2, n) * 0.3 + s.sine(f * 3.01, n) * 0.15, ("hp", 200), ("lp", 5000))
     air = ins.eq(ins.tv_lowpass(_noise(n, "air", length), 300 + 5000 * x ** 1.5, q=1.5), ("hp", 200))
-    return faded(ins.normalize((whine * 0.6 + air * 0.8) * (0.15 + 0.85 * x ** 1.8)), 0.05)
+    return faded(ins.normalize((whine * 0.6 + air * 0.8) * (0.15 + 0.85 * x ** 1.8) * np.clip(t / 0.02, 0, 1)), 0.05)
 
 
 @lru_cache(maxsize=None)
@@ -343,7 +343,7 @@ def big_bad_vacuum():
             bass(bar, st, n.midi, n.length, 0.85 if mute else 1.0)
             tr.add("kick", bar, st, kick, 0.75 if mute else 1.0)
             if not mute:
-                tr.add("perc", bar, st, brick(int(st) % 4), 0.7, 0.3 if int(st) % 4 else -0.3)
+                tr.add("perc", bar, st, brick(int(st) % 4), 1.0, 0.3 if int(st) % 4 else -0.3)
                 if big:
                     stab(bar, st, (n.midi + 24, n.midi + 31, n.midi + 36), n.length * 0.75)
                     tr.add("choir", bar, st, ins.choir((n.midi + 19, n.midi + 24), sec(1.2), "ah", 0.01), 0.8)
@@ -416,12 +416,12 @@ def big_bad_vacuum():
     # ------------------------------------------------ the intro: a lullaby, then the vacuum wakes up
     for bar, step, length, c in part["intro"].changes:
         if bar <= 5:
-            tr.add("pad", bar, step, ins.strings(tuple(voicing(c, 50, 65, size=3)), sec(length), 0.5, 0.25, 0.8), 0.45 + 0.1 * min(bar, 4))
-    tr.add("music", 0, 4, ins.glock(93, 0.5), 0.35, 0.3)  # the night-light's twinkle
-    tr.add("music", 0, 8, ins.glock(86, 0.5), 0.3, -0.3)
-    tr.play("music", 0, lullaby, ins.celesta, 1.0, 0.1)
-    tr.play("toy", 0, shift(lullaby, 12), ins.toy_piano, 0.35, -0.25)
-    tr.add("music", 5, 8, droop(86), 1.0, 0.1)  # ...and it sags: the toy box's battery is running down
+            tr.add("night", bar, step, ins.strings(tuple(voicing(c, 50, 65, size=3)), sec(length), 0.5, 0.25, 0.8), 0.3 + 0.05 * min(bar, 4))
+    tr.add("night", 0, 4, ins.glock(93, 0.5), 0.35, 0.3)  # the night-light's twinkle
+    tr.add("night", 0, 8, ins.glock(86, 0.5), 0.3, -0.3)
+    tr.play("night", 0, lullaby, ins.celesta, 1.0, 0.1)
+    tr.play("night", 0, shift(lullaby, 12), ins.toy_piano, 0.2, -0.25)
+    tr.add("night", 5, 8, droop(86), 1.0, 0.1)  # ...and it sags: the toy box's battery is running down
     eye(3, 8)
     tr.add("fx", 3, 8, hum(sec(88)), 0.7)
     eye(5, 12, 1.2)
@@ -495,7 +495,7 @@ def big_bad_vacuum():
     # ------------------------------------------------ the heroes' theme (the lullaby, grown up)
     tr.play("lead", 21, hero, hero_lead)
     tr.play("lead2", 21, [n for n in harmony(hero, 21, parts) if n.step >= 64], hero_lead, pan=0.35)
-    tr.play("toy", 21, shift(hero, 12), ins.toy_piano, 0.5, -0.3)
+    tr.play("toy", 21, shift(hero, 12), ins.toy_piano, 0.7, -0.3)
     for bar, step, length, c in part["hero"].changes:
         gallop(bar, step, length, bass_note(c, 36))
         if bar >= 25:
@@ -514,14 +514,13 @@ def big_bad_vacuum():
     under = harmony(anthem, 29, parts)
     tr.play("lead", 29, anthem, hero_lead)
     tr.play("lead2", 29, under, hero_lead, 0.7, 0.35)
-    sing(29, anthem, under)
+    sing(29, anthem, under, 0.85)
     tr.play("brass", 29, shift(anthem, -12), trumpets, 0.75)
     tr.play("toy", 29, shift(anthem, 12), ins.glock, 0.35, 0.3)
     for bar, step, length, c in part["chorus"].changes:
         root = bass_note(c, 36)
         if bar < 36:
             ring(bar, step, length, root)
-            strings_pad(bar, step, length, c, 0.6)
         else:  # the last bar rings out while the vacuum breathes in
             chord_hit(bar, 0, root, 16, False, 1.0, True)
             bass(bar, 0, root, 16)
@@ -636,7 +635,7 @@ def big_bad_vacuum():
     hero_up = shift(hero, 2)
     tr.play("lead", 49, hero_up, hero_lead)
     tr.play("lead2", 49, harmony(hero_up, 49, parts), hero_lead, pan=0.35)
-    tr.play("toy", 49, shift(hero_up, 12), ins.toy_piano, 0.5, -0.3)
+    tr.play("toy", 49, shift(hero_up, 12), ins.toy_piano, 0.7, -0.3)
     for bar, step, length, c in part["hero2"].changes:
         gallop(bar, step, length, bass_note(c, 36), 1.0, True)
         pad(bar, step, length, c, 0.7)
@@ -712,7 +711,7 @@ def big_bad_vacuum():
         chord_hit(bar, 0, root, 16, False, 0.55)
         bass(bar, 0, root, 8, 0.6)
         bass(bar, 8, root, 8, 0.5)
-        pad(bar, 0, 16, c, 0.55)
+        pad(bar, 0, 16, c, 0.4)
         for m in voicing(c, 55, 67, size=3):
             tr.add("brass", bar, 0, horns(m, sec(15)), 0.3)
         timp(bar, 0, 41 + (root - 41) % 12, 0.5, 0.5)
@@ -753,9 +752,10 @@ def big_bad_vacuum():
         "brass": Bus(-12, reverb=0.2),
         "orch": Bus(-12, reverb=0.3),
         "pad": Bus(-17, reverb=0.3),
-        "chip": Bus(-17, delay=0.15),
+        "chip": Bus(-15, delay=0.15),
         "toy": Bus(-16, reverb=0.25, delay=0.1),
-        "music": Bus(-9, reverb=0.4, delay=0.15),
+        "night": Bus(-14, reverb=0.4, delay=0.15),
+        "music": Bus(-8, reverb=0.4, delay=0.15),
         "perc": Bus(-19, reverb=0.1),
         "wub": Bus(-10),
         "fx": Bus(-14, reverb=0.3),

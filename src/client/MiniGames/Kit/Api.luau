@@ -84,9 +84,6 @@ local eventRemote = Remotes.Get("MiniGameEvent")
 local HINT_FADE = 6 -- seconds a hint is on screen before it fades (a new hint comes back)
 local HINT_FADE_TIME = 0.6
 local HINT_STROKE = 0.2
--- A hint's words: on phones a size up, as the mode HUDs are drawn at 3/4 there (about 14 points on a
--- phone instead of 12: owner, "I want playing on mobile to feel really good.").
-local HINT_SIZE, HINT_TOUCH_SIZE = 26, 31
 local SHIFT_TIME = 0.25 -- the TopHud's move with the status line (HudController's team pill's too)
 
 function Api.new(id: string)
@@ -699,7 +696,7 @@ function Api.Hint(self: Api, text: string, y: number?)
 			Name = "Hint",
 			Text = "",
 			Font = Theme.Fonts.Display,
-			TextSize = if self:IsTouch() then HINT_TOUCH_SIZE else HINT_SIZE,
+			TextSize = 26,
 			AnchorPoint = Vector2.new(0.5, 0),
 			Size = UDim2.fromOffset(620, 64),
 			TextYAlignment = Enum.TextYAlignment.Top,
@@ -732,9 +729,9 @@ function Api.Hint(self: Api, text: string, y: number?)
 	if self:IsTouch() then
 		-- Phones: only as wide (and as tall) as the words, so the line stays clear of the thumbstick's
 		-- corner and of anything a mode shows under it.
-		local width = UIKit.TextWidth(text, HINT_TOUCH_SIZE, Theme.Fonts.Display) + 24
+		local width = UIKit.TextWidth(text, 26, Theme.Fonts.Display) + 24
 		local oneLine = width <= 620 and not string.find(text, "\n", 1, true)
-		hint.Size = UDim2.fromOffset(math.min(620, math.ceil(width)), if oneLine then 42 else 76)
+		hint.Size = UDim2.fromOffset(math.min(620, math.ceil(width)), if oneLine then 36 else 64)
 	end
 end
 

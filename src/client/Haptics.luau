@@ -1,7 +1,7 @@
 -- Vibration for the moments that matter (owner: "I want playing on mobile to feel really good."): a
 -- light tap when a mode's action button goes down, a pulse at GO and for a win, a thud when you're
--- knocked out. Roblox's HapticEffect plays on phones and gamepads that can; anywhere else (or where
--- the engine has no HapticEffect) it's quietly nothing. Off with Settings' 📳 Vibration.
+-- knocked out. Phones only (Roblox's HapticEffect, on phones that can buzz); anywhere else, or where
+-- the engine has no HapticEffect, it's quietly nothing. Off with Settings' 📳 Vibration (phones).
 --
 --   Haptics.Play("Tap" | "Pulse" | "Thud")
 
@@ -32,9 +32,9 @@ local function effectFor(kind: Kind): any
 	return if effect then effect else nil
 end
 
--- Whether this device buzzes for the game: a phone (or a gamepad) and the setting on.
+-- Whether this device buzzes for the game: a phone, with the setting on.
 function Haptics.Enabled(): boolean
-	return (UserInputService.TouchEnabled or UserInputService.GamepadEnabled) and State.Setting("Vibration") ~= false
+	return UserInputService.TouchEnabled and State.Setting("Vibration") ~= false
 end
 
 function Haptics.Play(kind: Kind)
