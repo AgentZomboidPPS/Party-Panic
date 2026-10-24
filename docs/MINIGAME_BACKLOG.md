@@ -207,10 +207,29 @@ How it plays (all numbers and geometry: `Shared/Logic/BigBadVacuum.luau`, unit-t
   A brick thrown at the bag (BAG, Q) pops it and rescues everyone inside.
 - Damage and rescues fill the PARTY METER; full, anyone can press PANIC (F): a sky beam hits for 8% of the boss's health and
   overloads the core for 2.4 s.
-- Win by emptying the boss's health (100 per player) before the clock runs out. Nobody is ever out (daze and the bag are the
-  setbacks). Score: damage + 8 per rescue + a few bonuses (finisher 15, PANIC 10, everyone else 5). **Results:** a win is everyone's
-  win (a shared first place, `WinningTeam = "Squad"`); a loss ranks by contribution (`WinningTeam = "Vacuum"`; the results card says
-  "The Vacuum won"; the top contributor still counts first place for rewards and medals, so a win is not claimed by losing).
+- Win by emptying the boss's health before the clock runs out. Score: damage + 8 per rescue + a few bonuses (finisher 15, PANIC 10,
+  everyone else 5). **Results:** a win is everyone's win (a shared first place, `WinningTeam = "Squad"`, knocked-out players
+  included: it's a team win); a loss ranks by contribution (`WinningTeam = "Vacuum"`; the results card says "The Vacuum won"; nobody
+  takes 1st on a loss: `RoundManager` moves everyone down a place, so a defeat is never anyone's win).
+- **Hearts and how you lose** (2026-10-24; the owner played it live and asked: "how do you loose this? maybe after 3 hits or
+  something?" Until then nobody was ever out and only the clock could beat the lobby.) Everyone starts the fight with 3 hearts, bots
+  too, shown right above their THROW button (drawn hearts that go wherever the button goes: bottom middle on PC, beside the jump
+  button on phones). Each attack that lands (the hit that dazes you) costs one heart, once per attack instance: one swing, one
+  charge, one slam with its shockwave, one dust bomb (`Rules.FirstStrike`); the daze and the grace after it (3.3 s) still stop a
+  hit chaining. The lost heart pops white, the row shakes, the last one pulses ("LAST HEART!"), and others see your hearts left
+  float over your head. Being sucked into the dust bag costs no heart: it is its own setback (up to 7 s out of the fight, the boss
+  heals, the lobby can pop you out), and since a SUCTION catches several people at once, a heart for it too would make every
+  late-fight suction a pile of knockouts. At no hearts you are **KNOCKED OUT**: flung up with a burst and a "K.O.!" everyone sees,
+  "KNOCKED OUT!" on your screen (your buttons go at once), a line under the boss bar for the rest ("Mochi is out! 7 left"),
+  then out of the round 1.6 s later like any Survival mode's out (`ctx:Eliminate(player, "KO", KO_SHOW)`: the poof, the lobby,
+  spectating from the HUD). Your damage and rescues stay in the results, and a brick you threw before the knockout still counts
+  when it lands. **If nobody is left standing the Vacuum wins at once** ("WIPED OUT!", then the same defeat show, results and "The
+  Vacuum won" card as a fight lost on the clock). "Nobody" means no person: a round is for people (RoundContext ends a round a
+  moment after its last person goes out), so bots never fight on alone; the last knockout of a lost fight isn't eliminated, so the
+  round ends with the boss's show instead of being cut off two seconds in. Bots have hearts and are knocked out the same way; on
+  their last heart they play it safer (notice warnings sooner, a wider berth round the zones and the boss, no freezing up, surer
+  shockwave jumps, no brick pile inside the boss's reach). Knocked-out players stop throwing, so the fight gets harder as people
+  drop. The rules card says "3 hits and you're out", and so does the boss's roar.
 
 How it is built:
 - Server (`MiniGames/BigBadVacuum.luau`): a boss state machine (Intro, Chase, Wind, Act, Recover, Stun, Break, Dying/Done) and one

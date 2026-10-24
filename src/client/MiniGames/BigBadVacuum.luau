@@ -23,7 +23,9 @@
 --     what they show. Someone else's hit floats their hearts left over their head. A KNOCKOUT is a burst and a
 --     "K.O.!" where it happened for everyone, "KNOCKED OUT!" for that player (their buttons go at once; the
 --     round's spectate takes over when they leave), and a short line under the boss bar for the rest ("Mochi
---     is knocked out! 7 left"). Everyone knocked out: "WIPED OUT!", then the same defeat show as time running out.
+--     is out! 7 left"). Everyone knocked out: "WIPED OUT!", then the same defeat show as time running out. On
+--     phones the lines under the boss bar (the feed, the dust bag's, the hints) stay narrow and short: wider,
+--     they reach into the thumbstick's corner.
 --
 -- The suction's pull is applied here to this player's own character (smooth, like a conveyor), by the same
 -- Rules the server uses to judge who ends up in the bag. Everything made here goes in api.World or through
@@ -1888,7 +1890,8 @@ function BigBadVacuum.Start(api)
 			end)
 		else
 			local left = num(standing)
-			feed(`{nameOf(userId)} is knocked out!{if left then ` {left} left` else ""}`)
+			-- (short enough for a phone's narrow line with a long name: "Mochi is out! 7 left")
+			feed(`{nameOf(userId)} is out!{if left then ` {left} left` else ""}`)
 		end
 	end)
 	onEvent("Pickup", function(userId)
@@ -2239,7 +2242,8 @@ function BigBadVacuum.Start(api)
 	})
 	local coreScale = UIKit.new("UIScale", { Parent = coreLabel })
 	-- Someone else knocked out: a short line where the core's call goes (the core is never open while the
-	-- boss is attacking, so the two don't meet; if they do, the core's call wins).
+	-- boss is attacking, so the two don't meet; if they do, the core's call wins). Phones: narrow, so it
+	-- stays out of the thumbstick's corner.
 	local feedLabel = UIKit.Label({
 		Name = "Feed",
 		Text = "",
@@ -2249,7 +2253,7 @@ function BigBadVacuum.Start(api)
 		TextColor3 = Color3.fromRGB(255, 150, 160),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 108),
-		Size = UDim2.fromOffset(barWidth, 30),
+		Size = UDim2.fromOffset(if touch then 400 else barWidth, 30),
 		Visible = false,
 		Parent = panel,
 		Children = { UIKit.TextStroke(0) },
@@ -2368,14 +2372,15 @@ function BigBadVacuum.Start(api)
 		Parent = hud,
 		Children = { UIKit.TextStroke(0) },
 	})
+	-- (phones: narrower, so it stays out of the thumbstick's corner, as the feed line and the hints do)
 	local trappedLabel = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 32,
+		TextSize = if touch then 28 else 32,
 		TextColor3 = WIND,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, api:HudY() + 150),
-		Size = UDim2.fromOffset(560, 80),
+		Size = UDim2.fromOffset(if touch then 400 else 560, if touch then 70 else 80),
 		Visible = false,
 		Parent = hud,
 		Children = { UIKit.TextStroke(0) },
@@ -2392,11 +2397,11 @@ function BigBadVacuum.Start(api)
 	-- Right above the THROW button, inside its holder (Api.Button names it "Action_THROW"), so the row goes wherever
 	-- the button goes on every screen (and the phone checks place it the same way) and hides with it when this
 	-- player can't act. Each heart is drawn from shapes (a square turned 45 degrees and two circles on its top
-	-- edges, over a slightly bigger dark copy for an outline), like UIKit.Coin: no glyph a phone might lack.
+	-- edges, over a slightly bigger white copy for a sticker's rim), like UIKit.Coin: no glyph a phone might lack.
 	local HEART_FULL = Color3.fromRGB(255, 64, 96)
-	local HEART_EMPTY = Color3.fromRGB(70, 58, 92)
-	local HEART_EDGE = Color3.fromRGB(30, 15, 60)
-	local HEART_W = 36 -- each heart's width, in the button's (auto-scaled) units
+	local HEART_EMPTY = Color3.fromRGB(56, 44, 78)
+	local HEART_EDGE = WHITE -- (a sticker's white rim, like the buttons': an empty heart still shows on the dark rug)
+	local HEART_W = 40 -- each heart's width, in the button's (auto-scaled) units
 	local heartsHolder: Instance = api.Gui:FindFirstChild("Action_THROW") or api.Gui
 	local heartsRow = UIKit.new("Frame", {
 		Name = "Hearts",
@@ -2448,7 +2453,7 @@ function BigBadVacuum.Start(api)
 		})
 		local scale = UIKit.new("UIScale", { Parent = holder })
 		local side = HEART_W / 1.707 * 0.94
-		heartShapes(holder, side, 5, HEART_EDGE, 1)
+		heartShapes(holder, side, 7, HEART_EDGE, 1)
 		table.insert(
 			hearts,
 			{ Holder = holder, Scale = scale, Fill = heartShapes(holder, side, 0, HEART_FULL, 2), Full = true }
@@ -2683,7 +2688,7 @@ function BigBadVacuum.Start(api)
 			elseif coreOpen then
 				hint = ""
 			elseif holding then
-				hint = "Keep your brick - THROW when the core opens!"
+				hint = "THROW it when the core opens!" -- (short: a long hint reaches the thumbstick's corner on phones)
 			end
 		end
 		if hint ~= shownHint then
@@ -2742,10 +2747,10 @@ function BigBadVacuum.Start(api)
 		local stuck = trapped[me]
 		trappedLabel.Visible = stuck ~= nil
 		if stuck then
-			trappedLabel.Text = `YOU'RE IN THE DUST BAG!\nFriends can free you with a brick · out in {math.max(
-				0,
-				math.ceil(stuck.E - t)
-			)}s`
+			local left = math.max(0, math.ceil(stuck.E - t))
+			trappedLabel.Text = if touch
+				then `IN THE DUST BAG! OUT IN {left}s\nA friend's brick frees you`
+				else `YOU'RE IN THE DUST BAG!\nFriends can free you with a brick · out in {left}s`
 		end
 	end
 

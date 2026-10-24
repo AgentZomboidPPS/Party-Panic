@@ -64,12 +64,17 @@ end
 -- with a little time to spare. A small squad gets less each: with fewer people the boss's attacks come
 -- round to each of them more often, so each throws less (on test servers with bots, at 100 a player a
 -- duo never won and four won half the time, at the buzzer; eight or more won in 65-80 s; at 125 for two
--- a duo won one in three, at 300 four won three in three). 100 for two, 291 for four, 542 for six, 100 a
--- player from eight.
+-- a duo won one in three, at 300 four won three in three). 100 for two, 291 for four, 542 for six, 800 for
+-- eight.
+--
+-- Past eight each player gets more, because a big lobby spreads the boss's attacks thinner still (with the
+-- hearts, 2026-10-24: at 100 a player, twelve won 6 rounds of 6 at 57-77 s, eight 7 of 8 at 70-84 s, and
+-- knockouts came almost only in phase 3; the aim is about two wins in three for a strong full lobby). 954 for
+-- nine, 1488 for twelve.
 function BigBadVacuum.HealthFor(count: number): number
 	local players = math.clamp(count, 1, 12)
 	local short = math.max(0, 8 - players) / 6 -- how far short of eight the squad is (1 for a duo)
-	local each = math.max(45, 100 - 50 * short ^ 1.5)
+	local each = math.max(45, 100 - 50 * short ^ 1.5) + 6 * math.max(0, players - 8)
 	return math.floor(players * each + 0.5)
 end
 
