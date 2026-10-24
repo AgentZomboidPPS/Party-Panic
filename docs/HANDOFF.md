@@ -17,8 +17,17 @@
   (ScaleType Stretch/Fit/Crop/Tile, ImageColor3, rounded corners). The client harness is over the 1 MiB cap with all
   controllers: screen runs use `--skip SkeeBall,Pet,SeasonWorld,PartyWorld,Aura,HallOfFame,AssetReport,Ambience` (any
   controller name can be skipped now).
-- The map half of the guide (z-fighting, clipping models, too many parts) was given to a background agent; see below for
-  what landed.
+- **Z-fighting sweep** (the guide's map half: flickering overlaps, clipping, too many parts). `tools/preview/zfight.py`
+  now checks real shapes (cylinders, wedges, unions, mesh props triangle by triangle from `assets/meshes`), skips faces
+  pressed flat against something solid and same-colour pairs, and counts fights inside one mesh apart (`--all` says why
+  each pair was dropped). Fixed, every offset 0.1 or more and only on decorations (no spawns, colliders or KillY): lobby
+  8 -> 1 (obby arch sign, medal wall emblem, suggestion box, Hall of Fame dais), Mecha Marathon 192 -> 0 (lane lines,
+  curbs, pads), Obby Odyssey 26 -> 2 (tier lips, stair strips, checkpoint strips, arches, bridge edges, banks), Hot Potato
+  23 -> 0 (alternate fence panels 0.1 deeper), Prime Cut rugs. **Left:** fights inside mesh props (need meshgen fixes and
+  re-uploads: the lobby's crate pile and crates ~261, Rockin' Raceway 133, Tanks 105, Mecha Marathon 76, Skate Escape 72,
+  Log Jam 46, Pump & Pop 43), Prime Cut's fence (82: its mesh doubles end posts; needs a mesh without one), Skate Escape
+  36 (under the road, `GapLip` is read by the mode), Crazy Cutters 14, Struggle 24, a sliver at the vote stage's foot.
+  No clipping render pass and no part merges yet (none were trivial: rings, dashes, alternating colours, runtime parts).
 
 **Live in version 55 (2026-10-24, on the owner's "You can push what you have finished.")**: everything below, from version
 54 (= 53 with Capy Go Boom out of the rotation) to the suggestion box. Capy Go Boom is still off.
