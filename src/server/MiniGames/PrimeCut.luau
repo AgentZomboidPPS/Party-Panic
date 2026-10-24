@@ -177,15 +177,18 @@ function PrimeCut:_buildArena()
 			})
 		end
 	end
+	-- Round the yard one way (back, right side, front, left side), so wherever two panels meet, at a
+	-- joint or a corner, one panel's bigger end post holds the next one's smaller start post (the
+	-- fence mesh: two posts in the same place flickered, z-fighting).
 	local y0 = origin.Y - 1.2
-	fenceRun(Vector3.new(origin.X - yardX, y0, origin.Z + backZ), Vector3.new(origin.X + yardX, y0, origin.Z + backZ))
-	fenceRun(
-		Vector3.new(origin.X - yardX, y0, origin.Z + frontZ),
-		Vector3.new(origin.X + yardX, y0, origin.Z + frontZ),
-		12
-	)
-	fenceRun(Vector3.new(origin.X - yardX, y0, origin.Z + backZ), Vector3.new(origin.X - yardX, y0, origin.Z + frontZ))
-	fenceRun(Vector3.new(origin.X + yardX, y0, origin.Z + backZ), Vector3.new(origin.X + yardX, y0, origin.Z + frontZ))
+	local backLeft = Vector3.new(origin.X - yardX, y0, origin.Z + backZ)
+	local backRight = Vector3.new(origin.X + yardX, y0, origin.Z + backZ)
+	local frontRight = Vector3.new(origin.X + yardX, y0, origin.Z + frontZ)
+	local frontLeft = Vector3.new(origin.X - yardX, y0, origin.Z + frontZ)
+	fenceRun(backLeft, backRight)
+	fenceRun(backRight, frontRight)
+	fenceRun(frontRight, frontLeft, 12)
+	fenceRun(frontLeft, backLeft)
 
 	local leafColors = { rgb(80, 186, 88), rgb(108, 196, 78), rgb(70, 160, 92), rgb(136, 200, 84) }
 	local planted = 0

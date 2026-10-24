@@ -638,7 +638,10 @@ def grill():
 # ====================================================================== the backyard
 
 def fence():
-    """An 8 stud run of white picket fence (posts at both ends)."""
+    """An 8 stud run of white picket fence (posts at both ends). Runs share a post where they meet, so
+    the right-hand post is a little bigger than the left all round (0.06 out on every side and on
+    top): the next run's left post sits inside it instead of flickering in the same faces
+    (z-fighting). PrimeCut.luau lays the runs round the yard one way, so corners pair up the same."""
     boards = []
     for i in range(8):
         x = -3.5 + i
@@ -646,9 +649,9 @@ def fence():
         boards.append(extrude(picket, 0.16).translate(x, 0, -0.05))
     for y in (1.05, 2.95):
         boards.append(rbox(8.0, 0.42, 0.18, 0.08).translate(0, y, 0.14))
-    for x in (-4.0, 4.0):
-        boards.append(rbox(0.55, 4.25, 0.55, 0.12).translate(x, 2.125, 0.1))
-        boards.append(rbox(0.72, 0.18, 0.72, 0.07).translate(x, 4.3, 0.1))
+    for x, grow in ((-4.0, 0.0), (4.0, 0.06)):
+        boards.append(rbox(0.55 + 2 * grow, 4.25 + grow, 0.55 + 2 * grow, 0.12).translate(x, 2.125 + grow / 2, 0.1))
+        boards.append(rbox(0.72 + 2 * grow, 0.18 + grow, 0.72 + 2 * grow, 0.07).translate(x, 4.3 + grow * 1.5, 0.1))
     return {"Paint": merge(*boards)}
 
 

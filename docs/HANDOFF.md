@@ -1,6 +1,20 @@
 # Handoff: Party Panic (for the next Claude)
 
-**Live in version 56 (2026-10-24 ~19:30 UTC, on the owner's "Lets push it"; nothing on the branch since):**
+**On this branch since version 56 (not published yet):**
+- **Capy Go Boom is back in the rotation** (owner: "Reenable it."): its three live bugs were fixed after version 53 (below).
+- **PC lobby chips right under the banner** (owner: "Why is there a gap?"): `LobbyRibbon` PC.Top was 137, room for the
+  banner's status line, which only shows during a round, when the chips are away; now 80.
+- **PC chat in the bottom left** (owner, with a screenshot of Roblox's chat over the profile card and standings: "is there
+  anything we can do about the chatbox?"): `HudController.placeChat` sets `TextChatService.ChatWindowConfiguration` to
+  Left / Bottom, HeightScale 0.8. Phones keep Roblox's place (the chat starts closed there).
+- **Z-fighting inside our own meshes** (owner: "lets fix those right now"): `tools/preview/mesh_zfight.py` checks the .glb
+  files themselves (shapes = each piece's connected runs; buried faces and bottoms on the ground don't count);
+  `tools/meshgen/unfight.py` moves the smaller shape's fighting face 0.05 out along its normal until nothing fights, and
+  `generate_meshes.py` runs it on every prop it builds. The changed meshes were uploaded again
+  (`upload_assets.py --again`). Prime Cut's fence: the right-hand post is 0.06 bigger all round and the runs go round the
+  yard one way (`PrimeCut.luau`), so at every joint and corner one post holds the other.
+
+**Live in version 56 (2026-10-24 ~19:30 UTC, on the owner's "Lets push it"):**
 - **The game's own UI art instead of an AI look** (owner, with a guide to the tells of an AI-made Roblox game: "Can we fix
   these issues? ... I want you to read it and solve the issues"). The guide's GUI tells and what replaced them:
   emoji as icons ("THE BIG ONE") -> 64 icons modelled and lit in Blender, outlined in ink like stickers
