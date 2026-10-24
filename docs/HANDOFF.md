@@ -1,6 +1,13 @@
 # Handoff: Party Panic (for the next Claude)
 
-**Live in version 58 (2026-10-24, on the owner's "push"; nothing on the branch since):**
+**On this branch since version 58 (not published yet):**
+- **Last Dancer's standings showed twice on PC** (owner, with a screenshot: "Why is this duplicated?"): the mode's own
+  STANDINGS (for anyone out or watching: groove %, ranked as the cut ranks) sat where the round's board (points) is. The
+  mode sets the client attribute `PP_OwnStandings` while its board shows and `RoundController` hides its own meanwhile
+  (cleared at every phase change, so it can't stick). The mode's board is now as tall as its rows.
+- **Cross-lobby chat: closed** (owner: "close out cross lobby chat. dont need it"). Don't build it.
+
+**Live in version 58 (2026-10-24, on the owner's "push"):**
 - The last five meshes' fights (ArrowBarrel's vanes turned 30 degrees off the shaft's faces; Honeycomb, HoneyGlade,
   TanksTank's hubs and MinecartMayhemRailStart by unfight, which now moves a face 0.1 in front of the furthest face it
   fought), uploaded again. `mesh_zfight.py` over every .glb: 0 meshes with fights.

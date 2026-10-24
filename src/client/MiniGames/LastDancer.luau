@@ -952,6 +952,8 @@ function LastDancer.Start(api)
 				label.Text = ""
 			end
 		end
+		-- (as tall as its rows: an 8-dancer round has no empty bottom half)
+		standings.Size = UDim2.fromOffset(230, 40 + math.min(#sorted, #rows) * 26 + 8)
 	end
 	local function applyMode()
 		local playing = dancing()
@@ -962,6 +964,10 @@ function LastDancer.Start(api)
 		meter.Visible = playing
 		-- (not on phones: there it would cover the thumbstick, and the HUD's own standings are a tap away)
 		standings.Visible = not playing and not touch
+		-- The round's own board (RoundController, in the same place on PC) steps aside for it (owner,
+		-- with both showing at once: "Why is this duplicated?"): this one ranks by groove, as the cut
+		-- does.
+		Players.LocalPlayer:SetAttribute("PP_OwnStandings", standings.Visible)
 		combo.Visible = playing
 	end
 	applyMode()

@@ -790,8 +790,11 @@ function RoundController.Start(context)
 			flashCountdown("GO!", Theme.Colors.Green)
 			Haptics.Play("Pulse")
 		end
+		if phase ~= "InRound" then
+			player:SetAttribute("PP_OwnStandings", nil) -- (a mode's own board is gone with its round)
+		end
 		if not isTouch() then -- (phones: HudController's status row shows the strip when there's room)
-			boardRoot.Visible = phase == "InRound"
+			boardRoot.Visible = phase == "InRound" and player:GetAttribute("PP_OwnStandings") ~= true
 		end
 		refreshHighlights()
 	end)
@@ -800,6 +803,13 @@ function RoundController.Start(context)
 	player:GetAttributeChangedSignal("PP_InRound"):Connect(function()
 		if GameState.Get("Phase") == "Preparing" and State.InRound() and not rules.Visible and not rulesClosed then
 			showRules()
+		end
+	end)
+	-- PC: a mode showing standings of its own (Last Dancer's, ranked by groove, in the same place) has
+	-- the round's board step aside meanwhile, so the two never show at once.
+	player:GetAttributeChangedSignal("PP_OwnStandings"):Connect(function()
+		if not isTouch() then
+			boardRoot.Visible = GameState.Get("Phase") == "InRound" and player:GetAttribute("PP_OwnStandings") ~= true
 		end
 	end)
 	-- The server puts players on teams while the card is up (the mode's Prepare).
