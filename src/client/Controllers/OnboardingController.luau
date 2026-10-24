@@ -150,11 +150,11 @@ local function show(newStep: number)
 end
 
 local function buildPc(context)
-	-- Under the coins, keys and crates (HudController's profile chip frame is 182 tall).
+	-- Under the profile card (HudController.ProfileHeight: its frame is 104 tall).
 	local profile = context.Hud:FindFirstChild("ProfileChip")
 	panel = UIKit.Panel({
 		Name = "Onboarding",
-		Position = if profile then UDim2.fromOffset(0, 190) else UDim2.fromOffset(16, 202),
+		Position = if profile then UDim2.fromOffset(0, 112) else UDim2.fromOffset(16, 124),
 		Size = UDim2.fromOffset(PC_WIDTH, 120),
 		CornerRadius = 20,
 		Visible = false,

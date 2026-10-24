@@ -424,7 +424,7 @@ function BumperBallers.Start(api)
 	-- way they hold the phone then as level. While it's on, CALIBRATE (that's level now) and FLIP
 	-- (left and right swap) appear to its right: the switch itself never moves, so a second tap on
 	-- the same spot turns it off again. The row sits above where phone toasts pop up (the same spot,
-	-- 62% across the bottom), so BIG BUMPS and the like never cover it.
+	-- the middle of the bottom), so BIG BUMPS and the like never cover it.
 	local tilt = if touch then api:Tilt() else nil
 	local tiltOn = tilt ~= nil and tiltChosen
 	local hintY = underStrip
@@ -464,7 +464,7 @@ function BumperBallers.Start(api)
 		local row = UIKit.new("Frame", {
 			Name = "TiltControls",
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.62, 0, 1, -8),
+			Position = UDim2.new(0.5, 0, 1, -8),
 			Size = UDim2.fromOffset(446, Theme.Touch.Target + toastRoom),
 			BackgroundTransparency = 1,
 			Visible = false,

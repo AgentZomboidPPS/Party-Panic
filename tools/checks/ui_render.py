@@ -54,14 +54,22 @@ FIT_MARGIN = 8  # UI/Modal.luau: room around a window shrunk to fit the screen
 
 # Screens, in points: size, the safe area's insets in landscape (left, right, bottom: notch or
 # Dynamic Island, home bar) and the top inset Roblox's top bar takes (CoreUISafeInsets).
+# What the side insets are for (owner: "I know about the safety space nonsense but you over
+# compensate for it too much."): `cut` is the notch, Dynamic Island or camera hole on a side with an
+# inset (how far in from that edge, and from where to where down it: always the middle of the side,
+# on whichever side the phone is turned to), `corner` the screen's rounded corners. The rest of an
+# inset is screen like any other, and the HUD may use it (the edge ScreenGui, init.client.luau).
 SIZES = {
     "pc": dict(w=1280, h=720, l=0, r=0, b=0, t=58, touch=False),
     "pc-hd": dict(w=1920, h=1080, l=0, r=0, b=0, t=58, touch=False),
-    "phone-large": dict(w=932, h=430, l=59, r=59, b=21, t=56, touch=True),  # iPhone Pro Max (the owner's phone)
-    "phone": dict(w=844, h=390, l=47, r=47, b=21, t=56, touch=True),  # iPhone 12 to 16
-    "phone-android": dict(w=800, h=360, l=32, r=0, b=0, t=56, touch=True),  # 20:9 Android, camera hole on one side
+    # iPhone Pro Max (the owner's phone): the Dynamic Island, 11 to 48 pt in, 126 pt tall.
+    "phone-large": dict(w=932, h=430, l=59, r=59, b=21, t=56, touch=True, cut=(48, 152, 278), corner=55),
+    # iPhone 12 to 16: the notch, 30 pt deep and 209 pt tall.
+    "phone": dict(w=844, h=390, l=47, r=47, b=21, t=56, touch=True, cut=(30, 91, 299), corner=47),
+    # 20:9 Android, camera hole on one side.
+    "phone-android": dict(w=800, h=360, l=32, r=0, b=0, t=56, touch=True, cut=(32, 162, 198), corner=24),
     "phone-small": dict(w=667, h=375, l=0, r=0, b=0, t=56, touch=True),  # iPhone SE / 8
-    "tablet": dict(w=1024, h=768, l=0, r=0, b=0, t=56, touch=True),  # iPad
+    "tablet": dict(w=1024, h=768, l=0, r=0, b=0, t=56, touch=True, corner=18),  # iPad
 }
 SIZE_GROUPS = {
     "phone": ["phone-large", "phone", "phone-android", "phone-small"],
@@ -95,6 +103,35 @@ def jump_button(dev: dict) -> tuple:
 def thumbstick_zone(dev: dict) -> tuple:
     """Where a touch starts the DynamicThumbstick: the left 40% of the safe area, bottom two thirds."""
     return dev["l"], dev["h"] / 3, dev["l"] + 0.4 * (dev["w"] - dev["l"] - dev["r"]), dev["h"]
+
+
+def cut_boxes(dev: dict) -> list:
+    """The notch / Dynamic Island / camera hole as boxes, on each side that has an inset for it."""
+    cut = dev.get("cut")
+    if not cut:
+        return []
+    depth, y0, y1 = cut
+    boxes = []
+    if dev["l"]:
+        boxes.append((0, y0, depth, y1))
+    if dev["r"]:
+        boxes.append((dev["w"] - depth, y0, dev["w"], y1))
+    return boxes
+
+
+def outside_screen_corner(dev: dict, box: tuple, give: float = 6) -> bool:
+    """Whether a box reaches past the screen's rounded corners (its own corners taken `give` points
+    in: buttons and panels are rounded too)."""
+    r = dev.get("corner", 0)
+    if not r:
+        return False
+    x0, y0, x1, y1 = box[0] + give, box[1] + give, box[2] - give, box[3] - give
+    w, h = dev["w"], dev["h"]
+    for px, py, cx, cy in ((x0, y0, r, r), (x1, y0, w - r, r), (x0, y1, r, h - r), (x1, y1, w - r, h - r)):
+        if (px < r if cx == r else px > w - r) and (py < r if cy == r else py > h - r):
+            if (px - cx) ** 2 + (py - cy) ** 2 > r * r:
+                return True
+    return False
 
 
 def screen_area(dev: dict, insets: str, inset: bool = True) -> tuple:
@@ -651,7 +688,7 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
             pox = jx - px - 12 - (n["touchSlot"] - 1) * (width + 12)
             poy = jy + jump / 2 - py - jump * 0.15
         if n.get("underProfile"):
-            psx, psy, pox, poy = 0, 0, 14, 12 + 182 * auto_scale + 8  # RoundController: under the profile chip
+            psx, psy, pox, poy = 0, 0, 14, 12 + 104 * auto_scale + 8  # RoundController: under the profile card
         if n.get("aboveActions") and touch:
             # NotificationController: the toasts sit above the mode's action buttons (their row, as above).
             jx, jy, jump = jump_button(dev)
@@ -683,7 +720,10 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
             if (n.get("text", "") != "" or is_button) and shown[2] - shown[0] > 1 and shown[3] - shown[1] > 1:
                 raw_text = re.sub(r"<[^>]+>", "", n.get("text") or "")
                 label = (raw_text or n["n"])[:40]
-                boxes.append(dict(screen=screen, path=path_of(i), box=shown, label=label, seq=seq, popup=popup))
+                # An invisible tap area round something smaller (no fill, no words showing) can sit
+                # under a notch: nothing it shows is hidden.
+                ghost = is_button and n.get("bgt", 1) >= 0.99 and (not raw_text.strip() or n.get("tt", 0) >= 0.9)
+                boxes.append(dict(screen=screen, path=path_of(i), box=shown, label=label, seq=seq, popup=popup, ghost=ghost))
                 if is_button and touch and min(x1 - x0, y1 - y0) < TOUCH_TARGET and (x1 - x0) * (y1 - y0) < vw * vh / 2:
                     problems.append(f"small touch target {x1 - x0:.0f}x{y1 - y0:.0f}: {path_of(i)} '{label}'")
                 if text_info and raw_text.strip() and n.get("tt", 0) < 0.9:
@@ -906,9 +946,20 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
         od.ellipse([rx - ring / 2, ry - ring / 2, rx + ring / 2, ry + ring / 2], fill=(255, 255, 255, 45), outline=(255, 255, 255, 140), width=2)
         od.text((rx, ry), "MOVE", font=font("Bold", 12), fill=(255, 255, 255, 220), anchor="mm")
     if dev["l"]:
-        od.rectangle([0, 0, dev["l"], vh], fill=(0, 0, 0, 90))
+        od.rectangle([0, 0, dev["l"], vh], fill=(0, 0, 0, 40))
     if dev["r"]:
-        od.rectangle([vw - dev["r"], 0, vw, vh], fill=(0, 0, 0, 90))
+        od.rectangle([vw - dev["r"], 0, vw, vh], fill=(0, 0, 0, 40))
+    for cx0, cy0, cx1, cy1 in cut_boxes(dev):
+        # (drawn where it is on the phone: the Dynamic Island floats a few points in from the edge)
+        gap = 11 if dev.get("corner", 0) >= 55 else 0
+        x0 = cx0 + (gap if cx0 == 0 else 0)
+        x1 = cx1 - (gap if cx1 == vw else 0)
+        od.rounded_rectangle([x0, cy0, x1, cy1], radius=min(18, (x1 - x0) / 2), fill=(0, 0, 0, 255))
+    if dev.get("corner"):
+        r = dev["corner"]
+        mask = Image.new("L", (vw, vh), 0)
+        ImageDraw.Draw(mask).rounded_rectangle([0, 0, vw - 1, vh - 1], radius=r, fill=255)
+        od.bitmap((0, 0), Image.eval(mask, lambda v: 255 - v), fill=(0, 0, 0, 255))
     if dev["b"]:
         od.rectangle([0, vh - dev["b"], vw, vh], fill=(0, 0, 0, 40))
     image = Image.alpha_composite(image, overlay)
@@ -932,8 +983,15 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
             sx, sy, sw, sh = screen_rect.get(A["screen"], (0, 0, vw, vh))
             if ax0 < -1 or ay0 < -1 or ax1 > vw + 1 or ay1 > vh + 1:
                 problems.append(f"off-screen: {A['path']} '{A['label']}' at ({ax0:.0f},{ay0:.0f})-({ax1:.0f},{ay1:.0f})")
-            elif ax0 < dev["l"] - 1 or ax1 > vw - dev["r"] + 1 or ay1 > vh - dev["b"] + 1:
-                problems.append(f"outside the safe area (notch/home bar): {A['path']} '{A['label']}' at ({ax0:.0f},{ay0:.0f})-({ax1:.0f},{ay1:.0f})")
+            elif ay1 > vh - dev["b"] + 1:
+                problems.append(f"outside the safe area (home bar): {A['path']} '{A['label']}' at ({ax0:.0f},{ay0:.0f})-({ax1:.0f},{ay1:.0f})")
+            elif ax0 < dev["l"] - 1 or ax1 > vw - dev["r"] + 1:
+                # In a side inset: fine, as long as it's clear of the notch/island and the corners.
+                cut = next((c for c in cut_boxes(dev) if area_of(intersect(A["box"], c)) > 4), None) if not A.get("ghost") else None
+                if cut:
+                    problems.append(f"under the notch/island: {A['path']} '{A['label']}' at ({ax0:.0f},{ay0:.0f})-({ax1:.0f},{ay1:.0f})")
+                elif outside_screen_corner(dev, A["box"]):
+                    problems.append(f"past the screen's rounded corner: {A['path']} '{A['label']}' at ({ax0:.0f},{ay0:.0f})-({ax1:.0f},{ay1:.0f})")
             if zone and layer_of(A) == 0 and not A["popup"]:
                 inside = area_of(intersect(A["box"], zone))
                 if inside > 0.15 * max(1.0, area_of(A["box"])):

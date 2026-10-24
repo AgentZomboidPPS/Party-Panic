@@ -43,6 +43,21 @@ local overlay = UIKit.new("ScreenGui", {
 	Parent = playerGui,
 })
 
+-- Phones (owner: "move the ones we keep over more. we have more usable space. I know about the
+-- safety space nonsense but you over compensate for it too much."): the profile card and the menu
+-- sit in the screen's top corners, in part of the safe area's side insets, a fixed margin from the
+-- edges. The notch, the Dynamic Island and a camera hole are all in the middle of a side, so the top
+-- band is clear on every phone. This ScreenGui is the whole screen; HudController keeps them there.
+local edge = UIKit.new("ScreenGui", {
+	Name = "PartyPanicEdge",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	ScreenInsets = Enum.ScreenInsets.None,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	DisplayOrder = 5,
+	Parent = playerGui,
+})
+
 pcall(function()
 	-- Our own HUD shows coins/level; keep chat and the player list.
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
@@ -93,7 +108,7 @@ local order = {
 	"BotWatchController",
 }
 
-local context = { Hud = hud, Overlay = overlay }
+local context = { Hud = hud, Overlay = overlay, Edge = edge }
 for _, name in order do
 	local module = Controllers:FindFirstChild(name)
 	if not module then

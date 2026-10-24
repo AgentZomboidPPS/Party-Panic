@@ -6,9 +6,8 @@
 --     round banner as an icon and the number (HudController); the rest of the line stays under the
 --     banner. Modes keep calling ctx:SetStatus as before: the count is read from the words they
 --     already send, one "  •  "-separated part at a time.
---   * BoardPlaces: which places the phone standings show (RoundController): you and the leader (or
---     just you when you lead), the top three plus you for a few seconds after a tap, and the top
---     three for someone watching who isn't in the round.
+--   * BoardPlaces: which places the phone standings strip shows (RoundController): the top three,
+--     with you in the third place if you're further down.
 
 local RoundHud = {}
 
@@ -67,26 +66,15 @@ function RoundHud.SplitStatus(text: string?): (number?, string?, string)
 	return nil, nil, text
 end
 
--- The places (1 = the leader) the phone standings show, in order. `count` is how many are in the
--- round, `mine` the player's own place (nil if they're not in it), `expanded` the few seconds after
--- a tap on the board.
-function RoundHud.BoardPlaces(count: number, mine: number?, expanded: boolean): { number }
+-- The places (1 = the leader) the phone standings strip shows, in order. `count` is how many are in
+-- the round, `mine` the player's own place (nil if they're not in it).
+function RoundHud.BoardPlaces(count: number, mine: number?): { number }
 	local places = {}
-	if count <= 0 then
-		return places
+	for place = 1, math.min(3, count) do
+		table.insert(places, place)
 	end
-	if expanded or not mine then
-		for place = 1, math.min(3, count) do
-			table.insert(places, place)
-		end
-		if mine and mine > 3 then
-			table.insert(places, mine)
-		end
-		return places
-	end
-	table.insert(places, 1)
-	if mine > 1 then
-		table.insert(places, mine)
+	if mine and mine > 3 then
+		places[3] = mine
 	end
 	return places
 end

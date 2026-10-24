@@ -4,8 +4,8 @@
 --     everyone's face in a glowing ring of the party's colour (the leader wears the 👑) and the streak
 --     (🔥 rounds in a row together) once it's 2, on a dark pill with a rim of colours turning round
 --     it, a neon glow breathing round that and a shine sweeping over now and then. A tap opens the
---     PARTY window. Phones: compact, low in the middle of the gap between the MOVE stick's corner and
---     the jump button (62% across, like the toasts, which sit above it: NotificationController),
+--     PARTY window. Phones: compact, low in the middle of the screen (like the toasts, which sit
+--     above it: NotificationController; owner, on layout A: "the bottom not being centrally located"),
 --     clear of the chip row and the menu column up top and of the ☰ in the top bar row. The vote
 --     cards take that spot while they're up (VoteController's row at the bottom middle), so the bar
 --     steps aside for the vote, as the chip row does on phones; the party still shows in the world
@@ -175,7 +175,7 @@ local function buildBar(context)
 	local holder = UIKit.new("Frame", {
 		Name = "SquadBar",
 		AnchorPoint = if touch then Vector2.new(0.5, 1) else Vector2.zero,
-		Position = if touch then UDim2.new(0.62, 0, 1, -8) else UDim2.fromOffset(16, 12),
+		Position = if touch then UDim2.new(0.5, 0, 1, -8) else UDim2.fromOffset(16, 12),
 		Size = if touch then UDim2.fromOffset(460, s.Height + 30) else UDim2.fromOffset(440, PC_BAR_Y + s.Height + 30),
 		BackgroundTransparency = 1,
 		Visible = false,

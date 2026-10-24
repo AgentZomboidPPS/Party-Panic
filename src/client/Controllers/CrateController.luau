@@ -1,10 +1,10 @@
 -- The crate season on this player's screen (owner: "Hollow night comes first I want you to actually work
 -- on adding it to the game right now ... Also do all of your ideas. This has to be sick."; Shared/
 -- Seasons, Services/CrateService). It puts together:
---   * the lobby chip (UI/LobbyRibbon, priority 1.5: right after a limited-time event's): "📦 3 🔑 5",
---     and OPEN glowing when there's a crate and a key to open it with; a tap opens the crate window;
---   * the crate window (Crates/CrateMenu), also from State.OpenScreen:Fire("Crates", tab), the
---     altars (out of keys: the key shop) and the shop's crate items;
+--   * the crate window (Crates/CrateMenu), from State.OpenScreen:Fire("Crates", tab): the profile
+--     card's keys and crates (HudController; the lobby's row had a crate chip until layout A, owner:
+--     "We dont need a separate open crate button"), the altars (out of keys: the key shop) and the
+--     shop's crate items;
 --   * OPEN: walks the player to the nearest free altar round the pile (around it, not through it)
 --     and opens there; OPEN HERE (or every altar busy) opens over their head; OPEN 5;
 --   * every opening in the server, played where it happens (Crates/CrateShow), with the pile, the
@@ -25,8 +25,6 @@ local Remotes = require(Shared.Remotes)
 local Seasons = require(Shared.Seasons)
 
 local State = require(script.Parent.Parent.State)
-local UIKit = require(script.Parent.Parent.UI.UIKit)
-local LobbyRibbon = require(script.Parent.Parent.UI.LobbyRibbon)
 local CrateMenu = require(script.Parent.Parent.Crates.CrateMenu)
 local CrateMoments = require(script.Parent.Parent.Crates.CrateMoments)
 local CrateShow = require(script.Parent.Parent.Crates.CrateShow)
@@ -48,7 +46,6 @@ local SOUND_RANGE = 70 -- studs from the camera: a show's sounds are heard this 
 
 local RANK = { Title = 1, Pet = 2, Hat = 3, Effect = 4, Coins = 5 }
 
-local chip: LobbyRibbon.Chip? = nil
 local walking = 0 -- bumped for every walk, so a new one (or anything that stops it) ends the last
 local welcomed = false
 
@@ -60,28 +57,6 @@ local function counts(): (number, number)
 	end
 	return LootFly.Shown("Crates", if profile.Crates then profile.Crates.Count or 0 else 0),
 		LootFly.Shown("Keys", profile.Keys or 0)
-end
-
-local function refreshChip()
-	local current = chip
-	if not current then
-		return
-	end
-	local crates, keys = counts()
-	-- (PC shows the counts under the coins, HudController: the chip just opens the window. Phones
-	-- show them here.)
-	local touch = UIKit.IsTouch()
-	if not State.Profile then
-		current:Set("", "")
-	elseif crates > 0 and keys > 0 then
-		current:Set("📦", if touch then `OPEN · {crates} · 🔑 {keys}` else "OPEN CRATES")
-	else
-		current:Set("📦", if touch then `{crates} · 🔑 {keys}` else "CRATES")
-	end
-	local glow = current.Button:FindFirstChild("Glow")
-	if glow and glow:IsA("UIStroke") then
-		glow.Enabled = crates > 0 and keys > 0
-	end
 end
 
 local function rootOf(): BasePart?
@@ -313,29 +288,11 @@ function CrateController.Start(context)
 		end
 	end
 
-	chip = LobbyRibbon.Add(context, {
-		Name = "Crates",
-		Priority = 1.5,
-		OnClick = function()
-			CrateMenu.Show("Crates")
-		end,
-	})
-	local glow = Instance.new("UIStroke")
-	glow.Name = "Glow"
-	local amber = season.Colors.Glow
-	glow.Color = Color3.fromRGB(amber[1], amber[2], amber[3])
-	glow.Thickness = 3
-	glow.Enabled = false
-	glow.Parent = (chip :: LobbyRibbon.Chip).Button
-	refreshChip()
-	-- A round's keys and crate land on the chip on phones (PC: the pills under the coins win).
-	LootFly.Target("Keys", (chip :: LobbyRibbon.Chip).Button, 2)
-	LootFly.Target("Crates", (chip :: LobbyRibbon.Chip).Button, 2)
+	-- A round's keys and crate landing on the profile card's pills (HudController).
 	LootFly.OnLand = function()
 		AudioController.PlayOr("CrateTick", "Pickup")
 		Haptics.Play("Tap")
 	end
-	LootFly.Changed:Connect(refreshChip)
 
 	remote.OnClientEvent:Connect(function(action, payload)
 		if action == "Show" and type(payload) == "table" then
@@ -353,10 +310,7 @@ function CrateController.Start(context)
 			CrateMenu.Show(if type(tab) == "string" then tab else nil)
 		end
 	end)
-	State.ProfileChanged:Connect(function()
-		refreshChip()
-		tryWelcome()
-	end)
+	State.ProfileChanged:Connect(tryWelcome)
 	State.GameState.Changed("Phase", tryWelcome)
 	for _, attribute in { "PP_Celebrating", "PP_ResultsShowing", "PP_CupPodium", "PP_InRound" } do
 		player:GetAttributeChangedSignal(attribute):Connect(function()
@@ -366,16 +320,6 @@ function CrateController.Start(context)
 			task.delay(1, tryWelcome)
 		end)
 	end
-	-- The glow on the chip breathes while there's something to open.
-	task.spawn(function()
-		while true do
-			task.wait(0.05)
-			local stroke = glow
-			if stroke.Enabled then
-				stroke.Transparency = 0.25 + 0.45 * (0.5 + 0.5 * math.sin(os.clock() * 4))
-			end
-		end
-	end)
 end
 
 return CrateController

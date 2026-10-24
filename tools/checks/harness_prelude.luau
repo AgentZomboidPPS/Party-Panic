@@ -979,9 +979,13 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 			__note("client State.Init failed: " .. tostring(stateErr))
 		end
 		local context = {}
-		for key, guiName in { Hud = "PartyPanicHUD", Overlay = "PartyPanicOverlay" } do
+		for key, guiName in { Hud = "PartyPanicHUD", Overlay = "PartyPanicOverlay", Edge = "PartyPanicEdge" } do
 			local gui = Instance.new("ScreenGui")
 			gui.Name = guiName
+			if key == "Edge" then -- (the whole screen, as init.client.luau's)
+				gui.IgnoreGuiInset = true
+				gui.ScreenInsets = Enum.ScreenInsets.None
+			end
 			gui.Parent = __localPlayer.PlayerGui
 			context[key] = gui
 		end

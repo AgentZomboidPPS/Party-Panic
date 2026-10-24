@@ -10,7 +10,10 @@
 -- knob, bounces the pill and plays a sound at once, then asks the server (Services/SitOutService),
 -- which sets the PP_SitOut attribute and sends a short notification; if no answer comes, the
 -- switch slides back. The banner's switch steps aside while you're playing a round (you finish it
--- either way) and comes back when you're out, or the round's over.
+-- either way) and comes back when you're out, or the round's over. It also steps aside for whatever
+-- SitOutSwitch.SetAside names: the PLAY NEXT ROUND button that stands in for it while you watch a
+-- round you're sitting out (SpectateController), and on phones, where it sits under the banner,
+-- anything else using that spot (HudController).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -96,6 +99,7 @@ local answerDue = 0
 local lastTap = -math.huge
 local requestId = 0
 local listening = false
+local asides: { [string]: boolean? } = {} -- why the banner's switch steps aside (SetAside)
 
 local function lookFor(sitOut: boolean): Look
 	return if sitOut then SITTING_OUT else PLAYING
@@ -186,7 +190,7 @@ local function playingRound(): boolean
 end
 
 local function refreshVisible()
-	local visible = not playingRound()
+	local visible = not playingRound() and next(asides) == nil
 	for _, view in views do
 		if view.Hud and view.Root.Visible ~= visible then
 			view.Root.Visible = visible
@@ -217,6 +221,15 @@ local function listen()
 	GameState.Changed("Phase", refreshVisible)
 	player:GetAttributeChangedSignal("PP_InRound"):Connect(refreshVisible)
 	player:GetAttributeChangedSignal("PP_Alive"):Connect(refreshVisible)
+end
+
+-- Steps the banner's switch aside (or back) for `reason`: it shows only when no reason holds it.
+function SitOutSwitch.SetAside(reason: string, aside: boolean)
+	if (asides[reason] == true) == aside then
+		return
+	end
+	asides[reason] = if aside then true else nil
+	refreshVisible()
 end
 
 -- Asks to sit out (true) or to play again (false). The switches flip right away.
@@ -338,7 +351,7 @@ function SitOutSwitch.new(parent: Instance, options: Options?): TextButton
 	table.insert(views, view)
 	paint(view, false, false)
 	if view.Hud then
-		root.Visible = not playingRound()
+		root.Visible = not playingRound() and next(asides) == nil
 	end
 
 	-- A squish under the thumb, then the flip.

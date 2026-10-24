@@ -65,9 +65,6 @@ local body: Frame
 local tabButtons: { [string]: TextButton } = {}
 local currentTab = "Road"
 
--- Phones: how far right of the profile chip's left edge the next-reward tab may reach (scaled
--- units): the top-middle vote cards and tip start about 215 units in on the narrowest phone.
-local TOUCH_TAB_REACH = 208
 local CARD_W, CARD_GAP = 180, 12
 local LANE_W = 60 -- the lanes' names at the road's left (FREE, GOLD)
 -- The road makes a level's content when it scrolls this near the view (scaled units).
@@ -138,56 +135,34 @@ end
 
 -- HUD: the next reward beside the coins, and the badge's colors ------------------------------------
 
-local function buildNextTab(context)
-	local holder = context.Hud:FindFirstChild("ProfileChip")
-	local coins = holder and holder:FindFirstChild("Coins")
-	if not holder or not coins or not coins:IsA("GuiObject") then
-		return
-	end
-	local height = if touch then 42 else 46
+-- The profile chip, wherever HudController put it (phones: the edge ScreenGui).
+local function profileChip(context): Instance?
+	local edge = context.Edge
+	return (edge and edge:FindFirstChild("ProfileChip")) or context.Hud:FindFirstChild("ProfileChip")
+end
+
+-- The next reward: a pink pill in the profile card's NextSlot, beside the XP bar, "NEXT 🎁 20", or
+-- shorter if that doesn't fit ("🎁 Lv 20", "🎁 20"). The card itself opens the Rewards screen.
+local function buildSlotTab(slot: Frame)
+	local height = slot.Size.Y.Offset
 	local tab = UIKit.Panel({
 		Name = "NextReward",
-		Position = UDim2.fromOffset(0, coins.Position.Y.Offset),
-		Size = UDim2.fromOffset(100, height),
-		CornerRadius = if touch then 18 else 23,
-		ZIndex = 1,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromScale(0, 0.5),
+		Size = UDim2.fromOffset(slot.Size.X.Offset, height),
+		CornerRadius = height / 2,
 		Visible = false,
-		Parent = holder,
+		Parent = slot,
 	}, Theme.Colors.Pink, PINK_DARK)
 	local stroke = tab:FindFirstChildOfClass("UIStroke") :: UIStroke
-	-- The whole pill opens the Rewards screen. PC: it's a see-through button over the pill (the pill
-	-- reaches past the profile chip's own button), with the words on it. Phones: the chip's button
-	-- grows to cover the pill instead (a button of the pill's height would be too small for a thumb).
-	local baseWidth = holder.Size.X.Offset
-	local face: GuiObject = tab
-	if not touch then
-		local open = UIKit.new("TextButton", {
-			Name = "Open",
-			Text = "",
-			AutoButtonColor = false,
-			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 1),
-			ZIndex = 2,
-			Parent = tab,
-		})
-		open.Activated:Connect(function()
-			State.OpenScreen:Fire("Rewards")
-		end)
-		face = open
-	end
-	-- Phones: the coins tab's top is tucked under the pill, so the text sits in its visible part.
-	local textSize = if touch then 18 else 20
+	local textSize = Theme.Touch.MinText
 	local label = UIKit.Label({
 		Text = "",
-		RichText = not touch,
 		Font = Theme.Fonts.Display,
 		TextSize = textSize,
 		TextWrapped = false,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(if touch then 10 else 16, if touch then 10 else 0),
-		Size = UDim2.new(1, if touch then -14 else -22, 0, if touch then 32 else height),
-		ZIndex = 2,
-		Parent = face,
+		Size = UDim2.fromScale(1, 1),
+		Parent = tab,
 		Children = { UIKit.TextStroke(0.2) },
 	})
 	local function refresh()
@@ -198,37 +173,24 @@ local function buildNextTab(context)
 		end
 		local current = profile.Level or 1
 		local nextLevel, item = Progression.NextReward(current, GoldPassController.Owned())
-		local plain
-		if item and nextLevel then
-			plain = if touch then `{item.Icon} Lv {nextLevel}` else `NEXT  {item.Icon} Lv {nextLevel}: {item.Name}`
-			label.Text = if touch
-				then plain
-				else `<font color="#{Theme.Colors.Yellow:ToHex()}">NEXT</font>  {item.Icon} Lv {nextLevel}: {item.Name}`
-		else
-			plain = if touch then "👑 MAX" else "👑 Every level reward unlocked!"
-			label.Text = plain
+		local room = slot.Size.X.Offset - 16
+		local options = if item and nextLevel
+			then { `NEXT {item.Icon} {nextLevel}`, `{item.Icon} Lv {nextLevel}`, `{item.Icon} {nextLevel}` }
+			else { "👑 MAX" }
+		local text = options[#options]
+		for _, option in options do
+			if UIKit.TextWidth(option, textSize, Theme.Fonts.Display) <= room then
+				text = option
+				break
+			end
 		end
-		local left = coins.Position.X.Offset + coins.Size.X.Offset + (if touch then 6 else 8)
-		local width = math.ceil(UIKit.TextWidth(plain, textSize, Theme.Fonts.Display)) + (if touch then 22 else 34)
-		if touch and left + width > TOUCH_TAB_REACH then
-			-- A long coin number: just the reward's icon, or nothing if even that doesn't fit.
-			plain = if item then item.Icon else "👑"
-			label.Text = plain
-			width = 44
-		end
-		tab.Size = UDim2.fromOffset(width, height)
-		tab.Position = UDim2.fromOffset(left, coins.Position.Y.Offset)
+		label.Text = text
 		-- One level to go: a gold rim.
 		local close = nextLevel ~= nil and nextLevel == current + 1
 		stroke.Color = if close then Theme.Colors.Yellow else Theme.Colors.Stroke
 		stroke.Thickness = if close then 3 else 2
 		stroke.Transparency = if close then 0 else 0.75
-		local phase = GameState.Get("Phase") or "Waiting"
-		tab.Visible = phase ~= "InRound" and not (touch and left + width > TOUCH_TAB_REACH)
-		if touch then
-			local reach = if tab.Visible then left + width else 0
-			holder.Size = UDim2.fromOffset(math.max(baseWidth, reach), holder.Size.Y.Offset)
-		end
+		tab.Visible = true
 	end
 	State.ProfileChanged:Connect(function(profile, previous)
 		refresh()
@@ -236,14 +198,20 @@ local function buildNextTab(context)
 			UIKit.PopIn(tab, 0.5)
 		end
 	end)
-	coins:GetPropertyChangedSignal("Size"):Connect(refresh)
-	GameState.Changed("Phase", refresh)
 	task.delay(3, refresh) -- again once the font has surely loaded
 	refresh()
 end
 
+local function buildNextTab(context)
+	local holder = profileChip(context)
+	local slot = holder and holder:FindFirstChild("NextSlot", true)
+	if slot and slot:IsA("Frame") then
+		buildSlotTab(slot)
+	end
+end
+
 local function followBadge(context)
-	local holder = context.Hud:FindFirstChild("ProfileChip")
+	local holder = profileChip(context)
 	local badge = holder and holder:FindFirstChild("LevelBadge", true)
 	local gradient = badge and badge:FindFirstChildOfClass("UIGradient")
 	if not gradient then

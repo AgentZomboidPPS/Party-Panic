@@ -29,7 +29,7 @@ show with two toasts up ("InRound buttons": on phones the toasts sit above the b
 says whether they did and came back down after, and whether the mode HUD's scales let go).
 A quieter round (owner: "During the mini games, any way we can save UI space so they can see more of
 the game at one time?"): while the player plays, the menu column waits behind the ☰ and the phone
-standings show the player and the leader; "InRound menu" is the screen with both tapped open, and
+standings are a strip under the banner; "InRound menu" is the screen with the ☰ tapped open, and
 "hudChecks.quiet" says what showed before, then, and 5.5 seconds later (the banner's players-left
 pill, the status line, the mode HUDs' shift). Of the two toasts in "InRound buttons", the round's
 callout (topic "Round") shows (on phones in the strip under the banner) and the quest waits until
@@ -1370,6 +1370,28 @@ do
 		foundMap[id] = { Crate = 20 + index * 31, Day = today - 6 + index }
 	end
 	local checks = {}
+	-- A player who has never opened a crate, with one and a key to open it (Crates/CrateNudge: the
+	-- 📦 pill's halo, its OPEN! tag and the sparkles): "First crate".
+	if okSnap then
+		snapshot.Keys = 1
+		snapshot.Crates = { Season = season.Id, Count = 1 }
+		snapshot.Seasons = {}
+		__fire("ProfileData", snapshot)
+		-- (as a player past the first-join tips sees it: on phones the tip has the card's corner)
+		local hudGui = __playerGui:FindFirstChild("PartyPanicHUD")
+		local tipFrame = hudGui and hudGui:FindFirstChild("Onboarding", true)
+		local tipWasUp = __touchMode and tipFrame ~= nil and tipFrame.Visible
+		if tipWasUp then
+			tipFrame.Visible = false
+			hudGui:SetAttribute("PP_TipShowing", false)
+		end
+		task.wait(0.8)
+		snap("First crate")
+		if tipWasUp then
+			tipFrame.Visible = true
+			hudGui:SetAttribute("PP_TipShowing", true)
+		end
+	end
 	if okSnap then
 		snapshot.Keys = 7
 		snapshot.Crates = { Season = season.Id, Count = 12 }
@@ -1608,9 +1630,8 @@ end
 -- The standings rows as they read on screen (a row is a title label, or a name and a score).
 local function boardRows()
 	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
-	-- (Phones: inside its tap area, RoundController's "Standings".)
-	local tapArea = hud and hud:FindFirstChild("Standings")
-	local board = hud and (hud:FindFirstChild("Leaderboard") or (tapArea and tapArea:FindFirstChild("Leaderboard")))
+	-- (Phones: the strip in the round status row, RoundController.)
+	local board = hud and hud:FindFirstChild("Leaderboard", true)
 	local rows = {}
 	for _, child in if board then board:GetChildren() else {} do
 		if child:IsA("TextLabel") or child:IsA("Frame") then
@@ -2031,7 +2052,9 @@ local okQuiet, quietErr = pcall(function()
 	local okHud, Hud = pcall(__require, "Client/Controllers/HudController")
 	local okRound, Round = pcall(__require, "Client/Controllers/RoundController")
 	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
-	local menu = hud and hud:FindFirstChild("Menu")
+	-- (Phones: the menu is in the edge ScreenGui.)
+	local edge = __playerGui:FindFirstChild("PartyPanicEdge")
+	local menu = (hud and hud:FindFirstChild("Menu")) or (edge and edge:FindFirstChild("Menu"))
 	local function find(name)
 		for _, gui in __playerGui:GetChildren() do
 			local found = gui:FindFirstChild(name, true)
@@ -2078,10 +2101,8 @@ local okQuiet, quietErr = pcall(function()
 	}
 	if okHud and okRound then
 		Hud.ToggleMenu()
-		Round.ToggleStandings()
 		task.wait(0.8)
 		quiet.tapped = menuState()
-		quiet.boardTapped = boardRows()
 		snap("InRound menu")
 		task.wait(5.5)
 		quiet.later = menuState()
@@ -2173,7 +2194,9 @@ do
 			table.insert(stack, if words then words.Text else "?")
 		end
 	end
+	local edgeGui = __playerGui:FindFirstChild("PartyPanicEdge")
 	local menuFrame = __playerGui.PartyPanicHUD:FindFirstChild("Menu")
+		or (edgeGui and edgeGui:FindFirstChild("Menu"))
 	hudChecks.out = {
 		toasts = stack,
 		menu = if menuFrame and menuFrame.Visible then "column shown" else "column away",
@@ -2570,13 +2593,20 @@ if #bots > 0 then
 end
 
 -- The round's crate and keys fly into their counters as the card closes (Crates/LootFly): the 🔑
--- and 📦 pills under the coins on PC, the lobby's crate chip on phones. lootChecks: what the
--- counters read with the card up (the old numbers), in the middle of the flight, and after it.
+-- and 📦 pills on the profile card (phones: in the edge ScreenGui). lootChecks: what the counters
+-- read with the card up (the old numbers), in the middle of the flight, and after it.
 local lootChecks = {}
 local function lootLook(label)
 	local hud = __playerGui:FindFirstChild("PartyPanicHUD")
+	local edge = __playerGui:FindFirstChild("PartyPanicEdge")
+	local everything = {}
+	for _, gui in { hud, edge } do
+		for _, item in gui:GetDescendants() do
+			table.insert(everything, item)
+		end
+	end
 	local counters = {}
-	for _, item in (if hud then hud:GetDescendants() else {}) do
+	for _, item in everything do
 		if (item.Name == "Keys" or item.Name == "Crates") and item:IsA("GuiObject") then
 			local texts = {}
 			for _, label in item:GetDescendants() do

@@ -1,5 +1,36 @@
 # Handoff: Party Panic (for the next Claude)
 
+**On this branch since version 54 (not published yet; version 54 = 53 with Capy Go Boom out of the rotation):**
+- **HUD layout A** (owner, picking A of three mockups: "I like a but damn have we got to clean up the mobile UI"). PC and
+  phones share one profile card (level, name, XP bar with the NEXT reward beside it, then coins, keys and crates in a row;
+  `HudController.buildProfileCard`). Phones: the card and the menu (now a 2 x 2 grid) sit in the top corners
+  `Theme.Touch.Edge` (32) points from the screen's sides, in part of the side insets (owner: "I know about the safety space
+  nonsense but you over compensate for it too much"), in a new full-screen ScreenGui (`PartyPanicEdge`,
+  `context.Edge`); the notch / Dynamic Island / camera hole are in the middle of a side, so the top band is clear on every
+  phone. The sit-out switch is under the banner in the lobby (beside it, it ran into the menu on an iPhone SE), the lobby's
+  chips are one row under the menu grid, the round's standings are a centred strip under the banner (owner: "It has to be
+  centered"; the card steps aside during a round), and everything at the bottom is centred (owner: "the bottom not being
+  centrally located is ass"): toasts, the "you're out" panel, the spectate bar, the squad bar, and a new pair for anyone
+  watching a round: 👀 WATCH and 🎮 PLAY NEXT ROUND (turns sitting out off; the banner's switch steps aside while it shows).
+  The event and crate chips are gone (owner: "We dont need a separate open crate button. I thought we said the event button
+  goes inside of the season button?"): the event is the Season hub's tab, the crates are on the card. PC standings: the
+  score column is capped and long scores shrink, so names stop showing as "1....".
+- **First-crate nudge** (owner: "we need a way to push players to open crates if they have never opened any. can we make it
+  flashy but elegant?"): `Crates/CrateNudge` on the card's 📦 pill: a breathing halo whenever there's a crate and a key, plus
+  a bobbing OPEN! tag, a crate shake and a sparkle burst for someone who has never opened one.
+- **No more hovering at the start of a round** (owner: "Also I did spawn hovering. Ive had reports of that."): five modes
+  put their spots 3 studs over the floor on top of RoundContext's own lift; and a device that has the whole arena
+  (`PP_Parts`) never holds a character in mid-air (`ArrivalController`). `tools/checks/scenarios/SpawnGap.luau` measures
+  every mode.
+- **Eatsa Pizza bite spots** (owner: "can we make players run around while eating"): eat only on your team's glowing spots
+  (one per player, about 6 bites, the next lights up about a second's run away).
+- **Big Bad Vacuum can be lost** (owner: "how do you loose this? maybe after 3 hits or something?"): 3 hearts, knocked out at
+  0, the Vacuum wins when no person is left standing; bigger lobbies get a tougher boss (about 2 wins in 3).
+- **Last Dancer**: steps on W A S D, speakers out of the starting camera, one name per dancer.
+- **Capy Go Boom fixed but still off** (`Enabled = false`): whole capybaras, visible shells, BOOM fires forward (below).
+- `tools/checks/ui_render.py` now models the real cut-outs (`cut`, `corner` per screen) instead of flagging the whole side
+  insets, and lets an invisible tap area sit under one.
+
 **Live in version 53 (2026-10-24 ~15:20 UTC, from `claude/friendly-ramanujan-2dtfr2`)** on the owner's "Lets push it all.":
 Big Bad Vacuum and Last Dancer with their own songs (ModePack8, 83135733999883, approved; Last Dancer joins the live vote
 now that its song is in), Capy Go Boom (merged from `claude/quirky-hopper-5yk8zk`; its song is ModePack9 here), the new

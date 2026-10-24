@@ -5,13 +5,11 @@
 -- weekends"). The server decides all of it (Services/EventService: GameState "Event" says what's
 -- on, the profile's Events field holds the candy); this only shows it and asks.
 --
---   * The chip, first in the lobby's row (UI/LobbyRibbon, priority 1): "🎃 HALLOWEEN · 9D" (PC
---     adds the candy), and "🎃 2× COINS · 1D 4H" on one of the event's double coins weekends (there
---     are none outside an event; owner, on double coins after Halloween: "NO"). A red "!" when a
---     reward is ready to claim.
---     After a round, the candy it paid pops on the chip ("+2 🍬 CANDY") once the player is back in
---     the lobby: never on the results card, and never a toast (the end of a round has enough).
---   * The event screen (tap the chip, or a locked event reward in the Shop): the candy, the track of
+--   * The Season hub's Event tab (UI/HubTabs) while an event is on, with a "!" when a reward is
+--     ready to claim (owner: "I thought we said the event button goes inside of the season button?":
+--     the lobby's row had an event chip of its own until layout A). Double coins weekends are the
+--     event's (there are none outside one; owner, on double coins after Halloween: "NO").
+--   * The event screen (the hub's tab, or a locked event reward in the Shop): the candy, the track of
 --     free rewards with CLAIM and EQUIP, the time left, and where to find candy. Phones first: it
 --     fits the shortest phone window, 44 pt buttons, 18-unit text.
 --   * The pumpkin hunt: the golden pumpkins this player found today disappear on their screen only
@@ -27,7 +25,6 @@ local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
 local Cosmetics = require(Shared.Cosmetics)
@@ -38,30 +35,22 @@ local Remotes = require(Shared.Remotes)
 
 local State = require(script.Parent.Parent.State)
 local HubTabs = require(script.Parent.Parent.UI.HubTabs)
-local LobbyRibbon = require(script.Parent.Parent.UI.LobbyRibbon)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local EventController = {}
 
-local LOBBY = { Waiting = true, Intermission = true, Voting = true, Cleanup = true }
 local ORANGE_DARK = Color3.fromRGB(205, 92, 24)
 local PURPLE = Color3.fromRGB(120, 70, 200)
 local GREEN_DARK = Color3.fromRGB(60, 160, 90)
 local CYAN_DARK = Color3.fromRGB(50, 120, 230)
-local POP_TIME = 3 -- seconds the "+2 🍬 CANDY" stays on the chip
 local LOBBY_REACH = 600 -- studs from the lobby's middle: the camera is at the lobby (arenas are 1400 away)
 
 local touch = false
 local current: EventLogic.State? = nil -- what's on (GameState "Event")
-local chip: LobbyRibbon.Chip? = nil
-local badge: Frame? = nil
 local modal: Modal.Modal? = nil
 local body: Frame? = nil
-local lastCandy: number? = nil
-local pendingCandy = 0 -- candy from a round, popped on the chip back in the lobby
-local popUntil = 0
 local justClaimed: string? = nil -- the reward just asked for: its card pops when the server says yes
 local ticking: { [TextLabel]: () -> string } = {} -- the open screen's countdowns, and their words
 
@@ -79,117 +68,22 @@ local function progress(): EventLogic.Progress?
 	return if type(saved) == "table" then EventLogic.Progress(table.clone(saved)) else nil
 end
 
-local function candy(): number
-	local mine = progress()
-	return if mine then mine.Candy else 0
-end
-
 local function timeLeft(endsAt: number): string
 	return EventLogic.Countdown(endsAt - workspace:GetServerTimeNow())
 end
 
--- The chip -----------------------------------------------------------------------------------------
+-- The hub's tab ----------------------------------------------------------------------------------
 
 local function claimable(): boolean
 	local definition, mine = event(), progress()
 	return definition ~= nil and mine ~= nil and #EventLogic.Claimable(mine, definition.Track) > 0
 end
 
-local function refreshChip()
-	-- The season hub's event tab, there while an event is on, with the chip's "!".
+-- The season hub's event tab, there while an event is on, with a "!" when a reward is ready.
+local function refreshHub()
 	local definition = event()
 	HubTabs.SetEvent(if definition then definition.Icon else nil, if definition then definition.Short else nil)
 	HubTabs.SetBadge("Event", definition ~= nil and claimable())
-	local ribbonChip = chip
-	if not ribbonChip or os.clock() < popUntil then
-		return
-	end
-	local state = current
-	if badge then
-		badge.Visible = claimable()
-	end
-	if state and definition and state.DoubleCoins then
-		ribbonChip:Set(definition.Icon, `2× COINS · {timeLeft(state.DoubleEndsAt)}`)
-	elseif state and definition then
-		local words = `{definition.Short} · {timeLeft(state.EndsAt)}`
-		-- PC has the room for the candy too; phones keep the row for the other chips.
-		ribbonChip:Set(definition.Icon, if touch then words else `{words} · 🍬 {candy()}`)
-	else
-		ribbonChip:Set("", "") -- nothing on: off the row
-	end
-end
-
--- Whether the chip is on screen now (the row shows it, and the row is up).
-local function chipShowing(): boolean
-	local button = chip and chip.Button
-	local row = button and button.Parent
-	return button ~= nil and button.Visible and row ~= nil and row:IsA("GuiObject") and row.Visible
-end
-
--- The candy a round paid, popped on the chip once it's back on screen in the lobby.
-local function popCandy()
-	local ribbonChip = chip
-	if pendingCandy <= 0 or not ribbonChip or not chipShowing() then
-		return
-	end
-	local amount = pendingCandy
-	pendingCandy = 0
-	ribbonChip:Set("🍬", `+{amount} CANDY`)
-	popUntil = os.clock() + POP_TIME
-	UIKit.PopIn(ribbonChip.Button, 0.45)
-	task.delay(POP_TIME + 0.05, refreshChip)
-end
-
-local function buildChip(context)
-	chip = LobbyRibbon.Add(context, {
-		Name = "Event",
-		Priority = 1,
-		OnClick = function()
-			if event() then
-				State.OpenScreen:Fire("Event")
-			end
-		end,
-		Top = Theme.Colors.Orange,
-		Bottom = ORANGE_DARK,
-	})
-	local button = (chip :: LobbyRibbon.Chip).Button
-	-- A reward ready to claim: a red "!" on the chip's corner, gently pulsing.
-	local dot = UIKit.new("Frame", {
-		Name = "Ready",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(1, -6, 0, 6),
-		Size = UDim2.fromOffset(26, 26),
-		BackgroundColor3 = Theme.Colors.Red,
-		Visible = false,
-		ZIndex = 3,
-		Parent = button,
-		Children = { UIKit.Round(), UIKit.Stroke(nil, 2, 0.1) },
-	})
-	UIKit.Label({
-		Text = "!",
-		Font = Theme.Fonts.Display,
-		TextSize = 20,
-		TextWrapped = false,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 4,
-		Parent = dot,
-	})
-	local pulse = UIKit.new("UIScale", { Parent = dot })
-	TweenService
-		:Create(
-			pulse,
-			TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-			{ Scale = 1.18 }
-		)
-		:Play()
-	badge = dot
-	-- Back in the lobby after a round: the chip comes back (a moment after the phase turns), and
-	-- shows what the round paid.
-	button:GetPropertyChangedSignal("Visible"):Connect(popCandy)
-	local row = button.Parent
-	if row and row:IsA("GuiObject") then
-		row:GetPropertyChangedSignal("Visible"):Connect(popCandy)
-	end
 end
 
 -- The event screen -----------------------------------------------------------------------------------
@@ -600,9 +494,6 @@ local function readState()
 		end
 	end
 	current = decoded
-	-- Candy counts from here: an event coming on (or a profile arriving before the event did) is
-	-- never a "+31 CANDY" moment.
-	lastCandy = if State.Profile then candy() else nil
 	-- The window's title is the event's name (another event later gets its own).
 	local definition = event()
 	local titleBar = modal and modal.Window:FindFirstChild("TitleBar")
@@ -610,7 +501,7 @@ local function readState()
 	if title and definition then
 		title.Text = `{definition.Icon}  {definition.Name}`
 	end
-	refreshChip()
+	refreshHub()
 	if modal and modal.IsOpen then
 		render()
 	end
@@ -619,10 +510,9 @@ end
 function EventController.Start(context)
 	touch = UIKit.IsTouch()
 	readState()
-	buildChip(context)
 	buildScreen(context)
 	GameState.Changed("Event", readState)
-	refreshChip()
+	refreshHub()
 
 	State.OpenScreen:Connect(function(name)
 		if name == "Event" and modal and event() then
@@ -630,32 +520,16 @@ function EventController.Start(context)
 		end
 	end)
 	State.ProfileChanged:Connect(function()
-		local now = candy()
-		if lastCandy and now > lastCandy then
-			-- Candy from a round arrives with its results: it pops once the player is back in the
-			-- lobby. A pumpkin found in the lobby pops right away (its toast says the rest).
-			pendingCandy += now - lastCandy
-			if LOBBY[GameState.Get("Phase") or "Waiting"] and not State.InRound() then
-				popCandy()
-			end
-		end
-		lastCandy = now
-		refreshChip()
+		refreshHub()
 		if modal and modal.IsOpen then
 			render()
 		end
 	end)
-	GameState.Changed("Phase", function(phase)
-		if LOBBY[phase] then
-			task.delay(1.2, popCandy) -- after the row has come back
-		end
-	end)
-	-- The countdowns tick (the words only change once a minute; the row redraws only then), the
-	-- open screen's too (just their words: nothing else on it moves).
+	-- The open screen's countdowns tick (just their words: nothing else on it moves).
 	task.spawn(function()
 		while true do
 			task.wait(1)
-			refreshChip()
+			refreshHub()
 			for label, words in ticking do
 				if label.Parent then
 					label.Text = words()

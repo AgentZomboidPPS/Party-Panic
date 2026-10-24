@@ -1,8 +1,8 @@
 -- Toast notifications: short, icon-led messages that slide in and fade out (design doc §12).
 -- They draw above the HUD and mode HUDs (but under pop-ups) in a spot nothing else uses: the top
--- right corner on PC (above the side menu), and on phones low down between the thumbstick's corner
--- and the jump button (62% across: the middle of that gap), lifted above the "you're out" and
--- spectate panels (and only the newest while the rules card is up).
+-- right corner on PC (above the side menu), and on phones low down in the middle (owner, on layout
+-- A: "certain buttons aren't centered?"), lifted above the "you're out" and spectate panels (and
+-- only the newest while the rules card is up).
 -- Two at a time (a new one pushes the oldest out), so they never reach the menu or the vote.
 -- A toast is as tall as its lines (measured, not AutomaticSize, which cut text short on phones).
 --
@@ -51,7 +51,7 @@ local KINDS = {
 local BOTTOM_PANELS = {
 	OutPanel = 86 + 12,
 	Spectate = 86 + 12,
-	SpectateButton = 72 + 12,
+	SpectateButton = 84 + 12, -- (WATCH / PLAY NEXT ROUND)
 	SquadBar = 84 + 18,
 	Vote = 110 * 1.25 + 10 + 12,
 }
@@ -220,12 +220,15 @@ function NotificationController.Start(context)
 		local holder = UIKit.new("Frame", {
 			Name = "ToastArea",
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.62, 0, 1, -8),
+			Position = UDim2.new(0.5, 0, 1, -8),
 			Size = UDim2.fromOffset(TOUCH_WIDTH, 300),
 			BackgroundTransparency = 1,
 			Parent = gui,
 		})
 		UIKit.AutoScale(holder)
+		-- (In the middle a toast's left end reaches the MOVE stick's zone on smaller phones: nothing on
+		-- one takes taps, so a thumb starting there still walks. tools/checks: allowed there.)
+		holder:SetAttribute("PP_Popup", true)
 		stack = UIKit.new("Frame", {
 			Name = "Toasts",
 			AnchorPoint = Vector2.new(0.5, 1),
@@ -265,10 +268,10 @@ function NotificationController.Start(context)
 			-- tools/checks (gui_dump.luau, ui_render.py) place it the same way on each screen they draw.
 			holder:SetAttribute("PP_AboveActions", if top then true else nil)
 			if top then
-				holder.Position = UDim2.new(0.62, 0, 0, top - ACTION_GAP)
+				holder.Position = UDim2.new(0.5, 0, 0, top - ACTION_GAP)
 				stack.Position = UDim2.fromScale(0.5, 1)
 			else
-				holder.Position = UDim2.new(0.62, 0, 1, -8)
+				holder.Position = UDim2.new(0.5, 0, 1, -8)
 				local height = 0
 				for name, panelHeight in BOTTOM_PANELS do
 					local panel = context.Hud:FindFirstChild(name)

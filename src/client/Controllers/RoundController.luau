@@ -2,8 +2,8 @@
 -- the round; then a live mini-leaderboard, team highlights and an "you're out" prompt. Bots are in
 -- the standings and get team outlines like everyone else (Participants).
 -- Phones (owner: "Wtf is this mobile Ui lol"): the rules card sits in the upper middle under the
--- tip, sized for a phone; the standings take the profile pill's corner (top three, or you); the
--- "you're out" pill sits low between the thumbstick's corner and the jump button.
+-- tip, sized for a phone; the standings are a strip under the banner (below); the "you're out" pill
+-- sits low in the middle.
 -- The rules card and the 3-2-1 are for the round's players only: someone sitting it out (or who
 -- arrived mid-round) watches from the lobby, with a line under the banner (HudController).
 --
@@ -24,11 +24,12 @@
 -- friend button so dark?"): it's the windows' bright red round ✕ now (UI/Modal: a red gradient,
 -- a white ✕ with a text stroke and a white ring), with the same size and tap area as before.
 --
--- Smaller standings on phones (owner: "During the mini games, any way we can save UI space so they
--- can see more of the game at one time?"): the board shows your own place and the leader's ("1.
--- Bubbles 12", "6. You 4"), or just your row when you lead (Logic/RoundHud.BoardPlaces). A tap on
--- it shows the top three plus you for a few seconds, in slimmer rows that keep it clear of the MOVE
--- stick's corner. Someone watching who isn't in the round sees the top three. PC keeps its board.
+-- The standings on phones (owner: "The standings on mobile takes way too much space. It has to be
+-- centered."): one slim strip under the banner in the middle, for the round's players and anyone
+-- watching: LIVE, then the top three (place, name, score), with you in third place if you're further
+-- down ("6 You 4"). It's part of HudController's round status row, which shows it: for the round's
+-- players in the status line's place once the line has faded, so the mode HUDs keep their spot; for
+-- anyone watching above their line. PC keeps its board.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -341,51 +342,37 @@ local function flashCountdown(text: string, color: Color3)
 end
 
 -- PC: the standings sit under the profile card, clear of the tips panel now that bots keep the
--- board full. Phones: in the profile pill's corner (it makes way during the round), with no title:
--- you and the leader (RoundHud.BoardPlaces); a tap shows the top three plus you for BOARD_OPEN
--- seconds, four slimmer rows that end about where three used to, clear of the thumbstick's corner.
--- The tap area is an invisible button round the board, at least a 44 pt touch target however few
--- rows show (one row is 26 pt).
-local TOUCH_ROW, TOUCH_GAP, TOUCH_PAD = 26, 3, 8
-local TOUCH_TAP = Theme.Touch.Target
-local TOUCH_ROW_SLIM, TOUCH_GAP_SLIM, TOUCH_PAD_SLIM = 22, 2, 6 -- four rows
-local BOARD_OPEN = 4
-local boardOpenUntil = 0 -- phones: the board shows its top three plus you until then
--- What a tap on the phone standings does (the client harness taps them this way): the top three
--- plus you for BOARD_OPEN seconds, or back to you and the leader if they're showing.
-function RoundController.ToggleStandings()
-	if board and isTouch() then
-		boardOpenUntil = if os.clock() < boardOpenUntil then 0 else os.clock() + BOARD_OPEN
-		refreshBoard()
-	end
-end
+-- board full. Phones: the strip (scaled units, in the round status row; a long name is shortened).
+local STRIP_H, STRIP_TEXT, STRIP_NAME = 40, 20, 92
+local SCORE_MAX = 104 -- PC: the score column's widest (the board's rows are 246 wide)
+local PLACE_COLORS = { Color3.fromRGB(255, 200, 60), Color3.fromRGB(205, 210, 225), Color3.fromRGB(215, 135, 75) }
 
 local function buildBoard(parent: Instance)
 	if isTouch() then
-		local list = UIKit.List(Enum.FillDirection.Vertical, TOUCH_GAP)
-		list.Name = "Rows"
-		local padding = UIKit.Padding(TOUCH_PAD, 12)
-		padding.Name = "Room"
-		local tap = UIKit.new("TextButton", {
-			Name = "Standings",
-			Text = "",
-			AutoButtonColor = false,
-			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(8, 6),
-			Size = UDim2.fromOffset(230, TOUCH_TAP),
-			Visible = false,
-			Parent = parent,
-		})
-		UIKit.AutoScale(tap)
-		tap.Activated:Connect(RoundController.ToggleStandings)
+		-- (HudController's round status row: it moves what's under it down while this shows.)
+		local row = parent:FindFirstChild("RoundStatus")
+		local holder = row
+		if not holder then
+			holder = UIKit.new("Frame", {
+				Name = "StandingsHolder",
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.fromScale(0.5, 0),
+				Size = UDim2.fromOffset(620, STRIP_H + 8),
+				BackgroundTransparency = 1,
+				Parent = parent,
+			})
+			UIKit.AutoScale(holder)
+		end
 		board = UIKit.Panel({
 			Name = "Leaderboard",
-			Size = UDim2.fromOffset(230, 2 * TOUCH_PAD + 2 * TOUCH_ROW + TOUCH_GAP),
-			CornerRadius = 16,
-			Parent = tap,
-			Children = { list, padding },
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 4),
+			Size = UDim2.fromOffset(300, STRIP_H),
+			CornerRadius = STRIP_H / 2,
+			Visible = false,
+			Parent = holder,
 		}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
-		boardRoot = tap
+		boardRoot = board
 		return
 	end
 	board = UIKit.Panel({
@@ -399,10 +386,9 @@ local function buildBoard(parent: Instance)
 	}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 	UIKit.AutoScale(board, 0.9)
 	boardRoot = board
-	-- Just under the profile chip, the coins, keys and crates (HudController: 182 tall at y 12, scaled
-	-- the same way).
+	-- Just under the profile card (HudController.ProfileHeight: 104 tall at y 12, scaled the same way).
 	local function place()
-		board.Position = UDim2.fromOffset(14, 12 + 182 * UIKit.CurrentScale() + 8)
+		board.Position = UDim2.fromOffset(14, 12 + 104 * UIKit.CurrentScale() + 8)
 	end
 	board:SetAttribute("PP_UnderProfile", true)
 	place()
@@ -411,9 +397,112 @@ end
 
 local boardKey = ""
 
+-- Phones: the strip's words, laid out left to right (LIVE, then each place's number, name and score).
+local function drawStrip(entries: { any })
+	local mine = nil
+	for index, entry in entries do
+		if entry.who.IsLocal then
+			mine = index
+		end
+	end
+	local shown = RoundHud.BoardPlaces(#entries, mine)
+	local x = 8
+	local live = UIKit.new("Frame", {
+		Name = "Live",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, x, 0.5, 0),
+		Size = UDim2.fromOffset(60, 26),
+		BackgroundColor3 = Theme.Colors.Red,
+		LayoutOrder = 0,
+		Parent = board,
+		Children = { UIKit.Round() },
+	})
+	UIKit.Label({
+		Text = "LIVE",
+		Font = Theme.Fonts.Display,
+		TextSize = Theme.Touch.MinText,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		Parent = live,
+	})
+	x += 60 + 10
+	for _, index in shown do
+		local entry = entries[index]
+		local who = entry.who
+		local teamColor = TEAM_COLORS[entry.team]
+		local name = if who.IsLocal then "You" else Participants.ListName(who.DisplayName, who.IsBot and not teamColor)
+		local color = if who.IsLocal
+			then Theme.Colors.Yellow
+			elseif teamColor then teamColor
+			elseif entry.alive then Theme.Colors.Text
+			else Theme.Colors.TextDim
+		local score = Participants.Escape(if entry.text ~= "" then entry.text else tostring(entry.score))
+		local plainName = string.gsub(name, "<[^>]+>", "")
+		local plainScore = string.gsub(score, "<[^>]+>", "")
+		local nameWidth = math.min(STRIP_NAME, math.ceil(UIKit.TextWidth(plainName, STRIP_TEXT, Theme.Fonts.Bold)) + 2)
+		local scoreWidth = math.min(80, math.ceil(UIKit.TextWidth(plainScore, STRIP_TEXT, Theme.Fonts.Display)) + 2)
+		local place = UIKit.new("Frame", {
+			Name = `Place{index}`,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, x, 0.5, 0),
+			Size = UDim2.fromOffset(28 + 6 + nameWidth + 6 + scoreWidth, STRIP_H),
+			BackgroundTransparency = 1,
+			LayoutOrder = index,
+			Parent = board,
+		})
+		local badge = UIKit.new("Frame", {
+			Name = "Badge",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromScale(0, 0.5),
+			Size = UDim2.fromOffset(28, 28),
+			BackgroundColor3 = PLACE_COLORS[index] or Theme.Colors.PanelDark,
+			Parent = place,
+			Children = { UIKit.Round(), UIKit.Stroke(nil, 1.5, 0.4) },
+		})
+		UIKit.Label({
+			Text = tostring(index),
+			Font = Theme.Fonts.Display,
+			TextSize = Theme.Touch.MinText,
+			TextWrapped = false,
+			TextColor3 = if PLACE_COLORS[index] then Color3.fromRGB(40, 24, 70) else Theme.Colors.Text,
+			Size = UDim2.fromScale(1, 1),
+			Parent = badge,
+		})
+		local nameLabel = UIKit.Label({
+			Text = name,
+			RichText = true,
+			TextSize = STRIP_TEXT,
+			TextWrapped = false,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = color,
+			Position = UDim2.fromOffset(34, 0),
+			Size = UDim2.new(0, nameWidth, 1, 0),
+			Parent = place,
+			Children = { UIKit.TextStroke(0.3) },
+		})
+		nameLabel:SetAttribute("PP_TruncateOk", true)
+		UIKit.Label({
+			Text = score,
+			RichText = true,
+			Font = Theme.Fonts.Display,
+			TextSize = STRIP_TEXT,
+			TextWrapped = false,
+			TextScaled = scoreWidth >= 80,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = Theme.Colors.Yellow,
+			Position = UDim2.fromOffset(34 + nameWidth + 6, 0),
+			Size = UDim2.new(0, scoreWidth, 1, 0),
+			Parent = place,
+			Children = { UIKit.TextStroke(0.3), UIKit.new("UITextSizeConstraint", { MaxTextSize = STRIP_TEXT }) },
+		})
+		x += place.Size.X.Offset + 14
+	end
+	board.Size = UDim2.fromOffset(x - 14 + 12, STRIP_H)
+end
+
 function refreshBoard()
 	local touch = isTouch()
-	local expanded = touch and os.clock() < boardOpenUntil
 	local entries = {}
 	for _, other in Participants.InRound() do
 		table.insert(entries, {
@@ -435,7 +524,7 @@ function refreshBoard()
 	end)
 	-- Rebuilt only when something on it changed (it's checked ~3 times a second all round, and
 	-- rebuilding every row and measuring its text each time cost phones for nothing).
-	local parts = { if expanded then "T+" elseif touch then "T" else "P" }
+	local parts = { if touch then "T" else "P" }
 	for _, entry in entries do
 		table.insert(
 			parts,
@@ -452,57 +541,34 @@ function refreshBoard()
 			child:Destroy()
 		end
 	end
-	if not touch then
-		UIKit.Label({
-			Text = "🏁 Standings",
-			Font = Theme.Fonts.Display,
-			TextSize = 22,
-			TextWrapped = false,
-			Size = UDim2.new(1, 0, 0, 28),
-			LayoutOrder = 0,
-			Parent = board,
-		})
-	end
-	-- PC: the top rows, and always your own (in place of the last row if you're further down).
-	-- Phones: you and the leader, or the top three plus you after a tap.
-	local shown = {}
 	if touch then
-		local mine = nil
-		for index, entry in entries do
-			if entry.who.IsLocal then
-				mine = index
-			end
-		end
-		shown = RoundHud.BoardPlaces(#entries, mine, expanded)
-		local slim = #shown >= 4
-		local rowHeight = if slim then TOUCH_ROW_SLIM else TOUCH_ROW
-		local gap = if slim then TOUCH_GAP_SLIM else TOUCH_GAP
-		local pad = if slim then TOUCH_PAD_SLIM else TOUCH_PAD
-		local rows = math.max(1, #shown)
-		local list = board:FindFirstChild("Rows") :: UIListLayout?
-		local room = board:FindFirstChild("Room") :: UIPadding?
-		if list and room then
-			list.Padding = UDim.new(0, gap)
-			room.PaddingTop, room.PaddingBottom = UDim.new(0, pad), UDim.new(0, pad)
-		end
-		local height = 2 * pad + rows * rowHeight + (rows - 1) * gap
-		board.Size = UDim2.fromOffset(230, height)
-		boardRoot.Size = UDim2.fromOffset(230, math.max(TOUCH_TAP, height))
-	else
-		for index = 1, math.min(6, #entries) do
-			table.insert(shown, index)
-		end
-		for index, entry in entries do
-			if entry.who.IsLocal and index > 6 then
-				shown[#shown] = index
-			end
+		drawStrip(entries)
+		return
+	end
+	UIKit.Label({
+		Text = "🏁 Standings",
+		Font = Theme.Fonts.Display,
+		TextSize = 22,
+		TextWrapped = false,
+		Size = UDim2.new(1, 0, 0, 28),
+		LayoutOrder = 0,
+		Parent = board,
+	})
+	-- The top rows, and always your own (in place of the last row if you're further down).
+	local shown = {}
+	for index = 1, math.min(6, #entries) do
+		table.insert(shown, index)
+	end
+	for index, entry in entries do
+		if entry.who.IsLocal and index > 6 then
+			shown[#shown] = index
 		end
 	end
-	local touchRow = if #shown >= 4 then TOUCH_ROW_SLIM else TOUCH_ROW
 	-- The score column is as wide as the widest score shown ("5 perfect", "2 KOs", "Alive"), up to
-	-- about half the board; names give way and are shortened if they must.
-	local textSize = if touch then 19 else 18
-	local scoreWidth = if touch then 60 else 76
+	-- a bit under half the board, and a longer score shrinks to fit it: the names keep the rest (with
+	-- a wider column Big Bad Vacuum's "16 dmg · 2 saved" left them as "1...."; owner, circling them).
+	local textSize = 18
+	local scoreWidth = 76
 	local needs: { [number]: number } = {}
 	for _, index in shown do
 		local entry = entries[index]
@@ -514,15 +580,13 @@ function refreshBoard()
 			scoreWidth = math.max(scoreWidth, needs[index])
 		end
 	end
-	scoreWidth = math.min(scoreWidth, if touch then 120 else 140)
+	scoreWidth = math.min(scoreWidth, SCORE_MAX)
 	for _, index in shown do
 		local entry = entries[index]
 		local who = entry.who
 		local status = if entry.alive then "" else "💀 "
 		local teamColor = TEAM_COLORS[entry.team]
-		local name = if touch and who.IsLocal
-			then "You"
-			else Participants.ListName(who.DisplayName, who.IsBot and not teamColor) -- teams keep their color
+		local name = Participants.ListName(who.DisplayName, who.IsBot and not teamColor) -- teams keep their color
 		local detail = Participants.Escape(if entry.text ~= "" then entry.text else tostring(entry.score))
 		local color = if who.IsLocal
 			then Theme.Colors.Yellow
@@ -531,7 +595,7 @@ function refreshBoard()
 			else Theme.Colors.TextDim
 		-- The name (shortened if it must be) and the score on the right, always shown.
 		local row = UIKit.new("Frame", {
-			Size = UDim2.new(1, 0, 0, if touch then touchRow else 24),
+			Size = UDim2.new(1, 0, 0, 24),
 			BackgroundTransparency = 1,
 			LayoutOrder = index,
 			Parent = board,
@@ -569,18 +633,21 @@ end
 
 local function buildOutPanel(parent: Instance)
 	if isTouch() then
-		-- Phones: one low pill between the thumbstick's corner and the jump button (62% across is
-		-- the middle of that gap on phones and tablets alike).
+		-- Phones: one low pill in the middle (owner, on layout A: "the bottom not being centrally
+		-- located is ass").
 		outPanel = UIKit.Panel({
 			Name = "OutPanel",
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.62, 0, 1, -8),
+			Position = UDim2.new(0.5, 0, 1, -8),
 			Size = UDim2.fromOffset(400, 86),
 			CornerRadius = 30,
 			Visible = false,
 			Parent = parent,
 		}, Theme.Colors.PanelLight, Theme.Colors.PanelDark)
 		UIKit.AutoScale(outPanel)
+		-- (In the middle its left end reaches the MOVE stick's zone on smaller phones: someone just
+		-- knocked out isn't walking. tools/checks: allowed there.)
+		outPanel:SetAttribute("PP_Popup", true)
 		UIKit.Label({
 			Text = "💥 You're out!",
 			Font = Theme.Fonts.Display,
@@ -705,8 +772,9 @@ function RoundController.Start(context)
 			flashCountdown("GO!", Theme.Colors.Green)
 			Haptics.Play("Pulse")
 		end
-		boardRoot.Visible = phase == "InRound"
-		boardOpenUntil = 0
+		if not isTouch() then -- (phones: HudController's status row shows the strip when there's room)
+			boardRoot.Visible = phase == "InRound"
+		end
 		refreshHighlights()
 	end)
 	-- The round's players get PP_InRound as it's set up; it can land just after the phase does (but
@@ -728,7 +796,7 @@ function RoundController.Start(context)
 	end)
 	-- A bot fading in or out shows up in the standings right away.
 	Participants.Changed:Connect(function()
-		if boardRoot.Visible then
+		if GameState.Get("Phase") == "InRound" then
 			refreshBoard()
 		end
 	end)
@@ -749,8 +817,8 @@ function RoundController.Start(context)
 		accumulator += dt
 		if accumulator > 0.3 then
 			accumulator = 0
-			if boardRoot.Visible then
-				refreshBoard() -- (a tapped board closes again when its time is up)
+			if phase == "InRound" then
+				refreshBoard()
 			end
 			if phase == "InRound" then
 				refreshHighlights()

@@ -3,21 +3,23 @@
 -- round, the invite button. Each feature adds its own chip here instead of finding its own spot on
 -- the screen, so no two of them ever draw on top of each other: the row keeps them side by side in
 -- priority order and leaves out the ones that don't fit, lowest priority first.
--- Phones: under the top bar in the middle, the first-join tip's spot (the row gives way to the tip,
--- which uses it too), between the profile chip and the menu column; chips are 44 pt tall. PC: under
+-- Phones (layout A; owner: "move the ones we keep over more"): one row under the menu's grid in the
+-- top right corner, right-aligned with it (the edge ScreenGui, scaled like the grid), each chip a
+-- slim face on top of its 40 pt tap area. PC: under
 -- the phase banner, below the line of the coins and their pink NEXT reward pill (which a full row
 -- reached over at first). It shows in the lobby only: never during a round, the rules card or the
--- results, not during the vote on phones (the vote cards' spot), and not while a level-up or medal
--- card is up (PP_Celebrating: on phones it's in the same spot, on PC its top reaches the row) or a
--- lobby game has the screen (the HUD's PP_TipsAside: Skee-Ball).
+-- results, and not while a level-up or medal card is up (PP_Celebrating: its top reaches the row on
+-- PC) or a lobby game has the screen (the HUD's PP_TipsAside: Skee-Ball).
 --
 --   local chip = LobbyRibbon.Add(context, { Name = "Cup", Priority = 2, OnClick = openStandings })
 --   chip:Set("🏆", "CUP 3/5")   -- icon and words; empty words take the chip off the row
 --   chip.Button                 -- the chip itself, for extras (a "!" badge, a pulse)
 --
--- Priorities: 1 Event (Halloween, double coins), 2 Party Cup, 2.5 Party (owner: "stuff to work on
--- right now is parties."), 3 Invite, 4 Weekly leaderboard. A priority can be a fraction (one between
--- two others): the chips line up by it in tenths.
+-- Priorities: 2 Party Cup, 2.5 Party (owner: "stuff to work on right now is parties."), 3 Invite,
+-- 4 Weekly leaderboard. A priority can be a fraction (one between two others): the chips line up by
+-- it in tenths. The event and the crates had chips too; with layout A (owner: "We dont need a
+-- separate open crate button. I thought we said the event button goes inside of the season button?")
+-- the event is the Season hub's tab and the crates are counted on the profile card.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -38,20 +40,28 @@ export type Chip = {
 	Set: (self: Chip, icon: string, text: string) -> (),
 }
 
--- Scaled units (UIKit.AutoScale): phones get 0.62 points per unit, so a 72-unit chip is 44 pt.
-local TOUCH = { Width = 620, Height = Theme.Touch.Target, Text = 24, Top = 4 + 8, Pad = 18, Gap = 10 }
--- PC: under the phase banner (its holder sits 10 px from the top and scales the same way), below
--- the line of the coins and the pink NEXT reward pill beside them (RewardsController), which reaches
--- 129 units down and past where a full row would start; clear of the toasts down the right.
+-- Scaled units (UIKit.AutoScale): phones get 0.62 points per unit. Phones: Height is a chip's face,
+-- Hit its tap area (40 pt), Top where the row starts under the menu's grid (in a holder level with
+-- the grid's top).
+local MENU = Theme.Touch.Menu
+local TOUCH = {
+	Width = 300,
+	Height = 42,
+	Hit = 65,
+	Text = 20,
+	Top = 2 * MENU.Tile + MENU.Gap + 8,
+	Pad = 12,
+	Gap = 8,
+}
+-- PC: under the phase banner and its status line (its holder sits 10 px from the top and scales the
+-- same way); clear of the toasts down the right.
 local PC = { Width = 560, Height = 44, Text = 20, Top = 137, Pad = 16, Gap = 10 }
-local TOUCH_ROW_Y = 8 -- phones: the row's top in its holder (the first-join tip's spot)
-
--- Where the row ends (scaled units, in a holder 4 points from the top on phones and 10 on PC, like
--- the row's own): what goes just under it lines up with it (CupController's standings moment).
-LobbyRibbon.Bottom = { Touch = TOUCH_ROW_Y + TOUCH.Height, Pc = PC.Top + PC.Height }
+-- Where the row ends (scaled units, in a holder 10 points from the top on PC): what goes just under
+-- it lines up with it (CupController's standings moment). Phones: under the top bar in the middle
+-- the sit-out switch is what's there (HudController, 72 tall in a holder 4 points down).
+LobbyRibbon.Bottom = { Touch = 72, Pc = PC.Top + PC.Height }
 
 local LOBBY = { Waiting = true, Intermission = true, Voting = true, Cleanup = true }
-local HIDDEN_ON_PHONES = { Voting = true }
 
 local touch = false
 local hud: Instance? = nil
@@ -80,9 +90,7 @@ local function refresh()
 	local replaying = phase == "Cleanup" and (GameState.Get("Replay") or "") ~= ""
 	local free = LOBBY[phase]
 		and not replaying
-		and not (touch and HIDDEN_ON_PHONES[phase])
 		and player:GetAttribute("PP_Celebrating") ~= true
-		and not (touch and hud:GetAttribute("PP_TipShowing") == true)
 		and hud:GetAttribute("PP_TipsAside") ~= true
 	local s = size()
 	local used = 0
@@ -97,7 +105,7 @@ local function refresh()
 		local fits = wanted and room <= s.Width
 		if fits then
 			used = room
-			chip.Button.Size = UDim2.fromOffset(width, s.Height)
+			chip.Button.Size = UDim2.fromOffset(width, if touch then TOUCH.Hit else s.Height)
 		end
 		chip.Button.Visible = fits
 	end
@@ -114,27 +122,44 @@ local function build(context)
 	touch = UIKit.IsTouch()
 	hud = context.Hud
 	local s = size()
-	local holder = UIKit.new("Frame", {
-		Name = "LobbyRibbon",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, if touch then 4 else 10),
-		Size = UDim2.fromOffset(s.Width, s.Top - (if touch then 4 else 0) + s.Height + 8),
-		BackgroundTransparency = 1,
-		Parent = context.Hud,
-	})
+	local holder
+	if touch then
+		holder = UIKit.new("Frame", {
+			Name = "LobbyRibbon",
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -Theme.Touch.Edge, 0, MENU.Top),
+			Size = UDim2.fromOffset(s.Width, s.Top + TOUCH.Hit),
+			BackgroundTransparency = 1,
+			Parent = context.Edge or context.Hud,
+		})
+	else
+		holder = UIKit.new("Frame", {
+			Name = "LobbyRibbon",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 10),
+			Size = UDim2.fromOffset(s.Width, s.Top + s.Height + 8),
+			BackgroundTransparency = 1,
+			Parent = context.Hud,
+		})
+	end
 	UIKit.AutoScale(holder)
 	row = UIKit.new("Frame", {
 		Name = "Row",
-		Position = UDim2.fromOffset(0, if touch then TOUCH_ROW_Y else s.Top),
-		Size = UDim2.fromOffset(s.Width, s.Height),
+		Position = UDim2.fromOffset(0, s.Top),
+		Size = UDim2.fromOffset(s.Width, if touch then TOUCH.Hit else s.Height),
 		BackgroundTransparency = 1,
 		Visible = false,
 		Parent = holder,
-		Children = { UIKit.List(Enum.FillDirection.Horizontal, s.Gap, Enum.HorizontalAlignment.Center) },
+		Children = {
+			UIKit.List(
+				Enum.FillDirection.Horizontal,
+				s.Gap,
+				if touch then Enum.HorizontalAlignment.Right else Enum.HorizontalAlignment.Center
+			),
+		},
 	})
 	GameState.Changed("Phase", refresh)
 	Players.LocalPlayer:GetAttributeChangedSignal("PP_Celebrating"):Connect(refresh)
-	context.Hud:GetAttributeChangedSignal("PP_TipShowing"):Connect(refresh)
 	context.Hud:GetAttributeChangedSignal("PP_TipsAside"):Connect(refresh)
 	task.delay(3, refresh) -- again once the font has surely loaded (widths measure narrow before)
 end
@@ -146,6 +171,10 @@ local function set(self: Chip, icon: string, text: string)
 	self.Icon = icon
 	self.Text = text
 	self.Button.Text = if icon ~= "" then `{icon} {text}` else text
+	local words = self.Button:FindFirstChild("Words", true)
+	if words and words:IsA("TextLabel") then
+		words.Text = self.Button.Text -- (phones: on the chip's face; the tap area's own stay hidden)
+	end
 	refresh()
 end
 
@@ -159,17 +188,52 @@ function LobbyRibbon.Add(
 		build(context)
 	end
 	local s = size()
-	local button = UIKit.Button({
-		Name = options.Name,
-		Text = "",
-		TextSize = s.Text,
-		TextWrapped = false,
-		Size = UDim2.fromOffset(0, s.Height),
-		CornerRadius = "round",
-		LayoutOrder = math.round(options.Priority * 10),
-		Visible = false,
-		Parent = row,
-	}, options.OnClick, options.Top or Theme.Colors.Lavender, options.Bottom or Theme.Colors.Purple)
+	local top, bottom = options.Top or Theme.Colors.Lavender, options.Bottom or Theme.Colors.Purple
+	local button
+	if touch then
+		button = UIKit.new("TextButton", {
+			Name = options.Name,
+			Text = "",
+			TextTransparency = 1,
+			AutoButtonColor = false,
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(0, TOUCH.Hit),
+			LayoutOrder = math.round(options.Priority * 10),
+			Visible = false,
+			Parent = row,
+		})
+		local face = UIKit.Panel({
+			Name = "Face",
+			Size = UDim2.new(1, 0, 0, s.Height),
+			CornerRadius = s.Height / 2,
+			Parent = button,
+		}, top, bottom)
+		UIKit.Label({
+			Name = "Words",
+			Text = "",
+			Font = Theme.Fonts.Display,
+			TextSize = s.Text,
+			TextWrapped = false,
+			Size = UDim2.fromScale(1, 1),
+			Parent = face,
+			Children = { UIKit.TextStroke(0.35) },
+		})
+		if options.OnClick then
+			button.Activated:Connect(options.OnClick)
+		end
+	else
+		button = UIKit.Button({
+			Name = options.Name,
+			Text = "",
+			TextSize = s.Text,
+			TextWrapped = false,
+			Size = UDim2.fromOffset(0, s.Height),
+			CornerRadius = "round",
+			LayoutOrder = math.round(options.Priority * 10),
+			Visible = false,
+			Parent = row,
+		}, options.OnClick, top, bottom)
+	end
 	local chip: Chip = {
 		Name = options.Name,
 		Priority = options.Priority,

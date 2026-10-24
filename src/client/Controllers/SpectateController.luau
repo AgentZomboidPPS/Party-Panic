@@ -1,8 +1,14 @@
 -- Spectating (design doc §11 "Spectator options"): watch remaining players during a round,
 -- cycle between them, and return to your own camera automatically at results. Bots in the round
 -- can be watched too (Participants).
--- Phones: the bar and the "Watch" button sit low between the thumbstick's corner and the jump
--- button (62% across), with 44 pt buttons.
+-- Phones: the bar sits low in the middle, with 44 pt buttons.
+--
+-- Someone not playing the round (sitting it out, or arrived while it was on) gets two big buttons at
+-- the bottom in the middle (owner, on layout A: "the bottom not being centrally located is ass",
+-- then "certain buttons aren't centered?"), the same width side by side: 👀 WATCH (the bar above)
+-- and, for anyone sitting out, 🎮 PLAY NEXT ROUND, which turns sitting out off (UI/SitOutSwitch: the
+-- banner's switch steps aside while it shows, so there's one way to do it at a time). With only one
+-- of them up, it sits in the middle by itself.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,6 +17,7 @@ local GameState = require(ReplicatedStorage.Shared.GameState)
 
 local Participants = require(script.Parent.Parent.Participants)
 local State = require(script.Parent.Parent.State)
+local SitOutSwitch = require(script.Parent.Parent.UI.SitOutSwitch)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
@@ -22,6 +29,7 @@ local nameLabel: TextLabel
 local openButton: TextButton
 local index = 1
 local spectating = false
+local PAIR_PHASES = { Preparing = true, InRound = true }
 
 local function targets(): { Participants.Participant }
 	local list = {}
@@ -87,13 +95,16 @@ function SpectateController.Start(context)
 	bar = UIKit.Panel({
 		Name = "Spectate",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = if touch then UDim2.new(0.62, 0, 1, -8) else UDim2.new(0.5, 0, 1, -24),
+		Position = if touch then UDim2.new(0.5, 0, 1, -8) else UDim2.new(0.5, 0, 1, -24),
 		Size = if touch then UDim2.fromOffset(460, button + 2 * inset) else UDim2.fromOffset(560, 76),
 		CornerRadius = if touch then 30 else 38,
 		Visible = false,
 		Parent = context.Hud,
 	})
 	UIKit.AutoScale(bar)
+	-- (In the middle its ◀ reaches the MOVE stick's zone on smaller phones: someone spectating isn't
+	-- walking. tools/checks: allowed there.)
+	bar:SetAttribute("PP_Popup", true)
 	UIKit.Button({
 		Text = "◀",
 		Size = UDim2.fromOffset(button, button),
@@ -135,19 +146,42 @@ function SpectateController.Start(context)
 		Parent = bar,
 	}, stop, Theme.Colors.Red, Color3.fromRGB(190, 40, 60))
 
-	-- Lobby players can also watch a round in progress.
-	openButton = UIKit.Button({
+	-- Lobby players can also watch a round in progress; someone sitting it out can jump into the
+	-- next one. (Scaled units: phones 52 points tall.)
+	local width, height, gap = if touch then 300 else 270, if touch then 84 else 64, 16
+	local pair = UIKit.new("Frame", {
 		Name = "SpectateButton",
-		Text = "👀 Watch the round",
-		TextSize = if touch then 22 else 20,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = if touch then UDim2.new(0.62, 0, 1, -8) else UDim2.new(0.5, 0, 1, -24),
-		Size = if touch then UDim2.fromOffset(280, Theme.Touch.Target) else UDim2.fromOffset(250, 56),
-		CornerRadius = if touch then 26 else 28,
+		Position = if touch then UDim2.new(0.5, 0, 1, -8) else UDim2.new(0.5, 0, 1, -24),
+		Size = UDim2.fromOffset(2 * width + gap, height),
+		BackgroundTransparency = 1,
 		Visible = false,
 		Parent = context.Hud,
+	})
+	UIKit.AutoScale(pair)
+	-- In the middle, as the owner asked, WATCH reaches into the MOVE stick's zone on smaller phones
+	-- (a thumb starting further left still walks). tools/checks: allowed there.
+	pair:SetAttribute("PP_Popup", true)
+	openButton = UIKit.Button({
+		Name = "Watch",
+		Text = "👀 WATCH",
+		TextSize = if touch then 30 else 26,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Size = UDim2.fromOffset(width, height),
+		CornerRadius = height / 2,
+		Parent = pair,
 	}, start, Theme.Colors.Cyan, Color3.fromRGB(50, 120, 230))
-	UIKit.AutoScale(openButton)
+	local playButton = UIKit.Button({
+		Name = "Play",
+		Text = "🎮 PLAY NEXT ROUND",
+		TextSize = if touch then 28 else 24,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Size = UDim2.fromOffset(width, height),
+		CornerRadius = height / 2,
+		Parent = pair,
+	}, function()
+		SitOutSwitch.Request(false)
+	end, Theme.Colors.Green, Color3.fromRGB(40, 160, 80))
 
 	State.OpenScreen:Connect(function(name)
 		if name == "Spectate" then
@@ -163,14 +197,23 @@ function SpectateController.Start(context)
 		if not roundLive and spectating then
 			stop()
 		end
-		openButton.Visible = roundLive
-			and not spectating
-			and not (State.InRound() and State.Alive())
-			and not (outPanel and outPanel.Visible)
-			and #targets() > 0
+		local watching = not spectating and not State.PlayingRound() and not (outPanel and outPanel.Visible)
+		local watch = roundLive and watching and #targets() > 0
+		local play = PAIR_PHASES[phase] == true and watching and State.SittingOut()
+		openButton.Visible = watch
+		playButton.Visible = play
+		-- Side by side, or the one up in the middle.
+		local both = watch and play
+		openButton.Position = UDim2.new(0.5, if both then -(width + gap) / 2 else 0, 0, 0)
+		playButton.Position = UDim2.new(0.5, if both then (width + gap) / 2 else 0, 0, 0)
+		pair.Visible = watch or play
+		SitOutSwitch.SetAside("Play", play)
 	end
 	GameState.Changed("Phase", refresh)
 	Participants.Changed:Connect(refresh)
+	player:GetAttributeChangedSignal("PP_SitOut"):Connect(refresh)
+	player:GetAttributeChangedSignal("PP_InRound"):Connect(refresh)
+	player:GetAttributeChangedSignal("PP_Alive"):Connect(refresh)
 	task.spawn(function()
 		while true do
 			task.wait(0.5)

@@ -158,9 +158,9 @@ local function __engineLayout(playerGui, entries)
 					local top = centerY - js * 0.15 - 118 * __autoScale(device.w, device.h, 1) / 2
 					item.Position = UDim2.new(item.Position.X.Scale, item.Position.X.Offset, 0, top - 8)
 				end
-				-- RoundController's standings on PC: under the profile chip (182 tall at y 12, scaled).
+				-- RoundController's standings on PC: under the profile card (104 tall at y 12, scaled).
 				if item:GetAttribute("PP_UnderProfile") then
-					item.Position = UDim2.fromOffset(14, 12 + 182 * __autoScale(device.w, device.h, 1) + 8)
+					item.Position = UDim2.fromOffset(14, 12 + 104 * __autoScale(device.w, device.h, 1) + 8)
 				end
 			end
 		end
@@ -495,7 +495,8 @@ function __dumpGui(playerGui, label)
 				e.it = inst.ImageTransparency
 				if inst.ImageRectSize.X > 0 then
 					-- (a cell of a sheet: ui_render.py draws just that part of a local copy)
-					e.irect = { inst.ImageRectOffset.X, inst.ImageRectOffset.Y, inst.ImageRectSize.X, inst.ImageRectSize.Y }
+					e.irect =
+						{ inst.ImageRectOffset.X, inst.ImageRectOffset.Y, inst.ImageRectSize.X, inst.ImageRectSize.Y }
 				end
 			end
 			if inst:IsA("ScrollingFrame") then

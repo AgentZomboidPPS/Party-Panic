@@ -1,16 +1,19 @@
 -- Lobby / in-round HUD (design doc §12 "Primary UI surfaces"):
 -- profile chip (level, XP, coins), phase banner with timer, side menu, settings window.
 -- Kept to the screen edges so chat and the middle of the screen stay clear.
--- Phones (owner: "Wtf is this mobile Ui lol"): a compact HUD. The phase banner is one short line
--- with the timer ("VOTE! 0:08") up in Roblox's top bar row, beside its buttons; a small profile
--- pill (level, name, XP) with the coins tucked under it at the top left, which makes way for the
--- standings during a round; the round's status line under the top bar; the menu down the right
--- edge, with 44 pt buttons. Nothing goes in the thumbstick's corner or near the jump button.
+-- Phones (owner: "Wtf is this mobile Ui lol"; then layout A, owner: "I like a but damn have we got
+-- to clean up the mobile UI", "move the ones we keep over more. we have more usable space"): the
+-- phase banner is one short line with the timer ("VOTE! 0:08") up in Roblox's top bar row, in the
+-- middle; the profile card at the top left under Roblox's buttons and the menu as a 2 x 2 grid in
+-- the top right corner, both in part of the safe area's side insets (the edge ScreenGui, clear of
+-- the notch or Dynamic Island further down the sides); the round's standings strip and status line
+-- under the banner; everything at the bottom in the middle. Little goes in the thumbstick's zone,
+-- nothing near the jump button.
 -- The sit-out switch (owner: "we do need to add somewhere super apparent a toggle where you skip
--- next round", UI/SitOutSwitch) sits right by the banner where everyone looks for the timer:
--- beside it in the top bar row on phones, above it in that row on PC; it's in Settings too.
--- Tapping the profile chip opens the Rewards screen (owner: "Also we need cool payoffs for players
--- that keep playing the game."); RewardsController adds the next reward beside the coins and colors
+-- next round", UI/SitOutSwitch) sits right by the banner where everyone looks for the timer: under
+-- it in the lobby on phones, above it in the top bar row on PC; it's in Settings too.
+-- Tapping the profile card opens the Rewards screen (owner: "Also we need cool payoffs for players
+-- that keep playing the game."); RewardsController puts the next reward beside the XP bar and colors
 -- the level badge for the player's prestige tier.
 -- The team pill under the status line shows every team in the round with its mark and score, as
 -- wide as its line: colour teams by the shape they wear in the team modes, in their colour, versus
@@ -61,6 +64,7 @@ local RoundHud = require(Shared.Logic.RoundHud)
 local Teams = require(Shared.Teams)
 
 local GoldPassController = require(script.Parent.GoldPassController)
+local CrateNudge = require(script.Parent.Parent.Crates.CrateNudge)
 local LootFly = require(script.Parent.Parent.Crates.LootFly)
 local State = require(script.Parent.Parent.State)
 local HubTabs = require(script.Parent.Parent.UI.HubTabs)
@@ -152,36 +156,56 @@ local function profileHolder(props: { [string]: any }): TextButton
 	return holder
 end
 
--- PC: the profile chip's frame is 182 tall (the pill, the coins, then the keys and crates): what sits
--- under it (OnboardingController's tip, RoundController's standings) starts there.
-HudController.ProfileHeight = 182
-
-local function buildProfileChip(parent: Instance)
-	local width = 310
+-- The profile card (layout A; owner, picking it: "I like a but damn have we got to clean up the
+-- mobile UI"): the level badge, the name, the XP bar with the next reward beside it (the NextSlot:
+-- RewardsController), then the coins, keys and crates in a row (owner: "show keys as a currency,
+-- show crates as a currency. both under the coins."). A tap on the card opens the Rewards screen;
+-- the keys and crates open the crate window (the keys its key shop), and the crates ask to be opened
+-- (Crates/CrateNudge). A round's keys and crate fly into them (Crates/LootFly).
+-- PC: the top left corner, always (the standings and the first-join tip go under it). Phones: in the
+-- top left corner under Roblox's buttons, Theme.Touch.Edge points from the screen's side (the edge
+-- ScreenGui), outside rounds: from the rules card on for the round's players, and while the round is
+-- on for everyone (the round's standings strip under the banner, RoundController, reaches its corner
+-- on the smallest phones). It steps aside for the first-join tip too (OnboardingController's
+-- PP_TipShowing), for the same reason.
+-- Phones: it ends where the MOVE stick's zone starts on the smallest phones (a third of the way down).
+local CARD = Vector2.new(336, 104) -- scaled units (phones: 208 x 64 points)
+local TOUCH_CARD_TOP = 58 -- points: under Roblox's buttons (12 to 55)
+local PILL_Y, PILL_H = 56, 42
+local TAP_H = 65 -- the keys' and crates' tap areas (40 points on phones)
+-- What sits under the card on PC (OnboardingController's tip, RoundController's standings) starts
+-- this far down its frame.
+HudController.ProfileHeight = CARD.Y
+local function buildProfileCard(parent: Instance, hud: Instance, touch: boolean)
 	local holder = profileHolder({
-		Position = UDim2.fromOffset(16, 12),
-		Size = UDim2.fromOffset(width, HudController.ProfileHeight),
+		Position = if touch then UDim2.fromOffset(Theme.Touch.Edge, TOUCH_CARD_TOP) else UDim2.fromOffset(16, 12),
+		Size = UDim2.fromOffset(CARD.X, CARD.Y),
 		Parent = parent,
 	})
 	UIKit.AutoScale(holder)
 
-	local chip = UIKit.Panel({ Size = UDim2.fromOffset(width, 74), CornerRadius = 37, Parent = holder })
+	local card = UIKit.Panel({
+		Name = "Card",
+		Size = UDim2.fromOffset(CARD.X, CARD.Y),
+		CornerRadius = 24,
+		Parent = holder,
+	})
 	local badge = UIKit.new("Frame", {
 		Name = "LevelBadge",
-		Size = UDim2.fromOffset(62, 62),
-		Position = UDim2.fromOffset(6, 6),
+		Size = UDim2.fromOffset(44, 44),
+		Position = UDim2.fromOffset(8, 6),
 		BackgroundColor3 = Color3.new(1, 1, 1),
-		Parent = chip,
+		Parent = card,
 		Children = {
 			UIKit.Round(),
 			UIKit.Gradient(Theme.Colors.Yellow, Theme.Colors.Orange),
-			UIKit.Stroke(nil, 3, 0.3),
+			UIKit.Stroke(nil, 2, 0.3),
 		},
 	})
 	local levelLabel = UIKit.Label({
 		Text = "1",
 		Font = Theme.Fonts.Display,
-		TextSize = 30,
+		TextSize = 24,
 		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		Parent = badge,
@@ -189,20 +213,22 @@ local function buildProfileChip(parent: Instance)
 	})
 	local name = UIKit.Label({
 		Text = player.DisplayName,
+		Font = Theme.Fonts.Display,
 		TextSize = 20,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(80, 8),
-		Size = UDim2.new(1, -96, 0, 24),
-		Parent = chip,
+		Position = UDim2.fromOffset(60, 2),
+		Size = UDim2.fromOffset(CARD.X - 60 - 10, 22),
+		Parent = card,
+		Children = { UIKit.TextStroke(0.2) },
 	})
 	name:SetAttribute("PP_TruncateOk", true) -- a long name ends in "..."
 	local barBack = UIKit.new("Frame", {
-		Position = UDim2.fromOffset(80, 40),
-		Size = UDim2.new(1, -100, 0, 18),
+		Position = UDim2.fromOffset(60, 25),
+		Size = UDim2.fromOffset(150, 22),
 		BackgroundColor3 = Theme.Colors.PanelDark,
-		Parent = chip,
+		Parent = card,
 		Children = { UIKit.Round() },
 	})
 	local barFill = UIKit.new("Frame", {
@@ -213,85 +239,91 @@ local function buildProfileChip(parent: Instance)
 	})
 	local xpText = UIKit.Label({
 		Text = "",
-		TextSize = 14,
+		TextSize = Theme.Touch.MinText,
 		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		Parent = barBack,
 		Children = { UIKit.TextStroke(0.3) },
 	})
-
-	local coins = UIKit.Panel({
-		Name = "Coins",
-		Position = UDim2.fromOffset(0, 82),
-		Size = UDim2.fromOffset(200, 46),
-		CornerRadius = 23,
-		Parent = holder,
-	}, Color3.fromRGB(255, 196, 60), Color3.fromRGB(230, 130, 30))
-	UIKit.Coin({ Position = UDim2.fromOffset(12, 8), Size = UDim2.fromOffset(30, 30), Parent = coins })
-	local coinLabel = UIKit.Label({
-		Text = "0",
-		Font = Theme.Fonts.Display,
-		TextSize = 28,
-		TextWrapped = false,
-		Position = UDim2.fromOffset(46, 0),
-		Size = UDim2.new(1, -56, 1, 0),
-		Parent = coins,
-		Children = { UIKit.TextStroke(0.15) },
+	-- The next reward's pill goes here (RewardsController).
+	UIKit.new("Frame", {
+		Name = "NextSlot",
+		Position = UDim2.fromOffset(216, 25),
+		Size = UDim2.fromOffset(CARD.X - 216 - 8, 22),
+		BackgroundTransparency = 1,
+		Parent = card,
 	})
-	followProfile(levelLabel, barFill, xpText, badge, coins, function(value)
-		coinLabel.Text = UIKit.FormatNumber(value)
-	end)
 
-	-- The crate season's currencies under the coins (owner: "show keys as a currency, show crates as a
-	-- currency. both under the coins."): keys and crates, side by side as wide as the coins; a tap
-	-- opens the crate window (its key shop for the keys). Phones show them on the lobby's crate chip
-	-- (under their coins is the thumbstick's corner).
-	local function currency(name: string, icon: string, x: number, top: Color3, bottom: Color3, tab: string)
-		local pill = UIKit.Panel({
-			Name = name,
-			Position = UDim2.fromOffset(x, 136),
-			Size = UDim2.fromOffset(96, 42),
-			CornerRadius = 21,
-			Parent = holder,
+	-- The coins, keys and crates in a row along the bottom.
+	local function pill(pillName: string, x: number, width: number, top: Color3, bottom: Color3): Frame
+		return UIKit.Panel({
+			Name = pillName,
+			Position = UDim2.fromOffset(x, PILL_Y),
+			Size = UDim2.fromOffset(width, PILL_H),
+			CornerRadius = PILL_H / 2,
+			Parent = card,
 		}, top, bottom)
-		-- (The whole pill takes the tap; its words are on the tap button.)
-		local tap = UIKit.new("TextButton", {
-			Name = "Tap",
-			Text = "",
-			AutoButtonColor = false,
-			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 1),
-			Parent = pill,
-		})
-		tap.Activated:Connect(function()
-			State.OpenScreen:Fire("Crates", tab)
-		end)
-		UIKit.Label({
-			Text = icon,
-			TextScaled = true,
-			Position = UDim2.fromOffset(8, 7),
-			Size = UDim2.fromOffset(28, 28),
-			Parent = tap,
-		})
-		local label = UIKit.Label({
+	end
+	local function number(parent: Instance, x: number): TextLabel
+		return UIKit.Label({
 			Text = "0",
 			Font = Theme.Fonts.Display,
 			TextSize = 24,
 			TextWrapped = false,
 			TextScaled = true,
-			Position = UDim2.fromOffset(38, 5),
-			Size = UDim2.new(1, -46, 1, -10),
-			Parent = tap,
-			Children = { UIKit.TextStroke(0.15), UIKit.new("UITextSizeConstraint", { MaxTextSize = 26 }) },
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Position = UDim2.fromOffset(x, 5),
+			Size = UDim2.new(1, -(x + 8), 1, -10),
+			Parent = parent,
+			Children = { UIKit.TextStroke(0.15), UIKit.new("UITextSizeConstraint", { MaxTextSize = 24 }) },
 		})
-		return pill, label
+	end
+	local coins = pill("Coins", 8, 120, Color3.fromRGB(255, 196, 60), Color3.fromRGB(230, 130, 30))
+	UIKit.Coin({ Position = UDim2.fromOffset(8, 9), Size = UDim2.fromOffset(24, 24), Parent = coins })
+	local coinLabel = number(coins, 38)
+	followProfile(levelLabel, barFill, xpText, badge, coins, function(value)
+		coinLabel.Text = UIKit.FormatNumber(value)
+	end)
+	-- Keys and crates: a tap opens the crate window. The tap area is a 40 pt touch target round the
+	-- pill (its words are on it; it reaches a little past the card's bottom edge).
+	local function currency(pillName: string, icon: string, x: number, top: Color3, bottom: Color3, tab: string)
+		local face = pill(pillName, x, 94, top, bottom)
+		local tap = UIKit.new("TextButton", {
+			Name = "Tap",
+			Text = "",
+			AutoButtonColor = false,
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromScale(0, 0.5),
+			Size = UDim2.new(1, 0, 0, TAP_H),
+			ZIndex = 3,
+			Parent = face,
+		})
+		tap.Activated:Connect(function()
+			State.OpenScreen:Fire("Crates", tab)
+		end)
+		local words = UIKit.new("Frame", {
+			Name = "Words",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromScale(0, 0.5),
+			Size = UDim2.new(1, 0, 0, PILL_H),
+			BackgroundTransparency = 1,
+			Parent = tap,
+		})
+		local iconLabel = UIKit.Label({
+			Text = icon,
+			TextScaled = true,
+			Position = UDim2.fromOffset(8, 9),
+			Size = UDim2.fromOffset(24, 24),
+			Parent = words,
+		})
+		return face, number(words, 36), iconLabel
 	end
 	local keysPill, keysLabel =
-		currency("Keys", "🔑", 0, Color3.fromRGB(120, 210, 255), Color3.fromRGB(60, 120, 230), "Keys")
-	local cratesPill, cratesLabel =
-		currency("Crates", "📦", 104, Color3.fromRGB(255, 170, 80), Color3.fromRGB(225, 95, 40), "Crates")
-	-- A round's keys and crate fly in here once its results card closes (Crates/LootFly): until they
-	-- land the pills show what the player had before it.
+		currency("Keys", "🔑", 134, Color3.fromRGB(120, 210, 255), Color3.fromRGB(60, 120, 230), "Keys")
+	local cratesPill, cratesLabel, cratesIcon =
+		currency("Crates", "📦", 234, Color3.fromRGB(255, 170, 80), Color3.fromRGB(225, 95, 40), "Crates")
+	CrateNudge.Attach(cratesPill, cratesIcon, cratesLabel) -- a crate to open: the pill asks
 	LootFly.Target("Keys", keysPill, 1)
 	LootFly.Target("Crates", cratesPill, 1)
 	local shownKeys, shownCrates = nil :: number?, nil :: number?
@@ -314,109 +346,18 @@ local function buildProfileChip(parent: Instance)
 	end
 	State.ProfileChanged:Connect(redraw)
 	LootFly.Changed:Connect(redraw)
-end
 
--- Phones: a small pill (level badge, name, XP bar) with the coins tucked under it, in the top left
--- corner under Roblox's buttons. During a round the standings take its place (RoundController).
-local function buildTouchProfile(parent: Instance)
-	local holder = profileHolder({
-		Position = UDim2.fromOffset(8, 6),
-		Size = UDim2.fromOffset(196, 96),
-		Parent = parent,
-	})
-	UIKit.AutoScale(holder)
-
-	local chip = UIKit.Panel({ Size = UDim2.fromOffset(192, 62), CornerRadius = 31, ZIndex = 2, Parent = holder })
-	local badge = UIKit.new("Frame", {
-		Name = "LevelBadge",
-		Size = UDim2.fromOffset(52, 52),
-		Position = UDim2.fromOffset(5, 5),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		Parent = chip,
-		Children = {
-			UIKit.Round(),
-			UIKit.Gradient(Theme.Colors.Yellow, Theme.Colors.Orange),
-			UIKit.Stroke(nil, 2, 0.3),
-		},
-	})
-	local levelLabel = UIKit.Label({
-		Text = "1",
-		Font = Theme.Fonts.Display,
-		TextSize = 26,
-		TextWrapped = false,
-		Size = UDim2.fromScale(1, 1),
-		Parent = badge,
-		Children = { UIKit.TextStroke(0.2) },
-	})
-	local name = UIKit.Label({
-		Text = player.DisplayName,
-		TextSize = 20,
-		TextWrapped = false,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(64, 6),
-		Size = UDim2.fromOffset(118, 24),
-		Parent = chip,
-	})
-	name:SetAttribute("PP_TruncateOk", true)
-	local barBack = UIKit.new("Frame", {
-		Position = UDim2.fromOffset(64, 33),
-		Size = UDim2.fromOffset(118, 22),
-		BackgroundColor3 = Theme.Colors.PanelDark,
-		Parent = chip,
-		Children = { UIKit.Round() },
-	})
-	local barFill = UIKit.new("Frame", {
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		Parent = barBack,
-		Children = { UIKit.Round(), UIKit.Gradient(Theme.Colors.Cyan, Theme.Colors.Green, 0) },
-	})
-	local xpText = UIKit.Label({
-		Text = "",
-		TextSize = Theme.Touch.MinText,
-		TextWrapped = false,
-		Size = UDim2.fromScale(1, 1),
-		Parent = barBack,
-		Children = { UIKit.TextStroke(0.3) },
-	})
-
-	-- The coins: a gold tab under the pill, as wide as the number.
-	local coins = UIKit.Panel({
-		Name = "Coins",
-		Position = UDim2.fromOffset(12, 52),
-		Size = UDim2.fromOffset(110, 42),
-		CornerRadius = 18,
-		ZIndex = 1,
-		Parent = holder,
-	}, Color3.fromRGB(255, 196, 60), Color3.fromRGB(230, 130, 30))
-	UIKit.Coin({ Position = UDim2.fromOffset(10, 14), Size = UDim2.fromOffset(24, 24), Parent = coins })
-	local coinLabel = UIKit.Label({
-		Text = "0",
-		Font = Theme.Fonts.Display,
-		TextSize = 24,
-		TextWrapped = false,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(40, 10),
-		Size = UDim2.new(1, -46, 0, 32),
-		Parent = coins,
-		Children = { UIKit.TextStroke(0.15) },
-	})
-	local function fitCoins()
-		local width = UIKit.TextWidth(coinLabel.Text, 24, Theme.Fonts.Display)
-		coins.Size = UDim2.fromOffset(math.max(84, math.ceil(width) + 56), 42)
+	if not touch then
+		return
 	end
-	followProfile(levelLabel, barFill, xpText, badge, coins, function(value)
-		coinLabel.Text = UIKit.FormatNumber(value)
-		fitCoins()
-	end)
-	task.delay(3, fitCoins) -- again once the font has surely loaded
-
-	-- The standings use this corner during a round.
 	local function refresh()
-		holder.Visible = GameState.Get("Phase") ~= "InRound"
+		holder.Visible = not State.PlayingRound()
+			and GameState.Get("Phase") ~= "InRound"
+			and hud:GetAttribute("PP_TipShowing") ~= true
 	end
+	State.OnPlayingChanged(refresh)
 	GameState.Changed("Phase", refresh)
+	hud:GetAttributeChangedSignal("PP_TipShowing"):Connect(refresh)
 	refresh()
 end
 
@@ -513,6 +454,7 @@ type StatusRow = {
 	CollapsedTop: number,
 	Base: number,
 	Strip: Frame?, -- phones: the round callout strip, in the line's place while it's up
+	Holder: Instance?, -- phones: the row's frame, where RoundController's standings strip goes on top
 }
 
 -- Keeps the status row: the line's words (fading once they've gone STATUS_FADE seconds without
@@ -527,6 +469,7 @@ local function followStatusRow(row: StatusRow)
 	local reserved = true -- the line has room (today's layout until a round says otherwise)
 	local emptySince: number? = nil
 	local teamsY = -1
+	local lineY = -1
 	RunService.Heartbeat:Connect(function()
 		local now = os.clock()
 		local phase = GameState.Get("Phase") or "Waiting"
@@ -567,8 +510,19 @@ local function followStatusRow(row: StatusRow)
 		-- The room: kept while there's something to say (the line, even faded, or a callout), let go
 		-- a few seconds after there's nothing; decided before and during the round only, so the mode
 		-- HUD is already in place at GO and stays put through the results.
+		-- Phones: the standings strip (RoundController) while the round is on. For its players it takes
+		-- the line's place once the line has faded (or has nothing to say), so the mode HUDs keep their
+		-- spot; for anyone watching it sits above their line.
+		local board = row.Holder and row.Holder:FindFirstChild("Leaderboard")
+		local boardOn = false
+		if board and board:IsA("GuiObject") then
+			boardOn = phase == "InRound" and (not participant or not (label.Visible or calloutUp))
+			board.Visible = boardOn
+		end
+		local boardHeight = if board and board:IsA("GuiObject") then board.Size.Y.Offset else 0
+
 		if phase == "Preparing" or phase == "InRound" then
-			local wanted = calloutUp or (if participant then rest ~= "" else true)
+			local wanted = calloutUp or boardOn or (if participant then rest ~= "" else true)
 			if wanted then
 				reserved = true
 				emptySince = nil
@@ -580,9 +534,22 @@ local function followStatusRow(row: StatusRow)
 			end
 		end
 
+		-- (Watchers: the line under the strip.)
+		local below = if boardOn and not participant then boardHeight + 4 else 0
+		if row.LineTop + below ~= lineY then
+			lineY = row.LineTop + below
+			label.Position = UDim2.new(0.5, 0, 0, lineY)
+			if strip then
+				strip.Position = UDim2.new(0.5, 0, 0, lineY)
+			end
+		end
+
 		-- The team pill under the line, and the mode HUDs under both.
 		local height = if calloutUp and strip then math.max(row.LineHeight, strip.Size.Y.Offset) else row.LineHeight
-		local top = if reserved then row.LineTop + height + 4 else row.CollapsedTop
+		if boardOn and participant then
+			height = math.max(height, boardHeight - 2) -- (the strip in the line's place, from 4 down)
+		end
+		local top = if reserved then lineY + height + 4 else row.CollapsedTop + below
 		if top ~= teamsY then
 			local first = teamsY < 0
 			teamsY = top
@@ -883,10 +850,8 @@ end
 
 -- Phones: the banner sits in Roblox's top bar row (its own ScreenGui inside the device's safe area,
 -- level with Roblox's 44 pt buttons), centered, one short line as wide as its words. The sit-out
--- switch rides on its right, in the same row and at the same height (clear of the vote cards and
--- the menu under the top bar).
+-- switch is under it (buildTouchSwitch): the menu has that row's right end.
 local TOUCH_BANNER_HEIGHT = 66
-local SIT_OUT_GAP = 10 -- between the banner and the sit-out switch
 local function buildTopBarBanner(hud: Instance): ScreenGui
 	local gui = UIKit.new("ScreenGui", {
 		Name = "PartyPanicTopBar",
@@ -916,7 +881,6 @@ local function buildTopBarBanner(hud: Instance): ScreenGui
 		CornerRadius = TOUCH_BANNER_HEIGHT / 2,
 		Parent = holder,
 	})
-	local sitOut = SitOutSwitch.new(holder, { Name = "SitOut", Hud = true, AnchorPoint = Vector2.new(0, 0.5) })
 	local title = UIKit.Label({
 		Text = "",
 		Font = Theme.Fonts.Display,
@@ -987,9 +951,46 @@ local function buildTopBarBanner(hud: Instance): ScreenGui
 		countPill.Position = UDim2.new(1, if timerPill.Visible then -(7 + 88 + 8) else -7, 0.5, 0)
 		local bannerWidth = 20 + width + count + (if timerPill.Visible then 12 + 88 + 7 else 20)
 		banner.Size = UDim2.fromOffset(bannerWidth, TOUCH_BANNER_HEIGHT)
-		sitOut.Position = UDim2.new(0.5, bannerWidth / 2 + SIT_OUT_GAP, 0.5, 0)
 	end)
 	return gui
+end
+
+-- Phones: the sit-out switch sits under the banner in the middle, in the lobby (the top bar row has
+-- the menu at its right end now: beside the banner the switch ran into it on the smallest phones).
+-- During a round, someone sitting it out has PLAY NEXT ROUND at the bottom instead
+-- (SpectateController). It gives way to whatever else uses the spot: the first-join tip, a level-up
+-- card. The lobby's chips line up under it (UI/LobbyRibbon).
+local SWITCH_PHASES = { Waiting = true, Intermission = true, Voting = true, Cleanup = true }
+local function buildTouchSwitch(hud: Instance)
+	local holder = UIKit.new("Frame", {
+		Name = "SitOutRow",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 4),
+		Size = UDim2.fromOffset(400, 72),
+		BackgroundTransparency = 1,
+		Parent = hud,
+	})
+	UIKit.AutoScale(holder)
+	SitOutSwitch.new(holder, {
+		Name = "SitOut",
+		Hud = true,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
+	})
+	local function refresh()
+		local phase = GameState.Get("Phase") or "Waiting"
+		local replaying = phase == "Cleanup" and (GameState.Get("Replay") or "") ~= "" -- (straight into its rules)
+		SitOutSwitch.SetAside("Round", not SWITCH_PHASES[phase] or replaying)
+		SitOutSwitch.SetAside(
+			"Spot",
+			hud:GetAttribute("PP_TipShowing") == true or player:GetAttribute("PP_Celebrating") == true
+		)
+	end
+	GameState.Changed("Phase", refresh)
+	GameState.Changed("Replay", refresh)
+	hud:GetAttributeChangedSignal("PP_TipShowing"):Connect(refresh)
+	player:GetAttributeChangedSignal("PP_Celebrating"):Connect(refresh)
+	refresh()
 end
 
 -- PC: the sit-out switch sits in Roblox's top bar row too (free in the middle), right above the
@@ -1111,9 +1112,14 @@ local function buildTouchStatus(parent: Instance)
 		CollapsedTop = 4,
 		Base = 36,
 		Strip = strip,
+		Holder = holder,
 	})
 	followTeamScores(teams)
 end
+
+-- Phones: the menu's tiles (scaled units: 52 points) and the grid's place (points from the top).
+local TOUCH_TILE, TOUCH_TILE_GAP = Theme.Touch.Menu.Tile, Theme.Touch.Menu.Gap
+local TOUCH_MENU_TOP = Theme.Touch.Menu.Top
 
 local function menuButton(
 	parent: Instance,
@@ -1125,10 +1131,10 @@ local function menuButton(
 	bottom: Color3
 ): TextButton
 	local touch = isTouch()
-	local size = if touch then Theme.Touch.Target else 74
+	local size = if touch then TOUCH_TILE else 74
 	local button = UIKit.Button({
 		Name = name,
-		Text = icon,
+		Text = if touch then "" else icon,
 		TextSize = if touch then 34 else 36,
 		Size = UDim2.fromOffset(size, size),
 		CornerRadius = if touch then 22 else 24,
@@ -1137,13 +1143,26 @@ local function menuButton(
 	}, function()
 		State.OpenScreen:Fire(name)
 	end, top, bottom)
+	if touch then
+		-- (The icon over the caption, both inside the tile.)
+		UIKit.Label({
+			Name = "Icon",
+			Text = icon,
+			TextSize = 36,
+			TextWrapped = false,
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 6),
+			Size = UDim2.fromOffset(44, 44), -- (clear of the "!" on the corner)
+			Parent = button,
+		})
+	end
 	UIKit.Label({
 		Text = caption,
 		TextSize = if touch then Theme.Touch.MinText else 15,
 		TextWrapped = false,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, if touch then 4 else 2),
-		Size = UDim2.new(1, if touch then 20 else 10, 0, if touch then 20 else 18),
+		Position = UDim2.new(0.5, 0, 1, if touch then -5 else 2),
+		Size = UDim2.new(1, if touch then -4 else 10, 0, if touch then 22 else 18),
 		Parent = button,
 		Children = { UIKit.TextStroke(0.1) },
 	})
@@ -1167,34 +1186,54 @@ local function menuButton(
 end
 
 local function buildMenu(parent: Instance): Frame
-	-- PC: the middle of the right edge. Touch: down from the top right corner, where it can't be
-	-- hit by mistake when reaching for the jump button.
+	-- PC: the middle of the right edge. Phones (layout A): a 2 x 2 grid in the top right corner, in
+	-- Roblox's top bar row and under it, Theme.Touch.Edge points from the screen's side (the edge
+	-- ScreenGui), where it can't be hit by mistake when reaching for the jump button. It ends above
+	-- where a notch or the Dynamic Island starts on that side.
 	local touch = isTouch()
-	local gap = if touch then 12 else 14
-	local menu = UIKit.new("Frame", {
-		Name = "Menu",
-		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.new(1, 0.5),
-		Position = if touch then UDim2.new(1, -8, 0, 6) else UDim2.new(1, -14, 0.5, 0),
-		Size = if touch
-			then UDim2.fromOffset(Theme.Touch.Target + 20, 4 * Theme.Touch.Target + 3 * gap + 6)
-			else UDim2.fromOffset(80, 360),
-		BackgroundTransparency = 1,
-		Parent = parent,
-		Children = {
-			UIKit.List(
-				Enum.FillDirection.Vertical,
-				gap,
-				Enum.HorizontalAlignment.Center,
-				if touch then Enum.VerticalAlignment.Top else Enum.VerticalAlignment.Center
-			),
-		},
-	})
+	local menu
+	if touch then
+		local side = 2 * TOUCH_TILE + TOUCH_TILE_GAP
+		menu = UIKit.new("Frame", {
+			Name = "Menu",
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -Theme.Touch.Edge, 0, TOUCH_MENU_TOP),
+			Size = UDim2.fromOffset(side, side),
+			BackgroundTransparency = 1,
+			Parent = parent,
+			Children = {
+				UIKit.new("UIGridLayout", {
+					CellSize = UDim2.fromOffset(TOUCH_TILE, TOUCH_TILE),
+					CellPadding = UDim2.fromOffset(TOUCH_TILE_GAP, TOUCH_TILE_GAP),
+					SortOrder = Enum.SortOrder.LayoutOrder,
+				}),
+			},
+		})
+	else
+		menu = UIKit.new("Frame", {
+			Name = "Menu",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -14, 0.5, 0),
+			Size = UDim2.fromOffset(80, 360),
+			BackgroundTransparency = 1,
+			Parent = parent,
+			Children = {
+				UIKit.List(
+					Enum.FillDirection.Vertical,
+					14,
+					Enum.HorizontalAlignment.Center,
+					Enum.VerticalAlignment.Center
+				),
+			},
+		})
+	end
 	UIKit.AutoScale(menu)
-	menuButton(menu, "Shop", "🛍️", "Shop", 1, Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
+	-- (Phones: Season and Shop on top, Emotes and Settings under them.)
+	menuButton(menu, "Shop", "🛍️", "Shop", if touch then 2 else 1, Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
 	-- The season hub (owner: "Do we not have a button to open the season rewards?", then "What if we
 	-- rolled season/event/quests into one button?"): the season's crates, the event and the quests,
 	-- one window with their tabs (UI/HubTabs), with a "!" when a quest or event reward is ready.
-	menuButton(menu, "Hub", "🎃", "Season", 2, Theme.Colors.Orange, Color3.fromRGB(205, 92, 24))
+	menuButton(menu, "Hub", "🎃", "Season", if touch then 1 else 2, Theme.Colors.Orange, Color3.fromRGB(205, 92, 24))
 	menuButton(menu, "Emotes", "🕺", "Emotes", 3, Theme.Colors.Cyan, Color3.fromRGB(50, 120, 230))
 	menuButton(menu, "Settings", "⚙️", "Settings", 4, Theme.Colors.Lavender, Theme.Colors.Purple)
 
@@ -1214,16 +1253,17 @@ end
 -- like the sit-out switch in that row), with the column's "!" on it when a tile has one. Three
 -- drawn bars, since the ☰ character draws as a missing-glyph box in the game's fonts.
 local TOGGLE_SIZE, TOGGLE_BAR_W, TOGGLE_BAR_H, TOGGLE_BAR_GAP = 72, 34, 6, 12
-local function buildMenuToggle(topBar: ScreenGui, onClick: () -> ()): Frame
+local function buildMenuToggle(parent: Instance, onClick: () -> ()): Frame
 	local touch = isTouch()
 	local holder = UIKit.new("Frame", {
 		Name = "MenuToggle",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -8, 0, 34), -- level with Roblox's buttons (12 to 55)
+		-- Level with Roblox's buttons (12 to 55); phones: in the menu's corner (the edge ScreenGui).
+		Position = UDim2.new(1, if touch then -Theme.Touch.Edge else -8, 0, 34),
 		Size = UDim2.fromOffset(TOGGLE_SIZE, TOGGLE_SIZE),
 		BackgroundTransparency = 1,
 		Visible = false,
-		Parent = topBar,
+		Parent = parent,
 	})
 	if touch then
 		UIKit.AutoScale(holder, 0.8) -- phone size on tablets too, like the banner beside it
@@ -1289,7 +1329,7 @@ end
 -- the ☰ instead; a tap on it brings the column back until a menu has been opened and closed, or
 -- MENU_PEEK seconds pass with none opened. The column slides off the right edge and back (at once
 -- with reduced effects).
-local function followMenu(hud: Instance, menu: Frame, topBar: ScreenGui)
+local function followMenu(hud: Instance, menu: Frame, toggleParent: Instance)
 	local restAnchor, restPosition = menu.AnchorPoint, menu.Position
 	local awayAnchor = Vector2.new(0, restAnchor.Y) -- its left edge just past the screen's right edge
 	local awayPosition = UDim2.new(1, 8, restPosition.Y.Scale, restPosition.Y.Offset)
@@ -1352,9 +1392,11 @@ local function followMenu(hud: Instance, menu: Frame, topBar: ScreenGui)
 			peeking = false
 		end
 		setShown(not playing or peeking)
-		if toggle.Visible ~= playing then
-			toggle.Visible = playing
-			if playing and not State.ReducedEffects() then
+		-- (Phones: the menu's grid comes back over the ☰'s corner; it goes again by itself.)
+		local wantToggle = playing and not (peeking and isTouch())
+		if toggle.Visible ~= wantToggle then
+			toggle.Visible = wantToggle
+			if wantToggle and not State.ReducedEffects() then
 				UIKit.PopIn(toggle:FindFirstChild("Pop") :: Frame, 0.3)
 			end
 		end
@@ -1369,7 +1411,7 @@ local function followMenu(hud: Instance, menu: Frame, topBar: ScreenGui)
 		menuSeen = false
 		refresh()
 	end
-	toggle = buildMenuToggle(topBar, HudController.ToggleMenu)
+	toggle = buildMenuToggle(toggleParent, HudController.ToggleMenu)
 
 	State.OnPlayingChanged(refresh)
 	Modal.AnyOpenChanged:Connect(function(open)
@@ -1609,17 +1651,19 @@ local function buildSettings(overlay: Instance)
 end
 
 function HudController.Start(context)
-	local topBar: ScreenGui
 	if isTouch() then
-		buildTouchProfile(context.Hud)
-		topBar = buildTopBarBanner(context.Hud)
+		-- (The edge ScreenGui: the whole screen, init.client.luau; a harness may not make one.)
+		local edge = context.Edge or context.Hud
+		buildProfileCard(edge, context.Hud, true)
+		buildTopBarBanner(context.Hud)
+		buildTouchSwitch(context.Hud)
 		buildTouchStatus(context.Hud)
+		followMenu(context.Hud, buildMenu(edge), edge)
 	else
-		buildProfileChip(context.Hud)
+		buildProfileCard(context.Hud, context.Hud, false)
 		buildPhaseBanner(context.Hud)
-		topBar = buildTopBarSwitch(context.Hud)
+		followMenu(context.Hud, buildMenu(context.Hud), buildTopBarSwitch(context.Hud))
 	end
-	followMenu(context.Hud, buildMenu(context.Hud), topBar)
 	local settings = buildSettings(context.Overlay)
 
 	State.OpenScreen:Connect(function(name)

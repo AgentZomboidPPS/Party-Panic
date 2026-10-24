@@ -51,5 +51,12 @@ return {
 	Touch = {
 		Target = 72,
 		MinText = 18,
+		-- Points from the screen's sides to the profile card and the menu (the edge ScreenGui,
+		-- init.client.luau): into the safe area's side insets, still clear of the screen's corners and
+		-- of a notch (30 points deep) or the Dynamic Island further down the side.
+		Edge = 32,
+		-- The menu's 2 x 2 grid in the top right corner (HudController): its top in points, its tiles
+		-- and their gap in scaled units. The lobby's chips line up under it (UI/LobbyRibbon).
+		Menu = { Top = 8, Tile = 84, Gap = 10 },
 	},
 }
