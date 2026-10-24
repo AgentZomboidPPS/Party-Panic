@@ -1,8 +1,9 @@
 """Takes the z-fighting out of our meshes (owner, on what gives an AI-built game away: "Z Fighting ...
 overlapping parts that look like they flicker when you move the camera", then "lets fix those right
 now"). Where two shapes of a prop have faces in one plane, facing the same way and overlapping where
-it can be seen (tools/preview/mesh_zfight.py finds them), the smaller shape's face moves GAP studs out
-along its normal (its points on that plane; the rest of it stays), so it's in front and wins every
+it can be seen (tools/preview/mesh_zfight.py finds them), the smaller shape's face moves out along its
+normal to GAP studs in front of the face it fought (its points on that plane; the rest of it stays),
+so it's in front and wins every
 frame instead of flickering: a stripe, an emblem or a trim strip flush with the surface it's on stands
 a hair proud of it, a picket overlapping the next gets a hair thicker front and back. It goes round
 again until nothing fights (or ROUNDS runs out).
@@ -64,17 +65,22 @@ def separate(pieces: dict) -> tuple[dict, int, int]:
             else:
                 mover = a if bulk(a) <= bulk(b) else b
             for n, plane_a, plane_b in planes:
-                push[mover].add((tuple(np.round(n, 3)), round(plane_a if mover == a else plane_b, 3)))
-        # The mover's fighting face itself goes GAP out along its normal: its points on that plane
-        # move, the rest stay (a stripe gets a hair thicker, a slanted side a hair wider).
+                mine, theirs = (plane_a, plane_b) if mover == a else (plane_b, plane_a)
+                push[mover].add((tuple(np.round(n, 3)), round(mine, 3), round(theirs, 3)))
+        # The mover's fighting face itself goes out along its normal to GAP in front of the face it
+        # fought (of the furthest out, if it fought several): its points on that plane move, the rest
+        # stay (a stripe gets a hair thicker, a slanted side a hair wider).
         for k, faces in push.items():
             piece = shapes[k][1]
             points = verts[piece][owned[k]]
             moved = points.copy()
-            for n, plane in faces:
+            shifts = defaultdict(float)
+            for n, mine, theirs in faces:
+                shifts[(n, mine)] = max(shifts[(n, mine)], theirs + GAP - mine, 0.0)
+            for (n, mine), shift in shifts.items():
                 n = np.array(n) / np.linalg.norm(n)
-                on_face = np.abs(points @ n - plane) < 0.02
-                moved[on_face] += n * GAP
+                on_face = np.abs(points @ n - mine) < 0.02
+                moved[on_face] += n * shift
             verts[piece][owned[k]] = moved
         found = fights(work, shapes, EPS)
     return verts, before, len(found)

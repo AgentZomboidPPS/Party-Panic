@@ -502,6 +502,9 @@ def arrow_barrel():
         shafts.append(tube([tuple(base), tuple(top)], 0.05, 6))
         side = np.cross(lean, np.array([0.0, 0.0, 1.0]))
         side /= np.linalg.norm(side) + 1e-9
+        # (turned 30 degrees round the shaft: square on, a vane lay level with one of the six-sided
+        # shaft's faces, 0.04 off it, and the two flickered)
+        side = side * math.cos(math.radians(30)) + np.cross(lean, side) * math.sin(math.radians(30))
         for k in (-1, 1):
             p0 = top - lean * 0.75
             vane = [tuple(top - lean * 0.05), tuple(p0 + side * k * 0.22), tuple(p0 - lean * 0.15)]
