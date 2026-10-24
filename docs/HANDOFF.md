@@ -9,7 +9,9 @@
   `context.Edge`); the notch / Dynamic Island / camera hole are in the middle of a side, so the top band is clear on every
   phone. The sit-out switch is under the banner in the lobby (beside it, it ran into the menu on an iPhone SE), the lobby's
   chips are one row under the menu grid, the round's standings are a centred strip under the banner (owner: "It has to be
-  centered"; the card steps aside during a round), and everything at the bottom is centred (owner: "the bottom not being
+  centered"; the card steps aside during a round; for the round's players the strip fills the status line's room once the
+  line fades, never in a team round or a mode with nothing to say there, so mode HUDs keep their place), and everything at
+  the bottom is centred (owner: "the bottom not being
   centrally located is ass"): toasts, the "you're out" panel, the spectate bar, the squad bar, and a new pair for anyone
   watching a round: 👀 WATCH and 🎮 PLAY NEXT ROUND (turns sitting out off; the banner's switch steps aside while it shows).
   The event and crate chips are gone (owner: "We dont need a separate open crate button. I thought we said the event button
