@@ -60,14 +60,46 @@ Rules.ROCK_R = 3.6 -- a standing stone's radius (shells stop at it; the stone is
 Rules.WALL_THICK = 3
 
 -- Snacks -------------------------------------------------------------------------------------------
--- Kind 4 only comes in a SNACK DROP. Weight is how often a kind shows up when the meadow grows more.
+-- The snacks are the ones in the owner's CAPY GO BOOM (its FoodTemplates): each kind has a few foods
+-- that look different but weigh the same. Kind 4 only comes in a SNACK DROP. Weight is how often a kind
+-- shows up when the lawn is restocked.
 Rules.SNACKS = {
-	{ Name = "Cookie", Prop = "CapyBoomCookie", Mass = 2, Weight = 60, Color = Color3.fromRGB(222, 162, 92) },
-	{ Name = "Cupcake", Prop = "CapyBoomCupcake", Mass = 4, Weight = 28, Color = Color3.fromRGB(255, 150, 200) },
-	{ Name = "Melon", Prop = "CapyBoomMelon", Mass = 9, Weight = 10, Color = Color3.fromRGB(120, 205, 90) },
-	{ Name = "Golden Melon", Prop = "CapyBoomGoldMelon", Mass = 25, Weight = 0, Color = Color3.fromRGB(255, 205, 60) },
+	{
+		Name = "Small Snack",
+		Mass = 2,
+		Weight = 60,
+		Color = Color3.fromRGB(255, 120, 120),
+		Props = { "CapyBoomStrawberry", "CapyBoomBanana", "CapyBoomCarrot", "CapyBoomBlueberries", "CapyBoomAvocado" },
+	},
+	{
+		Name = "Tasty Snack",
+		Mass = 4,
+		Weight = 28,
+		Color = Color3.fromRGB(255, 190, 90),
+		Props = { "CapyBoomPizza", "CapyBoomBurger", "CapyBoomIceCream", "CapyBoomPancakes", "CapyBoomOrange" },
+	},
+	{
+		Name = "Big Snack",
+		Mass = 9,
+		Weight = 10,
+		Color = Color3.fromRGB(120, 205, 90),
+		Props = { "CapyBoomWatermelon" },
+	},
+	{
+		Name = "Golden Apple",
+		Mass = 25,
+		Weight = 0,
+		Color = Color3.fromRGB(255, 205, 60),
+		Props = { "CapyBoomGoldenApple" },
+	},
 }
-Rules.COOKIE, Rules.CUPCAKE, Rules.MELON, Rules.GOLD = 1, 2, 3, 4
+Rules.SMALL, Rules.TASTY, Rules.BIG, Rules.GOLD = 1, 2, 3, 4
+
+-- Which food a snack is drawn as: the same on every screen, from its id.
+function Rules.PropOf(kind: number, id: number): string
+	local list = Rules.SNACKS[kind].Props
+	return list[id % #list + 1]
+end
 
 -- How a snack comes into the world (the 8th number of its record): it sprouts where it lies, it flies
 -- in an arc (a spill), or it drops from the sky (a SNACK DROP).
@@ -76,12 +108,12 @@ Rules.FLIGHT = { [0] = 0.4, [1] = 0.7, [2] = 1.5 }
 Rules.SKY_HEIGHT = 34
 Rules.ARC_HEIGHT = 4.5
 
--- The snacks that make up `amount` of weight (a spill): at most 8 pieces, melons for the big ones.
+-- The snacks that make up `amount` of weight (a spill): at most 8 pieces, big snacks for the big ones.
 function Rules.Pieces(amount: number): { number }
 	local list = {}
 	local left = amount
 	while left > 0 and #list < 8 do
-		local kind = if left >= 14 then Rules.MELON elseif left >= 6 then Rules.CUPCAKE else Rules.COOKIE
+		local kind = if left >= 14 then Rules.BIG elseif left >= 6 then Rules.TASTY else Rules.SMALL
 		table.insert(list, kind)
 		left -= Rules.SNACKS[kind].Mass
 	end

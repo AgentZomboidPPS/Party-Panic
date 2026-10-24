@@ -9,9 +9,9 @@ Session A's handoff from 17:40 UTC, still accurate except where this block says 
 Owner: "Can you take Capy to boom. Make it into a mini game for party panic?" CAPY GO BOOM is the owner's other game
 (repo `AgentZomboidPPS/Capy-Go-Boom`: capybaras eat snacks to grow, blast each other, a popped capy spills food). It is
 now `CapyGoBoom` (Versus, 75 s, 2-12, bots fill): everyone is a 20 KG capybara on a hedged lawn; walk over snacks to eat
-(cookie 2, cupcake 4, melon 9, golden melon 25 KG) and grow; BOOM fires the snack cannon, a hit spills a fifth of the
+(small snacks 2, tasty ones 4, big ones 9, the golden apple 25 KG) and grow; BOOM fires the snack cannon, a hit spills a fifth of the
 victim's weight (a quarter for the leader, never below 10 KG) as snacks anyone can eat; nobody is out; the biggest capy
-at the buzzer wins. Two SNACK DROPS (a beam 2.5 s ahead, then a golden melon falls) and a last-12-seconds FEAST (lawn
+at the buzzer wins. Two SNACK DROPS (a beam 2.5 s ahead, then a golden apple falls) and a last-12-seconds FEAST (lawn
 snacks count double; spills never do, pops only move weight around) give comebacks. The brief is in `docs/MINIGAME_BACKLOG.md` 30.
 
 - **Files:** `src/server/MiniGames/CapyGoBoom.luau` (the rules), `src/client/MiniGames/CapyGoBoom.luau` (a capybara drawn on
@@ -24,14 +24,22 @@ snacks count double; spills never do, pops only move weight around) give comebac
   "Spawn", "Eat", "Shot", "Pop", "ShellEnd" cues). A shell is judged against where the shooter saw each rival
   (history rewound by ping/2 + interpolation, like Struggle) and stops at the standing stones and the hedge; a jump over
   it dodges it. PC fires toward the mouse, phones the way you face (bent up to 26 degrees toward a rival). The real avatar
-  is hidden locally and the capy (the original game's look: potato body, square head, orange on its head, snack cannon,
-  a scarf in the player's colour) follows its root.
+  is hidden locally and the capy follows its root; a coloured pad on the lawn under each capy is its shadow and its colour.
+- **Art borrowed from CAPY GO BOOM** (owner: "Why don't you borrow assets from the capy go boom repo?"): the capybara is that
+  game's `CapyMeshTemplate` (six textured meshes: body, head, four legs; the legs stride and the head dips to chomp), the
+  cannon is its starter blaster (seven meshes; housing, light and glow take the player's colour), the snacks are its twelve
+  `FoodTemplates` and the sound effects are the ones it plays. They are plain meshes and images, not Models, so
+  `Props/CapyGoBoom.luau` builds them with `AssetService:CreateMeshPartAsync` (a mesh that won't load falls back to rounded
+  parts). The capybara and cannon assets (19, user 11690979745's) were granted to the game (Universe 10772087888, Use) on
+  2026-10-24; their ids are in `assets/capy_borrowed_assets.json`, which `tools/asset_permissions.py` re-grants on every
+  publish. The foods are another creator's public assets (24) and the sounds Roblox library audio: nothing to grant, but
+  they are not ours, so if one ever goes private its snack falls back to a ball.
 - **Checked on a real server (Open Cloud):** 12-player round with the client half, 2 people + 10 bots, phone HUD at five
   sizes: see the mode_check lines in the report. Test bots are far better eaters than people, so their 400+ KG finals are
   not a balance signal (a capy stops growing visually at about 160 KG).
 - **Not done / owner's calls:**
-  - No uploaded meshes yet: the capy, snacks, shell and stones are rounded-part fallbacks (ellipsoids), as the original game's
-    own fallback capy is. A mesh pass (`tools/meshgen/props/CapyGoBoom.py`, then `upload_assets.py`) is optional.
+  - The shell and the standing stones are still rounded parts (the original game has no such pieces); the capy and the
+    snacks are real meshes. Their look in the game itself is unconfirmed: the preview tools can't draw plain meshes.
   - No portal preview yet (`tools/preview/make_preview.py CapyGoBoom`), so its portal shows the icon-and-name card.
   - No round song yet, so it plays "Panic Mode" (a new song needs a new pack: one of the owner's monthly audio uploads).
   - `IsNew = true` (a vote boost while new; 4 of 31 games).

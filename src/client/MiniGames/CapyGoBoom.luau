@@ -15,6 +15,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 
 local GameState = require(ReplicatedStorage.Shared.GameState)
@@ -26,7 +27,11 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local CapyGoBoom = {}
 
-local ROOT_TO_GROUND = 3.0 -- a standing character's root is this far above the lawn
+local ROOT_TO_GROUND = 3.0 -- a standing R15 character's root is this far above the lawn (its own HipHeight tells)
+local CAPY_HEIGHT = 5.0 -- the capybara's height at scale 1 (its head's top)
+local NECK = Vector3.new(0, 2.92, 1.3) -- where the original game tips the head from, to chomp (CapyMotion NECK_BACK)
+-- The original game's own sound effects (Roblox library audio it uses), played on this screen only.
+local SFX = { Munch = 5630037419, Bonk = 9120917438, Boing = 2764461710, Crunch = 9125467298 }
 local GROW = 6 -- how fast a capy's drawn size catches up with its weight (1/s)
 local SNACK_SCALE = 1.3 -- snacks are drawn a little bigger than their meshes (easy to spot on phones)
 local FLY = 0.25 -- seconds an eaten snack takes to fly to its eater
@@ -100,6 +105,31 @@ function CapyGoBoom.Start(api)
 		return found
 	end
 
+	local sounds: { [number]: Sound } = {}
+	local lastPlayed: { [number]: number } = {}
+	local function playAsset(id: number, volume: number, pitch: number?)
+		local clock = os.clock()
+		if clock - (lastPlayed[id] or -10) < 0.08 then
+			return
+		end
+		lastPlayed[id] = clock
+		local sound = sounds[id]
+		if not sound then
+			local made = Instance.new("Sound")
+			made.Name = "CapySfx"
+			made.SoundId = `rbxassetid://{id}`
+			made.Parent = SoundService
+			sounds[id] = made
+			sound = made
+		end
+		local ready = sound :: Sound
+		ready.Volume = volume
+		ready.PlaybackSpeed = pitch or 1
+		pcall(function()
+			SoundService:PlayLocalSound(ready)
+		end)
+	end
+
 	-- Round state from the server ---------------------------------------------------------------
 	local center: Vector3? = nil
 	local slots: { [number]: number } = {} -- UserId -> colour slot
@@ -152,15 +182,22 @@ function CapyGoBoom.Start(api)
 	end
 
 	-- Capys ------------------------------------------------------------------------------------------
+	-- A piece of the capybara that moves on its own (a leg strides, the head dips to chomp): where it
+	-- sits at rest, relative to the capy's pivot at scale 1, and which diagonal pair a leg belongs to.
+	type RigPart = { Part: BasePart, Pos: Vector3, Rot: CFrame, Phase: number }
+	type Rig = { Head: RigPart?, Legs: { RigPart } }
 	type Capy = {
 		Model: Model?,
+		Rig: Rig?,
+		Ground: number,
+		GroundAt: number,
 		Parts: { BasePart },
 		Scale: number,
 		Slot: number,
 		Tag: BillboardGui,
 		Name: TextLabel,
 		Amount: TextLabel,
-		Ring: Part?,
+		Pad: Part,
 		SafeUntil: number,
 		Blink: boolean,
 		Chomp: number,
@@ -186,22 +223,48 @@ function CapyGoBoom.Start(api)
 			if capy.Model then
 				capy.Model:Destroy()
 			end
-			if capy.Ring then
-				capy.Ring:Destroy()
-			end
+			capy.Pad:Destroy()
 			capy.Tag:Destroy()
 			capys[userId] = nil
 		end
 	end
 
-	local function paintCapy(model: Model, color: Color3): { BasePart }
+	-- Colours the capy for its player (the cannon's housing, light and glow; the rounded fallback's scarf and
+	-- rim) and finds the pieces that move.
+	local function paintCapy(model: Model, color: Color3): ({ BasePart }, Rig)
 		local parts = partsOf(model)
+		local pivot = model:GetPivot()
+		local rig: Rig = { Head = nil, Legs = {} }
+		local function rest(part: BasePart, phase: number): RigPart
+			local offset = pivot:ToObjectSpace(part.CFrame)
+			return { Part = part, Pos = offset.Position, Rot = offset.Rotation, Phase = phase }
+		end
 		for _, part in parts do
-			if part.Name == "Band" or part.Name == "CannonRim" then
+			local name = part.Name
+			if name == "CannonHousing" or name == "Band" or name == "RoundRim" then
 				part.Color = color
+			elseif name == "CannonLight" then
+				part.Color = color:Lerp(Color3.new(1, 1, 1), 0.38)
+			elseif name == "CannonGlow" then
+				part.Color = color:Lerp(Color3.new(1, 1, 1), 0.22)
+			elseif name == "CapyHead" then
+				rig.Head = rest(part, 0)
+			elseif name == "LegFL" or name == "LegRR" then
+				table.insert(rig.Legs, rest(part, 1))
+			elseif name == "LegFR" or name == "LegRL" then
+				table.insert(rig.Legs, rest(part, -1))
 			end
 		end
-		return parts
+		return parts, rig
+	end
+
+	-- How far a character's root is above the ground (an avatar with its own proportions differs).
+	local function groundOffset(character: Model, root: BasePart): number
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid and humanoid.RigType == Enum.HumanoidRigType.R15 and humanoid.HipHeight > 0.5 then
+			return humanoid.HipHeight + root.Size.Y / 2
+		end
+		return ROOT_TO_GROUND
 	end
 
 	local function makeCapy(userId: number, slot: number): Capy
@@ -234,32 +297,32 @@ function CapyGoBoom.Start(api)
 			Parent = tag,
 			Children = { UIKit.TextStroke(0.05) },
 		})
-		local ring: Part? = nil
-		if userId == myId then
-			local disc = Instance.new("Part")
-			disc.Name = "YouRing"
-			disc.Shape = Enum.PartType.Cylinder
-			disc.Size = Vector3.new(0.12, 8, 8)
-			disc.Material = Enum.Material.Neon
-			disc.Color = color
-			disc.Transparency = 0.45
-			disc.Anchored = true
-			disc.CanCollide = false
-			disc.CanQuery = false
-			disc.CanTouch = false
-			disc.CastShadow = false
-			disc.Parent = api.World
-			ring = disc
-		end
+		-- A coloured pad on the ground under every capy: its shadow, and its colour from every side.
+		local pad = Instance.new("Part")
+		pad.Name = "Pad"
+		pad.Shape = Enum.PartType.Cylinder
+		pad.Size = Vector3.new(0.12, 5.4, 7.6)
+		pad.Material = Enum.Material.SmoothPlastic
+		pad.Color = color:Lerp(Color3.new(0, 0, 0), 0.3)
+		pad.Transparency = 0.55
+		pad.Anchored = true
+		pad.CanCollide = false
+		pad.CanQuery = false
+		pad.CanTouch = false
+		pad.CastShadow = false
+		pad.Parent = api.World
 		local capy: Capy = {
 			Model = nil,
+			Rig = nil,
+			Ground = ROOT_TO_GROUND,
+			GroundAt = -10,
 			Parts = {},
 			Scale = Rules.ScaleOf(Rules.START_MASS),
 			Slot = slot,
 			Tag = tag,
 			Name = nameLabel,
 			Amount = amountLabel,
-			Ring = ring,
+			Pad = pad,
 			SafeUntil = 0,
 			Blink = false,
 			Chomp = -10,
@@ -506,6 +569,7 @@ function CapyGoBoom.Start(api)
 		Data: { number },
 		Model: Model?,
 		Kind: number,
+		Prop: string,
 		Added: number,
 		Beam: Part?,
 		TakenAt: number?,
@@ -536,7 +600,7 @@ function CapyGoBoom.Start(api)
 		local model = snack.Model
 		if model then
 			model.Parent = nil
-			local prop = Rules.SNACKS[snack.Kind].Prop
+			local prop = snack.Prop
 			pools[prop] = pools[prop] or {}
 			table.insert(pools[prop], model)
 			snack.Model = nil
@@ -560,13 +624,15 @@ function CapyGoBoom.Start(api)
 		if not Rules.SNACKS[kind] or Rules.FLIGHT[data[8]] == nil then
 			return
 		end
+		local prop = Rules.PropOf(kind, data[1])
 		local snack: Snack = {
 			Data = data,
-			Model = borrow(Rules.SNACKS[kind].Prop),
+			Model = borrow(prop),
 			Kind = kind,
+			Prop = prop,
 			Added = os.clock(),
 		}
-		-- A golden melon has a beam of light, easy to find across the lawn.
+		-- A golden apple has a beam of light, easy to find across the lawn.
 		if kind == Rules.GOLD and not reduced then
 			local beam = Instance.new("Part")
 			beam.Name = "GoldBeam"
@@ -652,11 +718,13 @@ function CapyGoBoom.Start(api)
 			capy.Chomp = clock
 		end
 		if userId == myId then
-			api:Sound("Pickup")
+			playAsset(SFX.Munch, 0.7, 0.95 + math.random() * 0.2)
 			local character = api:CharacterOf(myId)
 			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if root and type(gain) == "number" and gain > 0 then
-				local text = if gold == true then `+{gain} GOLDEN MELON!` else `+{gain}`
+				local text = if gold == true
+					then `+{gain} {string.upper(Rules.SNACKS[Rules.GOLD].Name)}!`
+					else `+{gain}`
 				floatText(
 					root.Position + Vector3.new(0, 4, 0),
 					text,
@@ -666,6 +734,7 @@ function CapyGoBoom.Start(api)
 				)
 				if gold == true and root then
 					api:Effect("Confetti", root.Position, { Rules.SNACKS[Rules.GOLD].Color, Color3.new(1, 1, 1) })
+					playAsset(SFX.Crunch, 0.9)
 				end
 			end
 		end
@@ -859,7 +928,7 @@ function CapyGoBoom.Start(api)
 		readyAt = now + Rules.RELOAD
 		local ax, az = mouseAim(root)
 		api:Action("Boom", now, ax, az)
-		api:Sound("Boing")
+		playAsset(SFX.Boing, 0.6, 1.25)
 		local capy = capys[myId]
 		if capy then
 			capy.Recoil = os.clock()
@@ -923,6 +992,7 @@ function CapyGoBoom.Start(api)
 			end
 			if victimId == myId or attackerId == myId then
 				api:Sound("Hit")
+				playAsset(SFX.Bonk, 0.8)
 			end
 		end
 	end)
@@ -948,9 +1018,7 @@ function CapyGoBoom.Start(api)
 						capy.Model.Parent = nil
 					end
 					capy.Tag.Enabled = false
-					if capy.Ring then
-						capy.Ring.Transparency = 1
-					end
+					capy.Pad.Transparency = 1
 				end
 				continue
 			end
@@ -960,12 +1028,17 @@ function CapyGoBoom.Start(api)
 				refreshTags()
 			end
 			local c = capy :: Capy
+			if clock - c.GroundAt > 1 then
+				c.GroundAt = clock
+				c.Ground = groundOffset(character, root)
+			end
 			if not c.Model then
 				local source = template("CapyBoomCapy")
 				if source then
 					local copy = source:Clone() :: Model
 					quiet(copy)
-					c.Parts = paintCapy(copy, colorOf(userId))
+					local parts, rig = paintCapy(copy, colorOf(userId))
+					c.Parts, c.Rig = parts, rig
 					scaleBy(copy, c.Scale)
 					c.Model = copy
 				end
@@ -1003,7 +1076,7 @@ function CapyGoBoom.Start(api)
 					end
 				end
 			end
-			local base = Vector3.new(root.Position.X, root.Position.Y - ROOT_TO_GROUND + bob, root.Position.Z)
+			local base = Vector3.new(root.Position.X, root.Position.Y - c.Ground + bob, root.Position.Z)
 			local model = c.Model
 			if model then
 				if model.Parent == nil then
@@ -1013,7 +1086,29 @@ function CapyGoBoom.Start(api)
 					scaleBy(model, drawn)
 					model:SetAttribute("PP_Drawn", drawn)
 				end
-				model:PivotTo(CFrame.lookAt(base - look * (kick * 0.5), base - look * (kick * 0.5) + look))
+				local at = base - look * (kick * 0.5)
+				local pose = CFrame.lookAt(at, at + look)
+				model:PivotTo(pose)
+				-- The legs stride while it moves (diagonal pairs together) and the head dips into a gulp.
+				local rig = c.Rig
+				if rig then
+					local stride = if moving then math.sin(clock * 11 + c.Bob) else 0
+					for _, leg in rig.Legs do
+						local swing = stride * leg.Phase
+						local offset = Vector3.new(0, math.max(0, swing) * 0.22 * drawn, swing * 0.5 * drawn)
+						leg.Part.CFrame = pose * CFrame.new(leg.Pos * drawn + offset) * leg.Rot
+					end
+					local head = rig.Head
+					if head then
+						local neck = NECK * drawn
+						head.Part.CFrame = pose
+							* CFrame.new(neck)
+							* CFrame.Angles(-0.32 * gulp, 0, 0)
+							* CFrame.new(-neck)
+							* CFrame.new(head.Pos * drawn)
+							* head.Rot
+					end
+				end
 				-- Safe after a pop: the capy blinks.
 				local blink = c.Parts[1] ~= nil and (c.SafeUntil > now) and math.floor(clock * 10) % 2 == 0
 				if blink ~= c.Blink then
@@ -1025,15 +1120,13 @@ function CapyGoBoom.Start(api)
 			end
 			c.Tag.Enabled = true
 			c.Tag.Adornee = root
-			c.Tag.StudsOffsetWorldSpace = Vector3.new(0, 5.4 * drawn - ROOT_TO_GROUND + 2.2, 0)
-			if c.Ring then
-				local size = 7.5 * c.Scale
-				c.Ring.Size = Vector3.new(0.12, size, size)
-				c.Ring.CFrame = CFrame.new(
-					Vector3.new(root.Position.X, root.Position.Y - ROOT_TO_GROUND + 0.1, root.Position.Z)
-				) * CFrame.Angles(0, 0, math.rad(90))
-				c.Ring.Transparency = 0.45 + 0.15 * math.sin(clock * 5)
-			end
+			c.Tag.StudsOffsetWorldSpace = Vector3.new(0, CAPY_HEIGHT * drawn - c.Ground + 2, 0)
+			-- The pad lies on the lawn (it stays there when the capy hops), under the capy, turned like it.
+			local lawn = (if center then (center :: Vector3).Y else root.Position.Y - c.Ground) + 0.26
+			local under = Vector3.new(root.Position.X, lawn, root.Position.Z)
+			c.Pad.Size = Vector3.new(0.12, 5.4 * c.Scale, 7.6 * c.Scale)
+			c.Pad.CFrame = CFrame.lookAt(under, under + look) * CFrame.Angles(0, 0, math.rad(90))
+			c.Pad.Transparency = if userId == myId then 0.38 + 0.12 * math.sin(clock * 5) else 0.55
 		end
 
 		-- The camera keeps clear of a big capy.
@@ -1171,6 +1264,9 @@ function CapyGoBoom.Start(api)
 		end
 		for _, model in shellPool do
 			model:Destroy()
+		end
+		for _, sound in sounds do
+			sound:Destroy()
 		end
 		for _, copy in templates do
 			copy:Destroy()

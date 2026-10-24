@@ -7,7 +7,7 @@
 --   * fires at the best rival in range with a clear line (not behind a standing stone, not blinking
 --     after a pop): bigger rivals and closer ones first, leading a moving target a little more the
 --     better the bot, with an aim error that shrinks with skill, and never faster than a person could;
---   * picks a goal every half second or so: mostly the most worthwhile snack (big ones, golden melons
+--   * picks a goal every half second or so: mostly the most worthwhile snack (big ones, golden apples
 --     and the SNACK DROP's beam first), sometimes closing in on a rival to a firing distance and
 --     circling it; weaker bots dither now and then;
 --   * walks round standing stones in its way.

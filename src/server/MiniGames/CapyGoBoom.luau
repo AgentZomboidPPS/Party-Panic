@@ -7,7 +7,7 @@
 -- caught). Nobody is ever out. The biggest capy at the buzzer wins (ties: most pops).
 --
 -- Two moments shake it up, like the airdrops and the Mega Snack in the original: two SNACK DROPS (a beam
--- of light 2.5 seconds ahead, then a golden melon and a dozen snacks fall there) and, for the last 12
+-- of light 2.5 seconds ahead, then a golden apple and a dozen snacks fall there) and, for the last 12
 -- seconds, a FEAST where every snack on the lawn counts double (a spill never does: pops only move weight
 -- around) and more snacks fall.
 --
@@ -178,7 +178,9 @@ function CapyGoBoom:Prepare()
 	end
 
 	for _, kind in Rules.SNACKS do
-		ctx:ShareTemplate(kind.Prop, MeshLibrary.Get(kind.Prop))
+		for _, prop in kind.Props do
+			ctx:ShareTemplate(prop, MeshLibrary.Get(prop))
+		end
 	end
 	ctx:ShareTemplate("CapyBoomCapy", MeshLibrary.Get("CapyBoomCapy"))
 	ctx:ShareTemplate("CapyBoomShell", MeshLibrary.Get("CapyBoomShell"))
@@ -545,7 +547,7 @@ function CapyGoBoom:_pickKind(): number
 			return index
 		end
 	end
-	return Rules.COOKIE
+	return Rules.SMALL
 end
 
 -- Adds a snack at an offset from the middle, `style` says how it arrives (`settled`: it has been lying
@@ -763,20 +765,20 @@ end
 
 -- Moments --------------------------------------------------------------------------------------------
 
--- A beam of light where a SNACK DROP will land, then a golden melon and a dozen snacks fall there.
+-- A beam of light where a SNACK DROP will land, then a golden apple and a dozen snacks fall there.
 function CapyGoBoom:_snackDrop()
 	local ctx = self.context
 	local x, z = self:_spot(0.6)
 	self.dropSpot = self.center + Vector3.new(x, 0, z)
 	ctx:Fire(nil, "DropWarn", round2(x), round2(z), round2(ctx:Now() + Rules.DROP_WARN))
-	ctx:Announce("SNACK DROP! A golden melon is coming down!", "info", 2.5)
+	ctx:Announce("SNACK DROP! A golden apple is coming down!", "info", 2.5)
 	ctx:Sound("HazardWarning")
 	ctx:Delay(Rules.DROP_WARN - Rules.FLIGHT[Rules.SKY], function()
 		local made = { self:_addSnack(Rules.GOLD, x, z, x, z, Rules.SKY, nil) }
 		for index = 1, Rules.DROP_SNACKS do
 			local angle = index / Rules.DROP_SNACKS * math.pi * 2 + rng:NextNumber(-0.2, 0.2)
 			local distance = rng:NextNumber(2.5, Rules.DROP_SPREAD)
-			local kind = if index % 4 == 0 then Rules.MELON elseif index % 2 == 0 then Rules.CUPCAKE else Rules.COOKIE
+			local kind = if index % 4 == 0 then Rules.BIG elseif index % 2 == 0 then Rules.TASTY else Rules.SMALL
 			table.insert(
 				made,
 				self:_addSnack(

@@ -121,6 +121,13 @@ def grant_all(universe_id: int = UNIVERSE, meshes: bool = True) -> tuple[str, li
     ids = collect()
     granted, errors = grant(list(ids.values()), universe_id)
     summary = f"the game may use {len(granted)} of {len(set(ids.values()))} models and sounds"
+    # The owner's CAPY GO BOOM meshes and textures that Capy Go Boom borrows (plain assets, not models).
+    borrowed = ROOT / "assets" / "capy_borrowed_assets.json"
+    if borrowed.exists():
+        extra = json.loads(borrowed.read_text()).get("grant", [])
+        extra_granted, extra_errors = grant(extra, universe_id)
+        errors += extra_errors
+        summary += f"; {len(extra_granted)} of {len(set(extra))} borrowed Capy Go Boom assets"
     if meshes:
         mesh_ids = inner_meshes({key: value for key, value in ids.items() if key.startswith("mesh:")})
         opened, open_errors = open_use(mesh_ids)
