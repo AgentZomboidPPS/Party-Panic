@@ -4,20 +4,29 @@
 -- First team to clear its part wins; at time up the team that ate the biggest share wins.
 --
 -- Here 2-4 teams (Teams.CountFor, about two a team) share one giant pizza on a pizzeria rooftop. It
--- is cut in twelve slices and each team owns a run of them (its flag stands at the rim). Everyone
--- chews the slice they stand on by mashing EAT (E); each slice takes a number of bites (more with
--- more pepperoni on it), shrinks in four stages as it's eaten (the crust first, then bitten back
--- towards the tip) and disappears when it's gone. Bigger teams get the same slices with more bites
--- in them (PER_PLAYER bites per player), so every team needs the same chewing per player; when
--- someone leaves, their team's pizza shrinks to match.
+-- is cut in twelve slices and each team owns a run of them (its flag stands at the rim). Each slice
+-- takes a number of bites (more with more pepperoni on it), shrinks in four stages as it's eaten
+-- (the crust first, then bitten back towards the tip) and disappears when it's gone. Bigger teams
+-- get the same slices with more bites in them (PER_PLAYER bites per player), so every team needs the
+-- same chewing per player; when someone leaves, their team's pizza shrinks to match.
 --
--- How it works: the server owns every slice ("Pizza": the layout, once; "Slices": the bites left,
--- about ten times a second while they change) and swaps the slice's model as it reaches a new
+-- BITE SPOTS (owner: "eatza pizza is better. can we make players run around while eating instead of
+-- just sitting on the slice?"): you don't chew wherever you stand. Glowing spots light up on each
+-- team's slices, one per player of the team; stand on one of your team's and mash EAT (E) to eat it
+-- (about six bites, each one a bite of the slice under it), and when it's eaten it pops and a new one
+-- lights up about a second's run away (SPOT_RUN from whoever ate it, away from the team's other
+-- spots), so a round is run, chomp, run, chomp. Pressing EAT off a spot does nothing. Spots only go
+-- where there's food for all their bites (each claims its bites from its slice, and sits inside what
+-- the slice will still be when they're eaten: Shared/Logic/EatsaPizza.PlaceSpot), so the last spots
+-- of a part are near its slices' tips, and a team that has eaten everything has none.
+--
+-- How it works: the server owns every slice and spot ("Pizza": the layout, once; "Slices": the bites
+-- left; "Spots": where each spot is and the bites left in it, shared about ten times a second while
+-- they change, and at once when spots come and go) and swaps a slice's model as it reaches a new
 -- stage. A client sends "Eat" per press; the server caps the rate (a token bucket, RATE a second)
--- and finds the slice under the player's character with Shared/Logic/EatsaPizza.Locate (with a
--- little leeway past its sides and bitten front, and the slice they stood on a moment ago still
--- counting for their ping, so a bite pressed as you step off still lands). Team scores are the
--- share eaten, in percent.
+-- and finds the spot under the player's character with Logic.OnSpot (the ring and a bit, and the
+-- spot they stood on a moment ago still counting for their ping, so a bite pressed as you step off
+-- still lands). Team scores are the share eaten, in percent.
 --
 -- More to do than mash (owner: "can we make the eatsa pizza game more interactable? In mario party it
 -- feels and plays a ton better."):
@@ -26,11 +35,12 @@
 --     eats two bites. One at a time; one nobody grabs goes.
 --   * Pepperoni go one at a time as the bites reach them (Logic.Front), each one flying into the
 --     eater's mouth on every screen ("Pep"), instead of a stage's worth vanishing at once.
--- Clients add the rest (chomping heads, combos, the crunch): Client/MiniGames/EatsaPizza.
+-- Clients add the rest (the spots' rings and markers, chomping heads, combos, the crunch):
+-- Client/MiniGames/EatsaPizza.
 --
--- Bots walk to a slice of their team with food left (spreading out over the slices) and mash
--- through ctx:BotAction like a player's button (Bots/EatsaPizza.luau). Nothing here is animated
--- only on clients: the slices are the server's, and everybody stands on the same pan.
+-- Bots run from spot to spot of their team (the nearest one no teammate is eating) and mash through
+-- ctx:BotAction like a player's button (Bots/EatsaPizza.luau). Nothing here is animated only on
+-- clients: the slices and spots are the server's, and everybody stands on the same pan.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
@@ -69,9 +79,21 @@ type Member = {
 	Tokens: number,
 	TokensAt: number,
 	Bites: number,
-	On: number?, -- the slice they last stood on...
-	OnAt: number, -- ...and when
+	Spot: number?, -- the spot (Id) they last stood on...
+	SpotAt: number, -- ...and when
 	SpicyUntil: number, -- the hot pepper's double bites last until then
+}
+-- A bite spot: where (offset from the pizza's middle, and on the cheese in the world), on which of
+-- its team's slices, and its bites (claimed from that slice).
+type Spot = {
+	Id: number,
+	Team: string,
+	Slice: number,
+	X: number,
+	Z: number,
+	Position: Vector3,
+	Left: number,
+	Bites: number,
 }
 type Chili = { Position: Vector3, Until: number, Model: Model }
 type TeamState = {
@@ -488,6 +510,8 @@ function EatsaPizza:Prepare()
 	ctx.KillY = origin.Y - 40
 	self.center = origin
 	self.phase = "Wait"
+	self.spots = {} :: { Spot }
+	self.spotCount = 0
 
 	local players = ctx:GetPlayers()
 	local names = {}
@@ -497,6 +521,7 @@ function EatsaPizza:Prepare()
 	self.order = names
 	self.radius = Logic.Radius(#players)
 	self.scale = self.radius / Logic.MESH_RADIUS
+	self.cheeseY = self.center.Y + Logic.MESH_CHEESE * self.scale
 	local assigned = ctx:AssignTeams(names)
 	self.teams = {} :: { [string]: TeamState }
 	self.members = {} :: { [any]: Member }
@@ -510,8 +535,8 @@ function EatsaPizza:Prepare()
 				Tokens = Logic.BURST,
 				TokensAt = 0,
 				Bites = 0,
-				On = nil,
-				OnAt = -math.huge,
+				Spot = nil,
+				SpotAt = -math.huge,
 				SpicyUntil = 0,
 			}
 		end
@@ -580,14 +605,27 @@ function EatsaPizza:Prepare()
 	ctx.Hooks.PlayerLeft = function(player)
 		self:_leave(player)
 	end
+	local points, from = {}, {}
+	for _, player in ctx:GetPlayers() do
+		local point = self:_standAt(player) or CFrame.new(self.center + Vector3.new(0, 0, self.radius * 0.5))
+		table.insert(points, point)
+		from[player] = point.Position
+	end
+	-- The first spots, one for each player, each about a run from one of the team's spawn points (so
+	-- at GO everyone has the same dash to make).
+	for _, team in names do
+		local state = self.teams[team]
+		for _, player in state.Members do
+			if self:_countSpots(team) < self:_spotTarget(state) then
+				self:_addSpot(state, from[player])
+			end
+		end
+	end
 	self:_shareLayout()
 	self:_shareSlices()
-	local points = {}
-	for _, player in ctx:GetPlayers() do
-		table.insert(points, self:_standAt(player) or CFrame.new(self.center + Vector3.new(0, 0, self.radius * 0.5)))
-	end
+	self:_shareSpots()
 	ctx:SpawnAll(points, true)
-	ctx:SetStatus("Eat your team's part of the pizza!")
+	ctx:SetStatus("Run to your team's spots and EAT!")
 end
 
 -- Scatters `count` pepperoni over a slice (spots as shares of the radius and of its width).
@@ -627,6 +665,7 @@ function EatsaPizza:_leave(player: any)
 	end
 	if #state.Members == 0 then
 		state.Gone = true
+		self:_fixSpots(state)
 	elseif not state.ClearedAt and state.Size > 1 then
 		-- Their part shrinks to fit the players left (what's eaten stays eaten, as a share).
 		local factor = (state.Size - 1) / state.Size
@@ -644,6 +683,8 @@ function EatsaPizza:_leave(player: any)
 			end
 		end
 		self:_updateScore(state)
+		-- (Its spots: one fewer, none claiming more than their slice now has, all still on the food.)
+		self:_fixSpots(state)
 	end
 	self:_shareLayout()
 	self.dirty = true
@@ -691,35 +732,209 @@ function EatsaPizza:Start()
 	self.chiliFirst = rng:NextInteger(0, math.max(#self.order, 1) - 1) -- (which border goes first)
 	self.chiliNext = ctx:Now() + Logic.CHILI_FIRST
 
-	-- Where everyone stands, ten times a second (a bite pressed just after stepping off a slice still
-	-- counts for the player's ping).
+	-- Where everyone stands, ten times a second (a bite pressed just after stepping off a spot still
+	-- counts for the player's ping); a team short of spots (there was no room a moment ago) gets them.
 	ctx:Loop(function()
 		local now = ctx:Now()
 		for player, member in self.members do
-			local index = self:_locate(player)
-			if index then
-				member.On = index
-				member.OnAt = now
+			local spot = self:_spotUnder(player)
+			if spot then
+				member.Spot = spot.Id
+				member.SpotAt = now
 			end
 		end
 		if self.phase == "Eat" then
 			self:_stepChili(now)
+			for _, team in self.order do
+				self:_fillSpots(self.teams[team], nil)
+			end
 		end
 		return 0.1
 	end)
 	local lastShare = 0
 	ctx:Heartbeat(function()
 		local now = ctx:Now()
-		if self.dirty and now - lastShare >= 0.1 then
+		-- (Bites left: ten times a second at most. A spot that pops or lights up: at once.)
+		if self.spotsChanged or (self.dirty and now - lastShare >= 0.1) then
 			lastShare = now
 			self.dirty = false
 			self:_shareSlices()
+			self:_shareSpots()
 		end
 	end)
 end
 
--- The slice of their own team, with food left, that a player stands on.
-function EatsaPizza:_locate(player: any): number?
+-- Bite spots ---------------------------------------------------------------------------------------
+
+-- How many spots a team has out at a time: one for each of its players (none once it's done).
+function EatsaPizza:_spotTarget(state: TeamState): number
+	if self.phase == "Done" or state.Gone or state.ClearedAt then
+		return 0
+	end
+	return Logic.SpotsFor(#state.Members)
+end
+
+function EatsaPizza:_countSpots(team: string): number
+	local count = 0
+	for _, spot in self.spots do
+		if spot.Team == team then
+			count += 1
+		end
+	end
+	return count
+end
+
+function EatsaPizza:_spotById(id: number?): Spot?
+	if not id then
+		return nil
+	end
+	for _, spot in self.spots do
+		if spot.Id == id then
+			return spot
+		end
+	end
+	return nil
+end
+
+-- Lights up a new spot on the team's part (Logic.PlaceSpot: about a run from `from`, the eater of the
+-- last one, if given). nil when there's no food left to claim, or no room just now.
+function EatsaPizza:_addSpot(state: TeamState, from: Vector3?): Spot?
+	local infos = {}
+	for _, spot in self.spots do
+		table.insert(
+			infos,
+			{ Slice = spot.Slice, X = spot.X, Z = spot.Z, Left = spot.Left, Mine = spot.Team == state.Name }
+		)
+	end
+	local slices = {}
+	for _, index in state.Slices do
+		local slice = self.slices[index]
+		table.insert(slices, { Index = index, Left = slice.Left, Max = slice.Max, Stage = slice.Stage })
+	end
+	local c = self.center
+	local placed = Logic.PlaceSpot(
+		slices,
+		infos,
+		self.radius,
+		if from then { X = from.X - c.X, Z = from.Z - c.Z } else nil,
+		function()
+			return rng:NextNumber()
+		end
+	)
+	if not placed then
+		return nil
+	end
+	self.spotCount += 1
+	local spot: Spot = {
+		Id = self.spotCount,
+		Team = state.Name,
+		Slice = placed.Slice,
+		X = placed.X,
+		Z = placed.Z,
+		Position = Vector3.new(c.X + placed.X, self.cheeseY, c.Z + placed.Z),
+		Left = placed.Bites,
+		Bites = placed.Bites,
+	}
+	table.insert(self.spots, spot)
+	self.spotsChanged = true
+	return spot
+end
+
+-- Tops the team up to its spots (the first new one about a run from `from`).
+function EatsaPizza:_fillSpots(state: TeamState, from: Vector3?)
+	local have, target = self:_countSpots(state.Name), self:_spotTarget(state)
+	while have < target do
+		if not self:_addSpot(state, from) then
+			break
+		end
+		have += 1
+		from = nil
+	end
+end
+
+function EatsaPizza:_removeSpot(spot: Spot)
+	local index = table.find(self.spots, spot)
+	if index then
+		table.remove(self.spots, index)
+		self.spotsChanged = true
+	end
+end
+
+-- A spot eaten (by `eater`): it goes and the team's next one lights up about a run from them.
+function EatsaPizza:_popSpot(spot: Spot, eater: any?)
+	self:_removeSpot(spot)
+	local state = self.teams[spot.Team]
+	if not state then
+		return
+	end
+	local from = spot.Position
+	if eater then
+		local _, _, root = self.context:GetCharacter(eater)
+		if root then
+			from = root.Position
+		end
+	end
+	self:_fillSpots(state, from)
+end
+
+-- Puts a team's spots right after its part changed under them (someone left: the slices shrank and
+-- there's a spot too many): none claims more than its slice has left (the newest give theirs up
+-- first), none is left off the food, the extra ones go (ones nobody is eating first), then the team
+-- is topped up.
+function EatsaPizza:_fixSpots(state: TeamState)
+	for _, index in state.Slices do
+		local slice = self.slices[index]
+		local on, claimed = {}, 0
+		for _, spot in self.spots do
+			if spot.Team == state.Name and spot.Slice == index then
+				table.insert(on, spot)
+				claimed += spot.Left
+			end
+		end
+		table.sort(on, function(a, b)
+			return a.Id > b.Id
+		end)
+		local outer = Logic.SpotOuter(slice.Stage, self.radius) + 0.5
+		for _, spot in on do
+			if claimed > slice.Left then
+				local cut = math.min(spot.Left, claimed - slice.Left)
+				spot.Left -= cut
+				claimed -= cut
+				self.dirty = true
+			end
+			if spot.Left <= 0 or math.sqrt(spot.X * spot.X + spot.Z * spot.Z) > outer then
+				claimed -= spot.Left
+				self:_removeSpot(spot)
+			end
+		end
+	end
+	local target = self:_spotTarget(state)
+	local now = self.context:Now()
+	while self:_countSpots(state.Name) > target do
+		local worst, worstCost = nil, math.huge
+		for _, spot in self.spots do
+			if spot.Team == state.Name then
+				local cost = spot.Id * 1e-6
+				for _, member in self.members do
+					if member.Spot == spot.Id and now - member.SpotAt < 0.6 then
+						cost += 1
+					end
+				end
+				if cost < worstCost then
+					worst, worstCost = spot, cost
+				end
+			end
+		end
+		if not worst then
+			break
+		end
+		self:_removeSpot(worst)
+	end
+	self:_fillSpots(state, nil)
+end
+
+-- The spot of their own team a player stands on, if any.
+function EatsaPizza:_spotUnder(player: any): Spot?
 	local member = self.members[player]
 	if not member then
 		return nil
@@ -732,14 +947,40 @@ function EatsaPizza:_locate(player: any): number?
 	if offset.Y < -2 or offset.Y > 9 then
 		return nil
 	end
-	return Logic.Locate(offset, self.radius, function(index)
-		local slice = self.slices[index]
-		if slice.Team == member.Team and slice.Left > 0 then
-			return slice.Stage
+	local mine = {}
+	for _, spot in self.spots do
+		if spot.Team == member.Team then
+			table.insert(mine, spot)
 		end
-		return nil
-	end)
+	end
+	local index = Logic.OnSpot(offset.X, offset.Z, mine)
+	return if index then mine[index] else nil
 end
+
+function EatsaPizza:_shareSpots()
+	local list = {}
+	for _, spot in self.spots do
+		table.insert(list, {
+			I = spot.Id,
+			T = spot.Team,
+			X = round(spot.X, 0.01),
+			Z = round(spot.Z, 0.01),
+			L = spot.Left,
+			M = spot.Bites,
+		})
+	end
+	self.spotsChanged = false
+	self.context:SetSharedJSON("Spots", { S = list })
+end
+
+function EatsaPizza:_clearSpots()
+	if self.spots and #self.spots > 0 then
+		table.clear(self.spots)
+		self:_shareSpots()
+	end
+end
+
+-- Eating -------------------------------------------------------------------------------------------
 
 function EatsaPizza:_bite(player: any)
 	local member = self.members[player]
@@ -753,24 +994,31 @@ function EatsaPizza:_bite(player: any)
 	if member.Tokens < 1 then
 		return
 	end
-	local index = self:_locate(player)
-	if not index and member.On and now - member.OnAt <= ping(player) + 0.25 then
-		local recent = self.slices[member.On]
-		if recent.Left > 0 and recent.Team == member.Team then
-			index = member.On
+	-- (Off every spot of their team: nothing, unless they stood on one a ping ago.)
+	local spot = self:_spotUnder(player)
+	if not spot and member.Spot and now - member.SpotAt <= ping(player) + 0.25 then
+		local recent = self:_spotById(member.Spot)
+		if recent and recent.Team == member.Team then
+			spot = recent
 		end
 	end
-	if not index then
+	if not spot then
 		return
 	end
+	local index = spot.Slice
 	local slice = self.slices[index]
 	-- (Two bites a press while the hot pepper lasts.)
-	local bites = math.min(if now < member.SpicyUntil then Logic.SPICY_BITES else 1, slice.Left)
+	local bites = math.min(if now < member.SpicyUntil then Logic.SPICY_BITES else 1, spot.Left, slice.Left)
+	if bites <= 0 then
+		self:_popSpot(spot, player) -- (nothing left in it: never happens, but it mustn't stick)
+		return
+	end
 	member.Tokens -= 1
 	member.Bites += bites
-	member.On = index
-	member.OnAt = now
+	member.Spot = spot.Id
+	member.SpotAt = now
 	slice.Left -= bites
+	spot.Left -= bites
 	ctx:AddScore(player, bites)
 	self.dirty = true
 	self:_eatPepperoni(slice, player)
@@ -786,6 +1034,8 @@ function EatsaPizza:_bite(player: any)
 	self:_updateScore(state)
 	if self:_teamShare(member.Team) >= 1 - 1e-9 then
 		self:_finish(member.Team, "Cleared")
+	elseif spot.Left <= 0 or slice.Left <= 0 then
+		self:_popSpot(spot, player)
 	end
 end
 
@@ -949,8 +1199,9 @@ function EatsaPizza:_finish(team: string, reason: string)
 	self.winner = team
 	self.teams[team].ClearedAt = ctx:Now()
 	self:_removeChili()
-	self:_shareSlices()
 	self:_shareLayout()
+	self:_shareSlices()
+	self:_clearSpots()
 	ctx:Sound("Victory")
 	if reason == "Cleared" then
 		ctx:Announce(`{label(team)} ATE THEIR PIZZA FIRST!`, "success", 3)
@@ -970,6 +1221,7 @@ function EatsaPizza:Stop(_reason: string?)
 		self.winner = self:_winner()
 		self:_shareLayout()
 	end
+	self:_clearSpots()
 end
 
 -- Sharing ------------------------------------------------------------------------------------------
