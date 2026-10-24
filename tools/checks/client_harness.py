@@ -2421,6 +2421,104 @@ do
 	GameState.SetJSON("ReplayVote", { Open = false, Game = "", Voters = {} })
 end
 
+-- More endings on the results card (owner: "you never gave me several different renders for the end
+-- round of the mini game?"), each its own shot and taken only when --shots names it (without bots:
+-- the stand-in players fill the standings): "Results team" (TEAM WIN!, 3rd on the winning team),
+-- "Results defeated" (Big Bad Vacuum won), "Results lower" (7th of 12: off the podium, no keys),
+-- "Results small" (a lobby of three: no standings beside the podium), "Results draw".
+do
+	local function standingsFor(count, myPlace, scoreFor)
+		local list, others = {}, 0
+		for place = 1, count do
+			local who = __player
+			if place ~= myPlace then
+				others += 1
+				who = __players[others + 1] or __player
+			end
+			table.insert(list, { Name = who.DisplayName, UserId = who.UserId, Place = place, ScoreText = scoreFor(place) })
+		end
+		return list
+	end
+	local function lines(list)
+		local out, coins, xp = {}, 0, 0
+		for _, line in list do
+			table.insert(out, { Label = line[1], Coins = line[2], XP = line[3] })
+			coins += line[2]
+			xp += line[3]
+		end
+		return out, coins, xp
+	end
+	local variants = {
+		{
+			Shot = "Results team",
+			GameId = "PumpAndPop", MyTeam = "Red", WinningTeam = "Red", Place = 3, Count = 12,
+			Score = function(place)
+				return `{if place <= 6 then "Red" else "Blue"} {100 - place * 4}% • {24 - place} perfect`
+			end,
+			Lines = { { "Played the round", 2, 25 }, { "Top half finish", 1, 10 }, { "Team win!", 2, 20 } },
+			KeysWon = 1,
+		},
+		{
+			Shot = "Results defeated",
+			GameId = "BigBadVacuum", MyTeam = "Squad", WinningTeam = "Vacuum", Place = 2, Count = 8,
+			Score = function(place)
+				return `{420 - place * 45} dmg • {math.max(0, 4 - place)} rescues`
+			end,
+			Lines = { { "Played the round", 2, 25 }, { "Top half finish", 1, 10 } },
+			KeysWon = 2,
+		},
+		{
+			Shot = "Results lower",
+			GameId = "CapyGoBoom", Place = 7, Count = 12,
+			Score = function(place)
+				return `{170 - place * 12} KG • {15 - place} pops`
+			end,
+			Lines = { { "Played the round", 2, 25 } },
+			KeysWon = 0,
+		},
+		{
+			Shot = "Results small",
+			GameId = "LastDancer", Place = 1, Count = 3,
+			Score = function(place)
+				return `Groove {98 - place * 9}% • {44 - place * 6} perfect`
+			end,
+			Lines = { { "Played the round", 2, 25 }, { "Winner!", 2, 20 }, { "First win today!", 5, 50 } },
+			KeysWon = 3,
+		},
+		{
+			Shot = "Results draw",
+			GameId = "SinkingSands", MyTeam = "Divers", WinningTeam = nil, Place = 2, Count = 6,
+			Score = function(place)
+				return `💎 {if place % 2 == 1 then "DIVERS" else "DIGGERS"} 900 • you {500 - place * 40}`
+			end,
+			Lines = { { "Played the round", 2, 25 }, { "Top half finish", 1, 10 } },
+			KeysWon = 2,
+		},
+	}
+	for _, variant in variants do
+		if not (__onlyShots and __onlyShots[variant.Shot]) or #bots > 0 then
+			continue
+		end
+		step = string.lower(variant.Shot)
+		local list, coins, xp = lines(variant.Lines)
+		__fire("RoundResults", {
+			GameId = variant.GameId,
+			MyTeam = variant.MyTeam,
+			WinningTeam = variant.WinningTeam,
+			Place = variant.Place,
+			PlayerCount = variant.Count,
+			ScoreText = variant.Score(variant.Place),
+			Lines = list,
+			Coins = coins,
+			XP = xp,
+			Standings = standingsFor(variant.Count, variant.Place, variant.Score),
+			Crate = { Count = 1, Name = "Hollow Crate", Season = "HollowNight", Total = 14, Keys = 10 + variant.KeysWon, KeysWon = variant.KeysWon },
+		})
+		task.wait(1.4)
+		snap(variant.Shot)
+	end
+end
+
 if #bots > 0 then
 	-- The podium name tags are BillboardGuis in the world; copy them onto a screen to draw them.
 	step = "podium"
