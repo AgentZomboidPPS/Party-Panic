@@ -279,6 +279,20 @@ local function refreshVolume(time: number?)
 end
 
 -- What this device's music is doing right now, for the sound report (AssetReportController).
+-- Puts the round's own song exactly where it should be now, however small the drift: for a mode whose
+-- GO moved (Last Dancer, when its round began late), so its notes and its music agree.
+function AudioController.ResyncModeSong()
+	local gameId, song = currentModeSong()
+	if not gameId or not song then
+		return
+	end
+	local sound = modeSounds[gameId]
+	local since = sinceGo(gameId)
+	if sound and since and currentSound == sound and sound.IsPlaying then
+		sound.TimePosition = SongTiming.Position(song, since)
+	end
+end
+
 function AudioController.Status(): { [string]: any }
 	local sound = currentSound
 	return {

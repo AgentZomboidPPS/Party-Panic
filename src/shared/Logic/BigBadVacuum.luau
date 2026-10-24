@@ -50,11 +50,14 @@ end
 -- The boss's health for `count` players: about the damage that many players do in a fight they win
 -- with a little time to spare. A small squad gets less each: with fewer people the boss's attacks come
 -- round to each of them more often, so each throws less (on test servers with bots, at 100 a player a
--- duo never won and four won half the time, at the buzzer; eight or more won in 65-80 s). 125 for two,
--- 300 for four, 100 a player from eight.
+-- duo never won and four won half the time, at the buzzer; eight or more won in 65-80 s; at 125 for two
+-- a duo won one in three, at 300 four won three in three). 100 for two, 291 for four, 542 for six, 100 a
+-- player from eight.
 function BigBadVacuum.HealthFor(count: number): number
 	local players = math.clamp(count, 1, 12)
-	return math.floor(players * math.clamp(50 + 6.25 * players, 56, 100) + 0.5)
+	local short = math.max(0, 8 - players) / 6 -- how far short of eight the squad is (1 for a duo)
+	local each = math.max(45, 100 - 50 * short ^ 1.5)
+	return math.floor(players * each + 0.5)
 end
 
 function BigBadVacuum.PilesFor(count: number): number

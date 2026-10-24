@@ -209,10 +209,16 @@ end)
 test("a lobby that plays well can win: the health is within reach of the damage on offer", function()
 	-- About 16 s of open core in a fight, a brick per player every ~1.6 s, a crit being CRIT and a volley
 	-- (crits close together) hitting about half as hard again.
-	for _, players in { 2, 8, 12 } do
+	-- A small squad gets a smaller share of it (each of them is attacked more often, so throws less:
+	-- measured with bots on test servers).
+	local previous = 0
+	for players = 1, 12 do
 		local potential = players * (16 / 1.6) * Rules.CRIT * 1.5
-		expectTrue(Rules.HealthFor(players) < potential, `{players} players: health {Rules.HealthFor(players)}`)
-		expectTrue(Rules.HealthFor(players) > potential * 0.4, "... but not a pushover")
+		local health = Rules.HealthFor(players)
+		expectTrue(health < potential, `{players} players: health {health}`)
+		expectTrue(health > potential * (if players >= 4 then 0.4 else 0.25), `{players} players: not a pushover`)
+		expectTrue(health > previous, "more players, more health")
+		previous = health
 	end
 end)
 

@@ -239,11 +239,31 @@ def slim(text: str) -> str:
     """Comment-only lines blanked, indentation dropped, and a comment after code cut off on lines with
     no string or long bracket in them (so no "--" inside a string is ever taken for one), with every
     line kept where it is (the line map and error lines stay right): Open Cloud caps a script at
-    1 MiB, and the biggest bundles come within a few dozen KB of it."""
+    1 MiB, and the biggest bundles come within a few dozen KB of it. A module with a long bracket ([[, [=[)
+    or a string carried on to the next line (a trailing backslash, \\z) is left as it is: a line inside
+    one isn't code."""
+    if re.search(r"\[=*\[|\\\n|\\z", text):
+        return text
     text = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", text)
     text = re.sub(r"(?m)^([^\"'`\[\n]*?\S)[ \t]+--(?!\[)[^\n]*$", r"\1", text)
     text = "\n".join(_cut_after_strings(line) for line in text.split("\n"))
     return re.sub(r"(?m)^[ \t]+", "", text)
+
+
+def drop_blank_lines(body: str) -> tuple[str, list]:
+    """The body without its blank lines, and the runs that map its lines back: [[line in the new body
+    (0-based), line in the module (1-based)], ...], one each time a blank line was skipped. A body with a
+    long bracket or a carried-on string stays whole (a blank line in it may be part of a string)."""
+    if re.search(r"\[=*\[|\\\n|\\z", body):
+        return body, [[0, 1]]
+    kept, runs = [], []
+    for number, text in enumerate(body.split("\n"), start=1):
+        if text.strip() == "":
+            continue
+        if not runs or runs[-1][1] + (len(kept) - runs[-1][0]) != number:
+            runs.append([len(kept), number])
+        kept.append(text)
+    return "\n".join(kept), runs or [[0, 1]]
 
 
 def _cut_after_strings(line: str) -> str:
@@ -397,14 +417,18 @@ def main():
         keep = bundling.closure(available, start, provided={"Shared/Remotes"})
     except bundling.BundleError as err:
         sys.exit(f"round_harness: {err}")
-    line_map = []  # (first line of the module body in the bundle, module name)
+    # (first line of the module body in the bundle, module name, [[line in the body, its line in the
+    # module], ...]): blank lines are dropped from the body (the bundle runs close to Open Cloud's 1 MiB
+    # cap), and each run of the rest records where it came from, so summarize.py's lines stay right.
+    line_map = []
     line = prelude.count("\n") + header.count("\n") + 1  # the __touchMode (and __devices) lines come first
     for module, body in available.items():
         if module not in keep:
             continue
         out.append(f'__modules["{module}"] = function()')
         line += 1
-        line_map.append((line, module))
+        body, runs = drop_blank_lines(body)
+        line_map.append((line, module, runs))
         out.append(body)
         line += body.count("\n") + 1
         out.append("end")

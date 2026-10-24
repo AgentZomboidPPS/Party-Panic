@@ -252,9 +252,18 @@ function LastDancer.Start(api)
 	local go = api:Shared("Go")
 	local floor = api:SharedJSON("Floor")
 	local arena = api:Arena(10)
+	-- GO moves when the round began late (server/MiniGames/LastDancer Start), possibly while the arena was
+	-- still arriving: read it again now, and follow it from here on, the song too.
+	go = api:Shared("Go") or go
 	if type(go) ~= "number" or not floor or not arena then
 		return
 	end
+	api:OnShared("Go", function(value)
+		if type(value) == "number" and value ~= go then
+			go = value
+			AudioController.ResyncModeSong()
+		end
+	end)
 	local touch = api:IsTouch()
 	local effects = not State.ReducedEffects()
 	local me = Players.LocalPlayer.UserId
@@ -446,7 +455,7 @@ function LastDancer.Start(api)
 		Size = UDim2.fromOffset(600, 34),
 		TextTransparency = 1,
 		Parent = hud,
-		Children = { UIKit.TextStroke(0.1) },
+		Children = { UIKit.TextStroke(0.1), UIKit.new("UITextSizeConstraint", { MaxTextSize = 28 }) },
 	})
 	local function hideHint()
 		if api.Gui.Parent then
@@ -456,7 +465,9 @@ function LastDancer.Start(api)
 	local function showBanner(text: string, color: Color3?, life: number?)
 		hideHint()
 		if touch then
+			-- (as wide as its words, up to 520; longer ones, two names about to fall, shrink to fit one line)
 			banner.Size = UDim2.fromOffset(math.min(520, UIKit.TextWidth(text, 28, Theme.Fonts.Display) + 24), 34)
+			banner.TextScaled = true
 		end
 		banner.Text = text
 		banner.TextColor3 = color or Color3.new(1, 1, 1)
@@ -721,12 +732,6 @@ function LastDancer.Start(api)
 	local function relNow(): number
 		return api:Now() - go
 	end
-	-- (moved when the round began late, along with the song: server/MiniGames/LastDancer Start)
-	api:OnShared("Go", function(value)
-		if type(value) == "number" then
-			go = value
-		end
-	end)
 
 	function tap(lane: number)
 		if not dancing() or GameState.Get("Phase") ~= "InRound" then
@@ -1163,6 +1168,8 @@ function LastDancer.Start(api)
 				if not character.Parent or groove == nil then
 					restore(entry.Rig)
 					rigs[character] = nil
+				elseif phase ~= "InRound" and phase ~= "Preparing" then
+					restore(entry.Rig) -- (the results: everyone stands at ease, not frozen mid-step)
 				elseif phase == "InRound" or phase == "Preparing" then
 					local energy = 0.3 + 0.7 * math.clamp(groove / 100, 0, 1)
 					if phase == "Preparing" then

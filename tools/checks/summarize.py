@@ -22,14 +22,21 @@ d = json.loads(d) if isinstance(d, str) else d
 if d is None:
     raise SystemExit("No results: the Luau task failed before returning (see the luau_task.py output).")
 line_map = json.load(open(args.map)) if args.map else []
-starts = [line for line, _ in line_map]
+starts = [entry[0] for entry in line_map]
 
 
 def where(n: int) -> str:
     i = bisect.bisect_right(starts, n) - 1
     if i < 0:
         return f"prelude:{n}"
-    return f"{line_map[i][1]}:{n - line_map[i][0] + 1}"
+    entry = line_map[i]
+    offset = n - entry[0]
+    if len(entry) > 2 and entry[2]:  # blank lines were dropped: the runs map the body's lines back
+        runs = entry[2]
+        k = bisect.bisect_right([run[0] for run in runs], offset) - 1
+        if k >= 0:
+            return f"{entry[1]}:{runs[k][1] + offset - runs[k][0]}"
+    return f"{entry[1]}:{offset + 1}"
 
 
 def fix(text: str) -> str:

@@ -48,6 +48,7 @@ local TURN_RATE = 2.4 -- rad/s while chasing
 local AIM_RATE = 6 -- rad/s while lining up an attack
 local PING_MAX = 0.3
 local LEAD_MAX = 0.15 -- the most of a player's velocity that is judged ahead
+local LEAD_SPEED = 80 -- ... and the fastest a player is taken to be moving for it (studs/s)
 
 local rng = Random.new()
 
@@ -466,7 +467,10 @@ function BigBadVacuum:_where(player: any, root: BasePart): (number, number)
 	if BotRegistry.IsBot(player) then
 		return position.X, position.Z
 	end
-	local velocity = root.AssemblyLinearVelocity
+	local velocity = root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)
+	if velocity.Magnitude > LEAD_SPEED then
+		velocity = velocity.Unit * LEAD_SPEED -- (a device reporting a wild velocity isn't judged far away)
+	end
 	local lead = math.min(pingOf(player) / 2 + 0.04, LEAD_MAX)
 	return position.X + velocity.X * lead, position.Z + velocity.Z * lead
 end
@@ -642,13 +646,18 @@ function BigBadVacuum:_release(player: any, now: number, spit: boolean)
 	local character, _, root = ctx:GetCharacter(player)
 	if root and character then
 		local boss = self.boss
+		-- Out of the back, clear of the body; with the boss backed against the wall, out towards the middle.
+		local reach = Rules.BODY_RADIUS + 5
 		local angle = boss.Face + math.pi + rng:NextNumber(-0.7, 0.7)
-		local reach = math.min(
-			Rules.BODY_RADIUS + 8,
-			self.radius - 4 - Rules.Distance(boss.X, boss.Z, self.center.X, self.center.Z)
-		)
-		reach = math.max(reach, 6)
-		local at = Vector3.new(boss.X + math.cos(angle) * reach, self.center.Y + 3.5, boss.Z + math.sin(angle) * reach)
+		local function landing(a: number): (number, number)
+			return boss.X + math.cos(a) * reach, boss.Z + math.sin(a) * reach
+		end
+		local x, z = landing(angle)
+		if Rules.Distance(x, z, self.center.X, self.center.Z) > self.radius - 3 then
+			angle = math.atan2(self.center.Z - boss.Z, self.center.X - boss.X) + rng:NextNumber(-0.7, 0.7)
+			x, z = landing(angle)
+		end
+		local at = Vector3.new(x, self.center.Y + 3.5, z)
 		root.Anchored = false
 		character:PivotTo(CFrame.new(at))
 		root.AssemblyLinearVelocity = Vector3.zero
@@ -760,8 +769,9 @@ function BigBadVacuum:_landBrick(flight: Flight, now: number)
 		ctx:Fire(nil, "Clink", r2(at.X), r2(at.Y), r2(at.Z), true)
 		return
 	end
-	-- (the core counts as open a hair after it shuts: the brick was already in the air)
-	local open = now < boss.CoreUntil + 0.12
+	-- (a brick thrown while the core was open counts as a crit even if the hatch shut while it flew: the
+	-- HUD said THROW when it left the hand)
+	local open = now < boss.CoreUntil + 0.12 or flight.T0 < boss.CoreUntil
 	if not open then
 		self:_damage(thrower, Rules.CHIP, false, 0, now)
 		ctx:Fire(nil, "Clink", r2(at.X), r2(at.Y), r2(at.Z), false)
@@ -918,7 +928,9 @@ function BigBadVacuum:_stepPeople(now: number, dt: number)
 		end
 		-- The safety net: anyone found outside the wall (or under the rug) goes back in.
 		local fromMiddle = Rules.Distance(x, z, self.center.X, self.center.Z)
-		if (fromMiddle > self.radius - 0.5 or position.Y < self.center.Y - 5) and not root.Anchored then
+		-- (the blocks' inside face is at radius + 0.5: only someone pushed into or through the wall is caught,
+		-- not someone standing against it)
+		if (fromMiddle > self.radius + 2 or position.Y < self.center.Y - 5) and not root.Anchored then
 			local ux = (x - self.center.X) / math.max(fromMiddle, 0.1)
 			local uz = (z - self.center.Z) / math.max(fromMiddle, 0.1)
 			local inside = math.min(fromMiddle, self.radius - 4)
@@ -1270,6 +1282,7 @@ function BigBadVacuum:_lose(now: number)
 	boss.Plan = nil
 	boss.Vx, boss.Vz, boss.Spin = 0, 0, 0
 	self.flights = {}
+	self:_releaseAll(now) -- (as a win does: nobody hangs in the bag through the results)
 	self:_freezeEveryone(true)
 	ctx:Fire(nil, "Defeat", r2(now))
 	self:_publishAll()
@@ -1313,17 +1326,25 @@ function BigBadVacuum:_tryPanic(player: any)
 			ctx:AddScore(other, Rules.PANIC_SHARE)
 		end
 	end
-	ctx:Delay(1.4, function()
-		self.panicPending = false
+	local function blast()
 		local at = ctx:Now()
-		if boss.Shield or boss.State == "Dying" or boss.State == "Done" then
+		if boss.State == "Dying" or boss.State == "Done" or not ctx:IsRunning() then
+			self.panicPending = false
 			return
 		end
+		if boss.Shield then
+			-- (a phase break began while it charged: it goes off as soon as the shield drops, the meter
+			-- already spent isn't wasted)
+			ctx:Delay(0.2, blast)
+			return
+		end
+		self.panicPending = false
 		-- The blast opens the core as well (an overload), whatever the boss was doing.
 		self:_openCore(at, Rules.BLAST_OPEN, "Blast")
 		local dealt = self:_damage(player, math.floor(boss.Max * Rules.BLAST + 0.5), false, 0, at, true)
 		ctx:Fire(nil, "Blast", dealt)
-	end)
+	end
+	ctx:Delay(1.4, blast)
 end
 
 -- Starting ------------------------------------------------------------------------------------------------------

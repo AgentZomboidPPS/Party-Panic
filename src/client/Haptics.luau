@@ -32,9 +32,12 @@ local function effectFor(kind: Kind): any
 	return if effect then effect else nil
 end
 
--- Whether this device buzzes for the game: a phone, with the setting on.
+-- Whether this device buzzes for the game: a phone (the same test as the one that shows Settings'
+-- switch: touch and no keyboard), with the setting on.
 function Haptics.Enabled(): boolean
-	return UserInputService.TouchEnabled and State.Setting("Vibration") ~= false
+	return UserInputService.TouchEnabled
+		and not UserInputService.KeyboardEnabled
+		and State.Setting("Vibration") ~= false
 end
 
 function Haptics.Play(kind: Kind)

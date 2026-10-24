@@ -35,6 +35,7 @@ local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
@@ -463,8 +464,16 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 		refreshShown()
 	end)
 	self.Janitor:Add(button.InputBegan:Connect(function(input)
-		if input.UserInputType ~= Enum.UserInputType.Touch or holdingTouch then
+		if input.UserInputType ~= Enum.UserInputType.Touch then
 			return
+		end
+		local held = holdingTouch
+		if held then
+			local state = held.UserInputState
+			if state ~= Enum.UserInputState.End and state ~= Enum.UserInputState.Cancel then
+				return -- (another finger on it: the first one holds it)
+			end
+			release() -- (a hold whose end never came)
 		end
 		press()
 		if isDown then
@@ -482,6 +491,9 @@ function Api.Button(self: Api, options: ButtonOptions): ActionButton
 			release()
 		end
 	end))
+	-- Roblox's menu, the notification shade or another app can swallow the finger's lift: let go then.
+	self.Janitor:Add(GuiService.MenuOpened:Connect(release))
+	self.Janitor:Add(UserInputService.WindowFocusReleased:Connect(release))
 	self.Janitor:Add(forgetTouch)
 	-- (A mouse, or a touch the InputBegan above didn't take: the button's own edges.)
 	self.Janitor:Add(button.MouseButton1Down:Connect(press))

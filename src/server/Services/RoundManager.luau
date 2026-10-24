@@ -263,6 +263,23 @@ local function runRound(definition, participants: { Player })
 				end
 			end
 			local placed = Placement.Assign(entries)
+			-- A round everyone lost (Big Bad Vacuum: the boss's side won, and no player is on it): nobody
+			-- takes 1st, so a defeat is never anyone's win (the win bonus, wins, medals, cups, the podium's
+			-- top step); the squad ranks from 2nd by what each did.
+			if type(results.WinningTeam) == "string" and #placed > 0 then
+				local anyWinner = false
+				for _, item in placed do
+					if (item.Entry :: any).Team == results.WinningTeam then
+						anyWinner = true
+						break
+					end
+				end
+				if not anyWinner then
+					for _, item in placed do
+						item.Place += 1
+					end
+				end
+			end
 			local granted = pcall(RewardService.GrantRound, definition, placed, results.WinningTeam)
 			if not granted then
 				Telemetry.Error("Rewards", definition.Id)

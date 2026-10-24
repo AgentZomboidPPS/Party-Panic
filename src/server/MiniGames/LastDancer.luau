@@ -528,6 +528,12 @@ function LastDancer:_cut(phase: number, rel: number)
 	for _, player in self.doomed or {} do
 		local slot = self.slots[player]
 		if not slot or not ctx:IsAlive(player) then
+			-- (gone, or reset, since the warning: their mat stops flashing on every device)
+			if slot then
+				slot.Doomed = false
+				slot.Tile:SetAttribute("Doomed", nil)
+			end
+			table.insert(spared, player.UserId)
 			continue
 		end
 		if #ids >= limit then

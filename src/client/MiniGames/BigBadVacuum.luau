@@ -522,11 +522,16 @@ function BigBadVacuum.Start(api)
 			Children = { UIKit.TextStroke(0) },
 		})
 		beamGui = gui
-		-- The arm.
-		if armModel then
-			prepare(armModel, true)
-			armModel.Parent = nil
-			indexParts(armModel, armParts)
+	end
+
+	-- The arm's rig, the first time it's drawn (its template can arrive after the body's).
+	local armReady = false
+	local function readyArm(model: Model)
+		if not armReady then
+			armReady = true
+			prepare(model, true)
+			model.Parent = nil
+			indexParts(model, armParts)
 		end
 	end
 
@@ -817,6 +822,7 @@ function BigBadVacuum.Start(api)
 		if not model or not boss or not shown.Ready then
 			return
 		end
+		readyArm(model)
 		local plan = atk
 		local ending = false
 		if (plan.K or "") == "" then
@@ -881,14 +887,17 @@ function BigBadVacuum.Start(api)
 
 	-- The dust bag --------------------------------------------------------------------------------------------------------
 	local bagGui: BillboardGui? = nil
+	local bagReady = false -- (set up once: its parent goes back to nil every frame until the boss lands)
+	local bagGone = false -- blown up with the boss at the finale
 	local bagLabel: TextLabel? = nil
 	local bagScale = 1
 	local function drawBag(t: number, dt: number)
 		local model = bagModel
-		if not model or not boss or not shown.Ready then
+		if not model or not boss or not shown.Ready or bagGone then
 			return
 		end
-		if model.Parent == nil then
+		if not bagReady then
+			bagReady = true
 			prepare(model, false)
 			model.Parent = world
 			bagGui = UIKit.new("BillboardGui", {
@@ -1130,6 +1139,7 @@ function BigBadVacuum.Start(api)
 				newPart({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 1, 1), Color = WHITE, Parent = world })
 			) :: Part
 			function marker.Update(t: number): boolean
+				local zone = marker.Zone -- (the latest: the cord's circle follows its target)
 				local span = math.max(zone.T1 - zone.T0, 0.05)
 				local p = clamp01((t - zone.T0) / span)
 				local hot = t >= zone.T1
@@ -1173,6 +1183,7 @@ function BigBadVacuum.Start(api)
 				add(pair[2])
 			end
 			function marker.Update(t: number): boolean
+				local zone = marker.Zone
 				local span = math.max(zone.T1 - zone.T0, 0.05)
 				local p = clamp01((t - zone.T0) / span)
 				local hot = t >= zone.T1
@@ -1215,6 +1226,7 @@ function BigBadVacuum.Start(api)
 				table.insert(chevrons, add(newPart({ Color = WHITE, Parent = world })))
 			end
 			function marker.Update(t: number): boolean
+				local zone = marker.Zone
 				local span = math.max(zone.T1 - zone.T0, 0.05)
 				local p = clamp01((t - zone.T0) / span)
 				local hot = t >= zone.T1
@@ -1256,34 +1268,40 @@ function BigBadVacuum.Start(api)
 		return marker :: Marker
 	end
 
-	local function rebuildMarkers()
-		for _, marker in markers do
-			marker.Destroy()
+	-- Keeps the markers in step with the attack plan, on every publish: a new attack clears the old one's;
+	-- within one, each zone is matched by its place, kind and start (a moved zone, the cord's circle
+	-- following its target, keeps its marker and moves it; a zone added later, the dust bombs' circles or
+	-- a second cord slam, gets one). A plan with no attack clears them all.
+	local function syncMarkers()
+		local plan = api:SharedJSON("Atk") -- (read here, whichever Atk handler runs first)
+		if type(plan) ~= "table" or (plan.K or "") == "" or plan.I ~= markerId then
+			for _, marker in markers do
+				marker.Destroy()
+			end
+			markers = {}
+			markerId = if type(plan) == "table" and (plan.K or "") ~= "" then plan.I else -1
 		end
-		markers = {}
-		if type(atk.Z) ~= "table" then
+		if type(plan) ~= "table" or type(plan.Z) ~= "table" or (plan.K or "") == "" then
 			return
 		end
-		for _, zone in atk.Z do
-			table.insert(markers, makeMarker(zone, atk.K))
+		local byKey: { [string]: Marker } = {}
+		for _, marker in markers do
+			byKey[(marker :: any).Key] = marker
 		end
-	end
-
-	-- A new attack plan (or the cord's circle following its target): rebuild or move the markers.
-	api:OnShared("Atk", function()
-		if atk.I ~= markerId then
-			markerId = atk.I
-			rebuildMarkers()
-		else
-			for index, zone in atk.Z or {} do
-				if markers[index] then
-					markers[index].Zone = zone
-				end
+		for index, zone in plan.Z do
+			local key = `{index}:{zone.K}:{zone.T0}`
+			local marker = byKey[key]
+			if marker then
+				marker.Zone = zone
+			else
+				local made = makeMarker(zone, plan.K);
+				(made :: any).Key = key
+				table.insert(markers, made)
 			end
 		end
-	end)
-	markerId = atk.I or -1
-	rebuildMarkers()
+	end
+	api:OnShared("Atk", syncMarkers)
+	syncMarkers()
 
 	-- The cord slam's shockwave rings -------------------------------------------------------------------------------------------
 	type Ring = { X: number, Z: number, T0: number, Parts: { Part }, Flash: Part?, Visual: boolean }
@@ -2010,6 +2028,7 @@ function BigBadVacuum.Start(api)
 					armModel.Parent = nil
 				end
 				if bagModel then
+					bagGone = true
 					bagModel.Parent = nil
 				end
 			end
