@@ -15,6 +15,7 @@ return {
 	HexMeltdown = { Pack = "ModePack1", Title = "Molten Showdown", Start = 0.000, Drop = 13.500, End = 106.403 },
 	HoneyTrap = { Pack = "ModePack1", Title = "Honeycomb Hush", Start = 204.713, Drop = 218.213, End = 301.290 },
 	HotPotato = { Pack = "ModePack6", Title = "Mambo Kaboom", Start = 0.000, Drop = 13.500, End = 108.500 },
+	LastDancer = { Pack = "ModePack7", Title = "Mirror Ball Showdown", Start = 0.000, Drop = 13.500, End = 77.500 },
 	LogJam = { Pack = "ModePack5", Title = "Timber Tumble", Start = 174.875, Drop = 188.375, End = 228.375 },
 	MechaMarathon = { Pack = "ModePack5", Title = "Tick-Tock Takeoff", Start = 278.875, Drop = 292.208, End = 323.875 },
 	MessyMemory = { Pack = "ModePack4", Title = "Tidy-Up Tango", Start = 0.000, Drop = 13.500, End = 69.500 },
