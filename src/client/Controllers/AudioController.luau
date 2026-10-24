@@ -39,7 +39,7 @@ local FIRST_FADE_TIME = 6
 local SWITCH_FADE_TIME = 1.2
 local HURRY_TIME = 10
 local SONG_FADE_TIME = 2.5 -- a mini-game song's intro fades in (it's soft to begin with)
-local SONG_DRIFT = 0.35 -- a mini-game song this far off where it should be jumps back in time
+local SONG_DRIFT = SongTiming.DRIFT -- a mini-game song this far off where it should be jumps back in time
 -- A mini-game song that hasn't loaded this long after it started (a slow phone, or a pack still in
 -- Roblox's review) gives way to "Panic Mode" for the rest of that round.
 local SONG_LOAD_GRACE = 8

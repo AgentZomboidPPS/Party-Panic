@@ -9,6 +9,10 @@
 
 local SongTiming = {}
 
+-- How far off a playing song may be before AudioController jumps it to where it should be (a jump is
+-- audible, so small drifts stay). Last Dancer's chart follows the same rule (MiniGames/LastDancer).
+SongTiming.DRIFT = 0.35
+
 export type Song = {
 	Start: number, -- where the song starts in its pack (seconds)
 	Drop: number, -- where its intro ends: this moment plays at GO

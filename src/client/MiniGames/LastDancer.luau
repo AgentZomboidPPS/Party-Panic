@@ -721,6 +721,12 @@ function LastDancer.Start(api)
 	local function relNow(): number
 		return api:Now() - go
 	end
+	-- (moved when the round began late, along with the song: server/MiniGames/LastDancer Start)
+	api:OnShared("Go", function(value)
+		if type(value) == "number" then
+			go = value
+		end
+	end)
 
 	function tap(lane: number)
 		if not dancing() or GameState.Get("Phase") ~= "InRound" then

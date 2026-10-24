@@ -32,6 +32,7 @@ local Chart = require(ReplicatedStorage.Shared.LastDancerChart)
 local GameDefinitions = require(ReplicatedStorage.Shared.GameDefinitions)
 local GameState = require(ReplicatedStorage.Shared.GameState)
 local Logic = require(ReplicatedStorage.Shared.Logic.LastDancer)
+local SongTiming = require(ReplicatedStorage.Shared.Logic.SongTiming)
 local Sounds = require(ReplicatedStorage.Shared.Sounds)
 
 local MiniGame = require(script.Parent.Kit.MiniGame)
@@ -637,6 +638,17 @@ end
 function LastDancer:Start()
 	local ctx = self.context
 	self.started = true
+	-- A round that began more than SongTiming.DRIFT after GO (a slow Prepare): every device's song jumps
+	-- to the real start (AudioController), so the chart moves there too and the notes stay on the music.
+	local definition = GameDefinitions.Get("LastDancer")
+	local phaseEnd = GameState.Get("PhaseEndsAt")
+	if definition and type(phaseEnd) == "number" and phaseEnd > 0 then
+		local began = phaseEnd - definition.Duration
+		if began - self.go > SongTiming.DRIFT then
+			self.go = began
+			ctx:SetShared("Go", self.go)
+		end
+	end
 	for _, player in ctx:GetPlayers() do
 		self:_still(player)
 	end
