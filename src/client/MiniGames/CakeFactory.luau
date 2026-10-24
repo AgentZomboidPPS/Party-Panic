@@ -52,6 +52,7 @@ local SPONGE_Y = 0.2
 local CREAM_Y = 0.89
 local BERRY_ON_CREAM = 1.69
 local BERRY_ON_SPONGE = 1.42
+local PRESS_HIT = 0.12 -- seconds into a machine's press when it meets the cake (its layer shows then)
 local LANE_BEHIND = 13 -- the lane shows cakes this far before the gate...
 local LANE_AHEAD = 5 -- ...and this far past it
 
@@ -77,6 +78,7 @@ type Machine = {
 	Owner: number,
 	Moving: { { Part: BasePart, Rest: CFrame } },
 	PressedAt: number,
+	Predicted: number?, -- when this device brought it down for your press (before the server said)
 	JamAt: number,
 	Gates: { BasePart },
 	Model: Model?,
@@ -566,15 +568,28 @@ function CakeFactory.Start(api)
 			end
 		end
 	end
-	-- Set below, once the cakes' state can be read: notes which cake this press is for.
-	local predictPress: ((at: number) -> ())? = nil
+	-- Set below, once the cakes' state can be read: notes which cake this press is for (and which of
+	-- your machines it works).
+	local predictPress: ((at: number) -> (number?, number?))? = nil
 	if add then
 		add.Pressed:Connect(function()
 			if live and not belt.StopAt and os.clock() >= jamUntil then
 				local at = api:Now()
 				api:Action("Add", at)
+				-- The machine comes down on the cake under it now, not when the server's answer is
+				-- back (owner: "I feel like its broken and not lining up properly": on a phone the
+				-- answer takes a tenth of a second or more, and by then the belt had carried the cake
+				-- on, so the stamp came down beside it and the layer popped on late). The verdict
+				-- (GOOD, PERFECT, SPLAT...) still comes from the server.
+				local index = nil
 				if predictPress then
-					predictPress(at)
+					local _, picked = predictPress(at)
+					index = picked
+				end
+				local machine = if index and myLine then myLine.Machines[index] else nil
+				if machine then
+					machine.PressedAt = os.clock()
+					machine.Predicted = os.clock()
 				end
 			end
 		end)
@@ -725,7 +740,7 @@ function CakeFactory.Start(api)
 	end
 	-- Your press on its way: the cake it's for, per k, counts as done for that machine on your
 	-- lanes until the server's state says what happened (or a moment passes).
-	local pending = {} :: { [number]: { Index: number, Until: number } }
+	local pending = {} :: { [number]: { Index: number, Until: number, At: number } }
 	local function speedAt(t: number): number
 		local t0 = belt.T0
 		if type(t0) ~= "number" or t < t0 or (type(belt.StopAt) == "number" and t >= belt.StopAt) then
@@ -762,8 +777,9 @@ function CakeFactory.Start(api)
 			end
 		end
 		if bestK and bestIndex then
-			pending[bestK] = { Index = bestIndex, Until = clock + 1 }
+			pending[bestK] = { Index = bestIndex, Until = clock + 1.5, At = clock }
 		end
+		return bestK, bestIndex
 	end
 
 	for _, team in order do
@@ -808,10 +824,12 @@ function CakeFactory.Start(api)
 		if not machine then
 			return
 		end
+		local predicted = userId == me and machine.Predicted ~= nil and os.clock() - machine.Predicted < 1
+		machine.Predicted = nil
 		if kind == "miss" then
 			machine.JamAt = os.clock()
-		elseif kind ~= "ruined" then
-			machine.PressedAt = os.clock()
+		elseif kind ~= "ruined" and not predicted then
+			machine.PressedAt = os.clock() -- (your own press already came down when you pressed)
 		end
 		if userId == me then
 			if kind == "miss" then
@@ -1009,6 +1027,12 @@ function CakeFactory.Start(api)
 				local n, bad, known = cakeState(line, k)
 				if not known then
 					n, bad = math.max(view.N, 0), view.Bad
+				end
+				-- Your press's layer shows as the machine comes down on it, before the server's
+				-- state says so (it says ruined instead if the press was bad).
+				local mark = if line == myLine and not bad then pending[k] else nil
+				if mark and mark.Until >= clock and clock - mark.At >= PRESS_HIT then
+					n = math.max(n, mark.Index)
 				end
 				if n ~= view.N or bad ~= view.Bad then
 					if bad and not view.Bad then

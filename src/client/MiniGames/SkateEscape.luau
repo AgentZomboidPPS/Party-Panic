@@ -669,9 +669,13 @@ function SkateEscape.Start(api)
 				end
 			end
 		end
+		-- Where it rests, as the server stamped it: the model may have come before its parts, and then
+		-- its own pivot reads as the world's middle, so the collapse moved the piece into the lobby
+		-- (owner: "The skate peices are in the lobby").
+		local base = child:GetAttribute("Pivot")
 		table.insert(pieces, {
 			Model = child,
-			Base = child:GetPivot(),
+			Base = if typeof(base) == "CFrame" then base else child:GetPivot(),
 			D0 = d0,
 			D1 = d1,
 			Planks = planks,

@@ -192,6 +192,9 @@ local function runRound(definition, participants: { Player })
 	local prepDeadline = os.clock() + prepTime
 	setPhase("Preparing", prepTime, definition.Name)
 	local prepared = guarded("Prepare:" .. definition.Id, prepTime + 10, miniGame.Prepare, miniGame)
+	if prepared then
+		context:MarkBuilt() -- (devices wait for the whole arena: Kit/Api.Arena)
+	end
 	-- Bots never play on their own: a round whose people all left or couldn't be placed before GO is
 	-- called off too (owner: "it just has to work"; it used to go on with only bots).
 	if not prepared or not context:WaitForStart(prepDeadline) then

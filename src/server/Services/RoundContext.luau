@@ -763,6 +763,21 @@ function RoundContext.GiveOwnership(_self: RoundContext, part: BasePart, player:
 	end
 end
 
+-- The arena is built (the mode's Prepare is done): PP_Parts on it says how many parts it holds, so
+-- devices wait for all of them before the client half looks at it (Kit/Api.Arena). The client half
+-- starts as Preparing does, while the arena is still being built and sent, and a model that came
+-- before its parts read its pivot as the world's middle: Skate Escape moved its bridge pieces into
+-- the lobby that way (owner: "The skate peices are in the lobby").
+function RoundContext.MarkBuilt(self: RoundContext)
+	local parts = 0
+	for _, descendant in self.Arena:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			parts += 1
+		end
+	end
+	self.Arena:SetAttribute("PP_Parts", parts)
+end
+
 -- Shares a model the client half copies (fruit, arrows, balloons...): it waits in
 -- ReplicatedStorage.MiniGameAssets, where nothing renders, until the round ends.
 -- PP_Parts says how many parts it holds: a model can reach a device before all of its parts do,

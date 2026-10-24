@@ -125,8 +125,40 @@ function Api.Now(_self: Api): number
 	return workspace:GetServerTimeNow()
 end
 
+-- The round's arena, once it's all here: the server marks it built with how many parts it holds
+-- (RoundContext.MarkBuilt) and this waits until this device has them, so nothing reads a model that
+-- came before its parts (its pivot then reads as the world's middle: Skate Escape's bridge pieces
+-- landed in the lobby; owner: "The skate peices are in the lobby"). The client half starts as
+-- Preparing does, while the server is still building. It gives up waiting after ARENA_WAIT, or once
+-- the count stops growing for a moment (the server may have taken parts out since).
+local ARENA_WAIT = 15
 function Api.Arena(self: Api, timeout: number?): Model?
-	return workspace:WaitForChild("Arena_" .. self.Id, timeout or 10) :: Model?
+	local arena = workspace:WaitForChild("Arena_" .. self.Id, timeout or 10) :: Model?
+	if not arena then
+		return nil
+	end
+	local deadline = os.clock() + ARENA_WAIT
+	local last, steadySince = -1, os.clock()
+	while os.clock() < deadline and arena.Parent do
+		local expected = arena:GetAttribute("PP_Parts")
+		if type(expected) == "number" then
+			local count = 0
+			for _, descendant in arena:GetDescendants() do
+				if descendant:IsA("BasePart") then
+					count += 1
+				end
+			end
+			if count >= expected then
+				break
+			elseif count ~= last then
+				last, steadySince = count, os.clock()
+			elseif os.clock() - steadySince > 1.5 then
+				break
+			end
+		end
+		task.wait(0.1)
+	end
+	return arena
 end
 
 function Api.Shared(_self: Api, key: string): any

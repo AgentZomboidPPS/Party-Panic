@@ -142,6 +142,9 @@ function SkateEscape:_deckPiece(index: number, d0: number, d1: number): Model
 		stretchZ(rail, length / DECK_MESH_LENGTH)
 	end
 	model.PrimaryPart = deck.PrimaryPart
+	-- (Devices move the piece from here as the bridge collapses: a model can reach them before its
+	-- parts, and then its own pivot reads as the world's middle, which is the lobby.)
+	model:SetAttribute("Pivot", model:GetPivot())
 	model.Parent = ctx.Arena
 	return model
 end
@@ -584,6 +587,7 @@ function SkateEscape:_buildArena()
 		end
 	end
 	start.PrimaryPart = pad
+	start:SetAttribute("Pivot", start:GetPivot()) -- (as each piece's: _deckPiece)
 	start.Parent = arena
 	-- The gate faces the racers' cameras behind the line (standing on the plinth); its banner says
 	-- what the race is.

@@ -1159,6 +1159,9 @@ function __runRound(id, playerCount, seconds, botFactory, clientMode, dumpAt, ui
 		else nil
 	local okPrepare, prepareErr = pcall(miniGame.Prepare, miniGame)
 	summary.prepare = if okPrepare then "ok" else tostring(prepareErr)
+	if okPrepare and ctx.MarkBuilt then
+		ctx:MarkBuilt() -- (as RoundManager: devices wait for the whole arena, Kit/Api.Arena)
+	end
 	summary.prepareSeconds = __round(os.clock() - t0)
 	summary.arenaParts = #ctx.Arena:GetDescendants()
 	if watch and watch.parties then
