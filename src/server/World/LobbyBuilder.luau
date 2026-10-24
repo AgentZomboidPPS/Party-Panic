@@ -1144,24 +1144,27 @@ local function buildQuestCorner(root: Model): ProximityPrompt
 		Color = rgb(70, 130, 240),
 		Parent = corner,
 	})
+	-- The slot stands a clear 0.1 off the box, the pole's top 0.15 over the flag's, and the flag
+	-- meets the pole's side instead of running into it: faces closer than that flicker as the
+	-- camera moves (z-fighting).
 	Build.Decor({
 		Name = "Slot",
-		Size = Vector3.new(1.6, 0.25, 0.1),
-		CFrame = mailFrame * CFrame.new(0, 5.5, -1.82),
+		Size = Vector3.new(1.6, 0.25, 0.2),
+		CFrame = mailFrame * CFrame.new(0, 5.5, -1.81),
 		Color = rgb(30, 30, 50),
 		Parent = corner,
 	})
 	Build.Decor({
 		Name = "FlagPole",
-		Size = Vector3.new(0.15, 1.6, 0.15),
-		CFrame = mailFrame * CFrame.new(1.4, 6.1, 0.8),
+		Size = Vector3.new(0.15, 1.8, 0.15),
+		CFrame = mailFrame * CFrame.new(1.4, 6.2, 0.8),
 		Color = rgb(230, 230, 235),
 		Parent = corner,
 	})
 	Build.Decor({
 		Name = "Flag",
-		Size = Vector3.new(0.12, 0.7, 1),
-		CFrame = mailFrame * CFrame.new(1.4, 6.6, 0.35),
+		Size = Vector3.new(0.12, 0.7, 0.875),
+		CFrame = mailFrame * CFrame.new(1.4, 6.6, 0.2875),
 		Color = rgb(255, 70, 80),
 		Parent = corner,
 	})

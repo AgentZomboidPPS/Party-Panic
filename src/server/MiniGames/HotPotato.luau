@@ -230,7 +230,11 @@ function HotPotato:_buildArena()
 	local fenceAt = radius + 0.7 -- the panels' inside faces on the lawn's edge
 	for index = 0, panels - 1 do
 		local angle = index / panels * math.pi * 2
-		local at = center + Vector3.new(math.cos(angle) * fenceAt, SET_ON, math.sin(angle) * fenceAt)
+		-- Neighbours overlap at their posts, and posts' tops in one plane flickered as the camera moved
+		-- (z-fighting): every other panel stands 0.1 deeper in the lawn (and with an odd count the
+		-- last 0.2, as it meets the first). Still far over a jump.
+		local sink = if index == panels - 1 and panels % 2 == 1 then 0.2 elseif index % 2 == 1 then 0.1 else 0
+		local at = center + Vector3.new(math.cos(angle) * fenceAt, SET_ON - sink, math.sin(angle) * fenceAt)
 		local facing = CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z))
 		MeshLibrary.Get("HotPotatoFence", { CFrame = facing, Parent = arena })
 		MeshLibrary.Get("HotPotatoLights", {

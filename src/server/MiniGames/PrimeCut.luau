@@ -275,9 +275,9 @@ function PrimeCut:_buildArena()
 			Parent = arena,
 		})
 		Build.Decor({
-			Name = `RugMiddle_{team}`,
+			Name = `RugMiddle_{team}`, -- (its top a full 0.1 over the rug's: at 0.03 the two flickered)
 			Size = Vector3.new(37, 0.1, 31),
-			CFrame = CFrame.new(frame.Position.X, self.origin.Y + 0.08, frame.Position.Z + 5),
+			CFrame = CFrame.new(frame.Position.X, self.origin.Y + 0.15, frame.Position.Z + 5),
 			Color = color:Lerp(Color3.new(0, 0, 0), 0.1),
 			Material = Enum.Material.Fabric,
 			Parent = arena,

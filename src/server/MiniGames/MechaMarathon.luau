@@ -212,13 +212,15 @@ local function buildField(ctx, origin: Vector3, laneCount: number)
 		index += 1
 	end
 	local white = rgb(250, 250, 245)
-	-- Curbs along both edges, lane lines, the start line.
+	-- Curbs along both edges, lane lines, the start line. The white lines' tops are a full 0.1 over
+	-- the grass (at 0.05 they flickered on it as the camera moved: z-fighting), and the curbs stop
+	-- 0.1 inside the track's sides and ends rather than sharing them.
 	for _, side in { -1, 1 } do
 		strip(
 			field,
 			"Curb",
-			Vector3.new(origin.X + side * (half - 0.4), 0, origin.Z + trackBack / 2 - trackEnd / 2),
-			Vector2.new(0.8, trackBack + trackEnd),
+			Vector3.new(origin.X + side * (half - 0.5), 0, origin.Z + trackBack / 2 - trackEnd / 2),
+			Vector2.new(0.8, trackBack + trackEnd - 0.2),
 			ground + 0.12,
 			white,
 			0.4
@@ -232,7 +234,7 @@ local function buildField(ctx, origin: Vector3, laneCount: number)
 				"LaneLine",
 				Vector3.new(x, 0, origin.Z - 3 - length / 2),
 				Vector2.new(0.3, length),
-				ground + 0.05,
+				ground + 0.1,
 				white
 			)
 		end
@@ -242,7 +244,7 @@ local function buildField(ctx, origin: Vector3, laneCount: number)
 		"StartLine",
 		Vector3.new(origin.X, 0, origin.Z - 3),
 		Vector2.new(half * 2 - 1.6, 1),
-		ground + 0.08,
+		ground + 0.1,
 		white
 	)
 
@@ -444,7 +446,8 @@ function MechaMarathon:Prepare()
 		local padAt = Vector3.new(x, origin.Y, origin.Z)
 		MeshLibrary.Get("MechaMarathonPad", {
 			Colors = { Top = color },
-			CFrame = CFrame.new(padAt),
+			-- (0.03 up: its dark foot's top was 0.07 over the grass and flickered on it)
+			CFrame = CFrame.new(padAt + Vector3.new(0, 0.03, 0)),
 			Parent = ctx.Arena,
 		})
 		local toy = MeshLibrary.Get("MechaMarathonFlyer", {

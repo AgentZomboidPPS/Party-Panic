@@ -293,10 +293,13 @@ function MedalWall.Build(root: Model)
 	})
 	local emblemY = signY + signH / 2 + 1.1
 	for _, side in { -1, 1 } do
+		-- (The pink one a little further back: in one plane, the two flickered where they cross.)
 		Build.Decor({
 			Name = "EmblemRibbon",
 			Size = Vector3.new(1.1, 3.4, 0.12),
-			CFrame = frame * CFrame.new(side * 0.55, emblemY + 0.4, 0.4) * CFrame.Angles(0, 0, math.rad(-18) * side),
+			CFrame = frame
+				* CFrame.new(side * 0.55, emblemY + 0.4, if side < 0 then 0.4 else 0.5)
+				* CFrame.Angles(0, 0, math.rad(-18) * side),
 			Color = if side < 0 then rgb(64, 196, 255) else PINK,
 			Parent = wall,
 		})
@@ -312,10 +315,10 @@ function MedalWall.Build(root: Model)
 		Parent = wall,
 	})
 	Build.Decor({
-		Name = "EmblemFace",
+		Name = "EmblemFace", -- (a full 0.1 proud of the gold: any closer and the two flicker)
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(0.1, 2.3, 2.3),
-		CFrame = frame * CFrame.new(0, emblemY, -0.22) * CFrame.Angles(0, math.rad(90), 0),
+		CFrame = frame * CFrame.new(0, emblemY, -0.25) * CFrame.Angles(0, math.rad(90), 0),
 		Color = rgb(255, 232, 130),
 		Material = Enum.Material.Neon,
 		Parent = wall,

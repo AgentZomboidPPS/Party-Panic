@@ -326,16 +326,20 @@ function ObbyOdyssey:_buildPiece(piece: Course.Piece, folders: { [string]: Insta
 			Color = TIER_COLORS[tier],
 			Parent = arena,
 		})
+		-- The stair pattern flat on the tier's front and the white lip round its top, each a full 0.1
+		-- off the tier's faces and each other's: closer than that they flickered as the camera
+		-- moved (z-fighting).
+		local stairsTop = top - 0.2
 		self:_decor({
 			Name = "Stairs",
-			Size = Vector3.new(10, top - math.max(bottom, 0), 0.2),
-			CFrame = self:_at(x, (top + math.max(bottom, 0)) / 2, z - piece.D / 2 - 0.08),
+			Size = Vector3.new(10, stairsTop - math.max(bottom, 0), 0.2),
+			CFrame = self:_at(x, (stairsTop + math.max(bottom, 0)) / 2, z - piece.D / 2 - 0.1),
 			Color = rgb(60, 110, 230),
 		})
 		self:_decor({
 			Name = "Lip",
-			Size = Vector3.new(piece.W + 0.1, 0.5, piece.D + 0.1),
-			CFrame = self:_at(x, top - 0.3, z),
+			Size = Vector3.new(piece.W + 0.2, 0.5, piece.D + 0.2),
+			CFrame = self:_at(x, top - 0.35, z),
 			Color = rgb(255, 255, 255),
 		})
 		return
@@ -385,9 +389,9 @@ function ObbyOdyssey:_buildPiece(piece: Course.Piece, folders: { [string]: Insta
 		-- pink edges and legs into the water
 		for _, side in { -1, 1 } do
 			self:_decor({
-				Name = "Edge",
+				Name = "Edge", -- (its top 0.12 under the deck's: at 0.05 the two flickered)
 				Size = Vector3.new(0.6, 2.2, piece.D - 2),
-				CFrame = self:_at(x + side * (piece.W / 2 - 0.2), top - 1.15, z),
+				CFrame = self:_at(x + side * (piece.W / 2 - 0.2), top - 1.22, z),
 				Color = PINK,
 			})
 		end
@@ -473,7 +477,8 @@ function ObbyOdyssey:_sectionArch(pad: Course.Piece)
 		return
 	end
 	local width = math.min(pad.W - 4, 26)
-	local exit = pad.Z + pad.D / 2 - 1
+	-- (1.1 in: at 1 the arch's far side was in the plane of the pad's glowing strip's, and flickered)
+	local exit = pad.Z + pad.D / 2 - 1.1
 	local color = rgb(section.Color[1], section.Color[2], section.Color[3])
 	local arch = Shapes.Arch(width, 13, 1.6, 1.6, self:_at(pad.X, pad.Top, exit), {
 		Name = "SectionArch",
@@ -639,8 +644,9 @@ function ObbyOdyssey:_checkpointFlag(piece: Course.Piece)
 			TextStrokeTransparency = 0.4,
 		})
 	end
-	-- a glowing strip round the pad's top edge
-	local y = piece.Top + 0.03
+	-- a glowing strip round the pad's top edge (its top a full 0.1 over the pad's: at 0.06 the two
+	-- flickered)
+	local y = piece.Top + 0.07
 	for _, edge in
 		{
 			{ piece.W - 1, 0.5, piece.X, piece.Z - piece.D / 2 + 0.45 },
@@ -1011,10 +1017,12 @@ function ObbyOdyssey:_buildScenery()
 		})
 	end
 	for _, z in { back - 60, ahead + 60 } do
+		-- (0.1 lower and narrower than the side banks where they meet: one grass top and one end in
+		-- the same planes flickered.)
 		self:_decor({
 			Name = "Bank",
-			Size = Vector3.new(540, 8, 120),
-			CFrame = self:_at(0, -3, z),
+			Size = Vector3.new(539.8, 8, 120),
+			CFrame = self:_at(0, -3.1, z),
 			Color = grass,
 			Material = Enum.Material.Grass,
 		})

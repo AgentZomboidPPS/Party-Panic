@@ -279,7 +279,8 @@ function LobbyObby.Build(parent: Instance, frame: CFrame): Refs
 		Color = WHITE,
 		Parent = entry,
 	})
-	local board = Shapes.RoundedBox(Vector3.new(11, 3.8, 1.2), 0.5, {
+	-- (1.4 deep: at the trim's 1.2 the two shared a front and a back, and flickered there.)
+	local board = Shapes.RoundedBox(Vector3.new(11, 3.8, 1.4), 0.5, {
 		Name = "Sign",
 		CFrame = at(0, 14.2, archFoot),
 		Color = rgb(255, 84, 150),
