@@ -315,7 +315,8 @@ end
 -- The header -------------------------------------------------------------------------------------------
 
 local function buildHeader()
-	-- The window's own title ("👥 PARTY") makes way for the header; its X stays on top.
+	-- The window's own title ("👥 PARTY") and title band make way for the header; its X stays on top.
+	window.Band.Visible = false
 	local titleBar = window.Window:FindFirstChild("TitleBar")
 	if titleBar then
 		for _, item in titleBar:GetChildren() do

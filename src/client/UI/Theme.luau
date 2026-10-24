@@ -7,6 +7,12 @@
 -- MutedDark is one that can't be used yet (locked, too dear), light enough to read; every close ✕
 -- is Red, like the windows' own. (A button's gradient tints its own text too: dark colours turn
 -- its words dark.)
+--
+-- Made by hand, not by a template (owner, with a guide to the tells of an AI-made game: "Can we fix
+-- these issues?"): panels are a bright party purple, not the dark navy every generated UI has;
+-- outlines are a thick dark ink like a cartoon's (Ink), never a thin see-through white line; titles
+-- are in Luckiest Guy, buttons in Fredoka, words in Builder Sans; and the icons are the game's own
+-- pictures (UI/Icons), not emoji.
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -14,12 +20,13 @@ end
 
 return {
 	Colors = {
-		Panel = rgb(44, 30, 92),
-		PanelLight = rgb(78, 52, 150),
-		PanelDark = rgb(26, 18, 56),
-		Card = rgb(60, 42, 120),
+		Panel = rgb(82, 48, 182),
+		PanelLight = rgb(120, 78, 232),
+		PanelDark = rgb(52, 28, 124),
+		Card = rgb(98, 62, 200),
 		Text = rgb(255, 255, 255),
-		TextDim = rgb(205, 195, 240),
+		TextDim = rgb(220, 210, 252),
+		Ink = rgb(34, 16, 58), -- outlines: panels, buttons, icons (the art's own outline is this too)
 		Pink = rgb(255, 92, 170),
 		Cyan = rgb(80, 205, 255),
 		Yellow = rgb(255, 212, 70),
@@ -34,6 +41,7 @@ return {
 		Stroke = rgb(255, 255, 255),
 	},
 	Fonts = {
+		Title = Enum.Font.LuckiestGuy, -- window titles and headlines
 		Display = Enum.Font.FredokaOne,
 		Bold = Enum.Font.BuilderSansExtraBold,
 		Body = Enum.Font.BuilderSansBold,

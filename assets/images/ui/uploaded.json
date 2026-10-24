@@ -1,0 +1,26 @@
+{
+  "Icons": {
+    "sha": "2e0a79a0e75470fd",
+    "decal": 100017814113268,
+    "image": 83983496946801,
+    "file": "icons.png"
+  },
+  "Gloss": {
+    "sha": "87f70d7a82105e37",
+    "decal": 88264311079027,
+    "image": 71502127524608,
+    "file": "gloss.png"
+  },
+  "Pattern": {
+    "sha": "fa3d986e7f8f98b1",
+    "decal": 76271675899920,
+    "image": 126914466217231,
+    "file": "pattern.png"
+  },
+  "Bunting": {
+    "sha": "914ed530ab28af2f",
+    "decal": 76713769286550,
+    "image": 99728742689684,
+    "file": "bunting.png"
+  }
+}

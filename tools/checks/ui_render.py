@@ -369,15 +369,18 @@ FACE_HAIR = [(70, 45, 30), (30, 25, 25), (230, 180, 70), (190, 80, 40), (90, 60,
 
 
 # Our own uploaded pictures, drawn from their local files (assets/images/season/uploaded.json: the
-# season's icon sheet, the key packs): rbxassetid -> path. Anything else is an outlined placeholder.
+# season's icon sheet, the key packs; assets/images/ui/uploaded.json: the UI's icons and textures,
+# tools/art/ui_art.py): rbxassetid -> path. Anything else is an outlined placeholder.
 _LOCAL_IMAGES: dict | None = None
+_PICTURES: dict = {}
 
 
 def local_images() -> dict:
     global _LOCAL_IMAGES
     if _LOCAL_IMAGES is None:
         _LOCAL_IMAGES = {}
-        folder = Path(__file__).resolve().parents[2] / "assets" / "images" / "season"
+        images = Path(__file__).resolve().parents[2] / "assets" / "images"
+        folder = images / "season"
         try:
             uploaded = json.loads((folder / "uploaded.json").read_text())
         except (OSError, ValueError):
@@ -387,31 +390,73 @@ def local_images() -> dict:
             path = folder / "shop" / f"{stem}.png" if name.startswith("Shop_") else folder / f"{stem}.png"
             if path.exists() and isinstance(entry, dict) and entry.get("image"):
                 _LOCAL_IMAGES[str(entry["image"])] = path
+        try:
+            ui = json.loads((images / "ui" / "uploaded.json").read_text())
+        except (OSError, ValueError):
+            ui = {}
+        for entry in ui.values():
+            path = images / "ui" / str(entry.get("file", ""))
+            if path.is_file() and entry.get("image"):
+                _LOCAL_IMAGES[str(entry["image"])] = path
     return _LOCAL_IMAGES
 
 
-def draw_local_image(layer: Image.Image, box: list, n: dict) -> bool:
-    """Draws an ImageLabel whose picture we have locally (its ImageRect cell, fitted to its box)."""
+def draw_local_image(layer: Image.Image, box: list, n: dict, radius: float = 0, k: float = 1) -> bool:
+    """Draws an ImageLabel whose picture we have locally: its ImageRect cell, by its ScaleType
+    (Stretch, Fit, Crop or Tile at its TileSize), tinted by its ImageColor3, see-through by its
+    ImageTransparency, inside its own rounded corners."""
     found = re.search(r"(\d{6,})", str(n.get("img", "")))
     path = found and local_images().get(found.group(1))
     if not path:
         return False
-    picture = Image.open(path).convert("RGBA")
+    if path not in _PICTURES:
+        _PICTURES[path] = Image.open(path).convert("RGBA")
+    picture = _PICTURES[path]
     rect = n.get("irect")
     if rect:
         x, y, w, h = rect
         picture = picture.crop((int(x), int(y), int(x + w), int(y + h)))
-    bw, bh = int(box[2] - box[0]), int(box[3] - box[1])
+    bw, bh = int(round(box[2] - box[0])), int(round(box[3] - box[1]))
     if bw < 2 or bh < 2:
         return True
-    scale = min(bw / picture.width, bh / picture.height)  # (ScaleType Fit)
-    size = (max(1, int(picture.width * scale)), max(1, int(picture.height * scale)))
-    picture = picture.resize(size, Image.LANCZOS)
+    kind = n.get("stype", "Fit")
+    canvas = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+    if kind == "Tile":
+        tile = n.get("tile") or [0, picture.width, 0, picture.height]
+        tw = max(2, int(round(tile[0] * bw + tile[1] * k)))
+        th = max(2, int(round(tile[2] * bh + tile[3] * k)))
+        piece = picture.resize((tw, th), Image.LANCZOS)
+        for ty in range(0, bh, th):
+            for tx in range(0, bw, tw):
+                canvas.alpha_composite(piece, (tx, ty))
+    elif kind == "Stretch":
+        canvas = picture.resize((bw, bh), Image.LANCZOS)
+    else:
+        # Fit: all of it, as big as fits; Crop: covering the box, the overflow cut off.
+        scale = (max if kind == "Crop" else min)(bw / picture.width, bh / picture.height)
+        size = (max(1, int(picture.width * scale)), max(1, int(picture.height * scale)))
+        sized = picture.resize(size, Image.LANCZOS)
+        left, top = (size[0] - bw) // 2, (size[1] - bh) // 2
+        if left > 0 or top > 0:
+            sized = sized.crop((max(0, left), max(0, top), max(0, left) + min(bw, size[0]), max(0, top) + min(bh, size[1])))
+        canvas.alpha_composite(sized, (max(0, -left), max(0, -top)))
+    tint = n.get("ic") or [255, 255, 255]
+    if tuple(int(c) for c in tint[:3]) != (255, 255, 255):
+        r, g, b, a = canvas.split()
+        r = r.point(lambda v, t=tint[0]: int(v * t / 255))
+        g = g.point(lambda v, t=tint[1]: int(v * t / 255))
+        b = b.point(lambda v, t=tint[2]: int(v * t / 255))
+        canvas = Image.merge("RGBA", (r, g, b, a))
     alpha = 1 - float(n.get("it", 0) or 0)
+    mask = canvas.getchannel("A")
     if alpha < 1:
-        picture.putalpha(picture.getchannel("A").point(lambda v: int(v * alpha)))
-    at = (int(box[0] + (bw - size[0]) / 2), int(box[1] + (bh - size[1]) / 2))
-    layer.alpha_composite(picture, at)
+        mask = mask.point(lambda v: int(v * alpha))
+    if radius > 0:
+        corners = Image.new("L", (bw, bh), 0)
+        ImageDraw.Draw(corners).rounded_rectangle([0, 0, bw - 1, bh - 1], radius=radius, fill=255)
+        mask = ImageChops.multiply(mask, corners)
+    canvas.putalpha(mask)
+    layer.alpha_composite(canvas, (int(round(box[0])), int(round(box[1]))))
     return True
 
 
@@ -859,7 +904,7 @@ def render(nodes: list, size_name: str, out: Path, backdrop: Path | None = None)
         if n.get("img"):
             if str(n["img"]).startswith("rbxthumb://"):
                 draw_face(layer, box, radius, n["img"], n.get("it", 0))
-            elif draw_local_image(layer, box, n):
+            elif draw_local_image(layer, box, n, radius, k):
                 pass
             else:
                 d.rounded_rectangle(box, radius=radius, outline=rgba(n.get("ic", [255, 255, 255]), 0.4), width=1)

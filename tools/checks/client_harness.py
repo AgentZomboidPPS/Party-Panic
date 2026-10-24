@@ -3176,8 +3176,8 @@ def main():
                         "even ones): a whole run's screens take longer to dump than Open Cloud's 5 minutes allow, "
                         "so a full sweep is two runs")
     parser.add_argument("--skip", help="leave these sections (and their controllers) out of the run, comma-separated: "
-                        "SkeeBall. The whole client is close to Open Cloud's 1 MiB script cap; a run checking "
-                        "something else can make room this way")
+                        "SkeeBall, or any controller by name (Pet, SeasonWorld, PartyWorld). The whole client is "
+                        "over Open Cloud's 1 MiB script cap; a run checking the screens leaves these out")
     parser.add_argument("--sizes", help="screens to lay the UI out on with the engine (ui_render.py's names or "
                         "groups; default: touch with --touch, else pc; none to skip)")
     args = parser.parse_args()
@@ -3210,12 +3210,15 @@ def main():
     main_luau = shared_requires(MAIN)
     # Sections left out (--skip): their lines blanked (the rest keep their line numbers), and their
     # controller not started, so its modules aren't bundled.
+    # A name with no section is just a controller left unstarted (Pet, SeasonWorld, PartyWorld: things in
+    # the world, not on the screens).
     for name in (args.skip.split(",") if args.skip else []):
         pattern = re.compile(r"--@section " + re.escape(name) + r"\n.*?--@end " + re.escape(name) + r"\n", re.S)
-        if not pattern.search(main_luau):
-            sys.exit(f"client_harness: no section {name} to skip")
+        listed = re.compile(r'"' + re.escape(name) + r'Controller",[ ]?')
+        if not pattern.search(main_luau) and not listed.search(main_luau):
+            sys.exit(f"client_harness: no section or controller {name} to skip")
         main_luau = pattern.sub(lambda m: "\n" * m.group(0).count("\n"), main_luau)
-        main_luau = main_luau.replace(f'"{name}Controller", ', "")
+        main_luau = listed.sub("", main_luau)
     # The run's own script too, the same way (its lines stay where they are, for the error lines).
     main_luau = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", main_luau)
     main_luau = re.sub(r"(?m)^([^\"'`\[\n]*?\S)[ \t]+--(?!\[)[^\n]*$", r"\1", main_luau)

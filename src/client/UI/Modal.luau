@@ -7,11 +7,17 @@
 -- like how clicking skips the ending screen. I clicked and I couldn't vote."): the window takes the
 -- taps that land on it. A window can keep the backdrop from closing it at all (CloseOnBackdrop: the
 -- results card, which only its X closes).
+-- Its look (owner, with a guide to the tells of an AI-made game: "Can we fix these issues?"): a
+-- bright party-purple window with faint confetti on it (UIKit.Pattern) and a thick ink outline, a
+-- candy-pink title band along its top with a string of party flags (Shared/UiArt's Bunting), the
+-- title in Luckiest Guy with the window's own icon (UI/Icons) and a red close button with a drawn X.
+-- A window whose own header takes the title band's place hides it (Modal.Band).
 
 local GuiService = game:GetService("GuiService")
 local UserInputService = game:GetService("UserInputService")
 
 local Signal = require(game:GetService("ReplicatedStorage").Shared.Signal)
+local UiArt = require(game:GetService("ReplicatedStorage").Shared.UiArt)
 local Theme = require(script.Parent.Theme)
 local UIKit = require(script.Parent.UIKit)
 
@@ -31,6 +37,7 @@ export type Modal = typeof(setmetatable(
 	{} :: {
 		Root: Frame,
 		Window: Frame,
+		Band: Frame,
 		Content: Frame,
 		IsOpen: boolean,
 		CloseOnBackdrop: boolean,
@@ -74,6 +81,11 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 		Active = true, -- a tap on the window stays there (it used to fall through to the backdrop)
 		Parent = root,
 	})
+	local rim = window:FindFirstChildOfClass("UIStroke")
+	if rim then
+		rim.Thickness = 4
+	end
+	UIKit.Pattern(window, 22, 0.88)
 	local windowScale = UIKit.AutoScale(window)
 	window:SetAttribute("PP_Fit", size) -- tools/checks/ui_render.py fits it the same way
 	-- Shrink (never grow) the window so it fits the safe area at the current UI scale.
@@ -100,23 +112,77 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 		ZIndex = 22,
 		Parent = window,
 	})
+	-- The title band: rounded at the top like the window, cut straight along its bottom (a taller
+	-- rounded band in a frame that clips it), with the party flags strung along its top.
+	local band = UIKit.new("Frame", {
+		Name = "Band",
+		Size = UDim2.new(1, 0, 0, titleHeight),
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		ZIndex = 21,
+		Parent = titleBar,
+	})
+	UIKit.new("Frame", {
+		Name = "Face",
+		Size = UDim2.new(1, 0, 1, 40),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		ZIndex = 21,
+		Parent = band,
+		Children = {
+			UIKit.Corner(22),
+			UIKit.new("UIGradient", {
+				Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 120, 190)),
+					ColorSequenceKeypoint.new(titleHeight / (titleHeight + 40), Color3.fromRGB(236, 62, 150)),
+					ColorSequenceKeypoint.new(1, Color3.fromRGB(236, 62, 150)),
+				}),
+				Rotation = 90,
+			}),
+		},
+	})
+	UIKit.new("Frame", {
+		Name = "Edge", -- a dark line under the band
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.new(1, 0, 0, 3),
+		BackgroundColor3 = Theme.Colors.Ink,
+		BorderSizePixel = 0,
+		ZIndex = 21,
+		Parent = band,
+	})
+	local flags = if touch then 18 else 16
+	if UiArt.Bunting ~= "" then
+		UIKit.new("ImageLabel", {
+			Name = "Bunting",
+			Image = UiArt.Bunting,
+			ScaleType = Enum.ScaleType.Tile,
+			TileSize = UDim2.fromOffset(flags * UiArt.BuntingSize.X / UiArt.BuntingSize.Y, flags),
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(18, 0),
+			Size = UDim2.new(1, -36, 0, flags),
+			ZIndex = 21,
+			Parent = band,
+		})
+	end
 	UIKit.Label({
 		Text = `{icon}  {title}`,
-		Font = Theme.Fonts.Display,
+		Font = Theme.Fonts.Title,
 		TextSize = if touch then 30 else 34,
 		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(24, (titleHeight - 44) / 2),
+		Position = UDim2.fromOffset(22, (titleHeight - 44) / 2 + flags / 4),
 		Size = UDim2.fromOffset(0, 44),
 		AutomaticSize = Enum.AutomaticSize.X,
 		ZIndex = 22,
 		Parent = titleBar,
-		Children = { UIKit.TextStroke(0.3) },
+		Children = { UIKit.TextStroke(0) },
 	})
 
 	local self = setmetatable({
 		Root = root,
 		Window = window,
+		Band = band,
 		Content = UIKit.new("Frame", {
 			Name = "Content",
 			Position = UDim2.fromOffset(20, titleHeight + 6),
@@ -135,7 +201,7 @@ function Modal.new(parent: Instance, title: string, icon: string, size: Vector2)
 	local closeSize = if touch then Theme.Touch.Target else 46
 	UIKit.Button({
 		Name = "Close",
-		Text = "X",
+		Text = if UiArt.Icons ~= "" then "✕" else "X", -- (UI/Icons draws the X)
 		TextSize = if touch then 30 else 26,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -12, 0, titleHeight / 2 + 2),

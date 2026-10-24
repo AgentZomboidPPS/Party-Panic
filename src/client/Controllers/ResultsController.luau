@@ -204,6 +204,10 @@ local function buildRating()
 		end
 	end
 	local titleWidth = if title then UIKit.TextWidth(title.Text, title.TextSize, title.Font) else 0
+	local room = title and title:FindFirstChildOfClass("UIPadding") -- (UI/Icons: its picture's room)
+	if room then
+		titleWidth += room.PaddingLeft.Offset
+	end
 	local textSize = if touch then 22 else 21
 	local labelWidth = math.ceil(UIKit.TextWidth(RATE_TEXT, textSize, Theme.Fonts.Display) * 1.06) + 4
 	local row = UIKit.new("Frame", {

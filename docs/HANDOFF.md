@@ -1,6 +1,27 @@
 # Handoff: Party Panic (for the next Claude)
 
-**On this branch since version 54 (not published yet; version 54 = 53 with Capy Go Boom out of the rotation):**
+**On this branch since version 55 (not published yet):**
+- **The game's own UI art instead of an AI look** (owner, with a guide to the tells of an AI-made Roblox game: "Can we fix
+  these issues? ... I want you to read it and solve the issues"). The guide's GUI tells and what replaced them:
+  emoji as icons ("THE BIG ONE") -> 64 icons modelled and lit in Blender, outlined in ink like stickers
+  (`tools/art/ui_art.py`, `assets/images/ui/icons.png`, ids in `Shared/UiArt`); `UI/Icons.Decorate` swaps a label's or
+  button's leading emoji for its picture automatically (every `UIKit.Label` / `UIKit.Button`; `KeepEmoji = true` opts
+  out; team shapes ★ ♥ are deliberately not mapped, they take their team's colour). Thin see-through white outlines ->
+  a thick dark ink (`Theme.Colors.Ink`; `UIKit.new` turns any faint white UIStroke into ink, now and when it's set again).
+  Dark navy panels -> a brighter party purple (`Theme.Colors.Panel*`). One font -> Luckiest Guy titles
+  (`Theme.Fonts.Title`), Fredoka buttons, Builder Sans words. No images/9-slice -> a button shine (`UIKit.Gloss`), faint
+  confetti on every window (`UIKit.Pattern`) and a pink title band with party flags (`Modal`, `Modal.Band`; the Party
+  window hides it for its own header). Coins are the coin picture (`UIKit.Coin`). Owner on the first sheet: "can we rework
+  the thumbs up and down? they look bad" -> round green/red badges with a cartoon hand.
+  `ui_art.py --upload` uploads only what changed (`assets/images/ui/uploaded.json`). `ui_render.py` now draws these
+  (ScaleType Stretch/Fit/Crop/Tile, ImageColor3, rounded corners). The client harness is over the 1 MiB cap with all
+  controllers: screen runs use `--skip SkeeBall,Pet,SeasonWorld,PartyWorld,Aura,HallOfFame,AssetReport,Ambience` (any
+  controller name can be skipped now).
+- The map half of the guide (z-fighting, clipping models, too many parts) was given to a background agent; see below for
+  what landed.
+
+**Live in version 55 (2026-10-24, on the owner's "You can push what you have finished.")**: everything below, from version
+54 (= 53 with Capy Go Boom out of the rotation) to the suggestion box. Capy Go Boom is still off.
 - **HUD layout A** (owner, picking A of three mockups: "I like a but damn have we got to clean up the mobile UI"). PC and
   phones share one profile card (level, name, XP bar with the NEXT reward beside it, then coins, keys and crates in a row;
   `HudController.buildProfileCard`). Phones: the card and the menu (now a 2 x 2 grid) sit in the top corners
@@ -796,10 +817,11 @@ bumper-controls (finished in 8945c14). Their bundles were removed from `docs/wip
 
 ### 2.3 Other open items
 
-- **Store description:** text ready in `docs/STORE_DESCRIPTION.txt`; our key can't save it (the place PATCH answers 403
-  "Scope not authorized"; the universe PATCH answers 200 but stores nothing). The owner pastes it (Creator Hub > Configure
-  > Basic Settings; also remove the trailing space in the name "Party Panic ") or adds **universe.place (write)** to the API
-  key, after which `publish_place.py` sets it every time.
+- **Store description and name: done.** The owner pasted `docs/STORE_DESCRIPTION.txt` and fixed the name in Creator
+  Hub (after v55). Don't remind them.
+  Our key still can't write them (the place PATCH answers 403 "Scope not authorized", which `publish_place.py` prints as a
+  warning after publishing: harmless). If the key ever gets **universe.place (write)**, `publish_place.py` would set the
+  name and `docs/STORE_DESCRIPTION.txt` on every publish (the same text, unless one of them changes it later).
 - **Icon and thumbnails:** made (`assets/store/`), sent to the owner; they upload them by hand.
 - **Known phone-HUD nits:** Skate Escape's race-bar racer dots overlap when riders are side by side; Bumper Ballers' "X"
   sits over a knocked-out rider's icon; Sinking Sands' Sand King hint wraps to two lines; mode buttons (`Api.Button`) still

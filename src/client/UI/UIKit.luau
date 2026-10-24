@@ -4,6 +4,8 @@ local TextService = game:GetService("TextService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local UiArt = require(game:GetService("ReplicatedStorage").Shared.UiArt)
+local Icons = require(script.Parent.Icons)
 local Theme = require(script.Parent.Theme)
 
 local UIKit = {}
@@ -14,6 +16,29 @@ export type Props = { [string]: any }
 -- jump button (bottom right), and use bigger text.
 function UIKit.IsTouch(): boolean
 	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+end
+
+-- A faint white outline (white, partly see-through) is drawn as the game's dark ink instead, now and
+-- whenever it's set again: the thin translucent white line round everything is a giveaway of a
+-- generated UI (Theme's note). A strong white one (a picked chip, a highlight) stays white, and one
+-- put away (fully see-through) stays away.
+local function inkify(stroke: UIStroke)
+	local function check()
+		local color, seen = stroke.Color, stroke.Transparency
+		if
+			stroke.ApplyStrokeMode == Enum.ApplyStrokeMode.Border
+			and seen >= 0.25
+			and seen < 0.99
+			and math.min(color.R, color.G, color.B) > 0.94
+		then
+			stroke.Color = Theme.Colors.Ink
+			stroke.Transparency = 0
+		end
+	end
+	stroke:GetPropertyChangedSignal("Color"):Connect(check)
+	stroke:GetPropertyChangedSignal("Transparency"):Connect(check)
+	stroke:GetPropertyChangedSignal("ApplyStrokeMode"):Connect(check)
+	check()
 end
 
 -- Creates an instance, applies props, parents children. `Parent` is applied last.
@@ -38,6 +63,9 @@ function UIKit.new(className: string, props: Props?, children: { Instance }?): a
 			child.Parent = instance
 		end
 	end
+	if className == "UIStroke" then
+		inkify(instance)
+	end
 	if parent then
 		instance.Parent = parent
 	end
@@ -52,18 +80,80 @@ function UIKit.Round(): UICorner
 	return UIKit.new("UICorner", { CornerRadius = UDim.new(1, 0) })
 end
 
+-- An outline (a faint white one is drawn in ink: inkify above).
 function UIKit.Stroke(color: Color3?, thickness: number?, transparency: number?): UIStroke
 	return UIKit.new("UIStroke", {
 		Color = color or Theme.Colors.Stroke,
 		Thickness = thickness or 2,
 		Transparency = transparency or 0.7,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		LineJoinMode = Enum.LineJoinMode.Round,
 	})
+end
+
+-- The ink outline for something this colour: the colour itself, far darker.
+function UIKit.InkFor(color: Color3): Color3
+	return color:Lerp(Theme.Colors.Ink, 0.75)
+end
+
+-- A button's shine (Shared/UiArt's Gloss, tools/art/ui_art.py): a soft light band along its top and
+-- a shade along its bottom edge, rounded like the button. Not on something laid out by a
+-- UIListLayout/UIGridLayout inside it (the shine would be laid out too), nor without the art.
+function UIKit.Gloss(target: GuiObject, radius: number | string | nil): ImageLabel?
+	if UiArt.Gloss == "" or target:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		return nil
+	end
+	local gloss = UIKit.new("ImageLabel", {
+		Name = "Gloss",
+		Image = UiArt.Gloss,
+		ScaleType = Enum.ScaleType.Stretch,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = target.ZIndex,
+		Parent = target,
+		Children = { if radius == "round" then UIKit.Round() else UIKit.Corner(radius :: number?) },
+	})
+	gloss:SetAttribute("PP_Skin", true)
+	local function follow()
+		gloss.ZIndex = target.ZIndex
+		gloss.ImageTransparency = if target.BackgroundTransparency >= 0.99 then 1 else target.BackgroundTransparency
+	end
+	target:GetPropertyChangedSignal("ZIndex"):Connect(follow)
+	target:GetPropertyChangedSignal("BackgroundTransparency"):Connect(follow)
+	target.ChildAdded:Connect(function(child)
+		if child:IsA("UIGridStyleLayout") then
+			gloss:Destroy()
+		end
+	end)
+	follow()
+	return gloss
+end
+
+-- Confetti over a window (Shared/UiArt's Pattern), faint, rounded like it. Its ZIndex is the
+-- window's own, so everything in the window draws over it.
+function UIKit.Pattern(target: GuiObject, radius: number?, transparency: number?): ImageLabel?
+	if UiArt.Pattern == "" then
+		return nil
+	end
+	local pattern = UIKit.new("ImageLabel", {
+		Name = "Pattern",
+		Image = UiArt.Pattern,
+		ScaleType = Enum.ScaleType.Tile,
+		TileSize = UDim2.fromOffset(256, 256),
+		ImageTransparency = transparency or 0.9,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = target.ZIndex,
+		Parent = target,
+		Children = { UIKit.Corner(radius) },
+	})
+	pattern:SetAttribute("PP_Skin", true)
+	return pattern
 end
 
 function UIKit.TextStroke(transparency: number?): UIStroke
 	return UIKit.new("UIStroke", {
-		Color = Color3.fromRGB(30, 15, 60),
+		Color = Theme.Colors.Ink,
 		Thickness = 2,
 		Transparency = transparency or 0.2,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
@@ -98,6 +188,8 @@ function UIKit.List(
 	})
 end
 
+-- A label. Text that starts with an emoji the game has a picture for shows the picture (UI/Icons);
+-- KeepEmoji = true keeps the emoji.
 function UIKit.Label(props: Props): TextLabel
 	local defaults: Props = {
 		BackgroundTransparency = 1,
@@ -112,10 +204,16 @@ function UIKit.Label(props: Props): TextLabel
 	end
 	local children = defaults.Children
 	defaults.Children = nil
-	return UIKit.new("TextLabel", defaults, children)
+	local keep = defaults.KeepEmoji
+	defaults.KeepEmoji = nil
+	local label = UIKit.new("TextLabel", defaults, children)
+	if not keep then
+		Icons.Decorate(label)
+	end
+	return label
 end
 
--- Glossy rounded panel with a gradient and a soft white rim.
+-- Rounded panel with a gradient and a dark ink outline.
 function UIKit.Panel(props: Props, top: Color3?, bottom: Color3?): Frame
 	local defaults: Props = {
 		BackgroundColor3 = Color3.new(1, 1, 1),
@@ -129,7 +227,7 @@ function UIKit.Panel(props: Props, top: Color3?, bottom: Color3?): Frame
 	table.insert(children, UIKit.Corner(defaults.CornerRadius))
 	defaults.CornerRadius = nil
 	table.insert(children, UIKit.Gradient(top or Theme.Colors.PanelLight, bottom or Theme.Colors.Panel))
-	table.insert(children, UIKit.Stroke(nil, 2, 0.75))
+	table.insert(children, UIKit.Stroke(Theme.Colors.Ink, 3, 0))
 	return UIKit.new("Frame", defaults, children)
 end
 
@@ -138,7 +236,9 @@ function UIKit.SetClickHandler(handler: () -> ())
 	clickHandler = handler
 end
 
--- Chunky button with hover and press animation. `onClick` fires on activation.
+-- Chunky button with hover and press animation. `onClick` fires on activation. It wears a thick ink
+-- outline in its own colour's darkest shade and a shine (UIKit.Gloss); text that starts with an
+-- emoji the game has a picture for shows the picture (UI/Icons; KeepEmoji = true keeps the emoji).
 function UIKit.Button(props: Props, onClick: (() -> ())?, top: Color3?, bottom: Color3?): TextButton
 	local defaults: Props = {
 		BackgroundColor3 = Color3.new(1, 1, 1),
@@ -156,13 +256,22 @@ function UIKit.Button(props: Props, onClick: (() -> ())?, top: Color3?, bottom: 
 	defaults.Children = nil
 	local radius = defaults.CornerRadius
 	defaults.CornerRadius = nil
+	local keep = defaults.KeepEmoji
+	defaults.KeepEmoji = nil
+	local low = bottom or Color3.fromRGB(200, 50, 140)
 	table.insert(children, if radius == "round" then UIKit.Round() else UIKit.Corner(radius))
-	table.insert(children, UIKit.Gradient(top or Theme.Colors.Pink, bottom or Color3.fromRGB(200, 50, 140)))
-	table.insert(children, UIKit.Stroke(nil, 2, 0.55))
-	table.insert(children, UIKit.TextStroke(0.35))
+	table.insert(children, UIKit.Gradient(top or Theme.Colors.Pink, low))
+	table.insert(children, UIKit.Stroke(UIKit.InkFor(low), 3, 0))
+	table.insert(children, UIKit.TextStroke(0.2))
 	local scale = UIKit.new("UIScale", { Scale = 1 })
 	table.insert(children, scale)
 	local button = UIKit.new("TextButton", defaults, children)
+	if button.BackgroundTransparency < 0.99 then
+		UIKit.Gloss(button, radius)
+	end
+	if not keep then
+		Icons.Decorate(button)
+	end
 
 	button.MouseEnter:Connect(function()
 		TweenService:Create(scale, TweenInfo.new(0.12), { Scale = 1.06 }):Play()
@@ -245,8 +354,8 @@ function UIKit.PopIn(gui: GuiObject, time: number?)
 	UIKit.Tween(popScale, time or 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
 end
 
--- A drawn coin (gold disc with a rim). Used instead of the 🪙 emoji, which phones don't show
--- (Roblox's emoji font is older than it).
+-- A coin: the game's own coin picture (UI/Icons), a little bigger than the box so the coin itself
+-- fills it; without the art, a drawn gold disc with a rim. (Not the 🪙 emoji: phones don't show it.)
 function UIKit.Coin(props: Props): Frame
 	local defaults: Props = {
 		Name = "Coin",
@@ -256,6 +365,18 @@ function UIKit.Coin(props: Props): Frame
 	}
 	for key, value in props do
 		defaults[key] = value
+	end
+	if Icons.Name("Coin") then
+		defaults.BackgroundTransparency = 1
+		local holder = UIKit.new("Frame", defaults)
+		Icons.Image("Coin", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1.3, 1.3),
+			ZIndex = holder.ZIndex,
+			Parent = holder,
+		})
+		return holder
 	end
 	local coin = UIKit.new("Frame", defaults, {
 		UIKit.Round(),

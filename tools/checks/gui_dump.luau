@@ -493,6 +493,10 @@ function __dumpGui(playerGui, label)
 				e.img = inst.Image
 				e.ic = color(inst.ImageColor3)
 				e.it = inst.ImageTransparency
+				e.stype = inst.ScaleType.Name
+				if inst.ScaleType == Enum.ScaleType.Tile then
+					e.tile = udim2(inst.TileSize)
+				end
 				if inst.ImageRectSize.X > 0 then
 					-- (a cell of a sheet: ui_render.py draws just that part of a local copy)
 					e.irect =
