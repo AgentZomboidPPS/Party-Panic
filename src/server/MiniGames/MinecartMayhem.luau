@@ -109,7 +109,7 @@ local RAIL_PROPS = {
 
 local rng = Random.new()
 
-type Pending = { K: string, At: number, Tile: number, V: number, Gap: number?, JudgeAt: number }
+type Pending = { K: string, At: number, Tile: number, V: number, Gap: number?, S: number?, JudgeAt: number }
 
 type Rider = Track.Rider & {
 	Player: any,
@@ -858,10 +858,16 @@ function MinecartMayhem:_ride(player: any, rider: Rider, dt: number, now: number
 			rider.Pending = {}
 			ctx:Fire(nil, "Bump", player.UserId)
 		elseif kind == "TNT" then
-			rider.Blasts += 1
-			rider.DownKind = "boom"
-			rider.Pending = {}
-			ctx:Fire(nil, "Boom", player.UserId)
+			-- (blown up unless it jumped clear over the crates: judged once a late JUMP has had time
+			-- to arrive, like a gap)
+			table.insert(rider.Pending, {
+				K = kind,
+				At = event.At,
+				Tile = event.Tile,
+				V = event.V,
+				S = event.S,
+				JudgeAt = event.At + leeway,
+			})
 		elseif kind == "Return" then
 			rider.DownKind = nil
 		elseif kind == "Finish" then
@@ -905,6 +911,20 @@ function MinecartMayhem:_judge(player: any, rider: Rider, now: number)
 				Track.Fall(self.course, rider, item.Tile, item.At) -- (from when it happened)
 				rider.Pending = {}
 				ctx:Fire(nil, "Fall", player.UserId, item.Tile)
+				return
+			end
+		elseif item.K == "TNT" then
+			if rider.Tile ~= item.Tile then
+				continue
+			end
+			if Track.JumpsTNT(rider.JumpAt, item.At, item.V) then
+				ctx:Fire(nil, "Cleared", player.UserId, item.Tile)
+			else
+				rider.Blasts += 1
+				rider.DownKind = "boom"
+				Track.Blast(self.course, rider, item.Tile, item.At, item.S or rider.S) -- (from when it happened)
+				rider.Pending = {}
+				ctx:Fire(nil, "Boom", player.UserId)
 				return
 			end
 		elseif item.K == "Crystal" then

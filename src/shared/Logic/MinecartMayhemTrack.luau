@@ -408,6 +408,31 @@ function Track.Airborne(jumpAt: number, at: number): boolean
 	return Track.JumpHeight(at - jumpAt) >= Track.MIN_CLEAR
 end
 
+-- A TNT track's crates can be jumped (owner, asked about a cart that flew clean over them and still
+-- blew up: "Jumping over TNT works"): high enough (TNT_CLEAR: its underside over the crates' tops,
+-- 2.87 on a 0.45 base) from the front wheels meeting the crates until the back wheels are past them
+-- (TNT_SPAN along the track).
+Track.TNT_CLEAR = 2.6
+Track.TNT_SPAN = 3.7
+function Track.JumpsTNT(jumpAt: number, at: number, v: number): boolean
+	local across = (Track.TNT_SPAN + Track.WHEELBASE) / math.max(v, 1)
+	return Track.JumpHeight(at - jumpAt) >= Track.TNT_CLEAR
+		and Track.JumpHeight(at + across - jumpAt) >= Track.TNT_CLEAR
+end
+
+-- A cart blown up by the TNT on `tileIndex` at `at`, its front wheels at the crates (`s` along that
+-- way): it stops there, down until its comeback at the junction.
+function Track.Blast(course: Course, rider: Rider, tileIndex: number, at: number, s: number)
+	rider.Tile = tileIndex
+	rider.B = 2
+	rider.S = s
+	rider.V = 0
+	rider.DownUntil = at + Track.COMEBACK
+	rider.ReTile = tileIndex
+	rider.ReS = course.Tiles[tileIndex].SplitS
+	rider.DashUntil = 0
+end
+
 -- Does a jump made at `jumpAt` carry the whole cart over a gap of `gap` studs whose start its front
 -- wheels reach at `at`, at speed `v`?
 function Track.Clears(jumpAt: number, at: number, v: number, gap: number): boolean
@@ -499,9 +524,10 @@ end
 export type Event = { K: string, At: number, Tile: number, B: number, S: number, V: number, Gap: number? }
 
 -- One step of riding. Returns what the cart passed in this step (each with the exact moment): a
--- "Switch", a "Gap" (its front wheels at the gap), a "Crystal", a "Buffer" or "TNT" (handled here:
--- they don't depend on any input), "Back" (rolled back onto the long way), "Return" (a comeback),
--- "Finish". Switches, gaps and crystals are judged by the caller (Judge*), with ping leeway.
+-- "Switch", a "Gap" (its front wheels at the gap), a "Crystal", "TNT" (its front wheels at the
+-- crates), a "Buffer" (handled here: it doesn't depend on any input), "Back" (rolled back onto the
+-- long way), "Return" (a comeback), "Finish". Switches, gaps, crystals and TNT are judged by the
+-- caller, with ping leeway (TNT: Track.JumpsTNT, else Track.Blast from the moment it happened).
 function Track.Ride(course: Course, rider: Rider, dt: number, now: number): { Event }
 	local events: { Event } = {}
 	if rider.Finish then
@@ -584,16 +610,9 @@ function Track.Ride(course: Course, rider: Rider, dt: number, now: number): { Ev
 			rider.Back = true
 			rider.V = 0
 			rider.DashUntil = 0
-		elseif kind == "TNT" then
-			rider.S = mark
-			rider.V = 0
-			rider.DownUntil = at + Track.COMEBACK
-			rider.ReTile = tile.Index
-			rider.ReS = tile.SplitS
-			rider.DashUntil = 0
 		end
 		table.insert(events, event)
-		if kind == "Buffer" or kind == "TNT" then
+		if kind == "Buffer" then
 			return events
 		end
 	end

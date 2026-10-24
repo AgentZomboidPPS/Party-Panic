@@ -230,6 +230,7 @@ function MinecartMayhem.Start(api)
 	local myPicks: { Track.Pick } = {}
 	local myWays: { [number]: number } = {} -- tile -> the way I took there (mine, then the server's)
 	local myGaps: { [number]: number } = {} -- tile -> when my cart fell into its gap here (not yet settled)
+	local myBlasts: { [number]: number } = {} -- tile -> when my cart hit its TNT (not yet settled)
 	local zoneAt: { [number]: number } = {}
 	local mine: Track.Rider? = nil
 	local called: { [string]: boolean } = {} -- callouts already shown (by what and where)
@@ -274,6 +275,23 @@ function MinecartMayhem.Start(api)
 				elseif live and not called["clear" .. event.Tile] then
 					called["clear" .. event.Tile] = true
 					say("✓ CLEARED!", Theme.Colors.Green, 0.9)
+				end
+			elseif event.K == "TNT" then
+				-- Blown up unless it jumped clean over the crates (the server judges it the same way).
+				local blown = myBlasts[event.Tile]
+				if blown and math.abs(event.At - blown) > 0.5 then
+					blown = nil -- (an earlier try down this way: this is a fresh one)
+					myBlasts[event.Tile] = nil
+				end
+				if blown == nil and not Track.JumpsTNT(myJumpAt, event.At, event.V) then
+					blown = event.At
+					myBlasts[event.Tile] = blown
+				end
+				if blown then
+					Track.Blast(c, rider, event.Tile, blown, event.S)
+				elseif live and not called["tnt" .. event.Tile] then
+					called["tnt" .. event.Tile] = true
+					say("✓ OVER THE TNT!", Theme.Colors.Green, 1.1)
 				end
 			elseif event.K == "Crystal" then
 				if not Track.Airborne(myJumpAt, event.At) then
@@ -1030,7 +1048,8 @@ function MinecartMayhem.Start(api)
 	end)
 	api:OnEvent("Cleared", function(userId, tileIndex)
 		if userId == myId and type(tileIndex) == "number" then
-			myGaps[tileIndex] = nil -- (the server saw it clear)
+			myGaps[tileIndex] = nil -- (the server saw it clear: a gap, or the TNT)
+			myBlasts[tileIndex] = nil
 		end
 	end)
 	api:OnEvent("Fall", function(userId, tileIndex)
@@ -1059,7 +1078,8 @@ function MinecartMayhem.Start(api)
 			api:Effect("Poof", at)
 		end
 		if userId == myId then
-			say("💥 BOOM! That was the TNT way!", Theme.Colors.Red, 2.2)
+			table.clear(myBlasts) -- (the snapshot carries it from here)
+			say("💥 BOOM! Jump the TNT, or take the other way!", Theme.Colors.Red, 2.2)
 			api:Sound("HazardWarning")
 			shake = 0.7
 		end

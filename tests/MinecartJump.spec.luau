@@ -66,4 +66,17 @@ test("Minecart: JumpFor finds the next gap on the rider's tile or the next", fun
 	expectEqual(Track.NextGap(course, rider, 90), nil, "a gap already reached isn't ahead")
 end)
 
+-- TNT can be jumped (owner: "Jumping over TNT works"): a cart high enough over the crates the whole
+-- way across survives; no jump, or one that comes down on them, doesn't.
+test("Minecart: a well-timed jump clears the TNT, a late or missing one doesn't", function()
+	local at, v = 10, Track.CRUISE
+	local across = (Track.TNT_SPAN + Track.WHEELBASE) / v
+	-- the jump's middle over the middle of the crossing
+	local best = at + across / 2 - Track.JUMP_TIME / 2
+	expectTrue(Track.JumpsTNT(best, at, v), "a jump timed over the crates")
+	expectTrue(not Track.JumpsTNT(-math.huge, at, v), "no jump")
+	expectTrue(not Track.JumpsTNT(at - 0.05, at, v), "a jump that hasn't risen yet")
+	expectTrue(not Track.JumpsTNT(at - Track.JUMP_TIME + 0.1, at, v), "a jump already coming down")
+end)
+
 return nil
