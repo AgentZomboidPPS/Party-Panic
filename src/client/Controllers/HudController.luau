@@ -351,14 +351,18 @@ local function buildProfileCard(parent: Instance, hud: Instance, touch: boolean)
 	if not touch then
 		return
 	end
+	-- (A level-up or medal card at the top middle reached over it on the smaller phones: it steps
+	-- aside for that too, PP_Celebrating, and is back with the new totals when the card goes.)
 	local function refresh()
 		holder.Visible = not State.PlayingRound()
 			and GameState.Get("Phase") ~= "InRound"
 			and hud:GetAttribute("PP_TipShowing") ~= true
+			and player:GetAttribute("PP_Celebrating") ~= true
 	end
 	State.OnPlayingChanged(refresh)
 	GameState.Changed("Phase", refresh)
 	hud:GetAttributeChangedSignal("PP_TipShowing"):Connect(refresh)
+	player:GetAttributeChangedSignal("PP_Celebrating"):Connect(refresh)
 	refresh()
 end
 
