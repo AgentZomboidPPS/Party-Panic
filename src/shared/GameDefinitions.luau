@@ -403,6 +403,19 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "LastDancer",
+		Name = "Last Dancer",
+		Category = "Survival",
+		Icon = "🛡️",
+		Color = Color3.fromRGB(255, 120, 90),
+		Objective = "Tap the notes on the beat! The lowest dancers fall through the floor after every verse. Last dancer standing wins.",
+		Controls = "Tap the pad under each falling note (phones), or press D F J K. Hit the beat to keep your groove up.",
+		Duration = 64,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
