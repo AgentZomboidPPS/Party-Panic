@@ -3,7 +3,7 @@
 --
 -- The highway sits at the bottom of the screen: notes fall down four lanes (▲ ■ ● ◆, each its own colour
 -- too) towards the pads, and a tap on a pad when a note reaches it is a hit. Phones tap the pads (they
--- take the touch the moment it lands, so two fingers work); PC uses D F J K. The notes come from the same
+-- take the touch the moment it lands, so two fingers work); PC uses W A S D. The notes come from the same
 -- chart as the server's and are timed by the same clock (the server's, shared as "Go"), so what falls
 -- here is what the server judges. This client also runs the same judging logic (Logic/LastDancer) on
 -- the player's own taps for instant PERFECT / GREAT / OK / MISS text and a combo; the server judges
@@ -26,7 +26,7 @@
 -- Every dancer stands on an arcade dance mat, and the four lanes are its four arrows (LEFT DOWN UP RIGHT,
 -- Logic.ARROWS): each tap, a dancer's own or one of the others' (the server batches everyone's steps), lights
 -- that arrow panel and makes the character step onto it: the body shifts over the panel, the foot goes out,
--- they hop and lean. Between steps they dance on the beat as before. Arrow keys work as well as D F J K.
+-- they hop and lean. Between steps they dance on the beat as before. Arrow keys work as well as W A S D.
 -- Anyone watching (cut, or sitting out) sees the standings instead of the highway.
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -62,7 +62,7 @@ for lane, arrow in Logic.ARROWS do
 		table.insert(KEYLIST, code)
 	end
 end
-local KEY_NAMES = { "D", "F", "J", "K" } -- shown under the pads on a computer (the arrow keys work too)
+local KEY_NAMES = { "A", "S", "W", "D" } -- shown under the pads on a computer (the arrow keys work too)
 local STEP_CODES = { Perfect = 1, Great = 2, Ok = 3, Stray = 4, Late = 4 } -- as the server sends them
 local STEP_SHIFT = 2.3 -- how far a dancer's body goes over the panel they step on (studs)
 local STEP_LIFE = 0.4 -- a step's animation (seconds)
@@ -676,7 +676,7 @@ function LastDancer.Start(api)
 			end
 		end))
 	end
-	-- The keyboard: the arrow keys and D F J K, bound ahead of the camera and the walking controls (the arrow
+	-- The keyboard: the arrow keys and W A S D, bound ahead of the camera and the walking controls (the arrow
 	-- keys would turn the camera) for as long as this player is dancing; anyone watching keeps their keys.
 	local action = "LastDancerStep"
 	local bound = pcall(function()

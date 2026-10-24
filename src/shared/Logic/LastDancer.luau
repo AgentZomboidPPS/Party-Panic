@@ -65,12 +65,13 @@ LastDancer.WARMUP = 0.5 -- taps this long before the first note (and its window)
 -- octave, laid out left to right like a dance mat's arrows). `Dx` and `Dz` are the arrow's direction in
 -- the dancer's own frame (+X is their right, -Z is the way they face: the arrow UP is the panel nearest
 -- the stage), `Rotation` turns an up-pointing glyph (a UI triangle) into this arrow (degrees clockwise),
--- `Color` is its colour, and `Keys` are the keyboard keys that step on it (the first is the arrow key).
+-- `Color` is its colour, and `Keys` are the keyboard keys that step on it (the first is the arrow key, then
+-- W A S D: owner, "why are the steps not hotkeyed to WASD?"; walking is off while dancing).
 LastDancer.ARROWS = {
-	{ Name = "LEFT", Dx = -1, Dz = 0, Rotation = 270, Color = { 255, 96, 150 }, Keys = { "Left", "D" } },
-	{ Name = "DOWN", Dx = 0, Dz = 1, Rotation = 180, Color = { 70, 200, 255 }, Keys = { "Down", "F" } },
-	{ Name = "UP", Dx = 0, Dz = -1, Rotation = 0, Color = { 255, 205, 60 }, Keys = { "Up", "J" } },
-	{ Name = "RIGHT", Dx = 1, Dz = 0, Rotation = 90, Color = { 150, 235, 110 }, Keys = { "Right", "K" } },
+	{ Name = "LEFT", Dx = -1, Dz = 0, Rotation = 270, Color = { 255, 96, 150 }, Keys = { "Left", "A" } },
+	{ Name = "DOWN", Dx = 0, Dz = 1, Rotation = 180, Color = { 70, 200, 255 }, Keys = { "Down", "S" } },
+	{ Name = "UP", Dx = 0, Dz = -1, Rotation = 0, Color = { 255, 205, 60 }, Keys = { "Up", "W" } },
+	{ Name = "RIGHT", Dx = 1, Dz = 0, Rotation = 90, Color = { 150, 235, 110 }, Keys = { "Right", "D" } },
 }
 
 export type Note = { T: number, Lane: number }

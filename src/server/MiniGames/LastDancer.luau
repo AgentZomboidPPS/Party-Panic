@@ -68,6 +68,7 @@ local RAIL = 2.6 -- the safety rail's height (the rail is decoration: nothing co
 local MAT_GAP = 1.6 -- between the mats' inner corners
 local MIN_RING = 14
 local PIT_DEPTH = 70
+local SPEAKER_OUT = 30 -- the speaker stacks, this far past the ring of mats (clear of the camera)
 local ORB_HEIGHT = 30
 local MAX_STEPS = 48 -- steps sent to the clients in one batch, and per dancer in one:
 local MAX_STEPS_EACH = 3
@@ -178,10 +179,13 @@ local function buildFloor(ctx, origin: Vector3, count: number): (number, { CFram
 		Parent = arena,
 	})
 	-- Speaker stacks and spotlights round the edge, the cones facing the stage. Each stack stands on a
-	-- pillar rising out of the pit, its spotlight on top (they floated over the pit before).
+	-- pillar rising out of the pit, its spotlight on top (they floated over the pit before). SPEAKER_OUT
+	-- past the mats: Roblox's camera sits about 12 studs behind a dancer, and there a stack filled the
+	-- whole view (owner's screenshot on spawning in).
 	for index = 0, 5 do
 		local angle = (index + 0.5) / 6 * math.pi * 2
-		local at = origin + Vector3.new(math.cos(angle) * (ring + 12), 0, math.sin(angle) * (ring + 12))
+		local out = ring + SPEAKER_OUT
+		local at = origin + Vector3.new(math.cos(angle) * out, 0, math.sin(angle) * out)
 		MeshLibrary.Get("LastDancerSpeaker", {
 			CFrame = CFrame.lookAt(at, Vector3.new(origin.X, at.Y, origin.Z)),
 			Parent = arena,
@@ -215,13 +219,13 @@ end
 -- of panels with an arrow on the four edge-centre ones (each lane's own colour, and lit by the client on the
 -- beat and when stepped on), a strip and a centre disc in the dancer's colour, and a safety rail round the
 -- front and sides like an arcade machine's. Returns the model.
-local function buildMat(ctx, frame: CFrame, color: Color3, userId: number, name: string): Model
+local function buildMat(ctx, frame: CFrame, color: Color3, userId: number): Model
 	local model = Instance.new("Model")
 	model.Name = "Tile_" .. userId
 	local function at(x: number, y: number, z: number): CFrame
 		return frame * CFrame.new(x, y, z)
 	end
-	local base = Build.Part({
+	Build.Part({
 		Name = "Base",
 		Size = Vector3.new(MAT, MAT_THICK, MAT),
 		CFrame = at(0, -MAT_THICK / 2, 0),
@@ -300,13 +304,8 @@ local function buildMat(ctx, frame: CFrame, color: Color3, userId: number, name:
 	)
 	rail("PostL", Vector3.new(RAIL, 0.36, 0.36), at(-half, RAIL / 2, -half) * CFrame.Angles(0, 0, math.rad(90)))
 	rail("PostR", Vector3.new(RAIL, 0.36, 0.36), at(half, RAIL / 2, -half) * CFrame.Angles(0, 0, math.rad(90)))
-	Build.Billboard(base, name, {
-		Name = "DancerName",
-		Size = UDim2.fromOffset(200, 44),
-		StudsOffset = Vector3.new(0, 9, 0),
-		MaxDistance = 200,
-		TextColor3 = color,
-	})
+	-- (No name over the mat: the dancer's own name tag says who it is, and two names stacked over every
+	-- dancer were a jumble.)
 	model.Parent = ctx.Arena
 	return model
 end
@@ -347,13 +346,8 @@ function LastDancer:Prepare()
 		local point = points[index]
 		local color = HUES[(index - 1) % #HUES + 1]
 		local position = point.Position
-		local mat = buildMat(
-			ctx,
-			CFrame.lookAt(position, Vector3.new(origin.X, position.Y, origin.Z)),
-			color,
-			player.UserId,
-			player.DisplayName
-		)
+		local mat =
+			buildMat(ctx, CFrame.lookAt(position, Vector3.new(origin.X, position.Y, origin.Z)), color, player.UserId)
 		self.slots[player] = {
 			Player = player,
 			Index = index,
