@@ -62,7 +62,12 @@ snacks count double; spills never do, pops only move weight around) give comebac
   - The shell and the standing stones are still rounded parts (the original game has no such pieces); the capy and the
     snacks are real meshes. Their look in the game itself is unconfirmed: the preview tools can't draw plain meshes.
   - No portal preview yet (`tools/preview/make_preview.py CapyGoBoom`), so its portal shows the icon-and-name card.
-  - No round song yet, so it plays "Panic Mode" (a new song needs a new pack: one of the owner's monthly audio uploads).
+  - **Song:** "Boom Boom Capybara" (`tools/music/songs/CapyGoBoom.py`: a 118 bpm tropical calypso; steel pans, marimba,
+    congas, brass; the finale starts as the FEAST does) is packed as ModePack7 and was uploaded on the owner's "Finish all
+    of the stuff": asset 114585791757431, 7 of the owner's 10 audio uploads this month. It was still in Roblox's review
+    when this was written; until it is approved the game keeps playing "Panic Mode" for this mode by itself
+    (`python3 tools/checks/asset_status.py` shows the state). The song check passes (intro 16.3 s, 81 s after the drop,
+    -11.0 LUFS, -1.6 dBTP).
   - `IsNew = true` (a vote boost while new; 4 of 31 games).
   - Only a real playtest can confirm: the feel of BOOM and the aim on phones, how the avatar-hiding and the capy look on
     different devices, the camera with a big capy, and the balance (final weights, how often pops happen).

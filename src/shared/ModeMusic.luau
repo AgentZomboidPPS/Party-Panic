@@ -8,6 +8,7 @@ return {
 	BobsledRun = { Pack = "ModePack4", Title = "Ice Chute Rush", Start = 280.000, Drop = 293.500, End = 348.885 },
 	BumperBallers = { Pack = "ModePack2", Title = "Tiki Bumper Bash", Start = 261.000, Drop = 274.125, End = 341.625 },
 	CakeFactory = { Pack = "ModePack3", Title = "Conveyor Belt Boogie", Start = 303.938, Drop = 317.438, End = 374.581 },
+	CapyGoBoom = { Pack = "ModePack7", Title = "Boom Boom Capybara", Start = 0.000, Drop = 13.500, End = 94.856 },
 	CrazyCutters = { Pack = "ModePack2", Title = "Cookie Cutter Swing", Start = 89.000, Drop = 102.500, End = 174.500 },
 	DiceDash = { Pack = "ModePack6", Title = "Lucky Roll Cha-Cha", Start = 213.000, Drop = 226.125, End = 289.875 },
 	EatsaPizza = { Pack = "ModePack5", Title = "Mozzarella Tarantella", Start = 324.375, Drop = 337.875, End = 367.875 },

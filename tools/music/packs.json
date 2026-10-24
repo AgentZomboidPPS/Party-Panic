@@ -232,5 +232,16 @@
     "end": 289.875
    }
   ]
+ },
+ "ModePack7": {
+  "songs": [
+   {
+    "id": "CapyGoBoom",
+    "title": "Boom Boom Capybara",
+    "start": 0.0,
+    "drop": 13.5,
+    "end": 94.856
+   }
+  ]
  }
 }
