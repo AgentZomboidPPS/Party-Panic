@@ -101,6 +101,12 @@ function Icons.Image(key: string?, props: { [string]: any }?): ImageLabel?
 	return image
 end
 
+-- The room a picture takes before words this size: itself (less the clear margin it tucks in) and the
+-- gap after it.
+function Icons.Room(size: number): number
+	return math.floor(size * SCALE + 0.5) - math.floor(size * 0.15) + math.floor(size * GAP + 0.5)
+end
+
 local function textWidth(text: string, size: number, font: Enum.Font): number
 	local ok, bounds = pcall(TextService.GetTextSize, TextService, text, size, font, Vector2.new(1e4, 1e4))
 	return if ok then bounds.X else #text * size * 0.6
@@ -138,40 +144,41 @@ function Icons.Decorate(object: GuiObject)
 			size = if o.Size.Y.Scale == 0 and height > 0 then height * 0.62 else size
 		end
 		local side = math.floor(size * SCALE + 0.5)
+		local room = Icons.Room(size)
 		if o.TextScaled and o.Text == "" and o.Size.X.Scale == 0 and o.Size.X.Offset > 0 and height > 0 then
 			side = math.floor(math.min(o.Size.X.Offset, height) * SCALE + 0.5) -- (just the picture: fill the box)
 		end
-		local gap = math.floor(size * GAP + 0.5)
-		local room = side - math.floor(size * 0.15) + gap -- (the picture's clear margin may tuck in a little)
 		image.Size = UDim2.fromOffset(side, side)
 		image.ImageTransparency = o.TextTransparency
 		image.ZIndex = o.ZIndex
+		-- (A UIPadding moves the label's children as well as its words: the picture's place is measured
+		-- from the padded box.)
 		local right = pad.PaddingRight.Offset
-		local top, bottom = pad.PaddingTop.Offset, pad.PaddingBottom.Offset
 		local y = if o.TextYAlignment == Enum.TextYAlignment.Top
-			then UDim.new(0, top + size * 0.55)
-			elseif o.TextYAlignment == Enum.TextYAlignment.Bottom then UDim.new(1, -(bottom + size * 0.55))
-			else UDim.new(0.5, (top - bottom) / 2)
+			then UDim.new(0, size * 0.55)
+			elseif o.TextYAlignment == Enum.TextYAlignment.Bottom then UDim.new(1, -size * 0.55)
+			else UDim.new(0.5, 0)
 		local words = if o.RichText then string.gsub(o.Text, "<[^>]+>", "") else o.Text
 		local width = textWidth(words, size, o.Font)
 		local box = o.Size.X.Offset
 		if o.Size.X.Scale == 0 and box > 0 then
 			width = math.min(width, box - baseLeft - right - room)
 		end
+		local tuck = math.floor(size * 0.08) -- (the picture's clear margin, on the outer side)
 		local x
 		if words == "" then
 			-- Just the picture (a close button's X): in the middle.
-			x = UDim.new(0.5, (baseLeft - right - side) / 2)
+			x = UDim.new(0.5, -side / 2)
 			pad.PaddingLeft = UDim.new(0, baseLeft)
 		elseif o.TextScaled or o.TextXAlignment == Enum.TextXAlignment.Left then
-			x = UDim.new(0, baseLeft - math.floor(size * 0.08))
+			x = UDim.new(0, -room - tuck)
 			pad.PaddingLeft = UDim.new(0, baseLeft + room)
 		elseif o.TextXAlignment == Enum.TextXAlignment.Right then
-			x = UDim.new(1, -(right + width + room))
+			x = UDim.new(1, -(width + room))
 			pad.PaddingLeft = UDim.new(0, baseLeft)
 		else
 			-- Centred: the picture and the words together, centred where the words were.
-			x = UDim.new(0.5, (baseLeft - right - room - width) / 2 - math.floor(size * 0.08))
+			x = UDim.new(0.5, -width / 2 - room - tuck)
 			pad.PaddingLeft = UDim.new(0, baseLeft + room)
 		end
 		image.AnchorPoint = Vector2.new(0, 0.5)

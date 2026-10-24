@@ -398,15 +398,22 @@ function UIKit.Coin(props: Props): Frame
 	return coin
 end
 
--- How wide a line of text is, in the units of the layout it sits in (before any UIScale).
+-- How wide a line of text is, in the units of the layout it sits in (before any UIScale), as a
+-- UIKit label shows it: a leading emoji the game has a picture for takes the picture's room.
 -- A font that hasn't loaded yet measures a little narrow, so callers re-measure now and then.
 function UIKit.TextWidth(text: string, size: number, font: Enum.Font): number
-	local ok, bounds = pcall(TextService.GetTextSize, TextService, text, size, font, Vector2.new(1e4, 1e4))
-	return if ok then bounds.X else #text * size * 0.6
+	local icon, rest = Icons.Split(text)
+	local extra = if icon then Icons.Room(size) else 0
+	local ok, bounds = pcall(TextService.GetTextSize, TextService, rest, size, font, Vector2.new(1e4, 1e4))
+	return extra + (if ok then bounds.X else #rest * size * 0.6)
 end
 
 -- How many lines text wraps onto in a box this wide (with a little slack for a font still loading).
 function UIKit.TextLines(text: string, size: number, font: Enum.Font, width: number): number
+	local icon, rest = Icons.Split(text)
+	if icon then
+		text, width = rest, width - Icons.Room(size)
+	end
 	local ok, bounds =
 		pcall(TextService.GetTextSize, TextService, text, size, font, Vector2.new(math.max(1, width * 0.94), 1e4))
 	local height = if ok then bounds.Y else size
