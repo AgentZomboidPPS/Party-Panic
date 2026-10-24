@@ -1,0 +1,17 @@
+newmtl Body
+Kd 0.980 0.784 0.157
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Cone
+Kd 0.275 0.275 0.361
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Rim
+Kd 0.353 0.314 0.471
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

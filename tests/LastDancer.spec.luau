@@ -1,0 +1,381 @@
+local fs = require("@lune/fs")
+
+local TestKit = require("./TestKit")
+local LastDancer = require("../src/shared/Logic/LastDancer")
+local Chart = require("../src/shared/LastDancerChart")
+
+local test, expectEqual, expectTrue = TestKit.test, TestKit.expectEqual, TestKit.expectTrue
+
+local function near(a: number, b: number, slack: number?): boolean
+	return math.abs(a - b) <= (slack or 1e-9)
+end
+
+-- A tiny chart: lane 1 at 1.0 s, lane 2 at 1.5 s, lane 1 again at 1.75 s, lane 4 at 3.0 s.
+local function small()
+	return { Notes = { { T = 1.0, Lane = 1 }, { T = 1.5, Lane = 2 }, { T = 1.75, Lane = 1 }, { T = 3.0, Lane = 4 } } }
+end
+
+test("the round is eight phrases of four bars at 120 bpm", function()
+	expectEqual(LastDancer.BEAT, 0.5)
+	expectEqual(LastDancer.PHRASE, 8)
+	expectEqual(LastDancer.DURATION, 64)
+end)
+
+test("ARROWS: one arrow a lane, left to right, in four different directions and colours", function()
+	expectEqual(#LastDancer.ARROWS, LastDancer.LANES)
+	local names, directions, colors, keys = {}, {}, {}, {}
+	for lane, arrow in LastDancer.ARROWS do
+		expectEqual(math.abs(arrow.Dx) + math.abs(arrow.Dz), 1) -- a unit step along an axis
+		names[arrow.Name], directions[`{arrow.Dx},{arrow.Dz}`] = true, true
+		colors[table.concat(arrow.Color, ",")] = true
+		for _, key in arrow.Keys do
+			expectTrue(not keys[key], `{key} steps on two arrows`)
+			keys[key] = true
+		end
+		-- an up-pointing glyph turned by Rotation points where the arrow goes (angle clockwise from up)
+		local angle = math.rad(arrow.Rotation)
+		expectTrue(near(math.sin(angle), arrow.Dx, 1e-9), `lane {lane}: rotation {arrow.Rotation} vs Dx {arrow.Dx}`)
+		expectTrue(near(-math.cos(angle), arrow.Dz, 1e-9), `lane {lane}: rotation {arrow.Rotation} vs Dz {arrow.Dz}`)
+	end
+	for _, set in { names, directions, colors } do
+		local count = 0
+		for _ in set do
+			count += 1
+		end
+		expectEqual(count, 4)
+	end
+	expectEqual(LastDancer.ARROWS[1].Name, "LEFT") -- the lanes run LEFT DOWN UP RIGHT, like a dance mat
+	expectEqual(LastDancer.ARROWS[4].Name, "RIGHT")
+end)
+
+test("Judge: perfect, great and ok by how close, nothing beyond the ok window", function()
+	expectEqual(LastDancer.Judge(0), "Perfect")
+	expectEqual(LastDancer.Judge(-0.06), "Perfect")
+	expectEqual(LastDancer.Judge(0.1), "Great")
+	expectEqual(LastDancer.Judge(-0.16), "Ok")
+	expectEqual(LastDancer.Judge(0.2), nil)
+end)
+
+test("Tap: hits the nearest waiting note in the lane and scores it", function()
+	local chart, dancer = small(), LastDancer.new()
+	local outcome = LastDancer.Tap(chart, dancer, 1, 1.02)
+	expectEqual(outcome.Kind, "Perfect")
+	expectEqual(outcome.Index, 1)
+	expectTrue(near(outcome.Offset :: number, 0.02), "the offset is tap - note")
+	expectEqual(dancer.Combo, 1)
+	expectEqual(dancer.Score, LastDancer.POINTS.Perfect + LastDancer.COMBO_BONUS)
+	expectEqual(dancer.Next, 2)
+end)
+
+test("Tap: a note is only hit once", function()
+	local chart, dancer = small(), LastDancer.new()
+	expectEqual(LastDancer.Tap(chart, dancer, 1, 1.0).Kind, "Perfect")
+	expectEqual(LastDancer.Tap(chart, dancer, 1, 1.0).Kind, "Stray")
+end)
+
+test(
+	"Tap: of two notes in a lane in reach it takes the earlier one, so a late tap doesn't eat the next note",
+	function()
+		-- lane 1 has notes a quarter of a second apart: 5.0 and 5.25 (their windows overlap)
+		local chart = { Notes = { { T = 5.0, Lane = 1 }, { T = 5.25, Lane = 1 } } }
+		local dancer = LastDancer.new()
+		local first = LastDancer.Tap(chart, dancer, 1, 5.13) -- late for the first, early for the second
+		expectEqual(first.Index, 1)
+		expectEqual(first.Kind, "Ok") -- 0.13 s late
+		local second = LastDancer.Tap(chart, dancer, 1, 5.26)
+		expectEqual(second.Index, 2)
+		expectEqual(second.Kind, "Perfect")
+		expectEqual(dancer.Stray, 0)
+		-- with the first already hit or missed, a tap in the overlap takes the second
+		local other = LastDancer.new()
+		LastDancer.Expire(chart, other, 5.2)
+		expectEqual(LastDancer.Tap(chart, other, 1, 5.2).Index, 2)
+	end
+)
+
+test("Tap: a tap that arrives late for a note already missed is Late, not a stray", function()
+	local chart, dancer = small(), LastDancer.new()
+	LastDancer.Expire(chart, dancer, 1.2) -- the note at 1.0 is missed
+	local groove = dancer.Groove
+	local outcome = LastDancer.Tap(chart, dancer, 1, 1.15) -- a slow packet: made on time, arrived late
+	expectEqual(outcome.Kind, "Late")
+	expectEqual(outcome.Points, 0)
+	expectEqual(dancer.Groove, groove)
+	expectEqual(dancer.Stray, 0)
+	-- but a tap in a lane with no missed note near it is still a stray
+	expectEqual(LastDancer.Tap(chart, dancer, 3, 1.15).Kind, "Stray")
+	-- and a tap well after the missed note's window is a stray
+	expectEqual(LastDancer.Tap(chart, dancer, 1, 1.4).Kind, "Stray")
+end)
+
+test("Tap: the wrong lane, too early, too late and nonsense are strays", function()
+	local chart, dancer = small(), LastDancer.new()
+	expectEqual(LastDancer.Tap(chart, dancer, 3, 1.0).Kind, "Stray")
+	expectEqual(LastDancer.Tap(chart, dancer, 1, 0.5).Kind, "Stray")
+	expectEqual(LastDancer.Tap(chart, dancer, 1, 1.4).Kind, "Stray")
+	expectEqual(LastDancer.Tap(chart, dancer, 0, 1.0).Kind, "Stray")
+	expectEqual(LastDancer.Tap(chart, dancer, 5, 1.0).Kind, "Stray")
+	expectEqual(LastDancer.Tap(chart, dancer, 1.5, 1.0).Kind, "Stray")
+	expectEqual(LastDancer.Tap(chart, dancer, "1", 1.0).Kind, "Stray")
+	expectEqual(LastDancer.Tap(chart, dancer, 1, 0 / 0).Kind, "Stray")
+	expectEqual(LastDancer.Tap(chart, dancer, 1, math.huge).Kind, "Stray")
+	expectEqual(dancer.Stray, 9)
+	expectEqual(dancer.Score, 0)
+end)
+
+test("Tap: a stray breaks the combo and pulls the groove down", function()
+	local chart, dancer = small(), LastDancer.new()
+	LastDancer.Tap(chart, dancer, 1, 1.0)
+	local before = dancer.Groove
+	LastDancer.Tap(chart, dancer, 3, 2.0)
+	expectEqual(dancer.Combo, 0)
+	expectTrue(dancer.Groove < before, "groove fell")
+	expectEqual(dancer.BestCombo, 1)
+end)
+
+test("Expire: notes nobody hit become misses once their window is over", function()
+	local chart, dancer = small(), LastDancer.new()
+	expectEqual(#LastDancer.Expire(chart, dancer, 1.1), 0) -- inside the window of the first note
+	local missed = LastDancer.Expire(chart, dancer, 1.2)
+	expectEqual(#missed, 1)
+	expectEqual(missed[1], 1)
+	expectEqual(dancer.Miss, 1)
+	expectEqual(dancer.Next, 2)
+	expectEqual(#LastDancer.Expire(chart, dancer, 1.2), 0) -- only once
+end)
+
+test("Expire: a note that was hit is not missed, and a late tap on a missed note is Late", function()
+	local chart, dancer = small(), LastDancer.new()
+	LastDancer.Tap(chart, dancer, 1, 1.0)
+	expectEqual(#LastDancer.Expire(chart, dancer, 1.3), 0)
+	LastDancer.Expire(chart, dancer, 2.0) -- the lane 2 note at 1.5 and lane 1 note at 1.75 are gone
+	expectEqual(dancer.Miss, 2)
+	expectEqual(LastDancer.Tap(chart, dancer, 2, 1.55).Kind, "Late")
+end)
+
+test("groove: perfect play climbs towards 1 without passing it, misses pull it to 0", function()
+	local dancer = LastDancer.new()
+	local chart = { Notes = {} }
+	for index = 1, 200 do
+		table.insert(chart.Notes, { T = index * 0.5, Lane = 1 })
+	end
+	for index = 1, 200 do
+		LastDancer.Tap(chart, dancer, 1, index * 0.5)
+	end
+	expectTrue(dancer.Groove > 0.99 and dancer.Groove <= 1, "perfect play: groove " .. dancer.Groove)
+	LastDancer.Expire({ Notes = {} }, dancer, 0)
+	local lazy = LastDancer.new()
+	LastDancer.Expire(chart, lazy, 100)
+	expectTrue(lazy.Groove < 0.01, "a dancer who never taps: groove " .. lazy.Groove)
+end)
+
+test("groove: mashing every pad never beats dancing it", function()
+	local chart = { Notes = {} }
+	for index = 1, 60 do
+		table.insert(chart.Notes, { T = index * 0.5, Lane = (index % 4) + 1 })
+	end
+	local masher, dancer = LastDancer.new(), LastDancer.new()
+	for index = 1, 60 do
+		local t = index * 0.5
+		LastDancer.Tap(chart, dancer, (index % 4) + 1, t + 0.04) -- a decent dancer, a little late
+		-- the masher hits all four pads every 80 ms
+		for step = -3, 3 do
+			for lane = 1, 4 do
+				LastDancer.Tap(chart, masher, lane, t + step * 0.08)
+			end
+		end
+	end
+	expectTrue(masher.Groove < dancer.Groove - 0.3, `masher {masher.Groove} dancer {dancer.Groove}`)
+	expectTrue(masher.Groove < 0.3, "the masher's groove is low: " .. masher.Groove)
+end)
+
+test("InWarmup: taps well before the first note are free", function()
+	local chart = small()
+	expectTrue(LastDancer.InWarmup(chart, -3), "the count-in")
+	expectTrue(LastDancer.InWarmup(chart, 0.2), "shortly before the first note's window")
+	expectTrue(not LastDancer.InWarmup(chart, 0.4), "just before the first note it counts")
+	expectTrue(not LastDancer.InWarmup(chart, 5), "in the song")
+end)
+
+test("PressTime: the device's time, within half the lag plus the reach and the sync limit", function()
+	expectTrue(near(LastDancer.PressTime(99.95, 100, 0.1), 99.95), "an honest time stands")
+	expectTrue(near(LastDancer.PressTime(100.5, 100, 0.1), 100), "never after it arrived")
+	local earliest = 100 - 0.05 - LastDancer.REACH - LastDancer.SYNC_MAX
+	expectTrue(near(LastDancer.PressTime(50, 100, 0.1), earliest), "a made-up time can't reach back")
+	expectTrue(near(LastDancer.PressTime(nil, 100, 0.1), 99.95), "no time: half a round trip ago")
+	expectTrue(near(LastDancer.PressTime(0 / 0, 100, 0), 100), "nan is no time")
+	expectTrue(near(LastDancer.PressTime("x", 100, 0), 100), "nor is a string")
+end)
+
+test("PhraseAt and CutTime: the cuts fall at the end of phrases 2 to 7", function()
+	expectEqual(LastDancer.PhraseAt(0), 1)
+	expectEqual(LastDancer.PhraseAt(7.99), 1)
+	expectEqual(LastDancer.PhraseAt(8), 2)
+	expectEqual(LastDancer.PhraseAt(63.9), 8)
+	expectEqual(LastDancer.CutTime(1), nil)
+	expectEqual(LastDancer.CutTime(2), 16)
+	expectEqual(LastDancer.CutTime(7), 56)
+	expectEqual(LastDancer.CutTime(8), nil)
+end)
+
+-- Plays a whole round of cuts from `start` dancers, nobody falling any other way.
+local function remaining(start: number): { number }
+	local alive = start
+	local history = { alive }
+	for phrase = LastDancer.FIRST_CUT, LastDancer.LAST_CUT do
+		alive -= LastDancer.CutCount(alive, phrase, start)
+		table.insert(history, alive)
+	end
+	return history
+end
+
+test("CutCount: 12 dancers go 10, 9, 7, 5, 4, 2 and two are left for the final duel", function()
+	expectEqual(table.concat(remaining(12), ","), "12,10,9,7,5,4,2")
+end)
+
+test("CutCount: 8 dancers lose one a phrase; 3 lose their third in the middle cut", function()
+	expectEqual(table.concat(remaining(8), ","), "8,7,6,5,4,3,2")
+	expectEqual(table.concat(remaining(3), ","), "3,3,3,2,2,2,2")
+	expectEqual(table.concat(remaining(4), ","), "4,4,3,3,3,2,2")
+	expectEqual(table.concat(remaining(2), ","), "2,2,2,2,2,2,2")
+end)
+
+test("CutCount: any size leaves two for the final phrase, never cuts into them, and spreads the cuts", function()
+	for start = 2, 24 do
+		local history = remaining(start)
+		expectEqual(history[#history], 2)
+		for index = 2, #history do
+			expectTrue(history[index] >= 2, `{start} dancers: {table.concat(history, ",")}`)
+			expectTrue(history[index] <= history[index - 1], `{start} dancers: {table.concat(history, ",")}`)
+		end
+		if start >= 7 then
+			expectTrue(history[2] < history[1], `{start} dancers: someone falls at the first cut`)
+		end
+	end
+	expectEqual(table.concat(remaining(1), ","), "1,1,1,1,1,1,1")
+	expectEqual(LastDancer.CutCount(12, 1, 12), 0)
+	expectEqual(LastDancer.CutCount(12, 8, 12), 0)
+end)
+
+test("CutCount: dancers who left already count towards the target", function()
+	-- 12 started; by the second cut 3 have left, so the target of 11 is already beaten
+	expectEqual(LastDancer.CutCount(9, 2, 12), 0)
+	expectEqual(LastDancer.CutCount(9, 3, 12), 0) -- target 9
+	expectEqual(LastDancer.CutCount(9, 4, 12), 2) -- target 7
+end)
+
+test("PickCuts: the lowest groove falls, then the fewest points, then the unluckiest draw", function()
+	local entries = {
+		{ Key = "a", Groove = 0.9, Score = 5000, Order = 1 },
+		{ Key = "b", Groove = 0.3, Score = 900, Order = 2 },
+		{ Key = "c", Groove = 0.3, Score = 400, Order = 3 },
+		{ Key = "d", Groove = 0.3, Score = 400, Order = 4 },
+		{ Key = "e", Groove = 0.7, Score = 100, Order = 5 },
+	}
+	local cut = LastDancer.PickCuts(entries, 3)
+	expectEqual(table.concat(cut, ","), "d,c,b")
+	expectEqual(#LastDancer.PickCuts(entries, 99), 5)
+	expectEqual(entries[1].Key, "a") -- the input isn't reordered
+end)
+
+test("Ahead: higher groove wins, then more points, then the luckier draw", function()
+	local a = { Key = "a", Groove = 0.8, Score = 10, Order = 1 }
+	local b = { Key = "b", Groove = 0.7, Score = 99, Order = 2 }
+	expectTrue(LastDancer.Ahead(a, b), "groove first")
+	b.Groove = 0.8
+	expectTrue(LastDancer.Ahead(b, a), "then points")
+	b.Score = 10
+	expectTrue(LastDancer.Ahead(a, b), "then the draw")
+	expectTrue(not LastDancer.Ahead(b, a), "and not both ways")
+end)
+
+test("Place: where a groove stands among the others", function()
+	expectEqual(LastDancer.Place({ 0.9, 0.5, 0.7 }, 0.7), 2)
+	expectEqual(LastDancer.Place({ 0.9, 0.5, 0.7 }, 0.95), 1)
+	expectEqual(LastDancer.Place({ 0.9, 0.5, 0.7 }, 0.1), 4)
+end)
+
+test("the chart: well formed, on the song's eighth notes, with the cut beats free", function()
+	expectEqual(LastDancer.Check(Chart, LastDancer.BEAT / 2), nil)
+	expectEqual(Chart.Bpm, LastDancer.BPM)
+	for index, note in Chart.Notes do
+		local eighths = note.T / (LastDancer.BEAT / 2)
+		expectTrue(near(eighths, math.floor(eighths + 0.5), 1e-6), `note {index} at {note.T}s is off the grid`)
+		local phrase = LastDancer.PhraseAt(note.T)
+		if LastDancer.CutTime(phrase) then
+			local into = note.T - (phrase - 1) * LastDancer.PHRASE
+			expectTrue(
+				into < LastDancer.PHRASE - LastDancer.BEAT - 1e-6,
+				`note {index}: a note in the last beat before a cut`
+			)
+		end
+	end
+end)
+
+test("the chart: gets busier and has a note for every lane", function()
+	local perPhrase = {}
+	local lanes = {}
+	for _, note in Chart.Notes do
+		local phrase = LastDancer.PhraseAt(note.T)
+		perPhrase[phrase] = (perPhrase[phrase] or 0) + 1
+		lanes[note.Lane] = true
+	end
+	for lane = 1, LastDancer.LANES do
+		expectTrue(lanes[lane], "lane " .. lane .. " is never used")
+	end
+	expectTrue(perPhrase[1] < perPhrase[4], "phrase 4 is busier than phrase 1")
+	expectTrue(perPhrase[8] >= perPhrase[4], "the final duel is at least as busy as phrase 4")
+	for phrase = 1, LastDancer.PHRASES do
+		expectTrue((perPhrase[phrase] or 0) >= 10, "phrase " .. phrase .. " has too few notes")
+	end
+end)
+
+test("a perfect player in every cut stays in; a player who never taps is cut first", function()
+	local good, idle = LastDancer.new(), LastDancer.new()
+	for _, note in Chart.Notes do
+		LastDancer.Tap(Chart, good, note.Lane, note.T)
+	end
+	LastDancer.Expire(Chart, idle, LastDancer.DURATION)
+	expectEqual(good.Miss, 0)
+	expectEqual(good.Perfect, #Chart.Notes)
+	expectEqual(idle.Miss, #Chart.Notes)
+	local cut = LastDancer.PickCuts({
+		{ Key = "good", Groove = good.Groove, Score = good.Score, Order = 1 },
+		{ Key = "idle", Groove = idle.Groove, Score = idle.Score, Order = 2 },
+	}, 1)
+	expectEqual(cut[1], "idle")
+end)
+
+test("every Logic.X the mode's files use exists (these files aren't type checked strictly)", function()
+	local types = { Dancer = true, Entry = true, Note = true, Chart = true, Outcome = true }
+	for _, path in
+		{
+			"src/server/MiniGames/LastDancer.luau",
+			"src/server/MiniGames/Bots/LastDancer.luau",
+			"src/client/MiniGames/LastDancer.luau",
+			"tools/checks/bots/LastDancer.luau",
+		}
+	do
+		local source = string.gsub(fs.readFile(path), "[^\n]*require%([^\n]*", "") -- (not the require lines)
+		for member in string.gmatch(source, "Logic%.([%w_]+)") do
+			expectTrue(
+				(LastDancer :: any)[member] ~= nil or types[member],
+				`{path} uses Logic.{member}, which doesn't exist`
+			)
+		end
+	end
+end)
+
+test(
+	"the server seats each dancer on their own mat with SpawnPlayer, never SpawnAll (which ignores the seating)",
+	function()
+		local source = string.gsub(fs.readFile("src/server/MiniGames/LastDancer.luau"), "%-%-[^\n]*", "") -- (comments aside)
+		expectTrue(string.find(source, "SpawnPlayer", 1, true) ~= nil, "no SpawnPlayer")
+		expectTrue(
+			string.find(source, "SpawnAll", 1, true) == nil,
+			"SpawnAll deals its points out in the round's player order: dancers land on each other's mats"
+		)
+	end
+)
+
+return nil

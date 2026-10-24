@@ -237,3 +237,57 @@ the owner's audio uploads: `tools/music/songs/BigBadVacuum.py` + `modes.py pack`
 preview (`tools/preview/make_preview.py BigBadVacuum`). Difficulty is tuned against the bots only (a strong lobby wins about
 two times in three, in 60-85 s); expect to retune `HealthFor`, the `Think`/`WIND_SCALE` pace and the core windows from real play.
 
+## 31. Last Dancer (`LastDancer`, Survival)
+
+Added on 2026-10-24 from Claude's own pitch ("If you could make any mini game to add to the game. What would it be?"),
+built when the owner said "Let's make it", and then, on the owner's "Also for this mini game I want it to show your
+character basically playing on a DDR mat from an arcade", turned into a dance-mat game. The first rhythm game in the
+lineup. Everyone stands on their own arcade dance mat on a disco floor and steps on the arrow under each falling note on
+the beat of the round's own song ("Mirror Ball Showdown", 120 bpm);
+at the end of each 8-second phrase from the second to the seventh the dancers with the lowest groove fall through the
+floor, enough to leave two for the final duel; at the buzzer the highest groove wins. Survival, 64 s, MinPlayers 1, up to 12.
+
+- **The chart is the song.** `tools/music/songs/LastDancer.py` lists the notes (`CHART_BARS`: 32 bars of 16 steps, a digit
+  for a lane 1-4); its lead plays every one of them (a chord tone per lane), and `python3 tools/music/lastdancer_chart.py`
+  writes the same notes to `src/shared/LastDancerChart.luau`. Everyone gets the same chart. Change a bar, re-render the
+  song (`modes.py render LastDancer`), re-export the chart and re-pack (`modes.py pack`, which never touches an uploaded
+  pack: a changed song needs `--replace ModePack7` and a new upload).
+- **Judging** is `src/shared/Logic/LastDancer.luau` (pure, unit-tested in `tests/LastDancer.spec.luau`): the earliest waiting
+  note in the tapped lane within 170 ms (Perfect 65, Great 115, Ok 170), else a stray; a note nobody hit is a miss, and a
+  tap that arrives just after for a note already missed (a slow packet) is "Late": no penalty. The
+  server judges every tap by the time the player's device says it was made (less its SYNC setting), never later than it
+  arrived and not earlier than half the ping + 0.4 s. The client judges the same taps with the same module for instant
+  PERFECT / GREAT text; the server's numbers are the ones that count.
+- **Groove** (what the cuts go by) is a moving average of recent outcomes, 0-1: a Perfect pulls it towards 1, a Great 0.8,
+  an Ok 0.5, a miss or stray towards 0 (a stray pulls half as hard as a miss, but mashing four pads gives ~8 strays a hit).
+  It can't pile up past the top and a bad stretch can be danced out of.
+- **The cuts.** 12 dancers go 10, 9, 7, 5, 4, 2 (`Logic.Target`: the surplus over two is spread evenly over the six cuts).
+  The cut is decided 0.3 s before the downbeat, in the last beat of the phrase that the chart leaves empty: the doomed tiles
+  flash red, then drop. Ties: lower groove, then fewer points, then a draw made once per round.
+- **The dance mat.** The four lanes are a dance mat's four arrows (LEFT DOWN UP RIGHT: `Logic.ARROWS`, the one table the
+  server, client and bots read for lane, direction, colour and keys). Each dancer's mat is a 3 x 3 grid of panels with an
+  arrow chevron on the four edge-centre ones, a strip and centre disc in the dancer's colour and a safety rail round the
+  front and sides; UP is the panel nearest the stage. Every tap, by anyone (the server batches everyone's steps 20 times a
+  second: `Steps`), lights that arrow panel (white for a perfect step, the arrow's colour for great, half for ok, dull red for
+  a wrong one) and makes that character step onto it: the body shifts over the panel, the foot goes out, a hop and a lean,
+  then back to dancing on the beat. A cut drops the whole mat (a model: its pivot is moved every frame).
+- **Controls.** Four arrow pads, each its own colour and turned to its arrow: tap them (phones take the touch the moment it
+  lands, so two fingers work), or use the arrow keys or D F J K (bound ahead of the camera, so the arrow keys never turn it,
+  and only while you are dancing). SYNC + / - beside the highway shifts the picture and the taps' time in 25 ms steps (0 to
+  300 ms: the sound reaches some players, Bluetooth speakers especially, late); the setting lasts for the visit. The client
+  also measures how far behind the song is playing against the shared clock and adds that (the audio only corrects itself
+  once it is 0.35 s off), and tells the server the total so a note isn't called missed before the tap for it can arrive. If
+  the song isn't playing, a quiet tick keeps the beat.
+- **Bots** (`Bots/LastDancer.luau`) tap the same chart through `ctx:BotAction`: skill 0.35-0.9 gives ~72-89% of the notes,
+  47-85 ms off, and the odd wrong pad; now and then one loses the beat for 2 s. Measured with the real judging, groove is
+  ~50% for the clumsiest bot and ~80% for the sharpest; a good human (92%, 55 ms) reaches ~82%, a casual one (80%, 85 ms) ~60%.
+- **Look.** A ring of dance mats (the ring grows with the dancers so square mats never touch) round a glass stage under a
+  mirror ball, speaker stacks and spotlights, a glowing pit below; on each client a club at midnight (stars, purple haze, a
+  coloured light on every mat). Every dancer, bots too, dances on this device only (R15 joint offsets, hops and sways on the
+  beat, arms up when in form, slack when not, flailing when about to fall) and steps onto the arrows as above. The mats are
+  plain parts (about 290 for 12 dancers: Hex Meltdown has 219 plus meshes, Cake Factory 628 plus meshes); the mirror ball and
+  speakers are mesh props with fallbacks (`World/Props/LastDancer.luau`, `tools/meshgen/props/LastDancer.py`).
+- **Ships dark.** The mode keeps itself out of the live vote until its song is in the game (`Sounds.ModeSongs.LastDancer`,
+  i.e. ModePack7's id in `AudioAssets`): upload with `python3 tools/upload_assets.py --user-id 11690979745 --what modes`
+  (uses 1 of the owner's 10 audio uploads a month: 6 are used), publish, and it is in the vote. Studio and the round
+  harness ignore that.

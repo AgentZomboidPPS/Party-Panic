@@ -440,6 +440,19 @@ local list: { GameDefinition } = {
 		-- mini games?").
 		Enabled = false,
 	},
+	{
+		Id = "LastDancer",
+		Name = "Last Dancer",
+		Category = "Survival",
+		Icon = "💃",
+		Color = Color3.fromRGB(235, 80, 200),
+		Objective = "Step on the arrows on the beat! The lowest dancers fall through the floor after every verse. Last dancer standing wins.",
+		Controls = "Tap the arrow pads (phones), or use the arrow keys or D F J K. Hit the beat to keep your groove up.",
+		Duration = 64,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 
