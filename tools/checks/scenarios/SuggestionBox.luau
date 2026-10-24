@@ -3,7 +3,8 @@
 -- seconds in, the stand-ins send what a player might: too short, a kind that isn't one, a real idea,
 -- a second one straight after (one a minute), and another player's two-line bug report. Each line
 -- says what the server answered; then the hour's key is read back. "PROBLEM" marks anything that
--- came out wrong. tools/checks/suggestions.py --test --days 1 shows them as the owner would.
+-- came out wrong; then the owner's inbox reads the week back (and a stand-in isn't the owner).
+-- tools/checks/suggestions.py --test --days 1 shows them as the owner would.
 --
 --   python3 tools/checks/round_harness.py FireRope --players 2 --seconds 8 \
 --       --bot tools/checks/scenarios/SuggestionBox.luau > box.luau
@@ -44,6 +45,23 @@ return function(env)
 					then `{mine} of this run's 2 in the hour's key`
 					else tostring(list)}`
 			)
+			-- The owner's inbox (the last week, newest first), as the owner's INBOX window gets it.
+			local entries, okInbox = SuggestionService.Inbox()
+			local found, newestFirst = 0, true
+			for index, entry in entries do
+				if entry.U == ann.UserId or entry.U == bo.UserId then
+					found += 1
+				end
+				if index > 1 and (entry.T or 0) > (entries[index - 1].T or 0) then
+					newestFirst = false
+				end
+			end
+			local broken = not okInbox or found < 2 or not newestFirst
+			env.note(
+				`SUGGEST{if broken then " PROBLEM" else ""} inbox: {#entries} in the last week, this run's {found} of 2, newest first {newestFirst}`
+			)
+			local owner = SuggestionService.IsOwner(ann)
+			env.note(`SUGGEST{if owner then " PROBLEM" else ""} inbox is the owner's only: a stand-in is owner {owner}`)
 		end)
 	end
 end

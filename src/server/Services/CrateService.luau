@@ -422,7 +422,8 @@ function CrateService.Open(player: Player, count: number, altarIndex: number): (
 	local coins = 0
 	local rare = false
 	for _ = 1, count do
-		local roll = CrateLogic.Roll(season, data.Owned, progress.Meter, random, bonus)
+		local first = lifetimeOpened(data) == 0 -- (their first crate ever always holds an item)
+		local roll = CrateLogic.Roll(season, data.Owned, progress.Meter, random, bonus, first)
 		data.Keys -= 1
 		data.Crates.Count -= 1
 		progress.Opened += 1

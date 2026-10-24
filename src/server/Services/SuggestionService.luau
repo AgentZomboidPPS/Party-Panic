@@ -13,6 +13,10 @@
 --
 -- Test runs (workspace PP_Harness) write to PP_Suggestions_Test instead (suggestions.py --test reads
 -- it); Studio keeps nothing.
+--
+-- The owner's inbox (owner: "did we ever add in a way for me the dev to read the suggestion box?"):
+-- the game's owner (its creator) sends "Inbox" on the same remote and hears back ("Inbox", the last
+-- INBOX_DAYS days' suggestions, newest first). Nobody else gets anything back.
 
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
@@ -35,8 +39,13 @@ local TEST_STORE = "PP_Suggestions_Test"
 local GAP = 60 -- seconds between one player's suggestions
 local SESSION_MOST = 6 -- suggestions one player can send in one server session
 
+local INBOX_DAYS = 7 -- how far back the owner's inbox reads
+local INBOX_MOST = 150 -- suggestions it sends at most
+local INBOX_GAP = 10 -- seconds between the owner's inbox reads
+
 local lastSent: { [Player]: number } = {}
 local sent: { [Player]: number } = {}
+local inboxAt = 0
 
 local function harness(): boolean
 	return workspace:GetAttribute("PP_Harness") == true
@@ -108,15 +117,84 @@ function SuggestionService.Submit(player: Player, kind: any, text: any): (boolea
 	return true, "Thanks! Your idea is in the box. We read every one!"
 end
 
+-- Whether `player` made the game (only they may read the box in game).
+function SuggestionService.IsOwner(player: Player): boolean
+	return game.CreatorType == Enum.CreatorType.User and game.CreatorId ~= 0 and player.UserId == game.CreatorId
+end
+
+-- The last INBOX_DAYS days' suggestions, newest first (at most INBOX_MOST), and whether it could read.
+-- Listing is the data store's scarcest request, so it lists by month (one or two calls: keys are
+-- "YYYY-MM-DDTHH") and then reads the newest hours that have any, until it has enough.
+function SuggestionService.Inbox(): ({ Suggestions.Entry }, boolean)
+	local target = store()
+	if not target then
+		return {}, true
+	end
+	local now = os.time()
+	local oldest = Suggestions.Key(now - INBOX_DAYS * 86400)
+	local months = { os.date("!%Y-%m", now) :: string }
+	local earlier = os.date("!%Y-%m", now - INBOX_DAYS * 86400) :: string
+	if earlier ~= months[1] then
+		table.insert(months, earlier)
+	end
+	local entries: { Suggestions.Entry } = {}
+	local ok = pcall(function()
+		local keys = {}
+		for _, month in months do
+			local pages = target:ListKeysAsync(month, 100)
+			while true do
+				for _, key in pages:GetCurrentPage() do
+					if key.KeyName >= oldest then
+						table.insert(keys, key.KeyName)
+					end
+				end
+				if pages.IsFinished then
+					break
+				end
+				pages:AdvanceToNextPageAsync()
+			end
+		end
+		table.sort(keys, function(a, b)
+			return a > b
+		end)
+		for _, key in keys do
+			if #entries >= INBOX_MOST then
+				break
+			end
+			local list = target:GetAsync(key)
+			for _, entry in if type(list) == "table" then list else {} do
+				if type(entry) == "table" then
+					table.insert(entries, entry)
+				end
+			end
+		end
+	end)
+	table.sort(entries, function(a, b)
+		return (a.T or 0) > (b.T or 0)
+	end)
+	while #entries > INBOX_MOST do
+		table.remove(entries)
+	end
+	return entries, ok
+end
+
 function SuggestionService.Init()
 	local limit = Config.RateLimits.Suggest
 	local limiter = RateLimiter.new(limit[1], limit[2])
 	local remote = Remotes.Get("Suggest")
 	remote.OnServerEvent:Connect(function(player, kind, text)
-		if limiter:Check(player) then
-			local ok, words = SuggestionService.Submit(player, kind, text)
-			remote:FireClient(player, ok, words)
+		if not limiter:Check(player) then
+			return
+		elseif kind == "Inbox" then
+			if SuggestionService.IsOwner(player) and os.clock() - inboxAt >= INBOX_GAP then
+				inboxAt = os.clock()
+				local entries, ok = SuggestionService.Inbox()
+				remote:FireClient(player, "Inbox", entries, ok)
+			end
+			return
 		end
+		local ok, words = SuggestionService.Submit(player, kind, text)
+		remote:FireClient(player, ok, words)
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		lastSent[player] = nil

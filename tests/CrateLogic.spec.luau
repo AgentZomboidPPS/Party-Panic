@@ -215,6 +215,29 @@ test("Crates: the Lantern Meter guarantees a pet at 150, then starts again", fun
 	expectTrue(longest < CrateLogic.Meter, `longest dry run {longest}`)
 end)
 
+test("Crates: a first crate ever always holds an item, the rare tiers at their usual odds", function()
+	local tiers = CrateLogic.TierOdds(season, {}, 0, true)
+	expectTrue(close(tiers.Coins, 0), `coins {tiers.Coins}`)
+	expectTrue(close(tiers.Title, 1 / 500) and close(tiers.Pet, 1 / 100), "title and pets unchanged")
+	expectTrue(close(tiers.Effect, 2 * tiers.Hat), "hats and effects keep their 1 to 2")
+	expectTrue(close(tiers.Title + tiers.Pet + tiers.Hat + tiers.Effect, 1), "adds up to 100%")
+	local total = 0
+	for _, row in CrateLogic.PersonalOdds(season, {}, 0, true) do
+		expectTrue(row.Tier ~= "Coins", "no coin rows on a first crate")
+		total += row.Chance
+	end
+	expectTrue(close(total, 1), `rows add up {total}`)
+	local random = generator(7)
+	for _ = 1, 2000 do
+		local roll = CrateLogic.Roll(season, {}, 0, random, nil, true)
+		expectTrue(roll.Item ~= nil and roll.Coins == 0, `a first crate gave {roll.Tier}`)
+	end
+	-- Every crate after it is the usual one.
+	expectTrue(close(CrateLogic.TierOdds(season, {}, 0, false).Coins, 0.928), "later crates as before")
+	expectEqual(CrateLogic.LifetimeOpened({ HollowNight = { Opened = 2 }, Frostfall = { Opened = 1 } }), 3)
+	expectEqual(CrateLogic.LifetimeOpened(nil), 0)
+end)
+
 test("Crates: keys from rounds, a Party Cup, levels and milestones", function()
 	-- Exactly 3 / 2 / 1 on the podium (owner: "Winner should get 3 keys, 2nd gets 2 and 3rd gets 1.").
 	expectEqual(CrateLogic.CupKeys(1, false), 3)

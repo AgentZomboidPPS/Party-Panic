@@ -14,9 +14,17 @@
 -- coins."). The Lantern Meter is the bad-luck guarantee: every crate without a pet or the title adds
 -- one, and at 150 the next crate is a pet they don't own (while any are left).
 --
+-- A player's very first crate always holds an item (owner: "can we make it so everyone is
+-- guaranteed an item from their first crate?"): the title and the pets keep their usual chances, and
+-- the coins' share goes to the hats and effects, in their usual proportion (1 to 2). The odds screen
+-- shows the usual odds for it (owner: "I dont want to display the first crate odds since they will
+-- be boosted."): only the server rolls with `first`, and nothing in the game or about it mentions
+-- the boost. (Every new player's 3 starting keys are free, so a first crate is almost never a paid
+-- one.)
+--
 -- PersonalOdds is the odds screen Roblox requires before anyone pays for a random item: every
--- outcome and its real chance for this player right now (no duplicates changes them as they
--- collect), adding up to exactly 100%.
+-- outcome and its usual chance for this player right now (no duplicates changes them as they
+-- collect; the meter's guaranteed pet shows as it is), adding up to exactly 100%.
 --
 -- Keys (the owner: "3 keys for 1st place, 2 keys for second, and 1 key for third", then "Winner
 -- should get 3 keys, 2nd gets 2 and 3rd gets 1.", and after "won obby odyssey and got no keys got
@@ -146,6 +154,42 @@ local function coinsAt(r: number): number
 	return CrateLogic.Coins[#CrateLogic.Coins].Coins
 end
 
+-- Crates opened over every season (a profile's Crates.Seasons, or CrateService's data.Seasons).
+function CrateLogic.LifetimeOpened(seasons: any): number
+	local total = 0
+	for _, progress in if type(seasons) == "table" then seasons else {} do
+		if type(progress) == "table" then
+			total += progress.Opened or 0
+		end
+	end
+	return total
+end
+
+-- The tiers' chances for this crate: the usual ones, or on a first crate ever (`first`) the coins'
+-- share spread over the hats and effects still to find, so it always holds an item.
+local function tierChances(season: Season, owned: { [string]: any }, first: boolean?): { [Tier]: number }
+	local chances: { [Tier]: number } = {}
+	local spare = 1
+	local common = 0
+	for _, tier in CrateLogic.Tiers do
+		if #missing(season, tier.Tier, owned) > 0 then
+			chances[tier.Tier] = tier.Chance
+			spare -= tier.Chance
+			if tier.Tier == "Hat" or tier.Tier == "Effect" then
+				common += tier.Chance
+			end
+		end
+	end
+	if first and common > 0 then
+		for tier, chance in chances do
+			if tier == "Hat" or tier == "Effect" then
+				chances[tier] = chance + spare * chance / common
+			end
+		end
+	end
+	return chances
+end
+
 -- Whether the next crate is the meter's guaranteed pet.
 function CrateLogic.Guaranteed(season: Season, owned: { [string]: any }, meter: number): boolean
 	return meter + 1 >= CrateLogic.Meter and #missing(season, "Pet", owned) > 0
@@ -159,7 +203,8 @@ function CrateLogic.Roll(
 	owned: { [string]: any },
 	meter: number,
 	random: () -> number,
-	bonus: number?
+	bonus: number?,
+	first: boolean? -- the player's first crate ever (it always holds an item)
 ): Result
 	local function finish(result: Result): Result
 		local resets = result.Tier == "Title" or result.Tier == "Pet"
@@ -179,12 +224,13 @@ function CrateLogic.Roll(
 	end
 
 	-- A finished tier is out of the roll: its share falls through to the coins.
+	local chances = tierChances(season, owned, first)
 	local r = random()
 	local acc = 0
 	for _, tier in CrateLogic.Tiers do
 		local choices = missing(season, tier.Tier, owned)
 		if #choices > 0 then
-			acc += tier.Chance
+			acc += chances[tier.Tier]
 			if r < acc then
 				local pick = choices[math.clamp(math.floor(random() * #choices) + 1, 1, #choices)]
 				return finish({ Tier = tier.Tier, Item = pick, Coins = 0, Guaranteed = false, Meter = 0 })
@@ -196,7 +242,9 @@ end
 
 -- The odds of every outcome for this player's next crate, adding up to exactly 1. Item rows give
 -- each item still to find its own chance; a finished tier has none (its share is in the coins).
-function CrateLogic.PersonalOdds(season: Season, owned: { [string]: any }, meter: number): { OddsRow }
+-- `first` gives a first crate's boosted odds (the tests check the roll against them; the odds screen
+-- never passes it).
+function CrateLogic.PersonalOdds(season: Season, owned: { [string]: any }, meter: number, first: boolean?): { OddsRow }
 	local rows: { OddsRow } = {}
 	if CrateLogic.Guaranteed(season, owned, meter) then
 		local pets = missing(season, "Pet", owned)
@@ -205,15 +253,20 @@ function CrateLogic.PersonalOdds(season: Season, owned: { [string]: any }, meter
 		end
 		return rows
 	end
+	local chances = tierChances(season, owned, first)
 	local tiers = 0
 	for _, tier in CrateLogic.Tiers do
 		local choices = missing(season, tier.Tier, owned)
 		if #choices > 0 then
-			tiers += tier.Chance
+			local chance = chances[tier.Tier]
+			tiers += chance
 			for _, item in choices do
-				table.insert(rows, { Key = item, Tier = tier.Tier, Label = item, Chance = tier.Chance / #choices })
+				table.insert(rows, { Key = item, Tier = tier.Tier, Label = item, Chance = chance / #choices })
 			end
 		end
+	end
+	if tiers >= 1 - 1e-9 then
+		return rows -- (a first crate: no coins in it)
 	end
 	local coinTotal = 0
 	for _, row in CrateLogic.Coins do
@@ -240,9 +293,14 @@ function CrateLogic.Percent(chance: number): string
 end
 
 -- The tier totals the odds screen shows (title, pet, hat, effect, coins), adding up to exactly 1.
-function CrateLogic.TierOdds(season: Season, owned: { [string]: any }, meter: number): { [string]: number }
+function CrateLogic.TierOdds(
+	season: Season,
+	owned: { [string]: any },
+	meter: number,
+	first: boolean?
+): { [string]: number }
 	local out: { [string]: number } = { Title = 0, Pet = 0, Hat = 0, Effect = 0, Coins = 0 }
-	for _, row in CrateLogic.PersonalOdds(season, owned, meter) do
+	for _, row in CrateLogic.PersonalOdds(season, owned, meter, first) do
 		out[row.Tier] += row.Chance
 	end
 	return out
