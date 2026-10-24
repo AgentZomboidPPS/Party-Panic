@@ -107,7 +107,7 @@ local function buildClose(touch: boolean)
 	-- Drawn like the windows' X (UI/Modal, a UIKit.Button): white under a red gradient.
 	UIKit.Label({
 		Name = "Mark",
-		Text = "X",
+		Text = "✕", -- (UI/Icons draws the X)
 		Font = Theme.Fonts.Display,
 		TextSize = if touch then 24 else 20,
 		TextWrapped = false,

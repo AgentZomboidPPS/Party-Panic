@@ -375,7 +375,7 @@ local function show(items: { Earned })
 	subline:SetAttribute("PP_Lines", 2)
 	UIKit.Button({
 		Name = "Close",
-		Text = "X",
+		Text = "✕", -- (UI/Icons draws the X)
 		TextSize = 30,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 12),

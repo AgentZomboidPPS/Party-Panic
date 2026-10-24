@@ -138,7 +138,7 @@ function SpectateController.Start(context)
 		focus()
 	end, Theme.Colors.Cyan, Color3.fromRGB(50, 120, 230))
 	UIKit.Button({
-		Text = "X",
+		Text = "✕", -- (UI/Icons draws the X)
 		AnchorPoint = Vector2.new(1, 0),
 		Size = if touch then UDim2.fromOffset(button, button) else UDim2.fromOffset(90, 60),
 		Position = UDim2.new(1, -inset - (if touch then 0 else 2), 0, inset),

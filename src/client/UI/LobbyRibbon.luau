@@ -9,7 +9,8 @@
 -- the phase banner, below the line of the coins and their pink NEXT reward pill (which a full row
 -- reached over at first). It shows in the lobby only: never during a round, the rules card or the
 -- results, and not while a level-up or medal card is up (PP_Celebrating: its top reaches the row on
--- PC) or a lobby game has the screen (the HUD's PP_TipsAside: Skee-Ball).
+-- PC) or a lobby game has the screen (the HUD's PP_TipsAside: Skee-Ball); on phones not while the
+-- emote picker is open either (the HUD's PP_EmotesOpen: on the smallest phones the row sat over its X).
 --
 --   local chip = LobbyRibbon.Add(context, { Name = "Cup", Priority = 2, OnClick = openStandings })
 --   chip:Set("🏆", "CUP 3/5")   -- icon and words; empty words take the chip off the row
@@ -94,6 +95,7 @@ local function refresh()
 		and not replaying
 		and player:GetAttribute("PP_Celebrating") ~= true
 		and hud:GetAttribute("PP_TipsAside") ~= true
+		and not (touch and hud:GetAttribute("PP_EmotesOpen") == true)
 	local s = size()
 	local used = 0
 	local order = table.clone(chips)
@@ -163,6 +165,7 @@ local function build(context)
 	GameState.Changed("Phase", refresh)
 	Players.LocalPlayer:GetAttributeChangedSignal("PP_Celebrating"):Connect(refresh)
 	context.Hud:GetAttributeChangedSignal("PP_TipsAside"):Connect(refresh)
+	context.Hud:GetAttributeChangedSignal("PP_EmotesOpen"):Connect(refresh)
 	task.delay(3, refresh) -- again once the font has surely loaded (widths measure narrow before)
 end
 

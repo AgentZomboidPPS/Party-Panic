@@ -541,7 +541,7 @@ local function show(payload: any)
 	CollectionService:AddTag(headGradient, SHIMMER_TAG)
 	UIKit.Button({
 		Name = "Close",
-		Text = "X",
+		Text = "✕", -- (UI/Icons draws the X)
 		TextSize = 30,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -14, 0, 14),

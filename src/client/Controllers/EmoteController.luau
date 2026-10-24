@@ -128,6 +128,12 @@ setOpen = function(open: boolean)
 		return
 	end
 	panel.Visible = open
+	-- (Phones: the lobby's chips step aside while it's open, UI/LobbyRibbon: on the smallest ones
+	-- they sat over its X.)
+	local gui = panel:FindFirstAncestorWhichIsA("ScreenGui")
+	if gui then
+		gui:SetAttribute("PP_EmotesOpen", open)
+	end
 	if open then
 		render()
 		grid.CanvasPosition = Vector2.zero
@@ -181,7 +187,7 @@ function EmoteController.Start(context)
 	})
 	UIKit.Button({
 		Name = "Close",
-		Text = "X",
+		Text = "✕", -- (UI/Icons draws the X)
 		TextSize = if touch then 24 else 20,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -PADDING, 0, (header - closeSize) / 2),
