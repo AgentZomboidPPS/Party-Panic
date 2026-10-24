@@ -4,7 +4,9 @@
 --     everyone's face in a glowing ring of the party's colour (the leader wears the 👑) and the streak
 --     (🔥 rounds in a row together) once it's 2, on a dark pill with a rim of colours turning round
 --     it, a neon glow breathing round that and a shine sweeping over now and then. A tap opens the
---     PARTY window. Phones: compact, low in the middle of the screen (like the toasts, which sit
+--     PARTY window (PC; on phones the lobby's PARTY chip does: there the bar takes no taps, as its
+--     left end reaches into the corner where a thumb starts the MOVE stick on smaller phones, and a
+--     touch there must move the player). Phones: compact, low in the middle of the screen (like the toasts, which sit
 --     above it: NotificationController; owner, on layout A: "the bottom not being centrally located"),
 --     clear of the chip row and the menu column up top and of the ☰ in the top bar row. The vote
 --     cards take that spot while they're up (VoteController's row at the bottom middle), so the bar
@@ -211,6 +213,12 @@ local function buildBar(context)
 		AudioController.Play("Click")
 		pcall(PartyController.Open)
 	end)
+	if touch then
+		-- Phones: nothing on it takes taps (see the top): a touch on it goes to the MOVE stick.
+		bar.Active = false
+		bar.Interactable = false
+		holder:SetAttribute("PP_Popup", true) -- (tools/checks/ui_render.py: allowed in the stick's corner)
+	end
 	-- The rim turns through the party's colours, a neon glow breathes round it, and a shine sweeps
 	-- over now and then.
 	PartyKit.SpinBorder(bar, PartyKit.RimColors(Theme.Colors.Cyan), 4, barLoops)
