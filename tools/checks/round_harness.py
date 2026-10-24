@@ -246,8 +246,63 @@ def slim(text: str) -> str:
         return text
     text = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", text)
     text = re.sub(r"(?m)^([^\"'`\[\n]*?\S)[ \t]+--(?!\[)[^\n]*$", r"\1", text)
-    text = "\n".join(_cut_after_strings(line) for line in text.split("\n"))
+    text = "\n".join(_tighten(_cut_after_strings(line)) for line in text.split("\n"))
     return re.sub(r"(?m)^[ \t]+", "", text)
+
+
+# Spaces next to these can go ("a = { b, c }" -> "a={b,c}"). Never "-" ("a - -b" would become a
+# comment), "." ("1 .. x" would become a bad number) or "[" ("[ [" would open a long string).
+_TIGHT = set("=,(){}]+*/%<>~:;^#")
+# Two of these side by side can read as one operator (">=", "//", "::", "->", "..."): a space between
+# them stays.
+_OPERATOR = set("=<>~/*+%^:-.!&|?")
+
+
+def _tighten(line: str) -> str:
+    """A line with the spaces beside operators and brackets dropped, outside strings and before any
+    comment. Lines with a `backtick` string (its {interpolation} is code) or a long bracket stay as
+    they are."""
+    if "`" in line or "[[" in line or "[=" in line:
+        return line
+    out: list[str] = []
+    quote = ""
+    i, n = 0, len(line)
+    while i < n:
+        ch = line[i]
+        if quote:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(line[i + 1])
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+            i += 1
+            continue
+        if ch in "\"'":
+            quote = ch
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "-" and line.startswith("--", i):
+            out.append(line[i:])  # a comment: the rest stays as it is
+            break
+        if ch in " \t":
+            j = i
+            while j < n and line[j] in " \t":
+                j += 1
+            before = out[-1] if out else ""
+            after = line[j] if j < n else ""
+            joins = before in _OPERATOR and after in _OPERATOR  # ("<T> = {" must not become ">=")
+            if after == "" or ((before in _TIGHT or after in _TIGHT) and not joins):
+                i = j
+                continue
+            out.append(" ")
+            i = j
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 def drop_blank_lines(body: str) -> tuple[str, list]:

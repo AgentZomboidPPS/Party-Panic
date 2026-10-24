@@ -31,27 +31,28 @@ FOLDER = re.compile(r'__folder\(\s*"([^"]+)"\s*\)')
 DYNAMIC = re.compile(r'(?<![\w.])(?:__req|require)\s*\(|pcall\(\s*(?:__req|require)\s*,')
 
 # Every require in the game's code that the bundler can't follow by its text: (module, a pattern its
-# line matches after the rewrite, what it loads and why the bundle still has it). "*" is any module.
+# line matches after the rewrite and the slimming, which drops spaces beside operators, so patterns
+# allow for either; what it loads and why the bundle still has it). "*" is any module.
 DYNAMIC_REQUIRES = [
     (
         "Server/World/MeshLibrary",
-        r"(?:__req|require)\(module :: any\)\(helpers\)",
+        r"(?:__req|require)\(module\s*::\s*any\)\(helpers\)",
         "every Props/<File> it finds through script.Parent:FindFirstChild(\"Props\") (a __folder listing)",
     ),
     (
         "Server/MiniGames",
-        r"pcall\((?:__req|require), child\)",
+        r"pcall\((?:__req|require),\s*child\)",
         "the game's mode registry requires its own children (modes, bots); in a harness `script` is "
         "the task, which has none, so it loads nothing",
     ),
     (
         "Client/Controllers/MiniGameController",
-        r"pcall\((?:__req|require), moduleScript\)",
+        r"pcall\((?:__req|require),\s*moduleScript\)",
         "the round's client half through script.Parent.Parent.MiniGames (a __folder listing)",
     ),
     (
         "*",
-        r"(?:__req|require)\(module(?: :: any)?\).*:GetControls\(\)",
+        r"(?:__req|require)\(module(?:\s*::\s*any)?\).*:GetControls\(\)",
         "Roblox's own PlayerModule (PlayerScripts), not a bundled module",
     ),
 ]
