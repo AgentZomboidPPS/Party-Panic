@@ -1679,8 +1679,9 @@ end
 
 -- PC: Roblox's chat window opens in the top left corner, over the profile card and the round's
 -- standings (owner, with a screenshot of it: "is there anything we can do about the chatbox?"). It
--- goes to the bottom left instead, a little shorter, where the HUD has nothing. Phones keep Roblox's
--- own place: there the chat starts closed and a player opens it on purpose.
+-- goes to the bottom left instead, shorter, where the HUD has nothing (it stays under the squad bar,
+-- which is on the left halfway down). Phones keep Roblox's own place: there the chat starts closed
+-- and a player opens it on purpose.
 local function placeChat()
 	if isTouch() or TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
 		return
@@ -1689,7 +1690,7 @@ local function placeChat()
 	if window then
 		window.HorizontalAlignment = Enum.HorizontalAlignment.Left
 		window.VerticalAlignment = Enum.VerticalAlignment.Bottom
-		window.HeightScale = 0.8
+		window.HeightScale = 0.6
 	end
 end
 

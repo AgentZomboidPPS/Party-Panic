@@ -6,13 +6,26 @@
   banner's status line, which only shows during a round, when the chips are away; now 80.
 - **PC chat in the bottom left** (owner, with a screenshot of Roblox's chat over the profile card and standings: "is there
   anything we can do about the chatbox?"): `HudController.placeChat` sets `TextChatService.ChatWindowConfiguration` to
-  Left / Bottom, HeightScale 0.8. Phones keep Roblox's place (the chat starts closed there).
+  Left / Bottom, HeightScale 0.6 (under the squad bar on the left). Phones keep Roblox's place (the chat starts closed there).
 - **Z-fighting inside our own meshes** (owner: "lets fix those right now"): `tools/preview/mesh_zfight.py` checks the .glb
   files themselves (shapes = each piece's connected runs; buried faces and bottoms on the ground don't count);
   `tools/meshgen/unfight.py` moves the smaller shape's fighting face 0.05 out along its normal until nothing fights, and
   `generate_meshes.py` runs it on every prop it builds. The changed meshes were uploaded again
   (`upload_assets.py --again`). Prime Cut's fence: the right-hand post is 0.06 bigger all round and the runs go round the
   yard one way (`PrimeCut.luau`), so at every joint and corner one post holds the other.
+- **Part-level leftovers and a clipping pass** (the map agent's second round): the vote stage floor, Rockin' Raceway
+  (hurdle rows, lane lines), Big Bad Vacuum (rug bands step 0.1; the woven spokes and brick piles floated 0.4 over their
+  bands and now lie on them), Sinking Sands (the mosaic), Arrow Ambush (side walls), Skate Escape (gap lips between the
+  curbs as `LIP_ROW`, banner posts, plateau, goal pillar, start wall; `GapLip` reads unchanged). Struggle's board/post
+  pairs are the fence mesh's own (fixed by unfight). Not rendered for clipping yet: Pump & Pop, Slaparazzi, Cake Factory
+  (the automatic cameras framed them badly), Mecha Marathon, Obby Odyssey, Hot Potato, Prime Cut, Capy Go Boom.
+- **A player's first crate ever always holds an item** (owner: "can we make it so everyone is guaranteed an item from their
+  first crate?"): `CrateLogic.Roll(..., first)`, from `CrateService` (lifetime opened 0). The owner doesn't want these odds
+  shown or published anywhere ("I dont want to display the first crate odds since they will be boosted."): the odds
+  screen keeps the usual odds; don't add them to the store description, the game or any public text.
+- **The owner's suggestion inbox in game** (owner: "did we ever add in a way for me the dev to read the suggestion box?"):
+  the game's creator sees 💌 INBOX in the suggestion box window; the server (`SuggestionService.Inbox`, creator only) lists
+  the week's keys by month (listing is the scarcest data store request) and sends the newest 150.
 
 **Live in version 56 (2026-10-24 ~19:30 UTC, on the owner's "Lets push it"):**
 - **The game's own UI art instead of an AI look** (owner, with a guide to the tells of an AI-made Roblox game: "Can we fix
