@@ -655,9 +655,11 @@ function HallOfFame.Build(root: Model)
 		Material = Enum.Material.SmoothPlastic,
 		Parent = model,
 	})
-	Shapes.Slab(Vector3.new(DAIS.X - 1, 0.1, DAIS.Z - 1), 0.8, {
+	-- (Its front edge 0.1 short of the gold's middle: 0.05 inside the plinths' feet, the two
+	-- marble edges flickered there.)
+	Shapes.Slab(Vector3.new(DAIS.X - 1, 0.1, DAIS.Z - 1.1), 0.8, {
 		Name = "DaisTop",
-		CFrame = frame * CFrame.new(0, DAIS.Y + 0.05, 0.4),
+		CFrame = frame * CFrame.new(0, DAIS.Y + 0.05, 0.45),
 		Color = MARBLE,
 		Material = Enum.Material.Marble,
 		Parent = model,
