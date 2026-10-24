@@ -36,6 +36,7 @@ local Sounds = require(ReplicatedStorage.Shared.Sounds)
 local MiniGame = require(script.Parent.Kit.MiniGame)
 local BotRegistry = require(script.Parent.Parent.Services.BotRegistry)
 local Build = require(script.Parent.Parent.World.Build)
+local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 
 local LastDancer = MiniGame.Define("LastDancer", { Results = "Survival" })
 
@@ -113,7 +114,9 @@ end
 -- The arena: a ring of lit tiles round a mirror-ball stage, speaker stacks, a pit with a glow under it.
 local function buildFloor(ctx, origin: Vector3, count: number): (number, { CFrame })
 	local arena = ctx.Arena
-	local ring = math.max(MIN_RING, count * (TILE + TILE_GAP) / (math.pi * 2))
+	-- The ring is wide enough that the tiles' inner corners (square tiles converge on the inside) clear
+	-- each other by TILE_GAP.
+	local ring = math.max(MIN_RING, (TILE + TILE_GAP) / (2 * math.sin(math.pi / count)) + TILE / 2)
 	-- The dark ground far below: what the dancers who are cut fall towards.
 	Build.Decor({
 		Name = "Pit",
@@ -125,72 +128,53 @@ local function buildFloor(ctx, origin: Vector3, count: number): (number, { CFram
 		Transparency = 0.1,
 		Parent = arena,
 	})
-	-- The stage the ring stands round: a dark glossy disc with a neon rim.
+	-- The stage the ring stands round: a dark glossy disc with neon rings, clear of the tiles.
+	local stage = ring - TILE / 2 - 1
 	Build.Part({
 		Name = "Stage",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(TILE_THICK, ring * 2 - TILE - 2, ring * 2 - TILE - 2),
+		Size = Vector3.new(TILE_THICK, stage * 2, stage * 2),
 		CFrame = upright(origin - Vector3.new(0, TILE_THICK / 2 + 0.4, 0)),
 		Color = rgb(28, 20, 58),
 		Material = Enum.Material.Glass,
 		Parent = arena,
 	})
-	for step, radius in { 0.32, 0.55, 0.78 } do
+	for step, share in { 0.34, 0.62, 0.9 } do
 		Build.Decor({
 			Name = "StageRing" .. step,
 			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.2, ring * 2 * radius, ring * 2 * radius),
-			CFrame = upright(origin - Vector3.new(0, 0.3, 0)),
+			Size = Vector3.new(0.1, stage * 2 * share, stage * 2 * share),
+			CFrame = upright(origin - Vector3.new(0, 0.04 + 0.15 * (step - 1), 0)), -- (the smaller on top: no flicker)
 			Color = HUES[(step * 3) % #HUES + 1],
 			Material = Enum.Material.Neon,
 			Transparency = 0.55,
 			Parent = arena,
 		})
 	end
-	-- The mirror ball, hanging over the stage.
-	local ball = Build.Part({
-		Name = "MirrorBall",
-		Shape = Enum.PartType.Ball,
-		Size = Vector3.one * 9,
-		Position = origin + Vector3.new(0, ORB_HEIGHT, 0),
-		Color = rgb(235, 240, 255),
-		Material = Enum.Material.Metal,
-		CanCollide = false,
-		CanQuery = false,
-		CanTouch = false,
+	-- The mirror ball, hanging over the stage from a rod (its centre ORB_HEIGHT up).
+	local ball = MeshLibrary.Get("LastDancerMirrorBall", {
+		CFrame = CFrame.new(origin + Vector3.new(0, ORB_HEIGHT - 4.5, 0)),
 		Parent = arena,
 	})
-	Build.Light(ball, rgb(255, 230, 255), 60, 2)
+	local glass = ball:FindFirstChild("Ball", true)
+	if glass and glass:IsA("BasePart") then
+		Build.Light(glass, rgb(255, 230, 255), 60, 2)
+	end
 	Build.Decor({
 		Name = "MirrorBallRod",
 		Size = Vector3.new(0.4, 40, 0.4),
-		Position = origin + Vector3.new(0, ORB_HEIGHT + 24, 0),
+		Position = origin + Vector3.new(0, ORB_HEIGHT + 6.2 + 20, 0),
 		Color = rgb(200, 200, 215),
 		Parent = arena,
 	})
-	-- Speaker stacks and spotlights round the edge.
+	-- Speaker stacks and spotlights round the edge, the cones facing the stage.
 	for index = 0, 5 do
 		local angle = (index + 0.5) / 6 * math.pi * 2
 		local at = origin + Vector3.new(math.cos(angle) * (ring + 12), 0, math.sin(angle) * (ring + 12))
-		local facing = CFrame.lookAt(at, Vector3.new(origin.X, at.Y, origin.Z))
-		for level = 0, 2 do
-			Build.Part({
-				Name = "Speaker",
-				Size = Vector3.new(5 - level * 0.6, 4.4, 4.4),
-				CFrame = facing * CFrame.new(0, 2.2 + level * 4.4, 0),
-				Color = rgb(24, 22, 36),
-				Material = Enum.Material.Slate,
-				Parent = arena,
-			})
-			Build.Decor({
-				Name = "Cone",
-				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(0.3, 3, 3),
-				CFrame = facing * CFrame.new(0, 2.2 + level * 4.4, -2.25) * CFrame.Angles(0, math.rad(90), 0),
-				Color = rgb(70, 70, 90),
-				Parent = arena,
-			})
-		end
+		MeshLibrary.Get("LastDancerSpeaker", {
+			CFrame = CFrame.lookAt(at, Vector3.new(origin.X, at.Y, origin.Z)),
+			Parent = arena,
+		})
 		local spot = Build.Decor({
 			Name = "Spot",
 			Size = Vector3.new(1.6, 1.6, 1.6),
@@ -258,6 +242,7 @@ function LastDancer:Prepare()
 			Material = Enum.Material.Neon,
 			Parent = slab,
 		})
+		Build.Light(pad, color, 15, 1.4) -- each dancer is lit in their own colour
 		Build.Billboard(slab, player.DisplayName, {
 			Name = "DancerName",
 			Size = UDim2.fromOffset(200, 44),

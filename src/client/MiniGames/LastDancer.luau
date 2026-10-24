@@ -20,6 +20,7 @@
 -- many fall). Dancers about to fall flash red on their tiles for a third of a second before the drop.
 -- Anyone watching (cut, or sitting out) sees the standings instead of the highway.
 
+local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
@@ -171,12 +172,21 @@ local function percentText(groove: number): string
 end
 
 function LastDancer.Start(api)
+	-- A club at midnight: the floor's own lights are the show (put back afterwards).
 	api:Mood({
-		Tint = Color3.fromRGB(255, 232, 255),
-		Saturation = 0.2,
-		Contrast = 0.08,
+		Tint = Color3.fromRGB(235, 205, 255),
+		Saturation = 0.3,
+		Contrast = 0.12,
 		Brightness = -0.03,
+		Haze = Color3.fromRGB(120, 60, 190),
+		HazeDecay = Color3.fromRGB(60, 25, 110),
+		Density = 0.22,
 	})
+	local clockTime = Lighting.ClockTime
+	Lighting.ClockTime = 0
+	api:Track(function()
+		Lighting.ClockTime = clockTime
+	end)
 	local waited = 0
 	while (not api:Shared("Go") or not api:SharedJSON("Floor")) and waited < 10 do
 		waited += task.wait(0.1)
