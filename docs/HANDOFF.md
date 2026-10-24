@@ -4,6 +4,34 @@ Last updated: **2026-10-22 03:15 UTC** by Session B (branch **`claude/upbeat-gal
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
+## Last Dancer (game 31), built 2026-10-24 on branch `claude/last-dancer`
+
+The owner asked Claude "If you could make any mini game to add to the game. What would it be?", got a pitch for a rhythm
+dance-off and said "Let's make it". Built on `claude/last-dancer` (from `claude/quirky-hopper-5yk8zk` at a2f483b), not pushed
+until the owner says; no pull request. Full description: [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md) 31; how to change it:
+[builds/LastDancer.md](builds/LastDancer.md).
+
+- **What it is:** Survival, 64 s, 1-12 players. Tap the pad under each falling note on the beat of "Mirror Ball Showdown";
+  groove (recent accuracy) decides who falls through the floor at the end of each 8 s phrase from the second to the seventh;
+  two dancers duel in the last phrase. The song's lead plays the chart, so the notes are the music.
+- **Checked:** 273 unit tests (`tests/LastDancer.spec.luau`: judging, groove, cuts, the generated chart), stylua, selene,
+  luau-lsp, `mode_check.sh LastDancer` (12 players, 10 real bots, phone HUD at five sizes: 0 errors, 0 UI problems), full rounds
+  of 1/2/3/5 players, no z-fighting, the arena rendered with Blender, mesh orientation 0.
+- **Waiting on the owner (nothing was uploaded or published):**
+  1. **The song:** `python3 tools/upload_assets.py --user-id 11690979745 --what modes` (ModePack7, built locally by
+     `modes.py pack`; uses the 7th of the owner's 10 audio uploads this month). Until its id is in `AudioAssets` the mode
+     **keeps itself out of the live vote** (a rhythm game without its song is half a game); Studio and the harness ignore that.
+  2. **The meshes** (mirror ball, speaker stack; `--what meshes --only LastDancerMirrorBall,LastDancerSpeaker`): until
+     uploaded and approved the arena uses plain parts.
+  3. After publishing: the portal preview (`tools/preview/make_preview.py LastDancer`), and "💃 LAST DANCER" in
+     `docs/STORE_DESCRIPTION.txt` (31 mini-games).
+- **Only a real device can confirm:** how the audio lines up with the notes (SYNC -/+ is the safety net; try Bluetooth
+  headphones), the dance poses (R15 `C0` offsets, local to each client), tiles dropping with dancers on them, the club
+  mood, tapping with two fingers on a small phone. The bots' strength was set by simulation, not by play: if casual players
+  are cut too early, lower `0.62 + 0.3 * skill` in `Bots/LastDancer.luau` (and its header numbers).
+- **Shared files touched** (small, additive): `GameDefinitions.luau` (the entry), `ModeMusic.luau` / `AudioAssets.luau`
+  (ModePack7, id 0), `tools/music/packs.json`, `docs/*`.
+
 ## Session B in flight (2026-10-22 03:15 UTC)
 
 - **Live version 34** (published 02:38 UTC on 2026-10-22 from `claude/upbeat-galileo-gvwq66` at `1f08776`, on the

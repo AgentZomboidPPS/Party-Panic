@@ -90,6 +90,8 @@ python3 tools/music/modes.py render <ModeId>      # into build/music/<ModeId>.wa
 python3 tools/music/modes.py check                # lengths against the round, loudness, peaks
 python3 tools/music/modes.py preview previews/ <ModeId>   # an MP3 to listen to
 python3 tools/music/modes.py pack                 # build/music/packs/ModePack<N>.ogg + src/shared/ModeMusic.luau
+# a rhythm game's song is also its chart: after editing tools/music/songs/LastDancer.py, run
+# python3 tools/music/lastdancer_chart.py (see docs/builds/LastDancer.md)
 python3 tools/upload_assets.py --user-id 11690979745 --what modes
 ```
 
