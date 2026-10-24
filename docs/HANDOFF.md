@@ -11,7 +11,9 @@ dance-off and said "Let's make it". Built on `claude/last-dancer` (from `claude/
 until the owner says; no pull request. Full description: [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md) 31; how to change it:
 [builds/LastDancer.md](builds/LastDancer.md).
 
-- **What it is:** Survival, 64 s, 1-12 players. Tap the pad under each falling note on the beat of "Mirror Ball Showdown";
+- **What it is:** Survival, 64 s, 1-12 players. Each dancer stands on an arcade dance mat (owner: "I want it to show your
+  character basically playing on a DDR mat from an arcade") and steps on the arrow under each falling note on the beat of
+  "Mirror Ball Showdown" (the four lanes are the mat's LEFT DOWN UP RIGHT; everyone sees everyone step);
   groove (recent accuracy) decides who falls through the floor at the end of each 8 s phrase from the second to the seventh;
   two dancers duel in the last phrase. The song's lead plays the chart, so the notes are the music.
 - **Checked:** 273 unit tests (`tests/LastDancer.spec.luau`: judging, groove, cuts, the generated chart), stylua, selene,
@@ -30,6 +32,12 @@ until the owner says; no pull request. Full description: [MINIGAME_BACKLOG.md](M
   headphones), the dance poses (R15 `C0` offsets, local to each client), tiles dropping with dancers on them, the club
   mood, tapping with two fingers on a small phone. The bots' strength was set by simulation, not by play: if casual players
   are cut too early, lower `0.62 + 0.3 * skill` in `Bots/LastDancer.luau` (and its header numbers).
+- **Review:** an independent reviewer read it; its confirmed findings are fixed (dancers spawned on each other's mats because
+  `SpawnAll` ignores the shuffled seating; SYNC and slow packets made notes count as missed; results could contradict the
+  announced winner; the cut HUD went stale when people left; resets showed as "Cut at 0s"; the loops now survive a failed
+  step; same-lane notes a quarter-second apart took each other's taps). Known and left: the "play every game" medal and
+  milestone count Last Dancer while it is still dark (they read the definitions at load, before it switches itself off),
+  and a modified client can autoplay (the chart is on the client: inherent to a chart game).
 - **Shared files touched** (small, additive): `GameDefinitions.luau` (the entry), `ModeMusic.luau` / `AudioAssets.luau`
   (ModePack7, id 0), `tools/music/packs.json`, `docs/*`.
 

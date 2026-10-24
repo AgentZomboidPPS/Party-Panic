@@ -10,16 +10,26 @@
 -- again, from the taps it receives, and its numbers are the ones that count (the groove meter shows its
 -- "Board", not this prediction).
 --
--- SYNC. The sound reaches a player a little after the clock says (Bluetooth speakers can add 200 ms), so
--- notes can look early to the ear. The - and + under the meters shift the picture and the taps' time by 25 ms
--- a step (up to 300 ms) until the notes land on the beat; the setting is kept for the rest of the visit.
--- If the round's song isn't playing (it hasn't loaded, or isn't uploaded) a quiet tick keeps the beat.
+-- SYNC. The sound reaches a player a little after the clock says (a late-loading song, Bluetooth speakers can
+-- add 200 ms), so notes can look early to the ear. The + and - beside the highway shift the picture and the
+-- taps' time by 25 ms a step (0 to 300 ms) until the notes land on the beat; that setting is kept for the
+-- rest of the visit. On top of it the client measures how far behind where it should be the song is playing
+-- (the song's own TimePosition against the shared clock, which the audio only corrects once it is 0.35 s
+-- off) and shifts by that too. The total is told to the server (it waits that long before counting a note
+-- as missed). If the round's song isn't playing (it hasn't loaded, or isn't uploaded) a quiet tick keeps the beat.
 --
 -- The meters: GROOVE (the server's number for this dancer, with a tick where the cut line is: whoever is
 -- left of it is in DANGER), the place among the dancers still on the floor, and the next cut (when, how
--- many fall). Dancers about to fall flash red on their tiles for a third of a second before the drop.
+-- many fall). Dancers about to fall flash red on their mats for a third of a second before the drop.
+--
+-- The dance mat (owner: "I want it to show your character basically playing on a DDR mat from an arcade").
+-- Every dancer stands on an arcade dance mat, and the four lanes are its four arrows (LEFT DOWN UP RIGHT,
+-- Logic.ARROWS): each tap, a dancer's own or one of the others' (the server batches everyone's steps), lights
+-- that arrow panel and makes the character step onto it: the body shifts over the panel, the foot goes out,
+-- they hop and lean. Between steps they dance on the beat as before. Arrow keys work as well as D F J K.
 -- Anyone watching (cut, or sitting out) sees the standings instead of the highway.
 
+local ContextActionService = game:GetService("ContextActionService")
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,6 +39,7 @@ local UserInputService = game:GetService("UserInputService")
 local Chart = require(ReplicatedStorage.Shared.LastDancerChart)
 local GameState = require(ReplicatedStorage.Shared.GameState)
 local Logic = require(ReplicatedStorage.Shared.Logic.LastDancer)
+local SongTiming = require(ReplicatedStorage.Shared.Logic.SongTiming)
 local Sounds = require(ReplicatedStorage.Shared.Sounds)
 
 local AudioController = require(script.Parent.Parent.Controllers.AudioController)
@@ -38,15 +49,22 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 
 local LastDancer = {}
 
-local SYMBOLS = { "▲", "■", "●", "◆" }
-local LANE_COLORS = {
-	Color3.fromRGB(255, 96, 150),
-	Color3.fromRGB(70, 200, 255),
-	Color3.fromRGB(255, 205, 60),
-	Color3.fromRGB(150, 235, 110),
-}
-local KEYS = { Enum.KeyCode.D, Enum.KeyCode.F, Enum.KeyCode.J, Enum.KeyCode.K }
-local KEY_NAMES = { "D", "F", "J", "K" }
+local GLYPH = "▲" -- every arrow is this triangle turned (Logic.ARROWS[lane].Rotation)
+local LANE_COLORS = {}
+local KEYCODES: { [Enum.KeyCode]: number } = {} -- which key steps on which arrow
+local KEYLIST: { Enum.KeyCode } = {}
+for lane, arrow in Logic.ARROWS do
+	LANE_COLORS[lane] = Color3.fromRGB(arrow.Color[1], arrow.Color[2], arrow.Color[3])
+	for _, key in arrow.Keys do
+		local code = (Enum.KeyCode :: any)[key] :: Enum.KeyCode
+		KEYCODES[code] = lane
+		table.insert(KEYLIST, code)
+	end
+end
+local KEY_NAMES = { "D", "F", "J", "K" } -- shown under the pads on a computer (the arrow keys work too)
+local STEP_CODES = { Perfect = 1, Great = 2, Ok = 3, Stray = 4, Late = 4 } -- as the server sends them
+local STEP_SHIFT = 2.3 -- how far a dancer's body goes over the panel they step on (studs)
+local STEP_LIFE = 0.4 -- a step's animation (seconds)
 local JUDGE_COLORS = {
 	Perfect = Color3.fromRGB(120, 235, 255),
 	Great = Color3.fromRGB(140, 255, 150),
@@ -66,7 +84,7 @@ local TRAVEL = 1.5 -- seconds from the top of the highway to the hit line
 
 local SIDE = 84 -- the SYNC column beside the highway (design units)
 local SYNC_STEP = 0.025
-local savedSync = 0 -- the player's sync setting, kept for the rest of the visit
+local savedSync = 0 -- the player's own sync setting, kept for the rest of the visit
 
 local function laneX(lane: number): number
 	return LANE_GAP + (lane - 1) * (LANE_W + LANE_GAP) + LANE_W / 2
@@ -95,13 +113,23 @@ local function playSound(api, name: string, speed: number, volume: number)
 end
 
 -- The dance ----------------------------------------------------------------------------------------------
--- Every dancer, bots too, moves to the beat on their tile, drawn on this device only: the character's R15
+-- Every dancer, bots too, moves to the beat on their mat, drawn on this device only: the character's R15
 -- joints get an offset on their C0 (animations only write Transform, so they don't undo it) that hops, sways,
 -- nods and lifts the arms in time. A dancer in form (a high groove) dances big; one losing the beat droops;
--- one whose tile is flashing red flails. Everything is put back when the round ends.
+-- one whose mat is flashing red flails. Everything is put back when the round ends.
 
 type Joint = { Motor: Motor6D, Base: CFrame }
-type Rig = { Root: Joint, Waist: Joint?, Neck: Joint?, LeftArm: Joint?, RightArm: Joint?, All: { Joint } }
+type Rig = {
+	Root: Joint,
+	Waist: Joint?,
+	Neck: Joint?,
+	LeftArm: Joint?,
+	RightArm: Joint?,
+	LeftLeg: Joint?,
+	RightLeg: Joint?,
+	All: { Joint },
+}
+type Step = { Dx: number, Dz: number, Env: number, Foot: number }
 
 local function joint(character: Model, parent: string, name: string): Joint?
 	local part = character:FindFirstChild(parent)
@@ -123,9 +151,11 @@ local function rigOf(character: Model): Rig?
 		Neck = joint(character, "Head", "Neck"),
 		LeftArm = joint(character, "UpperTorso", "LeftShoulder"),
 		RightArm = joint(character, "UpperTorso", "RightShoulder"),
+		LeftLeg = joint(character, "LowerTorso", "LeftHip"),
+		RightLeg = joint(character, "LowerTorso", "RightHip"),
 		All = {},
 	}
-	for _, entry in { rig.Root, rig.Waist, rig.Neck, rig.LeftArm, rig.RightArm } do
+	for _, entry in { rig.Root, rig.Waist, rig.Neck, rig.LeftArm, rig.RightArm, rig.LeftLeg, rig.RightLeg } do
 		table.insert(rig.All, entry)
 	end
 	return rig
@@ -146,14 +176,39 @@ local function pose(entry: Joint?, offset: CFrame)
 end
 
 -- One frame of dancing for a rig: `beat` counts beats, `energy` is 0-1, `phase` offsets this dancer from
--- the others, `panic` is true for a dancer about to fall.
-local function dance(rig: Rig, beat: number, energy: number, phase: number, panic: boolean)
+-- the others, `panic` is true for a dancer about to fall, `step` is the arrow they are stepping on (if
+-- they just did). A step moves the whole body over the panel (the Root joint's offset is in the dancer's
+-- own frame: +X their right, -Z the way they face, the way the UP arrow lies), puts that foot out (a hip
+-- turned about Z for a side step, about X for forward and back: R15 hips hang the leg down -Y, so +Z
+-- swings it to +X and +X swings it to -Z), hops a little and leans the way they went.
+local function dance(rig: Rig, beat: number, energy: number, phase: number, panic: boolean, step: Step?)
 	local t = beat + phase
 	local hop = math.abs(math.sin(math.pi * (t % 1))) -- up on the beat, down between
 	local sway = math.sin(t * math.pi) -- side to side every two beats
 	local e = if panic then 1 else energy
-	pose(rig.Root, CFrame.new(0, 0.3 * e * hop, 0) * CFrame.Angles(0, sway * 0.3 * e, 0))
-	pose(rig.Waist, CFrame.Angles(-0.12 * e * hop, 0, sway * 0.12 * e))
+	local shiftX, shiftY, shiftZ = 0, 0, 0
+	local lean, legLeft, legRight = CFrame.identity, CFrame.identity, CFrame.identity
+	if step then
+		local env = step.Env
+		shiftX, shiftY, shiftZ = step.Dx * STEP_SHIFT * env, 0.4 * env, step.Dz * STEP_SHIFT * env
+		if step.Dx > 0 then
+			legRight = CFrame.Angles(0, 0, 0.6 * env)
+		elseif step.Dx < 0 then
+			legLeft = CFrame.Angles(0, 0, -0.6 * env)
+		else
+			local swing = if step.Dz < 0 then 0.8 * env else -0.6 * env
+			if step.Foot == 1 then
+				legLeft = CFrame.Angles(swing, 0, 0)
+			else
+				legRight = CFrame.Angles(swing, 0, 0)
+			end
+		end
+		lean = CFrame.Angles(step.Dz * 0.2 * env, 0, -step.Dx * 0.2 * env)
+	end
+	pose(rig.Root, CFrame.new(shiftX, 0.3 * e * hop + shiftY, shiftZ) * CFrame.Angles(0, sway * 0.3 * e, 0))
+	pose(rig.Waist, CFrame.Angles(-0.12 * e * hop, 0, sway * 0.12 * e) * lean)
+	pose(rig.LeftLeg, legLeft)
+	pose(rig.RightLeg, legRight)
 	pose(rig.Neck, CFrame.Angles((0.15 * hop - 0.25 * (1 - e)) * (if panic then 0.2 else 1), 0, -sway * 0.1 * e))
 	-- arms: alternately up on the beat when in form, hanging slack when not (flailing when about to fall)
 	local lift = 0.15 + 1.9 * e * e
@@ -202,9 +257,28 @@ function LastDancer.Start(api)
 	local me = Players.LocalPlayer.UserId
 	local notes = Chart.Notes
 
+	-- Who stepped on which arrow when (everyone's, own taps at once and the others' from the server's batches).
+	local steps: { [number]: { Lane: number, At: number, Foot: number } } = {}
+	local flashes: { [number]: { [number]: { At: number, Code: number } } } = {}
+	local feet: { [number]: number } = {}
+	local function stepOn(userId: number, lane: number, code: number)
+		local now = os.clock()
+		local foot = (feet[userId] or 0) % 2 + 1 -- up and down steps alternate feet
+		feet[userId] = foot
+		steps[userId] = { Lane = lane, At = now, Foot = foot }
+		local list = flashes[userId]
+		if not list then
+			list = {}
+			flashes[userId] = list
+		end
+		list[lane] = { At = now, Code = code }
+	end
+
 	local mine = Logic.new() -- this player's taps judged here, for the instant feedback
 	local results: { [number]: string } = {} -- note index -> what happened to it
-	local sync = savedSync
+	local manual = savedSync -- the player's own setting
+	local auto = 0 -- what the song's measured lateness adds
+	local sync = math.clamp(manual, 0, Logic.SYNC_MAX) -- the total in use: the picture and the taps are this late
 
 	-- The people in the round (names for the banners and the standings).
 	local function nameOf(userId: number): string
@@ -238,6 +312,15 @@ function LastDancer.Start(api)
 			end
 		end
 		return nil
+	end
+	-- Whether this player is still dancing: in the round and on the floor (the board knows a moment before
+	-- the server's own "out" reaches this device).
+	local function dancing(): boolean
+		if not api:CanAct() then
+			return false
+		end
+		local row = myRow()
+		return row == nil or row[4] == 1
 	end
 	local function aliveGrooves(): { number }
 		local list = {}
@@ -403,14 +486,18 @@ function LastDancer.Start(api)
 	placeHighway()
 	api:Track(camera:GetPropertyChangedSignal("ViewportSize"):Connect(placeHighway))
 
-	-- The sync setting.
+	-- The sync setting: the player's own part, and the total in use (the measured part is added in the frame).
 	local syncLabel: TextLabel
-	local function setSync(value: number)
-		sync = math.clamp(math.floor(value / SYNC_STEP + 0.5) * SYNC_STEP, -Logic.SYNC_MAX, Logic.SYNC_MAX)
-		savedSync = sync
+	local function refreshSync()
+		sync = math.clamp(manual + auto, 0, Logic.SYNC_MAX)
 		if syncLabel then
 			syncLabel.Text = `SYNC\n{math.floor(sync * 1000 + 0.5)} ms`
 		end
+	end
+	local function setSync(value: number)
+		manual = math.clamp(math.floor(value / SYNC_STEP + 0.5) * SYNC_STEP, -0.1, Logic.SYNC_MAX)
+		savedSync = manual
+		refreshSync()
 	end
 	local syncColumn = UIKit.new("Frame", {
 		Name = "Sync",
@@ -446,12 +533,12 @@ function LastDancer.Start(api)
 			Children = { UIKit.Corner(14), UIKit.Stroke(Color3.new(1, 1, 1), 3, 0.4) },
 		})
 		api:Track(button.Activated:Connect(function()
-			setSync(sync + delta)
+			setSync(manual + delta)
 		end))
 	end
 	syncButton("+", 50, SYNC_STEP)
 	syncButton("−", 124, -SYNC_STEP)
-	setSync(sync)
+	refreshSync()
 	local lanes = UIKit.new("Frame", {
 		Name = "Lanes",
 		Size = UDim2.fromOffset(WIDTH, HIGHWAY_H + 6),
@@ -528,10 +615,13 @@ function LastDancer.Start(api)
 		})
 		UIKit.Label({
 			Name = "Glyph",
-			Text = SYMBOLS[lane],
+			Text = GLYPH,
+			Rotation = Logic.ARROWS[lane].Rotation,
 			Font = Theme.Fonts.Display,
-			TextSize = 44,
-			Size = UDim2.fromScale(1, if touch then 1 else 0.7),
+			TextSize = 52,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, if touch then 0.5 else 0.42),
+			Size = UDim2.fromOffset(56, 56),
 			ZIndex = 2,
 			Parent = pad,
 			Children = { UIKit.TextStroke(0.1) },
@@ -561,15 +651,36 @@ function LastDancer.Start(api)
 			end
 		end))
 	end
-	api:Track(UserInputService.InputBegan:Connect(function(input, processed)
-		if processed or input.UserInputType ~= Enum.UserInputType.Keyboard then
-			return
-		end
-		local lane = table.find(KEYS, input.KeyCode)
-		if lane then
-			tap(lane)
-		end
-	end))
+	-- The keyboard: the arrow keys and D F J K, bound ahead of the camera and the walking controls (the arrow
+	-- keys would turn the camera) for as long as this player is dancing; anyone watching keeps their keys.
+	local action = "LastDancerStep"
+	local bound = pcall(function()
+		ContextActionService:BindActionAtPriority(action, function(_name, state, input)
+			if not dancing() then
+				return Enum.ContextActionResult.Pass
+			end
+			if state == Enum.UserInputState.Begin then
+				local lane = KEYCODES[input.KeyCode]
+				if lane then
+					tap(lane)
+				end
+			end
+			return Enum.ContextActionResult.Sink
+		end, false, Enum.ContextActionPriority.High.Value, table.unpack(KEYLIST))
+	end)
+	if bound then
+		api:Track(function()
+			ContextActionService:UnbindAction(action)
+		end)
+	else
+		-- (no action service to bind to: listen for the keys the plain way)
+		api:Track(UserInputService.InputBegan:Connect(function(input, processed)
+			local lane = KEYCODES[input.KeyCode]
+			if lane and not processed then
+				tap(lane)
+			end
+		end))
+	end
 
 	-- Feedback -----------------------------------------------------------------------------------------
 	local judgeStamp = 0
@@ -594,9 +705,9 @@ function LastDancer.Start(api)
 		UIKit.Tween(padScales[lane], 0.15, { Scale = 1 })
 		UIKit.Tween(pad, 0.2, { BackgroundColor3 = LANE_COLORS[lane] })
 	end
-	local function myPad(): BasePart?
+	local function myPanel(lane: number): BasePart?
 		local tile = arena:FindFirstChild("Tile_" .. me)
-		return tile and tile:FindFirstChild("Pad") :: BasePart?
+		return tile and tile:FindFirstChild("Panel" .. lane) :: BasePart?
 	end
 
 	local function relNow(): number
@@ -604,7 +715,7 @@ function LastDancer.Start(api)
 	end
 
 	function tap(lane: number)
-		if not api:CanAct() or GameState.Get("Phase") ~= "InRound" then
+		if not dancing() or GameState.Get("Phase") ~= "InRound" then
 			return
 		end
 		local now = api:Now()
@@ -612,20 +723,24 @@ function LastDancer.Start(api)
 		api:Action("Tap", lane, now - sync)
 		if Logic.InWarmup(Chart, rel) then
 			flashPad(lane, "Ok")
+			stepOn(me, lane, STEP_CODES.Ok)
 			return
 		end
 		local outcome = Logic.Tap(Chart, mine, lane, rel)
+		stepOn(me, lane, STEP_CODES[outcome.Kind]) -- the foot went there, hit or not
 		if outcome.Index then
 			results[outcome.Index] = outcome.Kind
 			flashPad(lane, outcome.Kind)
 			judge(outcome.Kind)
 			playSound(api, "Click", 1.3 + lane * 0.1, 0.25)
 			if effects and outcome.Kind == "Perfect" then
-				local pad = myPad()
-				if pad then
-					api:Effect("Sparkles", pad.Position + Vector3.new(0, 2, 0), { LANE_COLORS[lane] })
+				local panel = myPanel(lane)
+				if panel then
+					api:Effect("Sparkles", panel.Position + Vector3.new(0, 2, 0), { LANE_COLORS[lane] })
 				end
 			end
+		elseif outcome.Kind == "Late" then
+			flashPad(lane, "Ok") -- (a tap for a note that already says MISS: nothing more to say)
 		else
 			flashPad(lane, "Miss")
 			combo.Text = ""
@@ -647,10 +762,12 @@ function LastDancer.Start(api)
 			})
 			UIKit.Label({
 				Name = "Glyph",
-				Text = "",
+				Text = GLYPH,
 				Font = Theme.Fonts.Display,
-				TextSize = 26,
-				Size = UDim2.fromScale(1, 1),
+				TextSize = 30,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(36, 36),
 				ZIndex = 2,
 				Parent = frame,
 				Children = { UIKit.TextStroke(0.2) },
@@ -660,7 +777,7 @@ function LastDancer.Start(api)
 		frame.BackgroundColor3 = LANE_COLORS[note.Lane]
 		frame.BackgroundTransparency = 0
 		frame.Visible = true
-		(frame:FindFirstChild("Glyph") :: TextLabel).Text = SYMBOLS[note.Lane]
+		(frame:FindFirstChild("Glyph") :: TextLabel).Rotation = Logic.ARROWS[note.Lane].Rotation
 		frame.Size = UDim2.fromOffset(LANE_W - 8, NOTE_H)
 		frames[index] = frame
 		return frame
@@ -683,16 +800,31 @@ function LastDancer.Start(api)
 		return status.Track == "Music_LastDancer" and status.Playing == true and status.Loaded == true
 	end
 
-	-- Who is about to fall, and the tiles' lights.
+	-- Who is about to fall, and the mats' lights.
 	local doomed: { [number]: boolean } = {}
 	local tiles = {}
 	for _, entry in floor.Tiles do
 		local tile = arena:FindFirstChild("Tile_" .. entry.Id)
-		local pad = tile and tile:FindFirstChild("Pad") :: BasePart?
-		if pad then
-			table.insert(tiles, { Id = entry.Id, Pad = pad, Color = pad.Color, Tile = tile })
+		if tile then
+			local panels = {}
+			for lane = 1, Logic.LANES do
+				panels[lane] = tile:FindFirstChild("Panel" .. lane) :: BasePart?
+			end
+			table.insert(tiles, { Id = entry.Id, Tile = tile, Panels = panels })
 		end
 	end
+	-- Everyone's steps, from the server (this player's own are made at the tap).
+	api:OnEvent("Steps", function(batch)
+		if type(batch) ~= "table" then
+			return
+		end
+		for _, entry in batch do
+			local id, lane, code = entry[1], entry[2], entry[3]
+			if id ~= me and type(id) == "number" and type(lane) == "number" and Logic.ARROWS[lane] then
+				stepOn(id, lane, if type(code) == "number" then code else STEP_CODES.Ok)
+			end
+		end
+	end)
 	api:OnEvent("CutWarn", function(ids)
 		for _, id in ids do
 			doomed[id] = true
@@ -702,9 +834,14 @@ function LastDancer.Start(api)
 			JUDGE_COLORS.Miss
 		)
 	end)
-	api:OnEvent("Cut", function(ids)
+	api:OnEvent("Cut", function(ids, _phase, spared)
 		for _, id in ids do
 			doomed[id] = nil
+		end
+		if type(spared) == "table" then
+			for _, id in spared do
+				doomed[id] = nil -- (someone left: they are not falling after all)
+			end
 		end
 		if #ids > 0 then
 			showBanner(`{namesOf(ids)} fell through the floor!`, Color3.new(1, 1, 1))
@@ -712,7 +849,7 @@ function LastDancer.Start(api)
 				for _, id in ids do
 					for _, t in tiles do
 						if t.Id == id then
-							api:Effect("Poof", t.Pad.Position, nil)
+							api:Effect("Poof", t.Tile:GetPivot().Position, nil)
 						end
 					end
 				end
@@ -792,29 +929,30 @@ function LastDancer.Start(api)
 		end
 	end
 	local function applyMode()
-		local playing = api:CanAct()
+		local playing = dancing()
 		if not playing then
 			updateStandings()
 		end
 		holder.Visible = playing
+		meter.Visible = playing
 		standings.Visible = not playing
 		combo.Visible = playing
 	end
 	applyMode()
 	api:OnCanAct(applyMode)
 	refreshStandings = function()
-		if not api:CanAct() then
-			updateStandings()
-		end
+		applyMode() -- (who is still dancing may have changed: it also updates the standings)
 	end
 
-	api:Hint("Tap a pad as each note lands!", y + 96)
+	api:Hint("Step on each arrow as it lands!", y + 96)
 	task.delay(9, hideHint)
 
 	-- Every frame ---------------------------------------------------------------------------------------
 	local scanStart = 1
 	local displayed = 60
-	local dancing = effects
+	local songClock = 0
+	local sentSync = -1
+	local danceOn = effects
 	local danceCheck = 1
 	local rigs: { [Model]: { Rig: Rig, UserId: number, Phase: number } } = {}
 	api:Track(function()
@@ -827,6 +965,25 @@ function LastDancer.Start(api)
 		local rel = relNow()
 		local chartRel = rel - sync -- the chart's time as this player hears it
 		local phase = GameState.Get("Phase")
+
+		-- how late the song is playing, and the sync in use told to the server (four times a second)
+		songClock += dt
+		if songClock > 0.25 then
+			songClock = 0
+			local song = Sounds.ModeSongs.LastDancer
+			if song and rel > 0.5 and rel < Logic.DURATION and songPlaying() then
+				local diff = AudioController.Status().Time - SongTiming.Position(song, rel)
+				if math.abs(diff) < 0.6 then
+					-- (behind where it should be: the picture waits for it; ahead can't be helped)
+					auto += (math.clamp(-diff, 0, Logic.SYNC_MAX) - auto) * 0.35
+				end
+			end
+			refreshSync()
+			if math.abs(sync - sentSync) >= 0.008 then
+				sentSync = sync
+				api:Action("Sync", sync)
+			end
+		end
 
 		-- notes
 		if holder.Visible then
@@ -861,6 +1018,7 @@ function LastDancer.Start(api)
 
 		-- the groove meter: the server's number, eased
 		local row = myRow()
+		local alive = row ~= nil and row[4] == 1
 		if row then
 			displayed += (row[2] - displayed) * math.min(1, dt * 8)
 			fill.Size = UDim2.fromScale(math.clamp(displayed / 100, 0.02, 1), 1)
@@ -871,31 +1029,42 @@ function LastDancer.Start(api)
 				elseif displayed >= 40 then Theme.Colors.Yellow
 				else Theme.Colors.Red
 			local grooves = aliveGrooves()
-			if row[4] == 1 then
+			if alive then
 				place.Text = `#{Logic.Place(grooves, row[2])}/{#grooves}`
 			else
 				place.Text = "OUT"
 			end
 		end
+		-- the line to stay clear of: the cut line (the lowest few fall), or in the final duel the other
+		-- dancer's groove
 		local cutAt = cut.At
 		local cutLineValue = cutLine()
-		line.Visible = cutLineValue ~= nil and row ~= nil and row[4] == 1
+		local inDanger = false
+		if alive and cut.Final then
+			local lead = nil
+			for _, other in board do
+				if other[1] ~= me and other[4] == 1 and (lead == nil or other[2] > lead) then
+					lead = other[2]
+				end
+			end
+			cutLineValue = lead
+			inDanger = lead ~= nil and row[2] < lead
+		elseif alive and cutLineValue and (cut.Count or 0) > 0 then
+			inDanger = row[2] <= cutLineValue
+		end
+		line.Visible = cutLineValue ~= nil and alive
 		if cutLineValue then
 			line.Position = UDim2.fromScale(math.clamp(cutLineValue / 100, 0, 1), 0.5)
-		end
-		local inDanger = false
-		if row and row[4] == 1 and cutLineValue and (cut.Count or 0) > 0 then
-			inDanger = row[2] <= cutLineValue
 		end
 		local alarm = inDanger and phase == "InRound"
 		local blink = math.floor(os.clock() * 4) % 2 == 0
 		meterStroke.Color = if alarm and blink then Theme.Colors.Red else Color3.new(1, 1, 1)
 		ticker.TextColor3 = if alarm and blink then Theme.Colors.Red else Color3.new(1, 1, 1)
-		if phase ~= "InRound" then
+		if phase == "Preparing" then
 			ticker.Text = "GET READY!"
-		elseif cut.Final then
-			ticker.Text = "FINAL DUEL! HIGHEST GROOVE WINS"
-		elseif cutAt then
+		elseif phase == "InRound" and cut.Final then
+			ticker.Text = if inDanger then "FINAL DUEL! YOU'RE BEHIND!" else "FINAL DUEL! HIGHEST GROOVE WINS"
+		elseif phase == "InRound" and cutAt then
 			local left = math.max(0, cutAt - api:Now())
 			local text = `CUT IN {math.ceil(left)}s • {cut.Count or 0} FALL`
 			ticker.Text = if alarm then `DANGER! {text}` else `NEXT {text}`
@@ -903,22 +1072,44 @@ function LastDancer.Start(api)
 			ticker.Text = ""
 		end
 
-		-- the tiles' lights: a pulse on every beat, red when about to fall
+		-- the mats' arrows: each lights up on the beat, flares when a dancer steps on it (white for a perfect
+		-- step, its own colour for a great one, half for an ok, a dull red for a wrong one), and flashes red
+		-- on a mat that is about to fall
 		local beat = chartRel / Logic.BEAT
 		local pulse = math.max(0, 1 - (beat % 1) * 2.5) ^ 2
 		local flash = math.floor(os.clock() * 8) % 2 == 0
+		local clock = os.clock()
 		for _, t in tiles do
-			if t.Tile.Parent then
-				local target = t.Color:Lerp(Color3.new(1, 1, 1), 0.55 * pulse)
+			if not t.Tile.Parent then
+				continue
+			end
+			local list = flashes[t.Id]
+			for lane, panel in t.Panels do
+				local lit = LANE_COLORS[lane]
+				local target = lit:Lerp(Color3.new(0, 0, 0), 0.45):Lerp(lit, 0.6 * pulse)
+				local last = list and list[lane]
+				local age = if last then clock - last.At else 1
+				if last and age < 0.3 then
+					local k = 1 - age / 0.3
+					if last.Code == STEP_CODES.Perfect then
+						target = target:Lerp(Color3.new(1, 1, 1), k)
+					elseif last.Code == STEP_CODES.Great then
+						target = target:Lerp(lit, k)
+					elseif last.Code == STEP_CODES.Ok then
+						target = target:Lerp(lit, k * 0.6)
+					else
+						target = target:Lerp(Color3.fromRGB(190, 45, 65), k * 0.8)
+					end
+				end
 				if doomed[t.Id] then
 					target = if flash then Color3.fromRGB(255, 40, 50) else Color3.fromRGB(90, 0, 10)
 				end
-				t.Pad.Color = target
+				panel.Color = target
 			end
 		end
 
 		-- the dancers, in time with the beat (this device only; off with reduced effects)
-		if dancing then
+		if danceOn then
 			danceCheck += dt
 			if danceCheck > 0.5 then
 				danceCheck = 0
@@ -952,7 +1143,16 @@ function LastDancer.Start(api)
 					if phase == "Preparing" then
 						energy = 0.6
 					end
-					pcall(dance, entry.Rig, beat, energy, entry.Phase, doomed[entry.UserId] == true)
+					-- (the step they are in the middle of: up to 0.06 s in, down to nothing by 0.36 s)
+					local step: Step? = nil
+					local last = steps[entry.UserId]
+					local age = if last then clock - last.At else STEP_LIFE
+					if last and age < STEP_LIFE then
+						local arrow = Logic.ARROWS[last.Lane]
+						local env = if age < 0.06 then age / 0.06 else math.max(0, 1 - (age - 0.06) / 0.3)
+						step = { Dx = arrow.Dx, Dz = arrow.Dz, Env = env, Foot = last.Foot }
+					end
+					pcall(dance, entry.Rig, beat, energy, entry.Phase, doomed[entry.UserId] == true, step)
 				end
 			end
 		end

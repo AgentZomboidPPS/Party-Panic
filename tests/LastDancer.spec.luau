@@ -21,6 +21,33 @@ test("the round is eight phrases of four bars at 120 bpm", function()
 	expectEqual(LastDancer.DURATION, 64)
 end)
 
+test("ARROWS: one arrow a lane, left to right, in four different directions and colours", function()
+	expectEqual(#LastDancer.ARROWS, LastDancer.LANES)
+	local names, directions, colors, keys = {}, {}, {}, {}
+	for lane, arrow in LastDancer.ARROWS do
+		expectEqual(math.abs(arrow.Dx) + math.abs(arrow.Dz), 1) -- a unit step along an axis
+		names[arrow.Name], directions[`{arrow.Dx},{arrow.Dz}`] = true, true
+		colors[table.concat(arrow.Color, ",")] = true
+		for _, key in arrow.Keys do
+			expectTrue(not keys[key], `{key} steps on two arrows`)
+			keys[key] = true
+		end
+		-- an up-pointing glyph turned by Rotation points where the arrow goes (angle clockwise from up)
+		local angle = math.rad(arrow.Rotation)
+		expectTrue(near(math.sin(angle), arrow.Dx, 1e-9), `lane {lane}: rotation {arrow.Rotation} vs Dx {arrow.Dx}`)
+		expectTrue(near(-math.cos(angle), arrow.Dz, 1e-9), `lane {lane}: rotation {arrow.Rotation} vs Dz {arrow.Dz}`)
+	end
+	for _, set in { names, directions, colors } do
+		local count = 0
+		for _ in set do
+			count += 1
+		end
+		expectEqual(count, 4)
+	end
+	expectEqual(LastDancer.ARROWS[1].Name, "LEFT") -- the lanes run LEFT DOWN UP RIGHT, like a dance mat
+	expectEqual(LastDancer.ARROWS[4].Name, "RIGHT")
+end)
+
 test("Judge: perfect, great and ok by how close, nothing beyond the ok window", function()
 	expectEqual(LastDancer.Judge(0), "Perfect")
 	expectEqual(LastDancer.Judge(-0.06), "Perfect")
@@ -46,12 +73,39 @@ test("Tap: a note is only hit once", function()
 	expectEqual(LastDancer.Tap(chart, dancer, 1, 1.0).Kind, "Stray")
 end)
 
-test("Tap: of two notes in a lane in reach it takes the nearer one", function()
+test(
+	"Tap: of two notes in a lane in reach it takes the earlier one, so a late tap doesn't eat the next note",
+	function()
+		-- lane 1 has notes a quarter of a second apart: 5.0 and 5.25 (their windows overlap)
+		local chart = { Notes = { { T = 5.0, Lane = 1 }, { T = 5.25, Lane = 1 } } }
+		local dancer = LastDancer.new()
+		local first = LastDancer.Tap(chart, dancer, 1, 5.13) -- late for the first, early for the second
+		expectEqual(first.Index, 1)
+		expectEqual(first.Kind, "Ok") -- 0.13 s late
+		local second = LastDancer.Tap(chart, dancer, 1, 5.26)
+		expectEqual(second.Index, 2)
+		expectEqual(second.Kind, "Perfect")
+		expectEqual(dancer.Stray, 0)
+		-- with the first already hit or missed, a tap in the overlap takes the second
+		local other = LastDancer.new()
+		LastDancer.Expire(chart, other, 5.2)
+		expectEqual(LastDancer.Tap(chart, other, 1, 5.2).Index, 2)
+	end
+)
+
+test("Tap: a tap that arrives late for a note already missed is Late, not a stray", function()
 	local chart, dancer = small(), LastDancer.new()
-	-- lane 1 has notes at 1.0 and 1.75; 1.66 s is 0.09 s from the second and 0.66 s from the first
-	local outcome = LastDancer.Tap(chart, dancer, 1, 1.66)
-	expectEqual(outcome.Index, 3)
-	expectEqual(outcome.Kind, "Great")
+	LastDancer.Expire(chart, dancer, 1.2) -- the note at 1.0 is missed
+	local groove = dancer.Groove
+	local outcome = LastDancer.Tap(chart, dancer, 1, 1.15) -- a slow packet: made on time, arrived late
+	expectEqual(outcome.Kind, "Late")
+	expectEqual(outcome.Points, 0)
+	expectEqual(dancer.Groove, groove)
+	expectEqual(dancer.Stray, 0)
+	-- but a tap in a lane with no missed note near it is still a stray
+	expectEqual(LastDancer.Tap(chart, dancer, 3, 1.15).Kind, "Stray")
+	-- and a tap well after the missed note's window is a stray
+	expectEqual(LastDancer.Tap(chart, dancer, 1, 1.4).Kind, "Stray")
 end)
 
 test("Tap: the wrong lane, too early, too late and nonsense are strays", function()
@@ -90,13 +144,13 @@ test("Expire: notes nobody hit become misses once their window is over", functio
 	expectEqual(#LastDancer.Expire(chart, dancer, 1.2), 0) -- only once
 end)
 
-test("Expire: a note that was hit is not missed, and a late tap on a missed note is a stray", function()
+test("Expire: a note that was hit is not missed, and a late tap on a missed note is Late", function()
 	local chart, dancer = small(), LastDancer.new()
 	LastDancer.Tap(chart, dancer, 1, 1.0)
 	expectEqual(#LastDancer.Expire(chart, dancer, 1.3), 0)
 	LastDancer.Expire(chart, dancer, 2.0) -- the lane 2 note at 1.5 and lane 1 note at 1.75 are gone
 	expectEqual(dancer.Miss, 2)
-	expectEqual(LastDancer.Tap(chart, dancer, 2, 1.55).Kind, "Stray")
+	expectEqual(LastDancer.Tap(chart, dancer, 2, 1.55).Kind, "Late")
 end)
 
 test("groove: perfect play climbs towards 1 without passing it, misses pull it to 0", function()
@@ -311,5 +365,17 @@ test("every Logic.X the mode's files use exists (these files aren't type checked
 		end
 	end
 end)
+
+test(
+	"the server seats each dancer on their own mat with SpawnPlayer, never SpawnAll (which ignores the seating)",
+	function()
+		local source = string.gsub(fs.readFile("src/server/MiniGames/LastDancer.luau"), "%-%-[^\n]*", "") -- (comments aside)
+		expectTrue(string.find(source, "SpawnPlayer", 1, true) ~= nil, "no SpawnPlayer")
+		expectTrue(
+			string.find(source, "SpawnAll", 1, true) == nil,
+			"SpawnAll deals its points out in the round's player order: dancers land on each other's mats"
+		)
+	end
+)
 
 return nil

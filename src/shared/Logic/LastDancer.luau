@@ -10,9 +10,12 @@
 -- tools/music/lastdancer_chart.py) lists every note as seconds after GO and a lane 1-4: each note is a
 -- note the song's lead plays, so tapping on the beat plays along. Everyone gets the same chart.
 --
--- Judging. A tap in lane L at `rel` seconds after GO hits the nearest note still waiting in lane L within
--- WINDOW.Ok of its time: Perfect, Great or Ok by how close. A tap that hits nothing is a stray; a note
--- nobody hit by WINDOW.Ok after its time is a miss. The server judges a tap by when the player's device
+-- Judging. A tap in lane L at `rel` seconds after GO hits the earliest note still waiting in lane L within
+-- WINDOW.Ok of its time (the earliest, not the nearest: two notes in a lane can be a quarter of a second
+-- apart, closer than two windows, and a tap that is late for the first must not take the second):
+-- Perfect, Great or Ok by how close. A tap that hits nothing is a stray; a note nobody hit by WINDOW.Ok
+-- after its time is a miss, and a tap that arrives just after (a slow packet) for a note already counted as
+-- missed is "Late": it costs nothing more. The server judges a tap by when the player's device
 -- says it was made (PressTime), so a laggy connection doesn't cost anyone a hit.
 --
 -- Groove (what the cuts go by). Every note's outcome and every stray pulls a dancer's groove, a moving
@@ -58,6 +61,18 @@ LastDancer.SYNC_MAX = 0.3
 LastDancer.REACH = 0.1 -- like Buzzer.REACH
 LastDancer.WARMUP = 0.5 -- taps this long before the first note (and its window) are free: trying the pads
 
+-- The four arrows of the dance mat, by lane (the chart's lanes 1-4 are the chord's root, third, fifth and
+-- octave, laid out left to right like a dance mat's arrows). `Dx` and `Dz` are the arrow's direction in
+-- the dancer's own frame (+X is their right, -Z is the way they face: the arrow UP is the panel nearest
+-- the stage), `Rotation` turns an up-pointing glyph (a UI triangle) into this arrow (degrees clockwise),
+-- `Color` is its colour, and `Keys` are the keyboard keys that step on it (the first is the arrow key).
+LastDancer.ARROWS = {
+	{ Name = "LEFT", Dx = -1, Dz = 0, Rotation = 270, Color = { 255, 96, 150 }, Keys = { "Left", "D" } },
+	{ Name = "DOWN", Dx = 0, Dz = 1, Rotation = 180, Color = { 70, 200, 255 }, Keys = { "Down", "F" } },
+	{ Name = "UP", Dx = 0, Dz = -1, Rotation = 0, Color = { 255, 205, 60 }, Keys = { "Up", "J" } },
+	{ Name = "RIGHT", Dx = 1, Dz = 0, Rotation = 90, Color = { 150, 235, 110 }, Keys = { "Right", "K" } },
+}
+
 export type Note = { T: number, Lane: number }
 export type Chart = { Notes: { Note } }
 
@@ -73,6 +88,7 @@ export type Dancer = {
 	Stray: number,
 	Next: number, -- the first note not yet hit or missed
 	Done: { [number]: boolean }, -- notes hit or missed
+	Missed: { [number]: boolean }, -- the ones missed
 }
 
 export type Outcome = { Kind: string, Index: number?, Offset: number?, Points: number }
@@ -90,6 +106,7 @@ function LastDancer.new(): Dancer
 		Stray = 0,
 		Next = 1,
 		Done = {},
+		Missed = {},
 	}
 end
 
@@ -122,8 +139,9 @@ function LastDancer.Judge(offset: number): string?
 end
 
 -- A tap in `lane` at `rel` seconds after GO. Returns what it did: a hit ("Perfect" | "Great" | "Ok", with
--- the note's index, the offset (tap - note, seconds) and the points) or a "Stray" that hit nothing.
--- Anything that isn't a lane 1-4 at a real time is a stray too.
+-- the note's index, the offset (tap - note, seconds) and the points), a "Late" tap for a note already
+-- missed (no penalty, no points), or a "Stray" that hit nothing. Anything that isn't a lane 1-4 at a real
+-- time is a stray too.
 function LastDancer.Tap(chart: Chart, dancer: Dancer, lane: any, rel: any): Outcome
 	local notes = chart.Notes
 	local valid = type(lane) == "number"
@@ -133,7 +151,8 @@ function LastDancer.Tap(chart: Chart, dancer: Dancer, lane: any, rel: any): Outc
 		and type(rel) == "number"
 		and rel == rel
 		and math.abs(rel) < 1e6
-	local bestIndex, bestOffset = nil, math.huge
+	local bestIndex, bestOffset = nil, 0
+	local late = false
 	if valid then
 		local limit = rel + LastDancer.WINDOW.Ok
 		local index = dancer.Next
@@ -141,12 +160,28 @@ function LastDancer.Tap(chart: Chart, dancer: Dancer, lane: any, rel: any): Outc
 			local note = notes[index]
 			if note.Lane == lane and not dancer.Done[index] then
 				local offset = rel - note.T
-				if math.abs(offset) <= LastDancer.WINDOW.Ok and math.abs(offset) < math.abs(bestOffset) then
-					bestIndex, bestOffset = index, offset
+				if math.abs(offset) <= LastDancer.WINDOW.Ok then
+					bestIndex, bestOffset = index, offset -- (the earliest waiting one: they are in time order)
+					break
 				end
 			end
 			index += 1
 		end
+		if not bestIndex then
+			-- (notes just before `Next` can still be missed ones further along: look a few back)
+			index = math.max(1, dancer.Next - 8)
+			while index <= #notes and notes[index].T <= limit do
+				local note = notes[index]
+				if note.Lane == lane and dancer.Missed[index] and math.abs(rel - note.T) <= LastDancer.WINDOW.Ok then
+					late = true
+					break
+				end
+				index += 1
+			end
+		end
+	end
+	if late then
+		return { Kind = "Late", Points = 0 }
 	end
 	if not bestIndex then
 		dancer.Stray += 1
@@ -182,6 +217,7 @@ function LastDancer.Expire(chart: Chart, dancer: Dancer, rel: number): { number 
 	while index <= #notes and notes[index].T + LastDancer.WINDOW.Ok < rel do
 		if not dancer.Done[index] then
 			dancer.Done[index] = true
+			dancer.Missed[index] = true
 			dancer.Miss += 1
 			dancer.Combo = 0
 			pull(dancer, "Miss")

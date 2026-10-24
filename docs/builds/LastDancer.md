@@ -1,6 +1,7 @@
 # Last Dancer (`LastDancer`, game 31): how it works and how to change it
 
-A rhythm dance-off, built in one session from Claude's own pitch ("Let's make it"). The rules, numbers and the owner-facing
+A rhythm dance-off on arcade dance mats, built in one session from Claude's own pitch ("Let's make it"; then "I want it to
+show your character basically playing on a DDR mat from an arcade"). The rules, numbers and the owner-facing
 summary are in [MINIGAME_BACKLOG.md](../MINIGAME_BACKLOG.md) (31). This page is for whoever tunes or extends it.
 
 ## The pieces
@@ -10,9 +11,9 @@ summary are in [MINIGAME_BACKLOG.md](../MINIGAME_BACKLOG.md) (31). This page is 
 | `tools/music/songs/LastDancer.py` | the song "Mirror Ball Showdown" (120 bpm, 8 intro bars + 32 round bars) **and the chart**: `CHART_BARS`, one string of 16 steps per bar, a digit for a note in lane 1-4. The lead plays every note (lane = root, third, fifth, octave of that bar's chord) |
 | `tools/music/lastdancer_chart.py` | writes `src/shared/LastDancerChart.luau` from the song (`--check` fails if it is stale); refuses a chart that breaks the rules (notes on eighths, none closer than an eighth, a free last beat before every cut) |
 | `src/shared/Logic/LastDancer.luau` | the rules as plain math: windows, groove, the cut schedule, the press-time clamp. Pure, unit-tested (`tests/LastDancer.spec.luau`, which also checks the generated chart) |
-| `src/server/MiniGames/LastDancer.luau` | the round: the floor, judging every `Tap`, misses, the cuts (decided 0.3 s early, tiles drop on the downbeat), results |
+| `src/server/MiniGames/LastDancer.luau` | the round: the floor and each dancer's dance mat (`buildMat`), judging every `Tap`, misses, the cuts (decided 0.3 s early, mats drop on the downbeat), the batched `Steps` everyone sees, results |
 | `src/server/MiniGames/Bots/LastDancer.luau` | bots tap the chart with skill-based accuracy (calibrated in the file's header) |
-| `src/client/MiniGames/LastDancer.luau` | the highway, pads, instant feedback (same logic), groove meter, cut line, SYNC, standings, the dance, the club mood |
+| `src/client/MiniGames/LastDancer.luau` | the highway with its arrow pads, instant feedback (same logic), groove meter, cut line, SYNC (manual and measured), standings, the dance and the stepping onto the mat's arrows, the club mood |
 | `src/server/World/Props/LastDancer.luau`, `tools/meshgen/props/LastDancer.py`, `assets/meshes/LastDancer*` | the mirror ball and speaker stack (meshes made, **not uploaded**: fallbacks are used until then) |
 | `tools/checks/bots/LastDancer.luau` | the round harness's scripted dancers: good, ok, sloppy, idle, masher; checks the idle one and the masher are cut first |
 
@@ -36,12 +37,17 @@ change both together (`BPM`, `PHRASES`, `FIRST_CUT`, `LAST_CUT`, `FINALISTS`) an
 
 ## Checked, and what only a real device can show
 
-Checked here: unit tests (273), stylua, selene, luau-lsp, a 12-player round, a round with 10 real bots, rounds of 2, 3, 5, 8
-players, the phone HUD at five sizes (0 problems), no z-fighting, the arena rendered in Blender, mesh orientation.
+Checked here: unit tests (275), stylua, selene, luau-lsp, a 12-player round, a round with 10 real bots, full rounds of 1, 2,
+3 and 5 players, the phone HUD at five sizes (0 problems), the arena and a dancer's mat rendered in Blender (the arrows point
+the right way, UP towards the stage), mesh orientation. The z-fight check still lists pairs: rail cylinders crossing at right
+angles and the two white bars of one arrow (same colour), which the check sees as boxes: nothing there can flicker.
 **Not checkable without a real client** (the test server has no input, audio, physics or GUI engine):
 
 - how the audio feels against the notes on real phones (the SYNC buttons are the safety net; judge it with Bluetooth too);
-- the dance poses (the R15 joint offsets are written from the rig's geometry; look at them once: arms should go up and out);
+- the dance poses and the stepping (the R15 joint offsets are written from the rig's geometry: arms up and out, a side step
+  puts that foot out and shifts the body over the panel, UP steps forward, DOWN back; look once, and check that the camera
+  doesn't sway with the steps: as far as I know Roblox's camera follows the root part, which the dance never moves, but I
+  couldn't confirm it here; if it sways, set the local player's Humanoid.CameraOffset to the negative of the body shift);
 - tiles dropping with the dancers on them, the red flash, the club mood (midnight, purple haze), the lights on phones;
 - tapping on glass: two fingers, a thumb resting on the screen edge, the pads' size on a small phone.
 
