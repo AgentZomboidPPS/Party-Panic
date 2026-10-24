@@ -436,9 +436,6 @@ local list: { GameDefinition } = {
 		MinPlayers = 1,
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
-		-- Out of the vote until its meshes, song and portal preview are in (owner: "Can you finish those two
-		-- mini games?").
-		Enabled = false,
 	},
 	{
 		Id = "LastDancer",
