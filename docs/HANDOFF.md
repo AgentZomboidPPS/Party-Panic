@@ -1,6 +1,6 @@
 # Handoff: Party Panic (for the next Claude)
 
-**On this branch since version 57 (not published yet):**
+**Live in version 58 (2026-10-24, on the owner's "push"; nothing on the branch since):**
 - The last five meshes' fights (ArrowBarrel's vanes turned 30 degrees off the shaft's faces; Honeycomb, HoneyGlade,
   TanksTank's hubs and MinecartMayhemRailStart by unfight, which now moves a face 0.1 in front of the furthest face it
   fought), uploaded again. `mesh_zfight.py` over every .glb: 0 meshes with fights.
