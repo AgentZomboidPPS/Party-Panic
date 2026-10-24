@@ -1539,7 +1539,9 @@ Participants.Changed:Connect(function()
 	botChecks.changedFired += 1
 end)
 
-local BOT_NAMES = { "Mochi", "Pip", "Bloop", "Sprocket", "Noodle", "Ziggy", "Pickle", "Bonbon", "Taffy", "Waffles", "Gizmo" }
+-- (named the way BotService names them now, Shared/Logic/BotLooks: the longest ones too)
+local BOT_NAMES = { "RainbowUnicorn2013", "xXOliviaXx", "jake_2013", "PixelPanda", "itsMaya", "Lily_Bunny",
+	"sleepy_panda", "ShadowWolf77", "Ava", "amelia09", "CosmicPenguin" }
 local BOT_COLORS = {
 	Color3.fromRGB(255, 92, 170),
 	Color3.fromRGB(80, 205, 255),

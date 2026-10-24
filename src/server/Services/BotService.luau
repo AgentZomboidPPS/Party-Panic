@@ -5,8 +5,10 @@
 -- bot fades out to make room (right away from the lobby, or after its round if it's playing one);
 -- when a player leaves, a bot fades in. Someone sitting out (SitOutService) leaves their spot to
 -- a bot the same way. Bots look like anyone else (owner: "Lets remove the bot tag so people dont
--- know they are playing with a bot."): a name, a level on a name tag like everyone's, no antenna.
--- They never earn rewards and never save data.
+-- know they are playing with a bot.", then "Can we make the bots look more like real players?"): a
+-- level on a name tag like everyone's, no antenna, dressed from the catalog and named the way
+-- players dress and name themselves (Shared/Logic/BotLooks). They never earn rewards and never
+-- save data.
 --
 -- A bot is a table that looks like a Player to the round code (Name, DisplayName, UserId < 0,
 -- Character, Parent, attributes, CharacterAdded, LoadCharacterAsync), so RoundContext and every
@@ -46,6 +48,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
+local BotLooks = require(Shared.Logic.BotLooks)
 local Config = require(Shared.Config)
 local NameTag = require(Shared.NameTag)
 local Signal = require(Shared.Signal)
@@ -56,41 +59,7 @@ local SitOutService = require(script.Parent.SitOutService)
 
 local BotService = {}
 
-local NAMES = {
-	"Pip",
-	"Mochi",
-	"Bloop",
-	"Sprocket",
-	"Noodle",
-	"Ziggy",
-	"Pickle",
-	"Bonbon",
-	"Taffy",
-	"Waffles",
-	"Gizmo",
-	"Nugget",
-	"Bubbles",
-	"Tofu",
-	"Pebble",
-	"Sunny",
-	"Jelly",
-	"Biscuit",
-	"Comet",
-	"Doodle",
-	"Fizz",
-	"Momo",
-	"Peanut",
-	"Rolo",
-}
-
-local SKIN = {
-	Color3.fromRGB(245, 205, 48), -- classic
-	Color3.fromRGB(255, 204, 170),
-	Color3.fromRGB(234, 184, 146),
-	Color3.fromRGB(199, 148, 108),
-	Color3.fromRGB(150, 103, 73),
-	Color3.fromRGB(99, 67, 48),
-}
+-- Each bot's colour (its sparkles when it fades in, its initial's backdrop where a picture goes).
 local OUTFIT = {
 	Color3.fromRGB(255, 92, 170),
 	Color3.fromRGB(80, 205, 255),
@@ -143,6 +112,7 @@ export type Bot = typeof(setmetatable(
 		CharacterAdded: any,
 		CharacterRemoving: any,
 		Description: HumanoidDescription,
+		Plain: HumanoidDescription, -- (its skin on the plain body: if the catalog can't be reached)
 		Goal: Vector3?,
 		Leaving: boolean,
 		JumpStart: number?,
@@ -406,6 +376,11 @@ function BotService.SpawnCharacter(bot: Bot, fadeIn: boolean)
 	local ok, model =
 		pcall(Players.CreateHumanoidModelFromDescription, Players, bot.Description, Enum.HumanoidRigType.R15)
 	if not ok or not model then
+		-- (the catalog didn't answer: its skin on the plain body, rather than no bot)
+		warn(`[BotService] couldn't dress {bot.Name}: {model}`)
+		ok, model = pcall(Players.CreateHumanoidModelFromDescription, Players, bot.Plain, Enum.HumanoidRigType.R15)
+	end
+	if not ok or not model then
 		warn(`[BotService] couldn't build {bot.Name}: {model}`)
 		return
 	end
@@ -455,18 +430,43 @@ function BotService.SpawnCharacter(bot: Bot, fadeIn: boolean)
 	end)
 end
 
+local function roll(): number
+	return rng:NextNumber()
+end
+
 local function pickName(): string
-	local free = {}
-	for _, name in NAMES do
-		if not usedNames[name] then
-			table.insert(free, name)
-		end
-	end
-	local name = if #free > 0
-		then free[rng:NextInteger(1, #free)]
-		else `{NAMES[rng:NextInteger(1, #NAMES)]}{nextId + 1}`
+	local name = BotLooks.FreshName(roll, usedNames)
 	usedNames[name] = true
 	return name
+end
+
+-- A HumanoidDescription for a look (Shared/Logic/BotLooks), or just the look's skin (`plain`: the
+-- fallback if the catalog can't be reached when the bot spawns).
+local function describe(look: BotLooks.Look, plain: boolean?): HumanoidDescription
+	local description = Instance.new("HumanoidDescription")
+	local skin = Color3.fromRGB(look.Skin[1], look.Skin[2], look.Skin[3])
+	description.HeadColor = skin
+	description.TorsoColor = skin
+	description.LeftArmColor = skin
+	description.RightArmColor = skin
+	description.LeftLegColor = skin
+	description.RightLegColor = skin
+	if plain then
+		return description
+	end
+	description.Head = look.Head
+	local body = look.Body
+	if body then
+		description.Torso, description.LeftArm, description.RightArm = body[1], body[2], body[3]
+		description.LeftLeg, description.RightLeg = body[4], body[5]
+	end
+	description.Shirt = look.Shirt
+	description.Pants = look.Pants
+	description.HairAccessory = if look.Hair then tostring(look.Hair) else ""
+	description.HatAccessory = if look.Hat then tostring(look.Hat) else ""
+	description.FaceAccessory = if look.Glasses then tostring(look.Glasses) else ""
+	description.BackAccessory = if look.Back then tostring(look.Back) else ""
+	return description
 end
 
 -- Creates a bot and fades it into the lobby.
@@ -501,16 +501,9 @@ function BotService.Add(): Bot
 	self.Info = info
 	self.Parent = info -- set while the bot is here, like Player.Parent
 
-	local description = Instance.new("HumanoidDescription")
-	local skin = SKIN[rng:NextInteger(1, #SKIN)]
-	description.HeadColor = skin
-	description.LeftArmColor = skin
-	description.RightArmColor = skin
-	description.TorsoColor = color
-	local pants = OUTFIT[rng:NextInteger(1, #OUTFIT)]:Lerp(Color3.fromRGB(40, 40, 60), 0.55)
-	description.LeftLegColor = pants
-	description.RightLegColor = pants
-	self.Description = description
+	local look = BotLooks.Outfit(roll)
+	self.Description = describe(look)
+	self.Plain = describe(look, true)
 
 	BotRegistry.Add(self)
 	BotService.SpawnCharacter(self, true)

@@ -117,6 +117,17 @@ by its pivot, and a steak whose pieces came a frame apart kept its seared body s
 piece drops from where the server put it, and the round's steaks are shared up front so devices download them
 before they're served).
 
+**Since version 50, not published yet:** the picnic tables stand on their legs (Hot Potato's and Prime Cut's legs
+leaned the wrong way: a V on its point; owner: "This is not good claude."; re-uploaded), and bots pass for real
+players (owner: "Can we make the bots look more like real players?"): `Shared/Logic/BotLooks` dresses each one
+from the catalog (one of 12 dynamic heads or Roblox's default, hair or a hat, a shirt and pants, sometimes glasses
+or a backpack, the blocky, Man, Woman or Robloxian 2.0 body, a real skin tone) and names it the way players
+name themselves ("itsJosh", "SleepyBean733", "FrostyFox"). `tools/checks/bot_looks.py` builds a bot in each item
+on a Roblox server (catalog items can be taken down: run it now and then); classic faces aren't used, since a
+bot's default dynamic head doesn't show them. If the catalog doesn't answer, a bot spawns in its skin on the
+plain body rather than not at all. Still a tell the owner may want gone: Roblox's own player list (Level, Wins)
+only lists real people.
+
 **The owner's plan for seasons and events** (2026-10-23): "Also we can have events/holidays run along side seasons.
 Also seasons are actually spring summer fall and winter". So the crate seasons are the year's four: HOLLOW NIGHT is
 the **fall** season (`Seasons` `Time = "FALL"`; screens say "FALL SEASON", "THE FALL SEASON HAS BEGUN"), and
@@ -657,7 +668,8 @@ LinearVelocity never moves. There is no way to step physics in a test; the bot r
   and a level on the same name tag as people's, no antenna, no 🤖, no softer name in lists, an initial for a
   portrait on the lobby's podium, a cup podium line like anyone's (the server still pays bots nothing).
 - `src/server/Services/BotService.luau`: bots are fake Player-likes with real R15 characters, moved by the server's
-  physics on live servers (`RoundContext:RunBots` drives the mode's brain).
+  physics on live servers (`RoundContext:RunBots` drives the mode's brain), dressed and named by
+  `Shared/Logic/BotLooks`.
 - Props: `src/server/World/Props/<File>.luau` (one spec per prop with its own `AssetId`, a primitive `Fallback`, a
   `Palette`; props don't collide unless `Collide = true`), `World/MeshLibrary.luau`, generators in
   `tools/meshgen/props/<Mode>.py` (shared helpers in `tools/meshgen/generate_meshes.py`, which turns every closed part
