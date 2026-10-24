@@ -53,9 +53,11 @@ local TOUCH = {
 	Pad = 12,
 	Gap = 8,
 }
--- PC: under the phase banner and its status line (its holder sits 10 px from the top and scales the
--- same way); clear of the toasts down the right.
-local PC = { Width = 560, Height = 44, Text = 20, Top = 137, Pad = 16, Gap = 10 }
+-- PC: right under the phase banner (70 tall; its holder sits 10 px from the top and scales the same
+-- way), clear of the profile card on the left and the toasts down the right. The banner's status
+-- line only shows during a round, when the row is away, so it needs no room here (owner, on the space
+-- the row left for it: "Why is there a gap?").
+local PC = { Width = 560, Height = 44, Text = 20, Top = 80, Pad = 16, Gap = 10 }
 -- Where the row ends (scaled units, in a holder 10 points from the top on PC): what goes just under
 -- it lines up with it (CupController's standings moment). Phones: under the top bar in the middle
 -- the sit-out switch is what's there (HudController, 72 tall in a holder 4 points down).

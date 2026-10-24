@@ -5,6 +5,7 @@ resulting asset ids into the game config, so the next build uses the real meshes
     python3 tools/upload_assets.py --group-id 7654321 --what audio
     python3 tools/upload_assets.py --user-id 12345678 --dry-run  # show what would happen
     python3 tools/upload_assets.py --user-id 12345678 --what meshes --only Pump,Balloon
+    python3 tools/upload_assets.py --user-id 12345678 --what meshes --only Pump --again   # a changed mesh
     python3 tools/upload_assets.py --user-id 12345678 --what modes   # the mini-game song packs
     python3 tools/upload_assets.py --user-id 12345678 --what season  # the crate season's effects
 
@@ -161,6 +162,8 @@ def main():
     who.add_argument("--group-id", help="upload as this group (must own the game)")
     parser.add_argument("--what", choices=["all", "meshes", "audio", "modes", "season"], default="all")
     parser.add_argument("--only", help="comma-separated mesh names (default: every mesh)")
+    parser.add_argument("--again", action="store_true", help="with --only: upload those meshes again even if they're "
+                        "up (a mesh whose .glb changed, e.g. tools/meshgen/unfight.py; the new id replaces the old)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     only = set(args.only.split(",")) if args.only else None
@@ -192,7 +195,7 @@ def main():
         props = props_file_for(name) if kind == "mesh" else None
         if props:
             # A mini-game's own prop: its id lives in its World/Props file, not the shared record.
-            existing = props_asset_id(*props)
+            existing = 0 if args.again and only else props_asset_id(*props)
             if existing > 0:
                 print(f"skip   {key:22s} already uploaded as {existing} ({props[0].name})")
             elif args.dry_run:
@@ -203,7 +206,7 @@ def main():
                 set_props_asset_id(props[0], name, asset_id)
                 print(f"{asset_id} -> {props[0].name}")
             continue
-        if key in record:
+        if key in record and not (args.again and only and kind == "mesh"):
             asset_id = record[key]
             print(f"skip   {key:22s} already uploaded as {asset_id}")
         elif args.dry_run:

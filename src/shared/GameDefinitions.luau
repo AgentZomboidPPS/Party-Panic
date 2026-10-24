@@ -460,11 +460,9 @@ local list: { GameDefinition } = {
 		MinPlayers = 2,
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
-		-- Out of the rotation (owner, 2026-10-24, on version 53: "WTF this is beyond broken. Models are
-		-- fucked. shooting is fucked", "cant see bullets. shooting turns you weird"): the borrowed
-		-- capybara meshes, the shells and the aiming only fail on live servers. The code stays:
-		-- Enabled = true (or this line gone) brings it back once it's fixed.
-		Enabled = false,
+		-- Back in the rotation (owner: "Reenable it.") after it was out from version 54: on version 53
+		-- the borrowed capybara meshes, the shells and the aiming failed on live servers ("Models are
+		-- fucked. shooting is fucked"); all three were fixed (docs/HANDOFF.md, Capy Go Boom).
 	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
