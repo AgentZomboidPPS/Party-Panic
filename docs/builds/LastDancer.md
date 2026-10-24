@@ -22,7 +22,7 @@ summary are in [MINIGAME_BACKLOG.md](../MINIGAME_BACKLOG.md) (31). This page is 
 1. Edit `CHART_BARS` (or the arrangement) in `tools/music/songs/LastDancer.py`.
 2. `python3 tools/music/lastdancer_chart.py` (chart), `python3 tools/music/modes.py render LastDancer` (audio) and
    `python3 tools/music/modes.py check` (length against the round: the round part must stay 32 bars = 64 s = `Duration`).
-3. If the pack is already uploaded, `modes.py pack --replace ModePack7` and a new upload; if not, `modes.py pack`.
+3. If the pack is already uploaded, `modes.py pack --replace ModePack8` and a new upload; if not, `modes.py pack`.
 4. `lune run tests/run`.
 
 The tempo, the phrase length (4 bars) and the round (8 phrases) are constants in `Logic/LastDancer.luau` **and** the song:
@@ -54,7 +54,7 @@ angles and the two white bars of one arrow (same colour), which the check sees a
 ## Going live
 
 The mode keeps itself out of the vote on live servers until its song is in the game. To switch it on: upload the song
-(ModePack7's audio file lives in `build/`, which isn't in git: in a fresh container run `python3 tools/music/modes.py render
+(ModePack8's audio file lives in `build/`, which isn't in git: in a fresh container run `python3 tools/music/modes.py render
 LastDancer` and `python3 tools/music/modes.py pack` first, which rebuilds the same pack; then `python3 tools/upload_assets.py --user-id 11690979745 --what modes --dry-run`, then without `--dry-run`: it uses 1 of the
 owner's 10 audio uploads a month), optionally the meshes (`--what meshes --only LastDancerMirrorBall,LastDancerSpeaker`),
 publish, restart the servers. Then add "💃 LAST DANCER" to `docs/STORE_DESCRIPTION.txt` (31 mini-games) and make its portal

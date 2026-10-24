@@ -42,7 +42,7 @@ local MeshLibrary = require(script.Parent.Parent.World.MeshLibrary)
 local LastDancer = MiniGame.Define("LastDancer", { Results = "Survival" })
 
 -- A rhythm game is half a game without its own song, and the song waits for the owner's go-ahead to be
--- uploaded (ModePack7, tools/music/modes.py). Until its id is in AudioAssets the mode stays out of the
+-- uploaded (ModePack8, tools/music/modes.py). Until its id is in AudioAssets the mode stays out of the
 -- vote on live servers (no code to flip afterwards: the next publish after the upload has it in the vote);
 -- Studio testing and the round harness ignore this, and play with the tick that keeps the beat.
 if Sounds.ModeSongs.LastDancer == nil and not RunService:IsStudio() then

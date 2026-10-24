@@ -20,7 +20,7 @@ until the owner says; no pull request. Full description: [MINIGAME_BACKLOG.md](M
   luau-lsp, `mode_check.sh LastDancer` (12 players, 10 real bots, phone HUD at five sizes: 0 errors, 0 UI problems), full rounds
   of 1/2/3/5 players, no z-fighting, the arena rendered with Blender, mesh orientation 0.
 - **Waiting on the owner (nothing was uploaded or published):**
-  1. **The song:** `python3 tools/upload_assets.py --user-id 11690979745 --what modes` (ModePack7, built locally by
+  1. **The song:** `python3 tools/upload_assets.py --user-id 11690979745 --what modes` (ModePack8 with Big Bad Vacuum's song, built locally by
      `modes.py pack`; the .ogg is in `build/`, not in git, so in a fresh container run `modes.py render LastDancer` and `modes.py pack`
      first; it uses the 7th of the owner's 10 audio uploads this month). Until its id is in `AudioAssets` the mode
      **keeps itself out of the live vote** (a rhythm game without its song is half a game); Studio and the harness ignore that.
@@ -39,7 +39,7 @@ until the owner says; no pull request. Full description: [MINIGAME_BACKLOG.md](M
   milestone count Last Dancer while it is still dark (they read the definitions at load, before it switches itself off),
   and a modified client can autoplay (the chart is on the client: inherent to a chart game).
 - **Shared files touched** (small, additive): `GameDefinitions.luau` (the entry), `ModeMusic.luau` / `AudioAssets.luau`
-  (ModePack7, id 0), `tools/music/packs.json`, `docs/*`.
+  (ModePack8, id 0), `tools/music/packs.json`, `docs/*`.
 
 ## Game 32: BIG BAD VACUUM (2026-10-24, built on `claude/big-bad-vacuum`, merged into `claude/friendly-ramanujan-2dtfr2`; being finished)
 

@@ -251,7 +251,7 @@ floor, enough to leave two for the final duel; at the buzzer the highest groove 
   for a lane 1-4); its lead plays every one of them (a chord tone per lane), and `python3 tools/music/lastdancer_chart.py`
   writes the same notes to `src/shared/LastDancerChart.luau`. Everyone gets the same chart. Change a bar, re-render the
   song (`modes.py render LastDancer`), re-export the chart and re-pack (`modes.py pack`, which never touches an uploaded
-  pack: a changed song needs `--replace ModePack7` and a new upload).
+  pack: a changed song needs `--replace ModePack8` and a new upload).
 - **Judging** is `src/shared/Logic/LastDancer.luau` (pure, unit-tested in `tests/LastDancer.spec.luau`): the earliest waiting
   note in the tapped lane within 170 ms (Perfect 65, Great 115, Ok 170), else a stray; a note nobody hit is a miss, and a
   tap that arrives just after for a note already missed (a slow packet) is "Late": no penalty. The
@@ -288,6 +288,6 @@ floor, enough to leave two for the final duel; at the buzzer the highest groove 
   plain parts (about 290 for 12 dancers: Hex Meltdown has 219 plus meshes, Cake Factory 628 plus meshes); the mirror ball and
   speakers are mesh props with fallbacks (`World/Props/LastDancer.luau`, `tools/meshgen/props/LastDancer.py`).
 - **Ships dark.** The mode keeps itself out of the live vote until its song is in the game (`Sounds.ModeSongs.LastDancer`,
-  i.e. ModePack7's id in `AudioAssets`): upload with `python3 tools/upload_assets.py --user-id 11690979745 --what modes`
+  i.e. ModePack8's id in `AudioAssets`): upload with `python3 tools/upload_assets.py --user-id 11690979745 --what modes`
   (uses 1 of the owner's 10 audio uploads a month: 6 are used), publish, and it is in the vote. Studio and the round
   harness ignore that.
