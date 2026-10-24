@@ -2319,6 +2319,13 @@ function BigBadVacuum.Start(api)
 		carrying[me] = nil -- (it's in the air; the server confirms)
 		api:Action("Throw", kind)
 		api:Sound("Boing")
+		-- A throw the server didn't take (too soon after the last) changes nothing it shares, so nothing
+		-- says so: look at its carry list again in a moment, and the brick is back in hand if it's still there.
+		task.delay(0.7, function()
+			if api.Gui.Parent then
+				readCarry()
+			end
+		end)
 	end
 	throwButton.Pressed:Connect(function()
 		throwBrick("Core")
