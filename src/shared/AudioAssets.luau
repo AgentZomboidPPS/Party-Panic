@@ -23,6 +23,7 @@ return {
 		ModePack6 = 111377793680965,
 		ModePack7 = 89946863953014,
 		ModePack8 = 0,
+		ModePack9 = 114585791757431, -- Capy Go Boom (uploaded as "ModePack7" on its own branch)
 	},
 	Sfx = {
 		VoteOpen = 0,

@@ -6,6 +6,87 @@ from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes fro
 
 ## Game 33: LAST DANCER (2026-10-24, built on `claude/last-dancer`, merged into `claude/friendly-ramanujan-2dtfr2`; being finished)
 
+## Capy Go Boom: game 31 (2026-10-24, branch `claude/quirky-hopper-5yk8zk`)
+
+Owner: "Can you take Capy to boom. Make it into a mini game for party panic?" CAPY GO BOOM is the owner's other game
+(repo `AgentZomboidPPS/Capy-Go-Boom`: capybaras eat snacks to grow, blast each other, a popped capy spills food). It is
+now `CapyGoBoom` (Versus, 75 s, 2-12, bots fill): everyone is a 20 KG capybara on a hedged lawn; walk over snacks to eat
+(small snacks 2, tasty ones 4, big ones 9, the golden apple 25 KG) and grow; BOOM fires the snack cannon, a hit spills a fifth of the
+victim's weight (a quarter for the leader, never below 10 KG) as snacks anyone can eat; nobody is out; the biggest capy
+at the buzzer wins. Two SNACK DROPS (a beam 2.5 s ahead, then a golden apple falls) and a last-12-seconds FEAST (lawn
+snacks count double; spills never do, pops only move weight around) give comebacks. The brief is in `docs/MINIGAME_BACKLOG.md` 30.
+
+- **Files:** `src/server/MiniGames/CapyGoBoom.luau` (the rules), `src/client/MiniGames/CapyGoBoom.luau` (a capybara drawn on
+  everyone's character, snacks, shells, HUD, BOOM button), `src/server/MiniGames/Bots/CapyGoBoom.luau` (bot brain),
+  `src/shared/Logic/CapyGoBoom.luau` (numbers and hit tests both sides use), `src/server/World/Props/CapyGoBoom.luau`
+  (props), `tools/checks/bots/CapyGoBoom.luau` (harness bot), the `GameDefinitions` entry, the store description (31
+  games) and this note. Shared files touched: only `GameDefinitions.luau`.
+- **How it works, in short:** weight is the score and drives size, hit circle, eating reach and speed
+  (`Logic/CapyGoBoom.ScaleOf`). Snacks and shells are server records the client draws on the server's clock ("Snacks",
+  "Spawn", "Eat", "Shot", "Pop", "ShellEnd" cues). A shell is judged against where the shooter saw each rival
+  (history rewound by ping/2 + interpolation, like Struggle) and stops at the standing stones and the hedge; a jump over
+  it dodges it. PC fires toward the mouse, phones the way you face (bent up to 26 degrees toward a rival, judged where the shooter saw it). The real avatar
+  is hidden locally and the capy follows its root; a coloured pad on the lawn under each capy is its shadow and its colour.
+- **Art borrowed from CAPY GO BOOM** (owner: "Why don't you borrow assets from the capy go boom repo?"): the capybara is that
+  game's `CapyMeshTemplate` (six textured meshes: body, head, four legs; the legs stride and the head dips to chomp), the
+  cannon is its starter blaster (seven meshes; housing, light and glow take the player's colour), the snacks are its twelve
+  `FoodTemplates` and the sound effects are the ones it plays. They are plain meshes and images, not Models, so
+  `Props/CapyGoBoom.luau` builds them with `AssetService:CreateMeshPartAsync` (a mesh that won't load falls back to rounded
+  parts). The capybara and cannon assets (19, user 11690979745's) were granted to the game (Universe 10772087888, Use) on
+  2026-10-24; their ids are in `assets/capy_borrowed_assets.json`, which `tools/asset_permissions.py` re-grants on every
+  publish. The foods are another creator's public assets (24) and the sounds Roblox library audio: nothing to grant, but
+  they are not ours, so if one ever goes private its snack falls back to a ball.
+- **Checked on a real server (Open Cloud):** 12-player round with the client half, 2 people + 10 bots, phone HUD at five
+  sizes: see the mode_check lines in the report. Test bots are far better eaters than people, so their 400+ KG finals are
+  not a balance signal (a capy stops growing visually at about 160 KG).
+- **Independent review (a fresh reviewer read it cold; no blockers) and what changed:** pooled snack models came back
+  shrunk from their eaten-flight (spills and the golden apple were drawn tiny): fixed; a huge or NaN aim from a client could give
+  a zero or NaN shell direction: the aim is range-checked, normalised in doubles and the final direction verified; the
+  leave/respawn hooks now go on before `SpawnAll`; aim assist uses the same rewound positions as the hit test; the
+  shell starts at the capy and is drawn from the cannon's muzzle, with a local muzzle flash on press; spills add up
+  exactly (`Rules.Pieces`: even spills only, so pops never create weight); each loop step runs under its own `pcall`
+  (a thrown error is reported once instead of silently ending eating); a refused press no longer costs a second
+  reload; landed snacks update at 30 Hz, the gulp no longer resizes the whole capy; the hint shows at GO; the FEAST
+  banner (redundant with the status line, and 8.8 pt on phones) is gone.
+- **Bots are deliberately gentle** (owner: "dont make bots overpowered"). Measured with the test harness (a competent
+  stand-in player among bots; the `GROUPS` line in the round log): the first bot brain hit about 80% of its shots and led
+  every round, on par with a competent person. The tuned one fires a shot every ~6 s, misses by a wide angle with only
+  a partial lead and no aim assist (the server skips assist for bots), dodges rarely and late, dithers and idles,
+  doesn't gang up on the leader, and a bot well ahead of the others holds fire and slows down. Result: one competent
+  person among seven bots finishes ahead in most rounds at about 1.6x their weight; with several people in the lobby
+  they mostly shoot each other and the bots come out about average. The knobs are at the top of `Step` in
+  `Bots/CapyGoBoom.luau` (`skill = bot.Skill * 0.65`, the reaction factor, the fire interval and probability, the aim
+  error, the dither).
+- **Left as they are (design calls / platform-wide):** the hit circle is smaller than a big capy's drawn long axis
+  (`Rules.HitRadius` is `BODY_R * scale^0.85` on purpose); presses and eats in the last 0.1 s and shells in flight at the
+  buzzer don't count (no HoldEnd); no speed or teleport validation (same as the other modes).
+- **Not done / owner's calls:**
+  - The shell and the standing stones are still rounded parts (the original game has no such pieces); the capy and the
+    snacks are real meshes. Their look in the game itself is unconfirmed: the preview tools can't draw plain meshes.
+  - **Portal preview:** made with `tools/preview/make_preview.py CapyGoBoom` (a round on a test server snapshotted at 8 s,
+    24 frames of a camera swaying round the lawn, `assets/previews/CapyGoBoom.jpg`, image 138566127435964, approved) and
+    recorded in `GamePreviews.luau`. The renderer can't draw plain uploaded meshes, so the capybaras, cannons and snacks
+    in it are stand-in shapes (`tools/preview/make_standins.py` writes them to `assets/previews/standins/`; the renderer
+    uses them when `assets/meshes/` has no `.glb`). **Never put those in `assets/meshes/`**: `tools/upload_assets.py`
+    uploads everything there and would swap the real art in the game for the stand-ins. The preview also needed
+    `make_preview.py` to find players that are drawn as figures (`DRAWN_PLAYERS`) rather than avatar rigs. An earlier
+    upload of the sheet with a wrong frame count (decal 111480877783246 / image 95247191577986) is unused; it can be
+    deleted from the owner's Creator Hub.
+  - **Song:** "Boom Boom Capybara" (`tools/music/songs/CapyGoBoom.py`: a 118 bpm tropical calypso; steel pans, marimba,
+    congas, brass; the finale starts as the FEAST does) was packed as ModePack7 on its own branch and uploaded on the owner's
+    "Finish all of the stuff": asset 114585791757431 (counted there as 7 of the owner's 10 audio uploads this month,
+    without this branch's Obby Odyssey pack and season sound sprite: with them it is the 9th). Merged into
+    `claude/friendly-ramanujan-2dtfr2` as **ModePack9** (that branch's ModePack7 is Obby Odyssey's song; same upload). Roblox's review has
+    approved it (checked on 2026-10-24: Audio, Approved, Active), so it plays; if it ever isn't approved the game keeps
+    playing "Panic Mode" for this mode by itself (`python3 tools/checks/asset_status.py` shows the state). The song check passes (intro 16.3 s, 81 s after the drop,
+    -11.0 LUFS, -1.6 dBTP).
+  - `IsNew = true` (a vote boost while new). In the merge into `claude/friendly-ramanujan-2dtfr2` it is one of 15 of 33
+    (Parasol Plummet and Spleef, the oldest "new" games, lost theirs: `tests/VoteFairness.spec.luau` allows at most half).
+  - Only a real playtest can confirm: the feel of BOOM and the aim on phones, how the avatar-hiding and the capy look on
+    different devices, the camera with a big capy, and the balance (final weights, how often pops happen).
+
+## Session B in flight (2026-10-22 03:15 UTC)
+
 The owner asked Claude "If you could make any mini game to add to the game. What would it be?", got a pitch for a rhythm
 dance-off and said "Let's make it". Built on `claude/last-dancer` (from `claude/quirky-hopper-5yk8zk` at a2f483b), not pushed
 until the owner says; no pull request. Full description: [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md) 31; how to change it:

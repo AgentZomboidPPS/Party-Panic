@@ -24,6 +24,9 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 MESH_DIR = ROOT / "assets" / "meshes"
+# Stand-in shapes for props that are plain uploaded meshes with no local .glb (the owner's CAPY GO BOOM art, see
+# tools/preview/make_standins.py): never in MESH_DIR, which the upload tool sends to Roblox.
+STANDIN_DIR = ROOT / "assets" / "previews" / "standins"
 
 # Roblox -> Blender basis change.
 M = mathutils.Matrix(((1, 0, 0), (0, 0, -1), (0, 1, 0)))
@@ -160,6 +163,8 @@ def glb_pieces(prop):
     import struct
 
     path = MESH_DIR / f"{prop}.glb"
+    if not path.exists():
+        path = STANDIN_DIR / f"{prop}.glb"
     result = {}
     if path.exists():
         data = path.read_bytes()
@@ -239,10 +244,24 @@ def mesh_from_arrays(key, verts, faces):
     return mesh
 
 
+STANDIN_COLORS: dict = {}
+
+
+def standin_color(p):
+    """The colour of a stand-in piece, for a mesh part whose real look is a texture (it arrives white)."""
+    prop = p.get("prop")
+    if not prop or p["c"] != "MeshPart" or list(p["col"]) != [255, 255, 255]:
+        return None
+    if prop not in STANDIN_COLORS:
+        sidecar = STANDIN_DIR / f"{prop}.json"
+        STANDIN_COLORS[prop] = json.loads(sidecar.read_text()) if sidecar.exists() else {}
+    return STANDIN_COLORS[prop].get(p["n"])
+
+
 def build_parts(parts):
     unknown_meshes = set()
     for index, p in enumerate(parts):
-        mat = material(p["col"], p["m"], p["t"])
+        mat = material(standin_color(p) or p["col"], p["m"], p["t"])
         shadow = p.get("sh", True)
         size = p["s"]
         if p.get("pieces"):

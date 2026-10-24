@@ -50,6 +50,13 @@ local previews: { [string]: Preview } = {
 		FrameSize = Vector2.new(168, 240),
 		Fps = 8,
 	},
+	CapyGoBoom = {
+		Image = "rbxassetid://138566127435964",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
 	CrazyCutters = {
 		Image = "rbxassetid://136340020877100",
 		Frames = 24,

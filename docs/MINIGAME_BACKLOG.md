@@ -291,3 +291,26 @@ floor, enough to leave two for the final duel; at the buzzer the highest groove 
   i.e. ModePack8's id in `AudioAssets`): upload with `python3 tools/upload_assets.py --user-id 11690979745 --what modes`
   (uses 1 of the owner's 10 audio uploads a month: 6 are used), publish, and it is in the vote. Studio and the round
   harness ignore that.
+
+## 32. Capy Go Boom (`CapyGoBoom`, Versus)
+
+Added by the owner on 2026-10-24: "Can you take Capy to boom. Make it into a mini game for party panic?" CAPY GO BOOM is
+the owner's other Roblox game (repo Capy-Go-Boom): capybaras eat snacks to grow huge and blast each other with snack
+cannons, and a popped capy spills about half its size as food. This is that loop as a 75 second round. Everyone is a
+20 KG capybara (drawn on the player's own character, the avatar is hidden on each screen) on a hedged lawn with a hot
+spring, standing stones and snacks lying about. Walking over a snack eats it (small snacks 2, tasty ones 4, big ones 9,
+the golden apple 25 KG) and the capy grows; its drawn size, hit circle and eating reach follow its weight and a bigger capy is a little
+slower. BOOM (a button, E, or a click on PC) fires the snack cannon: a shell flies 64 studs at 80 studs/s, one every 0.9 s, bent toward a
+rival close to the aim (phones: the way you face, a 26 degree cone; PC: where the mouse points). A hit "pops" the victim:
+a fifth of its weight (a quarter for the leader, at least 3, never below 10 KG) spills as snacks that fly back toward the
+shooter, the victim is thrown, staggers 0.45 s and blinks safe for 1.5 s. Nobody is ever out. Two SNACK DROPS (a beam of
+light 2.5 s ahead, then a golden apple and a dozen snacks fall there) and, for the last 12 s, a FEAST (every snack on
+the lawn counts double; a spill never does, so pops only move weight around) give comebacks. The biggest capy at the buzzer wins (ties: most pops). The server owns weights, snacks,
+shells and hits (judged against where the shooter saw each rival, like Struggle); bots use the same controls with
+skill-based aim, leading and dodging. Category Versus, Duration 75, MinPlayers 2, IsTeam false. Art borrowed from
+the original game (owner: "Why don't you borrow assets from the capy go boom repo?"): the capybara is its CapyMeshTemplate
+(six textured meshes, the legs stride and the head dips to chomp), the cannon on its front is its starter blaster (seven
+meshes, the housing, light and glow in the player's colour), the snacks are its twelve FoodTemplates (strawberry, banana,
+carrot, pizza, burger, ice cream, watermelon slice, golden apple...) and the sounds are the ones it uses (munch, boing,
+bonk, crunch). Each prop falls back to rounded parts if a mesh won't load. The shell and the standing stones are made
+here.
