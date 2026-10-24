@@ -56,13 +56,18 @@ return function(env)
 				continue
 			end
 			start[player] = start[player] or mode.mass[player]
-			-- Goal: a snack within 14 studs, else the nearest rival.
-			local goal, rival, rivalDistance = nil, nil, math.huge
+			-- A competent person: goes for the most worthwhile snack nearby (big ones count more, near ones
+			-- count more) while shooting at rivals on the way; with nothing to eat it closes on a rival.
+			local goal, goalScore, rival, rivalDistance = nil, -math.huge, nil, math.huge
 			for _, snack in mode.snacks do
+				if not Rules.Landed(snack, now + 0.3) then
+					continue
+				end
 				local spot = center + Vector3.new(snack[3], 0, snack[4])
 				local d = Vector3.new(spot.X - pos.X, 0, spot.Z - pos.Z).Magnitude
-				if d < 14 and Rules.Landed(snack, now) and (not goal or d < (goal - pos).Magnitude) then
-					goal = Vector3.new(spot.X, pos.Y, spot.Z)
+				local score = Rules.SNACKS[snack[2]].Mass * 1.6 - d
+				if d < 40 and score > goalScore then
+					goal, goalScore = Vector3.new(spot.X, pos.Y, spot.Z), score
 				end
 			end
 			for _, other in env.players do
@@ -76,26 +81,41 @@ return function(env)
 					end
 				end
 			end
+			-- (the real bots are in the round too: a person shoots at them as well)
+			for other, _ in mode.mass do
+				if other ~= player and not table.find(env.players, other) then
+					local _, _, otherRoot = ctx:GetCharacter(other)
+					if otherRoot then
+						local d = (otherRoot.Position - pos).Magnitude
+						if d < rivalDistance then
+							rival, rivalDistance = otherRoot.Position, d
+						end
+					end
+				end
+			end
 			local target = goal or rival
 			if target then
 				local flatTarget = Vector3.new(target.X, pos.Y, target.Z)
 				local offset = flatTarget - pos
-				local step = math.min(offset.Magnitude - (if goal then 0 else 12), 16 * 0.05)
+				local step = math.min(offset.Magnitude - (if goal then 0 else 14), 16 * 0.05)
 				local nextPos = if offset.Magnitude > 1e-3 and step > 0 then pos + offset.Unit * step else pos
-				local lookAt = if rival then Vector3.new(rival.X, nextPos.Y, rival.Z) else flatTarget
+				local lookAt = if rival and rivalDistance < 45
+					then Vector3.new(rival.X, nextPos.Y, rival.Z)
+					else flatTarget
 				if (lookAt - nextPos).Magnitude < 0.1 then
 					lookAt = nextPos + Vector3.new(0, 0, -1)
 				end
 				env.Move(player, nextPos, lookAt)
 			end
-			-- Fire at a rival in range.
+			-- Fire at a rival in range, as often as the reload allows, with an ordinary person's aim.
 			if rival and rivalDistance < 45 and now >= (nextShot[player] or 0) then
-				nextShot[player] = now + env.rng:NextNumber(0.8, 1.6)
+				nextShot[player] = now + env.rng:NextNumber(0.95, 1.5)
 				shots += 1
 				if env.rng:NextNumber() < 0.5 then
 					local aim = Vector3.new(rival.X - pos.X, 0, rival.Z - pos.Z)
 					if aim.Magnitude > 0.1 then
-						env.Action(player, "Boom", now, aim.Unit.X, aim.Unit.Z)
+						local turned = CFrame.Angles(0, env.rng:NextNumber(-0.12, 0.12), 0):VectorToWorldSpace(aim.Unit)
+						env.Action(player, "Boom", now, turned.X, turned.Z)
 					end
 				else
 					env.Action(player, "Boom", now)
@@ -122,6 +142,36 @@ return function(env)
 			end
 			env.note(
 				`{math.floor(elapsed)}s: weight {total} {Rules.UNIT} (top {top}, lowest {low}), pops {pops}, snacks lying {lying}`
+			)
+		end
+		-- Near the end: how the stand-in players (the competent-human reference) did against the real bots.
+		if elapsed > 70 and not reported.groups then
+			reported.groups = true
+			local groups = {
+				Players = { n = 0, mass = 0, shots = 0, pops = 0 },
+				Bots = { n = 0, mass = 0, shots = 0, pops = 0 },
+			}
+			local best, bestMass = nil, -1
+			for player, mass in mode.mass do
+				local group = if string.sub(player.Name, 1, 4) == "Bot_" then groups.Bots else groups.Players
+				group.n += 1
+				group.mass += mass
+				group.shots += mode.shots[player] or 0
+				group.pops += mode.pops[player] or 0
+				if mass > bestMass then
+					best, bestMass = player, mass
+				end
+			end
+			local function line(label, g)
+				if g.n == 0 then
+					return `{label}: none`
+				end
+				return `{label} {g.n}: avg {math.floor(g.mass / g.n)} {Rules.UNIT}, {math.floor(g.shots / g.n)} shots, hit {math.floor(
+					100 * g.pops / math.max(g.shots, 1)
+				)}%`
+			end
+			env.note(
+				`GROUPS {line("stand-ins", groups.Players)} | {line("bots", groups.Bots)} | leader {best and best.Name or "?"}`
 			)
 		end
 		if elapsed > 40 and not reported.stats then

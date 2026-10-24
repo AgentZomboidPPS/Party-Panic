@@ -122,6 +122,7 @@ function CapyGoBoom:Prepare()
 	self.radius = Rules.ArenaRadius(count)
 	self.mass = {} :: { [any]: number }
 	self.pops = {} :: { [any]: number }
+	self.shots = {} :: { [any]: number } -- BOOMs fired (the checks compare bots' accuracy with players')
 	self.slots = {} :: { [any]: number }
 	self.readyAt = {} :: { [any]: number }
 	self.safeUntil = {} :: { [any]: number }
@@ -159,6 +160,7 @@ function CapyGoBoom:Prepare()
 		self.slots[player] = slot
 		self.mass[player] = Rules.START_MASS
 		self.pops[player] = 0
+		self.shots[player] = 0
 		ctx:AddScore(player, Rules.START_MASS)
 		ctx:SetScoreText(player, `{Rules.START_MASS} {Rules.UNIT}`)
 		table.insert(roster, { player.UserId, slot })
@@ -901,7 +903,7 @@ function CapyGoBoom:_boom(player: any, claimed: any, ax: any, az: any)
 	local t = self:_pressTime(player, claimed)
 	if
 		(self.stunUntil[player] or 0) > now
-		or t < (self.readyAt[player] or 0) - 0.05
+		or t < (self.readyAt[player] or 0) - 0.03
 		or #self.shells >= Rules.MAX_SHELLS
 	then
 		self:_refuse(player)
@@ -925,7 +927,10 @@ function CapyGoBoom:_boom(player: any, claimed: any, ax: any, az: any)
 	local dir = aim or (if look.Magnitude > 0.01 then look.Unit else -Vector3.zAxis)
 	local position = root.Position
 	local rewind = math.min(pingOf(player) / 2 + (if BotRegistry.IsBot(player) then 0 else INTERP), REWIND_CAP)
-	dir = self:_assist(player, position, dir, aim ~= nil, rewind)
+	-- (aim assist is for people's thumbs: a bot's misses are its own, so it gets none)
+	if not BotRegistry.IsBot(player) then
+		dir = self:_assist(player, position, dir, aim ~= nil, rewind)
+	end
 	if not (finite(dir.X) and finite(dir.Z)) or math.abs(dir.Magnitude - 1) > 0.01 then
 		dir = if look.Magnitude > 0.01 then look.Unit else -Vector3.zAxis
 	end
@@ -939,6 +944,7 @@ function CapyGoBoom:_boom(player: any, claimed: any, ax: any, az: any)
 		ctx:SetPlayerShared(player, "ReadyAt", round2(ready))
 	end
 	self.nextShell += 1
+	self.shots[player] = (self.shots[player] or 0) + 1
 	-- (from the capy itself: whoever stands in front of the cannon is hit; clients draw it from the muzzle)
 	local origin = Vector3.new(position.X, position.Y - 0.9, position.Z)
 	local shell = {
@@ -1054,7 +1060,7 @@ function CapyGoBoom:_stepShells()
 					local seen = if shell.Rewind > 0 then self:_positionAt(other, now - shell.Rewind) else nil
 					local at = seen or root.Position
 					local scale = Rules.ScaleOf(mass)
-					if math.abs(shell.Y - at.Y) > Rules.HIT_HEIGHT * scale then
+					if math.abs(shell.Y - at.Y) > Rules.HitTolerance(scale) then
 						continue -- jumped over it
 					end
 					local t = Rules.SegmentEnter(a.X, a.Z, b.X, b.Z, at.X, at.Z, Rules.HitRadius(scale) + Rules.SHELL_R)

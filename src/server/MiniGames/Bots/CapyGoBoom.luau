@@ -4,12 +4,14 @@
 --   * sits still while it's staggered by a pop;
 --   * watches for shells heading its way: after its reaction time (more often for skilled bots) it
 --     steps out of the line, sometimes with a hop (a jump clears a shell);
---   * fires at the best rival in range with a clear line (not behind a standing stone, not blinking
---     after a pop): bigger rivals and closer ones first, leading a moving target a little more the
---     better the bot, with an aim error that shrinks with skill, and never faster than a person could;
+--   * fires at a rival in range with a clear line (not behind a standing stone, not blinking after a
+--     pop), nearer ones first and heavy ones only a little more (so the leader isn't ganged up on),
+--     leading a moving target only partly and missing by a wide, skill-dependent angle, slowly (a shot
+--     every few seconds) and with no aim assist, so a bot is clearly easier than a person who tries;
 --   * picks a goal every half second or so: mostly the most worthwhile snack (big ones, golden apples
 --     and the SNACK DROP's beam first), sometimes closing in on a rival to a firing distance and
---     circling it; weaker bots dither now and then;
+--     circling it; bots also stop to dither now and then, and a bot well ahead of the others holds
+--     its fire and slows down, so bots rarely run away with a round;
 --   * walks round standing stones in its way.
 local Brain = {}
 
@@ -71,7 +73,12 @@ function Brain.Step(bot, ctx, mode, _dt)
 	local clock = os.clock()
 	local pos = root.Position
 	local origin = mode.center
-	local skill = bot.Skill
+	-- Bots here are deliberately gentler than their 0.35-0.9 skill says (and slower to react): a person
+	-- who tries should beat them.
+	local skill = bot.Skill * 0.65
+	local function react(): number
+		return bot:Reaction() * 1.4
+	end
 	memory.Noticed = memory.Noticed or {}
 	memory.Dodges = memory.Dodges or {}
 	if next(memory.Noticed) and #mode.shells == 0 then
@@ -107,17 +114,17 @@ function Brain.Step(bot, ctx, mode, _dt)
 			continue
 		end
 		if memory.Noticed[shell.Id] == nil then
-			memory.Noticed[shell.Id] = clock + bot:Reaction()
-			memory.Dodges[shell.Id] = bot.Rng:NextNumber() < 0.15 + 0.6 * skill
+			memory.Noticed[shell.Id] = clock + react()
+			memory.Dodges[shell.Id] = bot.Rng:NextNumber() < 0.1 + 0.4 * skill
 		end
 		if clock >= memory.Noticed[shell.Id] and memory.Dodges[shell.Id] and along / Rules.SHELL_SPEED > 0.1 then
 			memory.Dodges[shell.Id] = false
 			local away = if sideways.Magnitude > 0.2
 				then sideways.Unit
 				else Vector3.new(-shell.Dir.Z, 0, shell.Dir.X) * (if bot.Rng:NextNumber() < 0.5 then -1 else 1)
-			memory.DodgeTo = inside(mode, pos + away * 9)
-			memory.DodgeUntil = clock + 0.45
-			if bot:Chance(0.3 * skill) then
+			memory.DodgeTo = inside(mode, pos + away * 7)
+			memory.DodgeUntil = clock + 0.35
+			if bot:Chance(0.2 * skill) then
 				bot:Jump()
 			end
 			bot:MoveTo(memory.DodgeTo)
@@ -146,23 +153,28 @@ function Brain.Step(bot, ctx, mode, _dt)
 			and (mode.safeUntil[other] or 0) <= now + 0.3
 			and not stoneBetween(mode, pos, otherRoot.Position, Rules.SHELL_R)
 		then
-			local score = math.min(otherMass, 120) / 12 - distance / 7
+			-- (nearer first; weight counts for little, and a little luck, so nobody is singled out)
+			local score = math.min(otherMass, 120) / 40 - distance / 7 + bot.Rng:NextNumber(0, 1.2)
 			if score > targetScore then
 				target, targetRoot, targetScore = other, otherRoot, score
 			end
 		end
 	end
+	-- A bot well ahead of the rest holds back (they shouldn't run away with a round).
+	local average = if count > 0 then massSum / count else myMass
+	local ahead = count > 0 and myMass > average * 1.3
 	if target and targetRoot then
 		memory.AimSince = memory.AimSince or clock
-		if ready and clock >= (memory.FireAt or 0) and clock - memory.AimSince >= bot:Reaction() * 0.6 then
-			memory.FireAt = clock + bot.Rng:NextNumber(0.6, 1.4) + (1 - skill) * 1.6
+		if ready and clock >= (memory.FireAt or 0) and clock - memory.AimSince >= react() * 0.8 then
+			memory.FireAt = clock + bot.Rng:NextNumber(1.1, 2.2) + (1 - skill) * 1.4
 			memory.AimSince = nil
-			if bot.Rng:NextNumber() < 0.4 + 0.3 * skill then
+			if bot.Rng:NextNumber() < (0.38 + 0.3 * skill) * (if ahead then 0.4 else 1) then
 				local distance = flat(targetRoot.Position - pos).Magnitude
-				local lead = flat(targetRoot.AssemblyLinearVelocity) * (skill * distance / Rules.SHELL_SPEED)
+				-- (a partial lead: a moving rival is usually missed)
+				local lead = flat(targetRoot.AssemblyLinearVelocity) * (0.5 * skill * distance / Rules.SHELL_SPEED)
 				local aim = flat(targetRoot.Position + lead - pos)
 				if aim.Magnitude > 0.1 then
-					local error = bot.Rng:NextNumber(-1, 1) * (0.08 + (1 - skill) * 0.5)
+					local error = bot.Rng:NextNumber(-1, 1) * (0.14 + (1 - skill) * 0.5)
 					local direction = CFrame.Angles(0, error, 0):VectorToWorldSpace(aim.Unit)
 					ctx:BotAction(bot, "Boom", now, direction.X, direction.Z)
 				end
@@ -174,13 +186,19 @@ function Brain.Step(bot, ctx, mode, _dt)
 
 	-- 3. Pick a goal now and then.
 	if not memory.NextPick or clock >= memory.NextPick then
-		memory.NextPick = clock + bot.Rng:NextNumber(0.4, 0.8) + (1 - skill) * 0.3
+		memory.NextPick = clock + bot.Rng:NextNumber(0.5, 1.0) + (1 - skill) * 0.4
 		memory.Goal, memory.Hunt = nil, nil
-		local average = if count > 0 then massSum / count else myMass
-		local hunting = #rivals > 0 and bot.Rng:NextNumber() < (if myMass >= average then 0.25 + 0.3 * skill else 0.1)
-		if bot.Rng:NextNumber() < 0.06 * (1 - skill) then
-			local angle = bot.Rng:NextNumber(0, math.pi * 2)
-			memory.Goal = inside(mode, pos + Vector3.new(math.cos(angle), 0, math.sin(angle)) * 10)
+		local hunting = #rivals > 0
+			and not ahead
+			and bot.Rng:NextNumber() < (if myMass >= average then 0.1 + 0.15 * skill else 0.04)
+		if bot.Rng:NextNumber() < (0.14 + (1 - skill) * 0.2) * (if ahead then 1.8 else 1) then
+			-- Dithering: stands about for a moment, or wanders off, instead of going for the best snack.
+			if bot.Rng:NextNumber() < 0.5 then
+				memory.IdleUntil = clock + bot.Rng:NextNumber(0.5, 1.2)
+			else
+				local angle = bot.Rng:NextNumber(0, math.pi * 2)
+				memory.Goal = inside(mode, pos + Vector3.new(math.cos(angle), 0, math.sin(angle)) * 10)
+			end
 		elseif hunting then
 			-- Close in on a rival (the heaviest within reach counts most) to a firing distance.
 			local best, bestScore = nil, -math.huge
@@ -196,7 +214,7 @@ function Brain.Step(bot, ctx, mode, _dt)
 		elseif
 			mode.dropSpot
 			and flat(mode.dropSpot - pos).Magnitude < 70
-			and bot.Rng:NextNumber() < 0.4 + 0.5 * skill
+			and bot.Rng:NextNumber() < 0.2 + 0.3 * skill
 		then
 			memory.Goal = mode.dropSpot
 		else
@@ -218,6 +236,10 @@ function Brain.Step(bot, ctx, mode, _dt)
 	end
 
 	-- 4. Go for it.
+	if clock < (memory.IdleUntil or 0) then
+		bot:Stop()
+		return
+	end
 	local hunt = memory.Hunt
 	local huntRoot = hunt and mode.mass[hunt] ~= nil and ctx:IsAlive(hunt) and select(3, ctx:GetCharacter(hunt))
 	if huntRoot then

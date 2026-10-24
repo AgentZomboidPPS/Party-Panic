@@ -31,6 +31,12 @@ Rules.HIT_HEIGHT = 3.4 -- a shell flies at the shooter's height: a jump over it 
 
 -- (a big capy is a bigger target, but not a whole drawn size bigger: it would be hit by shells that
 -- look like they miss, and a capy that has grown shouldn't just be shot at)
+-- How far above or below a capy's height a shell still hits it. It grows with size but is capped, so even
+-- the biggest capy (whose jump is the same as everyone's, about 7 studs) can hop over a shell.
+function Rules.HitTolerance(scale: number): number
+	return Rules.HIT_HEIGHT * math.min(scale, 1.6)
+end
+
 function Rules.HitRadius(scale: number): number
 	return Rules.BODY_R * scale ^ 0.85
 end
