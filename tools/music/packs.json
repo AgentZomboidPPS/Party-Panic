@@ -243,5 +243,23 @@
     "end": 83.9
    }
   ]
+ },
+ "ModePack8": {
+  "songs": [
+   {
+    "id": "BigBadVacuum",
+    "title": "Rumble on the Rug",
+    "start": 0.0,
+    "drop": 13.5,
+    "end": 114.553
+   },
+   {
+    "id": "LastDancer",
+    "title": "Mirror Ball Showdown",
+    "start": 115.053,
+    "drop": 128.553,
+    "end": 192.553
+   }
+  ]
  }
 }

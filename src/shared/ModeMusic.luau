@@ -5,6 +5,7 @@
 
 return {
 	ArrowAmbush = { Pack = "ModePack4", Title = "Archer's Jig", Start = 349.385, Drop = 362.885, End = 410.885 },
+	BigBadVacuum = { Pack = "ModePack8", Title = "Rumble on the Rug", Start = 0.000, Drop = 13.500, End = 114.553 },
 	BobsledRun = { Pack = "ModePack4", Title = "Ice Chute Rush", Start = 280.000, Drop = 293.500, End = 348.885 },
 	BumperBallers = { Pack = "ModePack2", Title = "Tiki Bumper Bash", Start = 261.000, Drop = 274.125, End = 341.625 },
 	CakeFactory = { Pack = "ModePack3", Title = "Conveyor Belt Boogie", Start = 303.938, Drop = 317.438, End = 374.581 },
@@ -15,6 +16,7 @@ return {
 	HexMeltdown = { Pack = "ModePack1", Title = "Molten Showdown", Start = 0.000, Drop = 13.500, End = 106.403 },
 	HoneyTrap = { Pack = "ModePack1", Title = "Honeycomb Hush", Start = 204.713, Drop = 218.213, End = 301.290 },
 	HotPotato = { Pack = "ModePack6", Title = "Mambo Kaboom", Start = 0.000, Drop = 13.500, End = 108.500 },
+	LastDancer = { Pack = "ModePack8", Title = "Mirror Ball Showdown", Start = 115.053, Drop = 128.553, End = 192.553 },
 	LogJam = { Pack = "ModePack5", Title = "Timber Tumble", Start = 174.875, Drop = 188.375, End = 228.375 },
 	MechaMarathon = { Pack = "ModePack5", Title = "Tick-Tock Takeoff", Start = 278.875, Drop = 292.208, End = 323.875 },
 	MessyMemory = { Pack = "ModePack4", Title = "Tidy-Up Tango", Start = 0.000, Drop = 13.500, End = 69.500 },
