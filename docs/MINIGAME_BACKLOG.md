@@ -236,7 +236,9 @@ How it is built:
   handler per attack (`ATTACKS`); every hit, trap, pickup, throw and the meter are judged on the server, against where a player is
   plus a little of where they are going (`_where`: a dodge that looks clean on a phone counts). The suction's pull is applied by each
   client to its own character and by the server to bots. Shared state: `Boss` (a 10 Hz snapshot with velocity), `Atk` (the plan:
-  danger zones with times), `Piles`, `Carry`, `Trap`, `Meter`, `Arena`; events for everything else.
+  danger zones with times), `Piles`, `Carry`, `Trap`, `Meter`, `Arena`, and each player's `Hearts` (`ctx:SetPlayerShared`);
+  events for everything else (a hit is `Dazed` with the hearts left, a knockout `KO`, a lost fight `Defeat` with "Time" or "Wipe").
+  Bots read hearts and knockouts through `HeartsOf` and `IsKnockedOut`.
 - Client (`client/MiniGames/BigBadVacuum.luau`): the boss rig (eye, hatch, side brushes, arm, bag, cord) animates from the snapshot,
   the zones are drawn from `Atk` with `Rules.ZoneContains`, plus camera flyover during the 3-2-1, shake and FOV punches, the
   victory chain of explosions and the defeat laugh, a boss bar with phase ticks, the meter, banners, and the phone layout (checked
@@ -253,8 +255,19 @@ How it is built:
 Not done / for a real playtest (the test servers have no physics): how the suction's pull and the dust bag's anchoring feel on a
 device, the camera shake and flyover on phones, the mood lighting, sound (it uses the generic round song; a boss theme needs one of
 the owner's audio uploads: `tools/music/songs/BigBadVacuum.py` + `modes.py pack`), real meshes for the boss and arena, and a portal
-preview (`tools/preview/make_preview.py BigBadVacuum`). Difficulty is tuned against the bots only (a strong lobby wins about
-two times in three, in 60-85 s); expect to retune `HealthFor`, the `Think`/`WIND_SCALE` pace and the core windows from real play.
+preview (`tools/preview/make_preview.py BigBadVacuum`). Difficulty is tuned against the bots only; expect to retune `HealthFor`,
+the `Think`/`WIND_SCALE` pace and the core windows from real play.
+
+Balance with the hearts (2026-10-24, real rounds on Open Cloud: `round_harness.py BigBadVacuum --players N --bots M`, the
+stand-in "people" playing the bot brain at skills 0.35-0.9). Before the hearts the lobby won 6 rounds of 6 (57-85 s). Hearts alone
+changed little: knockouts came 1-2 a fight, almost only in phase 3, and twelve players still won 6 of 6 (57-77 s), so `HealthFor`
+now gives 6 more health a player past eight (1488 for twelve; eight and fewer unchanged). Then, at the final numbers (39 rounds):
+twelve won 12 of 17 (12 stand-ins 6 of 10, 2 people + 10 bots 4 of 5, 6 + 6 bots 2 of 2; wins at 60-84 s, every loss on the
+clock); eight won 16 of 22 (1 person + 7 bots 8 of 10, both losses wipe-outs where the one person was knocked out in phase 3;
+2 + 6 bots 7 of 10; 4 + 4 bots 1 of 2). No round was lost, and nobody was knocked out, in phase 1. Real people will likely be
+hit more often than the stand-ins (the bot brain reads every zone the moment it appears), and with one or two people the round
+is lost when they are, so a small lobby with real people will lose more than these numbers say; if it's too hard, the first
+knobs are `HealthFor` for eight and fewer and `SAFE` (the grace after a hit), not the 3 hearts the owner asked for.
 
 ## 31. Last Dancer (`LastDancer`, Survival)
 

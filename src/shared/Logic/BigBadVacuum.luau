@@ -67,10 +67,11 @@ end
 -- a duo won one in three, at 300 four won three in three). 100 for two, 291 for four, 542 for six, 800 for
 -- eight.
 --
--- Past eight each player gets more, because a big lobby spreads the boss's attacks thinner still (with the
--- hearts, 2026-10-24: at 100 a player, twelve won 6 rounds of 6 at 57-77 s, eight 7 of 8 at 70-84 s, and
--- knockouts came almost only in phase 3; the aim is about two wins in three for a strong full lobby). 954 for
--- nine, 1488 for twelve.
+-- Past eight each player gets more, because a big lobby spreads the boss's attacks thinner still. Measured
+-- with the hearts on test servers with bots (2026-10-24): at 100 a player twelve won 6 rounds of 6 (57-77 s)
+-- while eight won 16 of 22 (50-84 s; the 6 losses: 3 on the clock, 3 wiped out, all in phase 3); with 6 more
+-- a player past eight, twelve won 12 of 17 (60-84 s, every loss on the clock), about the two wins in three a
+-- strong full lobby should get. 954 for nine, 1488 for twelve.
 function BigBadVacuum.HealthFor(count: number): number
 	local players = math.clamp(count, 1, 12)
 	local short = math.max(0, 8 - players) / 6 -- how far short of eight the squad is (1 for a duo)
