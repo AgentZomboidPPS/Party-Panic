@@ -19,6 +19,15 @@
 -- counting for their ping, so a bite pressed as you step off still lands). Team scores are the
 -- share eaten, in percent.
 --
+-- More to do than mash (owner: "can we make the eatsa pizza game more interactable? In mario party it
+-- feels and plays a ton better."):
+--   * THE HOT PEPPER: now and then a chili lands where two teams' parts meet ("Chili": where, and
+--     until when). The first to reach it is SPICY for a few seconds ("Spicy" to everyone): each press
+--     eats two bites. One at a time; one nobody grabs goes.
+--   * Pepperoni go one at a time as the bites reach them (Logic.Front), each one flying into the
+--     eater's mouth on every screen ("Pep"), instead of a stage's worth vanishing at once.
+-- Clients add the rest (chomping heads, combos, the crunch): Client/MiniGames/EatsaPizza.
+--
 -- Bots walk to a slice of their team with food left (spreading out over the slices) and mash
 -- through ctx:BotAction like a player's button (Bots/EatsaPizza.luau). Nothing here is animated
 -- only on clients: the slices are the server's, and everybody stands on the same pan.
@@ -40,6 +49,7 @@ EatsaPizza.Logic = Logic -- (for the round harness's test bot)
 EatsaPizza.Shapes = { Red = "■", Blue = "●", Green = "▲", Yellow = "◆" }
 
 local FINALE = 3 -- after a team clears its part, before the round ends
+local CHILI_FLOAT = 2.6 -- studs the hot pepper floats over the cheese (about a character's middle)
 local PAN_RIM = 20.7 -- the pan floor's radius, in slice-mesh units (the pizza is 20)
 
 local rng = Random.new()
@@ -50,7 +60,7 @@ type Slice = {
 	Max: number,
 	Left: number,
 	Stage: number,
-	Pepperoni: { { Rho: number, Phi: number, Model: Model? } },
+	Pepperoni: { { Rho: number, Phi: number, Model: Model?, Eaten: boolean? } },
 	Model: Model?,
 }
 type Member = {
@@ -61,7 +71,9 @@ type Member = {
 	Bites: number,
 	On: number?, -- the slice they last stood on...
 	OnAt: number, -- ...and when
+	SpicyUntil: number, -- the hot pepper's double bites last until then
 }
+type Chili = { Position: Vector3, Until: number, Model: Model }
 type TeamState = {
 	Name: string,
 	Members: { any },
@@ -400,7 +412,7 @@ function EatsaPizza:_drawSlice(slice: Slice)
 				pep.Model:Destroy()
 				pep.Model = nil
 			end
-		elseif not pep.Model then
+		elseif not pep.Model and not pep.Eaten then
 			local a = Logic.Angle(slice.Index) + pep.Phi * Logic.SLICE_ANGLE * 0.36
 			local p = Vector3.new(self.center.X + math.sin(a) * r, top, self.center.Z + math.cos(a) * r)
 			local copy = self.pepperoniTemplate:Clone()
@@ -500,6 +512,7 @@ function EatsaPizza:Prepare()
 				Bites = 0,
 				On = nil,
 				OnAt = -math.huge,
+				SpicyUntil = 0,
 			}
 		end
 	end
@@ -673,6 +686,10 @@ function EatsaPizza:Start()
 	ctx:OnAction("Eat", function(player)
 		self:_bite(player)
 	end, { Interval = 0 })
+	self.chili = nil :: Chili?
+	self.chiliCount = 0
+	self.chiliFirst = rng:NextInteger(0, math.max(#self.order, 1) - 1) -- (which border goes first)
+	self.chiliNext = ctx:Now() + Logic.CHILI_FIRST
 
 	-- Where everyone stands, ten times a second (a bite pressed just after stepping off a slice still
 	-- counts for the player's ping).
@@ -684,6 +701,9 @@ function EatsaPizza:Start()
 				member.On = index
 				member.OnAt = now
 			end
+		end
+		if self.phase == "Eat" then
+			self:_stepChili(now)
 		end
 		return 0.1
 	end)
@@ -743,14 +763,17 @@ function EatsaPizza:_bite(player: any)
 	if not index then
 		return
 	end
+	local slice = self.slices[index]
+	-- (Two bites a press while the hot pepper lasts.)
+	local bites = math.min(if now < member.SpicyUntil then Logic.SPICY_BITES else 1, slice.Left)
 	member.Tokens -= 1
-	member.Bites += 1
+	member.Bites += bites
 	member.On = index
 	member.OnAt = now
-	local slice = self.slices[index]
-	slice.Left -= 1
-	ctx:AddScore(player, 1)
+	slice.Left -= bites
+	ctx:AddScore(player, bites)
 	self.dirty = true
+	self:_eatPepperoni(slice, player)
 	local stage = if slice.Left > 0 then Logic.Stage(slice.Left, slice.Max) else slice.Stage
 	if slice.Left <= 0 then
 		self:_drawSlice(slice)
@@ -763,6 +786,149 @@ function EatsaPizza:_bite(player: any)
 	self:_updateScore(state)
 	if self:_teamShare(member.Team) >= 1 - 1e-9 then
 		self:_finish(member.Team, "Cleared")
+	end
+end
+
+-- The pepperoni the bites on `slice` have reached: off the pizza, flying into `player`'s mouth on
+-- every screen.
+function EatsaPizza:_eatPepperoni(slice: Slice, player: any)
+	local front = Logic.Front(slice.Left, slice.Max) * self.radius
+	for k, pep in slice.Pepperoni do
+		local model = pep.Model
+		if model and pep.Rho * self.radius + 0.6 * self.scale > front then
+			local p = model:GetPivot().Position
+			pep.Model = nil
+			pep.Eaten = true
+			model:Destroy()
+			self.context:Fire(
+				nil,
+				"Pep",
+				slice.Index,
+				k,
+				round(p.X, 0.01),
+				round(p.Y, 0.01),
+				round(p.Z, 0.01),
+				player.UserId
+			)
+		end
+	end
+end
+
+-- The hot pepper -----------------------------------------------------------------------------------
+
+-- A chili (made of parts: no mesh to wait on), floating over the pizza; clients turn and bob it.
+function EatsaPizza:_chiliModel(position: Vector3): Model
+	local model = Build.Model("Chili")
+	local base = CFrame.new(position) * CFrame.Angles(0, 0, math.rad(-20))
+	local function blob(name: string, size: Vector3, offset: CFrame, color: Color3, scale: Vector3)
+		local part = Build.Decor({
+			Name = name,
+			Size = size,
+			CFrame = base * offset,
+			Color = color,
+			Parent = model,
+		})
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Scale = scale
+		mesh.Parent = part
+		return part
+	end
+	local red = rgb(235, 36, 30)
+	local body = blob("Body", Vector3.new(1.5, 1.5, 3.4), CFrame.new(), red, Vector3.new(1, 1, 1))
+	blob(
+		"Tip",
+		Vector3.new(0.9, 0.9, 1.8),
+		CFrame.new(0, -0.35, 1.7) * CFrame.Angles(math.rad(28), 0, 0),
+		red,
+		Vector3.one
+	)
+	blob("Shine", Vector3.new(0.35, 0.35, 1.6), CFrame.new(-0.45, 0.5, -0.2), rgb(255, 170, 160), Vector3.one)
+	Build.Decor({
+		Name = "Cap",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.35, 1.1, 1.1),
+		CFrame = base * CFrame.new(0, 0, -1.65) * CFrame.Angles(0, math.rad(90), 0),
+		Color = rgb(60, 170, 60),
+		Parent = model,
+	})
+	Build.Decor({
+		Name = "Stem",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.9, 0.3, 0.3),
+		CFrame = base * CFrame.new(0, 0.25, -2.1) * CFrame.Angles(math.rad(30), math.rad(90), 0),
+		Color = rgb(40, 130, 50),
+		Parent = model,
+	})
+	local light = Instance.new("PointLight")
+	light.Color = rgb(255, 120, 60)
+	light.Range = 12
+	light.Brightness = 2.5
+	light.Parent = body
+	model.PrimaryPart = body
+	model.WorldPivot = CFrame.new(position)
+	model.Parent = self.context.Arena
+	return model
+end
+
+function EatsaPizza:_shareChili()
+	local chili = self.chili
+	self.context:SetSharedJSON(
+		"Chili",
+		if chili
+			then {
+				P = { round(chili.Position.X, 0.01), round(chili.Position.Y, 0.01), round(chili.Position.Z, 0.01) },
+				U = round(chili.Until, 0.01),
+			}
+			else {}
+	)
+end
+
+function EatsaPizza:_removeChili()
+	if self.chili then
+		self.chili.Model:Destroy()
+		self.chili = nil
+		self:_shareChili()
+	end
+end
+
+-- Ten times a second: a chili lands when it's due, goes when nobody took it in time, and goes to the
+-- first one of the eaters to reach it.
+function EatsaPizza:_stepChili(now: number)
+	local chili = self.chili
+	if not chili then
+		if now >= self.chiliNext then
+			self.chiliCount += 1
+			local x, z = Logic.ChiliSpot(self.chiliCount, #self.order, self.radius, self.chiliFirst)
+			local top = self.center.Y + Logic.MESH_CHEESE * self.scale
+			local position = Vector3.new(self.center.X + x, top + CHILI_FLOAT, self.center.Z + z)
+			self.chili = { Position = position, Until = now + Logic.CHILI_LIFE, Model = self:_chiliModel(position) }
+			self:_shareChili()
+			self.context:Sound("Pickup")
+		end
+		return
+	end
+	if now >= chili.Until then
+		self:_removeChili()
+		self.chiliNext = now + Logic.CHILI_EVERY
+		return
+	end
+	local best, bestDistance = nil, Logic.CHILI_REACH
+	for player, member in self.members do
+		local _, _, root = self.context:GetCharacter(player)
+		if root and self.context:State(player) then
+			local offset = root.Position - chili.Position
+			local flat = math.sqrt(offset.X * offset.X + offset.Z * offset.Z)
+			if flat <= bestDistance and math.abs(offset.Y) < 7 then
+				best, bestDistance = member, flat
+			end
+		end
+	end
+	if best then
+		best.SpicyUntil = now + Logic.SPICY_TIME
+		self:_removeChili()
+		self.chiliNext = now + Logic.CHILI_EVERY
+		self.context:Fire(nil, "Spicy", best.Player.UserId, Logic.SPICY_TIME)
 	end
 end
 
@@ -782,6 +948,7 @@ function EatsaPizza:_finish(team: string, reason: string)
 	self.phase = "Done"
 	self.winner = team
 	self.teams[team].ClearedAt = ctx:Now()
+	self:_removeChili()
 	self:_shareSlices()
 	self:_shareLayout()
 	ctx:Sound("Victory")
@@ -797,6 +964,7 @@ function EatsaPizza:_finish(team: string, reason: string)
 end
 
 function EatsaPizza:Stop(_reason: string?)
+	self:_removeChili()
 	if self.phase == "Eat" then
 		self.phase = "Done"
 		self.winner = self:_winner()

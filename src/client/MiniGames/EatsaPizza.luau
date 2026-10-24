@@ -2,6 +2,13 @@
 -- EAT button (E), what the player's own slice is up to, a marker over the next slice to go to, and
 -- the crumbs flying wherever someone chews.
 --
+-- Every bite shows (owner: "can we make the eatsa pizza game more interactable? In mario party it
+-- feels and plays a ton better."): heads dip into the pizza with each chomp (Client/Pose; the
+-- player's own at once, everyone else's as their bites come in), the crunch changes pitch, a phone
+-- taps back, a combo counts up with a cheer at 15 / 30 / 50 / 80, and each pepperoni the bites reach
+-- flies into the eater's mouth ("Pep"). THE HOT PEPPER ("Chili") turns and glows over the pizza with
+-- a timer over it; whoever grabs it ("Spicy") catches fire and eats two bites a press for a while.
+--
 -- The server owns the pizza ("Pizza": the layout, who owns each slice, the phase and the winner;
 -- "Slices": the bites left on each). This client works out which slice its character stands on with
 -- the same rule the server judges bites by (Shared/Logic/EatsaPizza.Locate), so "CHOMP!" here means
@@ -9,11 +16,14 @@
 -- squash play at once. Crumbs for everyone else come from the shared bites left: when a slice loses
 -- bites, crumbs fly from the characters standing on it.
 
+local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Logic = require(ReplicatedStorage.Shared.Logic.EatsaPizza)
 local Teams = require(ReplicatedStorage.Shared.Teams)
 
+local Haptics = require(script.Parent.Parent.Haptics)
+local Pose = require(script.Parent.Parent.Pose)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
@@ -21,6 +31,12 @@ local EatsaPizza = {}
 
 local SHAPES = { Red = "■", Blue = "●", Green = "▲", Yellow = "◆" }
 local CRUMB_COLORS = { Color3.fromRGB(236, 190, 120), Color3.fromRGB(255, 214, 102), Color3.fromRGB(200, 60, 40) }
+local CHOMP_TIME = 0.2 -- a head's dip into the pizza and back
+local NECK_DIP, WAIST_DIP = math.rad(-30), math.rad(-16)
+local COMBO_GAP = 0.9 -- seconds between bites that still keep a combo going
+local CHEERS = { [15] = "TASTY!", [30] = "YUMMY!", [50] = "MAMMA MIA!", [80] = "PIZZA MONSTER!" }
+local PEPPERONI = Color3.fromRGB(176, 42, 34)
+local SPICY = Color3.fromRGB(255, 110, 40)
 
 function EatsaPizza.Start(api)
 	local me = api.Player
@@ -176,6 +192,34 @@ function EatsaPizza.Start(api)
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.1) },
 	})
+	-- Under the status line: the combo, its cheers, the pepperoni and the hot pepper's news.
+	local callout = UIKit.Label({
+		Name = "Callout",
+		Text = "",
+		Font = Theme.Fonts.Display,
+		TextSize = 30,
+		TextWrapped = false,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, (if touch then hudY else hudY + 68) + 36),
+		Size = UDim2.fromOffset(if touch then 470 else 600, 34),
+		Visible = false,
+		Parent = hud,
+		Children = { UIKit.TextStroke(0.05) },
+	})
+	local calloutUntil = 0
+	local calloutPriority = 0
+	local function showCallout(text: string, color: Color3, life: number, priority: number?)
+		local now = os.clock()
+		if now < calloutUntil and (priority or 0) < calloutPriority then
+			return
+		end
+		calloutPriority = priority or 0
+		calloutUntil = now + life
+		callout.Text = text
+		callout.TextColor3 = color
+		callout.Visible = true
+		UIKit.PopIn(callout, 0.2)
+	end
 	if mine and not touch then
 		api:Hint("Stand on your team's slices and mash E to eat them!", hudY + 104)
 	end
@@ -241,6 +285,107 @@ function EatsaPizza.Start(api)
 		return (head.CFrame * CFrame.new(0, -0.3, -0.7)).Position
 	end
 
+	-- Chomping heads: each bite dips the head and shoulders into the pizza and back (over whatever the
+	-- body's animation is doing).
+	type Chewer = { Rig: { [string]: Pose.Joint }, At: number, Posed: boolean }
+	local chewers: { [Model]: Chewer } = {}
+	local function chomp(character: Model?)
+		if not character then
+			return
+		end
+		local chewer = chewers[character]
+		if not chewer then
+			chewer = { Rig = Pose.Rig(character, { "Neck", "Waist" }), At = -math.huge, Posed = false }
+			chewers[character] = chewer
+		end
+		chewer.At = os.clock()
+	end
+	api:Track(Pose.Step(function()
+		local clock = os.clock()
+		for character, chewer in chewers do
+			if not character.Parent then
+				chewers[character] = nil
+				continue
+			end
+			local t = (clock - chewer.At) / CHOMP_TIME
+			if t >= 1 then
+				if chewer.Posed then
+					chewer.Posed = false
+					Pose.ReleaseAll(chewer.Rig)
+				end
+				continue
+			end
+			local dip = math.sin(t * math.pi)
+			local neck, waist = chewer.Rig.Neck, chewer.Rig.Waist
+			if neck then
+				Pose.TurnOver(neck, CFrame.Angles(NECK_DIP * dip, 0, 0))
+			end
+			if waist then
+				Pose.TurnOver(waist, CFrame.Angles(WAIST_DIP * dip, 0, 0))
+			end
+			chewer.Posed = true
+		end
+	end))
+	api:Track(function()
+		for _, chewer in chewers do
+			Pose.ReleaseAll(chewer.Rig)
+		end
+		table.clear(chewers)
+	end)
+
+	-- A pepperoni the bites reached, flying off the pizza into its eater's mouth.
+	local function flyPepperoni(from: Vector3, character: Model?)
+		local size = 1.7 * radius / Logic.MESH_RADIUS
+		local disc = UIKit.new("Part", {
+			Name = "Pepperoni",
+			Shape = Enum.PartType.Cylinder,
+			Anchored = true,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+			Material = Enum.Material.SmoothPlastic,
+			Color = PEPPERONI,
+			Size = Vector3.new(0.22, size, size),
+			CFrame = CFrame.new(from) * CFrame.Angles(0, 0, math.rad(90)),
+			Parent = api.World,
+		})
+		local start = os.clock()
+		task.spawn(function()
+			while disc.Parent do
+				local t = math.min(1, (os.clock() - start) / 0.38)
+				local goal = mouthOf(character) or (from + Vector3.new(0, 3, 0))
+				local p = from:Lerp(goal, t) + Vector3.new(0, 3.2 * math.sin(t * math.pi), 0)
+				local shrink = 1 - 0.7 * t
+				disc.Size = Vector3.new(0.22, size * shrink, size * shrink)
+				disc.CFrame = CFrame.new(p) * CFrame.Angles(t * 9, 0, math.rad(90))
+				if t >= 1 then
+					crumbsAt(goal, 8)
+					disc:Destroy()
+					break
+				end
+				task.wait()
+			end
+		end)
+	end
+
+	-- The hot pepper's fire on whoever has it.
+	local function setAlight(character: Model?, seconds: number)
+		local head = character and character:FindFirstChild("Head")
+		if not head then
+			return
+		end
+		local fire = Instance.new("Fire")
+		fire.Name = "Spicy"
+		fire.Color = SPICY
+		fire.SecondaryColor = Color3.fromRGB(255, 220, 80)
+		fire.Size = 4
+		fire.Heat = 9
+		fire.Parent = head
+		api:Track(fire)
+		Debris:AddItem(fire, seconds)
+	end
+
 	-- The marker over the slice to go to.
 	local marker = UIKit.new("Part", {
 		Name = "Marker",
@@ -303,6 +448,8 @@ function EatsaPizza.Start(api)
 	local eat = nil
 	local lastBite = -math.huge
 	local deniedAt = -math.huge
+	local spicyUntil = 0 -- (os.clock) my hot pepper's double bites
+	local combo, comboAt, bitesSeen = 0, 0, 0
 	-- (The server's bite rate, mirrored: presses over it don't land, so they don't chomp either.)
 	local tokens, tokensAt = Logic.BURST, os.clock()
 	local function spend(): boolean
@@ -328,11 +475,34 @@ function EatsaPizza.Start(api)
 					return
 				end
 				lastBite = now
-				api:Sound("Click")
+				local spicy = os.clock() < spicyUntil
+				api:Sound("Click", 0.85 + math.random() * 0.4)
 				local character = api:Character()
+				chomp(character)
 				local mouth = mouthOf(character)
 				if mouth then
-					crumbsAt(mouth, 6)
+					crumbsAt(mouth, if spicy then 10 else 6)
+				end
+				bitesSeen += 1
+				if bitesSeen % 2 == 0 then
+					Haptics.Play("Tap")
+				end
+				-- The combo: bites close together count up; a pause starts it again.
+				local clock = os.clock()
+				if clock - comboAt > COMBO_GAP then
+					combo = 0
+				end
+				local before = combo
+				combo += if spicy then Logic.SPICY_BITES else 1
+				comboAt = clock
+				for at, cheer in CHEERS do
+					if before < at and combo >= at then
+						showCallout(`{cheer}  x{combo}`, Theme.Colors.Yellow, 1.2, 2)
+						api:Sound("Boing", 1.2)
+					end
+				end
+				if combo >= 5 then
+					showCallout(`x{combo} COMBO`, if spicy then SPICY else Color3.new(1, 1, 1), COMBO_GAP, 0)
 				end
 			else
 				deniedAt = now
@@ -381,6 +551,7 @@ function EatsaPizza.Start(api)
 						local mouth = spot and mouthOf(character)
 						if mouth then
 							crumbsAt(mouth, 4)
+							chomp(character)
 						end
 					end
 				end
@@ -419,11 +590,131 @@ function EatsaPizza.Start(api)
 		end
 	end)
 
+	api:OnEvent("Pep", function(_index, _k, x, y, z, userId)
+		if type(x) ~= "number" or type(y) ~= "number" or type(z) ~= "number" then
+			return
+		end
+		local character = api:CharacterOf(userId)
+		flyPepperoni(Vector3.new(x, y, z), character)
+		if userId == myId then
+			api:Sound("Hit", 1.25)
+			showCallout("PEPPERONI!", Color3.fromRGB(255, 120, 100), 0.8, 1)
+		end
+	end)
+
+	-- The hot pepper: where it is (turned and bobbed here) and how long it has left.
+	local chiliInfo = api:SharedJSON("Chili") or {}
+	local chiliModel: Model? = nil
+	local chiliMarker = UIKit.new("Part", {
+		Name = "ChiliMarker",
+		Anchored = true,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		CastShadow = false,
+		Transparency = 1,
+		Size = Vector3.new(0.2, 0.2, 0.2),
+		Parent = api.World,
+	})
+	local chiliGui = UIKit.new("BillboardGui", {
+		Name = "HotPepper",
+		Size = UDim2.fromOffset(170, 58),
+		AlwaysOnTop = true,
+		LightInfluence = 0,
+		Enabled = false,
+		Parent = chiliMarker,
+	})
+	UIKit.Label({
+		Text = "🌶️ HOT PEPPER!",
+		Font = Theme.Fonts.Display,
+		TextSize = 24,
+		TextColor3 = SPICY,
+		TextWrapped = false,
+		Size = UDim2.new(1, 0, 0, 30),
+		Parent = chiliGui,
+		Children = { UIKit.TextStroke(0) },
+	})
+	local chiliBar = UIKit.new("Frame", {
+		Name = "Time",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 36),
+		Size = UDim2.fromOffset(110, 10),
+		BackgroundColor3 = Color3.fromRGB(30, 16, 20),
+		Parent = chiliGui,
+		Children = { UIKit.Round() },
+	})
+	local chiliFill = UIKit.new("Frame", {
+		Name = "Fill",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = SPICY,
+		Parent = chiliBar,
+		Children = { UIKit.Round() },
+	})
+	local chiliArena: Instance? = nil
+	task.spawn(function()
+		chiliArena = api:Arena(10)
+	end)
+	api:OnShared("Chili", function()
+		local fresh = api:SharedJSON("Chili") or {}
+		local landed = fresh.P ~= nil and chiliInfo.P == nil
+		chiliInfo = fresh
+		chiliModel = nil
+		if landed and mine and pizza.Ph == "Eat" then
+			showCallout("🌶️ A HOT PEPPER! GRAB IT!", SPICY, 2.2, 3)
+		end
+	end)
+	api:OnEvent("Spicy", function(userId, seconds)
+		if type(seconds) ~= "number" then
+			return
+		end
+		local character = api:CharacterOf(userId)
+		setAlight(character, seconds)
+		if userId == myId then
+			spicyUntil = os.clock() + seconds
+			Haptics.Play("Pulse")
+			api:Sound("Pickup", 1.1)
+			showCallout("🌶️ SPICY! DOUBLE BITES!", SPICY, 2, 4)
+		else
+			for _, participant in api:Participants() do
+				if participant.UserId == userId then
+					showCallout(`🌶️ {participant.DisplayName} got the hot pepper!`, SPICY, 1.6, 1)
+					break
+				end
+			end
+		end
+	end)
+
 	-- Every frame ---------------------------------------------------------------------------------
 	api:RenderStep(function(_dt)
 		local now = api:Now()
 		local on = standingOn()
 		local playing = mine ~= nil and api:CanAct() and pizza.Ph == "Eat"
+		local clock = os.clock()
+		if callout.Visible and clock >= calloutUntil then
+			callout.Visible = false
+		end
+
+		-- The hot pepper turns and bobs where it floats, its timer running down over it.
+		local chiliAt = chiliInfo.P
+		if chiliAt and pizza.Ph == "Eat" then
+			local base = Vector3.new(chiliAt[1], chiliAt[2], chiliAt[3])
+			if not chiliModel or not chiliModel.Parent then
+				local found = chiliArena and chiliArena:FindFirstChild("Chili")
+				chiliModel = if found and found:IsA("Model") then found else nil
+			end
+			local model = chiliModel
+			if model then
+				model:PivotTo(
+					CFrame.new(base + Vector3.new(0, math.sin(clock * 3) * 0.45, 0)) * CFrame.Angles(0, clock * 2.2, 0)
+				)
+			end
+			chiliMarker.CFrame = CFrame.new(base + Vector3.new(0, 3.2, 0))
+			chiliGui.Enabled = true
+			local left = math.clamp(((chiliInfo.U or now) - now) / Logic.CHILI_LIFE, 0, 1)
+			chiliFill.Size = UDim2.fromScale(left, 1)
+		else
+			chiliGui.Enabled = false
+		end
 
 		-- The status line: what my slice is up to, or where to go.
 		if pizza.Ph == "Done" then
@@ -441,8 +732,15 @@ function EatsaPizza.Start(api)
 			local left = slices.L[on] or 0
 			local chomping = now - lastBite < 0.35
 			local shape = if touch and mine then `{SHAPES[mine] or ""} ` else ""
-			status.Text = if chomping then `{shape}CHOMP! {left} bites left` else `{shape}MASH EAT! {left} bites left`
-			status.TextColor3 = if chomping then Theme.Colors.Yellow else Color3.new(1, 1, 1)
+			if clock < spicyUntil then
+				status.Text = `🌶️ x2 BITES! {left} left · {math.ceil(spicyUntil - clock)}s`
+				status.TextColor3 = SPICY
+			else
+				status.Text = if chomping
+					then `{shape}CHOMP! {left} bites left`
+					else `{shape}MASH EAT! {left} bites left`
+				status.TextColor3 = if chomping then Theme.Colors.Yellow else Color3.new(1, 1, 1)
+			end
 		elseif now - deniedAt < 1.2 then
 			status.Text = "Not on your slice! Follow ▼"
 			status.TextColor3 = Theme.Colors.Red

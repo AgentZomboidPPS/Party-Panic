@@ -28,6 +28,22 @@ EatsaPizza.SIDE_ANGLE = 0.12 -- ...but never more than this far round (radians),
 -- a step off a slice is a step off it
 EatsaPizza.MIDDLE = 2.5 -- the very middle, where every slice's tip meets, is nobody's slice
 
+-- THE HOT PEPPER (owner: "can we make the eatsa pizza game more interactable? In mario party it feels
+-- and plays a ton better."): now and then a chili lands on the pizza where two teams' parts meet, half
+-- way out, and whoever gets to it first is SPICY for a few seconds: every press eats two bites. One
+-- is out at a time; one nobody grabs goes after a while.
+EatsaPizza.CHILI_FIRST = 6 -- seconds after GO the first one lands
+EatsaPizza.CHILI_EVERY = 7 -- seconds from one being grabbed (or going) to the next landing
+EatsaPizza.CHILI_LIFE = 8 -- seconds one waits to be grabbed
+EatsaPizza.CHILI_REACH = 3.5 -- studs (flat) from its middle that grab it
+EatsaPizza.CHILI_OUT = 0.55 -- how far out it lands (share of the radius)
+EatsaPizza.SPICY_TIME = 5 -- seconds of...
+EatsaPizza.SPICY_BITES = 2 -- ...this many bites a press
+
+-- A slice's bitten front for the pepperoni: they go one at a time as the bites reach them, not all
+-- at once when the slice's next stage does. Its last bite is this far out (share of the radius).
+EatsaPizza.LAST_REACH = 0.18
+
 -- The pizza's radius for a round of `count` players.
 function EatsaPizza.Radius(count: number): number
 	return math.clamp(24 + 1.2 * count, 26, 38)
@@ -59,6 +75,30 @@ function EatsaPizza.Stage(left: number, max: number): number
 	end
 	local eaten = 1 - left / max
 	return math.clamp(math.floor(eaten * 4), 0, 3)
+end
+
+-- How far the bites have come on a slice with `left` of `max` to go (share of the radius): smoothly
+-- from the crust (1) through each stage's reach as the slice gets to it, to LAST_REACH; 0 once gone.
+function EatsaPizza.Front(left: number, max: number): number
+	if max <= 0 or left <= 0 then
+		return 0
+	end
+	local eaten = math.clamp(1 - left / max, 0, 1) * 4
+	local stage = math.min(math.floor(eaten), 3)
+	local from = EatsaPizza.REACH[stage + 1]
+	local to = EatsaPizza.REACH[stage + 2] or EatsaPizza.LAST_REACH
+	return from + (to - from) * (eaten - stage)
+end
+
+-- Where the k-th chili of a round lands (offset from the middle, studs: x, z): on the line between
+-- two teams' parts, going round the borders in turn so each pair of neighbours races for one.
+-- `first` is the border the round starts at (0 is between the last team's part and the first's).
+function EatsaPizza.ChiliSpot(k: number, teamCount: number, radius: number, first: number?): (number, number)
+	local borders = math.max(teamCount, 1)
+	local border = ((first or 0) + k - 1) % borders
+	local a = border * EatsaPizza.PerTeam(teamCount) * EatsaPizza.SLICE_ANGLE
+	local r = radius * EatsaPizza.CHILI_OUT
+	return math.sin(a) * r, math.cos(a) * r
 end
 
 -- How far (studs) a slice at this stage reaches from the middle.

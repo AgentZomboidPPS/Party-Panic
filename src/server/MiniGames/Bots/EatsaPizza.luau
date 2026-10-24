@@ -6,6 +6,9 @@
 -- gone before it walks on. A bot that stops moving short of its slice (the step up from an eaten
 -- slice) hops.
 --
+-- The hot pepper (mode.chili): a bot that notices one close enough (better bots look farther and
+-- go more often) runs for it after a moment's reaction, then goes back to chewing.
+--
 -- Hazard parity: nothing is animated only on clients. Slices are the server's and bites are judged
 -- from where the bot's character stands, like everyone's.
 
@@ -30,6 +33,28 @@ function Brain.Step(bot, ctx, mode, dt)
 	end
 	if now < memory.WaitUntil then
 		return
+	end
+
+	local chili = mode.chili
+	if chili then
+		local offset = chili.Position - root.Position
+		local flat = Vector3.new(offset.X, 0, offset.Z).Magnitude
+		if memory.Chili ~= chili then
+			memory.Chili = chili
+			memory.ChiliAt = now + bot:Reaction() + bot.Rng:NextNumber(0.1, 0.6)
+			memory.ChiliWant = flat < 8 + 14 * skill and bot:Chance(0.45 + 0.4 * skill)
+		end
+		if memory.ChiliWant and now >= memory.ChiliAt then
+			bot:MoveTo(Vector3.new(chili.Position.X, root.Position.Y, chili.Position.Z))
+			if memory.LastPos and (root.Position - memory.LastPos).Magnitude > 0.8 then
+				memory.LastPos = root.Position
+				memory.MovedAt = now
+			elseif memory.MovedAt and now - memory.MovedAt > 0.8 then
+				bot:Jump()
+				memory.MovedAt = now
+			end
+			return
+		end
 	end
 
 	local on = mode:_locate(bot)

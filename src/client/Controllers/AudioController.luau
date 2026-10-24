@@ -71,17 +71,23 @@ local function makeSound(name: string, id: string, volume: number, looped: boole
 	return sound
 end
 
-function AudioController.Play(name: string)
+-- `speed` (optional) plays it higher or lower and quicker or slower (a crunch that isn't the same
+-- every bite).
+function AudioController.Play(name: string, speed: number?)
 	local sound = sfx[name]
 	if not sound then
 		return
 	end
-	if sound.PlaybackRegionsEnabled then
+	if sound.PlaybackRegionsEnabled or speed then
 		-- Sprite effects play a region of one shared sound; clone so effects can overlap.
 		local clone = sound:Clone()
+		clone.PlaybackSpeed = speed or 1
 		clone.Parent = SoundService
 		clone:Play()
-		Debris:AddItem(clone, sound.PlaybackRegion.Max - sound.PlaybackRegion.Min + 0.5)
+		local length = if sound.PlaybackRegionsEnabled
+			then sound.PlaybackRegion.Max - sound.PlaybackRegion.Min
+			else math.max(sound.TimeLength, 1)
+		Debris:AddItem(clone, length / (speed or 1) + 0.5)
 	else
 		SoundService:PlayLocalSound(sound)
 	end

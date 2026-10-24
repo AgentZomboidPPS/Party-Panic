@@ -282,10 +282,10 @@ function Api.Template(_self: Api, name: string, timeout: number?): Instance?
 	return template:Clone()
 end
 
--- Plays a sound effect (Shared/Sounds names) or a particle effect (EffectsController names) for
--- this player only.
-function Api.Sound(_self: Api, name: string)
-	AudioController.Play(name)
+-- Plays a sound effect (Shared/Sounds names; `speed` pitches it) or a particle effect
+-- (EffectsController names) for this player only.
+function Api.Sound(_self: Api, name: string, speed: number?)
+	AudioController.Play(name, speed)
 end
 
 function Api.Effect(_self: Api, name: string, position: Vector3, colors: { Color3 }?)
