@@ -63,6 +63,7 @@ local PAD_H = 74
 local NOTE_H = 36
 local TRAVEL = 1.5 -- seconds from the top of the highway to the hit line
 
+local SIDE = 84 -- the SYNC column beside the highway (design units)
 local SYNC_STEP = 0.025
 local savedSync = 0 -- the player's sync setting, kept for the rest of the visit
 
@@ -249,13 +250,15 @@ function LastDancer.Start(api)
 	end
 
 	-- HUD ------------------------------------------------------------------------------------------
+	-- (Three rows under the round banner, all above the thumbstick zone's top on phones: the groove meter,
+	-- the next cut, and the announcements.)
 	local hud = api:TopHud()
 	local y = api:HudY()
 	local meter = UIKit.new("Frame", {
 		Name = "GroovePanel",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, y),
-		Size = UDim2.fromOffset(430, 62),
+		Size = UDim2.fromOffset(470, 62),
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		BackgroundTransparency = 0.2,
 		Parent = hud,
@@ -266,10 +269,10 @@ function LastDancer.Start(api)
 		Name = "Title",
 		Text = "GROOVE",
 		Font = Theme.Fonts.Display,
-		TextSize = 20,
+		TextSize = 24,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(14, 4),
-		Size = UDim2.fromOffset(120, 24),
+		Position = UDim2.fromOffset(14, 2),
+		Size = UDim2.fromOffset(130, 28),
 		Parent = meter,
 		Children = { UIKit.TextStroke(0.2) },
 	})
@@ -277,10 +280,10 @@ function LastDancer.Start(api)
 		Name = "Percent",
 		Text = "60%",
 		Font = Theme.Fonts.Display,
-		TextSize = 26,
+		TextSize = 28,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		Position = UDim2.new(1, -170, 0, 2),
-		Size = UDim2.fromOffset(70, 28),
+		Position = UDim2.new(1, -204, 0, 0),
+		Size = UDim2.fromOffset(84, 30),
 		Parent = meter,
 		Children = { UIKit.TextStroke(0.2) },
 	})
@@ -288,17 +291,17 @@ function LastDancer.Start(api)
 		Name = "Place",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 22,
+		TextSize = 24,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		Position = UDim2.new(1, -92, 0, 4),
-		Size = UDim2.fromOffset(80, 26),
+		Position = UDim2.new(1, -112, 0, 2),
+		Size = UDim2.fromOffset(100, 28),
 		Parent = meter,
 		Children = { UIKit.TextStroke(0.2) },
 	})
 	local track = UIKit.new("Frame", {
 		Name = "Track",
 		Position = UDim2.fromOffset(14, 36),
-		Size = UDim2.new(1, -28, 0, 16),
+		Size = UDim2.new(1, -28, 0, 18),
 		BackgroundColor3 = Color3.fromRGB(14, 10, 34),
 		Parent = meter,
 		Children = { UIKit.Round() },
@@ -314,7 +317,7 @@ function LastDancer.Start(api)
 		Name = "CutLine",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0, 0.5),
-		Size = UDim2.new(0, 4, 1, 8),
+		Size = UDim2.new(0, 5, 1, 10),
 		BackgroundColor3 = Theme.Colors.Red,
 		Visible = false,
 		ZIndex = 3,
@@ -322,43 +325,38 @@ function LastDancer.Start(api)
 		Children = { UIKit.Corner(2) },
 	})
 
+	-- The next cut; in danger it turns red and flashes ("DANGER!" first).
 	local ticker = UIKit.Label({
 		Name = "CutTicker",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 24,
+		TextSize = 26,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, y + 68),
-		Size = UDim2.fromOffset(500, 32),
+		Position = UDim2.new(0.5, 0, 0, y + 64),
+		Size = UDim2.fromOffset(580, 30),
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.15) },
 	})
-	local danger = UIKit.Label({
-		Name = "Danger",
-		Text = "DANGER! KEEP DANCING!",
-		Font = Theme.Fonts.Display,
-		TextSize = 24,
-		TextColor3 = Theme.Colors.Red,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, y + 100),
-		Size = UDim2.fromOffset(500, 32),
-		Visible = false,
-		Parent = hud,
-		Children = { UIKit.TextStroke(0.1) },
-	})
+	-- Announcements (who is about to fall, who fell) and, before the first one, the hint.
 	local banner = UIKit.Label({
 		Name = "Banner",
 		Text = "",
 		Font = Theme.Fonts.Display,
-		TextSize = 30,
+		TextSize = 28,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, y + 136),
-		Size = UDim2.fromOffset(560, 40),
+		Position = UDim2.new(0.5, 0, 0, y + 96),
+		Size = UDim2.fromOffset(600, 34),
 		TextTransparency = 1,
 		Parent = hud,
 		Children = { UIKit.TextStroke(0.1) },
 	})
+	local function hideHint()
+		if api.Gui.Parent then
+			api:Hint("", y + 96)
+		end
+	end
 	local function showBanner(text: string, color: Color3?)
+		hideHint()
 		banner.Text = text
 		banner.TextColor3 = color or Color3.new(1, 1, 1)
 		banner.TextTransparency = 0
@@ -372,58 +370,11 @@ function LastDancer.Start(api)
 		end)
 	end
 
-	-- The sync setting.
-	local syncLabel
-	local function setSync(value: number)
-		sync = math.clamp(math.floor(value / SYNC_STEP + 0.5) * SYNC_STEP, -Logic.SYNC_MAX, Logic.SYNC_MAX)
-		savedSync = sync
-		if syncLabel then
-			syncLabel.Text = `SYNC {math.floor(sync * 1000 + 0.5)} ms`
-		end
-	end
-	local syncRow = UIKit.new("Frame", {
-		Name = "Sync",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, y + 182),
-		Size = UDim2.fromOffset(250, 40),
-		BackgroundTransparency = 1,
-		Parent = hud,
-	})
-	local function syncButton(text: string, x: number, delta: number)
-		local button = UIKit.new("TextButton", {
-			Name = "Sync" .. text,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0, x, 0.5, 0),
-			Size = UDim2.fromOffset(52, 36),
-			BackgroundColor3 = Theme.Colors.PanelLight,
-			BackgroundTransparency = 0.25,
-			AutoButtonColor = true,
-			Text = text,
-			Font = Theme.Fonts.Display,
-			TextSize = 26,
-			TextColor3 = Color3.new(1, 1, 1),
-			Parent = syncRow,
-			Children = { UIKit.Corner(10), UIKit.Stroke(Color3.new(1, 1, 1), 2, 0.5) },
-		})
-		api:Track(button.Activated:Connect(function()
-			setSync(sync + delta)
-		end))
-	end
-	syncButton("−", 26, -SYNC_STEP)
-	syncButton("+", 224, SYNC_STEP)
-	syncLabel = UIKit.Label({
-		Name = "SyncLabel",
-		Text = "",
-		Font = Theme.Fonts.Bold,
-		TextSize = 18,
-		Position = UDim2.fromOffset(54, 0),
-		Size = UDim2.fromOffset(142, 40),
-		Parent = syncRow,
-		Children = { UIKit.TextStroke(0.3) },
-	})
-	setSync(sync)
-
 	-- The highway ------------------------------------------------------------------------------------
+	-- On phones it stands between the thumbstick zone (the left 41% of the screen: nobody walks in this
+	-- game, but it's the thumb's) and the jump button, which also leaves the dancers in the middle of the
+	-- screen in view; on a computer it's centred. The SYNC column hangs off its left side.
+	local camera = workspace.CurrentCamera
 	local holder = UIKit.new("Frame", {
 		Name = "Highway",
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -433,6 +384,64 @@ function LastDancer.Start(api)
 		Parent = api.Gui,
 	})
 	UIKit.AutoScale(holder)
+	local function placeHighway()
+		if touch then
+			holder.AnchorPoint = Vector2.new(0, 1)
+			holder.Position = UDim2.new(0.41, 8 + SIDE * UIKit.CurrentScale(), 1, -10)
+		end
+	end
+	placeHighway()
+	api:Track(camera:GetPropertyChangedSignal("ViewportSize"):Connect(placeHighway))
+
+	-- The sync setting.
+	local syncLabel: TextLabel
+	local function setSync(value: number)
+		sync = math.clamp(math.floor(value / SYNC_STEP + 0.5) * SYNC_STEP, -Logic.SYNC_MAX, Logic.SYNC_MAX)
+		savedSync = sync
+		if syncLabel then
+			syncLabel.Text = `SYNC\n{math.floor(sync * 1000 + 0.5)} ms`
+		end
+	end
+	local syncColumn = UIKit.new("Frame", {
+		Name = "Sync",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromOffset(-SIDE, HIGHWAY_H + PAD_H + 8),
+		Size = UDim2.fromOffset(SIDE - 8, 196),
+		BackgroundTransparency = 1,
+		Parent = holder,
+	})
+	syncLabel = UIKit.Label({
+		Name = "SyncLabel",
+		Text = "",
+		Font = Theme.Fonts.Bold,
+		TextSize = 20,
+		Position = UDim2.fromOffset(0, 0),
+		Size = UDim2.fromOffset(SIDE - 8, 48),
+		Parent = syncColumn,
+		Children = { UIKit.TextStroke(0.3) },
+	})
+	local function syncButton(text: string, top: number, delta: number)
+		local button = UIKit.new("TextButton", {
+			Name = "Sync" .. text,
+			Position = UDim2.fromOffset(0, top),
+			Size = UDim2.fromOffset(SIDE - 8, 72),
+			BackgroundColor3 = Theme.Colors.PanelLight,
+			BackgroundTransparency = 0.2,
+			AutoButtonColor = true,
+			Text = text,
+			Font = Theme.Fonts.Display,
+			TextSize = 40,
+			TextColor3 = Color3.new(1, 1, 1),
+			Parent = syncColumn,
+			Children = { UIKit.Corner(14), UIKit.Stroke(Color3.new(1, 1, 1), 3, 0.4) },
+		})
+		api:Track(button.Activated:Connect(function()
+			setSync(sync + delta)
+		end))
+	end
+	syncButton("+", 50, SYNC_STEP)
+	syncButton("−", 124, -SYNC_STEP)
+	setSync(sync)
 	local lanes = UIKit.new("Frame", {
 		Name = "Lanes",
 		Size = UDim2.fromOffset(WIDTH, HIGHWAY_H + 6),
@@ -778,7 +787,6 @@ function LastDancer.Start(api)
 			updateStandings()
 		end
 		holder.Visible = playing
-		syncRow.Visible = playing
 		standings.Visible = not playing
 		combo.Visible = playing
 	end
@@ -790,12 +798,8 @@ function LastDancer.Start(api)
 		end
 	end
 
-	api:Hint("Tap the pad under each note when it lands on the line!", y + 226)
-	task.delay(9, function()
-		if api.Gui.Parent then
-			api:Hint("", y + 226)
-		end
-	end)
+	api:Hint("Tap a pad as each note lands!", y + 96)
+	task.delay(9, hideHint)
 
 	-- Every frame ---------------------------------------------------------------------------------------
 	local scanStart = 1
@@ -873,19 +877,18 @@ function LastDancer.Start(api)
 		if row and row[4] == 1 and cutLineValue and (cut.Count or 0) > 0 then
 			inDanger = row[2] <= cutLineValue
 		end
-		danger.Visible = inDanger and phase == "InRound"
-		meterStroke.Color = if inDanger
-				and phase == "InRound"
-				and math.floor(os.clock() * 4) % 2 == 0
-			then Theme.Colors.Red
-			else Color3.new(1, 1, 1)
+		local alarm = inDanger and phase == "InRound"
+		local blink = math.floor(os.clock() * 4) % 2 == 0
+		meterStroke.Color = if alarm and blink then Theme.Colors.Red else Color3.new(1, 1, 1)
+		ticker.TextColor3 = if alarm and blink then Theme.Colors.Red else Color3.new(1, 1, 1)
 		if phase ~= "InRound" then
 			ticker.Text = "GET READY!"
 		elseif cut.Final then
 			ticker.Text = "FINAL DUEL! HIGHEST GROOVE WINS"
 		elseif cutAt then
 			local left = math.max(0, cutAt - api:Now())
-			ticker.Text = `NEXT CUT IN {math.ceil(left)}s • {cut.Count or 0} FALL`
+			local text = `CUT IN {math.ceil(left)}s • {cut.Count or 0} FALL`
+			ticker.Text = if alarm then `DANGER! {text}` else `NEXT {text}`
 		else
 			ticker.Text = ""
 		end
