@@ -185,3 +185,55 @@ bots read the hints, clumsy ones sometimes take the TNT) and time jumps and lean
 Race, Duration 75-90 (a time-out), MinPlayers 1, IsTeam false. Props as real meshes: riveted mine carts with each
 player's colour trim and badge, curved rail segments (merged into few meshes for phones), wooden trestles and supports,
 TNT crates, junction signs, glowing crystals, lanterns, a cave entrance and a sunlit exit with a FINISH banner.
+
+## 30. Big Bad Vacuum (`BigBadVacuum`, Survival tag, co-op)
+
+Added by the owner on 2026-10-24 (asked which mini-game to make: "make it but make it feel super sick and epic"), built by hand in
+one session on `claude/big-bad-vacuum`. The first game with the whole lobby on one side: everyone against a giant robot vacuum
+(a boss fight) in a living room at night, a round rug inside a ring of giant toy blocks, with a floor lamp, a TV and a couch beyond
+the wall. 1-12 players, bots fill, Duration 100 (a fight clock of 82 s after a 5.5 s intro, then a 5 s finale).
+
+How it plays (all numbers and geometry: `Shared/Logic/BigBadVacuum.luau`, unit-tested in `tests/BigBadVacuum.spec.luau`):
+- The boss falls from the ceiling (a growing red warning on the floor), roars, then chases someone and attacks. Every attack is a
+  telegraphed danger zone that fills up, then hits: SWEEP (a brush arm swings through a 156 degree wedge), CHARGE (a lane; it runs
+  into the wall), SUCTION (a cone pulls everyone to its mouth), CORD SLAM (a circle, then a shockwave ring you jump; two in a row in
+  phase 3), WHIRL (it spins its arm all the way round) and DUST BOMBS (circles on people and round the arena). Warnings get quicker
+  with each phase (68% and 34% health; each break shoves everyone back and the boss can't be hurt for 3 s).
+- Players pick toy bricks up by walking onto piles (one brick at a time) and THROW (E) them: a brick on the armour chips (1), a brick on
+  the open CORE hatch is a CRIT (10; crits within 1.3 s make a VOLLEY, up to x1.6). The core is open only after a CHARGE crashes
+  into the wall (about 6 s), a SUCTION overheats it (about 3.5 s) or a WHIRL leaves it dizzy (about 3.8 s): the lobby dodges, baits
+  the charge, then everyone throws. A tall beacon marks the open core.
+- SUCTION also stuffs people who reach the mouth into the DUST BAG (a few at a time, spat out after 7 s; the boss heals meanwhile).
+  A brick thrown at the bag (BAG, Q) pops it and rescues everyone inside.
+- Damage and rescues fill the PARTY METER; full, anyone can press PANIC (F): a sky beam hits for 8% of the boss's health and
+  overloads the core for 2.4 s.
+- Win by emptying the boss's health (100 per player) before the clock runs out. Nobody is ever out (daze and the bag are the
+  setbacks). Score: damage + 8 per rescue + a few bonuses (finisher 15, PANIC 10, everyone else 5). **Results:** a win is everyone's
+  win (a shared first place, `WinningTeam = "Squad"`); a loss ranks by contribution (`WinningTeam = "Vacuum"`; the results card says
+  "The Vacuum won"; the top contributor still counts first place for rewards and medals, so a win is not claimed by losing).
+
+How it is built:
+- Server (`MiniGames/BigBadVacuum.luau`): a boss state machine (Intro, Chase, Wind, Act, Recover, Stun, Break, Dying/Done) and one
+  handler per attack (`ATTACKS`); every hit, trap, pickup, throw and the meter are judged on the server, against where a player is
+  plus a little of where they are going (`_where`: a dodge that looks clean on a phone counts). The suction's pull is applied by each
+  client to its own character and by the server to bots. Shared state: `Boss` (a 10 Hz snapshot with velocity), `Atk` (the plan:
+  danger zones with times), `Piles`, `Carry`, `Trap`, `Meter`, `Arena`; events for everything else.
+- Client (`client/MiniGames/BigBadVacuum.luau`): the boss rig (eye, hatch, side brushes, arm, bag, cord) animates from the snapshot,
+  the zones are drawn from `Atk` with `Rules.ZoneContains`, plus camera flyover during the 3-2-1, shake and FOV punches, the
+  victory chain of explosions and the defeat laugh, a boss bar with phase ticks, the meter, banners, and the phone layout (checked
+  with `tools/checks/ui_render.py`: 0 problems).
+- Bots (`MiniGames/Bots/BigBadVacuum.luau`): dodge by reading the same zones (reaction time and margins by skill), jump the ring,
+  fetch bricks, wait for the core, rescue, press PANIC after a human-like delay. The round harness's test bot runs this very brain
+  on its stand-ins (and does what a client would do for them: walk, jump, the suction's pull).
+- Props are all primitive fallbacks for now (`World/Props/BigBadVacuum.luau`; every prop has an `AssetId = 0` block ready for a
+  mesh; the client finds the boss's parts by name). Set `m.PrimaryPart` in a fallback: a model without one gets its bounding box
+  turned by the first rotated cylinder and MeshLibrary rescales the prop to the wrong size.
+- Test aids: `tools/checks/scenarios/BigBadVacuum_attack.luau` (force one attack, render it), `_bag.luau` (trap, a leave from inside
+  the bag, a rescue), `_showcase.luau` (lay the client-drawn parts out for `tools/preview/render.py`).
+
+Not done / for a real playtest (the test servers have no physics): how the suction's pull and the dust bag's anchoring feel on a
+device, the camera shake and flyover on phones, the mood lighting, sound (it uses the generic round song; a boss theme needs one of
+the owner's audio uploads: `tools/music/songs/BigBadVacuum.py` + `modes.py pack`), real meshes for the boss and arena, and a portal
+preview (`tools/preview/make_preview.py BigBadVacuum`). Difficulty is tuned against the bots only (a strong lobby wins about
+two times in three, in 60-85 s); expect to retune `HealthFor`, the `Think`/`WIND_SCALE` pace and the core windows from real play.
+

@@ -424,6 +424,22 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "BigBadVacuum",
+		Name = "Big Bad Vacuum",
+		Category = "Survival",
+		Icon = "🌀",
+		Color = Color3.fromRGB(255, 84, 96),
+		Objective = "Everyone vs. a giant robot vacuum! Grab bricks, dodge its attacks, and pelt its glowing core when it opens - beat it together before time runs out!",
+		Controls = "Walk over a brick pile, then THROW (E) at the boss. BAG frees friends it sucked up. PANIC blasts it when the meter is full.",
+		Duration = 100,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+		-- Out of the vote until its meshes, song and portal preview are in (owner: "Can you finish those two
+		-- mini games?").
+		Enabled = false,
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 

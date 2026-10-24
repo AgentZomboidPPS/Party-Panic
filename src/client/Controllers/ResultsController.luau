@@ -373,8 +373,14 @@ local function show(data)
 			elseif data.WinningTeam == nil then "  •  It's a draw!"
 			else ""
 	end
-	headline.Text = if data.Place == 1
-		then `{medal} You won {if definition then string.upper(definition.Name) else "the round"}!{teamLine}`
+	-- A co-op fight the boss won (Big Bad Vacuum: the squad has no rival team but "Vacuum"): nobody won it,
+	-- whatever place their contribution got.
+	local lostToBoss = data.WinningTeam == "Vacuum" and data.MyTeam == "Squad"
+	headline.Text = if lostToBoss
+		then `{medal} The Vacuum won  •  {Placement.Ordinal(data.Place)} of {data.PlayerCount}`
+		elseif data.Place == 1 then `{medal} You won {if definition
+			then string.upper(definition.Name)
+			else "the round"}!{teamLine}`
 		else `{medal} {Placement.Ordinal(data.Place)} of {data.PlayerCount}{teamLine}`
 
 	clear(standings)
