@@ -101,7 +101,6 @@ local entry = table.concat({
 	"\t\tDuration = 75,",
 	`\t\tMinPlayers = {if isTeam or category == "Knockback" or category == "Versus" then 2 else 1},`,
 	`\t\tIsTeam = {if isTeam then "true" else "false"},`,
-	"\t\tIsNew = true, -- a little extra vote exposure while it's new; remove later",
 	"\t},",
 	"",
 }, "\n")

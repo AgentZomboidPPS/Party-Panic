@@ -238,8 +238,9 @@ Until a mode has a preview, its portal shows its icon and name on its color.
 
 A mode should only join the live pool when it's fun in repeated tests, easy to explain in one
 sentence, stable with a full server, and has a clear end condition. Use `Enabled = false` in its
-definition to keep a mode out of the vote while you work on it, and `IsNew = true` to give a
-finished mode a little extra exposure.
+definition to keep a mode out of the vote while you work on it. The newest four games in the
+rotation get a little extra vote exposure by themselves (`NEW_GAMES` in `GameDefinitions.luau`, by
+their place in the list): add a new game at the end and the oldest of the four loses it.
 
 ## Safety nets
 

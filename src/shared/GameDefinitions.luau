@@ -1,5 +1,12 @@
 -- Player-facing metadata for every mini-game (design doc §7 template, §8 launch roster).
 -- Server modules live in ServerScriptService.Server.MiniGames and must use the same Id.
+--
+-- New games get a little extra vote exposure (IsNew; Logic/GamePicker's discovery weight). It used to
+-- be a tag set by hand on each game, and about half the games had it. Now it's the NEW_GAMES newest games in the
+-- rotation, by their place in this list (a new game goes at the end), worked out below (owner: "I like
+-- the idea of new games getting a boost. What if we do every 4 games. So if we add 3 and then 2 more
+-- the first one of the 3 gets its new vote boost."): adding a fifth takes the boost off the oldest of
+-- the four. A game out of the rotation (Enabled = false) doesn't count.
 
 export type GameDefinition = {
 	Id: string,
@@ -304,7 +311,6 @@ local list: { GameDefinition } = {
 		Duration = 60,
 		MinPlayers = 2,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "TraceRace",
@@ -317,7 +323,6 @@ local list: { GameDefinition } = {
 		Duration = 45,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "EatsaPizza",
@@ -330,7 +335,6 @@ local list: { GameDefinition } = {
 		Duration = 30,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "LogJam",
@@ -343,7 +347,6 @@ local list: { GameDefinition } = {
 		Duration = 30,
 		MinPlayers = 2,
 		IsTeam = true,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "Struggle",
@@ -356,7 +359,6 @@ local list: { GameDefinition } = {
 		Duration = 70,
 		MinPlayers = 2,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "DiceDash",
@@ -369,7 +371,6 @@ local list: { GameDefinition } = {
 		Duration = 60,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "HotPotato",
@@ -382,7 +383,6 @@ local list: { GameDefinition } = {
 		Duration = 90,
 		MinPlayers = 2,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "MinecartMayhem",
@@ -395,7 +395,6 @@ local list: { GameDefinition } = {
 		Duration = 90,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 		-- Out of the rotation (owner, 2026-10-23: "Can we take minecart mayham out of rotation"), after
 		-- "Minecart mayham is still terrible. Iam not sure how we can fix it. I cant see when to jump."
 		-- The code stays: Enabled = true (or this line gone) brings it back.
@@ -416,7 +415,6 @@ local list: { GameDefinition } = {
 		Duration = 300,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "BigBadVacuum",
@@ -429,7 +427,6 @@ local list: { GameDefinition } = {
 		Duration = 100,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "LastDancer",
@@ -442,7 +439,6 @@ local list: { GameDefinition } = {
 		Duration = 64,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "CapyGoBoom",
@@ -455,7 +451,6 @@ local list: { GameDefinition } = {
 		Duration = 75,
 		MinPlayers = 2,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 		-- Back in the rotation (owner: "Reenable it.") after it was out from version 54: on version 53
 		-- the borrowed capybara meshes, the shells and the aiming failed on live servers ("Models are
 		-- fucked. shooting is fucked"); all three were fixed (docs/HANDOFF.md, Capy Go Boom).
@@ -471,19 +466,34 @@ local list: { GameDefinition } = {
 		Duration = 60,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
+
+-- How many of the newest games in the rotation get the vote's new-game boost (tests/VoteFairness and
+-- tools/checks/vote_pool read this line).
+local NEW_GAMES = 4
 
 local GameDefinitions = {
 	List = list,
 	ById = {} :: { [string]: GameDefinition },
 	Categories = Categories,
+	NewGames = NEW_GAMES,
 }
 
 for _, definition in list do
 	GameDefinitions.ById[definition.Id] = definition
+end
+
+-- The newest NEW_GAMES games in the rotation are new; every other game isn't.
+local newLeft = NEW_GAMES
+for index = #list, 1, -1 do
+	local definition = list[index]
+	local inRotation = definition.Enabled ~= false
+	definition.IsNew = inRotation and newLeft > 0
+	if inRotation then
+		newLeft -= 1
+	end
 end
 
 function GameDefinitions.Get(id: string): GameDefinition?

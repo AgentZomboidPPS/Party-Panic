@@ -886,7 +886,6 @@ local function masteryRow(summary: { [string]: any }, rowHeight: number, order: 
 		fill.Size = UDim2.fromScale(0, 1)
 		fill.Visible = now.Fraction > 0
 		barText.Text = MasteryLogic.BarText(now)
-		UIKit.PopIn(bar, 0.35)
 		UIKit.Tween(fill, 0.7, { Size = UDim2.fromScale(now.Fraction, 1) }, Enum.EasingStyle.Quad)
 	end)
 end

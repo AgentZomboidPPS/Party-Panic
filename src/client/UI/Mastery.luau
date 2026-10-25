@@ -28,11 +28,11 @@ end
 -- Each rank's colours, top to bottom (index 0: not ranked yet).
 local LOOKS: { [number]: { Top: Color3, Bottom: Color3 } } = {
 	[0] = { Top = rgb(160, 150, 200), Bottom = rgb(92, 82, 140) },
-	{ Top = rgb(246, 176, 116), Bottom = rgb(176, 92, 40) }, -- BRONZE
-	{ Top = rgb(244, 247, 255), Bottom = rgb(146, 158, 192) }, -- SILVER
-	{ Top = rgb(255, 228, 92), Bottom = rgb(228, 140, 20) }, -- GOLD
-	{ Top = rgb(156, 242, 255), Bottom = rgb(60, 130, 245) }, -- DIAMOND
-	{ Top = rgb(255, 146, 228), Bottom = rgb(140, 70, 255) }, -- LEGEND
+	[1] = { Top = rgb(246, 176, 116), Bottom = rgb(176, 92, 40) }, -- BRONZE
+	[2] = { Top = rgb(244, 247, 255), Bottom = rgb(146, 158, 192) }, -- SILVER
+	[3] = { Top = rgb(255, 228, 92), Bottom = rgb(228, 140, 20) }, -- GOLD
+	[4] = { Top = rgb(156, 242, 255), Bottom = rgb(60, 130, 245) }, -- DIAMOND
+	[5] = { Top = rgb(255, 146, 228), Bottom = rgb(140, 70, 255) }, -- LEGEND
 }
 
 function Mastery.Look(rank: number): { Top: Color3, Bottom: Color3 }

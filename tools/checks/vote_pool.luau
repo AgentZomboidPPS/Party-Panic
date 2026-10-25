@@ -14,9 +14,18 @@ function Pool.Read(path: string?): { any }
 			Category = string.match(body, 'Category = "(%w+)"'),
 			MinPlayers = tonumber(string.match(body, "MinPlayers = (%d+)")) or 1,
 			Weight = tonumber(string.match(body, "\n\t\tWeight = ([%d%.]+)")),
-			IsNew = string.find(body, "\n\t\tIsNew = true", 1, true) ~= nil,
 			Enabled = not string.find(body, "\n\t\tEnabled = false", 1, true),
 		})
+	end
+	-- New games: the newest NEW_GAMES in the rotation, by their place in the list (as GameDefinitions
+	-- works it out).
+	local left = tonumber(string.match(source, "\nlocal NEW_GAMES = (%d+)")) or 0
+	for index = #pool, 1, -1 do
+		local entry = pool[index]
+		entry.IsNew = entry.Enabled and left > 0
+		if entry.Enabled then
+			left -= 1
+		end
 	end
 	return pool
 end

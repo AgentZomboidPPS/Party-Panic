@@ -55,7 +55,7 @@
     wide); PC vote cards show the objective's **first sentence** in a taller box (the card is 228 tall; the whole
     objective was squeezed to about 11 pt), the rules card shows all of it, and a long one there may shrink to 18
     instead of being cut off (Big Bad Vacuum's was).
-  - **Checks:** stylua, selene, luau-lsp clean; 482 Lune tests; client harness on PC and phones (phone, phone-small,
+  - **Checks:** stylua, selene (0 warnings), luau-lsp clean; 483 Lune tests; client harness on PC and phones (phone, phone-small,
     phone-large, phone-android, tablet): 0 errors. New harness shots: "Goals Mastery", "Mastery gold", "MasteryPop"
     (both pills copied onto a screen), "Results rank up" (0.75 s after "Results", which catches the bar filling).
 - **Harness bundle back under 1 MiB:** the whole client was 1,054,803 bytes (over Open Cloud's cap) even before the
@@ -65,12 +65,19 @@
   sheets (`assets/previews`), so tiles show their pictures.
 - **Sky Stack merged** (game 34 in the list, from the owner's other window, branch `claude/ecstatic-cray-9ijheg` at
   8235797; owner here: "when the other window finishes it's game let's merge it"). Its full note is the "Sky Stack"
-  section below. On merge: the store text file says 34 games; the vote's coverage spec (every game within 60 votes,
-  9 servers in 10) needed 64 with 34 games, so the four oldest "new" games lost `IsNew` (Slaparazzi, Stamp Out,
-  Rockin' Raceway, Messy Memory); `merge_check.sh SkyStack`: its 4 meshes face out, regenerate the same with this
+  section below. On merge: the store text file says 34 games; `merge_check.sh SkyStack`: its 4 meshes face out, regenerate the same with this
   branch's mesh tools, no z-fights, asset ids visible. It plays the generic round song (no song of its own; audio
   uploads are used up this month). The other window offered to merge it into `claude/quirky-hopper-5yk8zk` and
-  publish from there: that branch is far behind version 60, so it must not publish.
+  publish from there: that branch is far behind version 60, so it must not publish. `mode_check.sh SkyStack` on this
+  branch: 12 players, 10 bots and the phone round, 0 errors, phone UI 0 problems, no leftovers.
+- **The new-game vote boost is the 4 newest games, worked out by itself** (owner: "I like the idea of new games getting
+  a boost. What if we do every 4 games. So if we add 3 and then 2 more the first one of the 3 gets its new vote
+  boost."). `GameDefinitions` marks the `NEW_GAMES` (4) newest games in the rotation as `IsNew`, by their place in the
+  list (new games go at the end; `Enabled = false` ones don't count); the hand-set `IsNew = true` lines are gone, and
+  `tools/new-minigame` no longer writes one. Now: Big Bad Vacuum, Last Dancer, Capy Go Boom, Sky Stack (about 1.2x as
+  often as the rest in `lune run tools/checks/vote_sim`). `tests/VoteFairness.spec.luau` checks the rule; with 34 games
+  a fresh server offers every game by vote 60 (9 in 10), right at that spec's limit, so the next games may need it
+  revisited (fewer new games, or a looser bound).
 - **Still not built (steps 2 and 3):** a GOLD cosmetic per game (start with the 10 most played), DIAMOND name-tag
   frames, per-game LEGEND titles and a glow by the name in rounds, 2 Roblox badges (the owner creates them).
 
@@ -270,9 +277,7 @@ first to the cloud line wins, the tallest tower if time runs out. It is `SkyStac
   the camera (front right of your tower top, rising with it; circling the top once you're at the clouds), and
   whether the finisher's circling camera ever passes through the clouds behind the row.
 
-## Game 33: LAST DANCER (2026-10-24, built on `claude/last-dancer`, merged into `claude/friendly-ramanujan-2dtfr2`; being finished)
-
-## Capy Go Boom: game 31 (2026-10-24, branch `claude/quirky-hopper-5yk8zk`)
+## Capy Go Boom (2026-10-24, branch `claude/quirky-hopper-5yk8zk`, merged here; in the rotation again since version 57)
 
 Owner: "Can you take Capy to boom. Make it into a mini game for party panic?" CAPY GO BOOM is the owner's other game
 (repo `AgentZomboidPPS/Capy-Go-Boom`: capybaras eat snacks to grow, blast each other, a popped capy spills food). It is
@@ -364,7 +369,7 @@ snacks count double; spills never do, pops only move weight around) give comebac
   - Only a real playtest can confirm: the feel of BOOM and the aim on phones, how the avatar-hiding and the capy look on
     different devices, the camera with a big capy, and the balance (final weights, how often pops happen).
 
-## Session B in flight (2026-10-22 03:15 UTC)
+## LAST DANCER (2026-10-24, built on `claude/last-dancer`, merged into `claude/friendly-ramanujan-2dtfr2`; live since version 53)
 
 The owner asked Claude "If you could make any mini game to add to the game. What would it be?", got a pitch for a rhythm
 dance-off and said "Let's make it". Built on `claude/last-dancer` (from `claude/quirky-hopper-5yk8zk` at a2f483b), not pushed
@@ -401,7 +406,7 @@ until the owner says; no pull request. Full description: [MINIGAME_BACKLOG.md](M
 - **Shared files touched** (small, additive): `GameDefinitions.luau` (the entry), `ModeMusic.luau` / `AudioAssets.luau`
   (ModePack8, id 0), `tools/music/packs.json`, `docs/*`.
 
-## Game 32: BIG BAD VACUUM (2026-10-24, built on `claude/big-bad-vacuum`, merged into `claude/friendly-ramanujan-2dtfr2`; being finished)
+## BIG BAD VACUUM (2026-10-24, built on `claude/big-bad-vacuum`, merged into `claude/friendly-ramanujan-2dtfr2`; live since version 53)
 
 - The owner asked for "a mini game ... super sick and epic" and then "Make it": a co-op boss fight, the whole lobby against a giant
   robot vacuum. Everything about it is in [MINIGAME_BACKLOG.md](MINIGAME_BACKLOG.md) entry 30 (rules, how it is built, what is
@@ -1047,12 +1052,13 @@ bumper-controls (finished in 8945c14). Their bundles were removed from `docs/wip
 - **Not the owner's list:** `docs/MINIGAME_IDEAS.md` holds ten original ideas from the project's first day (Piñata
   Plungers, Captain Copycat, Fuse Frenzy...). The owner never picked them; only bring them up as suggestions.
 
-## 3. What's in `docs/wip/`
+## 3. What was in `docs/wip/`
 
-Only `shop-pass2.bundle`, a copy of the held second shop pass (see the top). The bundles of the stopped lanes (section
-2.2), of the four games started in Session B's container and of the per-game music were removed once their work was
-merged; they're still in git history (`git show 4117d67:docs/wip/<name>.bundle > <name>.bundle`).
-`git bundle list-heads docs/wip/<name>.bundle` shows the branch inside a bundle.
+Nothing now: every saved bundle's work is merged. The stopped lanes (section 2.2), the four games started in Session B's
+container and the per-game music were removed earlier (`git show 4117d67:docs/wip/<name>.bundle > <name>.bundle`
+gets one back); `shop-pass2.bundle` went on 2026-10-25, its shop pass having shipped in version 40
+(`git show 2a6af6e:docs/wip/shop-pass2.bundle > shop-pass2.bundle`). `git bundle list-heads <file>` shows the
+branch inside a bundle.
 
 ## 4. Setting up (a fresh cloud container)
 

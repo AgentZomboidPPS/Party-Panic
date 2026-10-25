@@ -16,7 +16,7 @@ local TestKit = require("./TestKit")
 local GamePicker = require("../src/shared/Logic/GamePicker")
 local Pool = require("../tools/checks/vote_pool")
 
-local test, expectTrue = TestKit.test, TestKit.expectTrue
+local test, expectTrue, expectEqual = TestKit.test, TestKit.expectTrue, TestKit.expectEqual
 
 local VOTES = 6000
 local config = fs.readFile("src/shared/Config.luau")
@@ -41,6 +41,23 @@ test("every game a lobby can play is offered at least 60% as often as the averag
 					`{entry.Id} is offered {math.floor(share * 100)}% of the average at {players} players`
 				)
 			end
+		end
+	end
+end)
+
+test("the newest four games in the rotation are the new ones", function()
+	local enabled = {}
+	for _, entry in pool do
+		if entry.Enabled then
+			table.insert(enabled, entry)
+		end
+	end
+	for index, entry in enabled do
+		expectEqual(entry.IsNew, index > #enabled - 4, `{entry.Id} new`)
+	end
+	for _, entry in pool do
+		if not entry.Enabled then
+			expectTrue(not entry.IsNew, `{entry.Id} is out of the rotation but new`)
 		end
 	end
 end)
