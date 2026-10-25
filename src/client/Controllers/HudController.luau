@@ -1237,10 +1237,12 @@ local function buildMenu(parent: Instance): Frame
 	UIKit.AutoScale(menu)
 	-- (Phones: Season and Shop on top, Emotes and Settings under them.)
 	menuButton(menu, "Shop", "🛍️", "Shop", if touch then 2 else 1, Theme.Colors.Pink, Color3.fromRGB(200, 50, 140))
-	-- The season hub (owner: "Do we not have a button to open the season rewards?", then "What if we
-	-- rolled season/event/quests into one button?"): the season's crates, the event and the quests,
-	-- one window with their tabs (UI/HubTabs), with a "!" when a quest or event reward is ready.
-	menuButton(menu, "Hub", "🎃", "Season", if touch then 1 else 2, Theme.Colors.Orange, Color3.fromRGB(205, 92, 24))
+	-- The GOALS hub (owner: "Do we not have a button to open the season rewards?", then "What if we
+	-- rolled season/event/quests into one button?", then with Game Mastery in it: "I want to rename
+	-- that button to better reflect everything in it"): the season's crates, the event, the quests and
+	-- every game's mastery, one window with their tabs (UI/HubTabs), with a "!" when a quest or event
+	-- reward is ready.
+	menuButton(menu, "Hub", "🎯", "Goals", if touch then 1 else 2, Theme.Colors.Orange, Color3.fromRGB(205, 92, 24))
 	menuButton(menu, "Emotes", "🕺", "Emotes", 3, Theme.Colors.Cyan, Color3.fromRGB(50, 120, 230))
 	menuButton(menu, "Settings", "⚙️", "Settings", 4, Theme.Colors.Lavender, Theme.Colors.Purple)
 

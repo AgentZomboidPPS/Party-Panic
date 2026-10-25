@@ -526,7 +526,7 @@ local order = {
 	"AudioController", "NotificationController", "EffectsController", "PetController", "AuraController",
 	"AmbienceController",
 	"MovementController", "WorldScreensController", "HudController", "VoteController",
-	"RoundController", "ResultsController", "ShopController", "QuestController",
+	"RoundController", "ResultsController", "ShopController", "QuestController", "MasteryController",
 	"RewardsController", "CelebrationController", "GoldPassController", "TitleController",
 	"CupController", "InviteController", "PartyController", "SquadController", "PartyWorldController", "MedalController",
 	"HallOfFameController", "EventController", "SeasonWorldController", "CrateController",

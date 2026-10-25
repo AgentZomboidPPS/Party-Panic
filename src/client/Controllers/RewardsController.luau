@@ -1322,7 +1322,7 @@ function RewardsController.Start(context)
 	local tabs = {
 		{ Key = "Road", Text = "⭐ Level Road" },
 		{ Key = "Career", Text = "🏅 Career" },
-		{ Key = "Mastery", Text = "🎮 Mastery" },
+		{ Key = "Mastery", Text = "🏆 Mastery" },
 		{ Key = "Medals", Text = "🥇 Medals" },
 	}
 	for index, tab in tabs do

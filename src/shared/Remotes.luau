@@ -33,6 +33,7 @@ local NAMES = {
 	"MiniGameEvent", -- (event: string, ...) mini-game specific cue for the client half of a mode
 	"Celebrate", -- (payload) a level up or career milestone to celebrate; see Services/ProgressionService
 	"LevelPop", -- (character: Model, level: number) the "Lv 10!" that pops over a player's head
+	"MasteryPop", -- (character: Model, rank: number, gameId: string) a new Game Mastery rank over their head
 	"MedalEarned", -- (medalId: string, earlier: boolean?) a new medal for the collection; see Services/MedalService
 	"GoldPass", -- both ways: "Prompt" (buy the GOLD PASS), "Unlocked" (what it gave); see Services/GoldPassService
 	"Crate", -- both ways: open crates, buy and gift keys; the openings everyone sees; see Services/CrateService

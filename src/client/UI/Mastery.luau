@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
+local GamePreviews = require(Shared.GamePreviews)
 local GameState = require(Shared.GameState)
 local MasteryLogic = require(Shared.Logic.MasteryLogic)
 
@@ -49,6 +50,18 @@ function Mastery.Name(rank: number): string
 	return if info then info.Name else "NEW"
 end
 
+-- A few words for reaching a rank (the celebration card's).
+local TAGLINES = {
+	"Your climb begins!",
+	"Getting good!",
+	"A true pro!",
+	"One of the very best!",
+	"A LEGEND forever!",
+}
+function Mastery.Tagline(rank: number): string
+	return TAGLINES[rank] or ""
+end
+
 -- The rank's medal emoji (UI/Icons draws it), or a star before the first.
 function Mastery.Icon(rank: number): string
 	local info = Mastery.Ranks[rank]
@@ -81,15 +94,16 @@ function Mastery.IsSpotlight(gameId: string): boolean
 end
 
 -- A round badge in the rank's colours with its medal in the middle, `size` units across (props go on
--- the badge: Position, AnchorPoint, Parent, ...). Before the first rank it's a faint star.
-function Mastery.Badge(rank: number, size: number, props: { [string]: any }?): Frame
+-- the badge: Position, AnchorPoint, Parent, ...). Before the first rank it's a faint star. `locked`:
+-- a rank still to come, its medal faint on the not-yet colours.
+function Mastery.Badge(rank: number, size: number, props: { [string]: any }?, locked: boolean?): Frame
 	local badge = UIKit.new("Frame", {
 		Name = "MasteryBadge",
 		Size = UDim2.fromOffset(size, size),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		Children = {
 			UIKit.Round(),
-			UIKit.new("UIGradient", { Color = Mastery.Gradient(rank), Rotation = 90 }),
+			UIKit.new("UIGradient", { Color = Mastery.Gradient(if locked then 0 else rank), Rotation = 90 }),
 			UIKit.Stroke(Theme.Colors.Ink, math.max(1.5, size / 16), 0),
 		},
 	})
@@ -106,7 +120,7 @@ function Mastery.Badge(rank: number, size: number, props: { [string]: any }?): F
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(inner, inner),
-		ImageTransparency = if rank == 0 then 0.45 else 0,
+		ImageTransparency = if rank == 0 or locked then 0.45 else 0,
 		ZIndex = badge.ZIndex + 1,
 		Parent = badge,
 	})
@@ -116,7 +130,7 @@ function Mastery.Badge(rank: number, size: number, props: { [string]: any }?): F
 			Text = Mastery.Icon(rank),
 			TextSize = math.floor(size * 0.6),
 			TextWrapped = false,
-			TextTransparency = if rank == 0 then 0.45 else 0,
+			TextTransparency = if rank == 0 or locked then 0.45 else 0,
 			Size = UDim2.fromScale(1, 1),
 			ZIndex = badge.ZIndex + 1,
 			Parent = badge,
@@ -124,6 +138,82 @@ function Mastery.Badge(rank: number, size: number, props: { [string]: any }?): F
 	end
 	badge.Parent = parent
 	return badge
+end
+
+-- The game's picture: the first frame of its preview (Shared/GamePreviews, the vote stage's portals),
+-- cropped to fill `props.Size`. nil for a game without one.
+function Mastery.Picture(gameId: string, props: { [string]: any }): ImageLabel?
+	local preview = GamePreviews[gameId]
+	if not preview then
+		return nil
+	end
+	local image = UIKit.new("ImageLabel", {
+		Name = "Picture",
+		Image = preview.Image,
+		ImageRectOffset = Vector2.zero,
+		ImageRectSize = preview.FrameSize,
+		ScaleType = Enum.ScaleType.Crop,
+		BackgroundTransparency = 1,
+	})
+	for property, value in props do
+		if property ~= "Parent" then
+			(image :: any)[property] = value
+		end
+	end
+	image.Parent = props.Parent
+	return image
+end
+
+-- The five ranks in a row, the ones reached lit and the rest still to come: `size`-unit badges
+-- `gap` apart on a line, the newest (`rank`) a little bigger. Returns the row (props on it).
+function Mastery.Ladder(rank: number, size: number, gap: number, props: { [string]: any }): Frame
+	local count = #Mastery.Ranks
+	local width = count * size + (count - 1) * gap
+	local row = UIKit.new("Frame", {
+		Name = "Ladder",
+		Size = UDim2.fromOffset(width, size + 8),
+		BackgroundTransparency = 1,
+	})
+	for property, value in props do
+		if property ~= "Parent" then
+			(row :: any)[property] = value
+		end
+	end
+	UIKit.new("Frame", {
+		Name = "Line",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, size / 2, 0.5, 0),
+		Size = UDim2.new(1, -size, 0, 6),
+		BackgroundColor3 = Theme.Colors.PanelDark,
+		ZIndex = row.ZIndex,
+		Parent = row,
+		Children = { UIKit.Round() },
+	})
+	if rank > 1 then
+		UIKit.new("Frame", {
+			Name = "Reached",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, size / 2, 0.5, 0),
+			Size = UDim2.new(0, (rank - 1) * (size + gap), 0, 6),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			ZIndex = row.ZIndex,
+			Parent = row,
+			Children = { UIKit.Round(), UIKit.new("UIGradient", { Color = Mastery.Gradient(rank) }) },
+		})
+	end
+	for index = 1, count do
+		local big = index == rank
+		local badgeSize = if big then size + 8 else size
+		Mastery.Badge(index, badgeSize, {
+			Name = Mastery.Ranks[index].Id,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0, (index - 1) * (size + gap) + size / 2, 0.5, 0),
+			ZIndex = row.ZIndex + 1,
+			Parent = row,
+		}, index > rank)
+	end
+	row.Parent = props.Parent
+	return row
 end
 
 -- A progress bar in the next rank's colours, filled `fraction` of the way, with `text` on it.

@@ -40,7 +40,7 @@ local OnboardingController = {}
 local STEPS = {
 	{ Icon = "🗳️", Text = "When voting opens, tap a card to pick the next game. Portals show a preview!" },
 	{ Icon = "🎮", Text = "Read the rules card, then go for it! Everyone earns coins just for playing." },
-	{ Icon = "🎁", Text = "Nice! Spend coins in the 🛍️ Shop and check 🎃 Season for quests and rewards." },
+	{ Icon = "🎁", Text = "Nice! Spend coins in the 🛍️ Shop and check 🎯 Goals for quests and mastery." },
 }
 local HIDDEN_IN = { InRound = true, Results = true }
 local HIDDEN_ON_PHONES = { Voting = true } -- the vote cards' spot

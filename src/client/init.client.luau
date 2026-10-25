@@ -83,6 +83,7 @@ local order = {
 	"ResultsController",
 	"ShopController",
 	"QuestController",
+	"MasteryController", -- Game Mastery's tab in the GOALS hub (UI/MasteryWall)
 	"RewardsController", -- after HudController: it adds to the profile chip
 	"CelebrationController",
 	"GoldPassController", -- the GOLD PASS's UNLOCKED card, and the gold shimmer on name tags

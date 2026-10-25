@@ -7,7 +7,8 @@
 --     earned when the update came out ("NEW REWARDS!"). EQUIP puts on what it unlocked; a new
 --     emote gets TRY IT.
 --   * Over the head of anyone who levels up, a "Lv 10!" pops up for everyone in the lobby to see
---     (a level-up from a round's rewards pops once everyone is back in the lobby).
+--     (a level-up from a round's rewards pops once everyone is back in the lobby); a new Game Mastery
+--     rank pops up the same way ("GOLD RANK!" and the game, in the rank's colours).
 -- The server has already granted everything (Services/ProgressionService); this only shows it.
 -- A celebration waits for a calm moment: never during the vote, the rules card, the round or the
 -- results (it shows when everyone's back in the lobby), and several at once make one. It closes
@@ -71,6 +72,7 @@ local GoldPassController = require(script.Parent.GoldPassController)
 local State = require(script.Parent.Parent.State)
 local Mastery = require(script.Parent.Parent.UI.Mastery)
 local Modal = require(script.Parent.Parent.UI.Modal)
+local PartyKit = require(script.Parent.Parent.UI.PartyKit)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
@@ -429,7 +431,8 @@ local function nextGoal(celebration: Celebration): string
 end
 
 -- Confetti falls over the card (clipped to it: never over the stick, the jump button or the menu).
-local function confetti(layer: Frame)
+local function confetti(layer: Frame, colors: { Color3 }?)
+	local palette = colors or CONFETTI
 	local count = if State.ReducedEffects() then 8 else 26
 	for index = 1, count do
 		local piece = UIKit.new("Frame", {
@@ -438,7 +441,7 @@ local function confetti(layer: Frame)
 			Position = UDim2.fromScale(0.04 + math.random() * 0.92, -0.04 - math.random() * 0.2),
 			Size = UDim2.fromOffset(math.random(8, 12), math.random(13, 18)),
 			Rotation = math.random(0, 360),
-			BackgroundColor3 = CONFETTI[(index % #CONFETTI) + 1],
+			BackgroundColor3 = palette[(index % #palette) + 1],
 			BorderSizePixel = 0,
 			ZIndex = 6,
 			Parent = layer,
@@ -477,12 +480,303 @@ local function setCelebrating(on: boolean)
 	State.LocalPlayer:SetAttribute("PP_Celebrating", on) -- OnboardingController's phone tip steps aside
 end
 
+-- Game Mastery's new rank (owner: "this has to be incredible and make players feel like they
+-- accomplished something"): a card in the rank's own colours with a turning rim, rays behind the
+-- badge, and the badge forged in front of you: the rank before shakes, flashes white and the new one
+-- bursts out with confetti and the crate's big reveal sound. The game's name, "GOLD RANK!" in the
+-- rank's metal and a line for it ("A true pro!"); the climb with every rank, the new one lit; its
+-- rewards one by one; the next goal and 🏆 MASTERY. DIAMOND and LEGEND get a halo and stay longer.
+local MASTERY_H = 410
+local function showMastery(celebration: Celebration)
+	local rank = celebration.Rank or 1
+	local before = math.max(0, rank - 1)
+	local definition = GameDefinitions.Get(celebration.Game or "")
+	local look = Mastery.Look(rank)
+	local big = rank >= 4
+	local reduced = State.ReducedEffects()
+	local group = PartyKit.Group()
+	PartyKit.SetPlaying(group, true)
+
+	local holder = UIKit.new("Frame", {
+		Name = "Celebration",
+		AnchorPoint = if touch then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5),
+		Position = if touch then UDim2.new(0.5, 0, 0, 4) else UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(CARD_W, MASTERY_H),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	UIKit.AutoScale(holder, if touch then nil else PC_BIAS)
+	local card = UIKit.Panel({
+		Name = "Card",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		CornerRadius = 26,
+		ClipsDescendants = true, -- the rays, rings and confetti stay on the card
+		ZIndex = 1,
+		Parent = holder,
+	}, PartyKit.Darker(look.Bottom, 0.25), Theme.Colors.PanelDark)
+	card:SetAttribute("PP_Popup", true) -- a few seconds in the lobby; nothing in the stick's corner takes taps
+	PartyKit.SpinBorder(
+		card,
+		ColorSequence.new({
+			ColorSequenceKeypoint.new(0, look.Top),
+			ColorSequenceKeypoint.new(0.35, Color3.new(1, 1, 1)),
+			ColorSequenceKeypoint.new(0.7, look.Bottom),
+			ColorSequenceKeypoint.new(1, look.Top),
+		}),
+		5,
+		group
+	)
+
+	local closed = false
+	local function close()
+		if closed then
+			return
+		end
+		closed = true
+		if closeCurrent == close then
+			closeCurrent = nil
+		end
+		PartyKit.SetPlaying(group, false)
+		holder:Destroy()
+		setCelebrating(false)
+		task.delay(0.4, CelebrationController.Pump)
+	end
+	closeCurrent = close
+	setCelebrating(true)
+
+	-- The badge, forged: rays behind, the rank before, a shake and a flash, then the new rank.
+	local badgeCenter = UDim2.fromOffset(86, 80)
+	PartyKit.Rays({
+		Parent = card,
+		Size = 320,
+		Position = badgeCenter,
+		Color = look.Top,
+		Count = 10,
+		ZIndex = 1,
+		Group = group,
+		Period = 14,
+		Strength = if big then 0.6 else 0.45,
+	})
+	local forge = UIKit.new("Frame", {
+		Name = "Badge",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = badgeCenter,
+		Size = UDim2.fromOffset(124, 124),
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = card,
+	})
+	local old = Mastery.Badge(before, 108, {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		ZIndex = 3,
+		Parent = forge,
+	})
+	local function reveal()
+		if closed then
+			return
+		end
+		old:Destroy()
+		local badge = Mastery.Badge(rank, 116, {
+			Name = "Rank",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			ZIndex = 3,
+			Parent = forge,
+		})
+		UIKit.PopIn(badge, 0.55)
+		if big then
+			PartyKit.Halo(badge, look.Top, 3, group)
+		end
+		local flash = UIKit.new("Frame", {
+			Name = "Flash",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = badgeCenter,
+			Size = UDim2.fromOffset(120, 120),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			ZIndex = 5,
+			Parent = card,
+			Children = { UIKit.Round() },
+		})
+		UIKit.Tween(flash, 0.45, { Size = UDim2.fromOffset(300, 300), BackgroundTransparency = 1 })
+		Debris:AddItem(flash, 0.5)
+		ring(card, badgeCenter, 0)
+		ring(card, badgeCenter, 0.2)
+		PartyKit.Burst(card, badgeCenter, { look.Top, look.Bottom, Theme.Colors.Yellow }, 30, 260)
+		AudioController.PlayOr("CrateTitle", "Victory")
+	end
+	if reduced then
+		reveal()
+	else
+		-- (a shake, left and right, then the flash)
+		for index, angle in { -10, 10, -12, 12, 0 } do
+			task.delay(0.35 + index * 0.08, function()
+				if old.Parent then
+					UIKit.Tween(old, 0.07, { Rotation = angle })
+				end
+			end)
+		end
+		task.delay(0.85, reveal)
+	end
+
+	-- The words: the game, the rank in its metal, a line for it; the ✕ in the corner.
+	label({
+		Name = "Game",
+		Text = if definition then string.upper(definition.Name) else "",
+		Font = Theme.Fonts.Display,
+		TextSize = 22,
+		TextWrapped = false,
+		TextColor3 = look.Top,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(166, 16),
+		Size = UDim2.fromOffset(CARD_W - 166 - 80, 28),
+		Parent = card,
+		Children = { UIKit.TextStroke(0) },
+	})
+	local headline = label({
+		Name = "Headline",
+		Text = `{Mastery.Name(rank)} RANK!`,
+		Font = Theme.Fonts.Display,
+		TextSize = 48,
+		TextWrapped = false,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(164, 42),
+		Size = UDim2.fromOffset(CARD_W - 164 - 24, 58),
+		Parent = card,
+		Children = {
+			UIKit.TextStroke(0),
+			UIKit.new("UIGradient", { Color = Mastery.Gradient(rank), Rotation = 90 }),
+		},
+	})
+	label({
+		Name = "Tagline",
+		Text = Mastery.Tagline(rank),
+		Font = Theme.Fonts.Display,
+		TextSize = 22,
+		TextWrapped = false,
+		TextColor3 = Theme.Colors.Yellow,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(166, 102),
+		Size = UDim2.fromOffset(CARD_W - 166 - 24, 28),
+		Parent = card,
+		Children = { UIKit.TextStroke(0.1) },
+	})
+	UIKit.Button({
+		Name = "Close",
+		Text = "✕", -- (UI/Icons draws the X)
+		TextSize = 30,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 12),
+		Size = UDim2.fromOffset(if touch then Theme.Touch.Target else 56, if touch then Theme.Touch.Target else 56),
+		CornerRadius = "round",
+		ZIndex = 5,
+		Parent = card,
+	}, close, Theme.Colors.Red, Color3.fromRGB(190, 40, 60))
+
+	-- The climb: every rank, the new one lit.
+	local ladder = Mastery.Ladder(rank, 44, 34, {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 146),
+		ZIndex = 3,
+		Parent = card,
+	})
+	UIKit.PopIn(ladder, 0.5)
+
+	-- The rewards, revealed one by one.
+	local row = UIKit.new("Frame", {
+		Name = "Rewards",
+		Position = UDim2.fromOffset(0, 208),
+		Size = UDim2.new(1, 0, 0, CHIP_H),
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = card,
+		Children = { UIKit.List(Enum.FillDirection.Horizontal, CHIP_GAP, Enum.HorizontalAlignment.Center) },
+	})
+	local chips = {}
+	if (celebration.Coins or 0) > 0 then
+		table.insert(chips, coinChip(row, celebration.Coins, 1))
+	end
+	if (celebration.Keys or 0) > 0 then
+		table.insert(chips, keyChip(row, celebration.Keys :: number, 2))
+	end
+	if (celebration.Crates or 0) > 0 then
+		table.insert(chips, crateChip(row, celebration.Crates :: number, 3))
+	end
+	for index, chip in chips do
+		local slot = UIKit.new("Frame", {
+			Name = chip.Name .. "Slot",
+			Size = chip.Size,
+			LayoutOrder = chip.LayoutOrder,
+			BackgroundTransparency = 1,
+			ZIndex = chip.ZIndex,
+			Parent = row,
+		})
+		chip.AnchorPoint = Vector2.new(0.5, 0.5)
+		chip.Position = UDim2.fromScale(0.5, 0.5)
+		chip.Parent = slot
+		chip.Visible = false
+		task.delay(1.1 + index * 0.18, function()
+			if chip.Parent then
+				chip.Visible = true
+				UIKit.PopIn(chip, 0.35)
+			end
+		end)
+	end
+
+	-- The next goal (left) and 🏆 MASTERY (right half).
+	local bottom = MASTERY_H - 14 - (if touch then Theme.Touch.Target else 56)
+	local goal = label({
+		Name = "NextGoal",
+		Text = nextGoal(celebration),
+		TextSize = Theme.Touch.MinText,
+		TextColor3 = Theme.Colors.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(20, bottom),
+		Size = UDim2.fromOffset(BUTTONS_LEFT - 28, if touch then Theme.Touch.Target else 56),
+		Parent = card,
+	})
+	goal:SetAttribute("PP_Lines", 2)
+	UIKit.Button({
+		Name = "SeeMore",
+		Text = "🏆 MASTERY",
+		TextSize = 22,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -16, 0, bottom),
+		Size = UDim2.fromOffset(176, if touch then Theme.Touch.Target else 56),
+		CornerRadius = 18,
+		ZIndex = 4,
+		Parent = card,
+	}, function()
+		close()
+		State.OpenScreen:Fire("Mastery") -- (the GOALS hub's tab: Controllers/MasteryController)
+	end, Theme.Colors.Pink, PINK_DARK)
+
+	-- Motion: the card pops, the headline's metal shimmers, confetti in the rank's colours.
+	UIKit.PopIn(card, 0.4)
+	UIKit.PopIn(headline, 0.5)
+	local metal = headline:FindFirstChildOfClass("UIGradient")
+	if metal and not reduced then
+		PartyKit.Loop(metal, 2.4, { Rotation = 270 }, group, { Style = Enum.EasingStyle.Sine })
+	end
+	task.delay(if reduced then 0 else 0.85, function()
+		if not closed then
+			confetti(card, { look.Top, look.Bottom, Theme.Colors.Yellow, Color3.new(1, 1, 1) })
+		end
+	end)
+	AudioController.Play("Victory")
+	task.delay(SHOW_FOR + (if big then 3 else 1), close)
+end
+
 local function show(celebration: Celebration)
+	if celebration.Kind == "Mastery" then
+		showMastery(celebration)
+		return
+	end
 	local isLevel = celebration.Kind == "LevelUp"
 	local welcome = celebration.Kind == "Welcome"
-	local isMastery = celebration.Kind == "Mastery"
-	local masteryRank = celebration.Rank or 1
-	local masteryGame = GameDefinitions.Get(celebration.Game or "")
 	local items = {}
 	for _, id in celebration.Items do
 		local item = Cosmetics.Get(id)
@@ -517,10 +811,7 @@ local function show(celebration: Celebration)
 	}, Color3.fromRGB(96, 62, 190), Theme.Colors.PanelDark)
 	card:SetAttribute("PP_Popup", true) -- a few seconds in the lobby; nothing in the stick's corner takes taps
 	local rim = card:FindFirstChildOfClass("UIStroke") :: UIStroke
-	rim.Color = if isLevel
-		then look.Gradient.Keypoints[1].Value
-		elseif isMastery then Mastery.Look(masteryRank).Top
-		else Theme.Colors.Yellow
+	rim.Color = if isLevel then look.Gradient.Keypoints[1].Value else Theme.Colors.Yellow
 	rim.Thickness = 4
 	rim.Transparency = 0
 
@@ -544,57 +835,36 @@ local function show(celebration: Celebration)
 	local badgeCenter = UDim2.fromOffset(18 + 48, 16 + 48)
 	ring(card, badgeCenter, 0.05)
 	ring(card, badgeCenter, 0.3)
-	local badge: Frame
-	local badgeGradient: UIGradient
-	if isMastery then
-		-- Game Mastery: the rank's own badge (UI/Mastery).
-		badge = Mastery.Badge(masteryRank, 96, {
-			Name = "Badge",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = badgeCenter,
-			ZIndex = 3,
-			Parent = card,
-		})
-		badgeGradient = badge:FindFirstChildOfClass("UIGradient") :: UIGradient
-	else
-		badge = UIKit.new("Frame", {
-			Name = "Badge",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = badgeCenter,
-			Size = UDim2.fromOffset(96, 96),
-			BackgroundColor3 = Color3.new(1, 1, 1),
-			ZIndex = 3,
-			Parent = card,
-			Children = { UIKit.Round(), UIKit.Stroke(nil, 4, 0.1) },
-		})
-		badgeGradient = UIKit.new("UIGradient", {
-			Color = if isLevel then look.Gradient else GOLD,
-			Rotation = 90,
-			Parent = badge,
-		})
-		label({
-			Text = if isLevel
-				then tostring(level)
-				elseif welcome then "🎁"
-				else (items[1] and items[1].Icon or "🏅"),
-			Font = Theme.Fonts.Display,
-			TextSize = if isLevel then (if level >= 100 then 40 else 50) else 46,
-			TextWrapped = false,
-			Size = UDim2.fromScale(1, 1),
-			ZIndex = 4,
-			Parent = badge,
-			Children = { UIKit.TextStroke(0.1) },
-		})
-	end
+	local badge = UIKit.new("Frame", {
+		Name = "Badge",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = badgeCenter,
+		Size = UDim2.fromOffset(96, 96),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		ZIndex = 3,
+		Parent = card,
+		Children = { UIKit.Round(), UIKit.Stroke(nil, 4, 0.1) },
+	})
+	local badgeGradient = UIKit.new("UIGradient", {
+		Color = if isLevel then look.Gradient else GOLD,
+		Rotation = 90,
+		Parent = badge,
+	})
+	label({
+		Text = if isLevel then tostring(level) elseif welcome then "🎁" else (items[1] and items[1].Icon or "🏅"),
+		Font = Theme.Fonts.Display,
+		TextSize = if isLevel then (if level >= 100 then 40 else 50) else 46,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 4,
+		Parent = badge,
+		Children = { UIKit.TextStroke(0.1) },
+	})
 	local headline = label({
 		Name = "Headline",
-		Text = if isLevel
-			then "LEVEL UP!"
-			elseif isMastery then `{Mastery.Name(masteryRank)} RANK!`
-			elseif welcome then "NEW REWARDS!"
-			else "MILESTONE!",
+		Text = if isLevel then "LEVEL UP!" elseif welcome then "NEW REWARDS!" else "MILESTONE!",
 		Font = Theme.Fonts.Display,
-		TextSize = if isMastery then 42 elseif welcome then 44 else 50,
+		TextSize = if welcome then 44 else 50,
 		TextWrapped = false,
 		TextColor3 = Theme.Colors.Yellow,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -606,9 +876,6 @@ local function show(celebration: Celebration)
 	local subline
 	if isLevel then
 		subline = if newColor then `New name tag color: {look.Icon} {look.Name}!` else `You're level {level}!`
-	elseif isMastery then
-		local name = if masteryGame then string.upper(masteryGame.Name) else "THIS GAME"
-		subline = `You're {Mastery.Name(masteryRank)} at {name}!`
 	elseif welcome then
 		subline = "Your level and career earned these. They're yours!"
 	else
@@ -660,10 +927,6 @@ local function show(celebration: Celebration)
 	local keys = celebration.Keys or 0
 	if keys > 0 then
 		table.insert(chips, keyChip(row, keys, 3))
-	end
-	local crates = celebration.Crates or 0
-	if crates > 0 then
-		table.insert(chips, crateChip(row, crates, 3))
 	end
 	-- As many item chips as fit beside the coins (3 less one per coin chip), the rest as "+2 more!"
 	-- (every one is on the Rewards screen). At most 576 of the card's 600 units.
@@ -794,7 +1057,7 @@ local function show(celebration: Celebration)
 	end
 	UIKit.Button({
 		Name = "SeeMore",
-		Text = if isLevel or welcome then "⭐ ROAD" elseif isMastery then "🎮 MASTERY" else "🏅 CAREER",
+		Text = if isLevel or welcome then "⭐ ROAD" else "🏅 CAREER",
 		TextSize = 22,
 		Size = UDim2.fromOffset(146, buttonHeight),
 		CornerRadius = 18,
@@ -803,10 +1066,7 @@ local function show(celebration: Celebration)
 		Parent = buttons,
 	}, function()
 		close()
-		State.OpenScreen:Fire(
-			"Rewards",
-			if isLevel or welcome then "Road" elseif isMastery then "Mastery" else "Career"
-		)
+		State.OpenScreen:Fire("Rewards", if isLevel or welcome then "Road" else "Career")
 	end, Theme.Colors.Pink, PINK_DARK)
 
 	-- Motion: the card and badge pop, confetti falls, a rainbow badge shimmers.
@@ -929,6 +1189,92 @@ local function popOver(character: Instance, level: number)
 	Debris:AddItem(board, 3)
 end
 
+-- A new Game Mastery rank over a player's head, for everyone in the lobby (owner: "make players feel
+-- like they accomplished something"): a pill in the rank's colours with its badge, "GOLD RANK!" and
+-- the game, rising for a few seconds like the "Lv 10!".
+local function masteryPop(character: Instance, rank: number, gameId: string)
+	local head = character:FindFirstChild("Head")
+	if not head or not head:IsA("BasePart") then
+		return
+	end
+	local camera = workspace.CurrentCamera
+	if camera and (camera.CFrame.Position - head.Position).Magnitude > 160 then
+		return -- too far away to see
+	end
+	local definition = GameDefinitions.Get(gameId)
+	local reduced = State.ReducedEffects()
+	local board = Instance.new("BillboardGui")
+	board.Name = "PP_MasteryPop"
+	board.Adornee = head
+	board.Size = UDim2.fromOffset(230, 64)
+	board.StudsOffset = Vector3.new(0, 5, 0)
+	board.MaxDistance = 160
+	board.LightInfluence = 0
+	board.AlwaysOnTop = true
+	board.ResetOnSpawn = false
+	local pill = UIKit.new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Parent = board,
+		Children = {
+			UIKit.Round(),
+			UIKit.new("UIGradient", { Color = Mastery.Gradient(rank), Rotation = 90 }),
+			UIKit.new("UIStroke", { Color = Theme.Colors.Ink, Thickness = 3 }),
+		},
+	})
+	Mastery.Badge(rank, 54, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 5, 0.5, 0), Parent = pill })
+	local words = {}
+	table.insert(
+		words,
+		UIKit.Label({
+			Text = `{Mastery.Name(rank)} RANK!`,
+			Font = Theme.Fonts.Display,
+			TextScaled = true,
+			Position = UDim2.fromOffset(64, 4),
+			Size = UDim2.new(1, -74, 0, 32),
+			Parent = pill,
+			Children = { UIKit.TextStroke(0) },
+		})
+	)
+	table.insert(
+		words,
+		UIKit.Label({
+			Text = if definition then string.upper(definition.Name) else "",
+			Font = Theme.Fonts.Display,
+			TextScaled = true,
+			Position = UDim2.fromOffset(64, 36),
+			Size = UDim2.new(1, -74, 0, 22),
+			Parent = pill,
+			Children = { UIKit.TextStroke(0.1) },
+		})
+	)
+	board.Parent = head
+	if not reduced then
+		UIKit.PopIn(pill, 0.5)
+		UIKit.Tween(board, 3.6, { StudsOffset = Vector3.new(0, 6.6, 0) }, Enum.EasingStyle.Sine)
+	end
+	task.delay(3, function()
+		if board.Parent then
+			UIKit.Tween(pill, 0.6, { BackgroundTransparency = 1 })
+			for _, word in words do
+				UIKit.Tween(word, 0.6, { TextTransparency = 1 })
+			end
+			for _, item in pill:GetDescendants() do
+				if item:IsA("UIStroke") then
+					UIKit.Tween(item, 0.6, { Transparency = 1 })
+				elseif item:IsA("ImageLabel") then
+					UIKit.Tween(item, 0.6, { ImageTransparency = 1 })
+				elseif item:IsA("Frame") then
+					UIKit.Tween(item, 0.6, { BackgroundTransparency = 1 })
+				end
+			end
+		end
+	end)
+	Debris:AddItem(board, 3.8)
+end
+
 function CelebrationController.Start(context)
 	touch = UIKit.IsTouch()
 	-- Their own layer: above the HUD and the toasts, under the windows (10), which close it anyway.
@@ -963,6 +1309,11 @@ function CelebrationController.Start(context)
 	Remotes.Get("LevelPop").OnClientEvent:Connect(function(character, level)
 		if typeof(character) == "Instance" and type(level) == "number" then
 			popOver(character, level)
+		end
+	end)
+	Remotes.Get("MasteryPop").OnClientEvent:Connect(function(character, rank, gameId)
+		if typeof(character) == "Instance" and type(rank) == "number" and type(gameId) == "string" then
+			masteryPop(character, rank, gameId)
 		end
 	end)
 	GameState.Changed("Phase", function(phase)

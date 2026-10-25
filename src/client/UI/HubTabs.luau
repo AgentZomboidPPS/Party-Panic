@@ -1,12 +1,15 @@
--- The season hub (owner: "What if we rolled season/event/quests into one button?"): the season's crate
--- window (Crates/CrateMenu), the event's window (Controllers/EventController) and the quests'
--- (Controllers/QuestController) share one strip of tabs in their title bars, in place of their
--- titles, and one 🎃 button in the menu column (Controllers/HudController, State.OpenScreen "Hub")
--- opens the tab used last (the season's at first). A tab opens its window in the same place, at the
--- same size, with no pop, so the three read as one window. The event's tab is there only while an
--- event is on; a tab with something to claim wears the red "!", and so does the hub's button.
+-- The GOALS hub (owner: "What if we rolled season/event/quests into one button?"): the season's crate
+-- window (Crates/CrateMenu), the event's window (Controllers/EventController), the quests'
+-- (Controllers/QuestController) and Game Mastery's (Controllers/MasteryController; owner: "I also want
+-- to mastery tab to be in the season button I want to rename that button to better reflect
+-- everything in it though") share one strip of tabs in their title bars, in place of their titles,
+-- and one 🎯 GOALS button in the menu column (Controllers/HudController, State.OpenScreen "Hub";
+-- it was 🎃 Season until Mastery joined) opens the tab used last (the season's at first). A tab opens
+-- its window in the same place, at the same size, with no pop, so they read as one window. The
+-- event's tab is there only while an event is on; a tab with something to claim wears the red "!",
+-- and so does the hub's button.
 --
---   HubTabs.Attach(modal, "Season")   strip in this window's title bar ("Season" | "Event" | "Quests")
+--   HubTabs.Attach(modal, "Season")   strip in this window's title bar ("Season" | "Event" | "Quests" | "Mastery")
 --   HubTabs.SetEvent(icon, name)      the event's tab (nil: no event on)
 --   HubTabs.SetBadge("Quests", true)  a red "!" on a tab
 --   HubTabs.AnyBadge()                whether any tab has one (the hub button's "!")
@@ -25,17 +28,18 @@ local UIKit = require(script.Parent.UIKit)
 
 local HubTabs = {}
 
-export type Key = "Season" | "Event" | "Quests"
+export type Key = "Season" | "Event" | "Quests" | "Mastery"
 
 HubTabs.Changed = Signal.new()
 
-local ORDER: { Key } = { "Season", "Event", "Quests" }
-local SCREENS: { [Key]: string } = { Season = "Crates", Event = "Event", Quests = "Quests" }
+local ORDER: { Key } = { "Season", "Event", "Quests", "Mastery" }
+local SCREENS: { [Key]: string } = { Season = "Crates", Event = "Event", Quests = "Quests", Mastery = "Mastery" }
 -- Each tab's colours when it's the one showing (the others wear the neutral lavender).
 local ACTIVE: { [Key]: { Color3 } } = {
 	Season = { Theme.Colors.Orange, Color3.fromRGB(205, 92, 24) },
 	Event = { Theme.Colors.Pink, Color3.fromRGB(200, 50, 140) },
 	Quests = { Theme.Colors.Yellow, Theme.Colors.Orange },
+	Mastery = { Theme.Colors.Cyan, Color3.fromRGB(50, 120, 230) },
 }
 
 local eventIcon: string?, eventName: string? = nil, nil
@@ -48,6 +52,8 @@ local function label(key: Key): string
 		return `🍂 {string.upper(Seasons.CurrentSeason().Name)}`
 	elseif key == "Event" then
 		return `{eventIcon or "🎃"} {string.upper(eventName or "EVENT")}`
+	elseif key == "Mastery" then
+		return "🏆 MASTERY"
 	end
 	return "📜 QUESTS"
 end

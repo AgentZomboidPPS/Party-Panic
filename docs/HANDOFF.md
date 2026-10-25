@@ -24,6 +24,48 @@
     per-game LEGEND titles and a glow by the name in rounds, 2 Roblox badges (the owner creates them).
   - The client harness bundle is over Open Cloud's 1 MiB cap again with Mastery in: runs skip `Event` too
     (`--skip ...,Event`), and Telemetry is a stand-in there now.
+- **Mastery, second pass (IN PROGRESS when the owner asked for this handoff; not rendered or tested in a
+  run yet, only stylua/selene/luau-lsp clean and the 471 Lune tests passing).** Owner: "I also want to mastery tab to be
+  in the season button I want to rename that button to better reflect everything in it though. Also this has to be
+  incredible and make players feel like they accomplished something."
+  - DONE in code:
+    - The menu's 🎃 **Season** button is now 🎯 **GOALS** (HudController; the onboarding tip says "check 🎯 Goals for
+      quests and mastery"). I picked the name; tell the owner it's easy to change.
+    - The GOALS hub (UI/HubTabs) has a 4th tab, 🏆 MASTERY: `Controllers/MasteryController` (new, in the client start
+      order and the harness's order list) draws `UI/MasteryWall` in a 980x600 hub window; `State.OpenScreen("Mastery")`
+      opens it. The Rewards screen still has its own MASTERY tab too (tab label now 🏆).
+    - A new rank (SILVER and up) gets its own celebration card, `showMastery` in CelebrationController: rank-tinted
+      card with a spinning rim, rays, the badge "forged" (old rank shakes, white flash, new rank bursts out, rings,
+      confetti, "CrateTitle" sound), the game name, "GOLD RANK!" in a shimmering rank gradient, a tagline
+      (`Mastery.Tagline`), the 5-rank ladder (`Mastery.Ladder`), coin/key/crate chips, next goal, 🏆 MASTERY button
+      (opens the hub tab). DIAMOND/LEGEND get a halo and stay 3 s longer. Card is 600x410 units (taller than the
+      others' 344).
+    - Everyone sees it: MasteryService holds a pop per player and, once back in the lobby (Cleanup +2.5 s), fires the
+      new remote `MasteryPop` (character, rank, gameId) to all clients; CelebrationController's `masteryPop` shows a
+      billboard pill over the head. DIAMOND now also gets a server-wide toast (LEGEND already did).
+    - `UI/Mastery` gained `Tagline`, `Picture(gameId, props)` (first frame of the game's preview sprite sheet,
+      Shared/GamePreviews), `Ladder`, and a `locked` flag on `Badge`.
+  - NOT DONE (next steps, in this order):
+    1. Results card rank-up animation (ResultsController.masteryRow): start on the old rank's badge, fill the bar to
+       full, flash, swap to the new badge with "GOLD RANK!", then the new rank's bar. Not started.
+    2. Fixes from the first render (`scratchpad/uisweep/MastPC`, `MastTouch`):
+       - Rules card (RoundController): the category label's box runs under the mastery chip (overlap flags); shrink
+         `rulesFields.Category` by the chip's width when the chip is shown.
+       - Mastery wall tiles: the invisible "Pick" TextButton over each tile is flagged as overlapping every label;
+         make the tile itself the TextButton instead.
+       - Mastery wall header "How" text is cut off on PC: shorten it.
+       - Phones: the results card overflows (the "LEVEL UP!" line falls off the bottom) when a round has every bonus
+         at once plus the mastery row; use tighter rows when there are 8+ items, or drop the level-up line then.
+       - PC vote cards: the objective box shrank to 40 units, so long objectives (Big Bad Vacuum) draw tiny. Give it
+         ~46 and squeeze the mastery line.
+    3. Trophy-case wall (UI/MasteryWall): tiles with the game's picture (`Mastery.Picture`) behind a dark bottom
+       gradient, rank-coloured rims, `PartyKit.Shine` on GOLD+, `PartyKit.SpinBorder` on LEGEND; the detail panel
+       as a 5-step rewards road (what each rank pays, ticks on the reached ones); a header pill for the next
+       cross-game title (All-Rounder 3/5).
+    4. Render it all: `bash scratchpad/uisweep/run_noevent.sh NAME [--touch] --shots "Voting,Preparing,Results,
+       Mastery,Rewards Mastery,LevelUp"` (the harness needs `Event` skipped to stay under 1 MiB). Add a harness shot
+       of the hub's Mastery tab (`State.OpenScreen:Fire("Mastery")`) and of the MasteryPop.
+    5. Then commit, push, show the owner, and ask before publishing (it would be version 61).
 
 **Live in version 60 (2026-10-25, on the owner's "Push it"):**
 - **Server merging** (owner: "Is there a way to merge severs automatically that are getting low?", then "Also push"; I

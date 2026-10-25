@@ -6,14 +6,17 @@
 --     PASS owner's top-half finish or team win) and whether its win counts toward the top ranks
 --     (ProvenPeople real players in the round, not a private server). A new rank pays its coins,
 --     keys and crate at once, shows a celebration card in the lobby (Celebrate, Kind "Mastery"; not
---     for BRONZE, which every game's first round gives) and, for LEGEND, tells the whole server.
---     What Record returns goes on the results card.
+--     for BRONZE, which every game's first round gives), and lets everyone see it (owner: "make
+--     players feel like they accomplished something"): the rank pops over their head for everyone
+--     in the lobby (MasteryPop, once everyone's back from the round, like the "Lv 10!"), and DIAMOND
+--     and LEGEND are told to the whole server. What Record returns goes on the results card.
 --   * Today's Spotlight is in GameState "Spotlight" (a JSON list of game ids), redone when the UTC day
 --     changes; VotingService offers those games a little more often.
 --   * Someone whose past rounds were credited when Mastery came out (Logic/MasteryLogic.Load) is told
 --     once, a few seconds after they join.
 -- Bots have no profile and get nothing; the server decides everything, the screens only show it.
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
@@ -35,6 +38,9 @@ local Telemetry = require(script.Parent.Telemetry)
 local MasteryService = {}
 
 local INTRO_DELAY = 10 -- seconds after joining before the "your past rounds earned..." toast
+-- The pop over a head waits while the round (and its results) is on: the players are in the arena.
+local HOLD_IN = { Preparing = true, InRound = true, Results = true }
+local POP_AFTER_RESPAWN = 2.5 -- seconds into Cleanup (just after the "Lv 10!", which goes at 2)
 
 -- What the results card shows about a round's mastery.
 export type Summary = {
@@ -50,6 +56,8 @@ export type Summary = {
 }
 
 local celebrateRemote = Remotes.Get("Celebrate")
+local popRemote = Remotes.Get("MasteryPop")
+local heldPops: { [Player]: { Rank: number, Game: string } } = {} -- to pop once back in the lobby
 
 -- The games that count (on in the rotation), and their ids in the game list's order.
 local known: { [string]: boolean } = {}
@@ -95,6 +103,10 @@ local function rankUp(player: Player, definition: any, before: number, after: nu
 	if rank.Id == "Bronze" then
 		return
 	end
+	local held = heldPops[player]
+	if not held or after >= held.Rank then
+		heldPops[player] = { Rank = after, Game = definition.Id }
+	end
 	celebrateRemote:FireClient(player, {
 		Kind = "Mastery",
 		Game = definition.Id,
@@ -106,6 +118,22 @@ local function rankUp(player: Player, definition: any, before: number, after: nu
 	})
 	if rank.Id == "Legend" then
 		Notifier.All(`👑 {player.DisplayName} is now a LEGEND at {string.upper(definition.Name)}!`, "reward", 7)
+	elseif rank.Id == "Diamond" then
+		Notifier.All(`💎 {player.DisplayName} reached DIAMOND at {string.upper(definition.Name)}!`, "reward", 6)
+	end
+end
+
+-- The held pops, once everyone is back in the lobby: each new rank over its player's head.
+local function flushPops()
+	if HOLD_IN[GameState.Get("Phase") or "Waiting"] then
+		return
+	end
+	for player, pop in heldPops do
+		heldPops[player] = nil
+		local character = player.Character
+		if character and player.Parent then
+			popRemote:FireAllClients(character, pop.Rank, pop.Game)
+		end
 	end
 end
 
@@ -185,6 +213,14 @@ end
 function MasteryService.Init()
 	MasteryService.Spotlight()
 	DataService.ProfileLoaded:Connect(intro)
+	GameState.Changed("Phase", function(phase)
+		if not HOLD_IN[phase] and next(heldPops) ~= nil then
+			task.delay(if phase == "Cleanup" then POP_AFTER_RESPAWN else 0.5, flushPops)
+		end
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		heldPops[player] = nil
+	end)
 end
 
 function MasteryService.Start()
