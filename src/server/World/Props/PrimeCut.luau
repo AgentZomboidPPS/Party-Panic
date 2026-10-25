@@ -144,7 +144,7 @@ return function(h)
 		},
 		PrimeCutFence = {
 			Height = 4.39,
-			AssetId = 78309083580880,
+			AssetId = 81022583304173,
 			Palette = { Paint = h.rgb(246, 246, 240) },
 			Materials = { Paint = wood },
 			Fallback = function(m)

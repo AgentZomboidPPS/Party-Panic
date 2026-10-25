@@ -2,7 +2,11 @@
 plane (within --eps studs) whose footprints overlap. Works on a world dump from dump_world.luau, or a
 round_harness.py --dump-at result (its "dump").
 
-    python3 tools/preview/zfight.py dump.json [--eps 0.08] [--all] [--no-meshes]
+    python3 tools/preview/zfight.py dump.json [--eps 0.025] [--all] [--no-meshes]
+
+--eps: faces closer than this flicker (0.025 studs). It was 0.08 ("the game keeps faces 0.1 apart"),
+but a depth buffer tells faces 0.03 apart at 100 studs, and pushing a mesh's own faces 0.1 apart
+swelled 51 props in version 57 (tools/meshgen/unfight.py): 0.03 is the game's gap now.
 
 Owner, on telling AI-built games apart: "Z Fighting. An AI built map will have overlapping parts that
 look like they flicker when you move the camera." So every pair found is checked against what's
@@ -518,7 +522,7 @@ def triangle_pairs(entries, eps):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("dump")
-    parser.add_argument("--eps", type=float, default=0.08)
+    parser.add_argument("--eps", type=float, default=0.025)
     parser.add_argument("--all", action="store_true", help="also list the false alarms, with why")
     parser.add_argument("--no-meshes", action="store_true", help="parts and unions only (the old check)")
     args = parser.parse_args()
