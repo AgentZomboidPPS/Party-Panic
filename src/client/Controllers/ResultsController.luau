@@ -55,6 +55,11 @@
 -- to the next rank that fills from where the round started. It counts as a line for the compact
 -- layout, so the card still fits a phone.
 --
+-- Mastery, second pass (owner: "this has to be incredible and make players feel like they
+-- accomplished something"): a new rank plays out on that row (masteryRow), and the column measures
+-- the room the card has on this screen before it picks its row height, so a round with every bonus
+-- at once no longer pushes the "LEVEL UP!" line off the bottom of a phone (rewardsLayout).
+--
 -- Only the card's X closes it early (owner: "I don't like how clicking skips the ending screen. I
 -- clicked and I couldn't vote."): a click beside it, on the dim backdrop, used to close it, and so
 -- could a click on the card itself.
@@ -733,7 +738,13 @@ local function buildStandings(data)
 end
 
 -- Game Mastery's row (Services/MasteryService's Summary): the rank's badge, what the round added and
--- a bar to the next rank that fills from where the round started (from empty on a new rank).
+-- a bar to the next rank that fills from where the round started.
+--
+-- A new rank plays out on the row (owner: "this has to be incredible and make players feel like they
+-- accomplished something"): it starts on the old rank's badge and bar, the bar fills to the brim,
+-- the row flashes white, the new badge pops out with "GOLD RANK!" and a puff of confetti in its
+-- colours, then the bar starts over in the next rank's colours and fills to where the player is now.
+-- With reduced effects it shows the new rank straight away.
 local function masteryRow(summary: { [string]: any }, rowHeight: number, order: number)
 	local after = tonumber(summary.After) or 0
 	local before = tonumber(summary.Before) or after
@@ -745,6 +756,9 @@ local function masteryRow(summary: { [string]: any }, rowHeight: number, order: 
 		Mastery.Ranks
 	)
 	local rankedUp = after > before
+	local animate = rankedUp and not State.ReducedEffects()
+	local spotlight = if (tonumber(summary.Spotlight) or 0) > 0 then " ×2" else ""
+	local shown = if animate then before else after -- the rank on the row as it opens
 	local row = UIKit.new("Frame", {
 		Name = "Mastery",
 		Size = UDim2.new(1, 0, 0, rowHeight),
@@ -752,63 +766,191 @@ local function masteryRow(summary: { [string]: any }, rowHeight: number, order: 
 		BackgroundTransparency = 0.35,
 		LayoutOrder = order,
 		Parent = rewards,
-		Children = {
-			UIKit.Corner(10),
-			UIKit.Stroke(Mastery.Look(math.max(after, 1)).Top, 2, if rankedUp then 0 else 0.4),
-		},
+		Children = { UIKit.Corner(10) },
 	})
+	local rim = UIKit.Stroke(Mastery.Look(math.max(shown, 1)).Top, 2, if rankedUp and not animate then 0 else 0.4)
+	rim.Parent = row
 	local badgeSize = rowHeight - 6
-	Mastery.Badge(after, badgeSize, {
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 4, 0.5, 0),
-		Parent = row,
-	})
-	local text = if rankedUp then `{Mastery.Name(after)} RANK!` else `{Mastery.Name(after)} +{gained}`
-	if (tonumber(summary.Spotlight) or 0) > 0 then
-		text ..= " ×2"
+	local function badge(rank: number): Frame
+		return Mastery.Badge(rank, badgeSize, {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 4, 0.5, 0),
+			ZIndex = row.ZIndex + 1,
+			Parent = row,
+		})
 	end
-	UIKit.Label({
+	local medal = badge(shown)
+	local gainedLabel = UIKit.Label({
 		Name = "Gained",
-		Text = text,
+		Text = if rankedUp and not animate
+			then `{Mastery.Name(after)} RANK!{spotlight}`
+			else `{Mastery.Name(shown)} +{gained}{spotlight}`,
 		Font = Theme.Fonts.Display,
 		TextSize = 18,
 		TextWrapped = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = if rankedUp then Theme.Colors.Yellow else Color3.new(1, 1, 1),
+		TextColor3 = if rankedUp and not animate then Theme.Colors.Yellow else Color3.new(1, 1, 1),
 		Position = UDim2.fromOffset(badgeSize + 10, 0),
 		Size = UDim2.new(0.6, -(badgeSize + 12), 1, 0),
 		Parent = row,
 		Children = { UIKit.TextStroke(0.2) },
 	})
-	local start = if rankedUp then 0 else was.Fraction
-	local bar = Mastery.Bar(math.min(now.Rank + 1, #Mastery.Ranks), start, MasteryLogic.BarText(now), 18, {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -6, 0.5, 0),
-		Size = UDim2.new(0.4, -6, 1, -6),
-		Parent = row,
-	})
+	local function nextOf(rank: number): number
+		return math.min(rank + 1, #Mastery.Ranks)
+	end
+	-- (A new rank's bar starts where the round began, in the colours of the rank it was heading for.)
+	local bar = Mastery.Bar(
+		nextOf(if animate then before else now.Rank),
+		if animate then was.Fraction elseif rankedUp then 0 else was.Fraction,
+		MasteryLogic.BarText(if animate then was else now),
+		18,
+		{
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -6, 0.5, 0),
+			Size = UDim2.new(0.4, -6, 1, -6),
+			Parent = row,
+		}
+	)
 	local fill = bar:FindFirstChild("Fill") :: Frame
-	task.delay(if State.ReducedEffects() then 0 else 0.6 + order * 0.07, function()
-		if fill.Parent then
-			fill.Visible = true
-			UIKit.Tween(fill, 0.8, { Size = UDim2.fromScale(now.Fraction, 1) }, Enum.EasingStyle.Quad)
-		end
-	end)
+	local barText = bar:FindFirstChild("Text") :: TextLabel
+	local fillTint = fill:FindFirstChildOfClass("UIGradient") :: UIGradient
 	UIKit.PopIn(row, 0.3 + order * 0.07)
+	local start = if State.ReducedEffects() then 0 else 0.6 + order * 0.07
+	if not animate then
+		task.delay(start, function()
+			if fill.Parent then
+				fill.Visible = true
+				UIKit.Tween(fill, 0.8, { Size = UDim2.fromScale(now.Fraction, 1) }, Enum.EasingStyle.Quad)
+			end
+		end)
+		return
+	end
+
+	-- The rank-up: fill to the brim ...
+	local reached = Mastery.Ranks[after]
+	task.delay(start, function()
+		if not fill.Parent then
+			return
+		end
+		fill.Visible = true
+		barText.Text = if was.Short == "Wins"
+			then `WINS {reached.Wins}/{reached.Wins}`
+			else `{reached.Points}/{reached.Points}`
+		UIKit.Tween(fill, 0.7, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	end)
+	-- ... a flash, the new badge and "GOLD RANK!" ...
+	local look = Mastery.Look(after)
+	task.delay(start + 0.75, function()
+		if not row.Parent then
+			return
+		end
+		local flash = UIKit.new("Frame", {
+			Name = "Flash",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.1,
+			ZIndex = row.ZIndex + 4,
+			Parent = row,
+			Children = { UIKit.Corner(10) },
+		})
+		UIKit.Tween(flash, 0.5, { BackgroundTransparency = 1 })
+		task.delay(0.55, function()
+			flash:Destroy()
+		end)
+		medal:Destroy()
+		medal = badge(after)
+		UIKit.PopIn(medal, 0.5)
+		rim.Color = look.Top
+		rim.Transparency = 0
+		rim.Thickness = 3
+		gainedLabel.Text = `{Mastery.Name(after)} RANK!{spotlight}`
+		gainedLabel.TextColor3 = Theme.Colors.Yellow
+		UIKit.PopIn(gainedLabel, 0.45)
+		PartyKit.Burst(
+			row,
+			UDim2.new(0, 4 + badgeSize / 2, 0.5, 0),
+			{ look.Top, look.Bottom, Theme.Colors.Yellow },
+			18,
+			150
+		)
+		PartyKit.Shine(row, group, { Period = 1.8, ZIndex = row.ZIndex + 3, Strength = 0.4 })
+		AudioController.PlayOr("CrateTitle", "Pickup")
+		Haptics.Play("Pulse")
+	end)
+	-- ... then the bar starts over for the rank after it.
+	task.delay(start + 1.2, function()
+		if not fill.Parent then
+			return
+		end
+		fillTint.Color = Mastery.Gradient(nextOf(now.Rank))
+		fill.Size = UDim2.fromScale(0, 1)
+		fill.Visible = now.Fraction > 0
+		barText.Text = MasteryLogic.BarText(now)
+		UIKit.PopIn(bar, 0.35)
+		UIKit.Tween(fill, 0.7, { Size = UDim2.fromScale(now.Fraction, 1) }, Enum.EasingStyle.Quad)
+	end)
+end
+
+-- How tall the reward rows can be, and which closing lines fit under the totals, in the room the
+-- column has (`room` units). Six or more lines (the boosts: a friend in the round, a double coins
+-- weekend) draw a little tighter; a round with every bonus at once and a Mastery row draws tighter
+-- still, and only then, if even that is too tall for a small phone, leaves the "LEVEL UP!" line to
+-- the lobby's own celebration card. The personal best and "Next round soon" go wherever there's room.
+local function rewardsLayout(rows: number, loot: boolean, levelUp: boolean, best: boolean, room: number)
+	local compact = rows + (if loot then 2 else 0) >= COMPACT_LINES
+	local sizes = if compact then { { 27, 4 }, { 24, 3 } } else { { 31, 5 }, { 27, 4 }, { 24, 3 } }
+	local function height(rowHeight: number, pad: number, tail: { number }): number
+		local count = rows + 1 + (if loot then 1 else 0) + #tail -- the rows, the totals, the loot, the tail
+		local total = rows * rowHeight + 46 + (if loot then LOOT_H else 0) + (count - 1) * pad
+		for _, extra in tail do
+			total += extra
+		end
+		return total
+	end
+	local pick = sizes[#sizes]
+	local showLevel = levelUp
+	for _, size in sizes do
+		if height(size[1], size[2], if levelUp then { 28 } else {}) <= room then
+			pick = size
+			break
+		end
+	end
+	if levelUp and height(pick[1], pick[2], { 28 }) > room then
+		showLevel = false
+	end
+	local tail = if showLevel then { 28 } else {}
+	local showBest = best and height(pick[1], pick[2], { 28, table.unpack(tail) }) <= room
+	if showBest then
+		table.insert(tail, 28)
+	end
+	local showCue = not levelUp and height(pick[1], pick[2], { 26, table.unpack(tail) }) <= room
+	return {
+		RowHeight = pick[1],
+		Padding = pick[2],
+		Level = showLevel,
+		Best = showBest,
+		Cue = showCue,
+	}
 end
 
 local function buildRewards(data)
 	clear(rewards)
-	-- Six or more lines (the boosts: a friend in the round, a double coins weekend) draw a little
-	-- tighter, and the personal best is left to its own line, so the card still fits a phone.
 	local crate = if type(data.Crate) == "table" then data.Crate else nil -- the round's season crate
 	local mastery = if type(data.Mastery) == "table" then data.Mastery else nil -- Game Mastery's row
-	local compact = #data.Lines + (if crate then 2 else 0) + (if mastery then 1 else 0) >= COMPACT_LINES
+	-- (The column's room: the window as it's fitted to this screen, less its title bar and the banner.)
+	local room = modal.Window.Size.Y.Offset - Modal.TitleHeight() - 24 - HERO_H
+	local layout = rewardsLayout(
+		#data.Lines + (if mastery then 1 else 0),
+		crate ~= nil,
+		type(data.LevelUp) == "number",
+		data.PersonalBest == true,
+		room
+	)
 	local list = rewards:FindFirstChildOfClass("UIListLayout")
 	if list then
-		list.Padding = UDim.new(0, if compact then 4 else 5)
+		list.Padding = UDim.new(0, layout.Padding)
 	end
-	local rowHeight = if compact then 27 else 31
+	local rowHeight = layout.RowHeight
 	for index, line in data.Lines do
 		local row = UIKit.new("Frame", {
 			Size = UDim2.new(1, 0, 0, rowHeight),
@@ -1004,7 +1146,7 @@ local function buildRewards(data)
 	countUp(xp, tonumber(data.XP) or 0, function(n)
 		return `+{n} XP`
 	end, delay)
-	if data.PersonalBest and not compact then
+	if layout.Best then
 		UIKit.Label({
 			Text = "⭐ New personal best!",
 			Font = Theme.Fonts.Display,
@@ -1016,7 +1158,7 @@ local function buildRewards(data)
 			Children = { UIKit.TextStroke(0.2) },
 		})
 	end
-	if type(data.LevelUp) == "number" then
+	if layout.Level then
 		-- The full celebration plays once everyone's back in the lobby (CelebrationController).
 		UIKit.Label({
 			Text = `⭐ LEVEL UP! You're level {data.LevelUp}!`,
@@ -1028,7 +1170,7 @@ local function buildRewards(data)
 			Parent = rewards,
 			Children = { UIKit.TextStroke(0.2) },
 		})
-	elseif not compact then
+	elseif layout.Cue then
 		UIKit.Label({
 			Text = "Next round soon - get ready!",
 			TextSize = 18,

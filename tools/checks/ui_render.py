@@ -398,6 +398,16 @@ def local_images() -> dict:
             path = images / "ui" / str(entry.get("file", ""))
             if path.is_file() and entry.get("image"):
                 _LOCAL_IMAGES[str(entry["image"])] = path
+        # The games' preview sheets (assets/previews: the vote stage's portals, the Mastery wall's tiles).
+        previews = images.parent / "previews"
+        try:
+            sheets = json.loads((previews / "previews.json").read_text())
+        except (OSError, ValueError):
+            sheets = {}
+        for game, entry in sheets.items():
+            path = previews / f"{game}.jpg"
+            if path.is_file() and isinstance(entry, dict) and entry.get("image"):
+                _LOCAL_IMAGES[str(entry["image"])] = path
     return _LOCAL_IMAGES
 
 

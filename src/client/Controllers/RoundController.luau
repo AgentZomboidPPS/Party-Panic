@@ -338,6 +338,18 @@ local function showRules()
 	chip.AnchorPoint = Vector2.new(1, 0)
 	chip.Position = UDim2.fromScale(1, 0)
 	chip.Parent = rulesMastery
+	-- The category's line ends a little before the chip (it ran under it), and draws smaller rather
+	-- than reach it when the chip is a wide one ("DIAMOND WINS 2/3 ×2").
+	local category = rulesFields.Category
+	local touch = UIKit.IsTouch()
+	local left, right = category.Position.X.Offset, -rulesMastery.Position.X.Offset
+	local room = rulesCard.Size.X.Offset - left - right - chip.Size.X.Offset - 10
+	category.Size = UDim2.new(0, room, 0, category.Size.Y.Offset)
+	local size = if touch then 20 else 22
+	while size > Theme.Touch.MinText and UIKit.TextWidth(category.Text, size, category.Font) > room do
+		size -= 1
+	end
+	category.TextSize = size
 	rulesFields.Objective.Text = "🎯 " .. definition.Objective
 	rulesFields.Controls.Text = "🎮 " .. definition.Controls
 	local gradient = rulesCard:FindFirstChildOfClass("UIGradient")

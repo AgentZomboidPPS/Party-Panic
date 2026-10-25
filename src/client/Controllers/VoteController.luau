@@ -17,7 +17,8 @@
 -- every game's card has the player's rank in it (phones: a badge in the top right corner, the
 -- category icon's twin; PC: a line under the objective with the next goal, "SILVER • 6 pts to GOLD"),
 -- and today's Spotlight games (double points) a yellow "×2" (phones: in the category icon's place;
--- PC: a sticker on the top right corner, clear of the YOUR VOTE tag).
+-- PC: a sticker on the top right corner, clear of the YOUR VOTE tag). PC cards are 12 units taller
+-- for that line, so a long objective (BIG BAD VACUUM's) still reads at its size.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -65,7 +66,7 @@ local touch = false
 local lastSitOutTip = -math.huge
 
 local CARDS = 4
-local CARD_W = 228 -- PC
+local CARD_W, CARD_H = 228, 226 -- PC
 local TOUCH_W, TOUCH_H, TOUCH_GAP = 150, 94, 10
 local TOUCH_NAME_TEXT = 20 -- a phone card's name (a long one is drawn a little smaller to fit)
 local TOUCH_TOP = 12 -- room above the row for the "YOUR VOTE" tag on a card's top edge
@@ -87,7 +88,7 @@ local function buildCard(index: number): Card
 	local button = UIKit.Button({
 		Name = "Card" .. index,
 		Text = "",
-		Size = if touch then UDim2.fromOffset(TOUCH_W, TOUCH_H) else UDim2.fromOffset(CARD_W, 214),
+		Size = if touch then UDim2.fromOffset(TOUCH_W, TOUCH_H) else UDim2.fromOffset(CARD_W, CARD_H),
 		CornerRadius = if touch then 18 else 22,
 		LayoutOrder = index,
 		Parent = row,
@@ -160,7 +161,7 @@ local function buildCard(index: number): Card
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		Position = UDim2.fromOffset(14, 104),
-		Size = UDim2.new(1, -28, 0, 40),
+		Size = UDim2.new(1, -28, 0, 46),
 		Visible = not touch,
 		Parent = button,
 		Children = { fitted(18) },
@@ -170,7 +171,7 @@ local function buildCard(index: number): Card
 		Name = "Mastery",
 		BackgroundTransparency = 1,
 		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.zero,
-		Position = if touch then UDim2.new(1, -6, 0, 14) else UDim2.fromOffset(14, 146),
+		Position = if touch then UDim2.new(1, -6, 0, 14) else UDim2.fromOffset(14, 154),
 		Size = if touch then UDim2.fromOffset(26, 26) else UDim2.fromOffset(22, 22),
 		Parent = button,
 	})
@@ -182,7 +183,7 @@ local function buildCard(index: number): Card
 			TextSize = 16,
 			TextWrapped = false,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.fromOffset(42, 146),
+			Position = UDim2.fromOffset(42, 154),
 			Size = UDim2.new(1, -56, 0, 22),
 			Parent = button,
 			Children = { UIKit.TextStroke(0.3) },
@@ -430,7 +431,7 @@ function VoteController.Start(context)
 			Name = "Vote",
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -18),
-			Size = UDim2.fromOffset(CARDS * CARD_W + (CARDS - 1) * 16 + 20, PC_TOP + 214),
+			Size = UDim2.fromOffset(CARDS * CARD_W + (CARDS - 1) * 16 + 20, PC_TOP + CARD_H),
 			BackgroundTransparency = 1,
 			Visible = false,
 			Parent = context.Hud,

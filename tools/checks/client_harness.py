@@ -92,6 +92,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bundling  # noqa: E402  (only the modules the run needs: Open Cloud's 1 MiB script cap)
+from round_harness import slim  # noqa: E402  (the same shrinking the round runs' bundles get)
 from ui_render import devices_luau, size_names  # noqa: E402  (the screens the engine lays the UI out on)
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -650,12 +651,14 @@ end
 
 -- 3. Screens opened by the lobby prompts and the HUD (the profile chip opens Rewards; its Career
 -- tab is a second snapshot).
-for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Suggestions", "Rewards", "Rewards Career", "Rewards Mastery" } do
+for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Suggestions", "Rewards", "Rewards Career", "Rewards Mastery", "Goals Mastery" } do
 	step = "OpenScreen " .. screen
 	if screen == "Rewards Career" then
 		State.OpenScreen:Fire("Rewards", "Career")
 	elseif screen == "Rewards Mastery" then
 		State.OpenScreen:Fire("Rewards", "Mastery")
+	elseif screen == "Goals Mastery" then
+		State.OpenScreen:Fire("Mastery") -- the GOALS hub's 🏆 MASTERY tab (Controllers/MasteryController)
 	else
 		State.OpenScreen:Fire(screen)
 	end
@@ -1711,6 +1714,10 @@ do
 			payload = { Kind = "Mastery", Game = "ParasolPlummet", Rank = 4, Coins = 50, Keys = 3, Crates = 1, Items = {} },
 		},
 		{
+			name = "Mastery gold",
+			payload = { Kind = "Mastery", Game = "HexMeltdown", Rank = 3, Coins = 25, Keys = 2, Crates = 0, Items = {} },
+		},
+		{
 			name = "Welcome",
 			payload = {
 				Kind = "Welcome",
@@ -1730,6 +1737,55 @@ do
 		__fire("LevelPop", bots[1].rig, 12)
 	end
 	__fire("LevelPop", workspace, 3) -- no head: nothing happens
+	-- A new Game Mastery rank over someone's head for everyone in the lobby (the MasteryPop remote):
+	-- a stand-in character in front of the camera; the pill is copied onto a screen to draw it.
+	step = "mastery pop"
+	local camera = workspace.CurrentCamera
+	local stand = Instance.new("Model")
+	stand.Name = "PopStandIn"
+	local head = Instance.new("Part")
+	head.Name = "Head"
+	head.Anchored = true
+	head.Size = Vector3.new(1, 1, 1)
+	head.CFrame = if camera then camera.CFrame * CFrame.new(0, 0, -12) else CFrame.new(0, 5, 0)
+	head.Parent = stand
+	stand.Parent = workspace
+	__fire("MasteryPop", stand, 3, "HexMeltdown")
+	task.wait(0.7)
+	local board = head:FindFirstChild("PP_MasteryPop")
+	if board then
+		local folder = Instance.new("Folder")
+		local screen = Instance.new("ScreenGui")
+		screen.Name = "MasteryPop"
+		screen:SetAttribute("PP_Billboards", true) -- ui_render.py: check the text, not where they sit
+		screen.Parent = folder
+		for index, rank in { 3, 5 } do
+			local frame = Instance.new("Frame")
+			frame.Name = `Pop{rank}`
+			frame.BackgroundTransparency = 1
+			frame.Size = (board :: BillboardGui).Size
+			frame.Position = UDim2.fromOffset(80 + (index - 1) * 300, 160)
+			for _, child in board:GetChildren() do
+				child:Clone().Parent = frame
+			end
+			frame.Parent = screen
+			if rank ~= 3 then
+				-- (LEGEND's: the same pill fired again)
+				board:Destroy()
+				__fire("MasteryPop", stand, rank, "ParasolPlummet")
+				task.wait(0.7)
+				local again = head:FindFirstChild("PP_MasteryPop")
+				frame:ClearAllChildren()
+				for _, child in if again then again:GetChildren() else {} do
+					child:Clone().Parent = frame
+				end
+			end
+		end
+		snap("MasteryPop", folder)
+	else
+		__note("MasteryPop: no pill over the head")
+	end
+	stand:Destroy()
 end
 -- Medals (MedalController): the player has a few; a medal won just before the vote waits it out,
 -- shows in the lobby ("Medal"), steps aside for a level-up card and comes back; several make one
@@ -2411,6 +2467,10 @@ phase("Results", 8, function()
 	-- 👍 / 👎 on the game (Services/RatingService): open for the card's game.
 	GameState.SetJSON("Rating", { Open = true, Game = if place == 1 then "SinkingSands" else ids[1] })
 end)
+-- The Mastery row's rank-up (ResultsController.masteryRow): "Results" caught the bar filling on the
+-- old rank; here the flash has just swapped in the new badge with "GOLD RANK!".
+task.wait(0.75)
+snap("Results rank up")
 -- The player taps PLAY AGAIN (marked, counted), then a card after the most replays in a row (no
 -- buttons: a new vote is next). replayChecks: what the strip showed each time; ratingChecks: the
 -- 👍 / 👎 pair.
@@ -3242,11 +3302,9 @@ def main():
             available[module] = TELEMETRY_STANDIN
             continue
         body = rewrite(module, path.read_text())
-        # Comments and indentation dropped (line numbers stay put): Open Cloud caps a script at 1 MiB,
-        # and the whole client with the crate season's screens is over it with them in.
-        body = re.sub(r"(?m)^[ \t]*--(?!\[).*$", "", body)
-        body = re.sub(r"(?m)^([^\"'`\[\n]*?\S)[ \t]+--(?!\[)[^\n]*$", r"\1", body)
-        available[module] = re.sub(r"(?m)[ \t]+$", "", re.sub(r"(?m)^[ \t]+", "", body))
+        # Comments, indentation and spaces round operators dropped (line numbers stay put: round_harness's
+        # slim): Open Cloud caps a script at 1 MiB, and the whole client is over it with them in.
+        available[module] = re.sub(r"(?m)[ \t]+$", "", slim(body))
     main_luau = shared_requires(MAIN)
     # Sections left out (--skip): their lines blanked (the rest keep their line numbers), and their
     # controller not started, so its modules aren't bundled.
