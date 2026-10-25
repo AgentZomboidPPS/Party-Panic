@@ -149,7 +149,7 @@ local function road(panel: Instance, progress: MasteryLogic.Progress, x: number,
 				BackgroundColor3 = Theme.Colors.Green,
 				KeepEmoji = true,
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.new(1, -2, 0, 2), -- (the top corner: the rank's name is under the badge)
+				Position = UDim2.new(1, 0, 0.5, 0), -- (on the badge's right edge, on the line: words above and below)
 				Size = UDim2.fromOffset(24, 24),
 				ZIndex = 4,
 				Parent = medal,
