@@ -93,15 +93,37 @@
     didn't / none; value = minutes).
   - Checked: `round_harness.py HoneyTrap --replay` (two stand-in new players; `summary.funnels` lists every step and
     event in order), 485 tests (`tests/Funnels.spec.luau` pins the step names: never rename a logged step).
+- **Eatsa Pizza fixed, and the meshes version 57 swelled repaired** (owner, with screenshots: "Eatsa Pizza is
+  bugged.", "the areas to say eat here the circles on the ground arent on the top of the pizza they are below it").
+  Cause: `tools/meshgen/unfight.py` (v57) pushed fighting faces 0.1 a round for up to 8 rounds; pushes stacked
+  through layered props (the slices' cheese rose 0.3-0.7 over toppings and pepperoni; bunting 5x thicker; Shark Bait's
+  floatie 1 -> 2.7 tall; Prime Cut's steaks doubled; 51 of 145 props off by >5%), and `MeshLibrary.normalize` scales
+  a prop more than 5% off its spec's Height back to it, so they were drawn shrunk too (pepperoni lay on the pan past
+  the slices; rings under the cheese). Now:
+  - `unfight.py`: GAP 0.03, EPS 0.02 (a depth buffer tells 0.03 apart at 100 studs); `NO_SEPARATE` (the four pizza
+    slices, the floatie, the dough sheet) are left exactly as built (their fights are on cut sides / one colour).
+    `mesh_zfight.py` (eps 0.02) lists those apart; `zfight.py`'s eps is 0.025.
+  - The 145 meshes were rebuilt from their pre-pass files (`git show 704ffcf^:assets/meshes/<Name>.glb`) with the new
+    unfight: 87 came out byte for byte and went back to their old, approved asset ids; 58 changed at most 0.12 studs
+    outside and were uploaded again; Prime Cut's fence was regenerated (its bigger end post was built in that same
+    commit); the Sky Stack crane rebuilt. `asset_status.py --meshes`: everything approved (496 assets, 1953 mesh files).
+  - Eatsa Pizza's bite-spot rings sit at `Logic.SPOT_TOP` (0.42 mesh studs), over the cheese's bumps.
+  - A helper had matched Mecha Marathon's pad Height to the swollen mesh (1.535): reverted to 1.335 with the repair.
 - **Clipping sweep** (owner: "Make sure everything is super nice. No clipping stuff like that."): every arena and the
   lobby snapshotted on a test server (`round_harness.py <Id> --players 2 --seconds 4 --dump-at 2`; the lobby
   `tools/preview/bundle.py`), checked with `tools/preview/zfight.py` and the new `tools/preview/resting.py` (things
-  hovering over what they stand on; mesh props judged whole). The common fault: lawns 0.3 under the play floor with the
-  decorations round the arena placed at floor height. Sky Stack: its curbs reach into the grass and no longer share end
-  faces, and its crane was rebuilt with the current mesh tools (`mesh_zfight.py`: 0; the only mesh in the game that had
-  fights) and uploaded again as 127519387619613 (needs Roblox's approval before a publish). Every model:
-  `mesh_zfight.py` 0. The full client UI sweep runs as `client_harness.py --part 1/3` .. `3/3` (a whole run is ~7 MB,
-  over Open Cloud's 4 MB result cap).
+  hovering over what they stand on; mesh props judged whole), every finding judged by hand. The common fault: lawns
+  0.3 under the play floor with the decorations round the arena placed at floor height (Rockin' Raceway, Struggle,
+  Trace Race, ...). Fixed in 25 arenas and the lobby (commit messages list them). Also: the Hollow Night pile's
+  stump reaches the court (`props/HollowNight.py` ground_bark, re-uploaded 96204088535966) and its invisible step is
+  at its drawn top; Capy Go Boom's mowing rings are straight bands now (stacked discs flickered). Left as they are,
+  with reasons in the helpers' notes: Skate Escape's plateau against the canyon walls' stepped backs (needs the
+  canyon wall mesh reshaped), Bobsled Run's track joints (Logic/BobsledCourse), Rockin' Raceway's turn mesh (curbs
+  0.07 over the grass).
+- **Pop-ups on phones:** the lobby's chips step aside while the party invite card, the cup's moment or a crate unbox
+  banner is up (`LobbyRibbon.CoverWhile`); during the vote the invite card sits between the top bar and the vote
+  cards (212 tall on phones). The whole client (`client_harness.py --part 1/3`..`3/3`, normal and `--rich --gold
+  --bots 5`, PC and all five phone sizes): 0 errors, 0 overlaps or cut-off text.
 - **Still not built (steps 2 and 3):** a GOLD cosmetic per game (start with the 10 most played), DIAMOND name-tag
   frames, per-game LEGEND titles and a glow by the name in rounds, 2 Roblox badges (the owner creates them).
 
