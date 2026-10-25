@@ -408,8 +408,10 @@ function ArrowAmbush:_buildArena()
 		local mid = (a + b) / 2
 		MeshLibrary.Get("Bunting", {
 			Scale = scale,
+			-- (0.15 under the hang: the end pennants dip into the turrets, and there the side runs'
+			-- pennant tops lay in the plane of the turret's stone ledge, flickering.)
 			CFrame = CFrame.lookAt(mid, mid + (b - a).Unit:Cross(Vector3.yAxis))
-				+ Vector3.new(0, hang - 2.23 * scale, 0),
+				+ Vector3.new(0, hang - 2.23 * scale - 0.15, 0),
 			Parent = ctx.Arena,
 		})
 	end

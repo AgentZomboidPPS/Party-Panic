@@ -387,10 +387,12 @@ local function render()
 		else
 			actionText, top, bottom = lockReason(item) or "Locked", Theme.Colors.Muted, Theme.Colors.MutedDark
 		end
-		UIKit.Button({
+		local action = UIKit.Button({
 			Text = actionText,
 			TextSize = if touch then 20 else 18,
 			TextScaled = not touch, -- PC: a long lock ("🔒 Survival wins 0/5") shrinks a little
+			-- Phones: a long lock ("🔒 DIAMOND games 0/10") takes a second line (the button has the room)
+			TextWrapped = touch,
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -10),
 			Size = UDim2.new(1, -20, 0, if touch then 68 else 44),
@@ -403,6 +405,9 @@ local function render()
 					UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
 				},
 		}, onClick, top, bottom)
+		if touch then
+			action:SetAttribute("PP_Lines", 2)
+		end
 	end
 end
 

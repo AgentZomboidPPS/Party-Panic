@@ -139,19 +139,22 @@ local function buildPlaza(ctx, origin: Vector3, laneCount: number)
 		CastShadow = false,
 		Parent = plaza,
 	})
+	-- (The curbs reach down into the grass, which is 0.4 under the paving's top: they hovered over it.
+	-- The long ones run past the corners and the short ones fit between them, so no two ends share a
+	-- face, which flickered.)
 	for _, side in { -1, 1 } do
 		Build.Decor({
 			Name = "Curb",
-			Size = Vector3.new(half * 2 + 1.2, 0.5, 0.6),
-			CFrame = CFrame.new(origin.X, ground + 0.05, origin.Z + 2 + side * 22.3),
+			Size = Vector3.new(half * 2 + 1.2, 0.9, 0.6),
+			CFrame = CFrame.new(origin.X, ground - 0.15, origin.Z + 2 + side * 22.3),
 			Color = rgb(200, 186, 160),
 			Material = Enum.Material.Concrete,
 			Parent = plaza,
 		})
 		Build.Decor({
 			Name = "Curb",
-			Size = Vector3.new(0.6, 0.5, 45.2),
-			CFrame = CFrame.new(origin.X + side * (half + 0.3), ground + 0.05, origin.Z + 2),
+			Size = Vector3.new(0.6, 0.9, 44),
+			CFrame = CFrame.new(origin.X + side * (half + 0.3), ground - 0.15, origin.Z + 2),
 			Color = rgb(200, 186, 160),
 			Material = Enum.Material.Concrete,
 			Parent = plaza,

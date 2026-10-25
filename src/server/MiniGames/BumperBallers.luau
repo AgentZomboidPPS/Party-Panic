@@ -110,6 +110,13 @@ local LAGOON_DEPTH = 15.2 -- the lagoon mesh's base under the water (its shelf i
 local PARTY_ANGLE = math.rad(-90) -- where the party islet sits around the island
 local PARTY_SCALE = 2.4
 local ISLET_PROFILE = { { 0, 3.25 }, { 2.4, 3.2 }, { 5, 2.9 }, { 7.6, 2.1 }, { 9.5, 0.9 }, { 10.5, 0 } }
+-- A palm's trunk foot is off the model's pivot (its crown is the model's middle), by this much (x, z)
+-- per unit of its scale, and flares out this far round: on an islet's slope that's what must stand on
+-- the sand. Placed by its pivot, a palm on the party islet's edge stood up to 3 studs over the sand,
+-- one of them over the water ("No clipping stuff like that.").
+local PALM_FOOT = Vector2.new(-2.65, -1.05)
+local PALM_FLARE = 1.15
+local PALM_SINK = 0.55 -- (the islets' sand wobbles in and out round the slope: 0.3 left gaps there)
 local PARASOL_COLORS = {
 	Color3.fromRGB(255, 92, 126),
 	Color3.fromRGB(70, 190, 255),
@@ -255,6 +262,21 @@ local function isletHeight(distance: number): number
 	return 0
 end
 
+-- A palm (of `scale`, turned `yaw`) at (x, z) studs from an islet's middle, in its frame, on the sand
+-- under its trunk's foot: judged at the downhill edge of the flare, sunk PALM_SINK.
+local function palmOn(islet: CFrame, isletScale: number, x: number, z: number, scale: number, yaw: number): CFrame
+	local c, s = math.cos(yaw), math.sin(yaw)
+	local fx, fz = PALM_FOOT.X * scale, PALM_FOOT.Y * scale
+	local foot = Vector2.new(x + fx * c + fz * s, z - fx * s + fz * c)
+	local ground = isletHeight((foot.Magnitude + PALM_FLARE * scale) / isletScale) * isletScale
+	return islet * CFrame.new(x, ground - PALM_SINK, z) * CFrame.Angles(0, yaw, 0)
+end
+
+-- The turn that puts a palm's trunk foot on the islet's side of (x, z), its crown leaning out to sea.
+local function leanOut(x: number, z: number): number
+	return math.atan2(z, -x) - math.atan2(-PALM_FOOT.Y, PALM_FOOT.X)
+end
+
 -- Arena -------------------------------------------------------------------------------------------
 
 function BumperBallers:_buildArena()
@@ -391,17 +413,20 @@ function BumperBallers:_buildArena()
 	for _, x in { -6.5, 6.5 } do
 		MeshLibrary.Get("BumperTikiTotem", { Scale = 1.15, CFrame = onParty(x, -12.5), Parent = ctx.Arena })
 	end
-	for index, spot in { Vector2.new(-16, -8), Vector2.new(15.5, -10) } do
+	-- (Z: sunk that much more: the sand dips under the first, which stood 0.6 over it.)
+	for index, spot in { Vector3.new(-16, -8, 0.8), Vector3.new(15.5, -10, 0) } do
 		MeshLibrary.Get("BumperParasol", {
 			Colors = if index == 2 then { CanopyA = Color3.fromRGB(70, 190, 255) } else nil,
-			CFrame = onParty(spot.X, spot.Y) * CFrame.Angles(0, index * 2.1, 0),
+			CFrame = onParty(spot.X, spot.Y) * CFrame.new(0, -spot.Z, 0) * CFrame.Angles(0, index * 2.1, 0),
 			Parent = ctx.Arena,
 		})
 	end
+	-- Palms lean out to sea (their feet on the high sand inside their spots), on the sand under their feet.
 	for index, spot in { Vector2.new(-15, 10), Vector2.new(13, 13), Vector2.new(1, 19), Vector2.new(19, -1) } do
+		local scale = 1.15 + index * 0.08
 		MeshLibrary.Get("BumperPalm", {
-			Scale = 1.15 + index * 0.08,
-			CFrame = onParty(spot.X, spot.Y) * CFrame.Angles(0, index * 1.9, 0),
+			Scale = scale,
+			CFrame = palmOn(party, PARTY_SCALE, spot.X, spot.Y, scale, leanOut(spot.X, spot.Y)),
 			Parent = ctx.Arena,
 		})
 	end
@@ -416,15 +441,21 @@ function BumperBallers:_buildArena()
 		local islet = CFrame.new(spot.X, waterY - 1.2, spot.Z) * CFrame.Angles(0, decor:NextNumber(0, math.pi * 2), 0)
 		MeshLibrary.Get("BumperIslet", { Scale = scale, CFrame = islet, Parent = ctx.Arena })
 		table.insert(taken, { Spot = spot, Radius = 11 * scale })
-		local function onIslet(x: number, z: number): CFrame
-			return islet * CFrame.new(x * scale, isletHeight(Vector2.new(x, z).Magnitude) * scale - 0.3, z * scale)
+		-- (`foot`: judged that many studs downhill, where a wide base's edge is: a totem's stood 0.2
+		-- over the sand there)
+		local function onIslet(x: number, z: number, foot: number?): CFrame
+			local ground = isletHeight(Vector2.new(x, z).Magnitude + (foot or 0) / scale) * scale
+			return islet * CFrame.new(x * scale, ground - 0.3, z * scale)
 		end
 		local palms = decor:NextInteger(1, 2)
 		for palm = 1, palms do
+			-- (the decor draws in the order they always had: the layout stays the same)
+			local palmScale = decor:NextNumber(0.85, 1.25) * (if palm == 1 then 1 else 0.8)
+			local x, z = decor:NextNumber(-3, 3), decor:NextNumber(-3, 3)
+			local yaw = decor:NextNumber(0, math.pi * 2)
 			MeshLibrary.Get("BumperPalm", {
-				Scale = decor:NextNumber(0.85, 1.25) * (if palm == 1 then 1 else 0.8),
-				CFrame = onIslet(decor:NextNumber(-3, 3), decor:NextNumber(-3, 3))
-					* CFrame.Angles(0, decor:NextNumber(0, math.pi * 2), 0),
+				Scale = palmScale,
+				CFrame = palmOn(islet, scale, x * scale, z * scale, palmScale, yaw),
 				Parent = ctx.Arena,
 			})
 		end
@@ -435,7 +466,7 @@ function BumperBallers:_buildArena()
 				Parent = ctx.Arena,
 			})
 		elseif index == 2 or index == 6 then
-			local totemSpot = onIslet(-4, 2).Position
+			local totemSpot = onIslet(-4, 2, 1.4).Position
 			MeshLibrary.Get("BumperTikiTotem", {
 				CFrame = CFrame.lookAt(totemSpot, Vector3.new(center.X, totemSpot.Y, center.Z)),
 				Parent = ctx.Arena,

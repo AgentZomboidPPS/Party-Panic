@@ -78,6 +78,30 @@
   often as the rest in `lune run tools/checks/vote_sim`). `tests/VoteFairness.spec.luau` checks the rule; with 34 games
   a fresh server offers every game by vote 60 (9 in 10), right at that spec's limit, so the next games may need it
   revisited (fewer new games, or a looser bound).
+- **Funnels redone for new players** (owner: "We also need the funnel updated its currently shit. Needs to show first
+  game played, what rank they got on that game, how many others were in the lobby, check if they open crate. Also
+  check for which game they leave during and any more data that might be beneficial to us."). `Shared/Logic/Funnels`
+  and `Services/FunnelService` (CrateService calls `FunnelService.CrateOpened`):
+  - **FirstVisit** funnel, once per new player (first visit after this ships; the profile's `Funnel.FirstVisit` keeps
+    which steps are out, a bit each): Joined, First round: rules card, First round: GO, First round: results, Second
+    round, Finished 3 rounds, Opened a crate, Came back another day. Fields: first game, device, others on the server
+    at their first join. Creator Hub > Analytics > Funnels > FirstVisit, split by a field.
+  - Custom events (Creator Hub > Analytics > Custom events): **FirstGame** (game, placed: 1st/2nd/3rd/top half/bottom
+    half/team won/lost, others on the server; value = place), **LeftDuringGame** (game, rules card/playing/out,
+    watching/results, new or returning), **LastGame** (last game before leaving the lobby, placed, rounds this visit;
+    value = seconds since its results), **VisitEnd** (new or returning, rounds this visit, crate opened / had one and
+    didn't / none; value = minutes).
+  - Checked: `round_harness.py HoneyTrap --replay` (two stand-in new players; `summary.funnels` lists every step and
+    event in order), 485 tests (`tests/Funnels.spec.luau` pins the step names: never rename a logged step).
+- **Clipping sweep** (owner: "Make sure everything is super nice. No clipping stuff like that."): every arena and the
+  lobby snapshotted on a test server (`round_harness.py <Id> --players 2 --seconds 4 --dump-at 2`; the lobby
+  `tools/preview/bundle.py`), checked with `tools/preview/zfight.py` and the new `tools/preview/resting.py` (things
+  hovering over what they stand on; mesh props judged whole). The common fault: lawns 0.3 under the play floor with the
+  decorations round the arena placed at floor height. Sky Stack: its curbs reach into the grass and no longer share end
+  faces, and its crane was rebuilt with the current mesh tools (`mesh_zfight.py`: 0; the only mesh in the game that had
+  fights) and uploaded again as 127519387619613 (needs Roblox's approval before a publish). Every model:
+  `mesh_zfight.py` 0. The full client UI sweep runs as `client_harness.py --part 1/3` .. `3/3` (a whole run is ~7 MB,
+  over Open Cloud's 4 MB result cap).
 - **Still not built (steps 2 and 3):** a GOLD cosmetic per game (start with the 10 most played), DIAMOND name-tag
   frames, per-game LEGEND titles and a glow by the name in rounds, 2 Roblox badges (the owner creates them).
 

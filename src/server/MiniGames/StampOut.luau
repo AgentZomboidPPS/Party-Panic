@@ -184,10 +184,12 @@ function StampOut:BuildArena()
 		Material = Enum.Material.Fabric,
 		Parent = arena,
 	})
+	-- (each wall down to the carpet's top, -125: they stopped 1 and 1.5 over it. Their tops stay 0.5
+	-- apart, 216 and 216.5, where they meet in the corner.)
 	for _, wall in
 		{
-			{ CFrame.new(origin + Vector3.new(59.5, 46, -300)), Vector3.new(781, 340, 4) },
-			{ CFrame.new(origin + Vector3.new(-330, 46.5, 74.5)), Vector3.new(4, 340, 751) },
+			{ CFrame.new(origin + Vector3.new(59.5, 45.5, -300)), Vector3.new(781, 341, 4) },
+			{ CFrame.new(origin + Vector3.new(-330, 45.75, 74.5)), Vector3.new(4, 341.5, 751) },
 		}
 	do
 		Build.Decor({

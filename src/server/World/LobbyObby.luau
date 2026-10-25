@@ -118,6 +118,10 @@ function LobbyObby.Build(parent: Instance, frame: CFrame): Refs
 	local pool = Build.Model("GooPool", model)
 	local radius = ParkourCourse.PoolRadius
 	column("PoolFloor", radius * 2 + 0.4, -0.6, floor, ground(0, 0), { Color = GOO_FLOOR, Parent = pool })
+	-- The same wall out to the rim's middle (decoration: no collisions), so the rim sits on it all the
+	-- way round instead of hanging 0.1 over the grass, and 2.1 over the plaza by the entrance. (Its top
+	-- is the floor's: same colour and material, so it can't be seen to flicker.)
+	decor(column("PoolSkirt", RIM_RADIUS * 2, -0.6, floor, ground(0, 0), { Color = GOO_FLOOR, Parent = pool }))
 	local goo = column("Goo", radius * 2, floor - 0.1, gooTop, ground(0, 0), {
 		Color = GOO,
 		Reflectance = 0.12,

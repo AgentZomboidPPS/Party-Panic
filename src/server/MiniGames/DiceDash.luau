@@ -328,38 +328,45 @@ function DiceDash:_buildArena()
 		})
 	end
 
-	-- Oversized board-game clutter around the board (decoration only).
-	local function prop(name: string, x: number, z: number, yaw: number, scale: number?, colors: any?)
+	-- Oversized board-game clutter around the board (decoration only). Each piece stands on what's
+	-- under it (owner: "No clipping stuff like that."): the flat ones lie wholly on the felt, on its top
+	-- (FELT_TOP; they used to hang half off its edge, a slit over the wood, and the bottom card sat in
+	-- the felt's top face, flickering), the pawns wholly on the wooden rim, on its top (TABLE_TOP; they
+	-- stood 0.3 over the wood, or half on the felt's edge). The dice stay at 0: their bottom pips sink
+	-- into the felt and their body rests on it.
+	local FELT_TOP = 0.2 -- the felt's top (its centre -0.1, half its 0.6 thickness)
+	local TABLE_TOP = -0.3 -- the tabletop's top, round the felt (its centre -2.3, half its 4 height)
+	local function prop(name: string, x: number, z: number, yaw: number, scale: number?, colors: any?, y: number?)
 		MeshLibrary.Get(name, {
 			Scale = scale,
 			Colors = colors,
-			CFrame = self:_at(Vector3.new(x, 0, z), yaw),
+			CFrame = self:_at(Vector3.new(x, y or 0, z), yaw),
 			Parent = arena,
 		})
 	end
-	prop("DiceDashSpinner", 72, 2, 0.3)
-	prop("DiceDashRuleBook", 72, -30, -0.35)
-	prop("DiceDashCards", 72, 32, 0.5)
-	prop("DiceDashCards", -78, -44, 2.4, 0.8)
-	prop("DiceDashDie", 62, -48, 0.6, 1.4, { Body = Color3.fromRGB(250, 248, 240), Pips = Color3.fromRGB(40, 36, 60) })
+	prop("DiceDashSpinner", 65, 2, 0.3, nil, nil, FELT_TOP)
+	prop("DiceDashRuleBook", 66, -27, -0.35, nil, nil, FELT_TOP)
+	prop("DiceDashCards", 64, 35, 0.5, nil, nil, FELT_TOP)
+	prop("DiceDashCards", -66, -12, 2.4, 0.8, nil, FELT_TOP)
+	prop("DiceDashDie", 60, -45, 0.6, 1.4, { Body = Color3.fromRGB(250, 248, 240), Pips = Color3.fromRGB(40, 36, 60) })
 	prop(
 		"DiceDashDie",
-		-76,
-		44,
+		-71,
+		43,
 		1.9,
 		1.2,
 		{ Body = Color3.fromRGB(255, 90, 100), Pips = Color3.fromRGB(255, 255, 255) }
 	)
 	local pawnSpots = {
-		{ 40, 50, 0.2 },
-		{ -10, 51, 1.2 },
-		{ -40, -51, 2.2 },
-		{ 18, -51, 0.4 },
+		{ 40, 54.5, 0.2 },
+		{ -10, 54.5, 1.2 },
+		{ -40, -54.5, 2.2 },
+		{ 18, -54.5, 0.4 },
 		{ 82, -14, 0.9 },
 		{ 82, 16, 1.6 },
 	}
 	for index, spot in pawnSpots do
-		prop("DiceDashPawn", spot[1], spot[2], spot[3], 1, { Body = COLORS[(index * 5) % #COLORS + 1] })
+		prop("DiceDashPawn", spot[1], spot[2], spot[3], 1, { Body = COLORS[(index * 5) % #COLORS + 1] }, TABLE_TOP)
 	end
 end
 

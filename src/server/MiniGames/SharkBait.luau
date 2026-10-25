@@ -630,11 +630,12 @@ function SharkBait:_buildArena()
 		Parent = arena,
 	})
 	local bedY = origin.Y + SharkBait.SEA_BED
+	-- (4 deep, so its rim goes down into the reef slope rather than a 2-deep shelf hanging 1.6 over it.)
 	Build.Decor({
 		Name = "LagoonSand",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(2, 150, 150),
-		CFrame = upright(Vector3.new(origin.X, bedY - 1, origin.Z)),
+		Size = Vector3.new(4, 150, 150),
+		CFrame = upright(Vector3.new(origin.X, bedY - 2, origin.Z)),
 		Color = rgb(232, 216, 168),
 		Material = Enum.Material.Sand,
 		Parent = arena,

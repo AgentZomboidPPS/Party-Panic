@@ -251,9 +251,13 @@ function HotPotato:_buildArena()
 	local turn = rng:NextNumber(0, math.pi * 2)
 	for index = 0, count - 1 do
 		local angle = turn + index / count * math.pi * 2
-		local at = center + Vector3.new(math.cos(angle) * ring, SET_ON, math.sin(angle) * ring)
+		local hay = index % 2 == 1
+		-- (a bale's flat underside is 0.02-0.04 over its lowest twine, so at SET_ON it stood 0.1-0.12
+		-- over the grass, a slit you could see: it stands 0.06 lower, still just over the lawn)
+		local up = if hay then SET_ON - 0.06 else SET_ON
+		local at = center + Vector3.new(math.cos(angle) * ring, up, math.sin(angle) * ring)
 		local facing = CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z))
-		MeshLibrary.Get(if index % 2 == 0 then "HotPotatoTable" else "HotPotatoHay", {
+		MeshLibrary.Get(if hay then "HotPotatoHay" else "HotPotatoTable", {
 			CFrame = facing, -- lengthwise round the ring
 			Parent = arena,
 		})

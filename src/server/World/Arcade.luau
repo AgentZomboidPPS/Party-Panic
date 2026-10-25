@@ -474,13 +474,17 @@ end
 
 -- The TODAY'S BEST board's screen (clients draw on its Front face, toward the plaza).
 local function buildBoard(parent: Instance, frame: CFrame)
+	-- Its posts' feet are at the patio's edge, past the tickets: on the band and the rim (0.2 and 0.1
+	-- under the tickets' top) and a little over the lawn. Standing at the tickets' height they hovered
+	-- 0.2 to 0.7 over those, so the board (with its screen) stands 0.4 lower, its feet in the rim.
+	local sink = 0.4
 	local model = MeshLibrary.Get("ArcadeBestBoard", {
-		CFrame = frame * CFrame.new(0, FLOOR_TOP, BOARD_Z) * BOARD_PIVOT,
+		CFrame = frame * CFrame.new(0, FLOOR_TOP - sink, BOARD_Z) * BOARD_PIVOT,
 		Parent = parent,
 	})
 	-- What bodies bump into (the mesh doesn't collide): its two posts on their feet, and the panel.
 	local colliders = Build.Model("Colliders", model)
-	local face = frame * CFrame.new(0, FLOOR_TOP, BOARD_Z)
+	local face = frame * CFrame.new(0, FLOOR_TOP - sink, BOARD_Z) -- (with the mesh)
 	for _, x in { -POST_X, POST_X } do
 		for _, piece in
 			{
@@ -513,7 +517,7 @@ local function buildBoard(parent: Instance, frame: CFrame)
 	local screen = Build.Decor({
 		Name = "BestBoard",
 		Size = Vector3.new(23, 5.6, 0.1),
-		CFrame = frame * CFrame.new(0, FLOOR_TOP + 16, BOARD_Z - 0.02),
+		CFrame = frame * CFrame.new(0, FLOOR_TOP + 16 - sink, BOARD_Z - 0.02),
 		Color = rgb(40, 28, 90),
 		Parent = parent,
 	})

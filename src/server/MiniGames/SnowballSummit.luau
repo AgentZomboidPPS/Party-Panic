@@ -204,10 +204,11 @@ function SnowballSummit:_buildScenery()
 		Material = Enum.Material.Snow,
 		Parent = ctx.Arena,
 	})
-	-- The ice band, lip and mountain (its top 0.05 above the snowfield, never colliding).
+	-- The ice band, lip and mountain (its top 0.1 above the snowfield, never colliding: 0.05 over it
+	-- the ice band's top, which lies on the snowfield's edge, could flicker with it).
 	MeshLibrary.Get("SnowballSummitPeak", {
 		Scale = scale,
-		CFrame = CFrame.new(origin + Vector3.new(0, 0.05 - 46 * scale, 0)),
+		CFrame = CFrame.new(origin + Vector3.new(0, 0.1 - 46 * scale, 0)),
 		Parent = ctx.Arena,
 	})
 
@@ -222,7 +223,8 @@ function SnowballSummit:_buildScenery()
 		Material = Enum.Material.SmoothPlastic,
 		Parent = ctx.Arena,
 	})
-	-- Billowing clouds drifting on it.
+	-- Billowing clouds drifting on it, their flat bases through the sea (always at least 0.1 under
+	-- its underside: a base in that plane flickered with it).
 	for _ = 1, 30 do
 		local angle = rng:NextNumber(0, math.pi * 2)
 		local distance = rng:NextNumber(radius + 12, 320)
@@ -230,7 +232,7 @@ function SnowballSummit:_buildScenery()
 			Scale = rng:NextNumber(1, 2.2),
 			CFrame = CFrame.new(
 				origin.X + math.cos(angle) * distance,
-				cloudY - rng:NextNumber(1.5, 3),
+				cloudY - rng:NextNumber(2.1, 3),
 				origin.Z + math.sin(angle) * distance
 			) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
 			Parent = ctx.Arena,

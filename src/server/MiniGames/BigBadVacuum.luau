@@ -314,8 +314,10 @@ function BigBadVacuum:_buildArena()
 			Parent = arena,
 		})
 		if stacked then
+			-- (on the lower block's flat top, 15.2 up, its studs inside this one: at 15.7 it sat on
+			-- the stud tops, a 0.5 slit under it all round)
 			MeshLibrary.Get("BigBadVacuumBlock", {
-				CFrame = facing * CFrame.new(0, 15.7, 0) * CFrame.Angles(0, math.rad(rng:NextNumber(-6, 6)), 0),
+				CFrame = facing * CFrame.new(0, 15.2, 0) * CFrame.Angles(0, math.rad(rng:NextNumber(-6, 6)), 0),
 				Colors = {
 					Body = palette[(index + 2) % #palette + 1],
 					Face = palette[(index + 2) % #palette + 1]:Lerp(Color3.new(1, 1, 1), 0.28),

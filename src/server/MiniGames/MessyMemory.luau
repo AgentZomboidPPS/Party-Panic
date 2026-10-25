@@ -256,19 +256,25 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 			Material = Enum.Material.SmoothPlastic,
 			Parent = arena,
 		})
+		-- (down to the floor: it stood 0.1, or 0.25 with the nudge, over the boards, a slit under
+		-- the wall all round. Its top stays where it was, nudge and all.)
 		Build.Decor({
 			Name = "Skirting",
-			Size = Vector3.new(width + 0.3, 1.6, 1.4),
-			CFrame = frame * CFrame.new(0, 0.9 + nudge, -0.05),
+			Size = Vector3.new(width + 0.3, 1.7 + nudge, 1.4),
+			CFrame = frame * CFrame.new(0, (1.7 + nudge) / 2, -0.05),
 			Color = rgb(150, 110, 200),
 			Material = Enum.Material.SmoothPlastic,
 			Parent = arena,
 		})
 	end
 
-	-- The middle: an open toy chest with giant toys round it, balloons and gift boxes.
+	-- The middle: an open toy chest with giant toys round it, balloons and gift boxes. The chest and
+	-- the giants stand on the rug's top (RUG_TOP): the chest stood on the boards under it, its purple
+	-- bottom band sunk out of sight in the rug (and its base in one plane with the rim's: flicker), and
+	-- the giants stood 0.1 over it.
+	local RUG_TOP = 0.32 -- (the rug's centre 0.29, half its 0.06 thickness)
 	MeshLibrary.Get("MessyMemoryToyBox", {
-		CFrame = CFrame.new(center) * CFrame.Angles(0, math.rad(20), 0),
+		CFrame = CFrame.new(center + Vector3.new(0, RUG_TOP, 0)) * CFrame.Angles(0, math.rad(20), 0),
 		Parent = arena,
 	})
 	local giants = {
@@ -280,7 +286,7 @@ function MessyMemory:_buildArena(center: Vector3, owners: { [number]: Player })
 	}
 	for _, giant in giants do
 		local angle = math.rad(giant[3] + 36)
-		local at = center + Vector3.new(math.cos(angle) * 9, 0.42, math.sin(angle) * 9)
+		local at = center + Vector3.new(math.cos(angle) * 9, RUG_TOP, math.sin(angle) * 9)
 		MeshLibrary.Get(giant[1], {
 			Scale = giant[2],
 			CFrame = CFrame.lookAt(at, Vector3.new(center.X, at.Y, center.Z)) * SPIN,

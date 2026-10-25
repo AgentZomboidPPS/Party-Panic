@@ -392,11 +392,13 @@ local function buildSpawns(root: Model)
 		spawn.Transparency = 1
 		spawn.CanCollide = false
 		spawn.Parent = spawns
+		-- The glowing pad lies on the court's tiles (their top is 0.2; its underside 0.05 over them, its
+		-- top 0.17), not 0.4 over them. (The SpawnLocation above stays where it was.)
 		disc(
 			"SpawnPad",
 			5.5,
 			0.12,
-			position + Vector3.new(0, 0.66, 0),
+			position + Vector3.new(0, 0.31, 0),
 			flat({
 				Color = PALETTE.Spawn,
 				Material = Enum.Material.Neon,
@@ -749,9 +751,10 @@ local function buildVoteStage(root: Model)
 	for _, side in { -1, 1 } do
 		local x = side * 51
 		for level = 0, 1 do
+			-- (The top box sits 0.1 into the one under it: 8.2 apart they hovered 0.2 over each other.)
 			local box = Shapes.RoundedBox(Vector3.new(9, 8, 8), 1, {
 				Name = "Speaker",
-				CFrame = facing(Vector3.new(x, 4 + level * 8.2, STAGE_Z - 4), Vector3.new(x * 0.3, 0, 30)),
+				CFrame = facing(Vector3.new(x, 4 + level * 7.9, STAGE_Z - 4), Vector3.new(x * 0.3, 0, 30)),
 				Color = rgb(40, 34, 60),
 				Parent = stage,
 			})
@@ -870,7 +873,7 @@ local function buildPodium(root: Model)
 		podium,
 		"CHAMPIONS",
 		Vector3.new(2.4, 6, 26),
-		CFrame.new(base + Vector3.new(9.6, 22.5, 0)),
+		CFrame.new(base + Vector3.new(9.6, 22.15, 0)), -- 0.1 into the bezel's top (it hovered 0.25 over it)
 		Enum.NormalId.Left,
 		rgb(255, 84, 150),
 		rgb(255, 255, 255)
@@ -1245,7 +1248,7 @@ local function buildArcade(root: Model): ({ BasePart }, TextLabel)
 		arcade,
 		"ARCADE",
 		Vector3.new(14, 4, 1),
-		boardCFrame * CFrame.new(0, 7.1, 0.5),
+		boardCFrame * CFrame.new(0, 6.6, 0.5), -- 0.1 into the bezel's top (it hovered 0.4 over it)
 		Enum.NormalId.Front,
 		rgb(45, 65, 130)
 	)
@@ -1305,7 +1308,7 @@ local function buildEmoteStage(root: Model): (ProximityPrompt, Vector3)
 		stage,
 		"EMOTE STAGE",
 		Vector3.new(22, 4.4, 1),
-		CFrame.new(center + Vector3.new(0, 22.2, 8)),
+		CFrame.new(center + Vector3.new(0, 21.9, 8)), -- on the arch's frame (it hovered 0.3 over it)
 		Enum.NormalId.Front,
 		rgb(255, 84, 150),
 		rgb(255, 255, 255)

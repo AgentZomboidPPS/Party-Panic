@@ -173,12 +173,30 @@ local function buildFairground(ctx, origin: Vector3, deck: Vector3, radius: numb
 		Parent = arena,
 	})
 
-	-- Light poles round the sides of the stage, bunting strung between neighbors.
+	-- Light poles round the sides of the stage, bunting strung between neighbors. The bandshell's
+	-- floodlights stand at these spots (from the arena's middle, either side, where its mesh puts them
+	-- at Scale 0.85): a pole that would stand within 4 studs of one goes round towards the front
+	-- until it's clear (with two teams the back pole went straight through a floodlight's can).
+	local floodlights = { Vector2.new(37.4, -10.2), Vector2.new(30.6, -6.8) }
+	local function nearFloodlight(at: Vector3): boolean
+		local spot = Vector2.new(math.abs(at.X - origin.X), at.Z - origin.Z)
+		for _, light in floodlights do
+			if (spot - light).Magnitude < 4 then
+				return true
+			end
+		end
+		return false
+	end
 	local poleRadius = radius + 3
 	for _, side in { -1, 1 } do
 		local previous: Vector3? = nil
-		for _, angle in { 40, 70, 100 } do
+		for _, base in { 40, 70, 100 } do
+			local angle = base
 			local at = around(side * angle, poleRadius)
+			while nearFloodlight(at) and angle > base - 24 do
+				angle -= 3
+				at = around(side * angle, poleRadius)
+			end
 			MeshLibrary.Get("PumpLightPole", { CFrame = CFrame.new(at), Parent = arena })
 			if previous then
 				local span = at - previous

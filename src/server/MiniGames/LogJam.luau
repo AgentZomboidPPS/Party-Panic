@@ -170,12 +170,14 @@ local function buildYard(ctx, origin: Vector3, frames: { CFrame })
 			Parent = arena,
 		})
 	end
-	-- Pine forest all round, thicker behind the mill.
+	-- Pine forest all round, thicker behind the mill. (Every pine stands 0, 0.1 or 0.2 into the
+	-- grass by turns: where neighbours' boughs overlap, two tiers' undersides lay in one plane and
+	-- flickered.)
 	local needles = { rgb(52, 124, 78), rgb(66, 140, 84), rgb(44, 110, 74), rgb(78, 150, 90) }
 	for index = 0, 47 do
 		local angle = (index + rng:NextNumber(-0.4, 0.4)) / 48 * math.pi * 2
 		local distance = rng:NextNumber(82, 130)
-		local at = origin + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance - 10)
+		local at = origin + Vector3.new(math.cos(angle) * distance, -(index % 3) * 0.1, math.sin(angle) * distance - 10)
 		MeshLibrary.Get("LogJamPine", {
 			Scale = rng:NextNumber(1.2, 2.1),
 			Colors = { Needles = needles[rng:NextInteger(1, #needles)] },
@@ -185,7 +187,7 @@ local function buildYard(ctx, origin: Vector3, frames: { CFrame })
 	end
 	for index = 0, 13 do
 		local x = -95 + index * 14.5 + rng:NextNumber(-3, 3)
-		local at = origin + Vector3.new(x, 0, -66 - rng:NextNumber(0, 12))
+		local at = origin + Vector3.new(x, -(index % 3) * 0.1, -66 - rng:NextNumber(0, 12))
 		MeshLibrary.Get("LogJamPine", {
 			Scale = rng:NextNumber(1.3, 1.9),
 			Colors = { Needles = needles[rng:NextInteger(1, #needles)] },

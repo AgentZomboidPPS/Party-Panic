@@ -240,19 +240,25 @@ function CapyGoBoom:_buildArena(spawns: { CFrame })
 		Material = Enum.Material.Grass,
 		Parent = arena,
 	})
-	-- Mowing stripes: rings a hair above the lawn, each a little higher than the one outside it, so
-	-- none of them are coplanar.
-	for index = 1, 3 do
-		local radius = full * (1 - 0.22 * index)
-		Build.Decor({
-			Name = "Mow",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.06, radius * 2, radius * 2),
-			CFrame = upright(origin + Vector3.new(0, 0.04 * index, 0)),
-			Color = if index % 2 == 1 then Color3.fromRGB(120, 206, 98) else Color3.fromRGB(104, 192, 84),
-			Material = Enum.Material.Grass,
-			Parent = arena,
-		})
+	-- Mowing stripes: light bands across the lawn, every other one, side by side and all a full 0.1
+	-- over the grass. (They were stacked rings 0.04 apart, which flickered on each other as the camera
+	-- moved: z-fighting. Stacking them 0.1 apart instead would have buried feet 0.3 deep in the
+	-- middle.) Each band's outer corners tuck into the hedge.
+	local band = 7
+	local reach = R + 1
+	for index = -6, 6, 2 do
+		local far = (math.abs(index) + 0.5) * band
+		if far < reach then
+			local long = math.sqrt(reach * reach - far * far) * 2
+			Build.Decor({
+				Name = "Mow",
+				Size = Vector3.new(band, 0.06, long),
+				CFrame = CFrame.new(origin + Vector3.new(index * band, 0.07, 0)),
+				Color = Color3.fromRGB(120, 206, 98),
+				Material = Enum.Material.Grass,
+				Parent = arena,
+			})
+		end
 	end
 
 	-- The hot spring: water and a ring of low stones, steaming.
@@ -307,10 +313,16 @@ function CapyGoBoom:_buildArena(spawns: { CFrame })
 		local angle = index / segments * math.pi * 2
 		local radial = Vector3.new(math.cos(angle), 0, math.sin(angle))
 		local length = math.pi * 2 * wallRadius / segments + 0.8
+		-- Neighbouring boxes overlap at their ends, so no two side by side share a top or a foot plane
+		-- (they flickered there: z-fighting). Every other one is 0.1 taller (and an odd last one 0.2,
+		-- as it meets the first), each foot goes 0.5 into the ground, and the outside face stops 0.1
+		-- inside the lawn's edge rather than touching its rim. The inside face is where it was.
+		local lift = if index % 2 == 1 then 0.1 elseif index == segments - 1 then 0.2 else 0
+		local height = WALL_H + lift + 0.5
 		Build.Part({
 			Name = "Hedge",
-			Size = Vector3.new(Rules.WALL_THICK, WALL_H, length),
-			CFrame = CFrame.new(origin + radial * wallRadius + Vector3.new(0, WALL_H / 2, 0))
+			Size = Vector3.new(Rules.WALL_THICK - 0.1, height, length),
+			CFrame = CFrame.new(origin + radial * (wallRadius - 0.05) + Vector3.new(0, height / 2 - 0.5, 0))
 				* CFrame.Angles(0, -angle, 0),
 			Color = Color3.fromRGB(58, 146, 70),
 			Material = Enum.Material.Grass,
@@ -320,7 +332,8 @@ function CapyGoBoom:_buildArena(spawns: { CFrame })
 			Name = "HedgeTop",
 			Shape = Enum.PartType.Ball,
 			Size = Vector3.new(5.4, 3.6, length + 0.6),
-			CFrame = CFrame.new(origin + radial * wallRadius + Vector3.new(0, WALL_H, 0)) * CFrame.Angles(0, -angle, 0),
+			CFrame = CFrame.new(origin + radial * wallRadius + Vector3.new(0, WALL_H + lift, 0))
+				* CFrame.Angles(0, -angle, 0),
 			Color = Color3.fromRGB(78, 170, 82),
 			Material = Enum.Material.Grass,
 			Parent = arena,
@@ -347,10 +360,12 @@ function CapyGoBoom:_buildArena(spawns: { CFrame })
 	-- A sign behind the hedge on the north side.
 	local signAt = origin + Vector3.new(0, 0, -(full + 16))
 	for _, x in { -17, 17 } do
+		-- The posts reach 0.6 below the lawn's height, into the grass outside (whose top is 0.4 lower),
+		-- rather than stopping 0.4 over it.
 		Build.Decor({
 			Name = "SignPost",
-			Size = Vector3.new(1.6, 18, 1.6),
-			CFrame = CFrame.new(signAt + Vector3.new(x, 9, 0.8)),
+			Size = Vector3.new(1.6, 18.6, 1.6),
+			CFrame = CFrame.new(signAt + Vector3.new(x, 8.7, 0.8)),
 			Color = Color3.fromRGB(120, 82, 50),
 			Material = Enum.Material.Wood,
 			Parent = arena,

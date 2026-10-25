@@ -234,6 +234,11 @@ local PILE_CRATES = {
 	},
 }
 
+-- How far a few of those crates are let down onto what's under them in the exported pile mesh (its
+-- leaves are lower than the Blender pile's): crate 10 hovered 0.11 to 0.29 over the stump's top, and
+-- crate 12's low corner 0.3 over the leaves (its high edge rests on a crate below).
+local PILE_SETTLE = { [10] = 0.15, [12] = 0.24 }
+
 local altars: { Altar } = {}
 local built = false
 
@@ -293,7 +298,12 @@ local function buildPile(root: Model)
 	MeshLibrary.Get(season.Props.Pile, { CFrame = base, Parent = pile })
 	local ring = Build.Model("Crates", pile)
 	for index, entry in PILE_CRATES do
-		local crate = MeshLibrary.Get(season.Props.Crate, { Scale = entry[2], CFrame = base * entry[1], Parent = ring })
+		local drop = PILE_SETTLE[index] or 0
+		local crate = MeshLibrary.Get(season.Props.Crate, {
+			Scale = entry[2],
+			CFrame = CFrame.new(0, -drop, 0) * base * entry[1],
+			Parent = ring,
+		})
 		crate.Name = "PileCrate" .. index
 	end
 
@@ -533,13 +543,17 @@ end
 
 -- Crows on the rooftops (the spots players can find the daily token on are the high ones). Each
 -- device animates them; a pet or title pull sends them flying across the sky.
+-- A crow's pivot is its underside. Each sits on its perch: they hovered 1.7 to 2.4 over the shop's
+-- awning, in the air beside the champion board's end, 0.9 over the speaker's edge and over the
+-- board's screen in front of its cap. The awning ones lean with its 12 degree slope, each on one strip.
+local AWNING_SLOPE = CFrame.Angles(0, 0, math.rad(-12))
 local CROW_SPOTS = {
-	CFrame.new(-57, 20, 2.5) * CFrame.Angles(0, math.rad(80), 0), -- the shop's awning
-	CFrame.new(-61, 20, 5.5) * CFrame.Angles(0, math.rad(110), 0),
-	CFrame.new(61.6, 20.5, 10) * CFrame.Angles(0, math.rad(-100), 0), -- the champion board
-	CFrame.new(65.6, 20.5, 9.5) * CFrame.Angles(0, math.rad(-60), 0),
-	CFrame.new(17, 8, 61.6) * CFrame.Angles(0, math.rad(180), 0), -- the emote stage's speaker
-	CFrame.new(-1.8, 16.6, 0), -- the board's cap (in the board's frame)
+	CFrame.new(-57, 17.56, 3.5) * AWNING_SLOPE * CFrame.Angles(0, math.rad(80), 0), -- the shop's awning
+	CFrame.new(-61, 18.26, 6.5) * AWNING_SLOPE * CFrame.Angles(0, math.rad(110), 0),
+	CFrame.new(63.6, 19.22, 10.6) * CFrame.Angles(0, math.rad(-100), 0), -- the champion board's bezel
+	CFrame.new(63.6, 19.22, -18.6) * CFrame.Angles(0, math.rad(-60), 0), -- (each side of the sign)
+	CFrame.new(18.6, 7.37, 61.6) * CFrame.Angles(0, math.rad(180), 0), -- the emote stage's speaker
+	CFrame.new(-1.8, 16.4, 0.6), -- the board's cap (in the board's frame; the cap is 0.6 behind it)
 }
 
 local function crows(root: Model)
@@ -554,7 +568,7 @@ local function crows(root: Model)
 	end
 	local second = MeshLibrary.Get("HarvestCrow", {
 		Scale = 1.3,
-		CFrame = board * CFrame.new(2.4, 16.6, 0) * CFrame.Angles(0, math.rad(40), 0),
+		CFrame = board * CFrame.new(2.4, 16.4, 0.6) * CFrame.Angles(0, math.rad(40), 0),
 		Parent = folder,
 	})
 	second.Name = "Crow" .. (#CROW_SPOTS + 1)
