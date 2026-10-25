@@ -9,6 +9,8 @@ local task = require("@lune/task")
 local TestKit = require("./TestKit")
 local DailyLogic = require("../src/shared/Logic/DailyLogic")
 local LevelCurve = require("../src/shared/Logic/LevelCurve")
+local MasteryLogic = require("../src/shared/Logic/MasteryLogic")
+local MedalLogic = require("../src/shared/Logic/MedalLogic")
 local ProfileMigration = require("../src/shared/Logic/ProfileMigration")
 local ProfileTemplate = require("../src/shared/Logic/ProfileTemplate")
 local TableUtil = require("../src/shared/Logic/TableUtil")
@@ -190,6 +192,12 @@ local function server(store, options: { [string]: any }?)
 			LoadRetries = 4,
 		},
 		DailyRewards = { 5, 6, 7 },
+		Mastery = {
+			Ranks = {
+				{ Id = "Bronze", Name = "BRONZE", Icon = "", Points = 1, Wins = 0, Coins = 0, Keys = 0, Crates = 0 },
+				{ Id = "Gold", Name = "GOLD", Icon = "", Points = 20, Wins = 0, Coins = 0, Keys = 0, Crates = 0 },
+			},
+		},
 	}
 	local shared = {
 		Config = config,
@@ -198,6 +206,8 @@ local function server(store, options: { [string]: any }?)
 		Logic = {
 			DailyLogic = DailyLogic,
 			LevelCurve = LevelCurve,
+			MasteryLogic = MasteryLogic,
+			MedalLogic = MedalLogic,
 			ProfileMigration = ProfileMigration,
 			ProfileTemplate = ProfileTemplate,
 			TableUtil = TableUtil,

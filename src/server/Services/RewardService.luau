@@ -4,7 +4,9 @@
 -- milestones, which ProgressionService celebrates (owner: "Also we need cool payoffs for players
 -- that keep playing the game."). Every round played to the end also gives the season's crate
 -- (Services/CrateService), on the results card with the rest, and the top 3 win 3 / 2 / 1 keys
--- (owner: "3/2/1 every round").
+-- (owner: "3/2/1 every round"). Game Mastery (owner: "Let's build it. 1 yes 2 gold pass should help a
+-- little. 3 yes"; Services/MasteryService): every person's round adds to that game's mastery, which
+-- goes on the card too.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -12,16 +14,19 @@ local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local DailyLogic = require(Shared.Logic.DailyLogic)
 local LevelCurve = require(Shared.Logic.LevelCurve)
+local MedalLogic = require(Shared.Logic.MedalLogic)
 local Placement = require(Shared.Logic.Placement)
 local ProgressionLogic = require(Shared.Logic.ProgressionLogic)
 local Remotes = require(Shared.Remotes)
 local RewardLogic = require(Shared.Logic.RewardLogic)
 
 local Boosts = require(script.Parent.Boosts)
+local BotRegistry = require(script.Parent.BotRegistry)
 local CosmeticService = require(script.Parent.CosmeticService)
 local CrateService = require(script.Parent.CrateService)
 local DataService = require(script.Parent.DataService)
 local Economy = require(script.Parent.Economy)
+local MasteryService = require(script.Parent.MasteryService)
 local ProgressionService = require(script.Parent.ProgressionService)
 local QuestService = require(script.Parent.QuestService)
 local Telemetry = require(script.Parent.Telemetry)
@@ -49,14 +54,16 @@ local function favoriteCategory(categoryPlays: { [string]: number }): string?
 	return best
 end
 
--- One player's rewards, stats, quests and results card (`playerCount` and `standings` are the round's).
+-- One player's rewards, stats, quests and results card (`playerCount`, `standings` and `people`, the
+-- real players in it, are the round's).
 local function grantOne(
 	definition,
 	item: Placement.Placed,
 	playerCount: number,
 	standings,
 	winningTeam: string?,
-	today: number
+	today: number,
+	people: number
 )
 	local entry = item.Entry :: any
 	local player: Player = entry.Player
@@ -126,6 +133,13 @@ local function grantOne(
 
 	Economy.AddCoins(player, reward.Coins, "Round")
 	Economy.AddXP(player, reward.XP)
+	-- Game Mastery (before the milestones: its counts across every game unlock career titles).
+	local won = MedalLogic.IsWin(item.Place, entry.Team, winningTeam)
+	local okMastery, mastery = pcall(MasteryService.Record, player, definition, item.Place, playerCount, won, people)
+	if not okMastery then
+		Telemetry.Error("Mastery", `{definition.Id}: {mastery}`)
+		mastery = nil
+	end
 	ProgressionService.CheckMilestones(player)
 	local levelAfter = LevelCurve.FromTotalXP(data.XP)
 	-- The round's keys for the top 3, then its crate (the crate seasons: one for every round played to
@@ -156,6 +170,7 @@ local function grantOne(
 		WinningTeam = winningTeam,
 		MyTeam = entry.Team,
 		Crate = crate, -- { Count, Name, Season, Total, Keys, KeysWon } (nil: none)
+		Mastery = mastery, -- Services/MasteryService's Summary (nil: none)
 	})
 	Telemetry.PlayerEvent(player, "RoundPlacement", item.Place, definition.Id)
 	DataService.Changed(player)
@@ -165,6 +180,12 @@ end
 function RewardService.GrantRound(definition, placed: { Placement.Placed }, winningTeam: string?)
 	local playerCount = #placed
 	local today = DailyLogic.DayNumber(os.time())
+	local people = 0 -- real players (Game Mastery counts a win toward the top ranks only among people)
+	for _, item in placed do
+		if not BotRegistry.IsBot((item.Entry :: any).Player) then
+			people += 1
+		end
+	end
 	local standings = {}
 	for index, item in placed do
 		if index > 8 then
@@ -182,7 +203,7 @@ function RewardService.GrantRound(definition, placed: { Placement.Placed }, winn
 
 	for _, item in placed do
 		-- One player's trouble never costs the others their rewards.
-		local ok, err = pcall(grantOne, definition, item, playerCount, standings, winningTeam, today)
+		local ok, err = pcall(grantOne, definition, item, playerCount, standings, winningTeam, today, people)
 		if not ok then
 			Telemetry.Error("Rewards", `{definition.Id}: {err}`)
 		end

@@ -41,6 +41,11 @@ return {
 		GamesTried = 0, -- different games played (worked out from ModePlays on every load)
 		DaysPlayed = 0, -- different days (UTC) with a round played
 		LastPlayDay = 0,
+		-- Game Mastery's counts across every game (Logic/MasteryLogic.SetStats redoes them on every load
+		-- and after each round): games at GOLD or higher, DIAMOND or higher, LEGEND
+		MasteryGold = 0,
+		MasteryDiamond = 0,
+		MasteryLegend = 0,
 		ModePlays = {} :: { [string]: number },
 		CategoryPlays = {} :: { [string]: number },
 		Best = {} :: { [string]: number },
@@ -58,6 +63,12 @@ return {
 	-- The owner's "keep players coming back" features (owner: "Can you work on all of that?").
 	Cups = { Played = 0, Wins = 0, Podiums = 0 }, -- Party Cups finished, won, on the podium (CupService)
 	Medals = {} :: { [string]: number }, -- medal id -> the UTC day it was earned (MedalService)
+	-- Game Mastery (owner: "Let's build it. 1 yes 2 gold pass should help a little. 3 yes";
+	-- Logic/MasteryLogic, Services/MasteryService): per game, its mastery points (P), the wins that
+	-- count toward the top ranks (W) and the rounds played to the end (N). MasteryIntro: whether the
+	-- past rounds were credited (once), the ranks that gave and whether the player was told.
+	Mastery = {} :: { [string]: { P: number, W: number, N: number } },
+	MasteryIntro = { Credited = false, Ranks = 0, Told = false },
 	Weekly = { Week = 0, Points = 0 }, -- the weekly leaderboard: which week, and its points (LeaderboardService)
 	Events = {} :: { [string]: { [string]: any } }, -- per limited-time event id, its progress (EventService)
 	-- The GOLD PASS (owner: "the paid one should also be insane"; Services/GoldPassService): whether

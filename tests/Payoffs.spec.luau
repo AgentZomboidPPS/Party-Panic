@@ -4,6 +4,7 @@
 local fs = require("@lune/fs")
 
 local TestKit = require("./TestKit")
+local MasteryLogic = require("../src/shared/Logic/MasteryLogic")
 local ProgressionLogic = require("../src/shared/Logic/ProgressionLogic")
 local RewardLogic = require("../src/shared/Logic/RewardLogic")
 
@@ -239,6 +240,7 @@ test("every career milestone is a stat the server keeps", function()
 	do
 		ProgressionLogic.RecordRound(stats, record)
 	end
+	MasteryLogic.SetStats(stats, {}, {}) -- (Game Mastery's counts across every game: after each round too)
 	for key in stats do
 		kept[key] = true
 	end

@@ -4,7 +4,8 @@
 -- not high."): a round pays 2-6 coins, so the cheapest items take a few rounds and the best a few
 -- dozen. Level and stat items can't be bought: they are the Rewards Road (one at most milestone
 -- levels) and the career milestones (owner: "Also we need cool payoffs for players that keep
--- playing the game."). Every UnlockStat must be a stat Logic/ProgressionLogic.RecordRound keeps.
+-- playing the game."). Every UnlockStat must be a stat Logic/ProgressionLogic.RecordRound keeps (or
+-- Game Mastery's counts across every game, which Logic/MasteryLogic.SetStats keeps after each round).
 -- Event rewards (owner, asked what keeps players coming back: "Can you work on all of that? this
 -- wont mess with what the other workers are working on right?"): an item with Event = "<event id>"
 -- is a step of that limited-time event's free reward track (Shared/Events), claimed with candy in the
@@ -344,6 +345,35 @@ local list: { Cosmetic } = {
 		Icon = "🗺️",
 		UnlockStat = { Stat = "GamesTried", Value = gameCount, Label = "Games" },
 		Colors = { rgb(120, 230, 200) },
+	},
+	-- Game Mastery's goals across every game (owner: "Let's build it. 1 yes 2 gold pass should help a
+	-- little. 3 yes"; Logic/MasteryLogic).
+	{
+		Id = "Title_AllRounder",
+		Slot = "Title",
+		Name = "All-Rounder",
+		Description = "Reach GOLD mastery in 5 games.",
+		Icon = "🥇",
+		UnlockStat = { Stat = "MasteryGold", Value = 5, Label = "GOLD games" },
+		Colors = { rgb(255, 214, 70) },
+	},
+	{
+		Id = "Title_DiamondPartier",
+		Slot = "Title",
+		Name = "Diamond Partier",
+		Description = "Reach DIAMOND mastery in 10 games.",
+		Icon = "💎",
+		UnlockStat = { Stat = "MasteryDiamond", Value = 10, Label = "DIAMOND games" },
+		Colors = { rgb(120, 230, 255) },
+	},
+	{
+		Id = "Title_PartyPro",
+		Slot = "Title",
+		Name = "Party Pro",
+		Description = `Reach GOLD mastery in all {gameCount} games.`,
+		Icon = "🏆",
+		UnlockStat = { Stat = "MasteryGold", Value = gameCount, Label = "GOLD games" },
+		Colors = { rgb(255, 190, 60) },
 	},
 	{
 		Id = "Title_WeekWarrior",

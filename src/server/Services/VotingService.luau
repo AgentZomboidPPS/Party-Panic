@@ -49,12 +49,17 @@ end
 -- one that isn't on the other cards when there's one to spare.
 function VotingService.BuildOptions(playerCount: number, recent: { string }, ignoreLimits: boolean): { VoteOption }
 	local pool = {}
+	-- Game Mastery's Spotlight games (double points today: Services/MasteryService) come up a little
+	-- more often.
+	local spotlight = GameState.GetJSON("Spotlight")
+	local boost = Config.Mastery.Spotlight.VoteWeight
 	for _, definition in GameDefinitions.List do
+		local lit = type(spotlight) == "table" and table.find(spotlight, definition.Id) ~= nil
 		table.insert(pool, {
 			Id = definition.Id,
 			Category = definition.Category,
 			MinPlayers = definition.MinPlayers,
-			Weight = definition.Weight,
+			Weight = if lit then (definition.Weight or 1) * boost else definition.Weight,
 			IsNew = definition.IsNew,
 			Enabled = definition.Enabled,
 		})

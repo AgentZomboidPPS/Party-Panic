@@ -27,6 +27,8 @@
 --                 ("" until loaded): see Services/CrateBoardService
 --   KeyShop       JSON of the Robux key packs on sale: { Packs = { { Key, Keys, Price, Gift } }, Starter }
 --                 ("" until Roblox has been asked): see Services/KeyShopService
+--   Spotlight     JSON list of today's Spotlight game ids (Game Mastery's double points): see
+--                 Services/MasteryService
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -66,6 +68,7 @@ function GameState.Folder(): Folder
 			created:SetAttribute("Parties", "")
 			created:SetAttribute("CrateBoard", "")
 			created:SetAttribute("KeyShop", "")
+			created:SetAttribute("Spotlight", "[]")
 			created.Parent = ReplicatedStorage
 			folder = created
 		end

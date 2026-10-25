@@ -39,6 +39,7 @@ local order = {
 	-- The crate seasons (Shared/Seasons): after the lobby (its altars) and the services they pay into.
 	"CrateBoardService",
 	"CrateService",
+	"MasteryService", -- Game Mastery: every game's own rank (pays into CrateService; RewardService asks it)
 	"KeyShopService", -- Robux keys: the game's only ProcessReceipt
 	"NoSitService", -- before the bots arrive: no character sits (Shared/NoSitting)
 	"BotService", -- after the lobby exists (spawns, vote pads)

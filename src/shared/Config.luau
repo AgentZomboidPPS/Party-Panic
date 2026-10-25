@@ -153,6 +153,32 @@ Config.Crates = {
 	RevealAtMany = 4.4,
 	AltarRange = 16,
 }
+-- Game Mastery (owner: "If you could add a progression system what would it be?", then, on the plan:
+-- "Let's build it. 1 yes 2 gold pass should help a little. 3 yes"; Logic/MasteryLogic has the rules,
+-- Services/MasteryService pays them). Every game has its own rank, BRONZE to LEGEND, climbed with
+-- mastery points from that game's rounds:
+--   * Points: a round played to the end pays by place (1st First, 2nd Second, 3rd Third, then
+--     TopHalf or Played); a team game pays TeamWin or TeamLoss. Today's Spotlight games pay
+--     Multiplier times as much (and come up a little more in the vote: VoteWeight). GOLD PASS owners
+--     get GoldBonus more for a top-half finish or a team win ("should help a little").
+--   * A win counts toward DIAMOND and LEGEND (Wins) only with ProvenPeople real players in the round
+--     (bots don't count) and never in a private server.
+--   * Each rank pays its Coins, Keys and Crates once, when it's reached by playing (the ranks a
+--     player's past rounds already earned, credited once when Mastery came out, pay nothing).
+Config.Mastery = {
+	Points = { First = 5, Second = 4, Third = 3, TopHalf = 2, Played = 1, TeamWin = 4, TeamLoss = 1 },
+	GoldBonus = 1,
+	Spotlight = { Count = 3, Multiplier = 2, VoteWeight = 1.5 },
+	ProvenPeople = 3,
+	Ranks = {
+		{ Id = "Bronze", Name = "BRONZE", Icon = "🥉", Points = 1, Wins = 0, Coins = 0, Keys = 0, Crates = 0 },
+		{ Id = "Silver", Name = "SILVER", Icon = "🥈", Points = 8, Wins = 0, Coins = 10, Keys = 1, Crates = 0 },
+		{ Id = "Gold", Name = "GOLD", Icon = "🥇", Points = 20, Wins = 0, Coins = 25, Keys = 2, Crates = 0 },
+		{ Id = "Diamond", Name = "DIAMOND", Icon = "💎", Points = 45, Wins = 3, Coins = 50, Keys = 3, Crates = 1 },
+		{ Id = "Legend", Name = "LEGEND", Icon = "👑", Points = 90, Wins = 10, Coins = 100, Keys = 5, Crates = 0 },
+	},
+}
+
 -- The gold lane's coins and XP boost (Logic/GoldLane): a level without a gold cosmetic pays Base
 -- coins plus PerTen for every ten levels (6 at level 3, 15 at level 99: 733 over the lane's 67 coin
 -- levels, half again the free road's 487), and owners get XPBoost more XP from rounds (10%).

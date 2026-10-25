@@ -41,6 +41,8 @@ local Config = require(Shared.Config)
 local DailyLogic = require(Shared.Logic.DailyLogic)
 local GameDefinitions = require(Shared.GameDefinitions)
 local LevelCurve = require(Shared.Logic.LevelCurve)
+local MasteryLogic = require(Shared.Logic.MasteryLogic)
+local MedalLogic = require(Shared.Logic.MedalLogic)
 local ProfileMigration = require(Shared.Logic.ProfileMigration)
 local ProfileTemplate = require(Shared.Logic.ProfileTemplate)
 local Remotes = require(Shared.Remotes)
@@ -91,6 +93,7 @@ end
 local function newData(): ProfileData
 	local data = TableUtil.DeepCopy(DataService.Template)
 	data.Meta.FirstJoin = os.time()
+	data.MasteryIntro.Credited = true -- (no past rounds to credit)
 	return data
 end
 
@@ -107,6 +110,8 @@ end
 -- values always win over defaults, and owned items are never touched.
 local function migrate(data: any): (ProfileData, ProfileMigration.Report)
 	local report = ProfileMigration.Load(data, DataService.Template, TableUtil.Reconcile, knownGames)
+	-- Game Mastery: the entries made safe, the past rounds credited once, the counts redone.
+	MasteryLogic.Load(data, Config.Mastery.Ranks, knownGames, MedalLogic.GameMedalId)
 	return data, report
 end
 DataService.Migrate = migrate
@@ -380,6 +385,7 @@ function DataService.BuildSnapshot(profile: Profile)
 		-- this week's leaderboard points, events).
 		Cups = data.Cups,
 		Medals = data.Medals,
+		Mastery = data.Mastery, -- Game Mastery: per game { P, W, N } (Logic/MasteryLogic)
 		Weekly = data.Weekly,
 		Events = data.Events,
 		-- The GOLD PASS (Services/GoldPassService): whether they own it (the old VIP flag's place).

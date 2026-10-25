@@ -214,6 +214,12 @@ local function giveCrates(player: Player, amount: number): boolean
 	return true
 end
 
+-- Gives `amount` of this season's crates (Game Mastery's DIAMOND rank: Services/MasteryService).
+-- False for bots and anyone without a profile.
+function CrateService.GiveCrates(player: Player, amount: number): boolean
+	return giveCrates(player, math.floor(amount))
+end
+
 -- RewardService: a person finished a round in `place`: 3 / 2 / 1 keys for the top 3, shown on their
 -- results card with the round's crate. The keys given (0 for bots and anyone lower).
 function CrateService.RoundKeys(player: Player, place: number, gameId: string): number
