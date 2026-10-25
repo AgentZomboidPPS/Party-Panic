@@ -35,6 +35,10 @@
 -- gold lane lit, their gold count in the header, a gold level badge (here and on the HUD) and gold
 -- goals in the next-reward tab. Phones: the header and both lanes fit the shortest phone window;
 -- tiles and buttons are 44 pt or more, text 11 pt or more.
+-- Game Mastery (owner: "Let's build it. 1 yes 2 gold pass should help a little. 3 yes"): a fourth
+-- tab, MASTERY, is every game's rank on one wall (UI/MasteryWall draws it); a new rank's card opens
+-- the screen on it (State.OpenScreen:Fire("Rewards", "Mastery")). The four tabs are a little
+-- narrower than the three were, to fit the title bar.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -53,6 +57,7 @@ local GoldPassController = require(script.Parent.GoldPassController)
 local MedalController = require(script.Parent.MedalController)
 local NotificationController = require(script.Parent.NotificationController)
 local State = require(script.Parent.Parent.State)
+local MasteryWall = require(script.Parent.Parent.UI.MasteryWall)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -1283,6 +1288,11 @@ local function render(keep: Vector2?)
 	end
 	if currentTab == "Career" then
 		renderCareer(keep)
+	elseif currentTab == "Mastery" then
+		MasteryWall.Render(body, keep, function()
+			local list = body:FindFirstChildOfClass("ScrollingFrame")
+			render(if list then list.CanvasPosition else nil)
+		end)
 	elseif currentTab == "Medals" then
 		MedalController.Render(body, keep)
 	else
@@ -1306,20 +1316,22 @@ function RewardsController.Start(context)
 		BackgroundTransparency = 1,
 		Parent = content,
 	})
-	-- The tabs, in the title bar after the title (the third ends 50 units short of the ✕ on phones).
+	-- The tabs, in the title bar after the title (the fourth ends 30-odd units short of the ✕ on
+	-- phones).
 	local tabHeight = if touch then Theme.Touch.Target else 50
 	local tabs = {
 		{ Key = "Road", Text = "⭐ Level Road" },
 		{ Key = "Career", Text = "🏅 Career" },
+		{ Key = "Mastery", Text = "🎮 Mastery" },
 		{ Key = "Medals", Text = "🥇 Medals" },
 	}
 	for index, tab in tabs do
 		tabButtons[tab.Key] = UIKit.Button({
 			Name = tab.Key .. "Tab",
 			Text = tab.Text,
-			TextSize = 22,
-			Position = UDim2.fromOffset(220 + (index - 1) * 206, -(title + 6) + (title - tabHeight) / 2 + 2),
-			Size = UDim2.fromOffset(194, tabHeight),
+			TextSize = 20,
+			Position = UDim2.fromOffset(216 + (index - 1) * 166, -(title + 6) + (title - tabHeight) / 2 + 2),
+			Size = UDim2.fromOffset(158, tabHeight),
 			CornerRadius = 16,
 			ZIndex = 25,
 			Parent = content,

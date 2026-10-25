@@ -20,6 +20,10 @@
 -- game, "YOU'RE AN 🏹 ARCHER": Teams.YouAre), there from the moment the server puts you on a team.
 -- It goes with the card (its ✕ too); the mode's own HUD carries the team on from the 3-2-1.
 --
+-- Game Mastery (owner: "Let's build it. 1 yes 2 gold pass should help a little. 3 yes"; UI/Mastery):
+-- the end of the category's line has the player's rank in the game and how far to the next
+-- ("SILVER 14/20"), with a yellow ×2 on today's Spotlight games.
+--
 -- The ✕ was a near-black dot on the card (owner: "why are the close menu buttons and the invite
 -- friend button so dark?"): it's the windows' bright red round ✕ now (UI/Modal: a red gradient,
 -- a white ✕ with a text stroke and a white ring), with the same size and tap area as before.
@@ -46,6 +50,7 @@ local Teams = require(Shared.Teams)
 local Haptics = require(script.Parent.Parent.Haptics)
 local Participants = require(script.Parent.Parent.Participants)
 local State = require(script.Parent.Parent.State)
+local Mastery = require(script.Parent.Parent.UI.Mastery)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
@@ -58,6 +63,7 @@ local TEAM_COLORS = Teams.Colors
 local rules: Frame -- the card (PC), or the frame it sits in (phones)
 local rulesCard: Frame
 local rulesFields: { [string]: TextLabel } = {}
+local rulesMastery: Frame -- Game Mastery's chip, at the end of the category's line
 local teamTab: Frame -- under the card in a team round: "YOU'RE ON ★ RED"
 local teamTabLabel: TextLabel
 local rulesClosed = false -- this player closed this round's card (its ✕); a new phase clears it
@@ -214,6 +220,16 @@ local function buildRules(parent: Instance)
 		Size = if touch then UDim2.new(1, -180, 0, 26) else UDim2.new(1, -160, 0, 30),
 		Parent = rulesCard,
 	})
+	-- Game Mastery (UI/Mastery): the player's rank in this game and how far to the next, at the end of
+	-- the category's line (before the ✕'s column), with the Spotlight's ×2.
+	rulesMastery = UIKit.new("Frame", {
+		Name = "Mastery",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = if touch then UDim2.new(1, -78, 0, 52) else UDim2.new(1, -24, 0, 72),
+		Size = UDim2.fromOffset(240, if touch then 30 else 34),
+		Parent = rulesCard,
+	})
 	rulesFields.Objective = UIKit.Label({
 		Text = "",
 		TextSize = if touch then 21 else 28,
@@ -315,8 +331,13 @@ local function showRules()
 	local info = GameDefinitions.Categories[definition.Category]
 	rulesFields.Icon.Text = definition.Icon
 	rulesFields.Name.Text = definition.Name
-	rulesFields.Category.Text =
-		`{info and info.Icon or ""} {definition.Category}  •  ⏱ {definition.Duration} seconds`
+	rulesFields.Category.Text = `{info and info.Icon or ""} {definition.Category}  •  ⏱ {definition.Duration}s`
+	rulesMastery:ClearAllChildren()
+	local chipHeight = rulesMastery.Size.Y.Offset
+	local chip = Mastery.Chip(definition.Id, chipHeight, if chipHeight < 34 then Theme.Touch.MinText else 20)
+	chip.AnchorPoint = Vector2.new(1, 0)
+	chip.Position = UDim2.fromScale(1, 0)
+	chip.Parent = rulesMastery
 	rulesFields.Objective.Text = "🎯 " .. definition.Objective
 	rulesFields.Controls.Text = "🎮 " .. definition.Controls
 	local gradient = rulesCard:FindFirstChildOfClass("UIGradient")

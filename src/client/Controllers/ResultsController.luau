@@ -49,6 +49,12 @@
 -- just before them, and they pop in as the card opens (owner: "lets do 1-7."). The card's title is
 -- "Results" (not "Round Results") to make room.
 --
+-- Game Mastery (owner: "Let's build it. 1 yes 2 gold pass should help a little. 3 yes"; UI/Mastery):
+-- a row after the lines with the game's rank badge and what the round added ("SILVER +4", "×2" on a
+-- Spotlight game, "GOLD RANK!" in yellow on a new rank; the full card plays in the lobby), and a bar
+-- to the next rank that fills from where the round started. It counts as a line for the compact
+-- layout, so the card still fits a phone.
+--
 -- Only the card's X closes it early (owner: "I don't like how clicking skips the ending screen. I
 -- clicked and I couldn't vote."): a click beside it, on the dim backdrop, used to close it, and so
 -- could a click on the card itself.
@@ -61,6 +67,7 @@ local Config = require(Shared.Config)
 local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local CrateLogic = require(Shared.Logic.CrateLogic)
+local MasteryLogic = require(Shared.Logic.MasteryLogic)
 local Placement = require(Shared.Logic.Placement)
 local Remotes = require(Shared.Remotes)
 
@@ -70,6 +77,7 @@ local LootFly = require(script.Parent.Parent.Crates.LootFly)
 local Haptics = require(script.Parent.Parent.Haptics)
 local Participants = require(script.Parent.Parent.Participants)
 local State = require(script.Parent.Parent.State)
+local Mastery = require(script.Parent.Parent.UI.Mastery)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local PartyKit = require(script.Parent.Parent.UI.PartyKit)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -724,12 +732,78 @@ local function buildStandings(data)
 	return count
 end
 
+-- Game Mastery's row (Services/MasteryService's Summary): the rank's badge, what the round added and
+-- a bar to the next rank that fills from where the round started (from empty on a new rank).
+local function masteryRow(summary: { [string]: any }, rowHeight: number, order: number)
+	local after = tonumber(summary.After) or 0
+	local before = tonumber(summary.Before) or after
+	local points, wins = tonumber(summary.P) or 0, tonumber(summary.W) or 0
+	local gained = tonumber(summary.Gained) or 0
+	local now = MasteryLogic.Progress({ P = points, W = wins, N = 0 }, Mastery.Ranks)
+	local was = MasteryLogic.Progress(
+		{ P = math.max(0, points - gained), W = math.max(0, wins - (if summary.Win then 1 else 0)), N = 0 },
+		Mastery.Ranks
+	)
+	local rankedUp = after > before
+	local row = UIKit.new("Frame", {
+		Name = "Mastery",
+		Size = UDim2.new(1, 0, 0, rowHeight),
+		BackgroundColor3 = Theme.Colors.PanelDark,
+		BackgroundTransparency = 0.35,
+		LayoutOrder = order,
+		Parent = rewards,
+		Children = {
+			UIKit.Corner(10),
+			UIKit.Stroke(Mastery.Look(math.max(after, 1)).Top, 2, if rankedUp then 0 else 0.4),
+		},
+	})
+	local badgeSize = rowHeight - 6
+	Mastery.Badge(after, badgeSize, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 4, 0.5, 0),
+		Parent = row,
+	})
+	local text = if rankedUp then `{Mastery.Name(after)} RANK!` else `{Mastery.Name(after)} +{gained}`
+	if (tonumber(summary.Spotlight) or 0) > 0 then
+		text ..= " ×2"
+	end
+	UIKit.Label({
+		Name = "Gained",
+		Text = text,
+		Font = Theme.Fonts.Display,
+		TextSize = 18,
+		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = if rankedUp then Theme.Colors.Yellow else Color3.new(1, 1, 1),
+		Position = UDim2.fromOffset(badgeSize + 10, 0),
+		Size = UDim2.new(0.6, -(badgeSize + 12), 1, 0),
+		Parent = row,
+		Children = { UIKit.TextStroke(0.2) },
+	})
+	local start = if rankedUp then 0 else was.Fraction
+	local bar = Mastery.Bar(math.min(now.Rank + 1, #Mastery.Ranks), start, MasteryLogic.BarText(now), 18, {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -6, 0.5, 0),
+		Size = UDim2.new(0.4, -6, 1, -6),
+		Parent = row,
+	})
+	local fill = bar:FindFirstChild("Fill") :: Frame
+	task.delay(if State.ReducedEffects() then 0 else 0.6 + order * 0.07, function()
+		if fill.Parent then
+			fill.Visible = true
+			UIKit.Tween(fill, 0.8, { Size = UDim2.fromScale(now.Fraction, 1) }, Enum.EasingStyle.Quad)
+		end
+	end)
+	UIKit.PopIn(row, 0.3 + order * 0.07)
+end
+
 local function buildRewards(data)
 	clear(rewards)
 	-- Six or more lines (the boosts: a friend in the round, a double coins weekend) draw a little
 	-- tighter, and the personal best is left to its own line, so the card still fits a phone.
 	local crate = if type(data.Crate) == "table" then data.Crate else nil -- the round's season crate
-	local compact = #data.Lines + (if crate then 2 else 0) >= COMPACT_LINES
+	local mastery = if type(data.Mastery) == "table" then data.Mastery else nil -- Game Mastery's row
+	local compact = #data.Lines + (if crate then 2 else 0) + (if mastery then 1 else 0) >= COMPACT_LINES
 	local list = rewards:FindFirstChildOfClass("UIListLayout")
 	if list then
 		list.Padding = UDim.new(0, if compact then 4 else 5)
@@ -768,6 +842,9 @@ local function buildRewards(data)
 			Parent = row,
 		})
 		UIKit.PopIn(row, 0.3 + index * 0.07)
+	end
+	if mastery then
+		masteryRow(mastery, rowHeight, #data.Lines + 1)
 	end
 	if crate then
 		-- The crate season (Services/CrateService): one crate for every round played to the end and

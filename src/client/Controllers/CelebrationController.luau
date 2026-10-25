@@ -45,6 +45,12 @@
 -- Controllers/GoldPassController.)
 -- The crate seasons (Shared/Seasons): every 5th level also gives a key for the season's crates
 -- (Services/CrateService), on a chip of its own in the season's colours ("+1 KEY").
+-- Game Mastery (owner: "Let's build it. 1 yes 2 gold pass should help a little. 3 yes";
+-- Services/MasteryService, UI/Mastery): a new rank in a game gets its own card, "GOLD RANK!", with
+-- the rank's badge, "You're GOLD at HEX MELTDOWN!", its coins, keys and crate on chips, and the next
+-- goal ("Next: 25 pts to DIAMOND"). It shows after a level-up or milestone card from the same round
+-- rather than being folded into it; several new ranks at once make one card (the highest, every
+-- reward added up).
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -52,8 +58,10 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage.Shared
 local Cosmetics = require(Shared.Cosmetics)
+local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local GoldPass = require(Shared.GoldPass)
+local MasteryLogic = require(Shared.Logic.MasteryLogic)
 local Progression = require(Shared.Progression)
 local Remotes = require(Shared.Remotes)
 local Seasons = require(Shared.Seasons)
@@ -61,6 +69,7 @@ local Seasons = require(Shared.Seasons)
 local AudioController = require(script.Parent.AudioController)
 local GoldPassController = require(script.Parent.GoldPassController)
 local State = require(script.Parent.Parent.State)
+local Mastery = require(script.Parent.Parent.UI.Mastery)
 local Modal = require(script.Parent.Parent.UI.Modal)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
@@ -68,7 +77,10 @@ local UIKit = require(script.Parent.Parent.UI.UIKit)
 local CelebrationController = {}
 
 type Celebration = {
-	Kind: string, -- "LevelUp" | "Milestone" | "Welcome" (rewards a returning player had already earned)
+	Kind: string, -- "LevelUp" | "Milestone" | "Welcome" (rewards a returning player had already earned) | "Mastery"
+	Game: string?, -- Mastery: the game
+	Rank: number?, -- Mastery: the new rank (Config.Mastery.Ranks)
+	Crates: number?, -- Mastery: crates (DIAMOND)
 	Level: number?,
 	From: number?,
 	Coins: number,
@@ -125,6 +137,25 @@ local gui: ScreenGui
 local queue: { Celebration } = {}
 local closeCurrent: (() -> ())? = nil
 local windowOpen = false -- a window (Modal) is open: the celebration waits for it to close
+
+-- Several new Game Mastery ranks make one card: the highest (the latest of equals), every reward.
+local function mergeMastery(list: { Celebration }): Celebration
+	local merged: Celebration = { Kind = "Mastery", Coins = 0, Items = {} }
+	for _, entry in list do
+		if (entry.Rank or 0) >= (merged.Rank or 0) then
+			merged.Rank = entry.Rank
+			merged.Game = entry.Game
+		end
+		merged.Coins += entry.Coins or 0
+		if entry.Keys and entry.Keys > 0 then
+			merged.Keys = (merged.Keys or 0) + entry.Keys
+		end
+		if entry.Crates and entry.Crates > 0 then
+			merged.Crates = (merged.Crates or 0) + entry.Crates
+		end
+	end
+	return merged
+end
 
 -- Several waiting celebrations make one: the highest level reached, every coin and every item.
 local function merge(list: { Celebration }): Celebration
@@ -272,6 +303,22 @@ local function keyChip(parent: Instance, keys: number, order: number): Frame
 	return chip
 end
 
+-- Crates (Game Mastery's DIAMOND): a chip like the keys', with the crate on it.
+local function crateChip(parent: Instance, crates: number, order: number): Frame
+	local chip = keyChip(parent, crates, order)
+	chip.Name = "Crates"
+	for _, child in chip:GetChildren() do
+		if child:IsA("TextLabel") then
+			if child.Text == "🔑" then
+				child.Text = "📦"
+			elseif child.Text == "KEY" or child.Text == "KEYS" then
+				child.Text = if crates == 1 then "CRATE" else "CRATES"
+			end
+		end
+	end
+	return chip
+end
+
 local function itemChip(parent: Instance, item: Cosmetics.Cosmetic, order: number): Frame
 	local chip = UIKit.Panel({
 		Name = item.Id,
@@ -361,6 +408,10 @@ end
 -- What to aim for next, after this celebration.
 local function nextGoal(celebration: Celebration): string
 	local profile = State.Profile
+	if celebration.Kind == "Mastery" then
+		local progress = Mastery.Progress(celebration.Game or "")
+		return if progress.Next then `Next: {MasteryLogic.Goal(progress)}` else "The top rank in this game!"
+	end
 	if celebration.Kind ~= "Milestone" then
 		local level = celebration.Level or (profile and profile.Level) or 1
 		local nextLevel, item = Progression.NextReward(level, GoldPassController.Owned())
@@ -429,6 +480,9 @@ end
 local function show(celebration: Celebration)
 	local isLevel = celebration.Kind == "LevelUp"
 	local welcome = celebration.Kind == "Welcome"
+	local isMastery = celebration.Kind == "Mastery"
+	local masteryRank = celebration.Rank or 1
+	local masteryGame = GameDefinitions.Get(celebration.Game or "")
 	local items = {}
 	for _, id in celebration.Items do
 		local item = Cosmetics.Get(id)
@@ -463,7 +517,10 @@ local function show(celebration: Celebration)
 	}, Color3.fromRGB(96, 62, 190), Theme.Colors.PanelDark)
 	card:SetAttribute("PP_Popup", true) -- a few seconds in the lobby; nothing in the stick's corner takes taps
 	local rim = card:FindFirstChildOfClass("UIStroke") :: UIStroke
-	rim.Color = if isLevel then look.Gradient.Keypoints[1].Value else Theme.Colors.Yellow
+	rim.Color = if isLevel
+		then look.Gradient.Keypoints[1].Value
+		elseif isMastery then Mastery.Look(masteryRank).Top
+		else Theme.Colors.Yellow
 	rim.Thickness = 4
 	rim.Transparency = 0
 
@@ -487,36 +544,57 @@ local function show(celebration: Celebration)
 	local badgeCenter = UDim2.fromOffset(18 + 48, 16 + 48)
 	ring(card, badgeCenter, 0.05)
 	ring(card, badgeCenter, 0.3)
-	local badge = UIKit.new("Frame", {
-		Name = "Badge",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = badgeCenter,
-		Size = UDim2.fromOffset(96, 96),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		ZIndex = 3,
-		Parent = card,
-		Children = { UIKit.Round(), UIKit.Stroke(nil, 4, 0.1) },
-	})
-	local badgeGradient = UIKit.new("UIGradient", {
-		Color = if isLevel then look.Gradient else GOLD,
-		Rotation = 90,
-		Parent = badge,
-	})
-	label({
-		Text = if isLevel then tostring(level) elseif welcome then "🎁" else (items[1] and items[1].Icon or "🏅"),
-		Font = Theme.Fonts.Display,
-		TextSize = if isLevel then (if level >= 100 then 40 else 50) else 46,
-		TextWrapped = false,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 4,
-		Parent = badge,
-		Children = { UIKit.TextStroke(0.1) },
-	})
+	local badge: Frame
+	local badgeGradient: UIGradient
+	if isMastery then
+		-- Game Mastery: the rank's own badge (UI/Mastery).
+		badge = Mastery.Badge(masteryRank, 96, {
+			Name = "Badge",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = badgeCenter,
+			ZIndex = 3,
+			Parent = card,
+		})
+		badgeGradient = badge:FindFirstChildOfClass("UIGradient") :: UIGradient
+	else
+		badge = UIKit.new("Frame", {
+			Name = "Badge",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = badgeCenter,
+			Size = UDim2.fromOffset(96, 96),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			ZIndex = 3,
+			Parent = card,
+			Children = { UIKit.Round(), UIKit.Stroke(nil, 4, 0.1) },
+		})
+		badgeGradient = UIKit.new("UIGradient", {
+			Color = if isLevel then look.Gradient else GOLD,
+			Rotation = 90,
+			Parent = badge,
+		})
+		label({
+			Text = if isLevel
+				then tostring(level)
+				elseif welcome then "🎁"
+				else (items[1] and items[1].Icon or "🏅"),
+			Font = Theme.Fonts.Display,
+			TextSize = if isLevel then (if level >= 100 then 40 else 50) else 46,
+			TextWrapped = false,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 4,
+			Parent = badge,
+			Children = { UIKit.TextStroke(0.1) },
+		})
+	end
 	local headline = label({
 		Name = "Headline",
-		Text = if isLevel then "LEVEL UP!" elseif welcome then "NEW REWARDS!" else "MILESTONE!",
+		Text = if isLevel
+			then "LEVEL UP!"
+			elseif isMastery then `{Mastery.Name(masteryRank)} RANK!`
+			elseif welcome then "NEW REWARDS!"
+			else "MILESTONE!",
 		Font = Theme.Fonts.Display,
-		TextSize = if welcome then 44 else 50,
+		TextSize = if isMastery then 42 elseif welcome then 44 else 50,
 		TextWrapped = false,
 		TextColor3 = Theme.Colors.Yellow,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -528,6 +606,9 @@ local function show(celebration: Celebration)
 	local subline
 	if isLevel then
 		subline = if newColor then `New name tag color: {look.Icon} {look.Name}!` else `You're level {level}!`
+	elseif isMastery then
+		local name = if masteryGame then string.upper(masteryGame.Name) else "THIS GAME"
+		subline = `You're {Mastery.Name(masteryRank)} at {name}!`
 	elseif welcome then
 		subline = "Your level and career earned these. They're yours!"
 	else
@@ -579,6 +660,10 @@ local function show(celebration: Celebration)
 	local keys = celebration.Keys or 0
 	if keys > 0 then
 		table.insert(chips, keyChip(row, keys, 3))
+	end
+	local crates = celebration.Crates or 0
+	if crates > 0 then
+		table.insert(chips, crateChip(row, crates, 3))
 	end
 	-- As many item chips as fit beside the coins (3 less one per coin chip), the rest as "+2 more!"
 	-- (every one is on the Rewards screen). At most 576 of the card's 600 units.
@@ -709,7 +794,7 @@ local function show(celebration: Celebration)
 	end
 	UIKit.Button({
 		Name = "SeeMore",
-		Text = if isLevel or welcome then "⭐ ROAD" else "🏅 CAREER",
+		Text = if isLevel or welcome then "⭐ ROAD" elseif isMastery then "🎮 MASTERY" else "🏅 CAREER",
 		TextSize = 22,
 		Size = UDim2.fromOffset(146, buttonHeight),
 		CornerRadius = 18,
@@ -718,7 +803,10 @@ local function show(celebration: Celebration)
 		Parent = buttons,
 	}, function()
 		close()
-		State.OpenScreen:Fire("Rewards", if isLevel or welcome then "Road" else "Career")
+		State.OpenScreen:Fire(
+			"Rewards",
+			if isLevel or welcome then "Road" elseif isMastery then "Mastery" else "Career"
+		)
 	end, Theme.Colors.Pink, PINK_DARK)
 
 	-- Motion: the card and badge pop, confetti falls, a rainbow badge shimmers.
@@ -757,9 +845,20 @@ function CelebrationController.Pump()
 	if not State.Profile then
 		return -- its "Next up" comes from the profile: shown once the first one arrives
 	end
-	local celebration = merge(queue)
+	-- A new Game Mastery rank gets its own card, after the round's level-up or milestone card.
+	local regular, ranks = {}, {}
+	for _, entry in queue do
+		table.insert(if entry.Kind == "Mastery" then ranks else regular, entry)
+	end
 	table.clear(queue)
-	show(celebration)
+	if #regular > 0 then
+		for _, entry in ranks do
+			table.insert(queue, entry) -- (next, once this one closes)
+		end
+		show(merge(regular))
+	else
+		show(mergeMastery(ranks))
+	end
 end
 
 -- Closes the celebration on screen (the client harness uses this too).
@@ -849,6 +948,9 @@ function CelebrationController.Start(context)
 		end
 		table.insert(queue, {
 			Kind = payload.Kind,
+			Game = if type(payload.Game) == "string" then payload.Game else nil,
+			Rank = tonumber(payload.Rank),
+			Crates = tonumber(payload.Crates),
 			Level = tonumber(payload.Level),
 			From = tonumber(payload.From),
 			Coins = tonumber(payload.Coins) or 0,

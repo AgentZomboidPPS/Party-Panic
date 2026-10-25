@@ -13,6 +13,11 @@
 -- Only people who'll play vote: while you're sitting out (UI/SitOutSwitch) the cards are dimmed and
 -- a note says why (over the cards); tapping one tells you how to jump back in. The server refuses
 -- those votes anyway (VotingService).
+-- Game Mastery (owner: "Let's build it. 1 yes 2 gold pass should help a little. 3 yes"; UI/Mastery):
+-- every game's card has the player's rank in it (phones: a badge in the top right corner, the
+-- category icon's twin; PC: a line under the objective with the next goal, "SILVER • 6 pts to GOLD"),
+-- and today's Spotlight games (double points) a yellow "×2" (phones: in the category icon's place;
+-- PC: a sticker on the top right corner, clear of the YOUR VOTE tag).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -22,8 +27,11 @@ local GameDefinitions = require(Shared.GameDefinitions)
 local GameState = require(Shared.GameState)
 local Remotes = require(Shared.Remotes)
 
+local MasteryLogic = require(Shared.Logic.MasteryLogic)
+
 local NotificationController = require(script.Parent.NotificationController)
 local State = require(script.Parent.Parent.State)
+local Mastery = require(script.Parent.Parent.UI.Mastery)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
@@ -43,6 +51,10 @@ type Card = {
 	stroke: UIStroke,
 	gradient: UIGradient,
 	dim: Frame,
+	mastery: Frame, -- holds the rank badge
+	masteryShown: string, -- the game and rank the badge is for ("" for none)
+	goal: TextLabel?, -- PC: the rank and the next goal
+	spotlight: TextLabel, -- "×2" on today's Spotlight games
 }
 
 local cards: { Card } = {}
@@ -148,10 +160,50 @@ local function buildCard(index: number): Card
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		Position = UDim2.fromOffset(14, 104),
-		Size = UDim2.new(1, -28, 0, 60),
+		Size = UDim2.new(1, -28, 0, 40),
 		Visible = not touch,
 		Parent = button,
 		Children = { fitted(18) },
+	})
+	-- Game Mastery: the rank (and on PC the next goal), and the Spotlight's ×2.
+	local mastery = UIKit.new("Frame", {
+		Name = "Mastery",
+		BackgroundTransparency = 1,
+		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.zero,
+		Position = if touch then UDim2.new(1, -6, 0, 14) else UDim2.fromOffset(14, 146),
+		Size = if touch then UDim2.fromOffset(26, 26) else UDim2.fromOffset(22, 22),
+		Parent = button,
+	})
+	local goal = if touch
+		then nil
+		else UIKit.Label({
+			Name = "MasteryGoal",
+			Text = "",
+			TextSize = 16,
+			TextWrapped = false,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Position = UDim2.fromOffset(42, 146),
+			Size = UDim2.new(1, -56, 0, 22),
+			Parent = button,
+			Children = { UIKit.TextStroke(0.3) },
+		})
+	local spotlight = UIKit.Label({
+		Name = "Spotlight",
+		Text = "×2",
+		Font = Theme.Fonts.Display,
+		TextSize = if touch then Theme.Touch.MinText else 20,
+		TextWrapped = false,
+		TextColor3 = Theme.Colors.Ink,
+		BackgroundTransparency = 0,
+		BackgroundColor3 = Theme.Colors.Yellow,
+		AnchorPoint = if touch then Vector2.zero else Vector2.new(0.5, 0.5),
+		Position = if touch then UDim2.fromOffset(4, 14) else UDim2.new(1, -16, 0, 0),
+		Size = if touch then UDim2.fromOffset(34, 26) else UDim2.fromOffset(44, 30),
+		Rotation = if touch then 0 else 10,
+		ZIndex = 4,
+		Visible = false,
+		Parent = button,
+		Children = { UIKit.Round(), UIKit.Stroke(Theme.Colors.Ink, 2, 0) },
 	})
 	local countPill = UIKit.new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -207,7 +259,38 @@ local function buildCard(index: number): Card
 		stroke = stroke,
 		gradient = gradient,
 		dim = dim,
+		mastery = mastery,
+		masteryShown = "",
+		goal = goal,
+		spotlight = spotlight,
 	}
+end
+
+-- The card's Game Mastery: the player's rank in the game, the next goal (PC) and the Spotlight's ×2
+-- (nil `gameId`: the Random card, none of it).
+local function showMastery(card: Card, gameId: string?)
+	local lit = gameId ~= nil and Mastery.IsSpotlight(gameId)
+	card.spotlight.Visible = lit
+	if touch then
+		card.categoryIcon.Visible = not lit
+	end
+	card.mastery.Visible = gameId ~= nil
+	if card.goal then
+		card.goal.Visible = gameId ~= nil
+	end
+	if not gameId then
+		return
+	end
+	local progress = Mastery.Progress(gameId)
+	if card.goal then
+		card.goal.Text = `{Mastery.Name(progress.Rank)} • {MasteryLogic.Goal(progress)}`
+	end
+	local shown = `{gameId}:{progress.Rank}`
+	if card.masteryShown ~= shown then
+		card.masteryShown = shown
+		card.mastery:ClearAllChildren()
+		Mastery.Badge(progress.Rank, card.mastery.Size.X.Offset, { Parent = card.mastery })
+	end
 end
 
 -- The note that says why the cards are dimmed, over the cards (short on phones).
@@ -265,6 +348,7 @@ local function refresh()
 			card.categoryIcon.Text = info and info.Icon or ""
 			card.objective.Text = definition.Objective
 			card.gradient.Color = ColorSequence.new(definition.Color, darker(definition.Color))
+			showMastery(card, definition.Id)
 		else
 			card.icon.Text = "🎲"
 			card.name.Text = "Random"
@@ -272,6 +356,7 @@ local function refresh()
 			card.categoryIcon.Text = "❔"
 			card.objective.Text = "Could be any game. Feeling lucky?"
 			card.gradient.Color = ColorSequence.new(Color3.fromRGB(150, 110, 255), Color3.fromRGB(70, 40, 140))
+			showMastery(card, nil)
 		end
 		if touch then
 			-- One line under the icon: a long name ("Mecha-Marathon") is drawn a little smaller to fit
@@ -375,6 +460,8 @@ function VoteController.Start(context)
 	end)
 	GameState.Changed("VoteOptions", refresh)
 	GameState.Changed("VoteCounts", refresh)
+	GameState.Changed("Spotlight", refresh)
+	State.ProfileChanged:Connect(refresh)
 	player:GetAttributeChangedSignal("PP_Vote"):Connect(refresh)
 	player:GetAttributeChangedSignal("PP_SitOut"):Connect(refresh)
 	refresh()

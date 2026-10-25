@@ -1,5 +1,30 @@
 # Handoff: Party Panic (for the next Claude)
 
+**On this branch since version 60 (not published yet):**
+- **Game Mastery, step 1** (owner: "If you could add a progression system what would it be?", then on the plan: "Let's
+  build it. 1 yes 2 gold pass should help a little. 3 yes"; the answers: the bot rule, a little GOLD PASS help, start with
+  step 1). Every game has its own rank, BRONZE, SILVER, GOLD, DIAMOND, LEGEND (Config.Mastery; rules in
+  `Shared/Logic/MasteryLogic`, tested in `tests/MasteryLogic.spec.luau`; paid by `Services/MasteryService`, which
+  RewardService asks for every person's round).
+  - Points per round played to the end: 1st 5, 2nd 4, 3rd 3, top half 2, else 1; team games 4 / 1. Ranks need 1, 8, 20,
+    45 and 90 points; DIAMOND also 3 wins and LEGEND 10, and a win only counts with 3+ real players and never in a private
+    server. Ranks never go down.
+  - Today's 3 Spotlight games (the same everywhere: a hash of the UTC day; GameState `Spotlight`) pay double and are
+    1.5x as likely in the vote. GOLD PASS owners get +1 point for a top-half finish or a team win.
+  - Rank rewards: SILVER 10 coins + 1 key, GOLD 25 + 2, DIAMOND 50 + 3 + a crate, LEGEND 100 + 5 and a line to the whole
+    server. Titles: All-Rounder (GOLD in 5), Diamond Partier (DIAMOND in 10), Party Pro (GOLD in every game), from the
+    stats MasteryGold / MasteryDiamond / MasteryLegend.
+  - Old players: on their first load, every game's past rounds (Stats.ModePlays) are credited at 1 point a round, and a
+    game medal counts as a win; those ranks pay nothing (`MasteryIntro`), and a toast tells them once.
+  - Screens (`UI/Mastery`): a badge on each vote card (PC also "SILVER • 6 pts to GOLD"), a ×2 sticker on Spotlight
+    games, a chip on the rules card, a row on the results card with a filling bar, a "GOLD RANK!" celebration card of
+    its own, and a MASTERY tab on the Rewards screen (`UI/MasteryWall`: counts, the picked game's detail, the Spotlight,
+    every game by type).
+  - Steps 2 and 3 (not built): a GOLD cosmetic per game (start with the 10 most played), DIAMOND name-tag frames,
+    per-game LEGEND titles and a glow by the name in rounds, 2 Roblox badges (the owner creates them).
+  - The client harness bundle is over Open Cloud's 1 MiB cap again with Mastery in: runs skip `Event` too
+    (`--skip ...,Event`), and Telemetry is a stand-in there now.
+
 **Live in version 60 (2026-10-25, on the owner's "Push it"):**
 - **Server merging** (owner: "Is there a way to merge severs automatically that are getting low?", then "Also push"; I
   proposed a STAY button, 3 real players and an on/off switch). `Services/MergeService` with the rules in

@@ -5,8 +5,9 @@
 --     (by place, Multiplier times as many for today's Spotlight games, GoldBonus more for a GOLD
 --     PASS owner's top-half finish or team win) and whether its win counts toward the top ranks
 --     (ProvenPeople real players in the round, not a private server). A new rank pays its coins,
---     keys and crate at once, shows a celebration card in the lobby (Celebrate, Kind "Mastery") and,
---     for LEGEND, tells the whole server. What Record returns goes on the results card.
+--     keys and crate at once, shows a celebration card in the lobby (Celebrate, Kind "Mastery"; not
+--     for BRONZE, which every game's first round gives) and, for LEGEND, tells the whole server.
+--     What Record returns goes on the results card.
 --   * Today's Spotlight is in GameState "Spotlight" (a JSON list of game ids), redone when the UTC day
 --     changes; VotingService offers those games a little more often.
 --   * Someone whose past rounds were credited when Mastery came out (Logic/MasteryLogic.Load) is told
@@ -78,7 +79,8 @@ function MasteryService.IsSpotlight(gameId: string): boolean
 	return table.find(MasteryService.Spotlight(), gameId) ~= nil
 end
 
--- A new rank (or several): its rewards, its card, and LEGEND's news for everyone.
+-- A new rank (or several): its rewards, its card (not for BRONZE, which every first round of a game
+-- gives: the results card says so), and LEGEND's news for everyone.
 local function rankUp(player: Player, definition: any, before: number, after: number)
 	local ranks = Config.Mastery.Ranks
 	local rank = ranks[after]
@@ -90,6 +92,9 @@ local function rankUp(player: Player, definition: any, before: number, after: nu
 	local gotKeys = keys > 0 and CrateService.GiveKeys(player, keys, "Mastery", detail, true)
 	local gotCrates = crates > 0 and CrateService.GiveCrates(player, crates)
 	Telemetry.PlayerEvent(player, "MasteryRank", after, definition.Id)
+	if rank.Id == "Bronze" then
+		return
+	end
 	celebrateRemote:FireClient(player, {
 		Kind = "Mastery",
 		Game = definition.Id,

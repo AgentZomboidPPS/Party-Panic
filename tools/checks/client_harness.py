@@ -60,9 +60,9 @@ The result's "effectChecks" plays every effect a cosmetic names, all at once, an
 (parts, glowing parts and the biggest, particle emitters and their longest lifetime, emoji) and how
 much was left 5 s later (none: everything cleans itself up). "Shop <Tab>" and "Shop <Tab> end" show
 every shop tab at the top and scrolled to the end; "Emotes end" the emote picker's last emotes.
-Besides the menu's screens it opens the Rewards screen on both tabs ("Rewards", "Rewards Career")
-and shows a level-up, a career milestone and a returning player's celebration ("LevelUp",
-"LevelUp2", "Milestone", "Welcome"). After the round a level-up card shows while the last
+Besides the menu's screens it opens the Rewards screen on its tabs ("Rewards", "Rewards Career",
+"Rewards Mastery") and shows a level-up, a career milestone, a new Game Mastery rank and a returning
+player's celebration ("LevelUp", "LevelUp2", "Milestone", "Mastery", "Welcome"). After the round a level-up card shows while the last
 first-join tip is due; the result's "tipChecks" says what was on screen while it was up and after.
 Medals (MedalController): a MEDAL EARNED card ("Medal"), the medals a returning player had already
 earned as one card ("Medals earlier"), the Rewards screen's MEDALS tab ("Rewards Medals"), and the
@@ -99,6 +99,9 @@ CLIENT = ROOT / "src" / "client"
 SHIMMED_SERVICES = ("Players", "RunService", "StarterGui", "UserInputService", "SocialService")
 # Server modules bundled from the working tree: the profile snapshot the client is sent.
 SERVER_MODULES = ("DataService", "Notifier", "Telemetry")
+# DataService only reports to Telemetry while it loads and saves, which a run never does: a stand-in
+# that takes every call keeps its 78 KB out of Open Cloud's 1 MiB script cap.
+TELEMETRY_STANDIN = "return setmetatable({}, { __index = function() return function() end end })\n"
 
 
 def played_game() -> str:
@@ -586,6 +589,18 @@ if __richMode then
 	data.Stats.GamesTried = 9
 	data.Stats.DaysPlayed = 8
 end
+-- Game Mastery (UI/Mastery, UI/MasteryWall): a spread of ranks, one waiting on wins, games not played
+-- yet, and three Spotlight games (the vote's long-named cards get theirs later).
+data.Mastery = {
+	HexMeltdown = { P = 95, W = 12, N = 31 }, -- LEGEND
+	FireRope = { P = 52, W = 4, N = 19 }, -- DIAMOND
+	BumperBallers = { P = 61, W = 1, N = 22 }, -- GOLD, waiting on wins for DIAMOND
+	MechaMarathon = { P = 24, W = 0, N = 9 }, -- GOLD
+	ParasolPlummet = { P = 14, W = 0, N = 6 }, -- SILVER
+	RockinRaceway = { P = 9, W = 0, N = 4 }, -- SILVER
+	SinkingSands = { P = 3, W = 0, N = 2 }, -- BRONZE
+}
+GameState.SetJSON("Spotlight", { "MechaMarathon", "ParasolPlummet", "SinkingSands" })
 local richLevel = LevelCurve.FromTotalXP(data.XP)
 for _, item in Cosmetics.List do
 	local earned = item.Default
@@ -635,10 +650,12 @@ end
 
 -- 3. Screens opened by the lobby prompts and the HUD (the profile chip opens Rewards; its Career
 -- tab is a second snapshot).
-for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Suggestions", "Rewards", "Rewards Career" } do
+for _, screen in { "Shop", "Quests", "Emotes", "Settings", "Suggestions", "Rewards", "Rewards Career", "Rewards Mastery" } do
 	step = "OpenScreen " .. screen
 	if screen == "Rewards Career" then
 		State.OpenScreen:Fire("Rewards", "Career")
+	elseif screen == "Rewards Mastery" then
+		State.OpenScreen:Fire("Rewards", "Mastery")
 	else
 		State.OpenScreen:Fire(screen)
 	end
@@ -1689,6 +1706,11 @@ do
 		{ name = "LevelUp2", payload = { Kind = "LevelUp", Level = 2, From = 1, Coins = 3, Items = { "Emote_Balloons" } } },
 		{ name = "Milestone", payload = { Kind = "Milestone", Coins = 0, Items = { "Title_Veteran" } } },
 		{
+			-- Game Mastery's new rank (Services/MasteryService): the longest headline and game name, every chip.
+			name = "Mastery",
+			payload = { Kind = "Mastery", Game = "ParasolPlummet", Rank = 4, Coins = 50, Keys = 3, Crates = 1, Items = {} },
+		},
+		{
 			name = "Welcome",
 			payload = {
 				Kind = "Welcome",
@@ -1839,6 +1861,7 @@ do
 	task.wait(0.4)
 end
 phase("Voting", 12, function()
+	GameState.SetJSON("Spotlight", { longNames[1], ids[1], "SinkingSands" }) -- (the cards' ×2)
 	GameState.SetJSON("VoteOptions", {
 		{ Id = longNames[1], Mystery = false },
 		{ Id = ids[1], Mystery = false },
@@ -2357,6 +2380,11 @@ phase("Results", 8, function()
 			Keys = 7 + (4 - place),
 			KeysWon = 4 - place,
 		},
+		-- Game Mastery's row (Services/MasteryService): a new rank on the win, a Spotlight round's ×2
+		-- otherwise.
+		Mastery = if place == 1
+			then { Game = "SinkingSands", Gained = 5, Spotlight = 0, Gold = 0, Before = 2, After = 3, P = 21, W = 1, Win = true }
+			else { Game = ids[1], Gained = 8, Spotlight = 4, Gold = 0, Before = 1, After = 1, P = 7, W = 0, Win = false },
 	})
 	-- The server's profile catches up just after (Services/DataService): the 🔑 and 📦 counters keep
 	-- the old numbers until the loot has flown in (Crates/LootFly).
@@ -3210,6 +3238,9 @@ def main():
     out = [flags + gui_dump + PRELUDE + screen_guis()]
     available = {}
     for module, path in module_paths().items():
+        if module == "Server/Services/Telemetry":
+            available[module] = TELEMETRY_STANDIN
+            continue
         body = rewrite(module, path.read_text())
         # Comments and indentation dropped (line numbers stay put): Open Cloud caps a script at 1 MiB,
         # and the whole client with the crate season's screens is over it with them in.
