@@ -17,8 +17,10 @@
 -- every game's card has the player's rank in it (phones: a badge in the top right corner, the
 -- category icon's twin; PC: a line under the objective with the next goal, "SILVER • 6 pts to GOLD"),
 -- and today's Spotlight games (double points) a yellow "×2" (phones: in the category icon's place;
--- PC: a sticker on the top right corner, clear of the YOUR VOTE tag). PC cards are 12 units taller
--- for that line, so a long objective (BIG BAD VACUUM's) still reads at its size.
+-- PC: a sticker on the top right corner, clear of the YOUR VOTE tag).
+-- The objective on a PC card was drawn at about 11 pt to fit, so it's the objective's first sentence
+-- now, in a slightly taller box (the card is 14 units taller); the rules card before the round has
+-- the whole of it.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -66,7 +68,7 @@ local touch = false
 local lastSitOutTip = -math.huge
 
 local CARDS = 4
-local CARD_W, CARD_H = 228, 226 -- PC
+local CARD_W, CARD_H = 228, 228 -- PC
 local TOUCH_W, TOUCH_H, TOUCH_GAP = 150, 94, 10
 local TOUCH_NAME_TEXT = 20 -- a phone card's name (a long one is drawn a little smaller to fit)
 local TOUCH_TOP = 12 -- room above the row for the "YOUR VOTE" tag on a card's top edge
@@ -77,6 +79,14 @@ local PC_TOP = 34 -- PC: the same room above the cards (the sit-out note uses it
 local function darker(color: Color3): Color3
 	local h, s, v = color:ToHSV()
 	return Color3.fromHSV(h, math.min(1, s * 1.1), v * 0.62)
+end
+
+-- An objective's first sentence ("Race your mine cart out of the crystal cave!"): the PC card's line
+-- (the rules card has the whole of it). A sentence ends at ". ", "! " or "? " before a capital or a
+-- number, so "Everyone vs. a giant robot vacuum!" stays whole.
+local function firstSentence(text: string): string
+	local stop = string.find(text, "[%.!%?] [%u%d]")
+	return if stop then string.sub(text, 1, stop) else text
 end
 
 -- For TextScaled labels: shrink to fit the box, but never past `size`.
@@ -161,7 +171,7 @@ local function buildCard(index: number): Card
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		Position = UDim2.fromOffset(14, 104),
-		Size = UDim2.new(1, -28, 0, 46),
+		Size = UDim2.new(1, -28, 0, 54),
 		Visible = not touch,
 		Parent = button,
 		Children = { fitted(18) },
@@ -171,7 +181,7 @@ local function buildCard(index: number): Card
 		Name = "Mastery",
 		BackgroundTransparency = 1,
 		AnchorPoint = if touch then Vector2.new(1, 0) else Vector2.zero,
-		Position = if touch then UDim2.new(1, -6, 0, 14) else UDim2.fromOffset(14, 154),
+		Position = if touch then UDim2.new(1, -6, 0, 14) else UDim2.fromOffset(14, 160),
 		Size = if touch then UDim2.fromOffset(26, 26) else UDim2.fromOffset(22, 22),
 		Parent = button,
 	})
@@ -183,7 +193,7 @@ local function buildCard(index: number): Card
 			TextSize = 16,
 			TextWrapped = false,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.fromOffset(42, 154),
+			Position = UDim2.fromOffset(42, 160),
 			Size = UDim2.new(1, -56, 0, 22),
 			Parent = button,
 			Children = { UIKit.TextStroke(0.3) },
@@ -347,7 +357,7 @@ local function refresh()
 			local info = GameDefinitions.Categories[definition.Category]
 			card.category.Text = `{info and info.Icon or ""} {definition.Category}  •  ⏱ ~{definition.Duration}s`
 			card.categoryIcon.Text = info and info.Icon or ""
-			card.objective.Text = definition.Objective
+			card.objective.Text = firstSentence(definition.Objective)
 			card.gradient.Color = ColorSequence.new(definition.Color, darker(definition.Color))
 			showMastery(card, definition.Id)
 		else

@@ -239,7 +239,9 @@ local function buildRules(parent: Instance)
 		Position = if touch then UDim2.fromOffset(20, 90) else UDim2.fromOffset(28, 128),
 		Size = if touch then UDim2.new(1, -40, 0, 70) else UDim2.new(1, -56, 0, 84),
 		Parent = rulesCard,
-		Children = if touch then {} else { UIKit.new("UITextSizeConstraint", { MaxTextSize = 28, MinTextSize = 20 }) },
+		Children = if touch
+			then {}
+			else { UIKit.new("UITextSizeConstraint", { MaxTextSize = 28, MinTextSize = Theme.Touch.MinText }) },
 	})
 	local controls = UIKit.new("Frame", {
 		Position = if touch then UDim2.fromOffset(14, 168) else UDim2.fromOffset(24, 222),

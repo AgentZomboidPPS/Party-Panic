@@ -622,6 +622,7 @@ local function showMastery(celebration: Celebration)
 	end
 
 	-- The words: the game, the rank in its metal, a line for it; the ✕ in the corner.
+	local closeSize = if touch then Theme.Touch.Target else 56
 	label({
 		Name = "Game",
 		Text = if definition then string.upper(definition.Name) else "",
@@ -631,20 +632,27 @@ local function showMastery(celebration: Celebration)
 		TextColor3 = look.Top,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(166, 16),
-		Size = UDim2.fromOffset(CARD_W - 166 - 80, 28),
+		Size = UDim2.fromOffset(CARD_W - 166 - 12 - closeSize - 10, 28),
 		Parent = card,
 		Children = { UIKit.TextStroke(0) },
 	})
+	-- (The headline ends before the ✕, drawn a little smaller when "DIAMOND RANK!" needs it.)
+	local headlineText = `{Mastery.Name(rank)} RANK!`
+	local headlineWidth = CARD_W - 164 - 12 - closeSize - 10
+	local headlineSize = 48
+	while headlineSize > 34 and UIKit.TextWidth(headlineText, headlineSize, Theme.Fonts.Display) > headlineWidth do
+		headlineSize -= 2
+	end
 	local headline = label({
 		Name = "Headline",
-		Text = `{Mastery.Name(rank)} RANK!`,
+		Text = headlineText,
 		Font = Theme.Fonts.Display,
-		TextSize = 48,
+		TextSize = headlineSize,
 		TextWrapped = false,
 		TextColor3 = Color3.new(1, 1, 1),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(164, 42),
-		Size = UDim2.fromOffset(CARD_W - 164 - 24, 58),
+		Size = UDim2.fromOffset(headlineWidth, 58),
 		Parent = card,
 		Children = {
 			UIKit.TextStroke(0),
@@ -670,7 +678,7 @@ local function showMastery(celebration: Celebration)
 		TextSize = 30,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 12),
-		Size = UDim2.fromOffset(if touch then Theme.Touch.Target else 56, if touch then Theme.Touch.Target else 56),
+		Size = UDim2.fromOffset(closeSize, closeSize),
 		CornerRadius = "round",
 		ZIndex = 5,
 		Parent = card,
@@ -728,14 +736,16 @@ local function showMastery(celebration: Celebration)
 
 	-- The next goal (left) and 🏆 MASTERY (right half).
 	local bottom = MASTERY_H - 14 - (if touch then Theme.Touch.Target else 56)
+	-- (Phones: in the lower part of the button's height, clear of the reward chips above it.)
+	local goalDrop = if touch then 26 else 0
 	local goal = label({
 		Name = "NextGoal",
 		Text = nextGoal(celebration),
 		TextSize = Theme.Touch.MinText,
 		TextColor3 = Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(20, bottom),
-		Size = UDim2.fromOffset(BUTTONS_LEFT - 28, if touch then Theme.Touch.Target else 56),
+		Position = UDim2.fromOffset(20, bottom + goalDrop),
+		Size = UDim2.fromOffset(BUTTONS_LEFT - 28, closeSize - goalDrop),
 		Parent = card,
 	})
 	goal:SetAttribute("PP_Lines", 2)

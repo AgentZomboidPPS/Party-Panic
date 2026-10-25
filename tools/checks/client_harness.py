@@ -1715,7 +1715,7 @@ do
 		},
 		{
 			name = "Mastery gold",
-			payload = { Kind = "Mastery", Game = "HexMeltdown", Rank = 3, Coins = 25, Keys = 2, Crates = 0, Items = {} },
+			payload = { Kind = "Mastery", Game = "MechaMarathon", Rank = 3, Coins = 25, Keys = 2, Crates = 0, Items = {} },
 		},
 		{
 			name = "Welcome",
@@ -1728,7 +1728,8 @@ do
 	} do
 		step = "celebration " .. case.name
 		__fire("Celebrate", case.payload)
-		task.wait(1.6) -- the rewards are revealed one by one
+		-- (the rewards are revealed one by one; a Mastery card's third chip lands at about 1.7 s)
+		task.wait(if case.payload.Kind == "Mastery" then 2 else 1.6)
 		snap(case.name)
 		Celebrations.Dismiss()
 		task.wait(0.5)
