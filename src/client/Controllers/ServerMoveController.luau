@@ -23,7 +23,7 @@ function ServerMoveController.Start(context)
 	local holder = UIKit.new("Frame", {
 		Name = "ServerMove",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, if touch then 58 else 150),
+		Position = UDim2.new(0.5, 0, 0, if touch then 4 else 150), -- (Overlay starts under the top bar)
 		Size = UDim2.fromOffset(560, height),
 		BackgroundTransparency = 1,
 		Visible = false,
