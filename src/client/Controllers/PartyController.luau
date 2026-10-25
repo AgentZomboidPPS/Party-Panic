@@ -80,7 +80,9 @@ local BUTTON = { Touch = Vector2.new(176, 72), Pc = Vector2.new(150, 46) }
 local MEMBER = { Touch = Vector2.new(190, 216), Pc = Vector2.new(180, 206) }
 local MEMBER_FACE = 112
 local SWATCH = { Touch = 72, Pc = 54 }
-local CARD = { Touch = Vector2.new(500, 244), Pc = Vector2.new(540, 214) }
+-- (Phones: 212 tall, with no room to spare between its words and its buttons, so during the vote it
+-- fits between the top bar and the vote cards on the smallest phone.)
+local CARD = { Touch = Vector2.new(500, 212), Pc = Vector2.new(540, 214) }
 local CARD_BUTTON = { Touch = Vector2.new(168, 72), Pc = Vector2.new(170, 52) } -- JOIN; NO is 0.62 of it
 local CARD_RING = { Touch = 150, Pc = 138 }
 local TIMER_COLORS = { Theme.Colors.Yellow, Theme.Colors.Orange, Theme.Colors.Red }
@@ -88,9 +90,11 @@ local TIMER_COLORS = { Theme.Colors.Yellow, Theme.Colors.Orange, Theme.Colors.Re
 -- zone (its left 40%) and left of the menu column; PC, in the middle of the band between the chips'
 -- row and the vote cards.
 local CARD_AT = { Touch = Vector2.new(0.64, 0.52), Pc = Vector2.new(0.5, 0.46) }
--- Phones and tablets while the vote cards are up at the bottom middle: the card's top, in pixels under
--- the top bar (the chips' row is away during the vote there).
-local CARD_TOP = 8
+-- Phones and tablets while the vote cards are up at the bottom middle: between the top bar and the
+-- vote's row, right of the thumbstick's zone and under the menu. (It went to the top of the screen,
+-- and there it covered the menu's Emotes button and the PLAYING switch on the smallest phones; the
+-- chips' row steps aside for it.)
+local CARD_VOTING = Vector2.new(0.63, 0.5)
 
 local touch = false
 local remote: RemoteEvent
@@ -894,7 +898,10 @@ local function dressCard(entry: Incoming)
 	end
 end
 
--- Shows the oldest invite when the lobby's up, and hides the card (stopping its time) when not.
+local function voting(): boolean
+	return touch and voteRow ~= nil and (voteRow :: GuiObject).Visible
+end
+
 local function refreshCard()
 	local free = lobbyUp()
 	if shown and (not free or not table.find(incoming, shown)) then
@@ -944,14 +951,12 @@ local function stepCard()
 end
 
 -- Where the card goes: its spot (CARD_AT), or on phones and tablets while the vote cards are up at the
--- bottom middle, the top of the screen, which keeps it clear of them, of the toasts over them and of
--- the jump button on every screen (from its spot, the card would reach the cards on most phones).
--- It glides there when it's showing.
+-- bottom middle, just over their row (from its spot, the card would reach the cards on most phones),
+-- under the top bar and the menu. It glides there when it's showing.
 local function placeCard(animate: boolean)
-	local vote = voteRow
 	local goal
-	if touch and vote and vote.Visible then
-		goal = { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(CARD_AT.Touch.X, 0, 0, CARD_TOP) }
+	if voting() then
+		goal = { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(CARD_VOTING.X, CARD_VOTING.Y) }
 	else
 		local at = size(CARD_AT)
 		goal = { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(at.X, at.Y) }
