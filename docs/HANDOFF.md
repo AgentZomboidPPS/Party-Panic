@@ -119,7 +119,10 @@
   at its drawn top; Capy Go Boom's mowing rings are straight bands now (stacked discs flickered). Left as they are,
   with reasons in the helpers' notes: Skate Escape's plateau against the canyon walls' stepped backs (needs the
   canyon wall mesh reshaped), Bobsled Run's track joints (Logic/BobsledCourse), Rockin' Raceway's turn mesh (curbs
-  0.07 over the grass).
+  0.07 over the grass), and the undersides of the top rails where two fence panels meet at a corner in Struggle (4)
+  and Prime Cut (2), only seen from below the rail. The final pass (every arena and the lobby again, on the repaired
+  meshes): 0 flickering pairs elsewhere, and every "floating" left is meant to hang or is held from the side; Eatsa
+  Pizza mid-round with bots eating (all four slice stages): 24 of 24 pepperoni on a slice.
 - **Pop-ups on phones:** the lobby's chips step aside while the party invite card, the cup's moment or a crate unbox
   banner is up (`LobbyRibbon.CoverWhile`); during the vote the invite card sits between the top bar and the vote
   cards (212 tall on phones). The whole client (`client_harness.py --part 1/3`..`3/3`, normal and `--rich --gold

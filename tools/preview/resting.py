@@ -181,7 +181,7 @@ def main():
             closer = t < gap
             gap[closer], what[closer] = t[closer], part_id
         ground = points[:, 1] - terrain_height(terrain, points)
-        closer = (ground >= -0.05) & (ground < gap)
+        closer = (ground >= -0.05) & (ground <= args.max) & (ground < gap)
         gap[closer], what[closer] = np.maximum(ground[closer], 0), TERRAIN
         return gap, what
 
