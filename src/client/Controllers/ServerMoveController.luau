@@ -3,8 +3,8 @@
 -- room, everyone here sees the countdown with STAY, and goes along unless they press it. The card
 -- goes when the server calls the move off ("Cancel") or the countdown runs out (Roblox's teleport
 -- screen takes over).
--- Phones: at the top in the middle, under the top bar, clear of the thumbstick's corner; STAY is a
--- 44 pt button.
+-- Phones: at the top in the middle, under the phase banner and above the thumbstick's part of the
+-- screen (its bottom two thirds); STAY is a 44 pt button.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -19,11 +19,11 @@ local ServerMoveController = {}
 function ServerMoveController.Start(context)
 	local touch = UIKit.IsTouch()
 	local remote = Remotes.Get("ServerMove")
-	local height = if touch then 120 else 104
+	local height = 100
 	local holder = UIKit.new("Frame", {
 		Name = "ServerMove",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, if touch then 70 else 150),
+		Position = UDim2.new(0.5, 0, 0, if touch then 58 else 150),
 		Size = UDim2.fromOffset(560, height),
 		BackgroundTransparency = 1,
 		Visible = false,
@@ -40,7 +40,7 @@ function ServerMoveController.Start(context)
 		Name = "Title",
 		Text = "🎉 Moving you to a busier party!",
 		Font = Theme.Fonts.Display,
-		TextSize = if touch then 24 else 24,
+		TextSize = 24,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = false,
 		Position = UDim2.fromOffset(20, 14),
@@ -54,8 +54,9 @@ function ServerMoveController.Start(context)
 		Text = "",
 		TextSize = Theme.Touch.MinText + 2,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = false,
 		Position = UDim2.fromOffset(20, 54),
-		Size = UDim2.new(1, -220, 0, height - 68),
+		Size = UDim2.new(1, -220, 0, 30),
 		Parent = card,
 		Children = { UIKit.TextStroke(0.3) },
 	})
@@ -90,7 +91,7 @@ function ServerMoveController.Start(context)
 		task.spawn(function()
 			local left = math.floor(seconds)
 			while left > 0 and mine == token do
-				count.Text = `More players are waiting for you. Going in {left}s...`
+				count.Text = `More players there. Going in {left}s`
 				task.wait(1)
 				left -= 1
 			end
