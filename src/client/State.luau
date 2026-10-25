@@ -33,6 +33,9 @@ State.RoundCallout = Signal.new()
 -- line, less when the line is out of the way, more while a two-line callout is up.
 State.TopHudShift = 0
 State.TopHudShiftChanged = Signal.new() -- (shift: number)
+-- True while something in the lobby films with its own camera (Skee-Ball): MiniGameController
+-- leaves the camera alone then, and otherwise puts it back on the player between rounds.
+State.CameraHeld = false
 
 function State.Init()
 	Remotes.Get("ProfileData").OnClientEvent:Connect(function(snapshot)

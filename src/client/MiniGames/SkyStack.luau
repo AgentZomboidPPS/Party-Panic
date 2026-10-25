@@ -677,7 +677,7 @@ function SkyStack.Start(api)
 	local function release()
 		if filming and not released then
 			released = true
-			camera.CameraType = savedType
+			camera.CameraType = if savedType == Enum.CameraType.Scriptable then Enum.CameraType.Custom else savedType
 			camera.FieldOfView = savedFov
 		end
 	end

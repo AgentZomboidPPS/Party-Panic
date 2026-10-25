@@ -446,7 +446,7 @@ function TraceRace.Start(api)
 			camera.CameraType = Enum.CameraType.Scriptable
 			camera.FieldOfView = 62
 		else
-			camera.CameraType = savedType
+			camera.CameraType = if savedType == Enum.CameraType.Scriptable then Enum.CameraType.Custom else savedType
 			camera.FieldOfView = savedFov
 			local _, humanoid, root = api:Character()
 			if humanoid then

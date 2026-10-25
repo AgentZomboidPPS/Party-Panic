@@ -622,7 +622,7 @@ function CrazyCutters.Start(api)
 		camera.CameraType = Enum.CameraType.Scriptable
 		camera.FieldOfView = 40
 		api:Track(function()
-			camera.CameraType = savedType
+			camera.CameraType = if savedType == Enum.CameraType.Scriptable then Enum.CameraType.Custom else savedType
 			camera.FieldOfView = savedFov
 		end)
 		-- The move controls go away: you stand at your board, and the screen is for cutting. (The UI

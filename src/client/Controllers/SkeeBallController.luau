@@ -1350,6 +1350,7 @@ local function exitPlay()
 	fadeOthers(nil)
 	local camera = workspace.CurrentCamera
 	local _, humanoid = character()
+	State.CameraHeld = false
 	camera.CameraType = Enum.CameraType.Custom
 	camera.FieldOfView = play.SavedFov
 	if humanoid then
@@ -1409,6 +1410,7 @@ local function enterPlay(index: number, best: number)
 	local camera = workspace.CurrentCamera
 	play.SavedFov = camera.FieldOfView
 	play.Pose = nil
+	State.CameraHeld = true
 	camera.CameraType = Enum.CameraType.Scriptable
 	-- Held every frame while you play: it swings in behind your lane (and to the vote's pose and
 	-- back), then stays there whatever else touches the camera.

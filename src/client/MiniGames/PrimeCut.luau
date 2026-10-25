@@ -363,7 +363,9 @@ function PrimeCut.Start(api)
 			camera.CameraType = Enum.CameraType.Scriptable
 			camera.FieldOfView = 42
 		else
-			camera.CameraType = savedType or Enum.CameraType.Custom
+			camera.CameraType = if savedType and savedType ~= Enum.CameraType.Scriptable
+				then savedType
+				else Enum.CameraType.Custom
 			camera.FieldOfView = savedFov or 70
 		end
 		-- You stand at your grill: the move controls go away, the screen is for the knife. (The UI

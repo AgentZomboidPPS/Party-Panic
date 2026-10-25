@@ -6,11 +6,21 @@
 -- That includes a start-up still waiting when the round is torn down (say for shared state a
 -- failed Prepare never set): its thread is cancelled with the round, so it can't wake up in a later
 -- round of the same mode with a dead API.
+--
+-- The camera goes back to the player too (owner, after a Sky Stack round on version 61: "This
+-- happened again after the new mini game", with a screenshot of the lobby far off from the sky over
+-- the arena, where the round's camera had been left). A mode's cleanup gives its camera back itself;
+-- settleCamera is the backstop for one that doesn't, or that hands back a scripted camera it found
+-- when it started: when a mode stops, when a new character arrives between rounds, and every second
+-- in the lobby, the camera follows the player's own character at the normal field of view. Skee-Ball
+-- films the lobby with its own camera (State.CameraHeld), so it's left alone then.
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameState = require(ReplicatedStorage.Shared.GameState)
 
+local State = require(script.Parent.Parent.State)
 local Api = require(script.Parent.Parent.MiniGames.Kit.Api)
 
 local MiniGameController = {}
@@ -20,17 +30,55 @@ local ACTIVE_PHASES = { Preparing = true, InRound = true, Results = true }
 
 local current: { id: string, api: any, roundId: number, thread: thread? }? = nil
 
+local player = Players.LocalPlayer
+local LOBBY_FOV = 70 -- Roblox's own field of view (the lobby never changes it)
+local WATCH_EVERY = 1 -- seconds between the lobby's camera checks
+
+-- The camera back on the player's own character (above). Returns whether anything was wrong.
+local function settleCamera(): boolean
+	local camera = workspace.CurrentCamera
+	if State.CameraHeld or not camera then
+		return false
+	end
+	local wrong = false
+	if camera.CameraType ~= Enum.CameraType.Custom then
+		camera.CameraType = Enum.CameraType.Custom
+		wrong = true
+	end
+	if camera.FieldOfView ~= LOBBY_FOV then
+		camera.FieldOfView = LOBBY_FOV
+		wrong = true
+	end
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local subject = camera.CameraSubject
+	if humanoid and subject ~= humanoid and (subject == nil or subject ~= humanoid.SeatPart) then
+		camera.CameraSubject = humanoid
+		wrong = true
+	end
+	return wrong
+end
+
+-- Between rounds: no mode running and the phase isn't a round's (a mode with no client code runs
+-- none, and spectating its round moves the camera on purpose).
+local function betweenRounds(): boolean
+	return current == nil and not ACTIVE_PHASES[GameState.Get("Phase") or ""]
+end
+
 local function stop()
 	local running = current
 	current = nil
 	if running then
 		-- A start-up still waiting goes with the round (not when stop runs from inside it).
 		if running.thread and coroutine.status(running.thread) == "suspended" then
-			task.cancel(running.thread)
+			pcall(task.cancel, running.thread)
 		end
 		local ok, err = pcall(running.api.Destroy, running.api)
 		if not ok then
 			warn(`[MiniGame] {running.id} cleanup failed: {err}`)
+		end
+		if settleCamera() then
+			warn(`[MiniGame] {running.id} left the camera off the player: put back`)
 		end
 	end
 end
@@ -74,6 +122,22 @@ function MiniGameController.Start(_context)
 	GameState.Changed("GameId", refresh)
 	GameState.Changed("RoundId", refresh)
 	refresh()
+
+	-- Between rounds (no mode running), a new character and the camera checks.
+	player.CharacterAdded:Connect(function(character)
+		character:WaitForChild("Humanoid", 10)
+		if betweenRounds() then
+			settleCamera()
+		end
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(WATCH_EVERY)
+			if betweenRounds() and settleCamera() then
+				warn("[MiniGame] the lobby camera was off the player: put back")
+			end
+		end
+	end)
 end
 
 return MiniGameController

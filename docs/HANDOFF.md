@@ -1,6 +1,16 @@
 # Handoff: Party Panic (for the next Claude)
 
-**On this branch since version 60 (not published yet):**
+**Version 61 is live** (everything below, published 2026-10-25). **Version 62: the camera fix.** After a Sky Stack round on
+61 the owner's camera stayed up in the sky over the arena through the next vote (owner: "This happened again after the new
+mini game", then "we need that fix asap and pushed"). Controllers/MiniGameController now puts the camera back on the
+player's own character (Custom, field of view 70, their humanoid) when a mode's client half stops, when a new character
+arrives between rounds, and every second in the lobby; it never touches it while a round is on, nor while Skee-Ball films
+(`State.CameraHeld`). The six modes that save the camera they found (Arrow Ambush, Crazy Cutters, Mecha-Marathon, Prime
+Cut, Sky Stack, Trace Race) never hand back a scripted one. The exact trigger wasn't reproduced (each mode's own cleanup
+looks right), so this is a backstop for every mode. The client harness checks it (`cameraChecks`: "round" Scriptable 50,
+"afterRound" and "lobby" Custom 70). Obby Madness (launch Friday 30 October) is planned in the owner's Claude doc, not built.
+
+**On this branch since version 60 (published as version 61):**
 - **Game Mastery, step 1** (owner: "If you could add a progression system what would it be?", then on the plan: "Let's
   build it. 1 yes 2 gold pass should help a little. 3 yes"; the answers: the bot rule, a little GOLD PASS help, start with
   step 1). Every game has its own rank, BRONZE, SILVER, GOLD, DIAMOND, LEGEND (Config.Mastery; rules in

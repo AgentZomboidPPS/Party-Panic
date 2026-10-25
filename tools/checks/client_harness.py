@@ -163,6 +163,8 @@ def rewrite(module: str, text: str) -> str:
     text = re.sub(r"require\(([^()]*?(?:\([^()]*\))?[^()]*?)\.Remotes\)", "__RemotesShim", text)
     text = re.sub(r"require\((script(?:\.\w+)+)\)", lambda m: f'__require("{resolve(module, m.group(1))}")', text)
     text = shared_requires(text)
+    if module == "Client/Controllers/MiniGameController":  # (no mode's client half runs here)
+        text = text.replace("local modules = script.Parent.Parent.MiniGames", 'local modules = Instance.new("Folder")')
     if module.startswith("Client/"):  # shared modules run as the server here (it owns GameState)
         for service in SHIMMED_SERVICES:
             text = text.replace(f'game:GetService("{service}")', f'__service("{service}")')
@@ -3220,6 +3222,45 @@ pcall(__require("Client/UI/Modal").CloseAll)
 __player:SetAttribute("PP_SitOut", false)
 task.wait(0.5)
 
+-- The camera goes back on the player after a round (owner, after a Sky Stack round on version 61:
+-- "This happened again after the new mini game"; Controllers/MiniGameController, which the rest of
+-- this run leaves out, here with no mode's client half to run). A round's camera is left alone while
+-- the round is on ("round": Scriptable 50), and put back on the player once it's over ("afterRound")
+-- and in the lobby ("lobby"), within a couple of seconds: Custom 70.
+local cameraChecks = {}
+do
+	step = "camera checks"
+	local camera = workspace.CurrentCamera
+	local function read()
+		return `{camera.CameraType.Name} {camera.FieldOfView}`
+	end
+	GameState.Set("Phase", "Intermission")
+	GameState.Set("GameId", "")
+	local okStart, startErr = pcall(function()
+		__require("Client/Controllers/MiniGameController").Start(context)
+	end)
+	if not okStart then
+		__note("MiniGameController failed to start: " .. tostring(startErr))
+	end
+	GameState.Set("GameId", "SkyStack")
+	GameState.Set("RoundId", 999)
+	GameState.Set("Phase", "InRound")
+	task.wait(0.3)
+	camera.CameraType = Enum.CameraType.Scriptable
+	camera.FieldOfView = 50
+	task.wait(2.2)
+	cameraChecks.round = read()
+	GameState.Set("Phase", "Cleanup")
+	task.wait(1.5)
+	cameraChecks.afterRound = read()
+	GameState.Set("GameId", "")
+	GameState.Set("Phase", "Intermission")
+	camera.CameraType = Enum.CameraType.Scriptable
+	camera.FieldOfView = 50
+	task.wait(2.2)
+	cameraChecks.lobby = read()
+end
+
 local guiCount = #__playerGui:GetDescendants()
 return game:GetService("HttpService"):JSONEncode({
 	ui = __ui,
@@ -3237,6 +3278,7 @@ return game:GetService("HttpService"):JSONEncode({
 	guiInstances = guiCount,
 	lastStep = step,
 	botChecks = if #bots > 0 then botChecks else nil,
+	cameraChecks = cameraChecks,
 	skeeChecks = skeeChecks,
 	eventChecks = eventChecks,
 	effectChecks = effectChecks,

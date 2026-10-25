@@ -699,7 +699,7 @@ function ArrowAmbush.Start(api)
 				return
 			end
 			holding = false
-			camera.CameraType = savedType
+			camera.CameraType = if savedType == Enum.CameraType.Scriptable then Enum.CameraType.Custom else savedType
 			camera.FieldOfView = savedFov
 			local _, humanoid = api:Character()
 			if humanoid then

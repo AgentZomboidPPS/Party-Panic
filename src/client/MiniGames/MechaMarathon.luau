@@ -409,7 +409,7 @@ function MechaMarathon.Start(api)
 		camera.CameraType = Enum.CameraType.Scriptable
 		camera.FieldOfView = 58
 		api:Track(function()
-			camera.CameraType = savedType
+			camera.CameraType = if savedType == Enum.CameraType.Scriptable then Enum.CameraType.Custom else savedType
 			camera.FieldOfView = savedFov
 		end)
 	end
