@@ -11,7 +11,7 @@ return function(h)
 	return {
 		StampOutRider = {
 			Height = 1.42,
-			AssetId = 88612882231955, -- tools/upload_assets.py --only StampOutRider fills this in
+			AssetId = 73397414880871, -- tools/upload_assets.py --only StampOutRider fills this in
 			Palette = { Rubber = h.rgb(226, 40, 52), Block = wood, Band = h.rgb(226, 40, 52) },
 			Materials = { Block = Enum.Material.Wood },
 			Fallback = function(m)

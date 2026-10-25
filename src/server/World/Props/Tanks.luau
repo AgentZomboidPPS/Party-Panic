@@ -7,7 +7,7 @@ return function(h)
 	return {
 		TanksTank = {
 			Height = 5.76,
-			AssetId = 104079569508206,
+			AssetId = 109025665137831,
 			Collide = false,
 			Palette = {
 				Body = h.rgb(232, 64, 58),
@@ -58,7 +58,7 @@ return function(h)
 		},
 		TanksBlock = {
 			Height = 8.03,
-			AssetId = 89568364741486,
+			AssetId = 93151363928051,
 			Collide = true,
 			Palette = { Wood = h.rgb(232, 196, 140), Grain = h.rgb(196, 150, 96) },
 			Materials = { Wood = Enum.Material.Wood, Grain = Enum.Material.Wood },
@@ -91,7 +91,7 @@ return function(h)
 		},
 		TanksBear = {
 			Height = 33.63,
-			AssetId = 99194252155062,
+			AssetId = 120595582935478,
 			Collide = false,
 			Palette = {
 				Fur = h.rgb(176, 112, 62),
@@ -139,7 +139,7 @@ return function(h)
 		},
 		TanksCrayon = {
 			Height = 1.9,
-			AssetId = 104286323322705,
+			AssetId = 122708381994355,
 			Collide = false,
 			Palette = { Wax = h.rgb(235, 70, 60), Wrapper = h.rgb(245, 140, 130) },
 			Fallback = function(m)
@@ -148,7 +148,7 @@ return function(h)
 		},
 		TanksWindow = {
 			Height = 44.4,
-			AssetId = 89672579142546,
+			AssetId = 136270568520820,
 			Collide = false,
 			Palette = {
 				Frame = h.rgb(250, 250, 245),

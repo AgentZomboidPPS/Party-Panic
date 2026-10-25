@@ -70,7 +70,7 @@ return function(h)
 		-- center). Cabins are separate props that hang from it.
 		LobbyFerrisWheel = {
 			Height = 65.6,
-			AssetId = 101739504023341,
+			AssetId = 117553986418264,
 			Palette = { Frame = rgb(255, 92, 150), Hub = rgb(255, 204, 64), Lights = rgb(255, 240, 170) },
 			Materials = { Lights = Enum.Material.Neon, Hub = Enum.Material.Metal },
 			Fallback = function(m)
@@ -91,7 +91,7 @@ return function(h)
 		-- A gondola; its hang point is the top center.
 		LobbyFerrisCabin = {
 			Height = 7.57,
-			AssetId = 83113954575693,
+			AssetId = 101788580276212,
 			Palette = { Body = rgb(64, 196, 255), Roof = rgb(255, 255, 255), Frame = rgb(255, 204, 64) },
 			Fallback = function(m)
 				h.rounded(m, "Body", Vector3.new(4.4, 2.6, 3.4), 0.7, Vector3.new(0, 1.3, 0))
@@ -102,7 +102,7 @@ return function(h)
 		-- Two A-frames on a boarding deck; the axle is 43 above the base.
 		LobbyFerrisStand = {
 			Height = 44.7,
-			AssetId = 109467883510419,
+			AssetId = 80815460183700,
 			Palette = { Legs = rgb(156, 108, 255), Base = rgb(255, 255, 255), Trim = rgb(255, 204, 64) },
 			Fallback = function(m)
 				h.rounded(m, "Base", Vector3.new(40, 1.2, 20), 0.5, Vector3.new(0, 0.6, 0.625))
@@ -139,7 +139,7 @@ return function(h)
 		-- An oval raised bed, 10 x 5, long axis along X.
 		LobbyFlowerBed = {
 			Height = 2.05,
-			AssetId = 75021445750108,
+			AssetId = 99112771816648,
 			Collide = true,
 			Palette = {
 				Curb = rgb(250, 246, 240),
@@ -159,7 +159,7 @@ return function(h)
 		-- A candy-striped carnival turret with a balcony of bulbs and a pennant (37 tall).
 		LobbyTower = {
 			Height = 37.15,
-			AssetId = 89366124243892,
+			AssetId = 139016732387318,
 			Collide = true,
 			Palette = {
 				Body = rgb(255, 255, 255),
@@ -237,7 +237,7 @@ return function(h)
 		-- local origin's line; the game's targets sit in front of it. The box center is 4.29 in front.
 		LobbyGalleryBooth = {
 			Height = 21.3,
-			AssetId = 139492160126361,
+			AssetId = 120873739872042,
 			Collide = true,
 			Palette = {
 				Back = rgb(45, 65, 130),
@@ -301,7 +301,7 @@ return function(h)
 		-- with bulbs and a speaker stack each side. The box center is 0.21 in front of the columns.
 		LobbyEmoteArch = {
 			Height = 33.8,
-			AssetId = 101648045405733,
+			AssetId = 93791187328814,
 			Collide = true,
 			Palette = {
 				Frame = rgb(120, 84, 230),
@@ -328,7 +328,7 @@ return function(h)
 		-- front -Z. The box center is 0.09 behind the board.
 		LobbyQuestKiosk = {
 			Height = 20.85,
-			AssetId = 99843025306070,
+			AssetId = 101127737875282,
 			Collide = true,
 			Palette = {
 				Wood = rgb(196, 140, 92),

@@ -159,7 +159,7 @@ return function(h)
 		},
 		StruggleFence = {
 			Height = 10.5,
-			AssetId = 82866516079462,
+			AssetId = 96648294267120,
 			Collide = true,
 			Palette = { Boards = h.rgb(196, 146, 96), Rails = h.rgb(150, 104, 66), Post = h.rgb(120, 84, 56) },
 			Materials = {
@@ -205,7 +205,7 @@ return function(h)
 		},
 		StruggleTram = {
 			Height = 11.1,
-			AssetId = 130157278749122,
+			AssetId = 110283636674850,
 			BlocksCamera = true,
 			Palette = {
 				Body = h.rgb(210, 80, 60),
@@ -243,7 +243,7 @@ return function(h)
 		},
 		StruggleBench = {
 			Height = 3.7,
-			AssetId = 122997575548971,
+			AssetId = 108941504027786,
 			Palette = { Seat = h.rgb(190, 130, 80), Back = h.rgb(176, 120, 74), Legs = h.rgb(60, 60, 66) },
 			Materials = { Seat = Enum.Material.WoodPlanks, Back = Enum.Material.WoodPlanks, Legs = Enum.Material.Metal },
 			Fallback = function(m)
@@ -254,7 +254,7 @@ return function(h)
 		},
 		StruggleBanner = {
 			Height = 12.6,
-			AssetId = 113335134452205,
+			AssetId = 114963198286555,
 			Palette = {
 				Pole = h.rgb(230, 230, 230),
 				Finial = h.rgb(240, 200, 80),

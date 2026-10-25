@@ -5,8 +5,8 @@ it can be seen (tools/preview/mesh_zfight.py finds them), the smaller shape's fa
 normal to GAP studs in front of the face it fought (its points on that plane; the rest of it stays),
 so it's in front and wins every
 frame instead of flickering: a stripe, an emblem or a trim strip flush with the surface it's on stands
-a hair proud of it, a picket overlapping the next gets a hair thicker front and back. It goes round
-again until nothing fights (or ROUNDS runs out).
+a hair proud of it (GAP, 0.03), a picket overlapping the next gets a hair thicker front and back. It
+goes round again until nothing fights (or ROUNDS runs out).
 
     python3 tools/meshgen/unfight.py                   # every .glb in assets/meshes, fixed in place
     python3 tools/meshgen/unfight.py PrimeCutFence Crate
@@ -34,9 +34,31 @@ MESH_DIR = ROOT / "assets" / "meshes"
 sys.path.insert(0, str(ROOT / "tools" / "preview"))
 from mesh_zfight import fights, shapes_of  # noqa: E402
 
-GAP = 0.1  # studs a face moves out per round (the game keeps faces 0.1 apart: closer ones can flicker)
-EPS = 0.08  # faces closer than this fight (mesh_zfight's and zfight's default)
+# A hair is enough: faces 0.03 apart don't flicker at the distances the game is seen from (a depth
+# buffer tells them apart to a few thousandths of a stud at 100 studs). It was 0.1 with faces closer
+# than 0.08 fighting, and that broke things (owner, with screenshots: "Eatsa Pizza is bugged.", "the
+# circles on the ground arent on the top of the pizza they are below it"): pushes of 0.1 a round, up to
+# 8 rounds, stacked through layered props, so the pizza's cheese rose 0.3-0.7 over its toppings and
+# pepperoni, bunting flags grew five times thicker, Shark Bait's floatie went from 1 to 2.7 tall and
+# Prime Cut's steaks doubled; and a prop more than 5% taller than its spec's Height is scaled down to it
+# (MeshLibrary.normalize), so they were drawn shrunk too. 51 of the 145 props it moved changed size by
+# more than 5%; with these values almost none moves more than a few hundredths (NO_SEPARATE lists the
+# ones it still can't help).
+GAP = 0.03  # studs a face moves out per round
+EPS = 0.02  # faces closer than this fight (mesh_zfight's default)
 ROUNDS = 8
+# Props left exactly as built: a push here changes them more than the fights it'd cure. The pizza
+# slices' layers fight only on their cut sides (bands seen edge-on between slices), and pushing them
+# widens the slice past its wedge; the floatie's stripes hug a curved ring, which a push makes a fifth
+# taller (and so drawn smaller); the dough sheet's two fighting flour flecks are one colour.
+NO_SEPARATE = {
+    "EatsaPizzaSlice",
+    "EatsaPizzaSlice1",
+    "EatsaPizzaSlice2",
+    "EatsaPizzaSlice3",
+    "SharkBaitFloatie",
+    "DoughSheet",
+}
 
 
 def separate(pieces: dict) -> tuple[dict, int, int]:
@@ -130,6 +152,8 @@ def accessor_array(doc, blob, index):
 
 
 def fix_file(name: str, check_only: bool = False) -> tuple[str, int, int]:
+    if name in NO_SEPARATE:
+        return name, 0, 0
     path = MESH_DIR / f"{name}.glb"
     doc, blob = read_glb(path)
     pieces, where = {}, {}

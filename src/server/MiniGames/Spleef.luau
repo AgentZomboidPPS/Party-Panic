@@ -200,10 +200,12 @@ function Spleef:_buildScenery()
 		Parent = ctx.Arena,
 	})
 	-- The crater rim: six arcs of ice cliff (each 60 degrees, authored around the crater's middle).
+	-- (Every other arc 0.2 higher: each arc runs a hair past its 60 degrees, and where two overlapped their
+	-- snow slopes lay 0.03 apart and flickered; one step up puts them a clear 0.1 and more apart.)
 	for index = 0, 5 do
 		MeshLibrary.Get("SpleefCliff", {
 			Scale = CLIFF_SCALE,
-			CFrame = CFrame.new(pool.X, waterY - CLIFF_BASE, pool.Z)
+			CFrame = CFrame.new(pool.X, waterY - CLIFF_BASE + (index % 2) * 0.2, pool.Z)
 				* CFrame.Angles(0, math.rad(index * 60 + 30), 0)
 				* CFrame.new(CLIFF_PIVOT),
 			Parent = ctx.Arena,

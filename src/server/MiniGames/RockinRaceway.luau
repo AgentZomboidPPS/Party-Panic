@@ -52,10 +52,15 @@ local FINISH_CLOCK = 10 -- seconds the finish stays open after the first rider i
 local MAX_LEEWAY = 0.4
 local ROOT_Y = 3 -- a standing character's root above the ground
 local ROW_BACK = 4 -- a hurdle row's pivot (the middle of its footprint) sits this far before its bars
-local SINK = 0.05 -- carrot panels sit this far into the track (never in its plane)
+-- Carrot panels sit this far into the track (never in its plane). At 0.05 the low edge of their trim
+-- was 0.08 over the track's top and flickered with it (z-fighting); at 0.03 it's a full 0.1 clear.
+local SINK = 0.03
 -- Hurdle rows sit less deep: at 0.05 their feet's tops were 0.07 over the track and their outer feet
 -- 0.07 over the curbs, and flickered (z-fighting). At 0.02 every face is a clear 0.1 off.
 local ROW_SINK = 0.02
+-- The grass's top is this far under the track: the fence, bunting, arch, stands, carousel, tents,
+-- balloons and the Ferris wheel stand on the grass, not hover this far over it at the track's height.
+local LAWN = 0.3
 
 -- Horse colours, one per lane (the lane number is the second cue).
 local COLORS = {
@@ -147,7 +152,13 @@ function RockinRaceway:_strip(
 	local origin = self.origin
 	-- (each kind sinks to its own depth, so buried bottoms never share a plane either: lane lines to
 	-- 0.31, as at 0.06 their bottoms met the hurdle rows' feet's)
-	local sink = if name == "Curb" then 0.2 elseif name == "Check" then 0.27 elseif name == "LaneLine" then 0.31 else 0.06
+	-- (curbs to 0.45: they lie on the grass, whose top is 0.3 under the track, and at 0.2 they hovered
+	-- 0.1 over it)
+	local sink = if name == "Curb"
+		then 0.45
+		elseif name == "Check" then 0.27
+		elseif name == "LaneLine" then 0.31
+		else 0.06
 	local height = top + sink
 	return Build.Decor({
 		Name = name,
@@ -267,7 +278,7 @@ function RockinRaceway:_buildArena()
 		end
 	end
 	-- The finish arch over it (its span runs across the track: the mesh's X along world Z).
-	local archAt = Vector3.new(origin.X, ground, origin.Z + R)
+	local archAt = Vector3.new(origin.X, ground - LAWN, origin.Z + R) -- (its feet stand on the grass)
 	local arch = MeshLibrary.Get("RockinRacewayArch", {
 		CFrame = CFrame.lookAt(archAt, archAt + Vector3.new(1, 0, 0)), -- front (-Z) toward riders coming home
 		Parent = field,
@@ -351,8 +362,8 @@ function RockinRaceway:_buildArena()
 	local count = math.floor((Track.LENGTH - gap * 2) / FENCE + 0.5)
 	local step = (Track.LENGTH - gap * 2) / count
 	for k = 0, count - 1 do
-		local a = self:_frame(gap + k * step, fenceOffset).Position
-		local b = self:_frame(gap + (k + 1) * step, fenceOffset).Position
+		local a = self:_frame(gap + k * step, fenceOffset, -LAWN).Position -- (on the grass)
+		local b = self:_frame(gap + (k + 1) * step, fenceOffset, -LAWN).Position
 		MeshLibrary.Get("RockinRacewayFence", {
 			CFrame = CFrame.fromMatrix((a + b) / 2, (b - a).Unit, Vector3.yAxis), -- its rails (X) along the track
 			Scale = (b - a).Magnitude / FENCE,
@@ -365,7 +376,7 @@ function RockinRaceway:_buildArena()
 			if math.abs(x) < 14 then
 				continue -- the arch stands there
 			end
-			local at = Vector3.new(origin.X + x, ground, origin.Z + side * (R + fenceOffset + 2.5))
+			local at = Vector3.new(origin.X + x, ground - LAWN, origin.Z + side * (R + fenceOffset + 2.5))
 			MeshLibrary.Get("RockinRacewayBunting", {
 				CFrame = CFrame.new(at) * CFrame.Angles(0, if side > 0 then 0 else math.pi, 0),
 				Parent = fence,
@@ -375,7 +386,7 @@ function RockinRaceway:_buildArena()
 
 	-- Grandstands full of fans along the home straight, facing the track.
 	for _, x in { -62, 62 } do
-		local at = Vector3.new(origin.X + x, ground, origin.Z + R + half + 20)
+		local at = Vector3.new(origin.X + x, ground - LAWN, origin.Z + R + half + 20)
 		MeshLibrary.Get("RockinRacewayStand", {
 			CFrame = CFrame.lookAt(at, at - Vector3.zAxis),
 			Parent = field,
@@ -385,7 +396,7 @@ function RockinRaceway:_buildArena()
 	-- The infield: a carousel in the middle, striped tents, balloons.
 	local infield = Build.Folder("Infield", field)
 	MeshLibrary.Get("RockinRacewayCarousel", {
-		CFrame = CFrame.new(origin.X, ground, origin.Z),
+		CFrame = CFrame.new(origin.X, ground - LAWN, origin.Z),
 		Parent = infield,
 	}).Name =
 		"Carousel"
@@ -393,7 +404,7 @@ function RockinRaceway:_buildArena()
 	for index, spot in { { -62, -6 }, { 60, 8 }, { -34, 14 }, { 36, -14 }, { -88, 10 }, { 88, -10 } } do
 		MeshLibrary.Get("RockinRacewayTent", {
 			Colors = { Stripes = tentColors[(index - 1) % #tentColors + 1] },
-			CFrame = CFrame.new(origin.X + spot[1], ground, origin.Z + spot[2])
+			CFrame = CFrame.new(origin.X + spot[1], ground - LAWN, origin.Z + spot[2])
 				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
 			Parent = infield,
 		})
@@ -406,7 +417,7 @@ function RockinRaceway:_buildArena()
 			decor(MeshLibrary.Get("Balloon", {
 				Scale = rng:NextNumber(0.6, 0.8),
 				Colors = { Balloon = balloonColors[rng:NextInteger(1, #balloonColors)] },
-				CFrame = CFrame.new(origin.X + spot[1], ground, origin.Z + spot[2])
+				CFrame = CFrame.new(origin.X + spot[1], ground - LAWN, origin.Z + spot[2])
 					* CFrame.Angles(0, angle, 0)
 					* CFrame.Angles(math.rad(10), 0, 0),
 				Parent = infield,
@@ -416,7 +427,7 @@ function RockinRaceway:_buildArena()
 
 	-- A Ferris wheel past the back straight, and trees all round beyond the fence.
 	MeshLibrary.Get("RockinRacewayWheel", {
-		CFrame = CFrame.new(origin.X + 20, ground, origin.Z - R - half - 48),
+		CFrame = CFrame.new(origin.X + 20, ground - LAWN, origin.Z - R - half - 48),
 		Parent = field,
 	})
 	local leafColors = { rgb(80, 190, 90), rgb(110, 200, 80), rgb(70, 165, 95), rgb(140, 205, 85) }

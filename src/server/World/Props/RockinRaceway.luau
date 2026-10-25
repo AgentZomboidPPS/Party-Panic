@@ -64,7 +64,7 @@ return function(h)
 		},
 		RockinRacewayCarrot = {
 			Height = 0.41,
-			AssetId = 105027829983437,
+			AssetId = 122688434824942,
 			Collide = false, -- a flat panel on the track: decoration only
 			Shadow = false,
 			Palette = {
@@ -83,7 +83,7 @@ return function(h)
 		},
 		RockinRacewayHurdleRow = {
 			Height = 2.96,
-			AssetId = 138485862161470,
+			AssetId = 130563388975616,
 			Collide = false, -- riders hop it; the game judges the bump, nothing physical
 			Palette = {
 				Takeoff = rgb(60, 130, 240),
@@ -119,7 +119,7 @@ return function(h)
 		},
 		RockinRacewayTurn = {
 			Height = 0.58,
-			AssetId = 99355844535212,
+			AssetId = 137178086326449,
 			Collide = false, -- the grass slab under it is the solid ground
 			Shadow = false,
 			Palette = {
@@ -183,7 +183,7 @@ return function(h)
 		},
 		RockinRacewayBunting = {
 			Height = 9.3,
-			AssetId = 88599094796789,
+			AssetId = 108967102889614,
 			Collide = false,
 			Palette = {
 				Pole = rgb(250, 250, 250),
@@ -304,7 +304,7 @@ return function(h)
 		},
 		RockinRacewayWheel = {
 			Height = 45.9,
-			AssetId = 124543573580427,
+			AssetId = 129216002551582,
 			Collide = false, -- far past the back straight
 			Palette = {
 				Rim = rgb(250, 250, 250),

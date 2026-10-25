@@ -16,6 +16,10 @@ EatsaPizza.SLICES = 12
 EatsaPizza.SLICE_ANGLE = 2 * math.pi / 12
 EatsaPizza.MESH_RADIUS = 20 -- the slice meshes' radius as drawn
 EatsaPizza.MESH_CHEESE = 0.31 -- the cheese's top in the meshes (pepperoni sit on it)
+-- Where the bite spots' glowing rings are drawn, in the same mesh studs: over the cheese's melty bumps
+-- (up to about 0.37) so the rings read on top of the pizza, under the tallest toppings (owner: "the
+-- areas to say eat here the circles on the ground arent on the top of the pizza they are below it").
+EatsaPizza.SPOT_TOP = 0.42
 EatsaPizza.REACH = { 1.0, 0.8, 0.6, 0.38 } -- how far stage 0..3 reaches (share of the radius)
 EatsaPizza.STAGES = { "EatsaPizzaSlice", "EatsaPizzaSlice1", "EatsaPizzaSlice2", "EatsaPizzaSlice3" }
 EatsaPizza.BITE_DEPTH = 1.7 -- mesh studs: the crust's width, and how deep a stage's tooth marks go

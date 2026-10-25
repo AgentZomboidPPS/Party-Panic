@@ -74,6 +74,14 @@ local FENCE_Z = Rules.FIELD_Z + 2
 local PANEL = 12 -- a fence panel's width (studs; the sides are whole numbers of panels)
 local SIGN = { Y = 10.6, W = 15.5, H = 6.2, Z = 0.62 } -- the scoreboard's lit face (its mesh, studs)
 local BOARD_SCALE = 1.3 -- the scoreboard is drawn this much bigger, so its face clears the fence
+-- The grass's top is this far under the sand's: the scoreboard, benches and banners out on it stand on
+-- it (at the sand's height they hovered this far over it).
+local GRASS = 0.3
+-- Each fence panel's post stands on the seam with the next panel and covers that panel's end board
+-- too, its face only 0.07 in front of that board's: they flickered (z-fighting). The post comes this
+-- far toward the field, halfway between its own end board (set 0.2 forward) and the next panel's:
+-- 0.1 from each.
+local POST_FORWARD = 0.03
 local CHARGE_SPEED = 10 -- walk speed while charging
 local MAX_LAG = 0.4 -- the longest round trip we allow for
 local REWIND_CAP = 0.3 -- the furthest back a victim is judged
@@ -276,15 +284,19 @@ function Struggle:_buildArena()
 		local inward = Vector3.new(-side.Dir.Z, 0, side.Dir.X)
 		for index = 0, panels - 1 do
 			local mid = origin + side.From + side.Dir * ((index + 0.5) * PANEL)
-			MeshLibrary.Get("StruggleFence", {
+			local panel = MeshLibrary.Get("StruggleFence", {
 				CFrame = CFrame.lookAt(mid, mid + inward),
 				Parent = arena,
 			})
+			local post = panel:FindFirstChild("Post", true)
+			if post and post:IsA("BasePart") then
+				post.CFrame += inward * POST_FORWARD
+			end
 		end
 	end
 
 	-- North: the scoreboard behind the fence, looking over it, flanked by banners.
-	local boardAt = origin + Vector3.new(0, 0, -FENCE_Z - 8)
+	local boardAt = origin + Vector3.new(0, -GRASS, -FENCE_Z - 8)
 	local board = MeshLibrary.Get("StruggleScoreboard", {
 		Scale = BOARD_SCALE,
 		CFrame = CFrame.lookAt(boardAt, Vector3.new(origin.X, boardAt.Y, origin.Z)),
@@ -292,7 +304,7 @@ function Struggle:_buildArena()
 	})
 	self:_scoreboardSign(board)
 	for _, x in { -22, 22 } do
-		local spot = origin + Vector3.new(x, 0, -FENCE_Z - 4)
+		local spot = origin + Vector3.new(x, -GRASS, -FENCE_Z - 4)
 		MeshLibrary.Get("StruggleBanner", {
 			CFrame = CFrame.lookAt(spot, Vector3.new(spot.X, spot.Y, origin.Z)),
 			Parent = arena,
@@ -330,14 +342,14 @@ function Struggle:_buildArena()
 	-- East and west: benches for the crowd, banners on poles.
 	for _, x in { -1, 1 } do
 		for _, z in { -14, 0, 14 } do
-			local spot = origin + Vector3.new(x * (FENCE_X + 4.5), 0, z)
+			local spot = origin + Vector3.new(x * (FENCE_X + 4.5), -GRASS, z)
 			MeshLibrary.Get("StruggleBench", {
 				CFrame = CFrame.lookAt(spot, Vector3.new(origin.X, spot.Y, spot.Z)),
 				Parent = arena,
 			})
 		end
 		for _, z in { -23, 23 } do
-			local spot = origin + Vector3.new(x * (FENCE_X + 3), 0, z)
+			local spot = origin + Vector3.new(x * (FENCE_X + 3), -GRASS, z)
 			MeshLibrary.Get("StruggleBanner", {
 				Colors = { Cloth = if x < 0 then Color3.fromRGB(70, 130, 220) else Color3.fromRGB(230, 70, 70) },
 				CFrame = CFrame.lookAt(spot, Vector3.new(origin.X, spot.Y, spot.Z)),

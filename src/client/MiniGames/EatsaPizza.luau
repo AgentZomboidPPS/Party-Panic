@@ -24,6 +24,13 @@
 -- the server as "Eat"; the crunch, crumbs and button squash play at once, and my own presses count
 -- my spot down here (so it pops when it's eaten, not a ping later). Crumbs for everyone else come
 -- from the shared spots: when one loses bites, crumbs fly from the characters standing on it.
+--
+-- Bugged since version 57 (owner, with screenshots: "Eatsa Pizza is bugged.", "the areas to say eat
+-- here the circles on the ground arent on the top of the pizza they are below it"): the mesh pass that
+-- pushed flickering faces apart had raised the slices' cheese by up to 0.7 and made the meshes taller,
+-- so the game drew them shrunk: pepperoni lay on the bare pan past the slices and the rings were under
+-- the cheese. The slices are their own meshes again (tools/meshgen/unfight.py, NO_SEPARATE), and the
+-- rings sit at Logic.SPOT_TOP, over the cheese's bumps.
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -90,6 +97,7 @@ function EatsaPizza.Start(api)
 
 	local slices = api:SharedJSON("Slices") or { L = {}, M = {} }
 	local cheeseY = center.Y + Logic.MESH_CHEESE * radius / Logic.MESH_RADIUS
+	local spotY = center.Y + Logic.SPOT_TOP * radius / Logic.MESH_RADIUS -- (over the cheese's bumps)
 
 	-- The spots: I (id), T (team), X, Z (offset from the middle), L (bites left), M (bites it had).
 	type SpotData = { I: number, T: string, X: number, Z: number, L: number, M: number }
@@ -536,7 +544,7 @@ function EatsaPizza.Start(api)
 	local function showView(view: SpotView, spot: SpotData)
 		local color = Teams.Colors[spot.T] or Color3.new(1, 1, 1)
 		local own = spot.T == mine
-		local base = Vector3.new(center.X + spot.X, cheeseY + 0.08, center.Z + spot.Z)
+		local base = Vector3.new(center.X + spot.X, spotY, center.Z + spot.Z)
 		view.Id, view.Team, view.Base, view.Lit, view.BornAt = spot.I, spot.T, base, -1, os.clock()
 		view.Disc.Color = color
 		view.Disc.Transparency = if own then 0.4 else 0.62

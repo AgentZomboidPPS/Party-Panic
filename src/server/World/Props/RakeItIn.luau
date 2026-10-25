@@ -69,7 +69,7 @@ return function(h)
 		},
 		HarvestSilo = {
 			Height = 19.5,
-			AssetId = 83793626406574,
+			AssetId = 74170227035304,
 			Collide = true,
 			Palette = {
 				SiloStone = rgb(160, 152, 146),

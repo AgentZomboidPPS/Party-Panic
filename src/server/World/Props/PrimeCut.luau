@@ -62,32 +62,32 @@ return function(h)
 
 	local props = {
 		PrimeCutRibeye = {
-			AssetId = 73965238825649,
+			AssetId = 139041453507649,
 			Steak = "Ribeye",
 		},
 		PrimeCutStrip = {
-			AssetId = 128874953047123,
+			AssetId = 111832472356610,
 			Steak = "Strip",
 		},
 		PrimeCutTriTip = {
-			AssetId = 125242515694835,
+			AssetId = 108392883610995,
 			Steak = "TriTip",
 		},
 		PrimeCutKidney = {
-			AssetId = 87388963895681,
+			AssetId = 82082073436404,
 			Steak = "Kidney",
 		},
 		PrimeCutHeart = {
-			AssetId = 97826761343416,
+			AssetId = 95000294024880,
 			Steak = "Heart",
 		},
 		PrimeCutChuck = {
-			AssetId = 80137177138706,
+			AssetId = 107127698420926,
 			Steak = "Chuck",
 		},
 		PrimeCutKnife = {
 			Height = 3.3,
-			AssetId = 120627546665458,
+			AssetId = 108387426433490,
 			Shadow = true,
 			Palette = {
 				Blade = h.rgb(196, 204, 216),
@@ -105,7 +105,7 @@ return function(h)
 		},
 		PrimeCutGrill = {
 			Height = 23.5,
-			AssetId = 91984854388494,
+			AssetId = 111190823141448,
 			Palette = {
 				Enamel = h.rgb(220, 60, 60), -- recolored per team
 				-- Recolored per team too (MiniGames/PrimeCut): the rim round the grate and the side
@@ -144,7 +144,7 @@ return function(h)
 		},
 		PrimeCutFence = {
 			Height = 4.39,
-			AssetId = 108574771336734,
+			AssetId = 78309083580880,
 			Palette = { Paint = h.rgb(246, 246, 240) },
 			Materials = { Paint = wood },
 			Fallback = function(m)
@@ -177,7 +177,7 @@ return function(h)
 		},
 		PrimeCutTable = {
 			Height = 3.28,
-			AssetId = 119427447906070,
+			AssetId = 81554601852768,
 			Palette = { Wood = h.rgb(176, 116, 70) },
 			Materials = { Wood = wood },
 			Fallback = function(m)

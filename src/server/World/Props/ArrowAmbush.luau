@@ -40,7 +40,7 @@ return function(h)
 	return {
 		ArcherTower = {
 			Height = 34.84,
-			AssetId = 79212250423567, -- tools/upload_assets.py --only ArcherTower fills this in
+			AssetId = 126916989171717, -- tools/upload_assets.py --only ArcherTower fills this in
 			Collide = false, -- the game puts a solid core under the deck
 			Palette = {
 				Mortar = mortar,
@@ -103,7 +103,7 @@ return function(h)
 		},
 		TargetBoard = {
 			Height = 7.79,
-			AssetId = 109005297154203,
+			AssetId = 71136282582485,
 			Collide = false, -- the client moves boards; arrows are blocked by the server's own check
 			-- ... and makes them solid for its runner: collision that follows the drawn board, not the
 			-- rough hull that bulged up to 6 studs past the planks (MeshLibrary: preciseCollision).
@@ -206,7 +206,7 @@ return function(h)
 		},
 		Bunting = {
 			Height = 2.28,
-			AssetId = 87801892849301,
+			AssetId = 119795646147853,
 			Shadow = false,
 			Palette = {
 				Rope = h.rgb(240, 235, 220),
@@ -263,7 +263,7 @@ return function(h)
 		-- the castle's towers).
 		ArrowAmbushTurret = {
 			Height = 12.69,
-			AssetId = 81972785547369,
+			AssetId = 86701641151874,
 			Collide = false,
 			Palette = {
 				Mortar = mortar,
@@ -346,7 +346,7 @@ return function(h)
 		-- A tall banner pole with a swallowtail banner and a gold crossed-arrows badge.
 		ArrowAmbushBanner = {
 			Height = 11.52,
-			AssetId = 124368056242520,
+			AssetId = 114024481238190,
 			Collide = false,
 			Palette = {
 				Foot = stone,
@@ -366,7 +366,7 @@ return function(h)
 		-- A round straw archery target on a wooden easel, three arrows in it.
 		ArrowAmbushHayTarget = {
 			Height = 5.47,
-			AssetId = 98325600613288,
+			AssetId = 111245681797757,
 			Collide = false,
 			Palette = {
 				Straw = h.rgb(242, 208, 112),

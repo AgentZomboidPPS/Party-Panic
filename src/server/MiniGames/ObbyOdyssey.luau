@@ -330,10 +330,12 @@ function ObbyOdyssey:_buildPiece(piece: Course.Piece, folders: { [string]: Insta
 		-- off the tier's faces and each other's: closer than that they flickered as the camera
 		-- moved (z-fighting).
 		local stairsTop = top - 0.2
+		-- (the bottom tier's stairs reach down into the lava: stopped at y 0, they hung 0.2 over it)
+		local stairsBottom = math.max(bottom, -0.5)
 		self:_decor({
 			Name = "Stairs",
-			Size = Vector3.new(10, stairsTop - math.max(bottom, 0), 0.2),
-			CFrame = self:_at(x, (stairsTop + math.max(bottom, 0)) / 2, z - piece.D / 2 - 0.1),
+			Size = Vector3.new(10, stairsTop - stairsBottom, 0.2),
+			CFrame = self:_at(x, (stairsTop + stairsBottom) / 2, z - piece.D / 2 - 0.1),
 			Color = rgb(60, 110, 230),
 		})
 		self:_decor({
@@ -742,10 +744,12 @@ function ObbyOdyssey:_buildGantry()
 	})
 	for _, z in { from, to } do
 		for _, side in { -1, 1 } do
+			-- (0.1 deeper than the low pieces' feet: its bottom was in the plane of the checkpoint's it
+			-- stands in, and flickered)
 			self:_decor({
 				Name = "Post",
-				Size = Vector3.new(1.6, pivotY + 2 - DEEP, 1.6),
-				CFrame = self:_at(bridge.X + side * 9, (pivotY + 2 + DEEP) / 2, z),
+				Size = Vector3.new(1.6, pivotY + 2 - DEEP + 0.1, 1.6),
+				CFrame = self:_at(bridge.X + side * 9, (pivotY + 2 + DEEP - 0.1) / 2, z),
 				Color = PINK,
 			})
 		end
@@ -1031,10 +1035,12 @@ function ObbyOdyssey:_buildScenery()
 	local leaves = { rgb(80, 190, 90), rgb(110, 205, 80), rgb(60, 160, 90), rgb(140, 210, 85) }
 	local function tree(x: number, z: number, scale: number)
 		local trunkHeight = 6 * scale
+		-- (its foot 0.3 into the bank: the end banks' top is 0.1 under the side banks', and trunks standing
+		-- on the side banks' height hovered over them)
 		self:_decor({
 			Name = "Trunk",
-			Size = Vector3.new(2 * scale, trunkHeight, 2 * scale),
-			CFrame = self:_at(x, 1 + trunkHeight / 2, z),
+			Size = Vector3.new(2 * scale, trunkHeight + 0.3, 2 * scale),
+			CFrame = self:_at(x, 1 + (trunkHeight - 0.3) / 2, z),
 			Color = rgb(130, 85, 50),
 		})
 		local y = 1 + trunkHeight

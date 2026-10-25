@@ -225,7 +225,15 @@ def main():
         gap, what = gap_under(points, skip)
         # A thin piece (a stripe, a decal-like board) is lifted a little on purpose, so it can't
         # flicker with what it lies on (the game keeps faces 0.1 apart); that reads as painted on.
-        tall = part["s"][1] if part["c"] != "MeshPart" else max(float(np.ptp(meshes[i][:, :, 1])) for i in skip)
+        if part["c"] == "MeshPart":
+            tall = max(float(np.ptp(meshes[i][:, :, 1])) for i in skip)
+        else:
+            # (its height as it stands: a disc lying flat is a cylinder turned up, as thin as its length)
+            rot, _ = frame(part["cf"])
+            size = np.array(part["s"], dtype=float)
+            if part.get("shape") == "Cylinder":
+                size = np.array([size[0], min(size[1], size[2]), min(size[1], size[2])])
+            tall = float((np.abs(rot) @ size)[1])
         touching = args.min if tall > THIN else THIN_LIFT
         if (gap <= touching).any():
             continue  # it touches something

@@ -43,7 +43,7 @@ return function(h)
 		-- The photographer bent to a vintage press camera on a wooden tripod, flash dish up.
 		SlaparazziCamera = {
 			Height = 8.62,
-			AssetId = 139339303946076,
+			AssetId = 134203015201267,
 			BlocksCamera = { "Coat", "Body", "Pants" },
 			Palette = {
 				Tripod = h.rgb(150, 100, 60),
@@ -82,7 +82,7 @@ return function(h)
 		-- A stage spotlight on a stand, its can tilted down toward the front (-Z).
 		SlaparazziSpotlight = {
 			Height = 8.62,
-			AssetId = 137613494256483,
+			AssetId = 115870061864485,
 			Palette = { Stand = h.rgb(60, 60, 66), Can = h.rgb(30, 30, 34), Lens = h.rgb(255, 244, 214) },
 			Materials = { Stand = Enum.Material.Metal, Lens = Enum.Material.Neon },
 			Fallback = function(m)

@@ -56,13 +56,16 @@ local END_AT = 3.2 -- the round ends this long after the ride (everyone sees the
 local RUN_IN = 34 -- paper before the start line
 local RUN_OUT = 34 -- paper after the finish line
 -- How far the markings stand above the paper. Rules and lane lines are centred on the paper's top
--- (their bottoms as far down inside the sheet); the guide and the start/finish float in thin bands
--- above them. Nothing that overlaps on the paper shares a height (no flicker); the clients' crayon
--- lines float higher still (0.5 and up).
+-- (their bottoms as far down inside the sheet); the guide floats in a thin band above them, and the
+-- start line's and finish squares' tops in a band above that (they reach down into the sheet: as
+-- thin bands they hovered 0.3 over the paper). Nothing that overlaps on the paper shares a height (no
+-- flicker); the clients' crayon lines float higher still (0.5 and up).
 local LAYER = { Rule = 0.1, Lane = 0.2 }
 local GUIDE_Y = 0.2 -- the guide's middle (0.15 to 0.25)
-local FINISH_Y = 0.35 -- the start line's and the finish squares' middle (0.3 to 0.4)
+local FINISH_Y = 0.35 -- the middle of the start line's and finish squares' top band (0.3 to 0.4)
 local BAND = 0.1
+local MARK_DEPTH = 0.15 -- the start line and finish squares reach this far into the paper
+local MARK_HEIGHT = FINISH_Y + BAND / 2 + MARK_DEPTH -- so their tops stay at 0.4
 
 local rng = Random.new()
 
@@ -313,8 +316,8 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 	-- Start line, START and the chequered finish across every lane.
 	Build.Decor({
 		Name = "StartLine",
-		Size = Vector3.new(width, BAND, 0.5),
-		CFrame = CFrame.new(origin.X, paperY + FINISH_Y, zStart + 0.5),
+		Size = Vector3.new(width, MARK_HEIGHT, 0.5),
+		CFrame = CFrame.new(origin.X, paperY - MARK_DEPTH + MARK_HEIGHT / 2, zStart + 0.5),
 		Color = rgb(60, 60, 70),
 		Parent = arena,
 	})
@@ -324,10 +327,10 @@ function TraceRace:_buildArena(origin: Vector3, count: number, players: { any })
 		for column = 0, squares - 1 do
 			Build.Decor({
 				Name = "Finish",
-				Size = Vector3.new(square, BAND, square),
+				Size = Vector3.new(square, MARK_HEIGHT, square),
 				CFrame = CFrame.new(
 					origin.X - width / 2 + (column + 0.5) * square,
-					paperY + FINISH_Y,
+					paperY - MARK_DEPTH + MARK_HEIGHT / 2,
 					zFinish - (row + 0.5) * square
 				),
 				Color = if (row + column) % 2 == 0 then rgb(35, 35, 45) else rgb(255, 255, 255),

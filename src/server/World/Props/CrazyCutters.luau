@@ -70,7 +70,7 @@ return function(h)
 		},
 		DoughSheet = {
 			Height = 0.42,
-			AssetId = 116926183517820,
+			AssetId = 139921206641823,
 			Shadow = false,
 			Palette = { Dough = h.rgb(250, 228, 190), Flour = h.rgb(255, 255, 255) },
 			Materials = { Dough = smooth, Flour = smooth },
@@ -213,7 +213,7 @@ return function(h)
 			Extra = h.rgb(255, 245, 225),
 		},
 		FlowerCookie = {
-			AssetId = 118501822867049,
+			AssetId = 128257871529883,
 			Size = Vector3.new(10.3, 1.462, 10),
 			Icing = h.rgb(200, 150, 255),
 			Extra = h.rgb(255, 220, 90),

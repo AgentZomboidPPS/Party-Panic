@@ -12,7 +12,8 @@ checked before anything is uploaded.
 A "shape" is a piece's connected run of triangles (a box, a lathe, a tube), so two boxes merged into
 one piece count as two. A spot only counts where it can be seen: not where the face is buried inside
 another closed shape of the prop (two blocks sunk into each other), and not a sliver under 0.003
-square studs, nor bottoms within 0.1 of the ground the prop stands on (its lowest point). --eps (default 0.08 studs, as tools/preview/zfight.py: the game keeps faces 0.1 apart) is
+square studs, nor bottoms within 0.1 of the ground the prop stands on (its lowest point). --eps (default 0.02 studs: tools/meshgen/unfight.py keeps a mesh's own faces 0.03 apart, which is
+enough and keeps its shape; 0.1 swelled layered props) is
 how far apart two faces may be and still fight.
 """
 
@@ -132,7 +133,7 @@ def check(prop: str, eps: float):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("props", nargs="*")
-    parser.add_argument("--eps", type=float, default=0.08)
+    parser.add_argument("--eps", type=float, default=0.02)
     parser.add_argument("--top", type=int, default=0)
     args = parser.parse_args()
     props = args.props or sorted(p.stem for p in MESH_DIR.glob("*.glb"))
@@ -144,10 +145,18 @@ def main():
     results.sort(reverse=True)
     if args.top:
         results = results[: args.top]
+    # (The props unfight.py leaves as built on purpose are listed apart: see its NO_SEPARATE.)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "meshgen"))
+    from unfight import NO_SEPARATE
+
+    kept = [r for r in results if r[1] in NO_SEPARATE]
+    results = [r for r in results if r[1] not in NO_SEPARATE]
     for total, prop, pairs in results:
         print(f"{prop}: {len(pairs)} pair(s), {total:.2f} sq studs")
         for a, b, area in sorted(pairs, key=lambda p: -p[2])[:8]:
             print(f"    {a}  x  {b}  ({area:.3f})")
+    if kept:
+        print(f"left as built on purpose (unfight.NO_SEPARATE): {', '.join(r[1] for r in kept)}")
     print(f"{len(results)} mesh(es) with fights")
 
 

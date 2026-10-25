@@ -36,7 +36,7 @@ return function(h)
 	local props = {
 		HexColumn = {
 			Height = 30.95,
-			AssetId = 120891015437725,
+			AssetId = 101443752523189,
 			Palette = { Rock = BASALT, Top = rgb(250, 250, 255), Rim = rgb(255, 244, 226), Glow = LAVA },
 			Materials = { Glow = Enum.Material.Neon },
 			Fallback = function(m)
@@ -94,7 +94,7 @@ return function(h)
 		},
 		RefereeBot = {
 			Height = 18.41,
-			AssetId = 83979387229507,
+			AssetId = 123380446678206,
 			Palette = {
 				Body = rgb(248, 248, 255),
 				Dark = rgb(46, 42, 60),

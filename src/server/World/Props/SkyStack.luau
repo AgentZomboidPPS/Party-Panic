@@ -65,7 +65,7 @@ return function(h)
 		},
 		SkyStackCrane = {
 			Height = 64,
-			AssetId = 103214181577609,
+			AssetId = 91075457597437,
 			Collide = false,
 			Shadow = true,
 			Palette = {

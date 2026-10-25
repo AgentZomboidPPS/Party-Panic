@@ -45,7 +45,7 @@ return function(h)
 		-- The boss ------------------------------------------------------------------------------------------
 		BigBadVacuumBody = {
 			Height = 20.2,
-			AssetId = 78868676777949, -- tools/upload_assets.py --only BigBadVacuumBody fills this in
+			AssetId = 74037864306457, -- tools/upload_assets.py --only BigBadVacuumBody fills this in
 			Palette = {
 				Skirt = rgb(24, 24, 30),
 				Base = rgb(40, 42, 54),
@@ -301,7 +301,7 @@ return function(h)
 
 		BigBadVacuumPile = {
 			Height = 5.7,
-			AssetId = 130306723646954,
+			AssetId = 114077157178535,
 			Palette = {
 				Red = rgb(232, 76, 84),
 				Blue = rgb(70, 140, 235),

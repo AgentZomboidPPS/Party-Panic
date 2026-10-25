@@ -15,7 +15,7 @@ return function(h)
 	return {
 		TraceRaceCrayon = {
 			Height = 6.46,
-			AssetId = 108044411554238, -- tools/upload_assets.py --only TraceRaceCrayon fills this in
+			AssetId = 72245581159205, -- tools/upload_assets.py --only TraceRaceCrayon fills this in
 			Palette = { Wax = h.rgb(235, 55, 60), Wrapper = h.rgb(200, 40, 50), Bands = h.rgb(40, 30, 35) },
 			Materials = { Wrapper = Enum.Material.Fabric },
 			Fallback = function(m)
@@ -40,7 +40,7 @@ return function(h)
 		},
 		TraceRaceCrayonBox = {
 			Height = 26.6,
-			AssetId = 114066388288612,
+			AssetId = 131839364666527,
 			Palette = {
 				Box = h.rgb(250, 210, 40),
 				Band = h.rgb(40, 150, 70),
@@ -93,7 +93,7 @@ return function(h)
 		},
 		TraceRaceSharpener = {
 			Height = 7.7,
-			AssetId = 93701630339581,
+			AssetId = 103699295920848,
 			Palette = {
 				Body = h.rgb(185, 190, 200),
 				Hole = h.rgb(60, 60, 70),

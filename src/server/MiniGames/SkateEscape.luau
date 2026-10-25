@@ -73,6 +73,9 @@ local PIER_FOOT = -66 -- the piers are taller: their foot stays under the lava a
 local RIM_TOP = -10 -- the plateau round the canyon (a canyon wall's top rolls down to it at the back)
 local WALL_X = 92 -- the canyon walls' foot, either side of the middle
 local WALL_PIVOT = 28.99 -- a canyon wall's pivot sits this far behind its foot (unscaled)
+-- The start and goal cliffs' foot (1.62 under the walls': at 1.5 their basalt ledges by the lava lay
+-- 0.06 from the canyon's end walls' behind them, and flickered)
+local CLIFF_FOOT = WALL_FOOT - 1.62
 local CABLE_PIVOT = 2.54 -- a swag rope's pivot sits this far outside the rail
 local CABLE_SPAN = 96 -- a swag rope's authored length
 local RAIL_X = DECK_WIDTH / 2 - 0.6
@@ -406,9 +409,10 @@ function SkateEscape:_buildArena()
 			end
 			-- A warning banner across the deck well before the gap: it stands up, so it shows from far.
 			local at = cut[1] - 28
+			-- (it fills the space between its trims: 0.2 shorter, it hung 0.1 over the lower one)
 			local banner = Build.Decor({
 				Name = "GapLip",
-				Size = Vector3.new(DECK_WIDTH - 4, 3.4, 0.5),
+				Size = Vector3.new(DECK_WIDTH - 4, 3.6, 0.5),
 				CFrame = CFrame.new(origin + Vector3.new(0, 16.1, -at)),
 				Color = rgb(34, 28, 34),
 				Material = Enum.Material.Metal,
@@ -539,7 +543,7 @@ function SkateEscape:_buildArena()
 	local start = Build.Model("Seg0")
 	start:SetAttribute("D0", -START_BACK)
 	start:SetAttribute("D1", 0)
-	local plinthTop = -2.2 -- just under the planks' beams
+	local plinthTop = -2 -- right under the planks' beams (at 0.2 under, the deck hovered over it)
 	local plinthLength = START_BACK + 3
 	local pad = Shapes.Slab(Vector3.new(DECK_WIDTH + 24, 6, plinthLength), 2, {
 		Name = "StartPad",
@@ -622,7 +626,7 @@ function SkateEscape:_buildArena()
 	-- (Wider than a side stretch, so its ends tuck into the canyon's side walls.)
 	stretch(
 		MeshLibrary.Get("SkateCanyonWall", {
-			CFrame = CFrame.new(origin + Vector3.new(0, WALL_FOOT - 1.5, START_BACK - 10 + WALL_PIVOT)),
+			CFrame = CFrame.new(origin + Vector3.new(0, CLIFF_FOOT, START_BACK - 10 + WALL_PIVOT)),
 			Parent = arena,
 		}),
 		1.4,
@@ -672,7 +676,7 @@ function SkateEscape:_buildArena()
 	})
 	stretch(
 		MeshLibrary.Get("SkateCanyonWall", {
-			CFrame = CFrame.new(origin + Vector3.new(0, WALL_FOOT - 1.5, -length - 2 - WALL_PIVOT))
+			CFrame = CFrame.new(origin + Vector3.new(0, CLIFF_FOOT, -length - 2 - WALL_PIVOT))
 				* CFrame.Angles(0, math.pi, 0),
 			Parent = arena,
 		}),

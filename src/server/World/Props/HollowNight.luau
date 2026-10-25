@@ -22,7 +22,7 @@ return function(h)
 		-- The Hollow Crate: planked wood, iron corners, brass studs, a glowing maple leaf on each side and leaves on the lid. The lid's pieces are Lid..., so the opening show can blow it off.
 		HollowCrate = {
 			Height = 3.550,
-			AssetId = 83829103231440,
+			AssetId = 134308408889863,
 			BlocksCamera = true,
 			Palette = {
 				Glow = rgb(255, 138, 42),
@@ -63,7 +63,7 @@ return function(h)
 		-- The Lantern Key: an iron key whose bow is a lantern cage with an ember inside.
 		LanternKey = {
 			Height = 1.808,
-			AssetId = 97898003186979,
+			AssetId = 86718277157977,
 			Palette = {
 				Iron = rgb(47, 43, 58),
 				Glow = rgb(255, 181, 48),
@@ -83,7 +83,7 @@ return function(h)
 		-- The crate pile on its tree stump, the lobby's middle for the season (the turning crate on top, the keys round it and the wisps are separate: the game moves them).
 		HollowPile = {
 			Height = 4.569,
-			AssetId = 128110561843370,
+			AssetId = 84829081395615,
 			BlocksCamera = true,
 			Shadow = true,
 			Palette = {
@@ -117,7 +117,7 @@ return function(h)
 		-- An opening altar: two stone steps, a glowing ring (Ring: the game colours it by tier), lantern posts and pumpkins. Its crate is a HollowCrate on top.
 		HollowAltar = {
 			Height = 5.375,
-			AssetId = 108924504499014,
+			AssetId = 85757292146292,
 			BlocksCamera = true,
 			Palette = {
 				Ring = rgb(255, 138, 42),
@@ -148,7 +148,7 @@ return function(h)
 		-- The Top Unboxers board's frame: wood, an iron cap, stump legs, lanterns, pumpkins and leaves (the screen is a part the game adds).
 		HollowBoard = {
 			Height = 16.612,
-			AssetId = 121805959908008,
+			AssetId = 105664440610541,
 			BlocksCamera = true,
 			Palette = {
 				Iron = rgb(49, 43, 56),
@@ -253,7 +253,7 @@ return function(h)
 		-- An iron post with a hanging lantern.
 		LanternPost = {
 			Height = 6.363,
-			AssetId = 80759294709236,
+			AssetId = 100030627731681,
 			Palette = {
 				Iron = rgb(47, 43, 58),
 				Glow = rgb(255, 241, 194),
@@ -271,7 +271,7 @@ return function(h)
 		-- Pet: the Harvest Owl, in flight, with leaf-feather wings and a lantern on a chain from its beak (Head..., WingL... / WingR..., Lantern..., Tail...: the game moves them, each turning at its Hinge).
 		HarvestOwl = {
 			Height = 4.227,
-			AssetId = 127692503026211,
+			AssetId = 87481245097389,
 			Palette = {
 				Talon = rgb(224, 166, 58),
 				Leg = rgb(220, 174, 116),
@@ -616,7 +616,7 @@ return function(h)
 		-- Pet: the Lantern Wisp, a little ghost in an iron lantern, its smoky tail curling out of the roof (Ghost..., Tail...: the game moves them).
 		LanternWisp = {
 			Height = 3.284,
-			AssetId = 74246454005630,
+			AssetId = 92946836157148,
 			Palette = {
 				Vine = rgb(52, 40, 41),
 				Glass = rgb(216, 244, 255),

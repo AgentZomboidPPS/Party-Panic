@@ -30,7 +30,7 @@ return function(h)
 	return {
 		PumpkinHat = {
 			Height = 1.356, -- the mesh's own height (the shell 1.04, the curl of its stem above)
-			AssetId = 124438654039918, -- filled in by tools/upload_assets.py
+			AssetId = 82691154142514, -- filled in by tools/upload_assets.py
 			Palette = {
 				HatShell = rgb(255, 128, 24),
 				HatGlow = rgb(255, 186, 64),

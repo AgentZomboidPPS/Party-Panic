@@ -52,7 +52,7 @@ return function(h)
 		},
 		MechaMarathonPad = {
 			Height = 1.335,
-			AssetId = 88186463493633,
+			AssetId = 100640928200720,
 			Collide = false, -- decoration only: nothing solid where nothing is drawn
 			Palette = {
 				Base = rgb(248, 246, 240),
@@ -115,7 +115,7 @@ return function(h)
 		},
 		MechaMarathonBunting = {
 			Height = 2.47,
-			AssetId = 134970092633284,
+			AssetId = 77562226006237,
 			Shadow = false,
 			Palette = {
 				String = rgb(250, 250, 250),
@@ -169,7 +169,7 @@ return function(h)
 		},
 		MechaMarathonStand = {
 			Height = 6.8,
-			AssetId = 95143675743899,
+			AssetId = 136690208156445,
 			Collide = false, -- decoration only: nothing solid where nothing is drawn
 			Palette = {
 				Frame = rgb(236, 242, 255),
