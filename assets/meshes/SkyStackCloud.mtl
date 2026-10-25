@@ -1,0 +1,11 @@
+newmtl Cloud
+Kd 1.000 1.000 1.000
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1
+
+newmtl Shade
+Kd 0.863 0.910 0.980
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+d 1

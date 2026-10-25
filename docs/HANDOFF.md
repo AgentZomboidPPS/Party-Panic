@@ -4,6 +4,53 @@ Last updated: **2026-10-22 03:15 UTC** by Session B (branch **`claude/upbeat-gal
 `claude/quirky-hopper-5yk8zk` at ee14d80). Session B is still working; see "Session B in flight" below. Sections 0-9 are
 Session A's handoff from 17:40 UTC, still accurate except where this block says otherwise.
 
+## Sky Stack: game 32 (2026-10-25, branch `claude/ecstatic-cray-9ijheg`, not merged or published yet)
+
+Owner: "If you could make any mini game. What would it be?" then "Build it." The pitch they approved: everyone gets a
+tower in a row of up to 12; a block slides back and forth over your tower and you tap to drop it; whatever hangs over
+the edge is sliced off, so every miss makes the next block smaller; a perfect drop keeps it full size and gusts the
+towers either side (their next block slides faster); a block that misses completely crumbles your tower and you're out;
+first to the cloud line wins, the tallest tower if time runs out. It is `SkyStack` (Race, 60 s, 1-12, bots fill).
+
+- **Files:** `src/shared/Logic/SkyStack.luau` (every rule and number, shared by server, clients and bots; unit tests in
+  `tests/SkyStack.spec.luau`), `src/server/MiniGames/SkyStack.luau` (the plaza, the towers, judging DROP),
+  `src/client/MiniGames/SkyStack.luau` (draws every tower and sliding block, shows your own drop at once, camera, HUD,
+  DROP), `src/server/MiniGames/Bots/SkyStack.luau` (bot brain), `src/server/World/Props/SkyStack.luau` +
+  `tools/meshgen/props/SkyStack.py` (base, star, cloud, crane), `tools/checks/bots/SkyStack.luau` (harness bot), its
+  `GameDefinitions` entry (`IsNew = true`: 16 of 32 games are tagged now, the most VoteFairness allows), the store
+  description (32 games), a `make_preview.py` camera and `assets/previews/SkyStack.jpg`. Shared files touched: only
+  `GameDefinitions.luau`, `tools/preview/make_preview.py` (its camera entry) and the store description.
+- **How it works:** a block slides on a schedule from the server's clock (`Stack.Offset`): 9 studs either side of the
+  top block's middle, X on odd floors and Z on even ones, faster every floor (9 to 17 studs/s; a gusted block 1.35x).
+  DROP sends the time of the frame on screen (input is handled a frame after it's drawn) and the floor it aimed at; the
+  server judges it at that moment (`Logic/Buzzer.PressTime`), so a drop that looked lined up lands lined up. Perfect is
+  within 0.3 studs or 0.03 s of travel, whichever is wider; every third perfect in a row grows the block 0.5 studs each
+  way and gusts both neighbours; less than 0.5 studs left is a miss (eliminated; floors still count). 25 floors reach
+  the clouds. Finishers place by when their last DROP was pressed (not when it arrived, so ping can't hand a close
+  finish to a bot); everyone else by floors, then by who got there first. The round ends 2.5 s after no person is
+  still building, or at the buzzer (presses made before it still count, nothing new starts after it). The client draws
+  its own drop at once and takes it back if the server answers "Refused" (a double tap, the buzzer, another floor).
+- **Bots** are deliberately beatable (owner: "dont make bots overpowered"): their timing is off by about 0.06-0.08 s and
+  they often wait a pass. With two harness players (one perfect, one steady) among 10 bots, over five rounds: the
+  perfect player always won (about 28.5 s), the steady one came 2nd or 3rd, 0-4 bots reached the clouds at 32-37 s and
+  the rest stopped between floors 10 and 24. Knobs: top of `Bots/SkyStack.luau`.
+- **Meshes** (uploaded under user 11690979745 on 2026-10-25, all four Approved): SkyStackBase 80397687535139,
+  SkyStackStar 124661970850866, SkyStackCloud 107029468779143, SkyStackCrane 103214181577609. The blocks themselves are
+  plain parts the client makes (they are sliced to any size), shaded per floor in the lane's colour.
+- **Portal preview:** `make_preview.py SkyStack` (a round snapshotted at 24 s, looking down the row from the front
+  right), image 106243641794421 (decal 139891385288243), Open Use and granted; it shows once moderation passes it.
+- **Checked on real servers (Open Cloud):** `tools/checks/mode_check.sh SkyStack`: 0 errors in the 12-player, bots and
+  phone rounds, phone UI 0 problems, no leftovers; stylua, selene, luau-lsp clean; 259 tests pass. An independent
+  review found no blockers; its three should-fix findings were fixed (finish order by press time, judging the frame on
+  screen, answering refused presses and starting nothing after the buzzer), as were its small ones (a gust cue only
+  when the gust actually reached you, no burst of old slices for a late spectator, one end hold at the buzzer).
+- **Left as is:** like every mode, a press may claim up to half a round trip plus 0.1 s back (`Buzzer.REACH`): a
+  cheating script could claim the perfect moment just after it passed. The experience is private; tighten REACH for
+  this mode if that ever matters.
+- **Only a real playtest can confirm:** how DROP feels on phones (tap anywhere except the bottom-left corner counts too),
+  the camera (front right of your tower top, rising with it; circling the top once you're at the clouds), and
+  whether the finisher's circling camera ever passes through the clouds behind the row.
+
 ## Capy Go Boom: game 31 (2026-10-24, branch `claude/quirky-hopper-5yk8zk`)
 
 Owner: "Can you take Capy to boom. Make it into a mini game for party panic?" CAPY GO BOOM is the owner's other game

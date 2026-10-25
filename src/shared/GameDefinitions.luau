@@ -416,6 +416,19 @@ local list: { GameDefinition } = {
 		IsTeam = false,
 		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
+	{
+		Id = "SkyStack",
+		Name = "Sky Stack",
+		Category = "Race",
+		Icon = "🧱",
+		Color = Color3.fromRGB(110, 190, 255),
+		Objective = "Drop blocks to stack your tower to the clouds. Overhangs get sliced off, and a total miss knocks you out!",
+		Controls = "Tap DROP (or click, or press E) when the sliding block lines up with your tower.",
+		Duration = 60,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
+	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }
 

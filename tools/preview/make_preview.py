@@ -143,6 +143,10 @@ CAMERAS: dict[str, dict] = {
     # Chasing two riders down their lanes: their crayons drawing purple and teal lines behind them, the
     # dotted guides curving away ahead.
     "TraceRace": {"look_at": "StartLine", "yaw": 0, "pitch": 45, "distance": 46, "shift": [29, 3, -110], "raise": 6},
+    # From the front right, looking down the row: rainbow stacks of every height one behind the other,
+    # blocks sliding over their tops, the stars waiting at the cloud line beyond.
+    "SkyStack": {"look_at": "Paving", "yaw": 72, "pitch": 16, "distance": 58, "fov": 50, "shift": [40, 17, -2],
+                 "raise": 4, "sway": 5},
     # Divers at the rim of the swirling sinkhole, treasure on the sand around it.
     "SinkingSands": {"yaw": 30, "pitch": 30, "distance": 36, "shift": [0, 2, 6]},
     # Low over the water: a shark's fin between the rafts, swimmers and coins on the decks, the
@@ -173,6 +177,7 @@ DUMP_AT: dict[str, float] = {
     "Tanks": 5.5,  # a second after the shields drop: the first tanks blowing up, the rest still rolling
     "TraceRace": 8,  # past the straight start, into the first curves, lines trailing behind
     "SinkingSands": 12,  # treasure out on the sand, someone already in the hole
+    "SkyStack": 24,  # the tallest towers near the clouds, blocks sliding over their tops
     "SharkBait": 13,  # a raft tipping, coins spilled in the water, the sharks closing in
 }
 

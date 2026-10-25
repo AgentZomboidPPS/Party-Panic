@@ -183,6 +183,13 @@ local previews: { [string]: Preview } = {
 		FrameSize = Vector2.new(168, 240),
 		Fps = 8,
 	},
+	SkyStack = {
+		Image = "rbxassetid://106243641794421",
+		Frames = 24,
+		Columns = 6,
+		FrameSize = Vector2.new(168, 240),
+		Fps = 8,
+	},
 	Slaparazzi = {
 		Image = "rbxassetid://71326423554345",
 		Frames = 24,
