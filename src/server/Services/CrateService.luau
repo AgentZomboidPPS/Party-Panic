@@ -61,6 +61,7 @@ local CosmeticService = require(script.Parent.CosmeticService)
 local CrateBoardService = require(script.Parent.CrateBoardService)
 local DataService = require(script.Parent.DataService)
 local FriendsService = require(script.Parent.FriendsService)
+local FunnelService = require(script.Parent.FunnelService)
 local Notifier = require(script.Parent.Notifier)
 local RateLimiter = require(script.Parent.RateLimiter)
 local Telemetry = require(script.Parent.Telemetry)
@@ -464,6 +465,7 @@ function CrateService.Open(player: Player, count: number, altarIndex: number): (
 		Telemetry.Coins(player, coins, data.Coins, "Crate", season.Id)
 	end
 	Telemetry.PlayerEvent(player, "CratesOpened", count, if altar then "Altar" else "Overhead")
+	FunnelService.CrateOpened(player, count) -- (a new player's FirstVisit funnel, the visit's crates)
 	Telemetry.Keys(player, -count, data.Keys, "Open", season.Id)
 	DataService.Changed(player)
 	if rare then

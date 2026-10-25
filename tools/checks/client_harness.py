@@ -105,6 +105,16 @@ SERVER_MODULES = ("DataService", "Notifier", "Telemetry")
 TELEMETRY_STANDIN = "return setmetatable({}, { __index = function() return function() end end })\n"
 
 
+def part_luau(args) -> str:
+    """--half / --part as Luau: { K, N }, or nil for every snapshot."""
+    if args.part:
+        k, n = (int(x) for x in args.part.split("/"))
+        if not 1 <= k <= n:
+            sys.exit("client_harness: --part K/N needs 1 <= K <= N")
+        return f"{{ {k}, {n} }}"
+    return f"{{ {args.half}, 2 }}" if args.half else "nil"
+
+
 def played_game() -> str:
     """The mode the run plays: the one with the longest objective (as the Luau side picks it)."""
     text = (ROOT / "src" / "shared" / "GameDefinitions.luau").read_text()
@@ -490,10 +500,11 @@ local function snap(key, root)
 	if __onlyShots then
 		wanted = __onlyShots[key] == true -- --shots: just these
 	end
-	if wanted and __half then
-		-- --half: every other one, so a whole run's screens fit Open Cloud's 5 minutes in two runs
+	if wanted and __part then
+		-- --half / --part K/N: every Nth one, so a whole run's screens fit Open Cloud's 5 minutes and its
+		-- 4 MB result cap in N runs
 		__shotCount += 1
-		wanted = __shotCount % 2 == __half % 2
+		wanted = __shotCount % __part[2] == __part[1] % __part[2]
 	end
 	if wanted then
 		__ui[key] = __dumpGui(root or __playerGui, key)
@@ -3273,6 +3284,9 @@ def main():
     parser.add_argument("--half", type=int, choices=(1, 2), help="dump every other snapshot (1: the odd ones, 2: the "
                         "even ones): a whole run's screens take longer to dump than Open Cloud's 5 minutes allow, "
                         "so a full sweep is two runs")
+    parser.add_argument("--part", help="K/N: dump every Nth snapshot, starting with the Kth (--half 1 is --part "
+                        "1/2): a whole run's screens are about 7 MB of results, over Open Cloud's 4 MB cap, so a "
+                        "full sweep is three runs (1/3, 2/3, 3/3)")
     parser.add_argument("--skip", help="leave these sections (and their controllers) out of the run, comma-separated: "
                         "SkeeBall, or any controller by name (Pet, SeasonWorld, PartyWorld). The whole client is "
                         "over Open Cloud's 1 MiB script cap; a run checking the screens leaves these out")
@@ -3287,7 +3301,7 @@ def main():
         f"__goldMode = {'true' if args.gold else 'false'}\n"
         f"__botCount = {args.bots}\n"
         f"__sitOutMode = {'true' if args.sit_out else 'false'}\n"
-        f"__half = {args.half or 'nil'}\n"
+        f"__part = {part_luau(args)}\n"
         "__shotCount = 0\n"
         + (
             "__onlyShots = { " + ", ".join(f'["{name}"] = true' for name in args.shots.split(",")) + " }\n"

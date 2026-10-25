@@ -92,7 +92,10 @@ return {
 	Tutorial = { Done = false },
 	-- The new-player funnel (Services/FunnelService): the last step logged for this player, -1 for
 	-- someone who had played before it shipped (never logged), 0 before their first load decides.
-	Funnel = { Onboarding = 0 },
+	-- FirstVisit: the same for the "FirstVisit" funnel, but which of its steps are logged (bit k-1
+	-- for step k: its later steps come in any order); FirstGame and Others: that funnel's fields
+	-- (their first game, the others on the server when they first joined).
+	Funnel = { Onboarding = 0, FirstVisit = 0, FirstGame = "", Others = "" },
 	Settings = {
 		ReducedEffects = false,
 		MusicVolume = 0.5, -- 0 = off; the client also starts quiet and fades in

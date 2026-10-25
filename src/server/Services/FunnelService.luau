@@ -27,6 +27,17 @@
 -- steps wait for it, up to DEVICE_WAIT), who they play with (Party, Friends or Solo: a party mate or a
 -- Roblox friend in the round, Services/FriendsService), how many people the round had, and the streak
 -- they left on. "FirstRoundWait" says how long a visit waited from joining to its first GO.
+--
+-- A new player's first visit and why people leave (owner: "We also need the funnel updated its
+-- currently shit. Needs to show first game played, what rank they got on that game, how many others
+-- were in the lobby, check if they open crate. Also check for which game they leave during and any
+-- more data that might be beneficial to us."; Shared/Logic/Funnels says what each one holds):
+--   FirstVisit (a funnel once per new player; which steps are logged is a bit each in the profile's
+--     Funnel.FirstVisit, -1 for someone who played before it shipped): joining, the first round's
+--     rules card, GO and results, a second round, 3 rounds, a crate opened (CrateService calls
+--     CrateOpened), and back on another UTC day. Its fields: the first game (kept in the profile once
+--     known), the device, and the other people on the server at their first join (kept too).
+--   FirstGame at that first round's results; LeftDuringGame, LastGame and VisitEnd when they leave.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -68,6 +79,10 @@ type Visit = {
 	Shop: string?, -- the current run of Shop
 	Gold: string?, -- the current run of GoldPass
 	Runs: number,
+	FirstVisit: boolean, -- a new player whose FirstVisit funnel starts this visit
+	CameBack: boolean, -- one who started it on an earlier day
+	Last: { Game: string, Placed: string, At: number }?, -- the last round they saw the results of
+	CratesOpened: number, -- crates opened this visit
 }
 
 local visits: { [any]: Visit } = {}
@@ -128,6 +143,9 @@ local function visitOf(player: any): Visit
 			Lost = 0,
 			Played = false,
 			Runs = 0,
+			FirstVisit = false,
+			CameBack = false,
+			CratesOpened = 0,
 		}
 		visits[player] = visit
 	end
@@ -146,6 +164,43 @@ local function onboardFields(visit: Visit): Fields
 	return { device(visit), visit.Social }
 end
 
+-- The FirstVisit funnel's step `index` for a new player, once ever (the profile keeps which are out).
+-- Its fields: their first game (once known), device and the others on the server when they joined.
+local function firstVisitFunnel(player: any): any?
+	local profile = DataService.Get(player)
+	local funnel = profile and profile.Data.Funnel
+	return if funnel and funnel.FirstVisit > 0 then funnel else nil
+end
+
+local function firstVisit(player: any, visit: Visit, index: number)
+	local funnel = firstVisitFunnel(player)
+	local bit = 2 ^ (index - 1)
+	if not funnel or bit32.btest(funnel.FirstVisit, bit) and index > 1 or index == 1 and not visit.FirstVisit then
+		return
+	end
+	funnel.FirstVisit = bit32.bor(funnel.FirstVisit, bit)
+	DataService.Changed(player)
+	local fields = { funnel.FirstGame, device(visit), funnel.Others }
+	step(player, Funnels.FirstVisit, tostring(player.UserId), index, fields)
+end
+
+-- Whether a new player has logged FirstVisit's step `index` already.
+local function firstVisitDone(player: any, index: number): boolean
+	local funnel = firstVisitFunnel(player)
+	return funnel == nil or bit32.btest(funnel.FirstVisit, 2 ^ (index - 1))
+end
+
+-- The other people (not bots) on the server, but not `player`.
+local function othersOnServer(player: any): number
+	local count = 0
+	for _, other in Players:GetPlayers() do
+		if other ~= player and person(other) then
+			count += 1
+		end
+	end
+	return count
+end
+
 -- The visit's Joined steps, once (they wait for the device; any later step sends them first).
 local function logJoined(player: any, visit: Visit)
 	if visit.JoinLogged then
@@ -156,6 +211,10 @@ local function logJoined(player: any, visit: Visit)
 		step(player, nil, nil, 1, onboardFields(visit))
 	end
 	step(player, Funnels.Session, visit.Id, 1, sessionFields(visit))
+	firstVisit(player, visit, 1)
+	if visit.CameBack then
+		firstVisit(player, visit, 8)
+	end
 end
 
 local function newRun(visit: Visit, kind: string): string
@@ -192,6 +251,20 @@ function FunnelService.Joined(player: any, profile: any)
 	if funnel and funnel.Onboarding == 0 then
 		funnel.Onboarding = if new then 1 else -1
 		visit.Onboard = new
+	end
+	-- FirstVisit: a new player starts it (step 1, Joined, goes out with the visit's Joined steps);
+	-- one who started it on an earlier visit and is back on a later day reaches "Came back".
+	if funnel and funnel.FirstVisit == 0 then
+		funnel.FirstVisit = if new then 0 else -1
+		if new then
+			funnel.Others = Funnels.OthersBucket(othersOnServer(player))
+			visit.FirstVisit = true
+			funnel.FirstVisit = 1 -- (step 1 is marked here so it's decided; logJoined logs it)
+			DataService.Changed(player)
+		end
+	elseif funnel and funnel.FirstVisit > 0 and data then
+		local today = math.floor(os.time() / 86400)
+		visit.CameBack = data.Meta.FirstJoin > 0 and today > math.floor(data.Meta.FirstJoin / 86400)
 	end
 	if visit.Device then
 		logJoined(player, visit)
@@ -248,6 +321,12 @@ function FunnelService.RoundJoined(gameId: string, roundId: number, players: { a
 		visit.Round = { Run = run, Id = roundId, Fields = fields }
 		visit.Social = Funnels.BestSocial(visit.Social, fields[2])
 		step(player, Funnels.Round, run, 1, fields)
+		-- FirstVisit: the first round's rules card, then any later round is their second.
+		if firstVisitDone(player, 2) then
+			firstVisit(player, visit, 5)
+		else
+			firstVisit(player, visit, 2)
+		end
 	end
 end
 
@@ -284,6 +363,8 @@ function FunnelService.RoundStarted(gameId: string, roundId: number, players: { 
 			)
 		end
 		onboard(player, visit, 2)
+		firstVisit(player, visit, 2) -- (put in after its rules card: a late joiner; else already out)
+		firstVisit(player, visit, 3)
 	end
 end
 
@@ -311,7 +392,39 @@ local function roundFinished(definition: any, placed: { any }, winningTeam: stri
 		if lifetime then
 			onboard(player, visit, lifetime)
 		end
+		local where = Funnels.Placed(
+			item.Place,
+			#placed,
+			definition.IsTeam == true,
+			MedalLogic.IsWin(item.Place, entry.Team, winningTeam)
+		)
+		visit.Last = { Game = definition.Id, Placed = where, At = os.clock() }
+		-- A new player's first game: what it was, where they placed, how many others were there.
+		local funnel = firstVisitFunnel(player)
+		if funnel and not firstVisitDone(player, 4) then
+			funnel.FirstGame = definition.Id
+			for missed = 2, 3 do
+				firstVisit(player, visit, missed) -- (steps a late joiner skipped, so the chart stays whole)
+			end
+			firstVisit(player, visit, 4)
+			-- (the others on the server as that game was played: the funnel's field is at their join)
+			local others = Funnels.OthersBucket(othersOnServer(player))
+			event(player, "FirstGame", item.Place, { definition.Id, where, others })
+		end
+		if profile and profile.Data.Stats.RoundsPlayed >= 3 then
+			firstVisit(player, visit, 6)
+		end
 	end
+end
+
+-- A crate was opened (Services/CrateService): FirstVisit's crate step, and the visit's count.
+function FunnelService.CrateOpened(player: any, count: number)
+	if not person(player) then
+		return
+	end
+	local visit = visitOf(player)
+	visit.CratesOpened += count
+	firstVisit(player, visit, 7)
 end
 
 -- A coin purchase in the shop went through.
@@ -387,6 +500,24 @@ function FunnelService.Left(player: any)
 	)
 	local minutes = math.floor((os.clock() - visit.JoinedAt) / 60 + 0.5)
 	event(player, "LeftDuring", minutes, { where, device(visit), Funnels.StreakLabel(visit.Rounds, visit.Lost) })
+	-- Which game they left in the middle of, or the last one they played before leaving the lobby.
+	local inRound = player:GetAttribute("PP_InRound") == true
+	local gameId = GameState.Get("GameId")
+	if inRound and type(gameId) == "string" and gameId ~= "" then
+		local doing = Funnels.InGameDoing(GameState.Get("Phase"), player:GetAttribute("PP_Alive") == true)
+		event(player, "LeftDuringGame", minutes, { gameId, doing, visit.New })
+	elseif visit.Last then
+		local seconds = math.min(3600, math.floor(os.clock() - visit.Last.At + 0.5))
+		event(player, "LastGame", seconds, { visit.Last.Game, visit.Last.Placed, Funnels.RoundsBucket(visit.Rounds) })
+	end
+	local profile = DataService.Get(player)
+	local unopened = if profile then tonumber(profile.Data.Crates.Count) or 0 else 0
+	event(
+		player,
+		"VisitEnd",
+		minutes,
+		{ visit.New, Funnels.RoundsBucket(visit.Rounds), Funnels.CrateLabel(visit.CratesOpened, unopened) }
+	)
 end
 
 -- Test runs only: every step and event logged so far ("<name> <funnel> <step> <step name> (<fields>)").

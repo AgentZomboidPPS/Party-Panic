@@ -2285,7 +2285,8 @@ function __runReplay(id, botCount, party)
 	summary.seconds = at()
 	-- The funnels: Ann visits the shop and buys (through the real ShopService and the screens'
 	-- remote), looks at the GOLD PASS, presses GET GOLD PASS and buys it (MarketplaceService stands in
-	-- for that: the service's hooks are called), then Bo leaves. summary.funnels: every step logged.
+	-- for that: the service's hooks are called), then Bo leaves, Ann opens a crate and leaves.
+	-- summary.funnels: every step and event logged.
 	pcall(function()
 		local ShopService = __require("Server/Services/ShopService")
 		ShopService.Init()
@@ -2301,6 +2302,9 @@ function __runReplay(id, botCount, party)
 		FunnelService.GoldPrompted(ann)
 		FunnelService.GoldBought(ann)
 		FunnelService.Left(bo)
+		-- (Ann opens a crate, CrateService's hook: FirstVisit's crate step; then she leaves too.)
+		FunnelService.CrateOpened(ann, 1)
+		FunnelService.Left(ann)
 	end)
 	summary.funnels = FunnelService.Log()
 	-- What went to Roblox's economy and progression reports (counted even for the stand-ins).
