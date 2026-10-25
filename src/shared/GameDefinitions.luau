@@ -256,7 +256,6 @@ local list: { GameDefinition } = {
 		Duration = 54,
 		MinPlayers = 2,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "StampOut",
@@ -269,7 +268,6 @@ local list: { GameDefinition } = {
 		Duration = 40,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "RockinRaceway",
@@ -282,7 +280,6 @@ local list: { GameDefinition } = {
 		Duration = 60,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "MessyMemory",
@@ -295,7 +292,6 @@ local list: { GameDefinition } = {
 		Duration = 52,
 		MinPlayers = 1,
 		IsTeam = false,
-		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	{
 		Id = "SnowballSummit",
@@ -463,6 +459,19 @@ local list: { GameDefinition } = {
 		-- Back in the rotation (owner: "Reenable it.") after it was out from version 54: on version 53
 		-- the borrowed capybara meshes, the shells and the aiming failed on live servers ("Models are
 		-- fucked. shooting is fucked"); all three were fixed (docs/HANDOFF.md, Capy Go Boom).
+	},
+	{
+		Id = "SkyStack",
+		Name = "Sky Stack",
+		Category = "Race",
+		Icon = "🧱",
+		Color = Color3.fromRGB(110, 190, 255),
+		Objective = "Drop blocks to stack your tower to the clouds. Overhangs get sliced off, and a total miss knocks you out!",
+		Controls = "Tap DROP (or click, or press E) when the sliding block lines up with your tower.",
+		Duration = 60,
+		MinPlayers = 1,
+		IsTeam = false,
+		IsNew = true, -- a little extra vote exposure while it's new; remove later
 	},
 	-- NEW MINI-GAMES GO ABOVE THIS LINE (`lune run tools/new-minigame` adds them here)
 }

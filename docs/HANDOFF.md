@@ -24,48 +24,55 @@
     per-game LEGEND titles and a glow by the name in rounds, 2 Roblox badges (the owner creates them).
   - The client harness bundle is over Open Cloud's 1 MiB cap again with Mastery in: runs skip `Event` too
     (`--skip ...,Event`), and Telemetry is a stand-in there now.
-- **Mastery, second pass (IN PROGRESS when the owner asked for this handoff; not rendered or tested in a
-  run yet, only stylua/selene/luau-lsp clean and the 471 Lune tests passing).** Owner: "I also want to mastery tab to be
-  in the season button I want to rename that button to better reflect everything in it though. Also this has to be
-  incredible and make players feel like they accomplished something."
-  - DONE in code:
-    - The menu's 🎃 **Season** button is now 🎯 **GOALS** (HudController; the onboarding tip says "check 🎯 Goals for
-      quests and mastery"). I picked the name; tell the owner it's easy to change.
-    - The GOALS hub (UI/HubTabs) has a 4th tab, 🏆 MASTERY: `Controllers/MasteryController` (new, in the client start
-      order and the harness's order list) draws `UI/MasteryWall` in a 980x600 hub window; `State.OpenScreen("Mastery")`
-      opens it. The Rewards screen still has its own MASTERY tab too (tab label now 🏆).
-    - A new rank (SILVER and up) gets its own celebration card, `showMastery` in CelebrationController: rank-tinted
-      card with a spinning rim, rays, the badge "forged" (old rank shakes, white flash, new rank bursts out, rings,
-      confetti, "CrateTitle" sound), the game name, "GOLD RANK!" in a shimmering rank gradient, a tagline
-      (`Mastery.Tagline`), the 5-rank ladder (`Mastery.Ladder`), coin/key/crate chips, next goal, 🏆 MASTERY button
-      (opens the hub tab). DIAMOND/LEGEND get a halo and stay 3 s longer. Card is 600x410 units (taller than the
-      others' 344).
-    - Everyone sees it: MasteryService holds a pop per player and, once back in the lobby (Cleanup +2.5 s), fires the
-      new remote `MasteryPop` (character, rank, gameId) to all clients; CelebrationController's `masteryPop` shows a
-      billboard pill over the head. DIAMOND now also gets a server-wide toast (LEGEND already did).
-    - `UI/Mastery` gained `Tagline`, `Picture(gameId, props)` (first frame of the game's preview sprite sheet,
-      Shared/GamePreviews), `Ladder`, and a `locked` flag on `Badge`.
-  - NOT DONE (next steps, in this order):
-    1. Results card rank-up animation (ResultsController.masteryRow): start on the old rank's badge, fill the bar to
-       full, flash, swap to the new badge with "GOLD RANK!", then the new rank's bar. Not started.
-    2. Fixes from the first render (`scratchpad/uisweep/MastPC`, `MastTouch`):
-       - Rules card (RoundController): the category label's box runs under the mastery chip (overlap flags); shrink
-         `rulesFields.Category` by the chip's width when the chip is shown.
-       - Mastery wall tiles: the invisible "Pick" TextButton over each tile is flagged as overlapping every label;
-         make the tile itself the TextButton instead.
-       - Mastery wall header "How" text is cut off on PC: shorten it.
-       - Phones: the results card overflows (the "LEVEL UP!" line falls off the bottom) when a round has every bonus
-         at once plus the mastery row; use tighter rows when there are 8+ items, or drop the level-up line then.
-       - PC vote cards: the objective box shrank to 40 units, so long objectives (Big Bad Vacuum) draw tiny. Give it
-         ~46 and squeeze the mastery line.
-    3. Trophy-case wall (UI/MasteryWall): tiles with the game's picture (`Mastery.Picture`) behind a dark bottom
-       gradient, rank-coloured rims, `PartyKit.Shine` on GOLD+, `PartyKit.SpinBorder` on LEGEND; the detail panel
-       as a 5-step rewards road (what each rank pays, ticks on the reached ones); a header pill for the next
-       cross-game title (All-Rounder 3/5).
-    4. Render it all: `bash scratchpad/uisweep/run_noevent.sh NAME [--touch] --shots "Voting,Preparing,Results,
-       Mastery,Rewards Mastery,LevelUp"` (the harness needs `Event` skipped to stay under 1 MiB). Add a harness shot
-       of the hub's Mastery tab (`State.OpenScreen:Fire("Mastery")`) and of the MasteryPop.
-    5. Then commit, push, show the owner, and ask before publishing (it would be version 61).
+- **Mastery, second pass (DONE, on screen in PC and phone renders; not published).** Owner: "I also want to mastery
+  tab to be in the season button I want to rename that button to better reflect everything in it though. Also this has
+  to be incredible and make players feel like they accomplished something."
+  - The menu's 🎃 **Season** button is now 🎯 **GOALS** (HudController; the onboarding tip says "check 🎯 Goals for
+    quests and mastery"). The name was picked by the session that built it; it's easy to change.
+  - The GOALS hub (UI/HubTabs) has a 4th tab, 🏆 MASTERY (`Controllers/MasteryController`, 980x600 like the hub;
+    `State.OpenScreen("Mastery")` opens it). The Rewards screen keeps its own 🏆 Mastery tab.
+  - **Rank-up card** (`showMastery` in CelebrationController): rank-tinted card, turning rim, rays, the badge forged
+    (old rank shakes, white flash, new rank bursts out), "GOLD RANK!" in the rank's metal, a tagline, the 5-rank
+    ladder, coin/key/crate chips, next goal, 🏆 MASTERY. DIAMOND/LEGEND get a halo and stay 3 s longer. The headline
+    ends before the ✕ (drawn smaller when "DIAMOND RANK!" needs it); on phones the next goal sits under the chips.
+  - **Over the head for everyone:** MasteryService holds a pop per player and, back in the lobby (Cleanup +2.5 s),
+    fires `MasteryPop` (character, rank, gameId); CelebrationController's `masteryPop` shows a pill over the head.
+    DIAMOND also gets a server-wide toast (LEGEND already did).
+  - **Results card rank-up** (`ResultsController.masteryRow`): starts on the old rank's badge and bar, the bar fills to
+    the brim, the row flashes, the new badge pops with "GOLD RANK!", confetti, a shine and the CrateTitle sound, then
+    the bar starts over in the next rank's colours. Reduced effects: the new rank straight away.
+  - **Results card fits phones** (`rewardsLayout`): the column measures its room (the fitted window less the title bar
+    and banner) and picks 31/27/24-unit rows; only if even 24 doesn't fit does it leave out "LEVEL UP!" (the lobby's
+    card celebrates it). The personal best and "Next round soon" show wherever there's room.
+  - **Trophy-case wall** (`UI/MasteryWall`): tiles are the game's picture (`Mastery.Picture`: frame 1 of its preview
+    sheet) under a dark fade, rank-coloured rims, `PartyKit.Shine` on GOLD+ (each tile on its own beat), a turning rim
+    on LEGEND; the tile itself is the TextButton (no invisible "Pick" over it). The picked game's panel: picture in its
+    rank frame with the badge on its corner, rank, rounds/wins, a **road** of the five ranks (lit + ✓ when reached,
+    the next ringed, what each pays under it, a line filled to where the player is) and the next goal with the bar's
+    numbers. Header: GOLD/DIAMOND/LEGEND counts and the **next title** pill (ALL-ROUNDER 3/5, filling; then Diamond
+    Partier, Party Pro), and the "How" line in whatever room is left (shorter, or none).
+  - **First-render fixes:** the rules card's category line ends before the mastery chip (and shrinks if the chip is
+    wide); PC vote cards show the objective's **first sentence** in a taller box (the card is 228 tall; the whole
+    objective was squeezed to about 11 pt), the rules card shows all of it, and a long one there may shrink to 18
+    instead of being cut off (Big Bad Vacuum's was).
+  - **Checks:** stylua, selene, luau-lsp clean; 482 Lune tests; client harness on PC and phones (phone, phone-small,
+    phone-large, phone-android, tablet): 0 errors. New harness shots: "Goals Mastery", "Mastery gold", "MasteryPop"
+    (both pills copied onto a screen), "Results rank up" (0.75 s after "Results", which catches the bar filling).
+- **Harness bundle back under 1 MiB:** the whole client was 1,054,803 bytes (over Open Cloud's cap) even before the
+  second pass. `client_harness.py` now shrinks modules with `round_harness.slim` (comments, indentation, spaces round
+  operators; line numbers kept): about 1,012,800 bytes **with `Event`**, so runs no longer need to skip it (skip
+  SkeeBall,Pet,SeasonWorld,PartyWorld,Aura,HallOfFame,AssetReport,Ambience). `ui_render.py` draws the games' preview
+  sheets (`assets/previews`), so tiles show their pictures.
+- **Sky Stack merged** (game 34 in the list, from the owner's other window, branch `claude/ecstatic-cray-9ijheg` at
+  8235797; owner here: "when the other window finishes it's game let's merge it"). Its full note is the "Sky Stack"
+  section below. On merge: the store text file says 34 games; the vote's coverage spec (every game within 60 votes,
+  9 servers in 10) needed 64 with 34 games, so the four oldest "new" games lost `IsNew` (Slaparazzi, Stamp Out,
+  Rockin' Raceway, Messy Memory); `merge_check.sh SkyStack`: its 4 meshes face out, regenerate the same with this
+  branch's mesh tools, no z-fights, asset ids visible. It plays the generic round song (no song of its own; audio
+  uploads are used up this month). The other window offered to merge it into `claude/quirky-hopper-5yk8zk` and
+  publish from there: that branch is far behind version 60, so it must not publish.
+- **Still not built (steps 2 and 3):** a GOLD cosmetic per game (start with the 10 most played), DIAMOND name-tag
+  frames, per-game LEGEND titles and a glow by the name in rounds, 2 Roblox badges (the owner creates them).
 
 **Live in version 60 (2026-10-25, on the owner's "Push it"):**
 - **Server merging** (owner: "Is there a way to merge severs automatically that are getting low?", then "Also push"; I
@@ -215,6 +222,53 @@ for three mockups of a tidier HUD for sitting out during a round (A tidy columns
 Last updated: **2026-10-22 ~20:05 UTC** by Session C (branch **`claude/friendly-ramanujan-2dtfr2`**, which started
 from `claude/upbeat-galileo-gvwq66` at 3bc532a). Below it, Session B's notes from 19:00 UTC and Session A's sections
 0-9, still accurate except where a newer block says otherwise.
+
+## Sky Stack (2026-10-25, built on `claude/ecstatic-cray-9ijheg`, merged into `claude/friendly-ramanujan-2dtfr2`; not published yet)
+
+Owner: "If you could make any mini game. What would it be?" then "Build it." The pitch they approved: everyone gets a
+tower in a row of up to 12; a block slides back and forth over your tower and you tap to drop it; whatever hangs over
+the edge is sliced off, so every miss makes the next block smaller; a perfect drop keeps it full size and gusts the
+towers either side (their next block slides faster); a block that misses completely crumbles your tower and you're out;
+first to the cloud line wins, the tallest tower if time runs out. It is `SkyStack` (Race, 60 s, 1-12, bots fill).
+
+- **Files:** `src/shared/Logic/SkyStack.luau` (every rule and number, shared by server, clients and bots; unit tests in
+  `tests/SkyStack.spec.luau`), `src/server/MiniGames/SkyStack.luau` (the plaza, the towers, judging DROP),
+  `src/client/MiniGames/SkyStack.luau` (draws every tower and sliding block, shows your own drop at once, camera, HUD,
+  DROP), `src/server/MiniGames/Bots/SkyStack.luau` (bot brain), `src/server/World/Props/SkyStack.luau` +
+  `tools/meshgen/props/SkyStack.py` (base, star, cloud, crane), `tools/checks/bots/SkyStack.luau` (harness bot), its
+  `GameDefinitions` entry (`IsNew = true`: 16 of 32 games are tagged now, the most VoteFairness allows), the store
+  description (32 games), a `make_preview.py` camera and `assets/previews/SkyStack.jpg`. Shared files touched: only
+  `GameDefinitions.luau`, `tools/preview/make_preview.py` (its camera entry) and the store description.
+- **How it works:** a block slides on a schedule from the server's clock (`Stack.Offset`): 9 studs either side of the
+  top block's middle, X on odd floors and Z on even ones, faster every floor (9 to 17 studs/s; a gusted block 1.35x).
+  DROP sends the time of the frame on screen (input is handled a frame after it's drawn) and the floor it aimed at; the
+  server judges it at that moment (`Logic/Buzzer.PressTime`), so a drop that looked lined up lands lined up. Perfect is
+  within 0.3 studs or 0.03 s of travel, whichever is wider; every third perfect in a row grows the block 0.5 studs each
+  way and gusts both neighbours; less than 0.5 studs left is a miss (eliminated; floors still count). 25 floors reach
+  the clouds. Finishers place by when their last DROP was pressed (not when it arrived, so ping can't hand a close
+  finish to a bot); everyone else by floors, then by who got there first. The round ends 2.5 s after no person is
+  still building, or at the buzzer (presses made before it still count, nothing new starts after it). The client draws
+  its own drop at once and takes it back if the server answers "Refused" (a double tap, the buzzer, another floor).
+- **Bots** are deliberately beatable (owner: "dont make bots overpowered"): their timing is off by about 0.06-0.08 s and
+  they often wait a pass. With two harness players (one perfect, one steady) among 10 bots, over five rounds: the
+  perfect player always won (about 28.5 s), the steady one came 2nd or 3rd, 0-4 bots reached the clouds at 32-37 s and
+  the rest stopped between floors 10 and 24. Knobs: top of `Bots/SkyStack.luau`.
+- **Meshes** (uploaded under user 11690979745 on 2026-10-25, all four Approved): SkyStackBase 80397687535139,
+  SkyStackStar 124661970850866, SkyStackCloud 107029468779143, SkyStackCrane 103214181577609. The blocks themselves are
+  plain parts the client makes (they are sliced to any size), shaded per floor in the lane's colour.
+- **Portal preview:** `make_preview.py SkyStack` (a round snapshotted at 24 s, looking down the row from the front
+  right), image 106243641794421 (decal 139891385288243), Open Use and granted; it shows once moderation passes it.
+- **Checked on real servers (Open Cloud):** `tools/checks/mode_check.sh SkyStack`: 0 errors in the 12-player, bots and
+  phone rounds, phone UI 0 problems, no leftovers; stylua, selene, luau-lsp clean; 259 tests pass. An independent
+  review found no blockers; its three should-fix findings were fixed (finish order by press time, judging the frame on
+  screen, answering refused presses and starting nothing after the buzzer), as were its small ones (a gust cue only
+  when the gust actually reached you, no burst of old slices for a late spectator, one end hold at the buzzer).
+- **Left as is:** like every mode, a press may claim up to half a round trip plus 0.1 s back (`Buzzer.REACH`): a
+  cheating script could claim the perfect moment just after it passed. The experience is private; tighten REACH for
+  this mode if that ever matters.
+- **Only a real playtest can confirm:** how DROP feels on phones (tap anywhere except the bottom-left corner counts too),
+  the camera (front right of your tower top, rising with it; circling the top once you're at the clouds), and
+  whether the finisher's circling camera ever passes through the clouds behind the row.
 
 ## Game 33: LAST DANCER (2026-10-24, built on `claude/last-dancer`, merged into `claude/friendly-ramanujan-2dtfr2`; being finished)
 
