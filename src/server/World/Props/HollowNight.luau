@@ -83,7 +83,7 @@ return function(h)
 		-- The crate pile on its tree stump, the lobby's middle for the season (the turning crate on top, the keys round it and the wisps are separate: the game moves them).
 		HollowPile = {
 			Height = 4.569,
-			AssetId = 84829081395615,
+			AssetId = 96204088535966,
 			BlocksCamera = true,
 			Shadow = true,
 			Palette = {

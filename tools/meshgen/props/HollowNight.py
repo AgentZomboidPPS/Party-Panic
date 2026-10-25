@@ -31,11 +31,31 @@ NAMES = [
 ]
 
 
+def ground_bark(pieces: dict) -> dict:
+    """The pile's stump stands on the court (the clipping sweep; owner: "Make sure everything is super
+    nice. No clipping stuff like that."): its leaf heap reaches the pile's base inside the stump, so the
+    prop's base is there, but the bark wall and its roots stopped 0.59-0.75 above it, and the stump hung
+    over the court. The bark's bottom edge goes down to the base (y = 0); the rest stays."""
+    bark = pieces.get("Bark")
+    if bark is None:
+        return pieces
+    v = np.array(bark.v, dtype=float)
+    low = v[:, 1].min()
+    edge = v[:, 1] < low + 0.2  # (the wall's foot and the roots' undersides)
+    v[edge, 1] = 0.0
+    bark.v = v
+    return pieces
+
+
+FIXES = {"HollowPile": ground_bark}
+
+
 def loader(name):
     def build():
         data = np.load(OUT / f"{name}.npz")
         meta = json.loads((OUT / f"{name}.json").read_text())
-        return {piece: Mesh(data[f"{piece}__v"], data[f"{piece}__f"]) for piece in meta["pieces"]}
+        pieces = {piece: Mesh(data[f"{piece}__v"], data[f"{piece}__f"]) for piece in meta["pieces"]}
+        return FIXES[name](pieces) if name in FIXES else pieces
 
     return build
 

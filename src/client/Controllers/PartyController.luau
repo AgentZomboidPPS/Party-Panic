@@ -1303,6 +1303,7 @@ function PartyController.Start(context)
 	end)
 	PartyKit.SetPlaying(loops, false)
 	buildCard(context)
+	LobbyRibbon.CoverWhile(card) -- (phones: the card's top reached over the lobby's chips)
 	placeCard(false)
 	PartyKit.WhenChild(context.Hud, "Vote", function(child)
 		if child:IsA("GuiObject") then

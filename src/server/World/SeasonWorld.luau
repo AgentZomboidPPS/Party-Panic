@@ -333,8 +333,9 @@ local function buildPile(root: Model)
 
 	-- Steps to climb it: the stump, the leaf mound, the crate rings, and the giant crate's lid.
 	local colliders = Build.Model("Colliders", pile)
-	step(colliders, "Stump", 12.5, 0, GROUND + 1.7)
-	step(colliders, "Mound", 9.6, GROUND + 1.7, GROUND + 3.6)
+	-- (The stump's top is drawn 2.3 over the court: at 1.7 people sank into its rim.)
+	step(colliders, "Stump", 12.5, 0, GROUND + 2.3)
+	step(colliders, "Mound", 9.6, GROUND + 2.3, GROUND + 3.6)
 	step(colliders, "RingLow", 8.2, GROUND + 3.6, GROUND + 5.9)
 	step(colliders, "RingMid", 5.6, GROUND + 5.9, GROUND + 8.0)
 	step(colliders, "TopCrate", 3.3, GROUND + 8.0, TOP_CRATE_Y + 6.9)

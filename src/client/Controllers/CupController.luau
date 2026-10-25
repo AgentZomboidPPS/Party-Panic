@@ -838,6 +838,7 @@ function CupController.Start(context)
 	hud = context.Hud
 	chip = LobbyRibbon.Add(context, { Name = "Cup", Priority = 2, OnClick = CupController.OpenStandings })
 	buildMoment(context)
+	LobbyRibbon.CoverWhile(moment) -- (the smallest phones: its top reached over the chips)
 
 	standingsModal = Modal.new(context.Overlay, "PARTY CUP", "🏆", STANDINGS_SIZE)
 	standingsBody = UIKit.new("Frame", {

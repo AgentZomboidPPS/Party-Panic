@@ -24,6 +24,7 @@ local Seasons = require(Shared.Seasons)
 
 local State = require(script.Parent.Parent.State)
 local Theme = require(script.Parent.Parent.UI.Theme)
+local LobbyRibbon = require(script.Parent.Parent.UI.LobbyRibbon)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 local CrateTheme = require(script.Parent.CrateTheme)
 
@@ -663,6 +664,10 @@ function CrateMoments.Build()
 		Parent = gui,
 	})
 	UIKit.AutoScale(bannerHolder)
+	-- (Phones: a banner hangs where the lobby's chips are; they step aside while one shows.)
+	LobbyRibbon.CoverWhile(bannerHolder, function()
+		return bannerHolder:FindFirstChild("Banner") ~= nil
+	end)
 	cardHolder = UIKit.new("Frame", {
 		Name = "Cards",
 		AnchorPoint = Vector2.new(0.5, 0.5),

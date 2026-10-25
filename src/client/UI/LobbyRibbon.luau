@@ -10,7 +10,9 @@
 -- reached over at first). It shows in the lobby only: never during a round, the rules card or the
 -- results, and not while a level-up or medal card is up (PP_Celebrating: its top reaches the row on
 -- PC) or a lobby game has the screen (the HUD's PP_TipsAside: Skee-Ball); on phones not while the
--- emote picker is open either (the HUD's PP_EmotesOpen: on the smallest phones the row sat over its X).
+-- emote picker is open either (the HUD's PP_EmotesOpen: on the smallest phones the row sat over its X),
+-- nor while a pop-up hangs over its spot (LobbyRibbon.CoverWhile: the party invite card, the cup's
+-- moment, a crate unbox banner; the clipping sweep, owner: "Make sure everything is super nice.").
 --
 --   local chip = LobbyRibbon.Add(context, { Name = "Cup", Priority = 2, OnClick = openStandings })
 --   chip:Set("🏆", "CUP 3/5")   -- icon and words; empty words take the chip off the row
@@ -70,6 +72,8 @@ local touch = false
 local hud: Instance? = nil
 local row: Frame? = nil
 local chips: { Chip } = {}
+-- Pop-ups that hang where the row is on a phone (LobbyRibbon.CoverWhile): it steps aside meanwhile.
+local covers: { () -> boolean } = {}
 
 local function size()
 	return if touch then TOUCH else PC
@@ -96,6 +100,13 @@ local function refresh()
 		and player:GetAttribute("PP_Celebrating") ~= true
 		and hud:GetAttribute("PP_TipsAside") ~= true
 		and not (touch and hud:GetAttribute("PP_EmotesOpen") == true)
+	if touch then
+		for _, covered in covers do
+			if covered() then
+				free = false
+			end
+		end
+	end
 	local s = size()
 	local used = 0
 	local order = table.clone(chips)
@@ -167,6 +178,18 @@ local function build(context)
 	context.Hud:GetAttributeChangedSignal("PP_TipsAside"):Connect(refresh)
 	context.Hud:GetAttributeChangedSignal("PP_EmotesOpen"):Connect(refresh)
 	task.delay(3, refresh) -- again once the font has surely loaded (widths measure narrow before)
+end
+
+-- A pop-up that hangs over the row's spot on phones (the party invite card, the cup's moment, the
+-- crate unbox banners: on the smallest phones each reached over the chips): the row steps aside while
+-- `gui` is showing, and while `test` says so if given (a holder whose banners come and go).
+function LobbyRibbon.CoverWhile(gui: GuiObject, test: (() -> boolean)?)
+	table.insert(covers, function()
+		return gui.Visible and gui.Parent ~= nil and (test == nil or test())
+	end)
+	gui:GetPropertyChangedSignal("Visible"):Connect(refresh)
+	gui.ChildAdded:Connect(refresh)
+	gui.ChildRemoved:Connect(refresh)
 end
 
 local function set(self: Chip, icon: string, text: string)
