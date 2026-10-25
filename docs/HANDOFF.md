@@ -1,6 +1,6 @@
 # Handoff: Party Panic (for the next Claude)
 
-**On this branch since version 59 (not published yet):**
+**Live in version 60 (2026-10-25, on the owner's "Push it"):**
 - **Server merging** (owner: "Is there a way to merge severs automatically that are getting low?", then "Also push"; I
   proposed a STAY button, 3 real players and an on/off switch). `Services/MergeService` with the rules in
   `Shared/Logic/ServerMerge` (tested) and the card in `Controllers/ServerMoveController`. Every public server lists itself
