@@ -1,22 +1,14 @@
-# Build output
-*.rbxl
-*.rbxlx
-*.rbxl.lock
-*.rbxlx.lock
-build/
-sourcemap.json
-
-# Store art renders and snapshots (tools/art/make_art.py; the finished art goes in assets/store)
-/art/
-/art_dumps/
-
-# Tooling caches
-roblox.yml
-globalTypes.d.luau
-.luau-lsp/
 __pycache__/
-*.pyc
-.DS_Store
-
-# Agent worktrees
-.claude/worktrees/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.db
+*.sqlite
+.env

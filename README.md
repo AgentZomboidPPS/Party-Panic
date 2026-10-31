@@ -1,162 +1,164 @@
-# 🎉 Party Panic
+# Lantern
 
-> Two Claudes are working on this project: read [docs/HANDOFF.md](docs/HANDOFF.md) first (who works on what, how to
-> test without Studio, what's open). The next games are in [docs/MINIGAME_BACKLOG.md](docs/MINIGAME_BACKLOG.md).
+Portfolio management, risk analytics, pre-trade compliance and order management on **one shared
+book of record**. Every module reads the same securities, prices, FX, trades and cash flows, so the
+portfolio manager, the risk team, compliance and the trading desk never disagree about what is held.
 
-A Roblox multiplayer party game: hang out in a lively lobby, vote on the next mini-game, compete in
-short chaotic rounds, earn rewards, and do it all again. Built from the *Party Panic Game Design
-Outline*.
+```
+                    ┌───────────────────────────────────────────────┐
+                    │              Book of record (SQL)             │
+                    │  securities · prices · fx · factor returns    │
+                    │  portfolios · cash flows · trades · orders    │
+                    │  compliance rules & checks · audit events     │
+                    └───────┬──────────┬──────────┬──────────┬──────┘
+                            │          │          │          │
+                   ┌────────▼───┐ ┌────▼─────┐ ┌──▼───────┐ ┌▼────────────┐
+                   │ Portfolio  │ │   Risk   │ │Compliance│ │   Trading   │
+                   │ positions  │ │ VaR / ES │ │ rules    │ │ orders      │
+                   │ exposures  │ │ stress   │ │ pre-trade│ │ fills       │
+                   │ active wts │ │ factors  │ │ post-trd │ │ blotter     │
+                   │ what-if    │ │ bonds    │ │ history  │ │ audit       │
+                   └────────────┘ └──────────┘ └──────────┘ └─────────────┘
+                            │          │          │          │
+                    ┌───────▼──────────▼──────────▼──────────▼──────┐
+                    │          REST API (FastAPI)  ·  CLI            │
+                    └───────────────────────────────────────────────┘
+```
 
-> **Get together. Pick the chaos. Play. Laugh. Repeat.**
-
-## What's in the box
-
-| Area | Highlights |
-| --- | --- |
-| **Core loop** | A server-authoritative state machine (Waiting → Intermission → Voting → Preparing → In Round → Results → Cleanup) with a watchdog. Every mini-game call runs with a timeout, so a broken mode can't stall the server. |
-| **Sitting out** | A big switch right by the phase banner (and in Settings): 🎮 PLAYING or 💤 SITTING OUT. Sitting out keeps you in the lobby while rounds go on and bots take your spot; you finish a round you're in, don't vote while you're out, and jump back in with one tap. If everyone sits out, rounds wait in the lobby. It resets when you leave. |
-| **Voting** | Four cards: three games and Random (a hidden pick, revealed if it wins), with live counts; change your vote until time runs out; random tie-breaks; recently played modes down-weighted; category mixing. Tap a card to vote. The stage's four portals play a little looping preview of each option (Random's spins through the games like a slot machine and lands on its game if it wins), and take turns showing every game between votes. |
-| **Mini-games** | Fifteen party classics rebuilt for 12 players: 🔥 Fire Rope · ⚡ Hex Meltdown · 🍯 Honey Trap · 🎈 Pump & Pop · 🛹 Skate Escape · 🏹 Arrow Ambush · 🏜️ Sinking Sands · 🔵 Bumper Ballers · 🥕 Rake It In · 🍪 Crazy Cutters · 🎂 Cake Factory · 🛷 Bobsled Run · 🦈 Shark Bait · 🚁 Mecha-Marathon · ❄️ Spleef |
-| **Bots** | Friendly AI players fill empty spots so every round feels full (8 by default): they fade out when someone joins, fade back in when someone leaves, play every mode with their own brain at varied skill, and are clearly labelled 🤖 with a BOT nameplate. No rewards, no saved data. |
-| **Progression** | Small, easy-to-read coins (a round pays 2-6) and XP, itemized round rewards, personal bests, a first-win-of-the-day bonus, daily and weekly quests, a daily gift with streaks, a hidden daily token. The **Rewards Road**: every level pays coins and most milestone levels unlock a cosmetic you can't buy, always shown on the HUD as the next goal; **career milestones** (rounds, wins, podiums, every game, days played) unlock titles; **prestige colors** on the name tag and level badge every 10 levels; a level-up celebration card in the lobby (with EQUIP for what it unlocked; it never blocks the stick, jump or menu) and, back in the lobby, a "Lv 10!" over your head for everyone to see; returning players get the rewards they had already earned in a "NEW REWARDS!" card. Saved coins moved to the low scale once (divided by 10, rounded up; items kept) |
-| **Cosmetics** | Trails, titles, emotes (dances and effect emotes), victory and knockout effects, a coin shop with confirmation, an optional VIP pass (cosmetic only, never pay-to-win) |
-| **Lobby** | A sunny theme-park plaza built around the vote stage: four portal bays that play previews of the games under a scalloped carnival crown with neon tubes, flanked by candy-striped turrets; a scalloped stone fountain with rubber ducks, arcing water jets and a turning gold trophy (players can wade in); a sunburst court and patterned promenade on a grass lawn with flower beds and tree clusters; a turning Ferris wheel and drifting hot-air balloons on the skyline; beach balls to kick around (players pass through them and the server punts them, so there's no lag-bump on phones); a winner podium of gold, silver and bronze tiers under a bulb-lit candy arch; a shop with a mannequin gallery; a wooden quest kiosk and a giant gumball gift machine; a carnival shooting gallery (striped awning, bulbs, tin ducks) for the arcade target range; a Skee-Ball arcade (four machines on a patio of giant tickets with a TODAY'S BEST board: drag to roll nine balls, the server scores every roll, no coins, just your best); an emote stage with a dance floor under a fan-crowned arch with speakers and a circus confetti cannon; an obby in a pool of goo (hops, candy pillars, beams and ledges up a lookout tower to a view deck, with checkpoints: a fall puts you back on the last one), lamp posts strung with bunting, floating confetti, and a ring of trees and hills |
-| **Look** | Rounded CSG geometry instead of blocks, over a hundred detailed original mesh props (every arena has its own set), ShadowMap lighting (sharp sun shadows, light on phones), bloom, sun rays, clouds, ambient particles and bobbing decorations |
-| **Audio** | An original soundtrack (two lobby tracks plus a round track that speeds up near the end) and 15 original sound effects |
-| **UI** | Mobile-first scaling, rounded glossy panels, toasts, rules card with a 3-2-1 countdown, standings, results breakdown, spectate, settings (music volume, reduced effects), onboarding tips |
-| **Safety** | Session-locked DataStore saves, rate-limited and validated remotes, server-side hit, pickup and checkpoint validation, and no client-reported scores or rewards |
+Positions are **never stored**. They are derived from the trade ledger and cash flows at any as-of
+date, so there is exactly one source of truth and point-in-time reporting comes for free.
 
 ## Quick start
 
-1. Install the toolchain with [Rokit](https://github.com/rojo-rbx/rokit): `rokit install`
-   (installs Rojo, Selene, StyLua and Lune at the versions in `rokit.toml`).
-2. Build the place: `rojo build -o build/PartyPanic.rbxl`, then open it in Roblox Studio.
-   Or run `rojo serve` and connect with the Rojo Studio plugin to live-sync while you edit.
-3. Press **Play**. In Studio, a single player is enough to start rounds.
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
 
-### Publishing (private first)
-
-Open Cloud can't create an experience, so the first time, open the built place in Studio and use
-**File > Publish to Roblox As > New experience**. New experiences start **private**. After that,
-every publish is one command (it refuses to publish to a public experience unless you say so):
-
-```sh
-python3 tools/publish_place.py --universe-id <id> --place-id <id>
+lantern seed-demo            # 21 securities, 3y of prices, 2 portfolios, rules, orders -> ./lantern.db
+lantern portfolios
+lantern positions 1
+lantern exposures 1 --by sector
+lantern risk 1               # VaR x3, component VaR, stress, factor model, bond analytics
+lantern compliance 1
+lantern orders
+lantern serve                # REST API with interactive docs at http://127.0.0.1:8000/docs
 ```
 
-It builds the place, publishes it, and sets the name, the store description from
-[docs/STORE_DESCRIPTION.txt](docs/STORE_DESCRIPTION.txt) and a server size of 12.
+Point at another database with `--db postgresql://...` or `LANTERN_DATABASE_URL=...`. SQLite is the
+default for development; the schema is plain SQLAlchemy and runs unchanged on Postgres.
 
-- The API key needs **Place Publishing** (write) and **universe.place** (write) for the experience.
-- Publishing is refused with *409 "Server is busy"* while a Collaborative Editing (Team Create)
-  session holds the place. Close Studio, or turn Collaborative Editing off, and try again.
+Run the tests with `pytest` (41 tests, ~10 s). Lint with `ruff check lantern tests`.
 
-Store art (thumbnails and icon) lives in [assets/store](assets/store) and is made with
-`tools/art/make_art.py` (see [docs/ASSETS.md](docs/ASSETS.md)). The API key can't upload it:
-[assets/store/README.md](assets/store/README.md) says where it goes in the Creator Hub.
+## What each module does
 
-Also check these in **Game Settings** in Studio:
+### Portfolio (`lantern/portfolio`)
+- `value_portfolio(session, portfolio_id, as_of)` → holdings from the ledger, latest prices on or
+  before `as_of`, FX-converted to the portfolio's base currency, weights relative to total value
+  including cash. Bonds are quoted per 100 face (`multiplier = 0.01`), quantity is face amount.
+- `exposure_by(valued, dimension)` for `asset_class | sector | country | currency | issuer`.
+- `active_weights` / `active_exposures` versus a benchmark (security-level or bucketed).
+- `apply_trades(session, valued, [ProposedTrade...])` – what-if analysis that never touches the ledger.
 
-- **Places**: max players **12** (matches `Config.Session.MaxPlayers`).
-- **Avatar**: R15 (emote animations use the default R15 emotes).
-- **Security**: enable *Studio Access to API Services* if you want saving to work while testing in
-  Studio. Without it you get a temporary profile and a notice; nothing is overwritten.
-- Optional: create a VIP game pass and put its id in `Config.Monetization.VipGamePassId`.
+### Risk (`lantern/risk`)
+- **VaR / Expected Shortfall** by three methods: historical, parametric (variance–covariance),
+  Monte Carlo (Cholesky, seeded). Square-root-of-time horizon scaling. Returns are computed in base
+  currency so FX risk is included.
+- **Component VaR**: Euler decomposition of parametric VaR; components sum to the total.
+- **Stress tests**: additive shocks by asset class / sector / country / currency / ticker, plus
+  parallel rate shifts applied through each bond's modified duration. Seven predefined scenarios;
+  custom scenarios via the API.
+- **Factor model**: OLS betas against stored factor returns, portfolio factor exposures, and a
+  systematic / idiosyncratic variance decomposition with per-factor contributions.
+- **Fixed income**: price ⇄ yield, Macaulay and modified duration, convexity, DV01.
 
-### Turn on the real meshes and music
+### Compliance (`lantern/compliance`)
+Rules live in the database, scoped to one portfolio or firm-wide, each `HARD` (blocks) or `SOFT`
+(warns). Built-in rule types:
 
-The game runs as-is with built-in fallbacks. To use the generated meshes and the soundtrack, upload
-them once (needs an Open Cloud API key, see [docs/ASSETS.md](docs/ASSETS.md)):
+| type | params |
+|---|---|
+| `max_position_weight` | `limit`, `exclude_asset_classes` |
+| `max_group_weight` | `dimension`, `limit`, `bucket` (optional), `include_cash` |
+| `min_group_weight` | `dimension`, `bucket`, `limit` |
+| `max_issuer_weight` | `limit`, `exclude_sectors` (e.g. exempt `Government`) |
+| `restricted_list` | `tickers` |
+| `min_cash_weight` / `max_cash_weight` | `limit` |
+| `no_short_positions` / `no_negative_cash` | – |
 
-```sh
-python3 tools/upload_assets.py --user-id <the game owner's user id>
+Adding a rule type is one decorated function in `rules.py`. An unknown rule type evaluates as a hard
+breach rather than silently passing.
+
+**Pre-trade logic**: breaches are evaluated before and after the proposed trade. A hard breach that
+is *introduced or worsened* blocks the order. A breach that already existed and is not made worse
+is reported but does not block, so a portfolio already over a limit can still trade back into line.
+Every check is recorded in `compliance_checks`.
+
+### Trading (`lantern/trading`)
+`create_order` runs pre-trade compliance and returns the order as `APPROVED` or `REJECTED` (with
+the breach messages as the reason). `fill_order` accepts partial fills, enforces limit prices, writes
+a `Trade` to the ledger, and tracks average fill price. `cancel_order`, `blotter`. Every status
+transition writes an `audit_events` row with actor and detail.
+
+## REST API
+
+Start with `lantern serve` and open `/docs`. Main endpoints:
+
+```
+GET  /portfolios/{id}/positions?as_of=            valued holdings
+GET  /portfolios/{id}/exposures?dimension=sector  bucketed exposure
+GET  /portfolios/{id}/active?dimension=           vs benchmark (security level if omitted)
+POST /portfolios/{id}/whatif                      before/after for proposed trades
+GET  /portfolios/{id}/risk/report                 everything below in one call
+GET  /portfolios/{id}/risk/var?confidence=&horizon_days=
+GET  /portfolios/{id}/risk/stress                 predefined scenarios
+POST /portfolios/{id}/risk/stress                 custom scenarios
+GET  /portfolios/{id}/risk/factors
+GET  /portfolios/{id}/risk/fixed-income
+GET  /portfolios/{id}/compliance                  post-trade check
+POST /portfolios/{id}/compliance/pre-trade        dry run, nothing recorded
+GET  /portfolios/{id}/compliance/history
+GET/POST /compliance/rules, PATCH /compliance/rules/{id}, GET /compliance/rule-types
+POST /orders  ·  GET /orders  ·  GET /orders/{id}  ·  POST /orders/{id}/fills  ·  POST /orders/{id}/cancel
+GET/POST /securities  ·  POST /prices  ·  POST /fx  ·  GET/POST /benchmarks
+POST /portfolios/{id}/trades (book external trades)  ·  POST /portfolios/{id}/cashflows
+GET  /audit
 ```
 
-## Adding mini-games
+Errors map to HTTP status: not found → 404, bad input → 400, order-state conflicts → 409.
 
-```sh
-lune run tools/new-minigame HotPotato "Hot Potato" Survival
-```
+## Demo data
 
-That one command creates a working mode and registers it. Then set
-`Config.Debug.ForceGame = "HotPotato"` to test just that mode in Studio. The full guide is in
-[docs/ADDING_MINIGAMES.md](docs/ADDING_MINIGAMES.md), and the idea backlog is in
-[docs/MINIGAME_IDEAS.md](docs/MINIGAME_IDEAS.md).
+`lantern seed-demo` builds a deterministic universe: 12 US equities across 9 sectors, 3 EUR
+equities, 4 bonds (two Treasuries, an IG corporate, a HY corporate), a commodity ETF and one
+restricted tobacco name. Prices are generated from a **known** five-factor model (market, rates,
+credit, size, EURUSD), which is what lets the test suite check that the factor estimator recovers
+the betas that produced the data. Two portfolios (a global balanced fund against a 60/40 benchmark,
+a US growth fund against an equal-weight index), eleven compliance rules, and three orders in
+different states (approved, rejected by the restricted list, filled).
 
-## Project layout
+Replace it with real data by loading `securities`, `prices`, `fx_rates`, `cash_flows` and `trades`
+through the API or directly into the tables.
 
-```
-src/
-  shared/            ReplicatedStorage.Shared: config, definitions, catalogs, pure logic
-    Logic/           vote tally, game picker, placements, rewards, levels, quests, daily (unit tested)
-  server/            ServerScriptService.Server
-    Services/        Data, Rewards, Quests, Shop, Voting, RoundManager, RoundContext, Lobby, ...
-    MiniGames/       one module per mode (auto-discovered) + Kit/ (MiniGame base, ArenaKit, Glove)
-    World/           Build, Shapes (CSG), MeshLibrary, LobbyBuilder, Environment (terrain/sky)
-  client/            StarterPlayerScripts.Client
-    Controllers/     HUD, Vote, Round, Results, Shop, Quests, Emotes, Spectate, Audio, Effects, ...
-    UI/              Theme, UIKit, Modal
-assets/              generated meshes (.obj/.glb) and audio (.ogg)
-tools/               mesh generator, music composer, asset uploader, mini-game scaffold
-tests/               Lune unit tests
-docs/                guides and design notes
-```
+## Configuration
 
-## Seeing the game without Studio
+Environment variables, all prefixed `LANTERN_`: `DATABASE_URL`, `BASE_CURRENCY`, `VAR_CONFIDENCE`
+(0.99), `VAR_HORIZON_DAYS` (1), `LOOKBACK_DAYS` (500), `MC_SIMULATIONS` (20000), `MC_SEED` (42).
 
-`tools/preview` runs the lobby builder on a **real Roblox server** (Open Cloud Luau execution, no
-publish needed), dumps every part, the terrain and the lighting, and renders it with Blender:
+## Design notes
 
-```sh
-python3 tools/preview/bundle.py > task.luau                  # working-tree World modules + dump script
-python3 tools/preview/luau_task.py task.luau - dump.json     # run it on Roblox
-python tools/preview/render.py dump.json shots/lobby --views spawn,overview   # needs `pip install bpy`
-```
+- **Single data model.** The reason integrated platforms win over best-of-breed point tools is that
+  risk, compliance and trading all see the same positions at the same instant. Lantern gets that by
+  construction: there is no positions table to fall out of sync.
+- **Point-in-time everywhere.** Every valuation, exposure and risk call takes `as_of`; trades dated
+  after it are ignored, prices are the latest on or before it.
+- **Compliance is a gate, not a report.** Orders cannot be filled unless they were approved, and
+  approval means the pre-trade check ran and was recorded.
+- **Audit by default.** Order transitions, rule changes, booked trades and cash flows all write
+  `audit_events`.
 
-It catches runtime errors and warnings too (CSG failures, missing assets), and it's how the lobby
-layout was checked. `bundle.py my_check.luau` runs any script with the World modules loaded.
+## Roadmap
 
-The portals' game previews are made the same way: `python3 tools/preview/make_preview.py <GameId>`
-plays a round on a test server, renders a looping flyover of the arena and uploads it (see
-[docs/ADDING_MINIGAMES.md](docs/ADDING_MINIGAMES.md), step 8).
-
-## Checks
-
-```sh
-lune run tests/run          # unit tests (vote logic, picker, rewards, quests, registry...)
-selene src tests            # lint
-stylua --check src tests    # formatting
-```
-
-The screens are checked on phones, a tablet and PC by running the whole client on a real Roblox
-server, which lays the UI out with the engine itself at each screen size (fonts loaded, real text
-measurements), then drawing every screen with Roblox's own buttons, the thumbstick and the jump
-button on top and listing text that's cut off or wraps, text under 11 pt on phones, small touch
-targets, overlaps and anything in the thumbstick's corner:
-
-```sh
-python3 tools/checks/client_harness.py --touch --bots 8 > client.luau   # leave out --touch for PC
-python3 tools/preview/luau_task.py client.luau - client.json
-python3 tools/checks/ui_render.py client.json /tmp/screens              # PNGs + the problem list
-```
-
-Add `--sit-out` to draw the screens of a player sitting out instead (next to the playing ones).
-
-Type checking uses [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp) with the Roblox API
-definitions:
-
-```sh
-rojo sourcemap -o sourcemap.json
-luau-lsp analyze --definitions=@roblox=globalTypes.d.luau --sourcemap=sourcemap.json src
-```
-
-## Status and honest caveats
-
-- The whole codebase type-checks against the current Roblox API (0 errors) and passes lint, format
-  and unit tests, and the place builds with Rojo. Every mini-game is checked on a real Roblox
-  server (12 players, real bots, phone screens; see Checks), but those servers have no physics, so
-  movement feel, knockbacks and timings are only proven by playing: expect tuning after playtests.
-- Balancing values (rewards, prices, timings) are the design outline's starting points. Tune them
-  in `src/shared/Config.luau` and `src/shared/Cosmetics.luau`.
-- Knockback is applied by the victim's client, because each client simulates its own character.
-  The server decides who gets hit, how hard and when.
+Next steps in rough priority order: a web dashboard (exposures, risk, blotter); real market-data
+adapters; performance attribution (Brinson, and factor-based); settlement and custodian
+reconciliation; multi-user auth with roles (PM / trader / compliance officer); scheduled end-of-day
+risk and compliance runs with alerting; Postgres migrations via Alembic.

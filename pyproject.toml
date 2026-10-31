@@ -1,0 +1,49 @@
+[project]
+name = "lantern"
+version = "0.1.0"
+description = "Portfolio, risk, compliance and order management on one shared book of record."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "sqlalchemy>=2.0",
+  "pydantic>=2.6",
+  "pydantic-settings>=2.2",
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "scipy>=1.12",
+  "typer>=0.12",
+  "rich>=13",
+  "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov", "ruff"]
+
+[project.scripts]
+lantern = "lantern.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["lantern"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# str+Enum keeps enum values JSON/DB friendly; StrEnum would change repr semantics.
+ignore = ["UP042"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+"lantern/marketdata/synthetic.py" = ["E501"]
