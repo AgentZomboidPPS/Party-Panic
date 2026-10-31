@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.engine import Engine
 
 from lantern import __version__
-from lantern.api.routers import compliance, orders, portfolios, risk, securities, system
+from lantern.api.routers import compliance, orders, portfolios, risk, securities, signals, system
 from lantern.config import settings
 from lantern.db import init_db, make_engine, make_session_factory
 from lantern.trading.oms import OrderError
@@ -36,7 +36,7 @@ def create_app(database_url: str | None = None, engine: Engine | None = None) ->
         return JSONResponse(status_code=409, content={"detail": str(exc)})
 
     for r in (system.router, securities.router, portfolios.router, risk.router, risk.scenarios_router,
-              compliance.router, orders.router):
+              compliance.router, orders.router, signals.router, signals.dashboard_router):
         app.include_router(r)
     return app
 

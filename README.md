@@ -1,6 +1,7 @@
 # Lantern
 
-Portfolio management, risk analytics, pre-trade compliance and order management on **one shared
+Portfolio management, risk analytics, pre-trade compliance, order management and an
+alternative-data **signals** layer (public conversation + prediction markets) on **one shared
 book of record**. Every module reads the same securities, prices, FX, trades and cash flows, so the
 portfolio manager, the risk team, compliance and the trading desk never disagree about what is held.
 
@@ -47,7 +48,8 @@ lantern serve                # REST API with interactive docs at http://127.0.0.
 Point at another database with `--db postgresql://...` or `LANTERN_DATABASE_URL=...`. SQLite is the
 default for development; the schema is plain SQLAlchemy and runs unchanged on Postgres.
 
-Run the tests with `pytest` (41 tests, ~10 s). Lint with `ruff check lantern tests`.
+Run the tests with `pytest` (57 tests, ~1 min; most of it is seeding synthetic social history).
+Lint with `ruff check lantern tests`.
 
 ## What each module does
 
@@ -99,6 +101,64 @@ the breach messages as the reason). `fill_order` accepts partial fills, enforces
 a `Trade` to the ledger, and tracks average fill price. `cancel_order`, `blotter`. Every status
 transition writes an `audit_events` row with actor and detail.
 
+### Signals (`lantern/signals`) — what the crowd is saying, made tradeable
+
+```
+sources ──► screening ──► NLP ──► store ──► aggregation ──► signals ──► backtest / paper strategy
+bluesky     bots, spam    sentiment          topic bubbles   z-scores      IC, long/short, OMS orders
+reddit      bursts        fear vocabulary    sentiment bars                      │
+stocktwits  duplicates    ticker + alias     fear index                          ▼
+rss, x      coordination  extraction         market snapshots              /dashboard (live viewer)
+kalshi
+polymarket
+```
+
+- **Sources** (`sources/`): Bluesky public firehose (Jetstream websocket, no key), Reddit, Stocktwits,
+  RSS news, X recent search (needs a paid bearer token), Kalshi and Polymarket market data, plus
+  `synthetic` (offline demo stream) and `replay` (JSONL recordings). Adding a source is one class
+  with an `async run(emit, stop)`.
+  *The live adapters are written to the documented APIs but have not been exercised from this
+  repository's build environment, which has no outbound network.* Facebook and Instagram do not
+  expose public conversation to third parties and are deliberately absent.
+- **Screening** (`screening.py`): a post's quality is the product of independent heuristics —
+  text shape (stuffing, link-only, shouting), author burst rate, self-duplication (SimHash),
+  cross-author coordination (same text from many accounts in minutes), and account metadata when
+  the source provides it. Below 0.35 a post is kept but excluded from every aggregate, so the
+  screening itself is auditable. On the demo stream the bot population is caught with zero human
+  posts screened out.
+- **NLP** (`nlp.py`): VADER with a finance lexicon, a fear vocabulary, cashtag + company-name
+  extraction mapped to the securities table, and topic clustering (agglomerative on TF-IDF cosine
+  for ordinary windows, mini-batch k-means for firehose-sized ones).
+- **Aggregation** (`aggregate.py`): per-window **topic bubbles** (volume, unique authors, sentiment,
+  fear share, velocity vs. the matching topic in the previous window), per-security **sentiment
+  bars** with attention and sentiment z-scores against the security's own history, a **fear
+  index**, and prediction-market snapshots with 24h change.
+- **Signals & evaluation** (`signals.py`): daily signal matrix; **information coefficient** (daily
+  cross-sectional rank correlation with forward returns, with t-stat and hit rate) and a
+  **long/short backtest**; a **paper strategy** that trades the top names inside a sleeve of a
+  portfolio *through the OMS*, so compliance can reject it like any other order.
+
+```bash
+lantern seed-social                  # synthetic history aligned to the demo prices (daily bubbles + bars)
+lantern bubbles · lantern sentiment · lantern markets
+lantern backtest                     # does the signal predict returns? IC + long/short
+lantern paper-trade 2 --fill         # trade it on paper through compliance
+lantern ingest --sources synthetic --minutes 5 --topic-window 1   # live pipeline, then open /dashboard
+lantern ingest --sources bluesky,kalshi,polymarket --keywords stocks,market,fed   # real data (needs network)
+```
+
+**On "edge".** The synthetic stream has a dial, `--ic` (default 0.03, roughly what good
+alternative data delivers), that sets how much next-day return leaks into post sentiment. The
+tests check that the backtester finds it when it is there and finds nothing when it is zero. On
+real data the edge is whatever the IC says it is; the tooling is built so you find that out
+before any capital does.
+
+**Privacy and licensing.** Only aggregates leave the signals layer. Author identity is reduced
+to a salted hash used for screening and de-duplication; no handles, names or profiles are stored,
+and post text is kept only for the aggregation window. Platform terms generally forbid
+redistributing raw content; derived aggregates (sentiment, attention, topic velocity) are the
+sellable product, and a data-licensing review is still part of commercialising them.
+
 ## REST API
 
 Start with `lantern serve` and open `/docs`. Main endpoints:
@@ -122,6 +182,11 @@ POST /orders  ·  GET /orders  ·  GET /orders/{id}  ·  POST /orders/{id}/fills
 GET/POST /securities  ·  POST /prices  ·  POST /fx  ·  GET/POST /benchmarks
 POST /portfolios/{id}/trades (book external trades)  ·  POST /portfolios/{id}/cashflows
 GET  /audit
+GET  /dashboard                                   live signals viewer (bubbles, sentiment, markets, fear)
+GET  /signals/status · /signals/bubbles · /signals/bubbles/history?hours=
+GET  /signals/sentiment · /signals/sentiment/{ticker} · /signals/fear · /signals/markets
+GET  /signals/backtest?start=&end=&horizon=&signal=
+POST /signals/paper-trade/{portfolio_id}?top_n=&sleeve=&fill=
 ```
 
 Errors map to HTTP status: not found → 404, bad input → 400, order-state conflicts → 409.
@@ -158,7 +223,9 @@ Environment variables, all prefixed `LANTERN_`: `DATABASE_URL`, `BASE_CURRENCY`,
 
 ## Roadmap
 
-Next steps in rough priority order: a web dashboard (exposures, risk, blotter); real market-data
-adapters; performance attribution (Brinson, and factor-based); settlement and custodian
-reconciliation; multi-user auth with roles (PM / trader / compliance officer); scheduled end-of-day
-risk and compliance runs with alerting; Postgres migrations via Alembic.
+Next steps in rough priority order: run the live source adapters against the real APIs and
+record a replay fixture; extend the dashboard to exposures, risk and the blotter; real market-data
+adapters; a transformer sentiment model calibrated on Stocktwits labels; performance attribution
+(Brinson, and factor-based); settlement and custodian reconciliation; multi-user auth with roles
+(PM / trader / compliance officer); scheduled end-of-day risk and compliance runs with alerting;
+Postgres migrations via Alembic; a data-licensing review before selling derived signals.

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lantern · Signals</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+    --s1: #2a78d6; --s1-soft: #86b6ef; --pos: #2a78d6; --neg: #e34948; --mid: #f0efec;
+    --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s1-soft: #1c5cab; --pos: #3987e5; --neg: #e66767; --mid: #383835;
+  } }
+  :root[data-theme="dark"] {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s1-soft: #1c5cab; --pos: #3987e5; --neg: #e66767; --mid: #383835;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: baseline; gap: 16px; padding: 18px 24px 6px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { color: var(--ink-2); font-size: 13px; }
+  header .right { margin-left: auto; display: flex; gap: 12px; align-items: center; color: var(--ink-2); font-size: 13px; }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--ink-2); border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; }
+  main { padding: 8px 24px 32px; display: grid; gap: 16px; grid-template-columns: repeat(12, 1fr); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+  .card h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0 0 10px; letter-spacing: 0.01em; }
+  .tiles { grid-column: span 12; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .tile .v { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+  .tile .l { color: var(--ink-2); font-size: 12px; }
+  .tile .d { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .bubbles { grid-column: span 8; }
+  .side { grid-column: span 4; display: grid; gap: 16px; align-content: start; }
+  .wide { grid-column: span 12; }
+  .half { grid-column: span 6; }
+  svg text { fill: var(--ink-2); font-size: 11px; }
+  svg .grid { stroke: var(--grid); stroke-width: 1; }
+  svg .axis { stroke: var(--axis); stroke-width: 1; }
+  svg .bubble { fill: var(--s1); fill-opacity: 0.55; stroke: var(--surface); stroke-width: 2; pointer-events: none; }
+  svg .bubble.hot { fill-opacity: 0.9; }
+  svg .hit { fill: transparent; cursor: pointer; }
+  svg .lbl { fill: var(--ink); font-size: 11px; pointer-events: none; }
+  svg .lbl.sub { fill: var(--muted); font-size: 10px; }
+  .tip { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border);
+         border-radius: 8px; padding: 8px 10px; font-size: 12px; max-width: 320px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); display: none; z-index: 10; }
+  .tip .k { color: var(--ink-2); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 4px 6px; border-bottom: 1px solid var(--grid); }
+  td { padding: 5px 6px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  td.num, th.num { text-align: right; }
+  .bar { display: inline-block; height: 10px; border-radius: 4px; vertical-align: middle; }
+  .bar.pos { background: var(--pos); } .bar.neg { background: var(--neg); }
+  .track { display: inline-flex; width: 140px; height: 10px; align-items: center; position: relative; }
+  .track::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--axis); }
+  .muted { color: var(--muted); }
+  .tag { display: inline-block; font-size: 11px; color: var(--ink-2); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; margin-right: 4px; }
+  .status { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .spark { width: 100%; height: 44px; }
+  .spark path { fill: none; stroke: var(--s1); stroke-width: 2; }
+  .hidden { display: none; }
+  .stale { opacity: 0.6; transition: opacity 0.2s; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lantern · Signals</h1>
+  <span class="sub">Public conversation and prediction markets, screened and aggregated</span>
+  <div class="right">
+    <span id="asof" class="muted">loading…</span>
+    <button class="ghost" id="toggleTable">Table view</button>
+    <button class="ghost" id="toggleTheme">Theme</button>
+  </div>
+</header>
+<main>
+  <section class="tiles">
+    <div class="card tile"><div class="v" id="t-posts">–</div><div class="l">posts in last hour of data</div><div class="d" id="t-posts-d"></div></div>
+    <div class="card tile"><div class="v" id="t-screen">–</div><div class="l">screened out (bots, spam, dupes)</div><div class="d" id="t-screen-d"></div></div>
+    <div class="card tile"><div class="v" id="t-fear">–</div><div class="l">fear index · share of posts using fear vocabulary</div><svg class="spark" id="fear-spark"></svg></div>
+    <div class="card tile"><div class="v" id="t-topics">–</div><div class="l">live topic bubbles</div><div class="d" id="t-topics-d"></div></div>
+    <div class="card tile"><div class="v" id="t-markets">–</div><div class="l">prediction markets tracked</div><div class="d" id="t-markets-d"></div></div>
+  </section>
+
+  <section class="card bubbles">
+    <h2>What people are talking about — bubble size is volume, left/right is sentiment, up/down is how fast it is growing</h2>
+    <svg id="bubble-chart" width="100%" height="460" role="img" aria-label="Topic bubbles: sentiment versus velocity, sized by volume"></svg>
+    <div id="bubble-table" class="hidden"></div>
+  </section>
+
+  <aside class="side">
+    <div class="card">
+      <h2>Sentiment by security — z-score vs. its own recent history</h2>
+      <div id="sentiment-table"></div>
+    </div>
+    <div class="card">
+      <h2>Prediction markets — implied probability</h2>
+      <div id="markets-table"></div>
+    </div>
+  </aside>
+
+  <section class="card wide">
+    <h2>Topic detail</h2>
+    <div id="topic-detail" class="muted">Hover or click a bubble.</div>
+  </section>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const fmtPct = (x, d=0) => x == null ? '–' : (x*100).toFixed(d) + '%';
+const fmtNum = (x) => x == null ? '–' : Number(x).toLocaleString();
+const fmtZ = (x) => x == null ? '–' : (x >= 0 ? '+' : '') + x.toFixed(2);
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let tableMode = false;
+let lastTopics = [];
+
+async function getJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error(url + ' ' + r.status); return r.json(); }
+
+function spark(svg, values) {
+  const w = svg.clientWidth || 200, h = 44, pad = 3;
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  if (!values.length) { svg.innerHTML = ''; return; }
+  const min = Math.min(...values), max = Math.max(...values), rng = (max - min) || 1;
+  const pts = values.map((v, i) => [pad + i * (w - 2*pad) / Math.max(values.length - 1, 1), h - pad - (v - min) / rng * (h - 2*pad)]);
+  svg.innerHTML = `<path d="M${pts.map(p => p.map(n => n.toFixed(1)).join(',')).join('L')}"/>`;
+}
+
+function drawBubbles(topics) {
+  const svg = $('#bubble-chart');
+  const W = svg.clientWidth || 800, H = 460, m = {l: 44, r: 20, t: 16, b: 36};
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  if (!topics.length) { svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle">No topics yet — run \`lantern ingest\` or \`lantern seed-social\`.</text>`; return; }
+  const x = (s) => m.l + (Math.max(-1, Math.min(1, s)) + 1) / 2 * (W - m.l - m.r);
+  const vClamp = (v) => Math.max(-1, Math.min(3, v));
+  const y = (v) => m.t + (3 - vClamp(v)) / 4 * (H - m.t - m.b);
+  const maxVol = Math.max(...topics.map(t => t.volume));
+  const r = (v) => 6 + 44 * Math.sqrt(v / maxVol);
+  let g = '';
+  // grid: sentiment ticks and velocity ticks (solid hairlines)
+  [-1, -0.5, 0, 0.5, 1].forEach(s => { g += `<line class="${s===0?'axis':'grid'}" x1="${x(s)}" x2="${x(s)}" y1="${m.t}" y2="${H-m.b}"/>`;
+    g += `<text x="${x(s)}" y="${H-m.b+16}" text-anchor="middle">${s>0?'+':''}${s.toFixed(1)}</text>`; });
+  [-1, 0, 1, 2, 3].forEach(v => { g += `<line class="${v===0?'axis':'grid'}" x1="${m.l}" x2="${W-m.r}" y1="${y(v)}" y2="${y(v)}"/>`;
+    g += `<text x="${m.l-6}" y="${y(v)+4}" text-anchor="end">${v===3?'≥3×':(v>0?'+':'')+v+'×'}</text>`; });
+  g += `<text x="${W-m.r}" y="${H-m.b+30}" text-anchor="end">sentiment →</text>`;
+  g += `<text x="${m.l}" y="${m.t-4}" text-anchor="start">velocity vs previous window ↑</text>`;
+  const sorted = [...topics].sort((a,b) => b.volume - a.volume);
+  const geo = sorted.map(t => ({ t, cx: x(t.sentiment_mean), cy: y(t.velocity), rr: r(t.volume) }));
+  geo.forEach(({t, cx, cy, rr}) => { g += `<circle class="bubble" data-id="${t.id}" cx="${cx}" cy="${cy}" r="${rr}"/>`; });
+  // Direct labels for the biggest bubbles only, placed above or below, skipped when they would
+  // overlap an already-placed label. Everything is still in the tooltip and the table view.
+  const placed = [];
+  const overlaps = (b) => placed.some(p => !(b.x2 < p.x1 || b.x1 > p.x2 || b.y2 < p.y1 || b.y1 > p.y2));
+  sorted.slice(0, 8).forEach(t => {
+    const cx = x(t.sentiment_mean), cy = y(t.velocity), rr = r(t.volume);
+    const w = t.label.length * 6.2 + 8, h = 14;
+    for (const ly of [cy - rr - 6, cy + rr + 14]) {
+      const box = { x1: Math.max(m.l, Math.min(cx - w/2, W - m.r - w)), y1: ly - 11, x2: 0, y2: ly + 3 };
+      box.x2 = box.x1 + w;
+      if (box.y1 < m.t || box.y2 > H - m.b || overlaps(box)) continue;
+      placed.push(box);
+      g += `<text class="lbl" x="${box.x1 + w/2}" y="${ly}" text-anchor="middle">${esc(t.label)}</text>`;
+      break;
+    }
+    if (rr >= 16) g += `<text class="lbl sub" x="${cx}" y="${cy + 4}" text-anchor="middle">${t.volume}</text>`;
+  });
+  // One transparent overlay; the pointer picks the nearest bubble (by distance scaled to its
+  // radius) within a generous reach, so small bubbles never hide big ones and every bubble has a
+  // hit target of at least ~24px.
+  g += `<rect class="hit" x="${m.l}" y="${m.t}" width="${W-m.l-m.r}" height="${H-m.t-m.b}"/>`;
+  svg.innerHTML = g;
+  const tip = $('#tip');
+  const pick = (e) => {
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+    let best = null, bestScore = Infinity;
+    geo.forEach(gg => { const d = Math.hypot(p.x - gg.cx, p.y - gg.cy); const reach = Math.max(gg.rr, 12) + 6;
+      const score = d / reach; if (d <= reach && score < bestScore) { bestScore = score; best = gg.t; } });
+    return best;
+  };
+  const overlay = svg.querySelector('rect.hit');
+  overlay.addEventListener('mousemove', (e) => {
+    const t = pick(e);
+    svg.querySelectorAll('.bubble').forEach(b => b.classList.toggle('hot', !!t && b.dataset.id == t.id));
+    if (!t) { tip.style.display = 'none'; return; }
+    tip.style.display = 'block'; tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px';
+    tip.innerHTML = `<b>${esc(t.label)}</b><br><span class="k">volume</span> ${t.volume} · <span class="k">authors</span> ${t.unique_authors}<br>
+      <span class="k">sentiment</span> ${fmtZ(t.sentiment_mean)} · <span class="k">velocity</span> ${t.velocity>=0?'+':''}${(t.velocity*100).toFixed(0)}% · <span class="k">fear</span> ${fmtPct(t.fear_share)}<br>
+      <span class="k">tickers</span> ${(t.tickers||[]).map(x => x[0]).join(', ') || '–'}`;
+  });
+  overlay.addEventListener('mouseleave', () => { tip.style.display = 'none'; svg.querySelectorAll('.bubble').forEach(b => b.classList.remove('hot')); });
+  overlay.addEventListener('click', (e) => { const t = pick(e); if (t) showTopic(t); });
+  $('#bubble-table').innerHTML = `<table><thead><tr><th>topic</th><th class="num">volume</th><th class="num">authors</th><th class="num">sentiment</th><th class="num">velocity</th><th class="num">fear</th><th>tickers</th></tr></thead><tbody>` +
+    sorted.map(t => `<tr><td>${esc(t.label)}</td><td class="num">${t.volume}</td><td class="num">${t.unique_authors}</td><td class="num">${fmtZ(t.sentiment_mean)}</td><td class="num">${(t.velocity*100).toFixed(0)}%</td><td class="num">${fmtPct(t.fear_share)}</td><td>${(t.tickers||[]).map(x=>x[0]).join(', ')}</td></tr>`).join('') + '</tbody></table>';
+}
+
+function showTopic(t) {
+  $('#topic-detail').className = '';
+  $('#topic-detail').innerHTML = `<b>${esc(t.label)}</b> &nbsp; ${(t.keywords||[]).map(k => `<span class="tag">${esc(k)}</span>`).join('')}
+    <div class="muted" style="margin:6px 0">${t.volume} posts from ${t.unique_authors} authors · sentiment ${fmtZ(t.sentiment_mean)} · fear ${fmtPct(t.fear_share)} · window ${esc(t.window_start.replace('T',' '))} → ${esc(t.window_end.slice(11,16))}</div>
+    <ul style="margin:4px 0 0 18px">${(t.sample||[]).map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
+}
+
+function sentimentTable(rows) {
+  rows = rows.filter(r => r.sentiment_z != null).sort((a,b) => Math.abs(b.sentiment_z) - Math.abs(a.sentiment_z)).slice(0, 12);
+  if (!rows.length) { $('#sentiment-table').innerHTML = '<div class="muted">No sentiment bars yet.</div>'; return; }
+  const scale = Math.max(2, ...rows.map(r => Math.abs(r.sentiment_z)));
+  $('#sentiment-table').innerHTML = `<table><thead><tr><th>ticker</th><th>sentiment z</th><th class="num">z</th><th class="num">attention z</th><th class="num">posts</th></tr></thead><tbody>` +
+    rows.map(r => { const w = Math.abs(r.sentiment_z) / scale * 70; const pos = r.sentiment_z >= 0;
+      return `<tr><td><b>${esc(r.ticker)}</b></td><td><span class="track"><span class="bar ${pos?'pos':'neg'}" style="width:${w}px;margin-left:${pos?70:70-w}px"></span></span></td>
+        <td class="num">${fmtZ(r.sentiment_z)}</td><td class="num">${fmtZ(r.attention_z)}</td><td class="num">${r.n_posts}</td></tr>`; }).join('') + '</tbody></table>';
+}
+
+function marketsTable(rows) {
+  if (!rows.length) { $('#markets-table').innerHTML = '<div class="muted">No market snapshots yet.</div>'; return; }
+  $('#markets-table').innerHTML = `<table><thead><tr><th>market</th><th class="num">yes</th><th class="num">24h</th></tr></thead><tbody>` +
+    rows.slice(0, 10).map(r => `<tr><td>${esc(r.title)}<br><span class="muted">${esc(r.source)}${r.category ? ' · ' + esc(r.category) : ''}</span></td>
+      <td class="num"><b>${fmtPct(r.yes_price)}</b></td><td class="num">${r.change_24h == null ? '–' : (r.change_24h>=0?'+':'') + (r.change_24h*100).toFixed(1) + ' pts'}</td></tr>`).join('') + '</tbody></table>';
+}
+
+async function refresh() {
+  document.body.classList.add('stale');
+  try {
+    const [status, bubbles, sent, mkts, fear] = await Promise.all([
+      getJSON('/signals/status'), getJSON('/signals/bubbles'), getJSON('/signals/sentiment'), getJSON('/signals/markets'), getJSON('/signals/fear')]);
+    $('#t-posts').textContent = fmtNum(status.posts_last_hour);
+    $('#t-posts-d').textContent = `${fmtNum(status.posts_total)} total · ${Object.entries(status.by_source).map(([k,v]) => k + ' ' + fmtNum(v)).join(', ')}`;
+    $('#t-screen').textContent = fmtPct(status.screened_share, 1);
+    $('#t-screen-d').textContent = Object.entries(status.screen_reasons).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v]) => `${k} ${fmtNum(v)}`).join(' · ');
+    $('#t-fear').textContent = fmtPct(fear.latest, 1);
+    spark($('#fear-spark'), (fear.series||[]).map(p => p.fear));
+    $('#t-topics').textContent = bubbles.topics.length;
+    $('#t-topics-d').textContent = bubbles.window_end ? `window ending ${bubbles.window_end.replace('T',' ').slice(0,16)} UTC` : '';
+    $('#t-markets').textContent = status.prediction_markets;
+    $('#t-markets-d').textContent = mkts.length ? `latest ${mkts[0].snapshot_at.replace('T',' ').slice(0,16)} UTC` : '';
+    $('#asof').textContent = status.last_post_at ? `data through ${status.last_post_at.replace('T',' ').slice(0,19)} UTC` : 'no data';
+    lastTopics = bubbles.topics;
+    drawBubbles(bubbles.topics);
+    sentimentTable(sent);
+    marketsTable(mkts);
+  } catch (e) { $('#asof').textContent = 'error: ' + e.message; }
+  document.body.classList.remove('stale');
+}
+
+$('#toggleTable').addEventListener('click', () => { tableMode = !tableMode;
+  $('#bubble-chart').classList.toggle('hidden', tableMode); $('#bubble-table').classList.toggle('hidden', !tableMode);
+  $('#toggleTable').textContent = tableMode ? 'Chart view' : 'Table view'; });
+$('#toggleTheme').addEventListener('click', () => { const r = document.documentElement; const cur = r.getAttribute('data-theme');
+  const dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; r.setAttribute('data-theme', dark ? 'light' : 'dark'); });
+window.addEventListener('resize', () => drawBubbles(lastTopics));
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>
