@@ -223,7 +223,12 @@ def test_signals_api(sclient):
     pt = sclient.post("/signals/paper-trade/1", params={"top_n": 2, "min_score": 0.0}).json()
     assert "orders" in pt
     html = sclient.get("/dashboard")
-    assert html.status_code == 200 and "bubble-chart" in html.text
+    assert html.status_code == 200 and "bubble-chart" in html.text and "view-portfolio" in html.text
+    # Every endpoint the portfolio view calls must answer for the demo portfolios.
+    for url in ("/portfolios/1/active?dimension=asset_class", "/portfolios/1/active?dimension=sector",
+                "/portfolios/1/risk/var", "/portfolios/1/risk/stress", "/portfolios/1/compliance",
+                "/orders?portfolio_id=1&limit=12", "/securities"):
+        assert sclient.get(url).status_code == 200, url
 
 
 def test_topic_count_matches_windows(social):

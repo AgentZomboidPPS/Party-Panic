@@ -3,32 +3,35 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lantern · Signals</title>
+<title>Lantern</title>
 <style>
   :root {
     color-scheme: light dark;
     --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
     --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
-    --s1: #2a78d6; --s1-soft: #86b6ef; --pos: #2a78d6; --neg: #e34948; --mid: #f0efec;
+    --s1: #2a78d6; --s2: #eb6834; --pos: #2a78d6; --neg: #e34948; --mid: #f0efec;
     --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --critical: #d03b3b;
   }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
     --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
     --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-    --s1: #3987e5; --s1-soft: #1c5cab; --pos: #3987e5; --neg: #e66767; --mid: #383835;
+    --s1: #3987e5; --s2: #d95926; --pos: #3987e5; --neg: #e66767; --mid: #383835;
   } }
   :root[data-theme="dark"] {
     --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
     --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-    --s1: #3987e5; --s1-soft: #1c5cab; --pos: #3987e5; --neg: #e66767; --mid: #383835;
+    --s1: #3987e5; --s2: #d95926; --pos: #3987e5; --neg: #e66767; --mid: #383835;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { display: flex; align-items: baseline; gap: 16px; padding: 18px 24px 6px; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px 6px; flex-wrap: wrap; }
   header h1 { font-size: 18px; margin: 0; font-weight: 600; }
-  header .sub { color: var(--ink-2); font-size: 13px; }
+  nav { display: flex; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+  nav button { background: transparent; border: 0; color: var(--ink-2); border-radius: 6px; padding: 4px 12px; cursor: pointer; font: inherit; }
+  nav button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
   header .right { margin-left: auto; display: flex; gap: 12px; align-items: center; color: var(--ink-2); font-size: 13px; }
-  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--ink-2); border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; }
+  button.ghost, select { background: transparent; border: 1px solid var(--border); color: var(--ink-2); border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; }
+  select { color: var(--ink); }
   main { padding: 8px 24px 32px; display: grid; gap: 16px; grid-template-columns: repeat(12, 1fr); }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
   .card h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0 0 10px; letter-spacing: 0.01em; }
@@ -36,10 +39,8 @@
   .tile .v { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
   .tile .l { color: var(--ink-2); font-size: 12px; }
   .tile .d { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .bubbles { grid-column: span 8; }
+  .c8 { grid-column: span 8; } .c4 { grid-column: span 4; } .c6 { grid-column: span 6; } .c12 { grid-column: span 12; }
   .side { grid-column: span 4; display: grid; gap: 16px; align-content: start; }
-  .wide { grid-column: span 12; }
-  .half { grid-column: span 6; }
   svg text { fill: var(--ink-2); font-size: 11px; }
   svg .grid { stroke: var(--grid); stroke-width: 1; }
   svg .axis { stroke: var(--axis); stroke-width: 1; }
@@ -52,34 +53,95 @@
          border-radius: 8px; padding: 8px 10px; font-size: 12px; max-width: 320px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); display: none; z-index: 10; }
   .tip .k { color: var(--ink-2); }
   table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 4px 6px; border-bottom: 1px solid var(--grid); }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 4px 6px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
   td { padding: 5px 6px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
   td.num, th.num { text-align: right; }
+  tr.hover:hover td { background: color-mix(in srgb, var(--ink) 4%, transparent); }
   .bar { display: inline-block; height: 10px; border-radius: 4px; vertical-align: middle; }
-  .bar.pos { background: var(--pos); } .bar.neg { background: var(--neg); }
+  .bar.pos { background: var(--pos); } .bar.neg { background: var(--neg); } .bar.s1 { background: var(--s1); } .bar.s2 { background: var(--s2); }
   .track { display: inline-flex; width: 140px; height: 10px; align-items: center; position: relative; }
-  .track::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--axis); }
+  .track.div::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--axis); }
+  .stack { display: flex; flex-direction: column; gap: 2px; width: 160px; }
   .muted { color: var(--muted); }
   .tag { display: inline-block; font-size: 11px; color: var(--ink-2); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; margin-right: 4px; }
-  .status { display: inline-flex; align-items: center; gap: 6px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--ink-2); margin: 0 0 8px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+  .status .ic { width: 16px; height: 16px; border-radius: 50%; display: inline-grid; place-items: center; color: #fff; font-size: 11px; }
+  .status.ok .ic { background: var(--good); } .status.bad .ic { background: var(--critical); } .status.warn .ic { background: var(--warn); color: #0b0b0b; }
+  .sev { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; color: #fff; }
+  .sev.HARD { background: var(--critical); } .sev.SOFT { background: var(--warn); color: #0b0b0b; }
   .spark { width: 100%; height: 44px; }
   .spark path { fill: none; stroke: var(--s1); stroke-width: 2; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
   .stale { opacity: 0.6; transition: opacity 0.2s; }
+  .pill { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-2); }
 </style>
 </head>
 <body>
 <header>
-  <h1>Lantern · Signals</h1>
-  <span class="sub">Public conversation and prediction markets, screened and aggregated</span>
+  <h1>Lantern</h1>
+  <nav>
+    <button id="nav-portfolio" class="on">Portfolio</button>
+    <button id="nav-signals">Signals</button>
+  </nav>
+  <select id="portfolio-select" title="Portfolio"></select>
   <div class="right">
     <span id="asof" class="muted">loading…</span>
     <button class="ghost" id="toggleTable">Table view</button>
     <button class="ghost" id="toggleTheme">Theme</button>
   </div>
 </header>
-<main>
+
+<!-- ============================================================ PORTFOLIO VIEW -->
+<main id="view-portfolio">
+  <section class="tiles">
+    <div class="card tile"><div class="v" id="p-nav">–</div><div class="l">net asset value</div><div class="d" id="p-nav-d"></div></div>
+    <div class="card tile"><div class="v" id="p-var">–</div><div class="l">1-day VaR 99% (parametric)</div><div class="d" id="p-var-d"></div></div>
+    <div class="card tile"><div class="v" id="p-vol">–</div><div class="l">annualised volatility</div><div class="d" id="p-vol-d"></div></div>
+    <div class="card tile"><div class="v" id="p-comp">–</div><div class="l">compliance</div><div class="d" id="p-comp-d"></div></div>
+    <div class="card tile"><div class="v" id="p-orders">–</div><div class="l">open orders</div><div class="d" id="p-orders-d"></div></div>
+  </section>
+
+  <section class="card c8">
+    <h2>Holdings — with the crowd's current read on each one</h2>
+    <div id="holdings"></div>
+  </section>
+  <aside class="side">
+    <div class="card">
+      <h2>Asset class vs benchmark</h2>
+      <div class="legend"><span><i style="background:var(--s1)"></i>portfolio</span><span><i style="background:var(--s2)"></i>benchmark</span></div>
+      <div id="exposure-ac"></div>
+    </div>
+    <div class="card">
+      <h2>Sector — active weight vs benchmark</h2>
+      <div id="exposure-sector"></div>
+    </div>
+  </aside>
+
+  <section class="card c6">
+    <h2>Value at risk — three estimators</h2>
+    <div id="var-table"></div>
+    <h2 style="margin-top:14px">Component VaR — who carries the risk</h2>
+    <div id="component-var"></div>
+  </section>
+  <section class="card c6">
+    <h2>Stress scenarios — instantaneous P&amp;L</h2>
+    <div id="stress-table"></div>
+  </section>
+
+  <section class="card c6">
+    <h2>Compliance — every active rule against current holdings</h2>
+    <div id="compliance-table"></div>
+  </section>
+  <section class="card c6">
+    <h2>Order blotter</h2>
+    <div id="blotter"></div>
+  </section>
+</main>
+
+<!-- ============================================================ SIGNALS VIEW -->
+<main id="view-signals" class="hidden">
   <section class="tiles">
     <div class="card tile"><div class="v" id="t-posts">–</div><div class="l">posts in last hour of data</div><div class="d" id="t-posts-d"></div></div>
     <div class="card tile"><div class="v" id="t-screen">–</div><div class="l">screened out (bots, spam, dupes)</div><div class="d" id="t-screen-d"></div></div>
@@ -88,7 +150,7 @@
     <div class="card tile"><div class="v" id="t-markets">–</div><div class="l">prediction markets tracked</div><div class="d" id="t-markets-d"></div></div>
   </section>
 
-  <section class="card bubbles">
+  <section class="card c8">
     <h2>What people are talking about — bubble size is volume, left/right is sentiment, up/down is how fast it is growing</h2>
     <svg id="bubble-chart" width="100%" height="460" role="img" aria-label="Topic bubbles: sentiment versus velocity, sized by volume"></svg>
     <div id="bubble-table" class="hidden"></div>
@@ -105,7 +167,7 @@
     </div>
   </aside>
 
-  <section class="card wide">
+  <section class="card c12">
     <h2>Topic detail</h2>
     <div id="topic-detail" class="muted">Hover or click a bubble.</div>
   </section>
@@ -115,14 +177,117 @@
 <script>
 const $ = (s) => document.querySelector(s);
 const fmtPct = (x, d=0) => x == null ? '–' : (x*100).toFixed(d) + '%';
+const fmtSPct = (x, d=1) => x == null ? '–' : (x >= 0 ? '+' : '') + (x*100).toFixed(d) + '%';
 const fmtNum = (x) => x == null ? '–' : Number(x).toLocaleString();
+const fmtMoney = (x) => x == null ? '–' : Math.round(x).toLocaleString();
+const fmtCompact = (x) => x == null ? '–' : Math.abs(x) >= 1e9 ? (x/1e9).toFixed(2) + 'bn' : Math.abs(x) >= 1e6 ? (x/1e6).toFixed(1) + 'm' : Math.abs(x) >= 1e3 ? (x/1e3).toFixed(0) + 'k' : x.toFixed(0);
 const fmtZ = (x) => x == null ? '–' : (x >= 0 ? '+' : '') + x.toFixed(2);
-const esc = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let tableMode = false;
-let lastTopics = [];
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let tableMode = false, lastTopics = [], view = 'portfolio', portfolioId = null;
 
 async function getJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error(url + ' ' + r.status); return r.json(); }
+const tip = $('#tip');
+function showTip(e, html) { tip.style.display = 'block'; tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; tip.innerHTML = html; }
+function hideTip() { tip.style.display = 'none'; }
+function hbar(value, scale, cls, width=140) { const w = Math.min(Math.abs(value) / scale * width, width); return `<span class="track"><span class="bar ${cls}" style="width:${w}px"></span></span>`; }
+function dbar(value, scale, width=140) { const half = width/2, w = Math.min(Math.abs(value) / scale * half, half); const pos = value >= 0;
+  return `<span class="track div" style="width:${width}px"><span class="bar ${pos?'pos':'neg'}" style="width:${w}px;margin-left:${pos?half:half-w}px"></span></span>`; }
 
+/* ============================================================ portfolio view */
+async function refreshPortfolio() {
+  if (portfolioId == null) return;
+  const id = portfolioId;
+  const [pos, ac, sec, varr, stress, comp, orders, sent, secs] = await Promise.all([
+    getJSON(`/portfolios/${id}/positions`),
+    getJSON(`/portfolios/${id}/active?dimension=asset_class`).catch(() => null),
+    getJSON(`/portfolios/${id}/active?dimension=sector`).catch(() => null),
+    getJSON(`/portfolios/${id}/risk/var`),
+    getJSON(`/portfolios/${id}/risk/stress`),
+    getJSON(`/portfolios/${id}/compliance`),
+    getJSON(`/orders?portfolio_id=${id}&limit=12`),
+    getJSON('/signals/sentiment').catch(() => []),
+    getJSON('/securities'),
+  ]);
+  const sentBy = Object.fromEntries(sent.map(r => [r.ticker, r]));
+  const tickerOf = Object.fromEntries(secs.map(s => [s.id, s.ticker]));
+  $('#asof').textContent = `${pos.portfolio_name} · as of ${pos.as_of} · ${pos.base_currency}`;
+
+  // tiles
+  $('#p-nav').textContent = fmtCompact(pos.total_value);
+  $('#p-nav-d').textContent = `${fmtMoney(pos.total_value)} · cash ${fmtPct(pos.cash_weight, 1)} · ${pos.positions.length} positions`;
+  const para = varr.methods?.parametric, hist = varr.methods?.historical;
+  $('#p-var').textContent = para ? fmtCompact(para.var) : '–';
+  $('#p-var-d').textContent = para ? `${fmtPct(para.var_pct, 2)} of NAV · ES ${fmtCompact(para.expected_shortfall)} · historical ${fmtCompact(hist.var)}` : (varr.error || '');
+  $('#p-vol').textContent = varr.annualised_vol != null ? fmtPct(varr.annualised_vol, 1) : '–';
+  $('#p-vol-d').textContent = varr.observations ? `${varr.observations} daily observations` : '';
+  const hard = comp.breaches.filter(b => b.severity === 'HARD').length, soft = comp.breaches.length - hard;
+  $('#p-comp').innerHTML = comp.passed
+    ? `<span class="status ok"><span class="ic">✓</span>PASS</span>`
+    : `<span class="status bad"><span class="ic">!</span>FAIL</span>`;
+  $('#p-comp-d').textContent = `${hard} hard · ${soft} soft breach${comp.breaches.length === 1 ? '' : 'es'}`;
+  const open = orders.filter(o => ['APPROVED', 'PARTIALLY_FILLED', 'PENDING'].includes(o.status));
+  $('#p-orders').textContent = open.length;
+  $('#p-orders-d').textContent = `${orders.filter(o => o.status === 'REJECTED').length} rejected by compliance (recent)`;
+
+  // holdings with sentiment overlay
+  const rows = [...pos.positions].sort((a, b) => b.market_value - a.market_value);
+  const maxW = Math.max(...rows.map(r => r.weight), 0.01);
+  $('#holdings').innerHTML = `<table><thead><tr><th>ticker</th><th>name</th><th>class</th><th>sector</th><th class="num">value</th><th>weight</th><th class="num">%</th><th title="sentiment z-score from the signals layer">sentiment z</th><th class="num">attention z</th><th class="num">posts</th></tr></thead><tbody>` +
+    rows.map(r => { const s = sentBy[r.ticker] || {}; return `<tr class="hover"><td><b>${esc(r.ticker)}</b></td><td>${esc(r.name)}</td><td class="muted">${esc(r.asset_class)}</td><td class="muted">${esc(r.sector)}</td>
+      <td class="num">${fmtMoney(r.market_value)}</td><td>${hbar(r.weight, maxW, 's1', 110)}</td><td class="num">${fmtPct(r.weight, 2)}</td>
+      <td style="white-space:nowrap">${s.sentiment_z != null ? dbar(s.sentiment_z, 3, 80) + ' ' + fmtZ(s.sentiment_z) : '<span class="muted">–</span>'}</td>
+      <td class="num">${fmtZ(s.attention_z)}</td><td class="num">${s.n_posts ?? '–'}</td></tr>`; }).join('') +
+    `<tr><td><b>CASH</b></td><td></td><td class="muted">Cash</td><td></td><td class="num">${fmtMoney(pos.cash)}</td><td>${hbar(pos.cash_weight, maxW, 's1', 110)}</td><td class="num">${fmtPct(pos.cash_weight, 2)}</td><td></td><td></td><td></td></tr></tbody></table>`;
+
+  // exposures
+  if (ac) {
+    const mx = Math.max(...ac.rows.map(r => Math.max(r.portfolio_weight, r.benchmark_weight)), 0.01);
+    $('#exposure-ac').innerHTML = `<table><tbody>` + ac.rows.sort((a, b) => b.portfolio_weight - a.portfolio_weight).map(r =>
+      `<tr><td>${esc(r.asset_class)}</td><td><span class="stack">${hbar(r.portfolio_weight, mx, 's1', 160)}${hbar(r.benchmark_weight, mx, 's2', 160)}</span></td>
+       <td class="num">${fmtPct(r.portfolio_weight, 1)}<br><span class="muted">${fmtPct(r.benchmark_weight, 1)}</span></td></tr>`).join('') + '</tbody></table>';
+  } else $('#exposure-ac').innerHTML = '<div class="muted">No benchmark set.</div>';
+  if (sec) {
+    const mx = Math.max(...sec.rows.map(r => Math.abs(r.active_weight)), 0.01);
+    $('#exposure-sector').innerHTML = `<table><tbody>` + sec.rows.slice(0, 10).map(r =>
+      `<tr><td>${esc(r.sector)}</td><td>${dbar(r.active_weight, mx, 120)}</td><td class="num">${fmtSPct(r.active_weight, 1)}</td></tr>`).join('') + '</tbody></table>';
+  } else $('#exposure-sector').innerHTML = '<div class="muted">No benchmark set.</div>';
+
+  // VaR
+  if (varr.methods) {
+    $('#var-table').innerHTML = `<table><thead><tr><th>method</th><th class="num">VaR</th><th class="num">% NAV</th><th class="num">expected shortfall</th><th class="num">% NAV</th></tr></thead><tbody>` +
+      Object.values(varr.methods).map(m => `<tr><td>${esc(m.method.replace('_', ' '))}</td><td class="num">${fmtMoney(m.var)}</td><td class="num">${fmtPct(m.var_pct, 2)}</td><td class="num">${fmtMoney(m.expected_shortfall)}</td><td class="num">${fmtPct(m.es_pct, 2)}</td></tr>`).join('') +
+      `</tbody></table><div class="muted" style="margin-top:4px">${varr.confidence*100}% confidence, ${varr.horizon_days}-day horizon, ${varr.observations} observations</div>`;
+    const cv = varr.component_var.slice(0, 8), mx = Math.max(...cv.map(c => Math.abs(c.component_var)), 1);
+    $('#component-var').innerHTML = `<table><tbody>` + cv.map(c =>
+      `<tr><td><b>${esc(c.ticker)}</b></td><td>${hbar(c.component_var, mx, 's1', 160)}</td><td class="num">${fmtMoney(c.component_var)}</td><td class="num muted">${fmtPct(c.pct_of_total, 1)}</td></tr>`).join('') + '</tbody></table>';
+  } else { $('#var-table').innerHTML = `<div class="muted">${esc(varr.error || 'no data')}</div>`; $('#component-var').innerHTML = ''; }
+
+  // stress
+  const mxS = Math.max(...stress.map(s => Math.abs(s.pnl)), 1);
+  $('#stress-table').innerHTML = `<table><thead><tr><th>scenario</th><th>P&amp;L</th><th class="num">amount</th><th class="num">% NAV</th></tr></thead><tbody>` +
+    stress.map(s => `<tr class="hover" data-scn="${esc(s.scenario)}"><td>${esc(s.scenario)}</td><td>${dbar(s.pnl, mxS, 160)}</td><td class="num">${fmtMoney(s.pnl)}</td><td class="num">${fmtSPct(s.pnl_pct, 1)}</td></tr>`).join('') + '</tbody></table>';
+  $('#stress-table').querySelectorAll('tr[data-scn]').forEach(tr => {
+    const s = stress.find(x => x.scenario === tr.dataset.scn);
+    tr.addEventListener('mousemove', e => showTip(e, `<b>${esc(s.scenario)}</b><br>` + s.by_security.slice(0, 5).map(b => `<span class="k">${esc(b.ticker)}</span> ${fmtMoney(b.pnl)}`).join('<br>')));
+    tr.addEventListener('mouseleave', hideTip);
+  });
+
+  // compliance
+  $('#compliance-table').innerHTML = comp.breaches.length
+    ? `<table><thead><tr><th>severity</th><th>rule</th><th>scope</th><th class="num">observed</th><th class="num">limit</th></tr></thead><tbody>` +
+      comp.breaches.map(b => `<tr><td><span class="sev ${b.severity}">${b.severity}</span></td><td>${esc(b.rule_name)}</td><td>${esc(b.scope)}</td><td class="num">${b.observed == null ? '–' : fmtPct(b.observed, 2)}</td><td class="num">${b.limit == null ? '–' : fmtPct(b.limit, 2)}</td></tr>`).join('') + '</tbody></table>'
+    : `<div class="status ok"><span class="ic">✓</span>All rules pass as of ${esc(comp.as_of)}</div>`;
+
+  // blotter
+  $('#blotter').innerHTML = orders.length
+    ? `<table><thead><tr><th>id</th><th>side</th><th>security</th><th class="num">qty</th><th class="num">filled</th><th>status</th><th>by</th></tr></thead><tbody>` +
+      orders.map(o => { const name = tickerOf[o.security_id] || '#' + o.security_id;
+        return `<tr class="hover" title="${esc(o.reject_reason || '')}"><td class="muted">${o.id}</td><td>${o.side}</td><td><b>${esc(name)}</b></td><td class="num">${fmtNum(o.quantity)}</td><td class="num">${fmtNum(o.filled_quantity)}</td>
+          <td><span class="pill">${o.status}</span>${o.reject_reason ? ` <span class="muted">${esc(o.reject_reason.slice(0, 48))}…</span>` : ''}</td><td class="muted">${esc(o.created_by)}</td></tr>`; }).join('') + '</tbody></table>'
+    : '<div class="muted">No orders yet.</div>';
+}
+
+/* ============================================================ signals view */
 function spark(svg, values) {
   const w = svg.clientWidth || 200, h = 44, pad = 3;
   svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
@@ -143,7 +308,6 @@ function drawBubbles(topics) {
   const maxVol = Math.max(...topics.map(t => t.volume));
   const r = (v) => 6 + 44 * Math.sqrt(v / maxVol);
   let g = '';
-  // grid: sentiment ticks and velocity ticks (solid hairlines)
   [-1, -0.5, 0, 0.5, 1].forEach(s => { g += `<line class="${s===0?'axis':'grid'}" x1="${x(s)}" x2="${x(s)}" y1="${m.t}" y2="${H-m.b}"/>`;
     g += `<text x="${x(s)}" y="${H-m.b+16}" text-anchor="middle">${s>0?'+':''}${s.toFixed(1)}</text>`; });
   [-1, 0, 1, 2, 3].forEach(v => { g += `<line class="${v===0?'axis':'grid'}" x1="${m.l}" x2="${W-m.r}" y1="${y(v)}" y2="${y(v)}"/>`;
@@ -157,9 +321,8 @@ function drawBubbles(topics) {
   // overlap an already-placed label. Everything is still in the tooltip and the table view.
   const placed = [];
   const overlaps = (b) => placed.some(p => !(b.x2 < p.x1 || b.x1 > p.x2 || b.y2 < p.y1 || b.y1 > p.y2));
-  sorted.slice(0, 8).forEach(t => {
-    const cx = x(t.sentiment_mean), cy = y(t.velocity), rr = r(t.volume);
-    const w = t.label.length * 6.2 + 8, h = 14;
+  geo.slice(0, 8).forEach(({t, cx, cy, rr}) => {
+    const w = t.label.length * 6.2 + 8;
     for (const ly of [cy - rr - 6, cy + rr + 14]) {
       const box = { x1: Math.max(m.l, Math.min(cx - w/2, W - m.r - w)), y1: ly - 11, x2: 0, y2: ly + 3 };
       box.x2 = box.x1 + w;
@@ -175,7 +338,6 @@ function drawBubbles(topics) {
   // hit target of at least ~24px.
   g += `<rect class="hit" x="${m.l}" y="${m.t}" width="${W-m.l-m.r}" height="${H-m.t-m.b}"/>`;
   svg.innerHTML = g;
-  const tip = $('#tip');
   const pick = (e) => {
     const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
     const p = pt.matrixTransform(svg.getScreenCTM().inverse());
@@ -188,13 +350,12 @@ function drawBubbles(topics) {
   overlay.addEventListener('mousemove', (e) => {
     const t = pick(e);
     svg.querySelectorAll('.bubble').forEach(b => b.classList.toggle('hot', !!t && b.dataset.id == t.id));
-    if (!t) { tip.style.display = 'none'; return; }
-    tip.style.display = 'block'; tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px';
-    tip.innerHTML = `<b>${esc(t.label)}</b><br><span class="k">volume</span> ${t.volume} · <span class="k">authors</span> ${t.unique_authors}<br>
+    if (!t) { hideTip(); return; }
+    showTip(e, `<b>${esc(t.label)}</b><br><span class="k">volume</span> ${t.volume} · <span class="k">authors</span> ${t.unique_authors}<br>
       <span class="k">sentiment</span> ${fmtZ(t.sentiment_mean)} · <span class="k">velocity</span> ${t.velocity>=0?'+':''}${(t.velocity*100).toFixed(0)}% · <span class="k">fear</span> ${fmtPct(t.fear_share)}<br>
-      <span class="k">tickers</span> ${(t.tickers||[]).map(x => x[0]).join(', ') || '–'}`;
+      <span class="k">tickers</span> ${(t.tickers||[]).map(x => x[0]).join(', ') || '–'}`);
   });
-  overlay.addEventListener('mouseleave', () => { tip.style.display = 'none'; svg.querySelectorAll('.bubble').forEach(b => b.classList.remove('hot')); });
+  overlay.addEventListener('mouseleave', () => { hideTip(); svg.querySelectorAll('.bubble').forEach(b => b.classList.remove('hot')); });
   overlay.addEventListener('click', (e) => { const t = pick(e); if (t) showTopic(t); });
   $('#bubble-table').innerHTML = `<table><thead><tr><th>topic</th><th class="num">volume</th><th class="num">authors</th><th class="num">sentiment</th><th class="num">velocity</th><th class="num">fear</th><th>tickers</th></tr></thead><tbody>` +
     sorted.map(t => `<tr><td>${esc(t.label)}</td><td class="num">${t.volume}</td><td class="num">${t.unique_authors}</td><td class="num">${fmtZ(t.sentiment_mean)}</td><td class="num">${(t.velocity*100).toFixed(0)}%</td><td class="num">${fmtPct(t.fear_share)}</td><td>${(t.tickers||[]).map(x=>x[0]).join(', ')}</td></tr>`).join('') + '</tbody></table>';
@@ -212,9 +373,7 @@ function sentimentTable(rows) {
   if (!rows.length) { $('#sentiment-table').innerHTML = '<div class="muted">No sentiment bars yet.</div>'; return; }
   const scale = Math.max(2, ...rows.map(r => Math.abs(r.sentiment_z)));
   $('#sentiment-table').innerHTML = `<table><thead><tr><th>ticker</th><th>sentiment z</th><th class="num">z</th><th class="num">attention z</th><th class="num">posts</th></tr></thead><tbody>` +
-    rows.map(r => { const w = Math.abs(r.sentiment_z) / scale * 70; const pos = r.sentiment_z >= 0;
-      return `<tr><td><b>${esc(r.ticker)}</b></td><td><span class="track"><span class="bar ${pos?'pos':'neg'}" style="width:${w}px;margin-left:${pos?70:70-w}px"></span></span></td>
-        <td class="num">${fmtZ(r.sentiment_z)}</td><td class="num">${fmtZ(r.attention_z)}</td><td class="num">${r.n_posts}</td></tr>`; }).join('') + '</tbody></table>';
+    rows.map(r => `<tr><td><b>${esc(r.ticker)}</b></td><td>${dbar(r.sentiment_z, scale, 140)}</td><td class="num">${fmtZ(r.sentiment_z)}</td><td class="num">${fmtZ(r.attention_z)}</td><td class="num">${r.n_posts}</td></tr>`).join('') + '</tbody></table>';
 }
 
 function marketsTable(rows) {
@@ -224,38 +383,63 @@ function marketsTable(rows) {
       <td class="num"><b>${fmtPct(r.yes_price)}</b></td><td class="num">${r.change_24h == null ? '–' : (r.change_24h>=0?'+':'') + (r.change_24h*100).toFixed(1) + ' pts'}</td></tr>`).join('') + '</tbody></table>';
 }
 
-async function refresh() {
-  document.body.classList.add('stale');
-  try {
-    const [status, bubbles, sent, mkts, fear] = await Promise.all([
-      getJSON('/signals/status'), getJSON('/signals/bubbles'), getJSON('/signals/sentiment'), getJSON('/signals/markets'), getJSON('/signals/fear')]);
-    $('#t-posts').textContent = fmtNum(status.posts_last_hour);
-    $('#t-posts-d').textContent = `${fmtNum(status.posts_total)} total · ${Object.entries(status.by_source).map(([k,v]) => k + ' ' + fmtNum(v)).join(', ')}`;
-    $('#t-screen').textContent = fmtPct(status.screened_share, 1);
-    $('#t-screen-d').textContent = Object.entries(status.screen_reasons).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v]) => `${k} ${fmtNum(v)}`).join(' · ');
-    $('#t-fear').textContent = fmtPct(fear.latest, 1);
-    spark($('#fear-spark'), (fear.series||[]).map(p => p.fear));
-    $('#t-topics').textContent = bubbles.topics.length;
-    $('#t-topics-d').textContent = bubbles.window_end ? `window ending ${bubbles.window_end.replace('T',' ').slice(0,16)} UTC` : '';
-    $('#t-markets').textContent = status.prediction_markets;
-    $('#t-markets-d').textContent = mkts.length ? `latest ${mkts[0].snapshot_at.replace('T',' ').slice(0,16)} UTC` : '';
-    $('#asof').textContent = status.last_post_at ? `data through ${status.last_post_at.replace('T',' ').slice(0,19)} UTC` : 'no data';
-    lastTopics = bubbles.topics;
-    drawBubbles(bubbles.topics);
-    sentimentTable(sent);
-    marketsTable(mkts);
-  } catch (e) { $('#asof').textContent = 'error: ' + e.message; }
-  document.body.classList.remove('stale');
+async function refreshSignals() {
+  const [status, bubbles, sent, mkts, fear] = await Promise.all([
+    getJSON('/signals/status'), getJSON('/signals/bubbles'), getJSON('/signals/sentiment'), getJSON('/signals/markets'), getJSON('/signals/fear')]);
+  $('#t-posts').textContent = fmtNum(status.posts_last_hour);
+  $('#t-posts-d').textContent = `${fmtNum(status.posts_total)} total · ${Object.entries(status.by_source).map(([k,v]) => k + ' ' + fmtNum(v)).join(', ')}`;
+  $('#t-screen').textContent = fmtPct(status.screened_share, 1);
+  $('#t-screen-d').textContent = Object.entries(status.screen_reasons).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v]) => `${k} ${fmtNum(v)}`).join(' · ');
+  $('#t-fear').textContent = fmtPct(fear.latest, 1);
+  spark($('#fear-spark'), (fear.series||[]).map(p => p.fear));
+  $('#t-topics').textContent = bubbles.topics.length;
+  $('#t-topics-d').textContent = bubbles.window_end ? `window ending ${bubbles.window_end.replace('T',' ').slice(0,16)} UTC` : '';
+  $('#t-markets').textContent = status.prediction_markets;
+  $('#t-markets-d').textContent = mkts.length ? `latest ${mkts[0].snapshot_at.replace('T',' ').slice(0,16)} UTC` : '';
+  $('#asof').textContent = status.last_post_at ? `data through ${status.last_post_at.replace('T',' ').slice(0,19)} UTC` : 'no data';
+  lastTopics = bubbles.topics;
+  drawBubbles(bubbles.topics);
+  sentimentTable(sent);
+  marketsTable(mkts);
 }
 
+/* ============================================================ shell */
+async function refresh() {
+  document.body.classList.add('stale');
+  try { if (view === 'portfolio') await refreshPortfolio(); else await refreshSignals(); }
+  catch (e) { $('#asof').textContent = 'error: ' + e.message; }
+  document.body.classList.remove('stale');
+}
+function setView(v) {
+  view = v;
+  $('#view-portfolio').classList.toggle('hidden', v !== 'portfolio');
+  $('#view-signals').classList.toggle('hidden', v !== 'signals');
+  $('#nav-portfolio').classList.toggle('on', v === 'portfolio');
+  $('#nav-signals').classList.toggle('on', v === 'signals');
+  $('#portfolio-select').classList.toggle('hidden', v !== 'portfolio');
+  $('#toggleTable').classList.toggle('hidden', v !== 'signals');
+  location.hash = v;
+  refresh();
+}
+$('#nav-portfolio').addEventListener('click', () => setView('portfolio'));
+$('#nav-signals').addEventListener('click', () => setView('signals'));
+$('#portfolio-select').addEventListener('change', (e) => { portfolioId = Number(e.target.value); refresh(); });
 $('#toggleTable').addEventListener('click', () => { tableMode = !tableMode;
   $('#bubble-chart').classList.toggle('hidden', tableMode); $('#bubble-table').classList.toggle('hidden', !tableMode);
   $('#toggleTable').textContent = tableMode ? 'Chart view' : 'Table view'; });
 $('#toggleTheme').addEventListener('click', () => { const r = document.documentElement; const cur = r.getAttribute('data-theme');
   const dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; r.setAttribute('data-theme', dark ? 'light' : 'dark'); });
-window.addEventListener('resize', () => drawBubbles(lastTopics));
-refresh();
-setInterval(refresh, 10000);
+window.addEventListener('resize', () => { if (view === 'signals') drawBubbles(lastTopics); });
+
+(async () => {
+  try {
+    const pfs = await getJSON('/portfolios');
+    $('#portfolio-select').innerHTML = pfs.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+    portfolioId = pfs.length ? pfs[0].id : null;
+  } catch (e) { $('#asof').textContent = 'error: ' + e.message; }
+  setView(location.hash === '#signals' ? 'signals' : 'portfolio');
+  setInterval(refresh, 10000);
+})();
 </script>
 </body>
 </html>

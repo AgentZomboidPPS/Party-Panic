@@ -182,7 +182,9 @@ POST /orders  ·  GET /orders  ·  GET /orders/{id}  ·  POST /orders/{id}/fills
 GET/POST /securities  ·  POST /prices  ·  POST /fx  ·  GET/POST /benchmarks
 POST /portfolios/{id}/trades (book external trades)  ·  POST /portfolios/{id}/cashflows
 GET  /audit
-GET  /dashboard                                   live signals viewer (bubbles, sentiment, markets, fear)
+GET  /dashboard                                   one screen: Portfolio view (NAV, holdings with sentiment
+                                                  overlay, exposures vs benchmark, VaR, stress, compliance,
+                                                  blotter) and Signals view (bubbles, sentiment, markets, fear)
 GET  /signals/status · /signals/bubbles · /signals/bubbles/history?hours=
 GET  /signals/sentiment · /signals/sentiment/{ticker} · /signals/fear · /signals/markets
 GET  /signals/backtest?start=&end=&horizon=&signal=
