@@ -277,9 +277,44 @@ def test_option_orders_reach_alpaca_as_whole_contract_limit_orders(book):
         assert [a["outcome"] for a in r.actions] == ["executed", "executed"]
         first, second = (json.loads(q.content) for q in fake.requests if q.url.path == "/v2/orders" and q.method == "POST")
         assert first["symbol"] == NVDA_CALL and first["qty"] == "5" and first["side"] == "buy"
-        assert first["type"] == "limit" and first["limit_price"] == "5.77" and first["time_in_force"] == "day"
-        assert second["symbol"] == TSLA_PUT and second["qty"] == "1" and second["limit_price"] == "18.75"
-        assert value_portfolio(s, pid).cash == pytest.approx(100_000 - 5 * 5.77 * 100 - 18.75 * 100)
+        # Each order is first tried at the midpoint of the bid and ask, and here that is enough.
+        assert first["type"] == "limit" and first["limit_price"] == "5.50" and first["time_in_force"] == "day"
+        assert second["symbol"] == TSLA_PUT and second["qty"] == "1" and second["limit_price"] == "18.00"
+        assert value_portfolio(s, pid).cash == pytest.approx(100_000 - 5 * 5.5 * 100 - 18.0 * 100)
+
+
+def test_an_option_order_starts_at_the_midpoint_and_steps_up_only_as_far_as_it_must(book):
+    factory, pid = book
+    with factory() as s:
+        (q,) = quotes({NVDA_CALL})  # bid 5.40, ask 5.60
+        sec = alpaca.ensure_option_security(s, q)
+        alpaca.store_option_mark(s, sec, q, 150.0)
+        s.commit()
+
+        def buy(fake):
+            o = oms.create_order(s, portfolio_id=pid, security_id=sec.id, side=Side.BUY, quantity=2,
+                                 order_type=OrderType.LIMIT, limit_price=5.77)
+            r = execute(s, o.id, alpaca.AlpacaPaperBroker(client_for(fake), fill_timeout=0.0, sleep=lambda _: None), LIMITS)
+            return r, [json.loads(x.content)["limit_price"] for x in fake.requests if x.url.path == "/v2/orders" and x.method == "POST"]
+
+        fake = FakeOptions(fills_from=5.58, fill_after_polls=0)  # the real seller wants 5.58
+        r, tried = buy(fake)
+        assert tried == ["5.50", "5.55", "5.60"], "midpoint, halfway, the ask: and no further"
+        assert r.outcome == "executed" and r.price == 5.60 and fake.cancelled == ["alp-1", "alp-2"]
+
+        r, tried = buy(FakeOptions(fills_from=5.70, fill_after_polls=0))
+        assert tried == ["5.50", "5.55", "5.60", "5.77"] and r.price == 5.77, "the order's own limit is the last resort"
+
+        r, tried = buy(FakeOptions(fills_from=6.00, fill_after_polls=0))
+        assert r.outcome == "blocked" and tried[-1] == "5.77", "never above the limit"
+
+        # Selling walks the other way: midpoint first, down to the bid, never below the order's limit.
+        fake = FakeOptions(fills_from=5.42, fill_after_polls=0)
+        o = oms.create_order(s, portfolio_id=pid, security_id=sec.id, side=Side.SELL, quantity=2,
+                             order_type=OrderType.LIMIT, limit_price=5.24)
+        r = execute(s, o.id, alpaca.AlpacaPaperBroker(client_for(fake), fill_timeout=0.0, sleep=lambda _: None), LIMITS)
+        tried = [json.loads(x.content)["limit_price"] for x in fake.requests if x.url.path == "/v2/orders" and x.method == "POST"]
+        assert tried == ["5.50", "5.45", "5.40"] and r.price == 5.40
 
 
 def test_marks_of_held_contracts_are_refreshed(book):

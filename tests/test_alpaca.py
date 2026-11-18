@@ -25,8 +25,9 @@ class FakeAlpaca:
     """Just enough of Alpaca's API to exercise the adapter."""
 
     def __init__(self, is_open=True, fill_after_polls=1, final_status="filled", fill_price="151.40", partial=None,
-                 multiplier="1"):
+                 multiplier="1", fills_from=None):
         self.is_open, self.fill_after_polls, self.final_status = is_open, fill_after_polls, final_status
+        self.fills_from = fills_from  # a buy limit below this (or a sell limit above it) is never filled
         self.multiplier = multiplier
         self.cash = "100000"
         self.positions: list[dict] = []
@@ -61,6 +62,11 @@ class FakeAlpaca:
                     return httpx.Response(422, json={"code": 42210000, "message": "asset BAD is not tradable"})
                 o = {"id": f"alp-{len(self.orders) + 1}", "status": "accepted", "filled_qty": "0", "filled_avg_price": None, **body}
                 self.orders[o["id"]] = o
+                if self.fills_from is not None and "limit_price" in body:
+                    px = float(body["limit_price"])
+                    o["never"] = px < self.fills_from if body["side"] == "buy" else px > self.fills_from
+                    if not o["never"] and self.fill_after_polls == 0:  # marketable: done at once
+                        o.update(status="filled", filled_qty=o["qty"], filled_avg_price=body["limit_price"])
                 return httpx.Response(200, json=o)
             if path.startswith("/v2/orders/"):
                 oid = path.rsplit("/", 1)[1]
@@ -73,7 +79,7 @@ class FakeAlpaca:
                             o.update(filled_qty=self.partial, filled_avg_price=self.fill_price)
                     return httpx.Response(204)
                 self.polls += 1
-                if self.polls >= self.fill_after_polls and o["status"] == "accepted":
+                if self.polls >= self.fill_after_polls and o["status"] == "accepted" and not o.get("never"):
                     o["status"] = self.final_status
                     if self.final_status == "filled":
                         o.update(filled_qty=o["qty"], filled_avg_price=self.fill_price)

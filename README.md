@@ -358,7 +358,10 @@ a call (bullish) or a put (bearish): an expiry three to seven weeks out, the str
 is nearest 0.45, and only where the bid/ask spread is tight. It spends `--options-per-trade`
 (3%) of the portfolio per position and at most `--options-budget` (20%) in total premium. A
 holding is sold at +100%, at −50%, a week before expiry (so nothing is exercised or assigned),
-or when the crowd turns; a contract sold today is not bought back the same day. It only ever
+or when the crowd turns; a contract sold today is not bought back the same day. Orders are
+worked rather than thrown at the market: the first try is at the midpoint of the bid and ask,
+then halfway to the far side, then the quote, and only last the order's own limit (3% past the
+quote), so the spread is paid only as far as it has to be. It only ever
 buys options, so the most a position can lose is what was paid for it, and the
 `no_naked_options` rule would reject an uncovered sale regardless.
 

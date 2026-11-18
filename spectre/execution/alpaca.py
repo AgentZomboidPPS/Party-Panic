@@ -511,32 +511,77 @@ class AlpacaPaperBroker:
                 quantity = min(quantity, math.floor(have * 1e6) / 1e6)
                 if quantity <= 0:
                     raise BrokerReject(f"the broker holds no {security.ticker} to sell")
-            body = {
-                "symbol": f"{security.ticker}/USD" if coin else security.ticker, "qty": _qty(quantity),
-                "side": order.side.lower(), "type": "market", "time_in_force": "gtc" if coin else "day",
-                "client_order_id": f"spectre-{order.id}-{uuid.uuid4().hex[:8]}",
-            }
-            if order.order_type == OrderType.LIMIT.value and order.limit_price is not None:
-                body.update(type="limit", limit_price=f"{order.limit_price:.2f}")
-            placed = self.client.submit_order(body)
-            deadline = time.monotonic() + self.fill_timeout
-            while placed.get("status") != "filled":
-                if placed.get("status") in DONE_BADLY:
-                    raise BrokerReject(f"alpaca order ended as {placed.get('status')}")
-                if time.monotonic() >= deadline:
+            limit = order.limit_price if order.order_type == OrderType.LIMIT.value else None
+            prices = self._ladder(security, order.side, limit)
+            wait = self.fill_timeout / len(prices)
+            done, paid, last_id = 0.0, 0.0, None
+            for price in prices:
+                body = {
+                    "symbol": f"{security.ticker}/USD" if coin else security.ticker, "qty": _qty(quantity - done),
+                    "side": order.side.lower(), "type": "market", "time_in_force": "gtc" if coin else "day",
+                    "client_order_id": f"spectre-{order.id}-{uuid.uuid4().hex[:8]}",
+                }
+                if price is not None:
+                    body.update(type="limit", limit_price=f"{price:.2f}")
+                placed = self._work(body, wait)
+                got = float(placed.get("filled_qty") or 0)
+                if got > 0 and placed.get("filled_avg_price"):
+                    done += got
+                    paid += got * float(placed["filled_avg_price"])
+                    last_id = placed["id"]
+                if quantity - done <= 1e-9:
                     break
-                self._sleep(self.poll_seconds)
-                placed = self.client.get_order(placed["id"])
-            if placed.get("status") != "filled":
-                # Out of time: cancel what is left and keep whatever did fill.
-                try:
-                    self.client.cancel_order(placed["id"])
-                except AlpacaError:
-                    pass  # already filled or already gone; the re-read below tells us which
-                placed = self.client.get_order(placed["id"])
         except AlpacaError as exc:
             raise BrokerReject(f"alpaca: {exc}") from exc
-        filled = float(placed.get("filled_qty") or 0)
-        if filled <= 0 or not placed.get("filled_avg_price"):
+        if done <= 0:
             raise BrokerReject(f"not filled within {self.fill_timeout:.0f}s; cancelled")
-        return BrokerFill(filled, float(placed["filled_avg_price"]), utcnow(), broker_order_id=placed["id"])
+        return BrokerFill(done, paid / done, utcnow(), broker_order_id=last_id)
+
+    def _work(self, body: dict, wait: float) -> dict:
+        """Place one order, give it `wait` seconds, cancel whatever is left, and return how it ended."""
+        placed = self.client.submit_order(body)
+        deadline = time.monotonic() + wait
+        while placed.get("status") != "filled":
+            if placed.get("status") in DONE_BADLY:
+                raise BrokerReject(f"alpaca order ended as {placed.get('status')}")
+            if time.monotonic() >= deadline:
+                break
+            self._sleep(self.poll_seconds)
+            placed = self.client.get_order(placed["id"])
+        if placed.get("status") != "filled":
+            # Out of time: cancel what is left and keep whatever did fill.
+            try:
+                self.client.cancel_order(placed["id"])
+            except AlpacaError:
+                pass  # already filled or already gone; the re-read below tells us which
+            placed = self.client.get_order(placed["id"])
+        return placed
+
+    def _ladder(self, security: Security, side: str, limit: float | None) -> list[float | None]:
+        """The prices to try, in order. A market order has none; a limit order has its limit.
+
+        An option's bid and ask sit far apart, and an order placed at the far side pays the whole
+        gap. So an option order starts at the midpoint and steps toward the far side (halfway,
+        then the quote, then the order's own limit), taking the first price someone will trade
+        at. The order's limit is always the last and worst price tried."""
+        if limit is None:
+            return [None]
+        if security.asset_class != "Option":
+            return [limit]
+        try:
+            quotes = self.client.option_snapshots([security.ticker])
+        except AlpacaError:
+            return [limit]
+        q = quotes[0] if quotes else None
+        if q is None or q.mid is None or not q.bid:
+            return [limit]
+        if side == Side.BUY.value:
+            steps = [p for p in (q.mid, (q.mid + q.ask) / 2, q.ask) if p < limit]
+        else:
+            steps = [p for p in (q.mid, (q.mid + q.bid) / 2, q.bid) if p > limit]
+        out: list[float | None] = []
+        for p in [*steps, limit]:
+            p = round(p, 2)
+            if p > 0 and p not in out:
+                out.append(p)
+        return out
