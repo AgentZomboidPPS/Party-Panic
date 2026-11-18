@@ -227,6 +227,7 @@ def test_signals_api(sclient):
     assert "orders" in pt
     html = sclient.get("/dashboard")
     assert html.status_code == 200 and "bubble-chart" in html.text and "view-portfolio" in html.text
+    assert '<html lang="en" data-theme="dark">' in html.text, "night mode is the default"
     # Every endpoint the portfolio view calls must answer for the demo portfolios.
     for url in ("/portfolios/1/active?dimension=asset_class", "/portfolios/1/active?dimension=sector",
                 "/portfolios/1/risk/var", "/portfolios/1/risk/stress", "/portfolios/1/compliance",

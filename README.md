@@ -287,7 +287,7 @@ POST /orders/{id}/execute (paper, guarded)  ·  GET /trading/status  ·  POST /t
 GET/POST /securities  ·  POST /prices  ·  POST /fx  ·  GET/POST /benchmarks
 POST /portfolios/{id}/trades (book external trades)  ·  POST /portfolios/{id}/cashflows
 GET  /audit
-GET  /dashboard                                   one screen: Portfolio view (NAV, holdings with sentiment
+GET  /dashboard                                   night mode by default (toggle is remembered); one screen: Portfolio view (NAV, holdings with sentiment
                                                   overlay, exposures vs benchmark, VaR, stress, compliance,
                                                   blotter) and Signals view (bubbles, sentiment, markets, fear)
 GET  /signals/status · /signals/bubbles · /signals/bubbles/history?hours=

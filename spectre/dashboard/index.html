@@ -1,6 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
+<script>
+  // Night mode is the default. A choice made with the toggle is remembered on this device.
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem('spectre-theme'); } catch (e) { /* storage unavailable */ }
+    document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
+  })();
+</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SPECTRE</title>
@@ -17,7 +25,9 @@
     --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
     --s1: #3987e5; --s2: #d95926; --pos: #3987e5; --neg: #e66767; --mid: #383835;
   } }
+  :root[data-theme="light"] { color-scheme: light; }
   :root[data-theme="dark"] {
+    color-scheme: dark;
     --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
     --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
     --s1: #3987e5; --s2: #d95926; --pos: #3987e5; --neg: #e66767; --mid: #383835;
@@ -49,7 +59,7 @@
   svg .bubble.hot { fill-opacity: 0.9; }
   svg .hit { fill: transparent; cursor: pointer; }
   svg .lbl { fill: var(--ink); font-size: 11px; pointer-events: none; }
-  svg .lbl.sub { fill: var(--muted); font-size: 10px; }
+  svg .lbl.sub { fill: var(--ink); fill-opacity: 0.75; font-size: 10px; }
   .tip { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border);
          border-radius: 8px; padding: 8px 10px; font-size: 12px; max-width: 320px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); display: none; z-index: 10; }
   .tip .k { color: var(--ink-2); }
@@ -74,6 +84,7 @@
   .sev.HARD { background: var(--critical); } .sev.SOFT { background: var(--warn); color: #0b0b0b; }
   .spark { width: 100%; height: 44px; }
   .spark path { fill: none; stroke: var(--s1); stroke-width: 2; }
+  #holdings, #blotter, #compliance-table, #stress-table, #var-table { overflow-x: auto; }
   .hidden { display: none !important; }
   .stale { opacity: 0.6; transition: opacity 0.2s; }
   .pill { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-2); }
@@ -90,7 +101,7 @@
   <div class="right">
     <span id="asof" class="muted">loading…</span>
     <button class="ghost" id="toggleTable">Table view</button>
-    <button class="ghost" id="toggleTheme">Theme</button>
+    <button class="ghost" id="toggleTheme" aria-label="Switch between night and day mode">Day mode</button>
   </div>
 </header>
 
@@ -241,10 +252,10 @@ async function refreshPortfolio() {
   const maxW = Math.max(...rows.map(r => r.weight), 0.01);
   $('#holdings').innerHTML = `<table><thead><tr><th>ticker</th><th>name</th><th>class</th><th>sector</th><th class="num">value</th><th>weight</th><th class="num">%</th><th title="z-score against the security's own history; the raw average (marked avg) until there is enough history">sentiment</th><th class="num">attention z</th><th class="num">posts</th></tr></thead><tbody>` +
     rows.map(r => { const s = sentBy[r.ticker] || {}; return `<tr class="hover"><td><b>${esc(r.ticker)}</b></td><td>${esc(r.name)}</td><td class="muted">${esc(r.asset_class)}</td><td class="muted">${esc(r.sector)}</td>
-      <td class="num">${fmtMoney(r.market_value)}</td><td>${hbar(r.weight, maxW, 's1', 110)}</td><td class="num">${fmtPct(r.weight, 2)}</td>
-      <td style="white-space:nowrap">${s.sentiment_z != null ? dbar(s.sentiment_z, 3, 80) + ' ' + fmtZ(s.sentiment_z) : s.sentiment_mean != null ? dbar(s.sentiment_mean, 1, 80) + ' ' + fmtZ(s.sentiment_mean) + ' <span class="muted">avg</span>' : '<span class="muted">–</span>'}</td>
+      <td class="num">${fmtMoney(r.market_value)}</td><td>${hbar(r.weight, maxW, 's1', 64)}</td><td class="num">${fmtPct(r.weight, 2)}</td>
+      <td style="white-space:nowrap">${s.sentiment_z != null ? dbar(s.sentiment_z, 3, 48) + ' ' + fmtZ(s.sentiment_z) : s.sentiment_mean != null ? dbar(s.sentiment_mean, 1, 48) + ' ' + fmtZ(s.sentiment_mean) + ' <span class="muted">avg</span>' : '<span class="muted">–</span>'}</td>
       <td class="num">${fmtZ(s.attention_z)}</td><td class="num">${s.n_posts ?? '–'}</td></tr>`; }).join('') +
-    `<tr><td><b>CASH</b></td><td></td><td class="muted">Cash</td><td></td><td class="num">${fmtMoney(pos.cash)}</td><td>${hbar(pos.cash_weight, maxW, 's1', 110)}</td><td class="num">${fmtPct(pos.cash_weight, 2)}</td><td></td><td></td><td></td></tr></tbody></table>`;
+    `<tr><td><b>CASH</b></td><td></td><td class="muted">Cash</td><td></td><td class="num">${fmtMoney(pos.cash)}</td><td>${hbar(pos.cash_weight, maxW, 's1', 64)}</td><td class="num">${fmtPct(pos.cash_weight, 2)}</td><td></td><td></td><td></td></tr></tbody></table>`;
 
   // exposures
   if (ac) {
@@ -457,8 +468,16 @@ $('#portfolio-select').addEventListener('change', (e) => { portfolioId = Number(
 $('#toggleTable').addEventListener('click', () => { tableMode = !tableMode;
   $('#bubble-chart').classList.toggle('hidden', tableMode); $('#bubble-table').classList.toggle('hidden', !tableMode);
   $('#toggleTable').textContent = tableMode ? 'Chart view' : 'Table view'; });
-$('#toggleTheme').addEventListener('click', () => { const r = document.documentElement; const cur = r.getAttribute('data-theme');
-  const dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; r.setAttribute('data-theme', dark ? 'light' : 'dark'); });
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  $('#toggleTheme').textContent = theme === 'dark' ? 'Day mode' : 'Night mode';
+}
+$('#toggleTheme').addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem('spectre-theme', next); } catch (e) { /* storage unavailable: lasts for this visit */ }
+  applyTheme(next);
+});
+applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
 window.addEventListener('resize', () => { if (view === 'signals') drawBubbles(lastTopics); });
 
 (async () => {
