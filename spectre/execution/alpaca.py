@@ -38,8 +38,9 @@ from spectre.execution.brokers import BrokerFill, BrokerReject
 from spectre.execution.models import OptionMark
 from spectre.marketdata.prices import latest_prices, upsert_prices
 from spectre.marketdata.universe import BY_TICKER, crypto_base
-from spectre.models import CashFlow, Order, OrderType, Security, Side, Trade
+from spectre.models import CashFlow, Fill, Order, OrderType, Security, Side, Trade
 from spectre.portfolio.positions import value_portfolio
+from spectre.portfolio.settlement import settlement_date
 from spectre.signals.models import PriceTick
 from spectre.signals.sources.base import to_naive_utc, utcnow
 
@@ -158,6 +159,37 @@ class AlpacaClient:
 
     def clock(self) -> dict:
         return self._call("GET", f"{self.trading_url}/v2/clock")
+
+    def authorised(self) -> bool:
+        """True when the account answers: either keys are configured here, or the network this
+        runs on adds the credentials itself (a hosting environment's saved secret)."""
+        try:
+            self.account()
+        except AlpacaError:
+            return False
+        return True
+
+    def activities(self, page_size: int = 100) -> list[dict]:
+        """Everything that has happened in the account, oldest first: fills, fees, dividends,
+        deposits. This is the broker's own record, and a ledger can be rebuilt from it."""
+        out: list[dict] = []
+        params: dict = {"direction": "asc", "page_size": page_size}
+        while True:
+            page = self._call("GET", f"{self.trading_url}/v2/account/activities", params=params) or []
+            out.extend(page)
+            if len(page) < page_size:
+                return out
+            params["page_token"] = page[-1]["id"]
+
+    def starting_value(self) -> float | None:
+        """What the account was worth at the start of the last month of its history; for a
+        young account that is what it was opened with."""
+        try:
+            body = self._call("GET", f"{self.trading_url}/v2/account/portfolio/history", params={"period": "1M", "timeframe": "1D"})
+        except AlpacaError:
+            return None
+        value = (body or {}).get("base_value")
+        return float(value) if value else None
 
     def configurations(self) -> dict:
         """Account switches, including `max_margin_multiplier` ("1" means no borrowing)."""
@@ -481,6 +513,132 @@ def reconcile(session: Session, client: AlpacaClient, portfolio_id: int, apply: 
                      detail={"positions": out["positions"], "cash": out["cash"]})
         session.commit()
     return out
+
+
+# What a non-trade activity with a cash amount is, for the ledger.
+_CASH_KINDS = {
+    "CSD": "EXTERNAL", "CSW": "EXTERNAL", "JNLC": "EXTERNAL", "ACATC": "EXTERNAL", "TRANS": "EXTERNAL",
+    "FEE": "FEE", "DIVFEE": "FEE", "PTC": "FEE",
+    "DIV": "INCOME", "INT": "INCOME", "CGD": "INCOME", "PTR": "INCOME", "DIVNRA": "INCOME", "INTNRA": "INCOME",
+}
+
+
+def _security_for(session: Session, symbol: str) -> Security:
+    """The ledger's security for a symbol in the broker's records, created if it is new here."""
+    ticker = crypto_base(symbol) or symbol
+    sec = session.execute(select(Security).where(Security.ticker == ticker)).scalar_one_or_none()
+    if sec is not None:
+        return sec
+    parsed = parse_occ(ticker)
+    if parsed:
+        root, expiry, kind, strike = parsed
+        return ensure_option_security(session, OptionQuote(ticker, root, expiry, kind, strike, *([None] * 9)))
+    sec = Security(ticker=ticker, name=ticker, asset_class="Crypto" if crypto_base(symbol) else "Equity", currency="USD",
+                   country="US", issuer=ticker, multiplier=1.0)
+    session.add(sec)
+    session.flush()
+    return sec
+
+
+def rebuild_ledger(session: Session, client: AlpacaClient, portfolio_id: int) -> dict:
+    """Rebuild an empty ledger from the broker's own record of every fill, so a fresh database
+    (a new machine, a replaced container) has the same trades, costs, settlement dates and
+    banked profit as the one before it, not just the same positions.
+
+    Every fill becomes an order, a fill and a trade dated as it happened; fees, dividends and
+    deposits become cash movements; and the opening balance is whatever makes the cash add up
+    to the broker's. Before anything is saved the rebuilt holdings are checked against the
+    broker's positions; if they do not agree (history the broker no longer serves, say) nothing
+    is written and the caller can fall back to `adopt_account`. Does nothing if the ledger
+    already has history."""
+    used = session.execute(select(func.count(Trade.id)).where(Trade.portfolio_id == portfolio_id)).scalar_one() or \
+        session.execute(select(func.count(CashFlow.id)).where(CashFlow.portfolio_id == portfolio_id)).scalar_one()
+    if used:
+        return {"rebuilt": False, "reason": "the ledger already has history"}
+    acct, held, acts = client.account(), client.positions(), client.activities()
+    fills = [a for a in acts if a.get("activity_type") == "FILL"]
+    if not fills:
+        return {"rebuilt": False, "reason": "the broker has no fills on record"}
+
+    cash_effect, first_day, skipped = 0.0, None, []
+    orders: dict[str, Order] = {}
+    quantity: dict[str, float] = {}
+    for a in acts:
+        kind = a.get("activity_type")
+        if kind == "FILL":
+            when = parse_time(a["transaction_time"])
+            sec = _security_for(session, a["symbol"])
+            qty, price, side = float(a["qty"]), float(a["price"]), a["side"].upper()
+            order = orders.get(a["order_id"])
+            if order is None:
+                order = Order(portfolio_id=portfolio_id, security_id=sec.id, side=side, quantity=0.0, status="FILLED",
+                              filled_quantity=0.0, avg_fill_price=0.0, created_by="alpaca-import", created_at=when)
+                session.add(order)
+                session.flush()
+                orders[a["order_id"]] = order
+            order.avg_fill_price = (order.avg_fill_price * order.filled_quantity + price * qty) / (order.filled_quantity + qty)
+            order.quantity = order.filled_quantity = order.filled_quantity + qty
+            session.add(Fill(order_id=order.id, quantity=qty, price=price, filled_at=when))
+            session.add(Trade(portfolio_id=portfolio_id, security_id=sec.id, order_id=order.id, side=side, quantity=qty,
+                              price=price, currency="USD", trade_date=when.date(),
+                              settle_date=settlement_date(sec.asset_class, when.date(), sec.sector)))
+            signed = qty if side == Side.BUY.value else -qty
+            cash_effect -= signed * price * sec.multiplier
+            quantity[sec.ticker] = quantity.get(sec.ticker, 0.0) + signed
+            first_day = first_day or when.date()
+        elif kind == "CFEE" and a.get("qty") and a.get("price") and a.get("symbol"):
+            # A fee taken in coin: the sliver leaves the position and brings in no cash.
+            sec, sliver, price = _security_for(session, a["symbol"]), abs(float(a["qty"])), float(a["price"])
+            day = date.fromisoformat(a["date"]) if a.get("date") else utcnow().date()
+            session.add(Trade(portfolio_id=portfolio_id, security_id=sec.id, side=Side.SELL.value, quantity=sliver, price=price,
+                              currency="USD", fees=sliver * price, trade_date=day, settle_date=day))
+            quantity[sec.ticker] = quantity.get(sec.ticker, 0.0) - sliver
+        elif a.get("net_amount") not in (None, "", "0"):
+            amount = float(a["net_amount"])
+            day = date.fromisoformat(a["date"]) if a.get("date") else utcnow().date()
+            session.add(CashFlow(portfolio_id=portfolio_id, date=day, amount=amount, kind=_CASH_KINDS.get(kind, "ADJUSTMENT"),
+                                 memo=f"{kind}: {a.get('description') or a.get('symbol') or 'from the Alpaca account'}"[:200]))
+            cash_effect += amount
+            first_day = first_day or day
+        else:
+            skipped.append(kind)
+
+    # The rebuilt holdings must be the broker's holdings (a coin position may be a shade
+    # smaller there: its fee is taken in coin and booked by the reconciliation that follows).
+    at_broker = {position_ticker(p): float(p["qty"]) for p in held}
+    for ticker in set(quantity) | set(at_broker):
+        mine, theirs = quantity.get(ticker, 0.0), at_broker.get(ticker, 0.0)
+        if abs(mine - theirs) > 1e-7 and not (crypto_base(f"{ticker}USD") and 0 < mine - theirs <= 0.01 * mine):
+            session.rollback()
+            return {"rebuilt": False, "reason": f"the broker's fills do not add up to its positions ({ticker}: "
+                                                 f"{mine:g} from fills, {theirs:g} held)"}
+
+    opening = float(acct["cash"]) - cash_effect
+    base = client.starting_value()
+    if base and abs(opening - base) <= max(5.0, 0.0005 * base):
+        opening = base  # the few dollars of difference are fees, which the reconciliation books as fees
+    if abs(opening) >= 0.005:
+        session.add(CashFlow(portfolio_id=portfolio_id, date=first_day or utcnow().date(), amount=opening,
+                             memo="Opening balance (from the Alpaca account)"))
+    audit.record(session, actor="rebuild", entity_type="portfolio", entity_id=portfolio_id, action="rebuilt_from_broker",
+                 detail={"fills": len(fills), "orders": len(orders), "opening_balance": opening, "not_understood": skipped})
+    session.commit()
+
+    sync_prices(session, client)
+    sync_option_marks(session, client)
+    today = utcnow().date()
+    marks = {}
+    for p in held:
+        sec = session.execute(select(Security).where(Security.ticker == position_ticker(p))).scalar_one_or_none()
+        if sec is not None and p.get("current_price"):
+            marks[sec.id] = float(p["current_price"])
+    priced = set(latest_prices(session, list(marks), today).index)
+    upsert_prices(session, [{"security_id": sid, "date": today, "close": px} for sid, px in marks.items() if sid not in priced])
+    session.commit()
+    rec = reconcile(session, client, portfolio_id, apply=True, actor="rebuild")
+    return {"rebuilt": True, "fills": len(fills), "orders": len(orders), "opening_balance": opening,
+            "positions": sorted(t for t, q in quantity.items() if abs(q) > 1e-9), "clean": rec["clean"],
+            "not_understood": sorted(set(skipped))}
 
 
 def adopt_account(session: Session, client: AlpacaClient, portfolio_id: int) -> dict:

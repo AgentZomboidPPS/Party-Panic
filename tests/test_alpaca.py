@@ -31,6 +31,8 @@ class FakeAlpaca:
         self.multiplier = multiplier
         self.cash = "100000"
         self.positions: list[dict] = []
+        self.activities: list[dict] = []
+        self.base_value = 100000.0
         self.coin_quotes = {"BTC/USD": {"bp": 62990.0, "ap": 63010.0, "t": "2026-11-18T18:44:05.077083862Z"},
                             "ETH/USD": {"bp": 1769.0, "ap": 1771.0, "t": "2026-11-18T18:44:03.209396325Z"},
                             "SOL/USD": {"bp": 0, "ap": 73.6, "t": "2026-11-18T18:04:13.3Z"}}  # one-sided: unusable
@@ -52,6 +54,14 @@ class FakeAlpaca:
                                                  "multiplier": self.multiplier})
             if path == "/v2/positions":
                 return httpx.Response(200, json=self.positions)
+            if path == "/v2/account/activities":
+                size, after = int(request.url.params.get("page_size", 100)), request.url.params.get("page_token")
+                rows = self.activities
+                if after:
+                    rows = rows[next(i for i, a in enumerate(rows) if a["id"] == after) + 1:]
+                return httpx.Response(200, json=rows[:size])
+            if path == "/v2/account/portfolio/history":
+                return httpx.Response(200, json={"base_value": self.base_value, "equity": [], "timestamp": []})
             if path == "/v2/account/configurations":
                 if request.method == "PATCH":
                     self.multiplier = json.loads(request.content).get("max_margin_multiplier", self.multiplier)

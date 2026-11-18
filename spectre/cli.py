@@ -1224,6 +1224,7 @@ def run(host: str = typer.Option("127.0.0.1", envvar="SPECTRE_HOST", help="0.0.0
         min_authors: int = typer.Option(8, envvar="SPECTRE_MIN_AUTHORS"),
         lookback: int = typer.Option(45, envvar="SPECTRE_LOOKBACK"),
         symbols: str = typer.Option("NVDA,TSLA,SPY,AAPL,AMD,PLTR,MSFT,META,AMZN,QQQ,GOOGL,INTC", envvar="SPECTRE_SYMBOLS"),
+        require_alpaca: bool = typer.Option(False, envvar="SPECTRE_REQUIRE_ALPACA", help="Without Alpaca credentials, only listen and show the dashboard: do not start a simulated book in the real one's place"),
         db: str | None = typer.Option(None, "--db")):
     """Everything in one process, for a machine that stays on: the dashboard and API, the live
     feeds, and KAIROS deciding every few minutes. Paper only.
@@ -1249,24 +1250,54 @@ def run(host: str = typer.Option("127.0.0.1", envvar="SPECTRE_HOST", help="0.0.0
         os.environ["SPECTRE_DATABASE_URL"] = db
         settings.database_url = db
     use_alpaca = bool(settings.alpaca_key_id and settings.alpaca_secret_key)
+    if not use_alpaca:
+        # No keys in the settings: the host may still supply them (a saved network secret that
+        # is added to every request to Alpaca). One call to the account tells.
+        from spectre.execution.alpaca import AlpacaClient as _Probe
 
+        use_alpaca = _Probe().authorised()
+        if use_alpaca:
+            console.print("Alpaca credentials are supplied by this environment.")
+
+    listen_only = require_alpaca and not use_alpaca
+    warm = False
     with _session(db) as s:
         _seed(s)
+        from sqlalchemy import func
+
+        from spectre.signals.models import SocialPost
+        from spectre.signals.sources.base import utcnow as _utcnow
+
+        newest = s.execute(select(func.max(SocialPost.posted_at))).scalar_one_or_none()
+        warm = newest is not None and (_utcnow() - newest).total_seconds() < lookback * 60 / 2
         pf = s.execute(select(Portfolio).where(Portfolio.name == portfolio)).scalar_one_or_none()
-        if pf is None:
+        if pf is None and listen_only:
+            pid = None
+        elif pf is None:
             pf = _new_trading_portfolio(s, portfolio, None if use_alpaca else cash)
             console.print(f"Created portfolio {pf.id} '{portfolio}'.")
-        pid = pf.id
+        if pf is not None:
+            pid = pf.id
         if use_alpaca:
-            from spectre.execution.alpaca import AlpacaClient, adopt_account
+            from spectre.execution.alpaca import AlpacaClient, adopt_account, rebuild_ledger
 
             client = AlpacaClient()
             if settings.alpaca_cash_only and str(client.account().get("multiplier")) != "1":
                 client.set_configurations(max_margin_multiplier="1")
                 console.print("Cash only: margin switched off at Alpaca.")
-            took = adopt_account(s, client, pid)
-            if took["adopted"]:
-                console.print(f"Picked up the Alpaca account: {len(took['positions'])} positions, cash {took['cash']:,.2f}.")
+            # A fresh database: rebuild the books from the broker's record of every fill, or,
+            # if that record does not add up to what the account holds, start from its positions.
+            built = rebuild_ledger(s, client, pid)
+            if built["rebuilt"]:
+                console.print(f"Rebuilt the ledger from Alpaca's records: {built['fills']} fills in {built['orders']} orders, "
+                              f"{len(built['positions'])} positions; "
+                              + ("it agrees with the broker." if built["clean"] else "[yellow]some differences remain[/].")
+                              + (f" Not understood: {', '.join(built['not_understood'])}." if built["not_understood"] else ""))
+            elif built["reason"] != "the ledger already has history":
+                console.print(f"[yellow]Could not rebuild from fills ({built['reason']}); starting from the positions instead.[/]")
+                took = adopt_account(s, client, pid)
+                if took["adopted"]:
+                    console.print(f"Picked up the Alpaca account: {len(took['positions'])} positions, cash {took['cash']:,.2f}.")
             try:  # price history for the risk numbers; cheap, and safe to repeat on every start
                 from spectre.execution.alpaca import backfill_prices
 
@@ -1280,14 +1311,20 @@ def run(host: str = typer.Option("127.0.0.1", envvar="SPECTRE_HOST", help="0.0.0
     server = uvicorn.Server(uvicorn.Config(create_app(), host=host, port=port, log_level="warning"))
     threading.Thread(target=server.run, daemon=True, name="spectre-api").start()
     where = f"http://localhost:{port}/" if local else f"port {port} of this machine's address"
+    doing = ("[yellow]listening only: no Alpaca credentials here, so nothing is traded[/]" if listen_only else
+             f"KAIROS trading portfolio {pid} on {'the Alpaca paper account' if use_alpaca else 'the built-in paper broker'}")
     console.print(f"[bold]SPECTRE[/] is up: dashboard at {where}"
-                  f"{' (password protected)' if settings.dashboard_password else ''}; "
-                  f"KAIROS trading portfolio {pid} on {'the Alpaca paper account' if use_alpaca else 'the built-in paper broker'}.")
+                  f"{' (password protected)' if settings.dashboard_password else ''}; {doing}.")
 
     while True:  # the feeds and the bot; if they ever fall over, start them again
         try:
+            if listen_only:
+                ingest(sources="bluesky,stocktwits,kalshi,polymarket,trends", minutes=0.0, topic_window=15, bar_window=60,
+                       preset="finance", sample=1.0, keywords="", symbols=symbols, geos="US", feeds="", db=db)
+                break
+            # A database that already holds the last stretch of posts needs no warm-up.
             autopilot(portfolio_id=pid, sources="bluesky,stocktwits,kalshi,polymarket,trends", symbols=symbols, geos="US",
-                      minutes=0.0, every=every, warmup=min(every, 10.0), top_n=5, invest=invest, enter=0.2, exit_below=0.0,
+                      minutes=0.0, every=every, warmup=0.0 if warm else min(every, 10.0), top_n=5, invest=invest, enter=0.2, exit_below=0.0,
                       lookback=lookback, min_authors=min_authors, broker="alpaca" if use_alpaca else "paper",
                       options=options and use_alpaca, options_budget=options_budget, options_per_trade=0.03,
                       options_enter=1.0, options_min_authors=10, max_exposure=max_exposure, crypto=crypto,

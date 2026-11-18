@@ -75,6 +75,7 @@ def sleeve_pnl(session: Session, valued: ValuedPositions) -> list[dict]:
     held: dict[int, float] = {}
     cost: dict[int, float] = {}
     scale: dict[int, tuple[str, float]] = {}  # security -> (sleeve, multiplier)
+    sales: dict[int, tuple[str, float]] = {}  # sale order -> (sleeve, profit banked by it)
     rows = session.execute(
         select(Trade, Security).join(Security, Security.id == Trade.security_id)
         .where(Trade.portfolio_id == valued.portfolio_id, Trade.trade_date <= valued.as_of)
@@ -93,12 +94,16 @@ def sleeve_pnl(session: Session, valued: ValuedPositions) -> list[dict]:
             gain = (t.price - cost.get(sec.id, t.price)) * t.quantity * sec.multiplier * fx
             sleeve["realised"] += gain
             if t.order_id is not None:  # a real sale, not a sliver booked for a fee paid in kind
-                sleeve["closed_trades"] += 1
-                sleeve["winners"] += gain > 0
+                # One sale is one order, however many pieces it was filled in.
+                name, so_far = sales.get(t.order_id, (sleeve["sleeve"], 0.0))
+                sales[t.order_id] = (name, so_far + gain)
             held[sec.id] = have - t.quantity
             if held[sec.id] <= EPS:
                 held.pop(sec.id)
                 cost.pop(sec.id, None)
+    for name, gain in sales.values():
+        out[name]["closed_trades"] += 1
+        out[name]["winners"] += gain > 0
     open_cost = {name: 0.0 for name in SLEEVES}
     for sid, qty in held.items():
         name, mult = scale[sid]

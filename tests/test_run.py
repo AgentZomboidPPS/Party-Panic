@@ -91,3 +91,95 @@ def test_an_empty_broker_account_is_adopted_as_cash(fresh):
     fake = FakeAlpaca()
     assert alpaca.adopt_account(s, client_for(fake), pid)["positions"] == []
     assert value_portfolio(s, pid).cash == 100_000
+
+
+# --------------------------------------------------------------------------- rebuilding the books from the broker
+
+
+def _fill(i, when, symbol, side, qty, price, order):
+    return {"id": f"{i:04d}::x", "activity_type": "FILL", "transaction_time": when, "symbol": symbol, "side": side,
+            "qty": str(qty), "price": str(price), "order_id": order}
+
+
+def _history(fake):
+    """What Alpaca would have on record: a buy filled in two pieces, a sale, an option, a coin, a fee."""
+    fake.activities = [
+        _fill(1, "2026-11-17T15:00:00.618165Z", "NVDA", "buy", 60, 150.00, "o1"),
+        _fill(2, "2026-11-17T15:00:01.100000Z", "NVDA", "buy", 40, 150.50, "o1"),
+        _fill(3, "2026-11-18T15:10:00Z", "NVDA", "sell", 30, 160.00, "o2"),
+        _fill(4, "2026-11-18T15:20:00Z", "NVDA261224C00155000", "buy", 5, 5.60, "o3"),
+        _fill(5, "2026-11-18T15:30:00Z", "BTC/USD", "buy", 0.05, 63000.0, "o4"),
+        {"id": "0006::x", "activity_type": "FEE", "date": "2026-11-18", "net_amount": "-0.14", "description": "REG fee"},
+    ]
+    spent = 60 * 150 + 40 * 150.5 - 30 * 160 + 5 * 5.6 * 100 + 0.05 * 63000 + 0.14
+    fake.cash = str(100_000 - spent - 0.08)  # ... and eight cents more of fees that have not been itemised yet
+    fake.positions = [
+        {"symbol": "NVDA", "asset_class": "us_equity", "qty": "70", "avg_entry_price": "150.2", "current_price": "161"},
+        {"symbol": "NVDA261224C00155000", "asset_class": "us_option", "qty": "5", "avg_entry_price": "5.6", "current_price": "5.4"},
+        {"symbol": "BTCUSD", "asset_class": "crypto", "qty": "0.049875", "avg_entry_price": "63000", "current_price": "63100"},
+    ]
+    return spent
+
+
+def test_an_empty_ledger_is_rebuilt_from_the_brokers_record_of_every_fill(fresh):
+    from spectre.models import CashFlow, Order
+    from spectre.portfolio.performance import performance
+    from spectre.portfolio.positions import average_costs
+
+    s, pid = fresh
+    fake = FakeOptions()
+    spent = _history(fake)
+    client = client_for(fake)
+    assert client.activities(page_size=2) == fake.activities, "read page by page, oldest first"
+
+    out = alpaca.rebuild_ledger(s, client, pid)
+    assert out["rebuilt"] and out["fills"] == 5 and out["orders"] == 4 and out["clean"] and out["not_understood"] == []
+    assert out["opening_balance"] == 100_000, "the round sum it was opened with; the odd cents are fees"
+
+    v = value_portfolio(s, pid)
+    held = {r.ticker: float(r.quantity) for r in v.positions.itertuples()}
+    assert held == {"NVDA": 70, "NVDA261224C00155000": 5, "BTC": pytest.approx(0.049875)}, "the coin is net of its fee"
+    assert v.cash == pytest.approx(100_000 - spent - 0.08), "to the cent"
+    nvda = s.execute(select(Security).where(Security.ticker == "NVDA")).scalar_one()
+    assert average_costs(s, pid)[nvda.id] == pytest.approx(150.20), "60 at 150.00 and 40 at 150.50"
+    first = s.execute(select(Order).order_by(Order.id)).scalars().first()
+    assert first.quantity == 100 and first.avg_fill_price == pytest.approx(150.20) and first.created_by == "alpaca-import"
+    assert len(first.fills) == 2 and first.status == "FILLED"
+    dates = {t.security.ticker: (t.trade_date, t.settle_date) for t in s.execute(select(Trade).where(Trade.order_id.is_not(None))).scalars()}
+    assert dates["NVDA261224C00155000"] == (date(2026, 11, 18), date(2026, 11, 19)) and dates["BTC"] == (date(2026, 11, 18),) * 2
+    fees = sorted(c.amount for c in s.execute(select(CashFlow).where(CashFlow.kind != "EXTERNAL")).scalars())
+    assert fees == pytest.approx([-0.14, -0.08]), "the itemised fee, and the rest found by reconciliation"
+
+    r = performance(s, pid)
+    stocks = next(x for x in r["sleeves"] if x["sleeve"] == "Stocks and funds")
+    assert r["put_in"] == 100_000 and stocks["realised"] == pytest.approx(30 * (160 - 150.20)) and stocks["closed_trades"] == 1
+    assert r["since"] == "2026-11-17T15:00:00", "the record starts at the first fill"
+    assert alpaca.rebuild_ledger(s, client, pid) == {"rebuilt": False, "reason": "the ledger already has history"}
+
+
+def test_a_record_that_does_not_add_up_writes_nothing_and_the_positions_are_used_instead(fresh):
+    s, pid = fresh
+    fake = FakeOptions()
+    _history(fake)
+    fake.activities = fake.activities[2:]  # the broker no longer serves the two oldest fills
+    out = alpaca.rebuild_ledger(s, client_for(fake), pid)
+    assert not out["rebuilt"] and "do not add up" in out["reason"] and "NVDA" in out["reason"]
+    assert s.execute(select(Trade)).first() is None, "nothing half-written"
+    assert alpaca.adopt_account(s, client_for(fake), pid)["adopted"]
+    assert {r.ticker for r in value_portfolio(s, pid).positions.itertuples()} == {"NVDA", "NVDA261224C00155000", "BTC"}
+
+
+def test_keys_supplied_by_the_environment_are_detected():
+    import httpx
+
+    def needs_basic(request):
+        ok = request.headers.get("authorization", "").startswith("Basic ")
+        return httpx.Response(200 if ok else 401, json={"status": "ACTIVE"} if ok else {"message": "unauthorized"})
+
+    def injecting(request):  # what a hosting environment's saved secret does to every request
+        request.headers["authorization"] = "Basic a2V5OnNlY3JldA=="
+        return needs_basic(request)
+
+    bare = dict(key_id="", secret_key="")
+    assert not alpaca.AlpacaClient(**bare, transport=httpx.MockTransport(needs_basic)).authorised()
+    assert alpaca.AlpacaClient(**bare, transport=httpx.MockTransport(injecting)).authorised()

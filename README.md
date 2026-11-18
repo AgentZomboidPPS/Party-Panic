@@ -73,9 +73,24 @@ history). Lint with `ruff check spectre tests`.
 
 `spectre run` is everything in one process: the dashboard and API, the live feeds, and KAIROS
 deciding every ten minutes. It creates the portfolio if it does not exist. With Alpaca paper
-keys it trades that account, switches margin off, and on a fresh database starts from what the
-account already holds; without keys it uses the built-in simulation. If the feeds or the bot
-fall over they are restarted.
+keys it trades that account and switches margin off; without keys it uses the built-in
+simulation (or, with `SPECTRE_REQUIRE_ALPACA=true`, only listens and shows the dashboard, so a
+simulated book never quietly takes the real one's place). If the feeds or the bot fall over
+they are restarted.
+
+**A fresh database carries on where the last one stopped.** The broker keeps a record of every
+fill, so on an empty database `run` rebuilds the ledger from it: each fill becomes an order, a
+fill and a trade dated as it happened, fees and deposits become cash movements, and the
+opening balance is whatever makes the cash agree. Costs, banked profit and settlement dates
+come back exactly. The rebuilt holdings are checked against the broker's before anything is
+saved; if the record does not add up, SPECTRE starts from the account's current positions
+instead. Posts and the value-over-time record are not at the broker and start again.
+
+`scripts/start_cloud.sh` does all of it in one command and can be run as often as you like: it
+installs SPECTRE if the machine lacks it, starts it in the background, and does nothing if it
+is already up. Keys can be in `.env` or supplied by the hosting environment as a saved secret
+(Alpaca accepts the Key ID and Secret as a username and password, so no key ever needs to be
+in the repository).
 
 **On your own computer** (Windows, Mac or Linux; needs Python 3.11 or newer and Git):
 
