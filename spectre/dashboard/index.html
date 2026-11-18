@@ -88,7 +88,7 @@
   .sev.HARD { background: var(--critical); } .sev.SOFT { background: var(--warn); color: #0b0b0b; }
   .spark { width: 100%; height: 44px; }
   .spark path { fill: none; stroke: var(--s1); stroke-width: 2; }
-  #holdings, #blotter, #compliance-table, #stress-table, #var-table, #settlement { overflow-x: auto; }
+  #holdings, #blotter, #compliance-table, #stress-table, #var-table, #settlement, #signal-check { overflow-x: auto; }
   .statrow { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0 0 12px; }
   .statrow .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
   .statrow .l { color: var(--ink-2); font-size: 12px; }
@@ -677,16 +677,16 @@ function signalCheck(r) {
   const pct = (x, d = 2) => x == null ? '–' : (x >= 0 ? '+' : '−') + Math.abs(x * 100).toFixed(d) + '%';
   const num = (x) => x == null ? '–' : (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2);
   const stat = (v, l) => `<div><div class="v">${v}</div><div class="l">${l}</div></div>`;
-  const short = (z) => z.zone.startsWith('buy') ? 'liked (buy zone)' : z.zone.startsWith('in') ? 'in between' : 'disliked (would be sold)';
+  const short = (z) => z.zone.startsWith('buy') ? 'liked it' : z.zone.startsWith('in') ? 'in between' : 'disliked it';
   el.classList.remove('muted');
   el.innerHTML = `<div class="statrow">` +
     stat(pct(r.held.mean_edge), `top ${r.held.top_n} liked names against the rest, over the next ${r.horizon_minutes} min`) +
     stat(num(r.rank_agreement.mean), 'rank agreement (−1 to +1)') +
     stat(`${r.windows} <span class="muted" style="font-size:13px;font-weight:400">of 30 needed</span>`, 'separate windows measured') + `</div>` +
-    `<table><thead><tr><th>what the crowd said</th><th class="num">readings</th><th class="num">next ${r.horizon_minutes} min, against the other names</th><th class="num">beat them</th></tr></thead><tbody>` +
+    `<table><thead><tr><th>the crowd</th><th class="num">readings</th><th class="num">vs the rest</th><th class="num">beat them</th></tr></thead><tbody>` +
     r.zones.map(z => `<tr><td>${short(z)}</td><td class="num">${fmtNum(z.samples)}</td><td class="num">${pct(z.mean_relative_return, 3)}</td><td class="num">${z.share_beating_the_rest == null ? '–' : Math.round(z.share_beating_the_rest * 100) + '%'}</td></tr>`).join('') +
     `</tbody></table><div style="margin-top:8px"><b>${esc(r.verdict)}</b></div>` +
-    `<div class="muted" style="margin-top:4px">${fmtNum(r.samples)} readings of ${r.names} names, ${esc(r.from.replace('T', ' '))} to ${esc(r.to.replace('T', ' '))} UTC. Readings ten minutes apart overlap, so only separate windows count as evidence.</div>`;
+    `<div class="muted" style="margin-top:4px">${fmtNum(r.samples)} readings of ${r.names} names, ${esc(r.from.replace('T', ' '))} to ${esc(r.to.replace('T', ' '))} UTC. "Vs the rest" is the return over the next ${r.horizon_minutes} minutes against the other names at the same moment. Readings ten minutes apart overlap, so only separate windows count as evidence.</div>`;
 }
 
 /* ============================================================ shell */
