@@ -58,6 +58,10 @@
   svg .bubble { fill: var(--s1); fill-opacity: 0.55; stroke: var(--surface); stroke-width: 2; pointer-events: none; }
   svg .bubble.hot { fill-opacity: 0.9; }
   svg .hit { fill: transparent; cursor: pointer; }
+  svg .curve-now { fill: none; stroke: var(--s1); stroke-width: 2; stroke-linejoin: round; }
+  svg .curve-then { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linejoin: round; }
+  svg .curve-dot { fill: var(--s1); stroke: var(--surface); stroke-width: 2; }
+  svg .curve-dot.hot { r: 6; }
   svg .lbl { fill: var(--ink); font-size: 11px; pointer-events: none; }
   svg .lbl.sub { fill: var(--ink); fill-opacity: 0.75; font-size: 10px; }
   .tip { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border);
@@ -186,6 +190,12 @@
     <div class="card">
       <h2>Prediction markets — contested (5–95%), most traded</h2>
       <div id="markets-table"></div>
+    </div>
+    <div class="card">
+      <h2>US Treasury yield curve</h2>
+      <div class="legend"><span><i style="background:var(--s1)"></i>latest</span><span><i style="background:var(--muted)"></i>one month ago</span></div>
+      <svg id="curve-chart" width="100%" height="190" role="img" aria-label="Treasury yield curve: latest against one month ago"></svg>
+      <div id="curve-table"></div>
     </div>
   </aside>
 
@@ -405,6 +415,59 @@ function sentimentTable(all) {
     '</tbody></table><div class="muted" style="margin-top:4px">Raw averages. Z-scores appear once each security has a few bars of history.</div>';
 }
 
+const fmtBp = (x) => x == null ? '–' : (x > 0 ? '+' : '') + x.toFixed(0);
+const MACRO_NAMES = { BAMLC0A0CM: 'Investment-grade credit spread', BAMLH0A0HYM2: 'High-yield credit spread',
+  DFF: 'Fed funds rate', T10YIE: '10-year inflation expectation', DFII10: '10-year real yield' };
+
+function drawCurve(c, macro) {
+  const svg = $('#curve-chart');
+  const pts = (c && c.points) || [];
+  if (!pts.length) { svg.innerHTML = ''; $('#curve-table').innerHTML = '<div class="muted">No curve yet. Run <code>spectre rates-sync</code>.</div>'; return; }
+  const W = svg.clientWidth || 380, H = 190, m = {l: 34, r: 14, t: 12, b: 22};
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const then = pts.filter(p => p.yield_1m_ago != null);
+  const all = pts.map(p => p.yield).concat(then.map(p => p.yield_1m_ago));
+  const lo = Math.floor(Math.min(...all) * 4 - 0.5) / 4, hi = Math.ceil(Math.max(...all) * 4 + 0.5) / 4;
+  const x = (i) => m.l + i * (W - m.l - m.r) / Math.max(pts.length - 1, 1);
+  const y = (v) => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
+  let g = '';
+  const step = (hi - lo) > 1.5 ? 0.5 : 0.25;
+  for (let v = lo; v <= hi + 1e-9; v += step) {
+    g += `<line class="grid" x1="${m.l}" x2="${W-m.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${m.l-5}" y="${y(v)+4}" text-anchor="end">${v.toFixed(2)}</text>`; }
+  const shown = new Set(['1M', '3M', '1Y', '2Y', '5Y', '10Y', '30Y']);
+  pts.forEach((p, i) => { if (shown.has(p.tenor)) g += `<text x="${x(i)}" y="${H-6}" text-anchor="middle">${p.tenor}</text>`; });
+  const path = (key) => pts.map((p, i) => p[key] == null ? null : `${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).filter(Boolean).join('L');
+  if (then.length > 1) g += `<path class="curve-then" d="M${path('yield_1m_ago')}"/>`;
+  g += `<path class="curve-now" d="M${path('yield')}"/>`;
+  pts.forEach((p, i) => { g += `<circle class="curve-dot" data-i="${i}" cx="${x(i)}" cy="${y(p.yield)}" r="4"/>`; });
+  const last = pts[pts.length - 1];
+  g += `<text class="lbl" x="${x(pts.length-1)}" y="${y(last.yield) - 9}" text-anchor="end">${last.yield.toFixed(2)}%</text>`;
+  g += `<rect class="hit" x="${m.l}" y="${m.t}" width="${W-m.l-m.r}" height="${H-m.t-m.b}"/>`;
+  svg.innerHTML = g;
+  const overlay = svg.querySelector('rect.hit');
+  overlay.addEventListener('mousemove', (e) => {
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const px = pt.matrixTransform(svg.getScreenCTM().inverse()).x;
+    const i = Math.max(0, Math.min(pts.length - 1, Math.round((px - m.l) / ((W - m.l - m.r) / Math.max(pts.length - 1, 1)))));
+    const p = pts[i];
+    svg.querySelectorAll('.curve-dot').forEach(d => d.classList.toggle('hot', d.dataset.i == i));
+    showTip(e, `<b>${esc(p.tenor)}</b> ${p.yield.toFixed(2)}%<br><span class="k">one month ago</span> ${p.yield_1m_ago == null ? '–' : p.yield_1m_ago.toFixed(2) + '%'}<br>
+      <span class="k">change</span> 1 day ${fmtBp(p.change_1d_bp)} bp · 1 week ${fmtBp(p.change_1w_bp)} bp · 1 month ${fmtBp(p.change_1m_bp)} bp`);
+  });
+  overlay.addEventListener('mouseleave', () => { hideTip(); svg.querySelectorAll('.curve-dot').forEach(d => d.classList.remove('hot')); });
+
+  const key = pts.filter(p => ['3M', '2Y', '10Y', '30Y'].includes(p.tenor));
+  const shape = c.inverted ? '<span class="status warn"><span class="ic">!</span>inverted</span>' : 'upward sloping';
+  let html = `<table><thead><tr><th>maturity</th><th class="num">yield</th><th class="num">1 day</th><th class="num">1 week</th><th class="num">1 month</th></tr></thead><tbody>` +
+    key.map(p => `<tr><td><b>${p.tenor}</b></td><td class="num">${p.yield.toFixed(2)}%</td><td class="num">${fmtBp(p.change_1d_bp)}</td><td class="num">${fmtBp(p.change_1w_bp)}</td><td class="num">${fmtBp(p.change_1m_bp)}</td></tr>`).join('') +
+    `</tbody></table><div class="muted" style="margin-top:4px">Changes in basis points. 10-year minus 2-year: ${fmtBp(c.slope_2s10s_bp)} bp, ${shape}. As of ${esc(c.date)}.</div>`;
+  if (macro && macro.length) {
+    html += `<table style="margin-top:8px"><thead><tr><th>credit and policy</th><th class="num">latest</th><th class="num">1 month</th></tr></thead><tbody>` +
+      macro.map(r => `<tr><td>${esc(MACRO_NAMES[r.series] || r.series)}</td><td class="num">${r.value.toFixed(2)}%</td><td class="num">${r.change_1m == null ? '–' : (r.change_1m > 0 ? '+' : '') + r.change_1m.toFixed(2)}</td></tr>`).join('') + '</tbody></table>';
+  }
+  $('#curve-table').innerHTML = html;
+}
+
 function trendsTable(rows) {
   if (!rows.length) { $('#trends-table').innerHTML = '<div class="muted">No trends yet. Run <code>spectre ingest --sources trends</code>.</div>'; return; }
   const mx = Math.max(...rows.map(r => r.approx_traffic || 0), 1);
@@ -422,10 +485,11 @@ function marketsTable(rows) {
 }
 
 async function refreshSignals() {
-  const [status, bubbles, sent, mkts, fear, trends] = await Promise.all([
+  const [status, bubbles, sent, mkts, fear, trends, curve, macro] = await Promise.all([
     getJSON('/signals/status'), getJSON('/signals/bubbles'), getJSON('/signals/sentiment'),
     getJSON('/signals/markets?min_prob=0.05&max_prob=0.95&limit=12'), getJSON('/signals/fear'),
-    getJSON('/signals/trends').catch(() => [])]);
+    getJSON('/signals/trends').catch(() => []), getJSON('/rates/curve').catch(() => null),
+    getJSON('/rates/macro').catch(() => [])]);
   $('#t-posts').textContent = fmtNum(status.posts_last_hour);
   $('#t-posts-d').textContent = `${fmtNum(status.posts_total)} total · ${Object.entries(status.by_source).map(([k,v]) => k + ' ' + fmtNum(v)).join(', ')}`;
   $('#t-screen').textContent = fmtPct(status.screened_share, 1);
@@ -442,6 +506,7 @@ async function refreshSignals() {
   sentimentTable(sent);
   marketsTable(mkts);
   trendsTable(trends);
+  drawCurve(curve, macro);
 }
 
 /* ============================================================ shell */

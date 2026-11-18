@@ -436,6 +436,60 @@ def paper_trade(portfolio_id: int, db: str | None = typer.Option(None, "--db"), 
             console.print(f"Filled {n} approved orders at the latest price.")
 
 
+# ----------------------------------------------------------------------------- rates
+
+
+@app.command()
+def rates_sync(years: int = typer.Option(2, help="How many calendar years of history to keep up to date"),
+               credit: bool = typer.Option(False, help="Also fetch credit spreads and policy rates from FRED"),
+               db: str | None = typer.Option(None, "--db")):
+    """Download the US Treasury yield curve (and optionally FRED credit spreads)."""
+    from spectre.rates import fred, treasury
+
+    this_year = date.today().year
+    with _session(db) as s:
+        r = treasury.sync(s, years=list(range(this_year - years + 1, this_year + 1)))
+        console.print(f"Treasury curve: {r['new_points']} new points, latest {r['latest_date']}")
+        if credit:
+            f = fred.sync(s)
+            console.print(f"FRED: {f['new_points']} new points across {len(f['series']) - len(f['failed'])} series")
+            for sid, why in f["failed"].items():
+                console.print(f"  [yellow]{sid} skipped: {why}[/]")
+
+
+@app.command()
+def rates(db: str | None = typer.Option(None, "--db")):
+    """Today's Treasury yield curve, how it has moved, and whether it is inverted."""
+    from spectre.rates.analytics import latest_curve, latest_macro
+
+    with _session(db) as s:
+        c = latest_curve(s)
+        macro = latest_macro(s)
+    if c is None:
+        console.print("No curve stored yet. Run `spectre rates-sync`.")
+        return
+
+    def bp(x):
+        return "-" if x is None else f"[{'red' if x > 0 else 'green' if x < 0 else 'white'}]{x:+.0f}[/]"
+
+    console.print(f"[bold]US Treasury yield curve[/] {c['date']}")
+    t = Table("maturity", "yield", "1 day (bp)", "1 week (bp)", "1 month (bp)")
+    for p in c["points"]:
+        t.add_row(p["tenor"], f"{p['yield']:.2f}%", bp(p["change_1d_bp"]), bp(p["change_1w_bp"]), bp(p["change_1m_bp"]))
+    console.print(t)
+    shape = "[red]inverted[/]" if c["inverted"] else "upward sloping"
+    console.print(f"10y minus 2y: {c['slope_2s10s_bp']:+.0f} bp (a month ago {c['slope_2s10s_1m_ago_bp'] or 0:+.0f}); "
+                  f"10y minus 3m: {c['slope_3m10y_bp']:+.0f} bp; curve is {shape}")
+    if macro:
+        from spectre.rates.fred import SERIES
+
+        t = Table("series", "latest", "1 month change", "as of", "what it is")
+        for m in macro:
+            chg = "-" if m["change_1m"] is None else f"{m['change_1m']:+.2f}"
+            t.add_row(m["series"], f"{m['value']:.2f}", chg, m["date"], SERIES.get(m["series"], ""))
+        console.print(t)
+
+
 # ----------------------------------------------------------------------------- fundamentals
 
 

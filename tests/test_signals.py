@@ -231,7 +231,7 @@ def test_signals_api(sclient):
     # Every endpoint the portfolio view calls must answer for the demo portfolios.
     for url in ("/portfolios/1/active?dimension=asset_class", "/portfolios/1/active?dimension=sector",
                 "/portfolios/1/risk/var", "/portfolios/1/risk/stress", "/portfolios/1/compliance",
-                "/orders?portfolio_id=1&limit=12", "/securities"):
+                "/orders?portfolio_id=1&limit=12", "/securities", "/rates/curve", "/rates/macro", "/trading/status"):
         assert sclient.get(url).status_code == 200, url
 
 

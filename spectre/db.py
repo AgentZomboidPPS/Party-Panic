@@ -37,6 +37,7 @@ def init_db(engine: Engine) -> None:
     import spectre.execution.models  # noqa: F401
     import spectre.fundamentals.models  # noqa: F401
     import spectre.models  # noqa: F401  (registers tables on Base.metadata)
+    import spectre.rates.models  # noqa: F401
     import spectre.signals.models  # noqa: F401
 
     Base.metadata.create_all(engine)

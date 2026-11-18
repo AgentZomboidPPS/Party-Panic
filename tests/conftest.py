@@ -23,6 +23,17 @@ D0 = date(2025, 1, 6)
 D1 = date(2025, 1, 7)
 
 
+@pytest.fixture(autouse=True)
+def _settings_do_not_depend_on_the_local_env_file(monkeypatch):
+    """A developer's .env (keys, looser paper limits) must never change what the tests see."""
+    from spectre.config import Settings, settings
+
+    defaults = Settings(_env_file=None)
+    for name in Settings.model_fields:
+        if name != "database_url":
+            monkeypatch.setattr(settings, name, getattr(defaults, name))
+
+
 @pytest.fixture
 def engine():
     e = make_engine("sqlite://")

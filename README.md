@@ -11,8 +11,10 @@
 | **AEGIS** | compliance rules, trading limits, kill switch | `spectre/compliance`, `spectre/execution` |
 | **REAPER** | order routing and brokers | `spectre/trading`, `spectre/execution/brokers.py` |
 
-**Status, plainly.** Live data flows from five sources. KAIROS trades on paper only. Nothing here
-has a demonstrated edge on real data yet, and no real broker is connected.
+**Status, plainly.** Live data flows from five social and prediction-market sources, plus the
+Treasury yield curve, FRED credit spreads and Alpaca prices and option chains. KAIROS trades on
+paper only, either in the built-in simulation or through an Alpaca paper account. Nothing here has
+a demonstrated edge on real data yet, and no live (real-money) broker exists in the code.
 
 Portfolio management, risk analytics, pre-trade compliance, order management and an
 alternative-data **signals** layer (public conversation + prediction markets) on **one shared
@@ -62,7 +64,7 @@ spectre serve                # REST API with interactive docs at http://127.0.0.
 Point at another database with `--db postgresql://...` or `SPECTRE_DATABASE_URL=...`. SQLite is the
 default for development; the schema is plain SQLAlchemy and runs unchanged on Postgres.
 
-Run the tests with `pytest` (88 tests, ~30 s; most of it is seeding synthetic social history).
+Run the tests with `pytest` (106 tests, ~30 s; most of it is seeding synthetic social history).
 Lint with `ruff check spectre tests`.
 
 ## What each module does
@@ -216,6 +218,45 @@ spectre execute 7                   # paper fill, subject to limits and the kill
 spectre limits · spectre halt "something looks wrong" · spectre resume
 ```
 
+### Alpaca (`execution/alpaca.py`) — paper trading, live prices, option chains
+
+Written from Alpaca's published API definition and confirmed against a live paper account.
+
+- **Paper trading.** `--broker alpaca` on `bot`, `autopilot` and `execute` routes orders to your
+  Alpaca paper account. Paper keys and live keys are separate at Alpaca, and the broker class
+  refuses to be constructed for any address other than the paper host, so this path cannot move
+  real money. It sends nothing while the market is closed, waits briefly for a fill, cancels what
+  is left, and reports broker refusals as plain reasons.
+- **Prices.** `spectre prices-sync` stores Alpaca's latest traded price for every US stock and
+  fund in the book (free plan: real-time IEX).
+- **Option chains.** `spectre options NVDA` shows bid, ask, implied volatility and greeks per
+  contract (free plan: "indicative" prices; the full real-time feed is a paid plan). This is
+  data only: SPECTRE does not trade options.
+- `spectre alpaca-status --portfolio N` shows the account and checks Alpaca's positions against
+  the ledger.
+
+```bash
+# keys live in a git-ignored .env, never in the repository
+echo 'SPECTRE_ALPACA_KEY_ID=PK...'       >> .env
+echo 'SPECTRE_ALPACA_SECRET_KEY=...'     >> .env
+spectre portfolio-create "KAIROS Alpaca" --cash 100000
+spectre autopilot 2 --broker alpaca      # live feeds in, a paper decision every 10 minutes
+```
+
+### Rates (`spectre/rates`) — the bond market
+
+- **US Treasury yield curve** from the Treasury's own daily file: every maturity from 1 month to
+  30 years, with changes over a day, a week and a month, the 10y-2y and 10y-3m slopes and an
+  inversion flag.
+- **Credit and policy** from FRED: investment-grade and high-yield spreads, the Fed funds rate,
+  the 10-year real yield and breakeven inflation. FRED returns a ZIP when asked for several
+  series at once, so each is fetched separately.
+
+```bash
+spectre rates-sync --credit      # two years of curve history plus the FRED series
+spectre rates
+```
+
 ### KAIROS, the trend bot (`signals/strategy.py`) — paper only
 
 `spectre autopilot <portfolio>` runs the live data feeds and a trading decision every few minutes
@@ -293,6 +334,7 @@ GET  /dashboard                                   night mode by default (toggle 
 GET  /signals/status · /signals/bubbles · /signals/bubbles/history?hours=
 GET  /signals/sentiment · /signals/sentiment/{ticker} · /signals/fear · /signals/markets
 GET  /fundamentals/{ticker}                        latest quarter vs previous quarter and a year ago
+GET  /rates/curve · /rates/history/{tenor} · /rates/macro   Treasury curve, one maturity over time, credit and policy
 GET  /signals/trends · /signals/live (crowd stance the bot trades on) · /signals/calibration
 GET  /signals/markets?min_prob=0.05&max_prob=0.95   contested markets only
 GET  /signals/backtest?start=&end=&horizon=&signal=&cost_bps=
@@ -318,7 +360,8 @@ through the API or directly into the tables.
 
 Environment variables, all prefixed `SPECTRE_`: `DATABASE_URL`, `BASE_CURRENCY`, `VAR_CONFIDENCE`
 (0.99), `VAR_HORIZON_DAYS` (1), `LOOKBACK_DAYS` (500), `MC_SIMULATIONS` (20000), `MC_SEED` (42).
-Trading guardrails: `TRADING_MODE` (paper), `TRADING_MAX_ORDER_NOTIONAL` (1000),
+Alpaca: `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`, `ALPACA_TRADING_URL` (paper host), `ALPACA_STOCK_FEED` (iex),
+`ALPACA_OPTION_FEED` (indicative). Trading guardrails: `TRADING_MODE` (paper), `TRADING_MAX_ORDER_NOTIONAL` (1000),
 `TRADING_MAX_DAILY_NOTIONAL` (5000), `TRADING_MAX_ORDERS_PER_DAY` (20), `TRADING_MAX_POSITION_WEIGHT`
 (0.20), `TRADING_REQUIRE_APPROVAL` (true), `TRADING_ALLOWED_SYMBOLS` (empty = any).
 
@@ -336,10 +379,11 @@ Trading guardrails: `TRADING_MODE` (paper), `TRADING_MAX_ORDER_NOTIONAL` (1000),
 
 ## Roadmap
 
-Next steps in rough priority order: keep the live ingest running for days so real signals can
-be backtested against real prices; train a sentiment classifier on the Stocktwits labels and
-adopt it only if it beats the baseline out of sample; a live broker adapter (official API, scoped
-key) behind the execution gate, after paper results justify it; a proper price feed; Reddit via
-a registered app; performance attribution (Brinson, and factor-based); settlement and custodian
-reconciliation; multi-user auth with roles; scheduled end-of-day risk and compliance runs with
-alerting; Postgres migrations via Alembic; a data-licensing review before selling derived signals.
+Next steps in rough priority order: a permanent, always-on home so KAIROS can build a track
+record; measure the crowd signal against real prices once weeks of data exist; train a sentiment
+classifier on the Stocktwits labels and adopt it only if it beats the baseline out of sample; use
+rates and credit as a risk-on / risk-off filter; SEC earnings against the live service; options
+analytics on the chain data (not trading); Reddit via a registered app; performance attribution;
+multi-user auth; scheduled end-of-day risk and compliance runs; Postgres migrations via Alembic; a
+data-licensing review before selling derived signals. A live broker would come last, behind the
+live-mode and per-order approval gates, and only after paper results justify it.

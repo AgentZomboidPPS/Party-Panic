@@ -5,7 +5,17 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.engine import Engine
 
 from spectre import __version__
-from spectre.api.routers import compliance, fundamentals, orders, portfolios, risk, securities, signals, system
+from spectre.api.routers import (
+    compliance,
+    fundamentals,
+    orders,
+    portfolios,
+    rates,
+    risk,
+    securities,
+    signals,
+    system,
+)
 from spectre.config import settings
 from spectre.db import init_db, make_engine, make_session_factory
 from spectre.trading.oms import OrderError
@@ -35,9 +45,12 @@ def create_app(database_url: str | None = None, engine: Engine | None = None) ->
     async def _order_error(_: Request, exc: OrderError):
         return JSONResponse(status_code=409, content={"detail": str(exc)})
 
-    for r in (system.router, securities.router, portfolios.router, risk.router, risk.scenarios_router,
-              compliance.router, orders.router, orders.trading_router, fundamentals.router, signals.router,
-              signals.dashboard_router):
+    routers = (
+        system.router, securities.router, portfolios.router, risk.router, risk.scenarios_router, compliance.router,
+        orders.router, orders.trading_router, fundamentals.router, rates.router, signals.router,
+        signals.dashboard_router,
+    )
+    for r in routers:
         app.include_router(r)
     return app
 
