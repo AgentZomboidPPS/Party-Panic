@@ -29,7 +29,7 @@ from tests.test_strategy import T0, crowd_posts
 TODAY = date(2026, 11, 18)
 RULES = OptionRules(min_authors=4)
 LIMITS = TradingLimits(max_order_notional=10_000, max_daily_notional=100_000, max_orders_per_day=50, max_position_weight=0.25)
-NVDA_CALL, TSLA_PUT, TSLA_CALL = "NVDA261224C00155000", "TSLA261218P00400000", "TSLA261218C00400000"
+NVDA_CALL, TSLA_PUT, TSLA_CALL = "NVDA261218C00155000", "TSLA261218P00400000", "TSLA261218C00400000"
 
 
 def snap(bid, ask, delta=None):
@@ -42,12 +42,12 @@ def snap(bid, ask, delta=None):
 def chain():
     return {
         "NVDA261127C00150000": snap(3.0, 3.1, 0.52),  # 9 days out: too close
-        "NVDA261218C00155000": snap(4.9, 5.1, 0.44),  # 30 days
-        "NVDA261224C00140000": snap(13.0, 13.4, 0.68),  # 36 days: nearest the middle of the 21-50 day window
-        "NVDA261224C00150000": snap(8.0, 8.2, 0.55),
+        "NVDA261224C00155000": snap(4.9, 5.1, 0.44),  # 36 days: nearest the middle of the 21-50 day window, but a weekly
+        "NVDA261218C00140000": snap(13.0, 13.4, 0.68),  # 30 days, the monthly expiry (third Friday): preferred
+        "NVDA261218C00150000": snap(8.0, 8.2, 0.55),
         NVDA_CALL: snap(5.4, 5.6, 0.45),  # ... and nearest the 0.45 target delta
-        "NVDA261224C00157500": snap(3.0, 5.0, 0.45),  # right delta, but a spread nobody should pay
-        "NVDA261224C00160000": snap(3.2, 3.3, 0.35),
+        "NVDA261218C00157500": snap(3.0, 5.0, 0.45),  # right delta, but a spread nobody should pay
+        "NVDA261218C00160000": snap(3.2, 3.3, 0.35),
         "NVDA270115C00155000": snap(7.0, 7.2, 0.46),  # 58 days out: too far
         "TSLA261218P00380000": snap(9.0, 9.3, -0.33),
         TSLA_PUT: snap(17.8, 18.2, -0.48),
@@ -117,10 +117,12 @@ def held(s, pid) -> dict[str, float]:
 def test_pick_contract_wants_a_tight_market_the_middle_expiry_and_the_target_delta():
     calls = [q for q in quotes() if q.underlying == "NVDA"]
     assert pick_contract(calls, 150.0, OptionRules(), TODAY).symbol == NVDA_CALL
-    assert pick_contract(calls, 150.0, OptionRules(target_delta=0.70), TODAY).symbol == "NVDA261224C00140000"
+    assert pick_contract(calls, 150.0, OptionRules(target_delta=0.70), TODAY).symbol == "NVDA261218C00140000"
+    weeklies = [q for q in calls if q.symbol != NVDA_CALL and not q.symbol.startswith("NVDA261218")]
+    assert pick_contract(weeklies, 150.0, OptionRules(), TODAY).symbol == "NVDA261224C00155000", "no monthly in range: nearest the middle"
     # Later in the month the nearer expiries have dropped out of the window and January is in it.
     assert pick_contract(calls, 150.0, OptionRules(), date(2026, 12, 10)).symbol == "NVDA270115C00155000"
-    assert pick_contract(quotes({"NVDA261224C00157500"}), 150.0, OptionRules(), TODAY) is None, "only a wide market: no trade"
+    assert pick_contract(quotes({"NVDA261218C00157500"}), 150.0, OptionRules(), TODAY) is None, "only a wide market: no trade"
     assert pick_contract([], 150.0, OptionRules(), TODAY) is None
 
 
@@ -163,8 +165,8 @@ def test_cycle_buys_a_call_on_the_bullish_name_and_a_put_on_the_bearish_one(book
         assert v.cash == pytest.approx(100_000 - 5 * 5.5 * 100 - 18.0 * 100)
         assert v.total_value == pytest.approx(100_000), "one contract is worth 100 x its price"
         sec = s.execute(select(Security).where(Security.ticker == NVDA_CALL)).scalar_one()
-        assert sec.asset_class == "Option" and sec.multiplier == 100 and sec.maturity_date == date(2026, 12, 24)
-        assert sec.name == "NVDA 2026-12-24 155 call" and sec.issuer == "NVIDIA Corporation"
+        assert sec.asset_class == "Option" and sec.multiplier == 100 and sec.maturity_date == date(2026, 12, 18)
+        assert sec.name == "NVDA 2026-12-18 155 call" and sec.issuer == "NVIDIA Corporation"
         mark = s.get(OptionMark, sec.id)
         assert mark.delta == 0.45 and mark.mark == pytest.approx(5.5) and mark.underlying_price == 150.0
         orders = s.execute(select(Order)).scalars().all()
@@ -195,10 +197,11 @@ def test_nothing_is_held_into_expiry_week(book):
     fake = FakeOptions()
     with factory() as s:
         cycle(s, pid, fake)
-        r = cycle(s, pid, fake, today=date(2026, 12, 14))  # TSLA put expires in 4 days, NVDA call in 10
-        (sell,) = r.actions
-        assert sell["ticker"] == TSLA_PUT and sell["side"] == "SELL" and sell["why"] == "4 days to expiry"
-        assert held(s, pid) == {NVDA_CALL: 5}
+        assert cycle(s, pid, fake, today=date(2026, 12, 10)).actions == [], "eight days out: still held"
+        r = cycle(s, pid, fake, today=date(2026, 12, 14))  # both expire on the 18th, four days away
+        assert {(a["ticker"], a["side"], a["why"]) for a in r.actions} == {(NVDA_CALL, "SELL", "4 days to expiry"),
+                                                                           (TSLA_PUT, "SELL", "4 days to expiry")}
+        assert held(s, pid) == {}
 
 
 def test_without_a_bid_it_waits_unless_expiry_is_on_top_of_it(book):
@@ -208,7 +211,7 @@ def test_without_a_bid_it_waits_unless_expiry_is_on_top_of_it(book):
         cycle(s, pid, fake)
         del fake.chain[TSLA_PUT]  # the feed has nothing for this contract
         r = cycle(s, pid, fake, today=date(2026, 12, 14))
-        (note,) = r.actions
+        note = next(a for a in r.actions if a["ticker"] == TSLA_PUT)
         assert note["outcome"] == "skipped" and "no bid" in note["why"] and held(s, pid)[TSLA_PUT] == 1
         r = cycle(s, pid, fake, today=date(2026, 12, 17))  # one day left: get out at whatever the bid is
         sell = next(a for a in r.actions if a["ticker"] == TSLA_PUT)
@@ -240,7 +243,7 @@ def test_option_contracts_never_leak_into_what_the_crowd_is_read_as_saying(book)
     factory, pid = book
     with factory() as s:
         cycle(s, pid, FakeOptions())
-        # The contract is named "NVDA 2026-12-24 155 call": its first word must not become a way to say NVDA.
+        # The contract is named "NVDA 2026-12-18 155 call": its first word must not become a way to say NVDA.
         assert build_extractor(s).extract("NVDA and nvda are both just the stock") == ["NVDA"]
         assert {x.ticker for x in live_signals(s, min_authors=4)} == {"NVDA", "TSLA"}
 

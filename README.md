@@ -397,8 +397,11 @@ KAIROS does not try to sell something it bought with unsettled sale proceeds unt
 has arrived, normally the next business day. It says so in its log instead.
 
 **Options sleeve (`--options`, `signals/options_strategy.py`).** On the strongest reads it buys
-a call (bullish) or a put (bearish): an expiry three to seven weeks out, the strike whose delta
-is nearest 0.45, and only where the bid/ask spread is tight. It spends `--options-per-trade`
+a call (bullish) or a put (bearish): an expiry three to seven weeks out, the standard monthly
+one (third Friday) when there is one in range, the strike whose delta is nearest 0.45, and
+only where the bid/ask spread is tight. The monthly preference is from measurement: on live
+chains the monthly expiry traded many times the volume of the weeklies around it, with a
+bid/ask gap of about 3% on AMZN against 8% a week later. It spends `--options-per-trade`
 (3%) of the portfolio per position and at most `--options-budget` (20%) in total premium. A
 holding is sold at +100%, at −50%, a week before expiry (so nothing is exercised or assigned),
 or when the crowd turns; a contract sold today is not bought back the same day. Orders are

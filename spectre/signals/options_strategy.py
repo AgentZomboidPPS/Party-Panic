@@ -10,8 +10,10 @@ Each cycle:
    nothing is exercised or assigned), when it has hit the profit target or the loss stop, or
    when the crowd has turned against it;
 3. for the strongest reads not already covered, buy one contract series: a call when the crowd
-   is bullish, a put when bearish; an expiry a few weeks out; the strike whose delta is nearest
-   `target_delta`; and only if the bid/ask spread is tight enough to trade. A name whose calls
+   is bullish, a put when bearish; an expiry a few weeks out, the standard monthly one when
+   there is one in range (far more heavily traded than the weeklies, so cheaper to get in and
+   out of); the strike whose delta is nearest `target_delta`; and only if the bid/ask spread
+   is tight enough to trade. A name whose calls
    (or puts) were sold today is not bought back the same day: a stop that is re-entered ten
    minutes later is not a stop.
 
@@ -79,6 +81,11 @@ class OptionRules:
     stop_loss: float = -0.5  # -50%
 
 
+def is_monthly(expiry: date) -> bool:
+    """A standard monthly expiry: the third Friday of its month."""
+    return expiry.weekday() == 4 and 15 <= expiry.day <= 21
+
+
 def pick_contract(chain: list[OptionQuote], spot: float, rules: OptionRules, today: date) -> OptionQuote | None:
     """One contract from a chain of a single type: tradable, in the expiry window, delta nearest target."""
     usable = [
@@ -88,8 +95,12 @@ def pick_contract(chain: list[OptionQuote], spot: float, rules: OptionRules, tod
     ]
     if not usable:
         return None
+    # Monthly contracts (the third Friday) are where the trading is: on live chains they showed
+    # many times the volume of the weeklies either side and a fraction of the bid/ask gap. So a
+    # monthly expiry inside the window wins; otherwise, and between two of a kind, the one
+    # nearest the middle of the window.
     middle = (rules.dte_min + rules.dte_max) / 2
-    expiry = min({q.expiration for q in usable}, key=lambda e: abs((e - today).days - middle))
+    expiry = min({q.expiration for q in usable}, key=lambda e: (not is_monthly(e), abs((e - today).days - middle)))
     candidates = [q for q in usable if q.expiration == expiry]
     with_delta = [q for q in candidates if q.delta is not None]
     if with_delta:

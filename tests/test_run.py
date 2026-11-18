@@ -76,7 +76,7 @@ def test_a_fresh_ledger_starts_from_what_the_broker_already_holds(fresh):
     assert v.cash == pytest.approx(17_966.74), "funded so that the ledger's cash is the broker's cash"
     option = s.execute(select(Security).where(Security.ticker == "NVDA261224C00155000")).scalar_one()
     assert option.asset_class == "Option" and option.multiplier == 100 and option.maturity_date == date(2026, 12, 24)
-    assert v.positions.at[option.id, "price"] == pytest.approx(5.5), "marked at the live quote, not the entry price"
+    assert v.positions.at[option.id, "price"] == pytest.approx(5.0), "marked at the live quote (4.90 / 5.10), not the entry price"
     assert all(t.settle_date == t.trade_date for t in s.execute(select(Trade)).scalars()), "already owned, so already settled"
     state = simulate(s, pid)
     assert state.pending == [] and state.restricted == [] and state.settled_cash == pytest.approx(17_966.74)
