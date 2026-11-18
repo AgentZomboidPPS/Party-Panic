@@ -104,10 +104,40 @@ UNIVERSE: list[Entry] = [
     Entry("DIA", "SPDR Dow Jones Industrial Average ETF", "Broad Market", ("dow jones",), bare="context", asset_class="Fund"),
     Entry("TLT", "iShares 20+ Year Treasury Bond ETF", "Government", ("long bonds", "treasury bonds"), asset_class="Fund"),
     Entry("GLD", "SPDR Gold Shares", "Commodities", ("gold prices", "price of gold"), bare="context", asset_class="Fund"),
-    Entry("IBIT", "iShares Bitcoin Trust", "Crypto", ("bitcoin", "btc"), asset_class="Fund"),
+    Entry("IBIT", "iShares Bitcoin Trust", "Crypto", ("ibit",), asset_class="Fund"),
+    # Crypto: spot coins, priced in dollars, trading around the clock. Symbols that are also
+    # words or other things' initials (SOL, ADA, DOGE the government office) need market talk.
+    Entry("BTC", "Bitcoin", "Crypto", ("bitcoin", "btc"), asset_class="Crypto", country="Global"),
+    Entry("ETH", "Ethereum", "Crypto", ("ethereum",), ("ether",), asset_class="Crypto", country="Global"),
+    Entry("SOL", "Solana", "Crypto", ("solana",), bare="context", asset_class="Crypto", country="Global"),
+    Entry("XRP", "XRP (Ripple)", "Crypto", ("xrp",), ("ripple",), asset_class="Crypto", country="Global"),
+    Entry("DOGE", "Dogecoin", "Crypto", ("dogecoin",), bare="context", asset_class="Crypto", country="Global"),
+    Entry("ADA", "Cardano", "Crypto", ("cardano",), bare="context", asset_class="Crypto", country="Global"),
+    Entry("AVAX", "Avalanche", "Crypto", ("avax",), asset_class="Crypto", country="Global"),
+    Entry("LINK", "Chainlink", "Crypto", ("chainlink",), bare="no", asset_class="Crypto", country="Global"),
+    Entry("LTC", "Litecoin", "Crypto", ("litecoin",), asset_class="Crypto", country="Global"),
+    Entry("DOT", "Polkadot", "Crypto", ("polkadot",), bare="no", asset_class="Crypto", country="Global"),
+    Entry("UNI", "Uniswap", "Crypto", ("uniswap",), bare="no", asset_class="Crypto", country="Global"),
+    Entry("SHIB", "Shiba Inu", "Crypto", ("shiba inu",), asset_class="Crypto", country="Global"),
 ]
 
 BY_TICKER: dict[str, Entry] = {e.ticker: e for e in UNIVERSE}
+CRYPTO_TICKERS: frozenset[str] = frozenset(e.ticker for e in UNIVERSE if e.asset_class == "Crypto")
+
+
+def lot_size(asset_class: str) -> float:
+    """Smallest quantity step worth trading: whole shares and contracts, millionths of a coin."""
+    return 1e-6 if asset_class == "Crypto" else 1.0
+
+
+def crypto_base(symbol: str) -> str | None:
+    """The coin a platform symbol stands for, or None: "BTC.X", "BTC/USD" and "BTCUSD" -> "BTC".
+    A bare "BTC" is deliberately not accepted here: on stock platforms that is a fund's ticker."""
+    s = symbol.upper()
+    for suffix in (".X", "/USD", "USD"):
+        if s.endswith(suffix) and s[: -len(suffix)] in CRYPTO_TICKERS:
+            return s[: -len(suffix)]
+    return None
 
 
 def seed_universe(session: Session) -> dict:

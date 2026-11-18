@@ -209,7 +209,11 @@ def test_extractor_handles_ambiguous_company_names(real_db):
     assert ex("CAT earnings tomorrow") == ["CAT"]
     assert ex("my visa got approved") == [] and ex("Visa shares fell") == ["V"]
     assert ex("S&P 500 closes at a record") == ["SPY"]
-    assert ex("bitcoin is pumping") == ["IBIT"]
+    assert ex("bitcoin is pumping") == ["BTC"], "the coin itself, not the fund that holds it"
+    assert ex("$BTC.X and $eth.x both green") == ["BTC", "ETH"], "how stock platforms write coins"
+    assert ex("SOL is a nice word and DOGE cut another agency") == [], "coin symbols that mean other things"
+    assert ex("SOL and DOGE are the coins to hold this cycle") == ["SOL", "DOGE"]
+    assert ex("IBIT inflows hit a record") == ["IBIT"]
     assert "goldman sachs" in firehose_keywords({"GS", "AAPL"}) and "apple" not in firehose_keywords({"GS", "AAPL"})
 
 

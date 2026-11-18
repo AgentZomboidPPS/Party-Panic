@@ -44,8 +44,9 @@ from spectre.execution.brokers import Broker, PaperBroker
 from spectre.execution.guard import TradingLimits, execute
 from spectre.models import OrderType, Security, Side, Trade
 from spectre.portfolio.positions import value_portfolio
+from spectre.portfolio.settlement import sale_restrictions
 from spectre.signals.sources.base import utcnow
-from spectre.signals.strategy import BOT_ACTOR, BotReport, TrendSignal, live_signals
+from spectre.signals.strategy import BOT_ACTOR, BotReport, TrendSignal, live_signals, withdraw_unfilled
 from spectre.trading import oms
 
 
@@ -153,12 +154,14 @@ def run_options_once(
                 res = execute(session, order.id, broker, limits, actor=BOT_ACTOR)
                 action.update(outcome=res.outcome, detail="; ".join(res.reasons), order_id=order.id, fill_price=res.price)
                 ok = res.outcome == "executed"
+                withdraw_unfilled(session, order)
         report.actions.append(action)
         return ok
 
     # --- 1 and 2: mark what is held, then decide exits
     covered: set[str] = set()
     closed = _sold_today(session, portfolio_id, today)
+    on_hold = sale_restrictions(session, portfolio_id) if len(held) else {}
     premium_held = 0.0
     if len(held):
         try:
@@ -192,6 +195,12 @@ def run_options_once(
                 reason = f"down {pnl:+.0%}: stop"
             elif sig is not None and ((kind == "call" and sig.score <= 0) or (kind == "put" and sig.score >= 0)):
                 reason = f"crowd has turned (score {sig.score:+.2f})"
+            if reason and row["ticker"] in on_hold and dte > 2:
+                # Bought with money from a sale that has not settled yet: selling today would be
+                # a good-faith violation. (With expiry two days off, getting out matters more.)
+                report.actions.append({"ticker": row["ticker"], "side": "SELL", "quantity": qty, "price": bid, "outcome": "skipped",
+                                       "why": f"{reason}; held until {on_hold[row['ticker']][1]}, when the money that paid for it settles"})
+                reason = None
             if reason and bid is None and dte > 2:
                 # No quote to price the sale against: wait for one rather than sell at any price.
                 report.actions.append({"ticker": row["ticker"], "side": "SELL", "quantity": qty, "price": None,

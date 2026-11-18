@@ -233,6 +233,18 @@ def test_a_call_is_sold_when_the_crowd_turns_bearish_and_a_put_replaces_it(book)
         assert held(s, pid) == {NVDA_CALL: 5, TSLA_PUT: 1}
 
 
+def test_option_contracts_never_leak_into_what_the_crowd_is_read_as_saying(book):
+    from spectre.signals.pipeline import build_extractor
+    from spectre.signals.strategy import live_signals
+
+    factory, pid = book
+    with factory() as s:
+        cycle(s, pid, FakeOptions())
+        # The contract is named "NVDA 2026-12-24 155 call": its first word must not become a way to say NVDA.
+        assert build_extractor(s).extract("NVDA and nvda are both just the stock") == ["NVDA"]
+        assert {x.ticker for x in live_signals(s, min_authors=4)} == {"NVDA", "TSLA"}
+
+
 def test_total_premium_stays_inside_the_budget(book):
     factory, pid = book
     with factory() as s:

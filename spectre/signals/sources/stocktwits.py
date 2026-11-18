@@ -15,6 +15,7 @@ from datetime import datetime
 
 import httpx
 
+from spectre.marketdata.universe import CRYPTO_TICKERS, crypto_base
 from spectre.signals.sources.base import Emit, Post, sleep_or_stop, to_naive_utc
 
 log = logging.getLogger(__name__)
@@ -43,8 +44,9 @@ def parse_message(m: dict) -> Post | None:
     prices: dict[str, float] = {}
     for p in m.get("prices") or []:  # the symbol's price when the message was posted
         try:
-            if p.get("symbol") and float(p["price"]) > 0:
-                prices[p["symbol"]] = float(p["price"])
+            sym = _symbol(p.get("symbol"))
+            if sym and float(p["price"]) > 0:
+                prices[sym] = float(p["price"])
         except (KeyError, TypeError, ValueError):
             continue
     return Post(
@@ -57,8 +59,20 @@ def parse_message(m: dict) -> Post | None:
         followers=user.get("followers"),
         account_age_days=age,
         source_sentiment=sentiment,
-        meta={"symbols": [s.get("symbol") for s in (m.get("symbols") or []) if s.get("symbol")], "prices": prices},
+        meta={"symbols": [sym for s in (m.get("symbols") or []) if (sym := _symbol(s.get("symbol")))], "prices": prices},
     )
+
+
+def _symbol(raw: str | None) -> str | None:
+    """Stocktwits writes coins as "BTC.X"; SPECTRE calls the coin "BTC". A plain "BTC" here is a
+    different instrument (a fund that happens to share the letters), so it is dropped rather
+    than have its price recorded as the coin's."""
+    if not raw:
+        return None
+    coin = crypto_base(raw)
+    if coin:
+        return coin
+    return None if raw.upper() in CRYPTO_TICKERS else raw
 
 
 class StocktwitsSource:

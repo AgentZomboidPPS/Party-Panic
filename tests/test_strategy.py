@@ -126,6 +126,22 @@ def test_cycle_buys_the_strong_name_within_limits_then_sells_when_the_crowd_turn
         assert v.positions.at[nvda_id, "quantity"] == 2, "a 2,000 order cap at 140 sells 14 of 16; the rest goes next cycle"
 
 
+def test_an_order_the_broker_does_not_fill_is_withdrawn_not_left_open(book):
+    from spectre.execution.brokers import BrokerReject
+
+    class Never:
+        name, live = "never", False
+
+        def submit(self, session, order):
+            raise BrokerReject("no fill")
+
+    factory, pid, _ = book
+    with factory() as s:
+        r = run_once(s, pid, broker=Never(), limits=LIMITS, top_n=2, invest=0.5)
+        assert r.actions[0]["outcome"] == "blocked" and "no fill" in r.actions[0]["detail"]
+        assert s.execute(select(Order.status)).scalar_one() == "CANCELLED"
+
+
 def test_invest_caps_the_whole_stock_book_not_just_each_name(book):
     factory, pid, _ = book
     with factory() as s:

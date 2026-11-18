@@ -28,6 +28,11 @@ class FakeAlpaca:
                  multiplier="1"):
         self.is_open, self.fill_after_polls, self.final_status = is_open, fill_after_polls, final_status
         self.multiplier = multiplier
+        self.cash = "100000"
+        self.positions: list[dict] = []
+        self.coin_quotes = {"BTC/USD": {"bp": 62990.0, "ap": 63010.0, "t": "2026-11-18T18:44:05.077083862Z"},
+                            "ETH/USD": {"bp": 1769.0, "ap": 1771.0, "t": "2026-11-18T18:44:03.209396325Z"},
+                            "SOL/USD": {"bp": 0, "ap": 73.6, "t": "2026-11-18T18:04:13.3Z"}}  # one-sided: unusable
         self.fill_price, self.partial = fill_price, partial
         self.orders: dict[str, dict] = {}
         self.polls = 0
@@ -42,8 +47,10 @@ class FakeAlpaca:
                 return httpx.Response(200, json={"is_open": self.is_open, "next_open": "2026-11-19T09:30:00-05:00",
                                                  "next_close": "2026-11-18T16:00:00-05:00", "timestamp": "x"})
             if path == "/v2/account":
-                return httpx.Response(200, json={"status": "ACTIVE", "cash": "100000", "equity": "100000",
+                return httpx.Response(200, json={"status": "ACTIVE", "cash": self.cash, "equity": "100000",
                                                  "multiplier": self.multiplier})
+            if path == "/v2/positions":
+                return httpx.Response(200, json=self.positions)
             if path == "/v2/account/configurations":
                 if request.method == "PATCH":
                     self.multiplier = json.loads(request.content).get("max_margin_multiplier", self.multiplier)
@@ -72,6 +79,9 @@ class FakeAlpaca:
                         o.update(filled_qty=o["qty"], filled_avg_price=self.fill_price)
                 return httpx.Response(200, json=o)
         if host == "data.alpaca.markets":
+            if path == "/v1beta3/crypto/us/latest/quotes":
+                wanted = request.url.params["symbols"].split(",")
+                return httpx.Response(200, json={"quotes": {s: self.coin_quotes[s] for s in wanted if s in self.coin_quotes}})
             if path == "/v2/stocks/trades/latest":
                 wanted = request.url.params["symbols"].split(",")
                 trades = {"NVDA": {"p": 151.38, "s": 150, "t": "2026-11-18T18:11:48.668719255Z", "x": "V"},

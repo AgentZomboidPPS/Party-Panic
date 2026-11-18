@@ -8,7 +8,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from spectre.compliance.rules import REGISTRY, Breach, RuleSpec
+from spectre.compliance.rules import NEEDS_CONTEXT, REGISTRY, Breach, Context, RuleSpec
 from spectre.models import CheckStage, ComplianceCheck, ComplianceRule, Severity
 from spectre.portfolio.positions import ValuedPositions, value_portfolio
 from spectre.portfolio.whatif import ProposedTrade, apply_trades
@@ -27,10 +27,19 @@ def load_rules(session: Session, portfolio_id: int) -> list[RuleSpec]:
     return [RuleSpec.from_orm(r) for r in rows]
 
 
-def evaluate(rules: list[RuleSpec], valued: ValuedPositions) -> list[Breach]:
+def evaluate(rules: list[RuleSpec], valued: ValuedPositions, ctx: Context | None = None) -> list[Breach]:
     breaches: list[Breach] = []
     for spec in rules:
         fn = REGISTRY.get(spec.rule_type)
+        if fn is not None and spec.rule_type in NEEDS_CONTEXT:
+            if ctx is None:
+                breaches.append(
+                    Breach(spec.id, spec.name, spec.rule_type, Severity.HARD, "rule", None, None, 1.0,
+                           f"Rule {spec.rule_type!r} needs the trade history and none was supplied")
+                )
+            else:
+                breaches.extend(fn(spec, valued, ctx))
+            continue
         if fn is None:
             # A rule nobody can evaluate must not silently pass.
             breaches.append(
@@ -88,7 +97,7 @@ def post_trade_check(
 ) -> CheckResult:
     valued = value_portfolio(session, portfolio_id, as_of)
     rules = load_rules(session, portfolio_id)
-    breaches = evaluate(rules, valued)
+    breaches = evaluate(rules, valued, Context(session, portfolio_id))
     hard = [b for b in breaches if b.severity == Severity.HARD]
     result = CheckResult(
         stage=CheckStage.POST_TRADE,
@@ -122,8 +131,8 @@ def pre_trade_check(
     after = apply_trades(session, before, trades)
     rules = load_rules(session, portfolio_id)
 
-    before_map = {b.key: b for b in evaluate(rules, before)}
-    after_breaches = evaluate(rules, after)
+    before_map = {b.key: b for b in evaluate(rules, before, Context(session, portfolio_id))}
+    after_breaches = evaluate(rules, after, Context(session, portfolio_id, tuple(trades)))
 
     new_or_worse: list[Breach] = []
     pre_existing: list[Breach] = []

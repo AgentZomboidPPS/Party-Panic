@@ -154,6 +154,7 @@ def paper_trade(portfolio_id: int, db: DB, top_n: int = 5, sleeve: float = 0.10,
 dashboard_router = APIRouter(tags=["dashboard"])
 
 
+@dashboard_router.get("/", include_in_schema=False)
 @dashboard_router.get("/dashboard", include_in_schema=False)
 def dashboard():
     return FileResponse(DASHBOARD, media_type="text/html")

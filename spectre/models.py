@@ -41,6 +41,7 @@ class AssetClass(str, enum.Enum):
     FUND = "Fund"
     COMMODITY = "Commodity"
     OPTION = "Option"
+    CRYPTO = "Crypto"
     CASH = "Cash"
 
 
@@ -178,7 +179,9 @@ class Portfolio(Base):
 
 
 class CashFlow(Base):
-    """External cash movements in the portfolio's base currency (subscriptions, redemptions)."""
+    """Cash movements in the portfolio's base currency that are not the cost of a trade.
+    `kind` says what it was: EXTERNAL (money put in or taken out), FEE (charged by a broker
+    outside any one trade), INCOME (dividends, interest) or ADJUSTMENT."""
 
     __tablename__ = "cash_flows"
 
@@ -187,6 +190,7 @@ class CashFlow(Base):
     date: Mapped[date] = mapped_column(Date, index=True)
     amount: Mapped[float] = mapped_column(Float)
     memo: Mapped[str | None] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(12), default="EXTERNAL", server_default="EXTERNAL")
 
 
 # --------------------------------------------------------------------------- trading

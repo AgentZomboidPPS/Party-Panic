@@ -78,7 +78,7 @@ def positions(portfolio_id: int, db: str | None = typer.Option(None, "--db"),
         console.print(f"[bold]{v.portfolio_name}[/] as of {v.as_of}  total {_money(v.total_value)} {v.base_currency}")
         t = Table("ticker", "name", "asset class", "sector", "qty", "price", "ccy", "mkt value", "weight")
         for _sid, r in v.positions.sort_values("market_value", ascending=False).iterrows():
-            t.add_row(r.ticker, r["name"], r.asset_class, r.sector, f"{r.quantity:,.0f}", f"{r.price:,.2f}",
+            t.add_row(r.ticker, r["name"], r.asset_class, r.sector, _fmt_qty(r.quantity), _fmt_px(r.price),
                       r.currency, _money(r.market_value), _pct(r.weight))
         t.add_row("CASH", "", "Cash", "", "", "", v.base_currency, _money(v.cash), _pct(v.cash_weight))
         console.print(t)
@@ -189,8 +189,8 @@ def orders(db: str | None = typer.Option(None, "--db"), portfolio_id: int | None
     with _session(db) as s:
         t = Table("id", "portfolio", "ticker", "side", "qty", "filled", "avg px", "type", "status", "reason")
         for o in blotter(s, portfolio_id):
-            t.add_row(str(o.id), str(o.portfolio_id), o.security.ticker, o.side, f"{o.quantity:,.0f}",
-                      f"{o.filled_quantity:,.0f}", f"{o.avg_fill_price:,.2f}" if o.avg_fill_price else "-",
+            t.add_row(str(o.id), str(o.portfolio_id), o.security.ticker, o.side, _fmt_qty(o.quantity),
+                      _fmt_qty(o.filled_quantity), f"{o.avg_fill_price:,.2f}" if o.avg_fill_price else "-",
                       o.order_type, o.status, (o.reject_reason or "")[:60])
         console.print(t)
 
@@ -430,7 +430,7 @@ def paper_trade(portfolio_id: int, db: str | None = typer.Option(None, "--db"), 
             return
         t = Table("id", "ticker", "side", "qty", "status", "reason")
         for o in orders:
-            t.add_row(str(o.id), o.security.ticker, o.side, f"{o.quantity:,.0f}", o.status, (o.reject_reason or "")[:70])
+            t.add_row(str(o.id), o.security.ticker, o.side, _fmt_qty(o.quantity), o.status, (o.reject_reason or "")[:70])
         console.print(t)
         if fill:
             console.print(f"Filled {n} approved orders at the latest price.")
@@ -587,7 +587,8 @@ def portfolio_create(name: str, cash: float = typer.Option(100_000.0, help="Star
         s.add(CashFlow(portfolio_id=pf.id, date=min(latest_price_date(s) or date.today(), date.today()), amount=cash,
                        memo="Initial funding"))
         for rule_name, rule_type in (("No overdraft", "no_negative_cash"), ("No short positions", "no_short_positions"),
-                                     ("No naked options", "no_naked_options")):
+                                     ("No naked options", "no_naked_options"),
+                                     ("No good-faith violations", "no_good_faith_violations")):
             s.add(ComplianceRule(portfolio_id=pf.id, name=rule_name, rule_type=rule_type, params={}, severity="HARD"))
         s.commit()
         console.print(f"Created portfolio {pf.id} '{name}' with {_money(cash)} {pf.base_currency}")
@@ -612,7 +613,7 @@ def order(portfolio_id: int, ticker: str, side: str, quantity: float,
                              order_type=OrderType.LIMIT if limit is not None else OrderType.MARKET, limit_price=limit,
                              actor=actor)
         colour = "green" if o.status == "APPROVED" else "red"
-        console.print(f"Order {o.id}: {o.side} {o.quantity:,.0f} {sec.ticker} -> [{colour}]{o.status}[/] {o.reject_reason or ''}")
+        console.print(f"Order {o.id}: {o.side} {_fmt_qty(o.quantity)} {sec.ticker} -> [{colour}]{o.status}[/] {o.reject_reason or ''}")
         if o.status == "APPROVED":
             console.print(f"Run `spectre execute {o.id}` to fill it on paper.")
 
@@ -629,7 +630,7 @@ def execute(order_id: int, slippage_bps: float = typer.Option(0.0, help="Built-i
         chosen = PaperBroker(slippage_bps) if broker == "paper" else _broker(broker, s)
         r = _execute(s, order_id, chosen, actor="cli")
     if r.outcome == "executed":
-        console.print(f"[green]Executed[/] order {r.order_id} on {r.broker}: {r.quantity:,.0f} @ {r.price:,.2f}")
+        console.print(f"[green]Executed[/] order {r.order_id} on {r.broker}: {_fmt_qty(r.quantity)} @ {_fmt_px(r.price)}")
     else:
         console.print(f"[red]{r.outcome}[/] order {r.order_id}: " + "; ".join(r.reasons))
 
@@ -656,17 +657,71 @@ def _option_rules(budget: float, per_trade: float, enter: float, min_authors: in
     return OptionRules(budget=budget, per_trade=per_trade, enter=enter, min_authors=min_authors)
 
 
+def _fmt_qty(q: float) -> str:
+    """Whole numbers plainly, fractions of a coin to six places."""
+    return f"{q:,.0f}" if float(q).is_integer() else f"{q:,.6f}".rstrip("0")
+
+
+def _fmt_px(px: float | None) -> str:
+    if not px:
+        return "-"
+    return f"{px:,.2f}" if px >= 1 else f"{px:.6f}"
+
+
 def _action_line(a: dict) -> str:
-    px = a.get("fill_price") or a.get("price")
     colour = {"executed": "green", "dry run": "yellow", "skipped": "dim"}.get(a["outcome"], "red")
-    return (f"{a['side']:<4} {a['quantity']:>6,.0f} {a['ticker']:<21} @ {f'{px:,.2f}' if px else '-':>8}  "
+    return (f"{a['side']:<4} {_fmt_qty(a['quantity']):>10} {a['ticker']:<21} @ {_fmt_px(a.get('fill_price') or a.get('price')):>10}  "
             f"[{colour}]{a['outcome']}[/]  {a.get('detail') or a['why']}")
+
+
+CRYPTO_STREAMS = "BTC.X,ETH.X,SOL.X,XRP.X,DOGE.X"
+
+
+def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, exit_below, lookback, min_authors,
+                  dry_run=False, options=False, option_rules=None, crypto=False, crypto_invest=0.10, crypto_top=3):
+    """One full KAIROS cycle: stocks and options while the stock market is open, coins at any hour.
+    Returns (stock report or None, coin report or None, every action taken, notes worth printing)."""
+    from spectre.signals.strategy import CRYPTO, run_once
+
+    route = _broker(broker, s)
+    notes: list[str] = []
+    market_open = True
+    if broker == "alpaca":
+        from spectre.execution.alpaca import reconcile
+
+        clock = route.client.clock()
+        market_open = bool(clock.get("is_open"))
+        if not market_open:
+            notes.append(f"stock market closed (next open {clock.get('next_open')})")
+        if not dry_run:
+            rec = reconcile(s, route.client, portfolio_id, apply=True)
+            for item in rec["positions"]:
+                notes.append(f"reconcile {item['ticker']}: ledger {item['ledger']:g}, broker {item['broker']:g} -> {item['action']}")
+            if rec["cash"]:
+                notes.append(f"reconcile cash: {rec['cash']['difference']:+,.2f} -> {rec['cash']['action']}")
+    report, actions = None, []
+    if market_open:
+        report = run_once(s, portfolio_id, route, top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
+                          lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run)
+        actions += report.actions
+        if options:
+            from spectre.execution.alpaca import AlpacaClient
+            from spectre.signals.options_strategy import run_options_once
+
+            actions += run_options_once(s, portfolio_id, getattr(route, "client", None) or AlpacaClient(), route,
+                                        lookback_minutes=lookback, dry_run=dry_run, rules=option_rules).actions
+    coins = None
+    if crypto:
+        coins = run_once(s, portfolio_id, route, top_n=crypto_top, invest=crypto_invest, enter=enter, exit_below=exit_below,
+                         lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run, asset_classes=CRYPTO)
+        actions += coins.actions
+    return report, coins, actions, notes
 
 
 @app.command()
 def bot(portfolio_id: int,
         top_n: int = typer.Option(5, help="How many names to hold at most"),
-        invest: float = typer.Option(0.5, help="Share of the portfolio the bot may invest"),
+        invest: float = typer.Option(0.5, help="Share of the portfolio the stock book may hold"),
         enter: float = typer.Option(0.2, help="Minimum score to buy"),
         exit_below: float = typer.Option(0.0, help="Sell a holding when its score falls to this or lower"),
         lookback: int = typer.Option(60, help="Minutes of conversation to read"),
@@ -679,39 +734,39 @@ def bot(portfolio_id: int,
         options_per_trade: float = typer.Option(0.03, help="Options: share of the portfolio spent on one new position"),
         options_enter: float = typer.Option(1.0, help="Options: how strong the read must be (absolute score)"),
         options_min_authors: int = typer.Option(10, help="Options: fewest distinct authors behind a read"),
+        crypto: bool = typer.Option(False, help="Also run the coin book (trades at any hour)"),
+        crypto_invest: float = typer.Option(0.10, help="Crypto: share of the portfolio the coin book may hold"),
+        crypto_top: int = typer.Option(3, help="Crypto: how many coins to hold at most"),
         db: str | None = typer.Option(None, "--db")):
     """KAIROS, the trend bot (paper only): buy what the crowd is leaning into, sell what it has turned on."""
     import time as _time
 
-    from spectre.signals.strategy import run_once
-
     def cycle() -> None:
         with _session(db) as s:
-            route = _broker(broker, s)
-            r = run_once(s, portfolio_id, route, top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
-                         lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run)
-            if options:
-                from spectre.execution.alpaca import AlpacaClient
-                from spectre.signals.options_strategy import run_options_once
-
-                o = run_options_once(s, portfolio_id, AlpacaClient(), route, lookback_minutes=lookback, dry_run=dry_run,
-                                     rules=_option_rules(options_budget, options_per_trade, options_enter, options_min_authors))
-                r.actions += o.actions
-        console.print(f"[bold]KAIROS[/] portfolio {portfolio_id}  NAV {_money(r.nav)}  cash {_money(r.cash)}"
-                      f"{'  [yellow](dry run)[/]' if dry_run else ''}")
+            r, coins, actions, notes = _kairos_cycle(
+                s, portfolio_id, broker, top_n=top_n, invest=invest, enter=enter, exit_below=exit_below, lookback=lookback,
+                min_authors=min_authors, dry_run=dry_run, options=options,
+                option_rules=_option_rules(options_budget, options_per_trade, options_enter, options_min_authors),
+                crypto=crypto, crypto_invest=crypto_invest, crypto_top=crypto_top)
+        for note in notes:
+            console.print(f"[dim]{note}[/]")
+        shown = r or coins
+        if shown is not None:
+            console.print(f"[bold]KAIROS[/] portfolio {portfolio_id}  NAV {_money(shown.nav)}  cash {_money(shown.cash)}"
+                          f"{'  [yellow](dry run)[/]' if dry_run else ''}")
+        targets = set((r.targets if r else []) + (coins.targets if coins else []))
+        signals = sorted((r.signals if r else []) + (coins.signals if coins else []), key=lambda x: -x.score)
         t = Table("ticker", "authors", "posts", "bullish", "bearish", "net", "trending", "price", "score", title="Crowd stance")
-        for sg in r.signals[:15]:
-            mark = "[green]buy zone[/]" if sg.ticker in r.targets else ""
+        for sg in signals[:18]:
+            mark = "[green]buy zone[/]" if sg.ticker in targets else ""
             t.add_row(sg.ticker, str(sg.n_authors), str(sg.n_posts), _pct(sg.bull_share), _pct(sg.bear_share),
-                      f"{sg.net:+.0%}", "yes" if sg.trending else "", f"{sg.price:,.2f}" if sg.price else "-",
-                      f"{sg.score:+.2f} {mark}")
+                      f"{sg.net:+.0%}", "yes" if sg.trending else "", _fmt_px(sg.price), f"{sg.score:+.2f} {mark}")
         console.print(t)
-        if r.actions:
+        if actions:
             t = Table("side", "ticker", "qty", "price", "outcome", "why / detail", title="Actions")
-            for a in r.actions:
-                px = a.get("fill_price") or a.get("price")
-                t.add_row(a["side"], a["ticker"], f"{a['quantity']:,.0f}", f"{px:,.2f}" if px else "-", a["outcome"],
-                          (a.get("detail") or a["why"])[:110])
+            for a in actions:
+                t.add_row(a["side"], a["ticker"], _fmt_qty(a["quantity"]), _fmt_px(a.get("fill_price") or a.get("price")),
+                          a["outcome"], (a.get("detail") or a["why"])[:110])
             console.print(t)
         else:
             console.print("No trades this cycle.")
@@ -736,6 +791,8 @@ def autopilot(portfolio_id: int,
               options: bool = typer.Option(False, help="Also run the options sleeve (bought calls and puts; needs Alpaca keys)"),
               options_budget: float = 0.20, options_per_trade: float = 0.03, options_enter: float = 1.0,
               options_min_authors: int = 10,
+              crypto: bool = typer.Option(False, help="Also run the coin book, which trades at any hour"),
+              crypto_invest: float = 0.10, crypto_top: int = 3,
               db: str | None = typer.Option(None, "--db")):
     """Run the whole thing: live data in, a paper trading decision every few minutes.
 
@@ -744,12 +801,16 @@ def autopilot(portfolio_id: int,
     import asyncio
     import time as _time
 
+    from spectre.marketdata.universe import seed_universe as _seed
     from spectre.signals.pipeline import Pipeline
-    from spectre.signals.strategy import run_once
 
     engine = make_engine(db or settings.database_url)
     init_db(engine)
     factory = make_session_factory(engine)
+    if crypto:
+        with factory() as s:
+            _seed(s)  # make sure the coins exist before the recogniser is built
+        symbols = ",".join(dict.fromkeys(filter(None, symbols.split(",") + CRYPTO_STREAMS.split(","))))
     built = _build_sources(factory, sources, symbols=symbols, geos=geos)
     pipe = Pipeline(factory)
     started = _time.monotonic()
@@ -759,32 +820,22 @@ def autopilot(portfolio_id: int,
             return
         stamp = _time.strftime("%H:%M:%S")
         try:
-            if broker == "alpaca":
-                from spectre.execution.alpaca import AlpacaClient as _Client
-
-                clock = _Client().clock()
-                if not clock.get("is_open"):
-                    console.print(f"{stamp}  market closed (next open {clock.get('next_open')}): still listening, not trading")
-                    return
             with factory() as s:
-                route = _broker(broker, s)
-                r = run_once(s, portfolio_id, route, top_n=top_n, invest=invest, enter=enter,
-                             exit_below=exit_below, lookback_minutes=lookback, min_authors=min_authors)
-                if options:
-                    from spectre.execution.alpaca import AlpacaClient
-                    from spectre.signals.options_strategy import run_options_once
-
-                    o = run_options_once(s, portfolio_id, AlpacaClient(), route, lookback_minutes=lookback,
-                                         rules=_option_rules(options_budget, options_per_trade, options_enter,
-                                                             options_min_authors))
-                    r.actions += o.actions
+                r, coins, actions, notes = _kairos_cycle(
+                    s, portfolio_id, broker, top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
+                    lookback=lookback, min_authors=min_authors, options=options,
+                    option_rules=_option_rules(options_budget, options_per_trade, options_enter, options_min_authors),
+                    crypto=crypto, crypto_invest=crypto_invest, crypto_top=crypto_top)
         except Exception as exc:  # one bad cycle (a network blip, a broker error) must not stop the run
             console.print(f"{stamp}  [red]cycle failed[/]: {type(exc).__name__}: {exc}")
             return
-        if not r.actions:
-            console.print(f"{stamp}  no trades  (NAV {_money(r.nav)}, {len(r.signals)} names read, buy zone: "
-                          f"{', '.join(r.targets) or 'none'})")
-        for a in r.actions:
+        for note in notes:
+            console.print(f"{stamp}  [dim]{note}[/]")
+        if not actions:
+            shown = r or coins
+            zone = (r.targets if r else []) + (coins.targets if coins else [])
+            console.print(f"{stamp}  no trades" + (f"  (NAV {_money(shown.nav)}, buy zone: {', '.join(zone) or 'none'})" if shown else ""))
+        for a in actions:
             console.print(f"{stamp}  {_action_line(a)}")
 
     console.print(f"KAIROS autopilot ({'Alpaca paper account' if broker == 'alpaca' else 'built-in paper'}) on portfolio {portfolio_id}: reading {', '.join(s.name for s in built)}; "
@@ -821,7 +872,9 @@ def alpaca_status(portfolio_id: int | None = typer.Option(None, "--portfolio", h
             v = value_portfolio(s, portfolio_id)
             ledger = {r.ticker: float(r.quantity) for r in v.positions.itertuples()}
             console.print(f"Ledger portfolio {portfolio_id} '{v.portfolio_name}': NAV {v.total_value:,.2f}, cash {v.cash:,.2f}")
-    at_broker = {p["symbol"]: p for p in held}
+    from spectre.execution.alpaca import position_ticker
+
+    at_broker = {position_ticker(p): p for p in held}
     if not at_broker and not ledger:
         console.print("No positions.")
         return
@@ -830,10 +883,80 @@ def alpaca_status(portfolio_id: int | None = typer.Option(None, "--portfolio", h
         p = at_broker.get(sym)
         bq, lq = (float(p["qty"]) if p else 0.0), ledger.get(sym)
         match = "" if portfolio_id is None else ("[green]yes[/]" if lq is not None and abs(bq - lq) < 1e-6 else "[red]no[/]")
-        t.add_row(sym, f"{bq:,.4g}", f"{float(p['avg_entry_price']):,.2f}" if p else "-",
-                  f"{float(p['current_price']):,.2f}" if p else "-", f"{float(p['market_value']):,.2f}" if p else "-",
-                  f"{float(p['unrealized_pl']):+,.2f}" if p else "-", f"{lq:,.4g}" if lq is not None else "-", match)
+        t.add_row(sym, _fmt_qty(bq), _fmt_px(float(p["avg_entry_price"])) if p else "-",
+                  _fmt_px(float(p["current_price"])) if p else "-", f"{float(p['market_value']):,.2f}" if p else "-",
+                  f"{float(p['unrealized_pl']):+,.2f}" if p else "-", _fmt_qty(lq) if lq is not None else "-", match)
     console.print(t)
+
+
+@app.command()
+def settlement(portfolio_id: int, db: str | None = typer.Option(None, "--db"),
+               as_of: str | None = typer.Option(None, help="YYYY-MM-DD; default today")):
+    """Settled and unsettled cash: what has really changed hands, what settles when, and what cannot be sold yet."""
+    from datetime import date as _date
+
+    from spectre.portfolio.settlement import backfill_settlement_dates, simulate
+
+    with _session(db) as s:
+        backfill_settlement_dates(s)
+        st = simulate(s, portfolio_id, _date.fromisoformat(as_of) if as_of else None)
+    t = Table("", "amount", title=f"Portfolio {portfolio_id} settlement as of {st.as_of}")
+    t.add_row("Cash the ledger shows (every trade counted at once)", f"{st.cash:,.2f}")
+    t.add_row("  Settled cash (has actually changed hands)", f"{st.settled_cash:,.2f}")
+    t.add_row("  + sale proceeds still to arrive", f"{st.receivable:,.2f}")
+    t.add_row("  - purchases still to be paid for", f"{st.payable:,.2f}")
+    t.add_row("Settled money not yet committed to a purchase", f"{st.funds_available:,.2f}")
+    console.print(t)
+    if st.funds_available < -0.005:
+        console.print(f"[yellow]{-st.funds_available:,.2f} of purchases rest on sale proceeds that have not settled yet.[/]")
+    if st.pending:
+        t = Table("settles on", "traded", "side", "ticker", "qty", "cash", title="Still to settle")
+        for x in st.pending:
+            t.add_row(x["settles_on"], x["traded_on"], x["side"], x["ticker"], _fmt_qty(x["quantity"]), f"{x['amount']:+,.2f}")
+        console.print(t)
+    else:
+        console.print("Nothing is waiting to settle.")
+    if st.restricted:
+        t = Table("ticker", "qty", "can be sold from", title="On hold: bought with money from a sale that has not settled")
+        for x in st.restricted:
+            t.add_row(x["ticker"], _fmt_qty(x["quantity"]), x["sell_freely_on"])
+        console.print(t)
+    recent = st.recent_violations()
+    if st.violations:
+        t = Table("date", "what happened", title="Good-faith violations on record")
+        for v in st.violations:
+            t.add_row(v.date.isoformat(), v.describe())
+        console.print(t)
+    colour = "green" if not recent else "yellow" if len(recent) < 3 else "red"
+    console.print(f"[{colour}]{len(recent)} good-faith violation(s) in the last 12 months.[/] "
+                  "At three, a real cash account is limited to settled money for 90 days.")
+
+
+@app.command()
+def alpaca_reconcile(portfolio_id: int,
+                     apply: bool = typer.Option(False, help="Book the small, explainable differences (fees taken in coin, a few dollars of fees and rounding)"),
+                     db: str | None = typer.Option(None, "--db")):
+    """Check the ledger against Alpaca's own figures, position by position and in cash."""
+    from spectre.execution.alpaca import AlpacaClient, AlpacaError, reconcile
+
+    try:
+        with _session(db) as s:
+            rec = reconcile(s, AlpacaClient(), portfolio_id, apply=apply)
+    except AlpacaError as exc:
+        console.print(f"[red]Alpaca: {exc}[/]")
+        raise typer.Exit(1) from exc
+    if not rec["positions"] and not rec["cash"]:
+        console.print("[green]Ledger and broker agree[/]: every position and the cash balance match.")
+        return
+    t = Table("item", "ledger", "broker", "difference", "what it is")
+    for item in rec["positions"]:
+        t.add_row(item["ticker"], f"{item['ledger']:,.6g}", f"{item['broker']:,.6g}", f"{item['difference']:+,.6g}", item["action"])
+    if rec["cash"]:
+        c = rec["cash"]
+        t.add_row("cash", f"{c['ledger']:,.2f}", f"{c['broker']:,.2f}", f"{c['difference']:+,.2f}", c["action"])
+    console.print(t)
+    if not rec["clean"]:
+        console.print("[red]Unexplained differences were left alone[/]: they need a person to look at them.")
 
 
 @app.command()

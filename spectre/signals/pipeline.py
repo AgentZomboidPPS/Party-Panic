@@ -35,7 +35,9 @@ def build_extractor(session: Session) -> TickerExtractor:
     context and "nvidia" does not). Anything else falls back to its full name plus an
     unambiguous first word ("Acme Systems" and "Acme" -> ACME).
     """
-    rows = session.execute(select(Security.ticker, Security.name)).all()
+    # Option contracts are never talked about by their contract symbol, and their names begin
+    # with the underlying's ticker: letting them in would tag "AMZN" posts with an AMZN option.
+    rows = session.execute(select(Security.ticker, Security.name).where(Security.asset_class != "Option")).all()
     tickers = {t for t, _ in rows}
     aliases, context_aliases, bare, context_bare = recognition_maps(tickers)
     first_words: dict[str, set[str]] = {}

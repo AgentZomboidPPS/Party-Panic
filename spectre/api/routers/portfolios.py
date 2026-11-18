@@ -147,6 +147,17 @@ def positions(portfolio_id: int, db: DB, as_of: date | None = None) -> dict:
     return value_portfolio(db, portfolio_id, as_of).to_dict()
 
 
+@router.get("/portfolios/{portfolio_id}/settlement")
+def settlement(portfolio_id: int, db: DB, as_of: date | None = None) -> dict:
+    """Settled and unsettled cash, what settles when, and holdings that cannot be sold cleanly yet."""
+    from spectre.portfolio.settlement import simulate
+
+    try:
+        return simulate(db, portfolio_id, as_of).to_dict()
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 @router.get("/portfolios/{portfolio_id}/exposures")
 def exposures(portfolio_id: int, db: DB, dimension: str = "sector", as_of: date | None = None,
               include_cash: bool = True) -> dict:

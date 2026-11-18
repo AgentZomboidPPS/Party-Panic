@@ -13,9 +13,10 @@
 
 **Status, plainly.** Live data flows from five social and prediction-market sources, plus the
 Treasury yield curve, FRED credit spreads and Alpaca prices and option chains. KAIROS trades
-stocks and bought options on paper only, either in the built-in simulation or through an Alpaca
-paper account, with cash only (no borrowing) and never an uncovered option. Nothing here has a
-demonstrated edge on real data yet, and no live (real-money) broker exists in the code.
+stocks, bought options and coins on paper only, either in the built-in simulation or through an
+Alpaca paper account, with cash only (no borrowing), never an uncovered option, and settlement
+simulated so it behaves like a real cash account. Nothing here has a demonstrated edge on real
+data yet, and no live (real-money) broker exists in the code.
 
 Portfolio management, risk analytics, pre-trade compliance, order management and an
 alternative-data **signals** layer (public conversation + prediction markets) on **one shared
@@ -77,6 +78,15 @@ Lint with `ruff check spectre tests`.
 - `exposure_by(valued, dimension)` for `asset_class | sector | country | currency | issuer`.
 - `active_weights` / `active_exposures` versus a benchmark (security-level or bucketed).
 - `apply_trades(session, valued, [ProposedTrade...])` – what-if analysis that never touches the ledger.
+- **Settlement (`portfolio/settlement.py`).** A trade is agreed today and the money moves later:
+  stocks, funds and options settle the next business day (two days before 28 May 2024, three
+  before September 2017), coins at once; weekends and exchange holidays are worked out, not
+  looked up. `simulate` replays the ledger and splits cash into what has settled, what is
+  arriving and what is owed, and tracks the rule a cash account lives by: something bought with
+  the proceeds of a sale that has not settled may not be sold until it has. Doing so anyway is
+  a *good-faith violation*, and it is counted (three in twelve months gets a real account
+  restricted for 90 days). `spectre settlement N` and `GET /portfolios/N/settlement` show it;
+  the dashboard has a settlement card.
 
 ### Risk (`spectre/risk`)
 - **VaR / Expected Shortfall** by three methods: historical, parametric (variance–covariance),
@@ -104,6 +114,8 @@ Rules live in the database, scoped to one portfolio or firm-wide, each `HARD` (b
 | `min_cash_weight` / `max_cash_weight` | `limit` |
 | `no_short_positions` / `no_negative_cash` | – |
 | `no_naked_options` | – (a sold call needs 100 shares per contract, a sold put needs strike × 100 in cash) |
+| `no_good_faith_violations` | – (blocks selling something bought with sale proceeds that have not settled) |
+| `settled_funds_only` | – (stricter: only money that has settled may be spent) |
 
 Adding a rule type is one decorated function in `rules.py`. An unknown rule type evaluates as a hard
 breach rather than silently passing.
@@ -241,6 +253,15 @@ Written from Alpaca's published API definition and confirmed against a live pape
 - **Cash only.** `spectre alpaca-margin 1` sets the account's margin multiplier to 1, so buying
   power equals cash. While `SPECTRE_ALPACA_CASH_ONLY` is true (the default) the broker refuses
   to send any order if the account is able to borrow.
+- **Crypto.** Coins (BTC, ETH, SOL and nine more) are securities like any other, priced from
+  the bid/ask midpoint and traded in millionths. Orders go out as pairs (`BTC/USD`), good till
+  cancelled, at any hour; coins cannot be bought on margin or sold short at Alpaca. The fee
+  (0.25%) is taken in coin at once, so a purchase leaves slightly fewer coins than were bought.
+- **Reconciliation.** `spectre alpaca-reconcile N` compares every position and the cash balance
+  with Alpaca's own figures. With `--apply` (the autopilot does this each cycle) the small,
+  explainable differences are booked: coin fees as a sale whose proceeds are all fee, and a few
+  dollars of option fees and price rounding as a `FEE` cash movement. Anything larger is
+  reported and left alone.
 - `spectre alpaca-status --portfolio N` shows the account and checks Alpaca's positions against
   the ledger.
 
@@ -281,6 +302,16 @@ collected. Each cycle:
 
 `--invest` caps the whole stock book as a share of the portfolio. Shares have no stop or profit
 target: a holding is sold when the crowd turns against it, and held when there is no fresh read.
+If the book is more than five points over its allowance, the weakest reads outside the top
+names are sold until it fits. An order the broker does not fill is withdrawn, not left open.
+
+**Coin book (`--crypto`).** The same rule on coins, with its own allowance (`--crypto-invest`,
+10%) and its own top list (`--crypto-top`, 3). It runs at every cycle, including nights and
+weekends when the stock market is closed; stocks and options are only traded while it is open.
+
+**Settlement holds.** When the portfolio has the `no_good_faith_violations` rule (new ones do),
+KAIROS does not try to sell something it bought with unsettled sale proceeds until the money
+has arrived, normally the next business day. It says so in its log instead.
 
 **Options sleeve (`--options`, `signals/options_strategy.py`).** On the strongest reads it buys
 a call (bullish) or a put (bearish): an expiry three to seven weeks out, the strike whose delta
@@ -382,7 +413,7 @@ through the API or directly into the tables.
 Environment variables, all prefixed `SPECTRE_`: `DATABASE_URL`, `BASE_CURRENCY`, `VAR_CONFIDENCE`
 (0.99), `VAR_HORIZON_DAYS` (1), `LOOKBACK_DAYS` (500), `MC_SIMULATIONS` (20000), `MC_SEED` (42).
 Alpaca: `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`, `ALPACA_TRADING_URL` (paper host), `ALPACA_STOCK_FEED` (iex),
-`ALPACA_OPTION_FEED` (indicative), `ALPACA_CASH_ONLY` (true). Trading guardrails: `TRADING_MODE` (paper), `TRADING_MAX_ORDER_NOTIONAL` (1000),
+`ALPACA_OPTION_FEED` (indicative), `ALPACA_CASH_ONLY` (true: refuse to trade while the account can borrow). Trading guardrails: `TRADING_MODE` (paper), `TRADING_MAX_ORDER_NOTIONAL` (1000),
 `TRADING_MAX_DAILY_NOTIONAL` (5000), `TRADING_MAX_ORDERS_PER_DAY` (20), `TRADING_MAX_POSITION_WEIGHT`
 (0.20), `TRADING_REQUIRE_APPROVAL` (true), `TRADING_ALLOWED_SYMBOLS` (empty = any).
 
@@ -404,8 +435,8 @@ Next steps in rough priority order: a permanent, always-on home so KAIROS can bu
 record; measure the crowd signal against real prices once weeks of data exist; train a sentiment
 classifier on the Stocktwits labels and adopt it only if it beats the baseline out of sample; use
 rates and credit as a risk-on / risk-off filter; SEC earnings against the live service; covered
-calls, cash-secured puts and defined-risk spreads (never an uncovered sale); option fees in the
-ledger; Reddit via a registered app; performance attribution;
+calls, cash-secured puts and defined-risk spreads (never an uncovered sale); price history for
+real tickers so the risk numbers work on the live book; Reddit via a registered app; performance attribution;
 multi-user auth; scheduled end-of-day risk and compliance runs; Postgres migrations via Alembic; a
 data-licensing review before selling derived signals. A live broker would come last, behind the
 live-mode and per-order approval gates, and only after paper results justify it.

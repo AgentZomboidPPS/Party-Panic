@@ -6,6 +6,12 @@ Facts taken from Alpaca's own documentation and confirmed against the live servi
 - paper keys and live keys are separate and cannot be used for each other
 - requests carry the `APCA-API-KEY-ID` and `APCA-API-SECRET-KEY` headers
 - the free plan gives real-time IEX stock prices and "indicative" option prices
+- crypto trades around the clock on the same orders endpoint as pairs ("BTC/USD"), in fractions,
+  with `time_in_force` gtc or ioc; it cannot be bought on margin or sold short; the fee
+  (0.25% at the entry tier) is taken from what you receive, so a coin purchase leaves slightly
+  fewer coins than were bought (the documentation says fees post at the end of the day; on the
+  paper account the position was already net of the fee seconds after the fill)
+- positions report coins without the slash ("BTCUSD") and with `asset_class` "crypto"
 
 `AlpacaPaperBroker` refuses to exist unless it points at the paper host, so this module cannot
 move real money. A live broker would be a separate class with `live = True`, which the
@@ -14,6 +20,7 @@ execution guard only lets through in live mode with a named approver per order.
 
 from __future__ import annotations
 
+import math
 import re
 import time
 import uuid
@@ -25,11 +32,14 @@ import httpx
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from spectre import audit
 from spectre.config import settings
 from spectre.execution.brokers import BrokerFill, BrokerReject
 from spectre.execution.models import OptionMark
 from spectre.marketdata.prices import latest_prices, upsert_prices
-from spectre.models import Order, OrderType, Security, Trade
+from spectre.marketdata.universe import crypto_base
+from spectre.models import CashFlow, Order, OrderType, Security, Side, Trade
+from spectre.portfolio.positions import value_portfolio
 from spectre.signals.models import PriceTick
 from spectre.signals.sources.base import to_naive_utc, utcnow
 
@@ -182,6 +192,18 @@ class AlpacaClient:
                     out[sym] = (float(t["p"]), parse_time(t["t"]))
         return out
 
+    def crypto_quotes(self, coins: list[str]) -> dict[str, tuple[float, float, datetime]]:
+        """Latest (bid, ask, time) per coin against the dollar; coins with no two-sided quote are absent."""
+        out: dict[str, tuple[float, float, datetime]] = {}
+        if not coins:
+            return out
+        body = self._call("GET", f"{self.data_url}/v1beta3/crypto/us/latest/quotes",
+                          params={"symbols": ",".join(f"{c}/USD" for c in coins)})
+        for pair, q in (body.get("quotes") or {}).items():
+            if q and q.get("bp") and q.get("ap"):
+                out[pair.split("/")[0]] = (float(q["bp"]), float(q["ap"]), parse_time(q["t"]))
+        return out
+
     def option_chain(
         self,
         underlying: str,
@@ -234,16 +256,24 @@ class AlpacaClient:
 
 
 def sync_prices(session: Session, client: AlpacaClient, tickers: list[str] | None = None) -> int:
-    """Store the latest traded price of each US stock or fund in the book: one tick each, and
-    the day's close updated to it. Returns how many securities were priced."""
-    q = select(Security).where(Security.currency == "USD", Security.asset_class.in_(("Equity", "Fund")))
+    """Store the latest price of each US stock, fund and coin in the book: one tick each, and
+    the day's close updated to it. Stocks and funds use the last trade; coins use the midpoint
+    of the bid and ask, because trades on Alpaca's own crypto venue can be many minutes apart.
+    Returns how many securities were priced."""
+    q = select(Security).where(Security.currency == "USD", Security.asset_class.in_(("Equity", "Fund", "Crypto")))
     if tickers:
         q = q.where(Security.ticker.in_([t.upper() for t in tickers]))
     secs = {s.ticker: s for s in session.execute(q).scalars()}
     if not secs:
         return 0
-    trades = client.latest_trades(sorted(secs))
-    stamps = {at.replace(microsecond=0) for _, at in trades.values()}
+    seen: dict[str, tuple[float, datetime]] = {}
+    stocks = sorted(t for t, s in secs.items() if s.asset_class != "Crypto")
+    coins = sorted(t for t, s in secs.items() if s.asset_class == "Crypto")
+    if stocks:
+        seen.update(client.latest_trades(stocks))
+    for coin, (bid, ask, at) in client.crypto_quotes(coins).items():
+        seen[coin] = ((bid + ask) / 2.0, at)
+    stamps = {at.replace(microsecond=0) for _, at in seen.values()}
     taken = set(
         session.execute(
             select(PriceTick.security_id, PriceTick.observed_at).where(
@@ -252,14 +282,14 @@ def sync_prices(session: Session, client: AlpacaClient, tickers: list[str] | Non
         ).all()
     )
     closes = []
-    for ticker, (price, at) in trades.items():
+    for ticker, (price, at) in seen.items():
         sec, at = secs[ticker], at.replace(microsecond=0)
         if (sec.id, at) not in taken:
             session.add(PriceTick(security_id=sec.id, ticker=ticker, observed_at=at, price=price, source="alpaca"))
         closes.append({"security_id": sec.id, "date": at.date(), "close": price})
     upsert_prices(session, closes)
     session.commit()
-    return len(trades)
+    return len(seen)
 
 
 def ensure_option_security(session: Session, q: OptionQuote) -> Security:
@@ -319,6 +349,74 @@ def sync_option_marks(session: Session, client: AlpacaClient) -> int:
     return len(quotes)
 
 
+def position_ticker(position: dict) -> str:
+    """The ledger ticker for one of Alpaca's positions: coins come back as "BTCUSD"."""
+    if position.get("asset_class") == "crypto":
+        return crypto_base(position["symbol"]) or position["symbol"]
+    return position["symbol"]
+
+
+def position_quantities(positions: list[dict]) -> dict[str, float]:
+    return {position_ticker(p): float(p.get("qty_available") or p["qty"]) for p in positions}
+
+
+def reconcile(session: Session, client: AlpacaClient, portfolio_id: int, apply: bool = False,
+              actor: str = "reconcile") -> dict:
+    """Compare the ledger with the broker's own figures and list every difference.
+
+    Two kinds of small difference are expected and, with `apply`, are booked so the books agree:
+    - a coin position slightly smaller at the broker (the trading fee, taken in coin): booked
+      as a sale of that sliver whose whole proceeds are a fee, so cash is untouched;
+    - a few dollars of cash (regulatory fees on options, rounding of average fill prices):
+      booked as a FEE or ADJUSTMENT cash movement.
+    Anything larger, or a position the broker has and the ledger does not, is reported and
+    left alone: that needs a person, not a plug."""
+    acct = client.account()
+    at_broker = {position_ticker(p): float(p["qty"]) for p in client.positions()}
+    v = value_portfolio(session, portfolio_id)
+    ledger = {r.ticker: r for r in v.positions.itertuples() if abs(r.quantity) > 1e-9}
+    out: dict = {"portfolio_id": portfolio_id, "positions": [], "cash": None, "applied": apply, "clean": True}
+    today = utcnow().date()
+
+    for ticker in sorted(set(at_broker) | set(ledger)):
+        row = ledger.get(ticker)
+        mine, theirs = (float(row.quantity) if row is not None else 0.0), at_broker.get(ticker, 0.0)
+        diff = theirs - mine
+        if abs(diff) <= 1e-7:
+            continue
+        item = {"ticker": ticker, "ledger": mine, "broker": theirs, "difference": diff, "action": "unexplained: left alone"}
+        fee_in_kind = row is not None and row.asset_class == "Crypto" and diff < 0 and -diff <= 0.01 * mine
+        if fee_in_kind:
+            item["action"] = "fee taken in coin"
+            if apply:
+                session.add(Trade(portfolio_id=portfolio_id, security_id=int(row.Index), side=Side.SELL.value,
+                                  quantity=-diff, price=float(row.price), currency="USD",
+                                  fees=-diff * float(row.price) * float(row.multiplier), trade_date=today, settle_date=today))
+                item["action"] = "booked: fee taken in coin"
+        else:
+            out["clean"] = False
+        out["positions"].append(item)
+
+    cash_diff = float(acct["cash"]) - v.cash
+    if abs(cash_diff) >= 0.005:
+        small = abs(cash_diff) <= max(5.0, 0.0005 * max(v.total_value, 0.0))
+        item = {"ledger": v.cash, "broker": float(acct["cash"]), "difference": cash_diff,
+                "action": "fees and rounding" if small else "unexplained: left alone"}
+        if small and apply:
+            session.add(CashFlow(portfolio_id=portfolio_id, date=today, amount=cash_diff,
+                                 kind="FEE" if cash_diff < 0 else "ADJUSTMENT",
+                                 memo="Broker fees and rounding found in reconciliation"))
+            item["action"] = "booked: fees and rounding"
+        elif not small:
+            out["clean"] = False
+        out["cash"] = item
+    if apply and (out["cash"] or out["positions"]):
+        audit.record(session, actor=actor, entity_type="portfolio", entity_id=portfolio_id, action="reconciled",
+                     detail={"positions": out["positions"], "cash": out["cash"]})
+        session.commit()
+    return out
+
+
 def _qty(q: float) -> str:
     return str(int(q)) if float(q).is_integer() else f"{q:.6f}".rstrip("0").rstrip(".")
 
@@ -343,10 +441,13 @@ class AlpacaPaperBroker:
 
     def submit(self, session: Session, order: Order) -> BrokerFill:
         security = session.get(Security, order.security_id)
+        coin = security.asset_class == "Crypto"
+        quantity = order.remaining_quantity
         try:
-            clock = self.client.clock()
-            if not clock.get("is_open"):
-                raise BrokerReject(f"market is closed; next open {clock.get('next_open')}")
+            if not coin:  # coins trade around the clock
+                clock = self.client.clock()
+                if not clock.get("is_open"):
+                    raise BrokerReject(f"market is closed; next open {clock.get('next_open')}")
             if settings.alpaca_cash_only:
                 multiplier = str(self.client.account().get("multiplier"))
                 if multiplier != "1":
@@ -354,9 +455,16 @@ class AlpacaPaperBroker:
                         f"cash-only mode, but the Alpaca account can borrow (margin multiplier {multiplier}); "
                         "run `spectre alpaca-margin 1` to turn margin off"
                     )
+            if coin and order.side == Side.SELL.value:
+                # The fee on a coin purchase is taken in coin, so the broker can hold a shade
+                # less than the ledger until that fee is booked. Sell what is really there.
+                have = position_quantities(self.client.positions()).get(security.ticker, 0.0)
+                quantity = min(quantity, math.floor(have * 1e6) / 1e6)
+                if quantity <= 0:
+                    raise BrokerReject(f"the broker holds no {security.ticker} to sell")
             body = {
-                "symbol": security.ticker, "qty": _qty(order.remaining_quantity), "side": order.side.lower(),
-                "type": "market", "time_in_force": "day",
+                "symbol": f"{security.ticker}/USD" if coin else security.ticker, "qty": _qty(quantity),
+                "side": order.side.lower(), "type": "market", "time_in_force": "gtc" if coin else "day",
                 "client_order_id": f"spectre-{order.id}-{uuid.uuid4().hex[:8]}",
             }
             if order.order_type == OrderType.LIMIT.value and order.limit_price is not None:

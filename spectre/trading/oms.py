@@ -15,6 +15,7 @@ from spectre import audit
 from spectre.compliance.engine import pre_trade_check
 from spectre.marketdata.prices import latest_price_date, latest_prices
 from spectre.models import Fill, Order, OrderStatus, OrderType, Portfolio, Security, Side, Trade
+from spectre.portfolio.settlement import settlement_date
 from spectre.portfolio.whatif import ProposedTrade
 
 EPS = 1e-9
@@ -146,6 +147,7 @@ def fill_order(
         currency=security.currency,
         fees=float(fees),
         trade_date=filled_at.date(),
+        settle_date=settlement_date(security.asset_class, filled_at.date(), security.sector),
     )
     session.add(trade)
 

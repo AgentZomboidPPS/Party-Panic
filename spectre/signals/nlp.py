@@ -66,7 +66,8 @@ _FIN_CONTEXT = re.compile(
     r"\$[A-Za-z]{1,6}\b|\b(?:stocks?|shares?|shareholders?|earnings|revenue|guidance|eps|dividends?|buybacks?|ipo|"
     r"market cap|price target|valuation|investors?|invest(?:ing|ment|ed)?|traders?|trading|calls|puts|options|"
     r"bullish|bearish|rally|sell-?off|downgrade[sd]?|upgrade[sd]?|analysts?|nasdaq|nyse|s&p|wall street|"
-    r"quarter(?:ly)?|q[1-4]|ceo|cfo|antitrust|layoffs|10-[kq])\b",
+    r"quarter(?:ly)?|q[1-4]|ceo|cfo|antitrust|layoffs|10-[kq]|crypto|coins?|tokens?|altcoins?|memecoins?|"
+    r"blockchain|defi|staking|hodl)\b",
     re.IGNORECASE,
 )
 _BARE = re.compile(r"(?<![\w$])[A-Z]{2,5}(?:\.[A-Z])?(?![\w])")
@@ -115,6 +116,8 @@ class TickerExtractor:
 
         for m in _CASHTAG.findall(text):
             t = m.upper().rstrip(".-")
+            if t.endswith(".X") and t[:-2] in self.tickers:  # "$BTC.X": how stock platforms write a coin
+                t = t[:-2]
             if t in self.tickers:
                 add(t)
         if self._alias_re:
@@ -128,6 +131,7 @@ class TickerExtractor:
                 add(self.context_aliases.get(m.lower()))
         if self.bare_tickers or self.context_bare:
             for tok in _BARE.findall(text):
+                tok = tok[:-2] if tok.endswith(".X") else tok
                 if tok in self.bare_tickers or (has_context and tok in self.context_bare):
                     add(tok)
         return found
