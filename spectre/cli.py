@@ -422,32 +422,58 @@ def calibrate(db: str | None = typer.Option(None, "--db")):
 
 @app.command()
 def signal_check(horizon: int = typer.Option(60, help="Minutes ahead to look at what the price did"),
-                 days: float = typer.Option(5.0, help="How far back to measure"),
+                 days: float = typer.Option(30.0, help="How far back to measure"),
                  crypto: bool = typer.Option(False, help="Measure the coins instead of stocks and funds"),
+                 sweep: bool = typer.Option(False, "--sweep", help="Compare 30, 60, 120 and 240 minutes ahead side by side"),
                  lookback: int = typer.Option(45, help="Minutes of conversation behind each read (as the bot uses)"),
                  min_authors: int = typer.Option(8, help="Fewest distinct authors behind a read (as the bot uses)"),
+                 enter: float | None = typer.Option(None, help="Score that counts as the buy zone (default: 0.2 for stocks, 0.5 for coins, as the bot uses)"),
+                 top: int | None = typer.Option(None, help="How many names KAIROS would hold (default: 5 stocks, 3 coins)"),
                  db: str | None = typer.Option(None, "--db")):
     """Does the crowd read predict what the price does next? Measured on the data collected so far."""
     from spectre.execution.alpaca import AlpacaClient, AlpacaError
-    from spectre.signals.intraday import check
+    from spectre.signals import intraday
     from spectre.signals.strategy import CRYPTO, STOCKS
 
-    try:
-        with _session(db) as s:
-            r = check(s, AlpacaClient(), days=days, horizon=horizon, lookback=lookback, min_authors=min_authors,
-                      asset_classes=CRYPTO if crypto else STOCKS)
-    except AlpacaError as exc:
-        console.print(f"[red]Alpaca (prices): {exc}[/]")
-        raise typer.Exit(1) from exc
-    if not r["samples"]:
-        console.print(r["verdict"])
-        return
+    enter = enter if enter is not None else (0.5 if crypto else 0.2)
+    top = top if top is not None else (3 if crypto else 5)
 
     def pct(x: float | None, digits: int = 3) -> str:
         return "-" if x is None else f"{x:+.{digits}%}"
 
     def num(x: float | None) -> str:
         return "-" if x is None else f"{x:+.2f}"
+
+    try:
+        with _session(db) as s:
+            if sweep:
+                r = intraday.sweep(s, AlpacaClient(), days=days, lookback=lookback, min_authors=min_authors, enter=enter, top_n=top,
+                                   asset_classes=CRYPTO if crypto else STOCKS, round_trip_cost=intraday.round_trip_cost(crypto))
+            else:
+                r = intraday.check(s, AlpacaClient(), days=days, horizon=horizon, lookback=lookback, min_authors=min_authors,
+                                   enter=enter, top_n=top, asset_classes=CRYPTO if crypto else STOCKS)
+    except AlpacaError as exc:
+        console.print(f"[red]Alpaca (prices): {exc}[/]")
+        raise typer.Exit(1) from exc
+    if sweep:
+        t = Table("minutes ahead", "separate windows", "readings", "rank agreement", "t", f"top {r['top_n']} against the rest", "t",
+                  "after costs", title=f"{'Coins' if crypto else 'Stocks and funds'}: how far ahead does the crowd read say anything?")
+        for h in r["horizons"]:
+            if not h["samples"]:
+                t.add_row(str(h["horizon_minutes"]), "0", "0", "-", "-", "-", "-", "-")
+                continue
+            mark = " [green]clears the bar[/]" if h["clears_the_bar"] else ""
+            t.add_row(str(h["horizon_minutes"]), f"{h['windows']}{'' if h['enough'] else ' (too few)'}", str(h["samples"]),
+                      num(h["rank_agreement"]), num(h["rank_t"]), pct(h["edge"]), num(h["edge_t"]) + mark, pct(h["edge_after_costs"]))
+        console.print(t)
+        console.print(f"[bold]{r['verdict']}[/]")
+        console.print(f"[dim]A horizon needs {r['enough_windows']} separate windows and a t of {r['bar']:.1f} or more (higher than the usual 2, "
+                      f"because {r['looks']} horizons are being looked at and the best of several flatters). \"After costs\" takes off "
+                      f"{r['round_trip_cost']:.2%} for getting in and out once.[/]")
+        return
+    if not r["samples"]:
+        console.print(r["verdict"])
+        return
 
     console.print(f"[bold]{'Coins' if crypto else 'Stocks and funds'}[/], {r['from']} to {r['to']} UTC: {r['samples']} readings of "
                   f"{r['names']} names at {r['moments']} moments, looking {r['horizon_minutes']} minutes ahead. "
@@ -837,10 +863,12 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
         booked += [("coins", a) for a in coins.actions]
     if not dry_run:
         from spectre.portfolio.performance import record_snapshot
+        from spectre.signals.intraday import record_readings
         from spectre.signals.journal import record_cycle
 
         record_snapshot(s, portfolio_id)  # the track record: what it was worth after this cycle
         record_cycle(s, portfolio_id, booked, notes, (report.targets if report else []) + (coins.targets if coins else []))
+        record_readings(s, lookback, min_authors)  # what the score said, to be judged against prices later
     return report, coins, actions, notes
 
 

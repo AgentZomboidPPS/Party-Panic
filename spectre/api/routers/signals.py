@@ -166,31 +166,60 @@ def news(db: DB, limit: int = 25, ticker: str | None = None, portfolio_id: int |
     return recent_news(db, limit, ticker, held)
 
 
-_CHECKS: dict[tuple, tuple[float, dict]] = {}  # (database, horizon, crypto) -> (when computed, result)
+_CHECKS: dict[tuple, tuple[float, dict]] = {}  # (database, question) -> (when computed, result)
 
 
-@router.get("/check")
-def signal_check(db: DB, horizon: int = 60, days: float = 5.0, crypto: bool = False, lookback: int = 45,
-                 min_authors: int = 8) -> dict:
-    """Does the crowd read predict what the price does next? Measured on the data collected so
-    far, with five-minute prices from Alpaca. Recomputed at most every ten minutes."""
+def _measured(db, key: tuple, compute) -> dict:
+    """The signal check, recomputed at most every ten minutes per question."""
     import time
 
-    from spectre.execution.alpaca import AlpacaClient, AlpacaError
-    from spectre.signals.intraday import check
-    from spectre.signals.strategy import CRYPTO, STOCKS
+    from spectre.execution.alpaca import AlpacaError
 
-    key = (str(db.get_bind().url), horizon, days, crypto, lookback, min_authors)
+    key = (str(db.get_bind().url), *key)
     cached = _CHECKS.get(key)
     if cached and time.monotonic() - cached[0] < 600:
         return cached[1]
     try:
-        result = _clean(check(db, AlpacaClient(), days=days, horizon=horizon, lookback=lookback, min_authors=min_authors,
-                              asset_classes=CRYPTO if crypto else STOCKS))
+        result = _clean(compute())
     except AlpacaError as exc:
-        return {"samples": 0, "moments": 0, "windows": 0, "verdict": f"Prices are not available to measure against ({exc})."}
+        return {"samples": 0, "moments": 0, "windows": 0, "horizons": [],
+                "verdict": f"Prices are not available to measure against ({exc})."}
     _CHECKS[key] = (time.monotonic(), result)
     return result
+
+
+@router.get("/check")
+def signal_check(db: DB, horizon: int = 60, days: float = 30.0, crypto: bool = False, lookback: int = 45,
+                 min_authors: int = 8) -> dict:
+    """Does the crowd read predict what the price does next? Measured on the data collected so
+    far, with five-minute prices from Alpaca. Recomputed at most every ten minutes."""
+    from spectre.execution.alpaca import AlpacaClient
+    from spectre.signals.intraday import check
+    from spectre.signals.strategy import CRYPTO, STOCKS
+
+    return _measured(db, ("check", horizon, days, crypto, lookback, min_authors), lambda: check(
+        db, AlpacaClient(), days=days, horizon=horizon, lookback=lookback, min_authors=min_authors,
+        enter=0.5 if crypto else 0.2, top_n=3 if crypto else 5, asset_classes=CRYPTO if crypto else STOCKS))
+
+
+@router.get("/sweep")
+def signal_sweep(db: DB, days: float = 30.0, lookback: int = 45, min_authors: int = 8) -> dict:
+    """The same check at 30, 60, 120 and 240 minutes ahead, for the stock book and the coin book:
+    how far ahead, if at all, does the crowd read say anything, and is it more than trading costs?"""
+    from spectre.execution.alpaca import AlpacaClient
+    from spectre.signals import intraday
+    from spectre.signals.strategy import CRYPTO, STOCKS
+
+    def both() -> dict:
+        client = AlpacaClient()
+        return {
+            "stocks": intraday.sweep(db, client, days=days, lookback=lookback, min_authors=min_authors, enter=0.2, top_n=5,
+                                     asset_classes=STOCKS, round_trip_cost=intraday.round_trip_cost(False)),
+            "coins": intraday.sweep(db, client, days=days, lookback=lookback, min_authors=min_authors, enter=0.5, top_n=3,
+                                    asset_classes=CRYPTO, round_trip_cost=intraday.round_trip_cost(True)),
+        }
+
+    return _measured(db, ("sweep", days, lookback, min_authors), both)
 
 
 dashboard_router = APIRouter(tags=["dashboard"])

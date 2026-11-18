@@ -147,3 +147,87 @@ def test_the_api_serves_the_check_and_says_so_when_prices_are_unavailable(world,
     assert r["samples"] > 0 and "verdict" in r and r["held"]["top_n"] == 5
     monkeypatch.setattr(alpaca, "AlpacaClient", Down)
     assert web.get("/signals/check?days=100000&horizon=30&lookback=30&min_authors=4").json() == r, "a recent answer is reused rather than asked for again"
+
+
+class Prices:
+    def __init__(self, bars):
+        self.bars, self.asked = bars, []
+
+    def stock_bars(self, symbols, start, timeframe="1Day", adjustment="all"):
+        self.asked.append(sorted(symbols))
+        return {t: b for t, b in self.bars.items() if t in symbols}
+
+
+def test_scores_written_at_the_time_are_used_as_they_were(world):
+    s, bars = world
+    # KAIROS decided every ten minutes through the second and third hours and wrote its scores
+    # down, with the three "liked" names scored the wrong way round compared with the posts.
+    for minute in range(60, 180, 10):
+        at = T0 + timedelta(minutes=minute)
+        s.add_all([intraday.SignalReading(at=at, ticker=t, asset_class="Equity", score=(-0.6 if t in LIKED else 0.6) + i * 0.01,
+                                          authors=5, posts=10, lookback_minutes=30) for i, t in enumerate(LIKED + DISLIKED)])
+    s.commit()
+    r = intraday.check(s, Prices(bars(0.001)), days=2, horizon=30, lookback=30, min_authors=4, now=T0 + timedelta(hours=3))
+    # 30 and 40 minutes in come from the posts; 60 to 150 from what was written (the last two have no price after them yet).
+    assert r["readings_written_at_the_time"] == 12 * 6 and r["readings_worked_out_again"] == 3 * 6
+    assert r["moments"] == 3 + 10
+    # The written scores win where they exist: against these prices they were wrong, so the edge is negative.
+    assert r["held"]["mean_edge"] < 0
+
+
+def test_recording_writes_one_row_per_name_and_not_twice(world):
+    s, _ = world
+    at = T0 + timedelta(minutes=175)
+    assert intraday.record_readings(s, lookback=30, min_authors=4, at=at) == 6
+    assert intraday.record_readings(s, lookback=30, min_authors=4, at=at) == 0
+    rows = intraday.stored_readings(s, T0, T0 + timedelta(hours=3))
+    assert len(rows) == 6 and {t for _, t, _, _ in rows} == set(LIKED + DISLIKED)
+    scores = {t: score for _, t, score, _ in rows}
+    assert all(scores[t] > 0 for t in LIKED) and all(scores[t] < 0 for t in DISLIKED)
+
+
+def test_sweep_compares_horizons_and_raises_the_bar_for_looking_at_several(world, monkeypatch):
+    s, bars = world
+    client = Prices(bars(0.001))
+    r = intraday.sweep(s, client, horizons=(20, 30, 60), days=2, lookback=30, min_authors=4, now=T0 + timedelta(hours=3))
+    assert len(client.asked) == 1  # one fetch of prices serves every horizon
+    assert [h["horizon_minutes"] for h in r["horizons"]] == [20, 30, 60]
+    assert all(h["edge"] > 0 for h in r["horizons"])
+    assert r["bar"] == pytest.approx(2.39, abs=0.01) and intraday.bar_for(1) == pytest.approx(1.96, abs=0.01)
+    assert "Too little data at every horizon" in r["verdict"] and not any(h["clears_the_bar"] for h in r["horizons"])
+
+    # With enough separate windows a real edge earns a verdict...
+    monkeypatch.setattr(intraday, "ENOUGH_WINDOWS", 2)
+    r = intraday.sweep(s, Prices(bars(0.001)), horizons=(20, 30), days=2, lookback=30, min_authors=4, now=T0 + timedelta(hours=3))
+    assert "beat the rest by more than chance" in r["verdict"]
+    # ... unless it is smaller than what it costs to trade.
+    r = intraday.sweep(s, Prices(bars(0.001)), horizons=(20, 30), days=2, lookback=30, min_authors=4, now=T0 + timedelta(hours=3),
+                       round_trip_cost=0.05)
+    assert "smaller than the cost" in r["verdict"] and all(h["edge_after_costs"] < 0 for h in r["horizons"])
+    # And a crowd that is reliably wrong is called out.
+    r = intraday.sweep(s, Prices(bars(-0.001)), horizons=(20, 30), days=2, lookback=30, min_authors=4, now=T0 + timedelta(hours=3))
+    assert "pointing the wrong way" in r["verdict"]
+
+
+def test_sweep_with_nothing_to_measure_says_so():
+    e = make_engine("sqlite://")
+    init_db(e)
+    with make_session_factory(e)() as s:
+        r = intraday.sweep(s, Prices({}), days=2)
+    assert r["horizons"] == [] and r["verdict"].startswith("No usable data yet")
+
+
+def test_the_api_serves_the_sweep_for_both_books(world, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from spectre.api.app import create_app
+    from spectre.api.routers import signals as router
+    from spectre.execution import alpaca
+
+    s, bars = world
+    monkeypatch.setattr(router, "_CHECKS", {})
+    monkeypatch.setattr(alpaca, "AlpacaClient", lambda: Prices(bars(0.001)))
+    r = TestClient(create_app(engine=s.get_bind())).get("/signals/sweep?days=100000&lookback=30&min_authors=4").json()
+    assert [h["horizon_minutes"] for h in r["stocks"]["horizons"]] == [30, 60, 120, 240]
+    assert r["stocks"]["horizons"][0]["edge"] > 0 and r["stocks"]["round_trip_cost"] < r["coins"]["round_trip_cost"]
+    assert r["coins"]["horizons"] == [] and r["coins"]["verdict"].startswith("No usable data yet")  # no coin was talked about

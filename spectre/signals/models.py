@@ -160,3 +160,23 @@ class NewsItem(Base):
     published_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     tickers: Mapped[list] = mapped_column(JSON, default=list)
     sentiment: Mapped[float] = mapped_column(Float, default=0.0)
+
+
+class SignalReading(Base):
+    """What KAIROS's score said about one name at one decision moment, written down at the time.
+
+    The record the signal is judged against later: it cannot be flattered by hindsight (a score
+    worked out again afterwards would use a sentiment model that has since learned from later
+    posts), and it outlives the raw posts, which are dropped after a month."""
+
+    __tablename__ = "signal_readings"
+    __table_args__ = (UniqueConstraint("at", "ticker", name="uq_signal_reading"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    ticker: Mapped[str] = mapped_column(String(32))
+    asset_class: Mapped[str] = mapped_column(String(16))
+    score: Mapped[float] = mapped_column(Float)
+    authors: Mapped[int] = mapped_column(Integer)
+    posts: Mapped[int] = mapped_column(Integer)
+    lookback_minutes: Mapped[int] = mapped_column(Integer)

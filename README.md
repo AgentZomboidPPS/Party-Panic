@@ -450,14 +450,23 @@ quote), so the spread is paid only as far as it has to be. It only ever
 buys options, so the most a position can lose is what was paid for it, and the
 `no_naked_options` rule would reject an uncovered sale regardless.
 
-**Is the signal any good? (`signals/intraday.py`, `spectre signal-check`).** For every past
-decision moment it recomputes the score exactly as the bot would have, from posts up to that
-moment only, and looks at what each name's price did over the following hour (five-minute
-prices from Alpaca). It reports the rank agreement between score and outcome, what followed
-for liked, in-between and disliked names relative to the others at the same moment, and how
-the top five would have done against the field. Readings ten minutes apart overlap heavily, so
-evidence is counted in separate windows, and no verdict is offered below thirty of them. The
-Signals tab of the dashboard shows it and it fills in as data accumulates.
+**Is the signal any good? (`signals/intraday.py`, `spectre signal-check`).** At every decision
+KAIROS writes down its score for every name (`signal_readings`), and the check sets those
+against what each name's price did next (five-minute prices from Alpaca). Scores written at
+the time cannot be flattered by hindsight and outlive the raw posts; for the time before the
+first written one the score is worked out again from the posts, from those up to that moment
+only. It reports the rank agreement between score and outcome, what followed for liked,
+in-between and disliked names relative to the others at the same moment, and how the names
+KAIROS would have held did against the field. Readings ten minutes apart overlap heavily, so
+evidence is counted in separate windows, and no verdict is offered below thirty of them.
+
+`spectre signal-check --sweep` (add `--crypto` for the coin book) asks the same question 30,
+60, 120 and 240 minutes ahead in one go, to see how far ahead the crowd read says anything.
+Because the best of four horizons flatters, each has to clear a higher bar (a t of 2.5 rather
+than 2), and the edge is also shown after the cost of one trip in and out (about 0.05% for
+stocks, 0.6% for coins, mostly Alpaca's fee): an edge smaller than that is real money lost,
+however real the edge. The Signals tab of the dashboard shows both and fills in as data
+accumulates.
 
 **Brakes on the whole account.** While the account is more than 10% below the most it has
 been worth, or more than 3% down on the day (`SPECTRE_TRADING_MAX_DRAWDOWN`,
