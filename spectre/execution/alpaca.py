@@ -22,13 +22,14 @@ from datetime import date, datetime
 from urllib.parse import urlparse
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from spectre.config import settings
 from spectre.execution.brokers import BrokerFill, BrokerReject
-from spectre.marketdata.prices import upsert_prices
-from spectre.models import Order, OrderType, Security
+from spectre.execution.models import OptionMark
+from spectre.marketdata.prices import latest_prices, upsert_prices
+from spectre.models import Order, OrderType, Security, Trade
 from spectre.signals.models import PriceTick
 from spectre.signals.sources.base import to_naive_utc, utcnow
 
@@ -88,6 +89,21 @@ class OptionQuote:
         return d
 
 
+def quote_from_snapshot(symbol: str, snap: dict) -> OptionQuote | None:
+    parsed = parse_occ(symbol)
+    if parsed is None:
+        return None
+    root, expiry, kind, strike = parsed
+    quote, trade = snap.get("latestQuote") or {}, snap.get("latestTrade") or {}
+    greeks = snap.get("greeks") or {}
+    return OptionQuote(
+        symbol=symbol, underlying=root, expiration=expiry, type=kind, strike=strike,
+        bid=quote.get("bp"), ask=quote.get("ap"), last=trade.get("p"),
+        implied_volatility=snap.get("impliedVolatility"), delta=greeks.get("delta"), gamma=greeks.get("gamma"),
+        theta=greeks.get("theta"), vega=greeks.get("vega"), volume=(snap.get("dailyBar") or {}).get("v"),
+    )
+
+
 class AlpacaClient:
     def __init__(
         self,
@@ -132,6 +148,13 @@ class AlpacaClient:
 
     def clock(self) -> dict:
         return self._call("GET", f"{self.trading_url}/v2/clock")
+
+    def configurations(self) -> dict:
+        """Account switches, including `max_margin_multiplier` ("1" means no borrowing)."""
+        return self._call("GET", f"{self.trading_url}/v2/account/configurations")
+
+    def set_configurations(self, **changes) -> dict:
+        return self._call("PATCH", f"{self.trading_url}/v2/account/configurations", json=changes)
 
     def positions(self) -> list[dict]:
         return self._call("GET", f"{self.trading_url}/v2/positions")
@@ -184,26 +207,30 @@ class AlpacaClient:
         for _ in range(max_pages):
             body = self._call("GET", f"{self.data_url}/v1beta1/options/snapshots/{underlying.upper()}", params=params)
             for symbol, snap in (body.get("snapshots") or {}).items():
-                parsed = parse_occ(symbol)
-                if parsed is None:
-                    continue
-                _, expiry, kind, strike = parsed
-                quote, trade = snap.get("latestQuote") or {}, snap.get("latestTrade") or {}
-                greeks = snap.get("greeks") or {}
-                out.append(
-                    OptionQuote(
-                        symbol=symbol, underlying=underlying.upper(), expiration=expiry, type=kind, strike=strike,
-                        bid=quote.get("bp"), ask=quote.get("ap"), last=trade.get("p"),
-                        implied_volatility=snap.get("impliedVolatility"), delta=greeks.get("delta"),
-                        gamma=greeks.get("gamma"), theta=greeks.get("theta"), vega=greeks.get("vega"),
-                        volume=(snap.get("dailyBar") or {}).get("v"),
-                    )
-                )
+                quote = quote_from_snapshot(symbol, snap)
+                if quote is not None:
+                    out.append(quote)
             token = body.get("next_page_token")
             if not token:
                 break
             params["page_token"] = token
         return sorted(out, key=lambda q: (q.expiration, q.strike, q.type))
+
+    def option_snapshots(self, symbols: list[str], feed: str | None = None) -> list[OptionQuote]:
+        """Quote and greeks for specific contracts (at most 100 per request)."""
+        out: list[OptionQuote] = []
+        for i in range(0, len(symbols), 100):
+            params: dict = {"symbols": ",".join(symbols[i : i + 100]), "feed": feed or settings.alpaca_option_feed}
+            while True:
+                body = self._call("GET", f"{self.data_url}/v1beta1/options/snapshots", params=params)
+                for symbol, snap in (body.get("snapshots") or {}).items():
+                    quote = quote_from_snapshot(symbol, snap)
+                    if quote is not None:
+                        out.append(quote)
+                if not body.get("next_page_token"):
+                    break
+                params["page_token"] = body["next_page_token"]
+        return out
 
 
 def sync_prices(session: Session, client: AlpacaClient, tickers: list[str] | None = None) -> int:
@@ -235,6 +262,63 @@ def sync_prices(session: Session, client: AlpacaClient, tickers: list[str] | Non
     return len(trades)
 
 
+def ensure_option_security(session: Session, q: OptionQuote) -> Security:
+    """The ledger's record of an option contract: one contract controls 100 shares."""
+    sec = session.execute(select(Security).where(Security.ticker == q.symbol)).scalar_one_or_none()
+    if sec is not None:
+        return sec
+    under = session.execute(select(Security).where(Security.ticker == q.underlying)).scalar_one_or_none()
+    sec = Security(
+        ticker=q.symbol, name=f"{q.underlying} {q.expiration:%Y-%m-%d} {q.strike:g} {q.type}", asset_class="Option",
+        currency="USD", sector=under.sector if under else None, country=under.country if under else "US",
+        issuer=under.name if under else q.underlying, multiplier=100.0, maturity_date=q.expiration,
+    )
+    session.add(sec)
+    session.flush()
+    return sec
+
+
+def store_option_mark(session: Session, sec: Security, q: OptionQuote, underlying_price: float | None) -> float | None:
+    """Record the contract's latest quote and greeks, and its mark as today's price.
+    The mark is the bid/ask midpoint when there is a two-sided quote, else the last trade."""
+    mark = q.mid if q.mid is not None else (q.last if q.last else (q.bid or None))
+    row = session.get(OptionMark, sec.id)
+    if row is None:
+        row = OptionMark(security_id=sec.id, underlying=q.underlying, option_type=q.type, strike=q.strike,
+                         expiration=q.expiration, as_of=utcnow())
+        session.add(row)
+    row.as_of, row.bid, row.ask, row.mark = utcnow(), q.bid, q.ask, mark
+    row.implied_volatility, row.delta, row.gamma, row.theta, row.vega = q.implied_volatility, q.delta, q.gamma, q.theta, q.vega
+    row.underlying_price = underlying_price
+    if mark is not None and mark > 0:
+        upsert_prices(session, [{"security_id": sec.id, "date": utcnow().date(), "close": mark}])
+    session.flush()
+    return mark
+
+
+def sync_option_marks(session: Session, client: AlpacaClient) -> int:
+    """Refresh quote, greeks and price for every option contract currently held in any portfolio."""
+    held = session.execute(
+        select(Security)
+        .join(Trade, Trade.security_id == Security.id)
+        .where(Security.asset_class == "Option")
+        .group_by(Security.id)
+        .having(func.abs(func.sum(case((Trade.side == "BUY", Trade.quantity), else_=-Trade.quantity))) > 1e-9)
+    ).scalars().all()
+    if not held:
+        return 0
+    by_symbol = {s.ticker: s for s in held}
+    quotes = client.option_snapshots(sorted(by_symbol))
+    unders = {s.ticker: s.id for s in session.execute(
+        select(Security).where(Security.ticker.in_({q.underlying for q in quotes}))).scalars()}
+    spots = latest_prices(session, unders.values(), utcnow().date())
+    for q in quotes:
+        uid = unders.get(q.underlying)
+        store_option_mark(session, by_symbol[q.symbol], q, float(spots[uid]) if uid in spots.index else None)
+    session.commit()
+    return len(quotes)
+
+
 def _qty(q: float) -> str:
     return str(int(q)) if float(q).is_integer() else f"{q:.6f}".rstrip("0").rstrip(".")
 
@@ -263,6 +347,13 @@ class AlpacaPaperBroker:
             clock = self.client.clock()
             if not clock.get("is_open"):
                 raise BrokerReject(f"market is closed; next open {clock.get('next_open')}")
+            if settings.alpaca_cash_only:
+                multiplier = str(self.client.account().get("multiplier"))
+                if multiplier != "1":
+                    raise BrokerReject(
+                        f"cash-only mode, but the Alpaca account can borrow (margin multiplier {multiplier}); "
+                        "run `spectre alpaca-margin 1` to turn margin off"
+                    )
             body = {
                 "symbol": security.ticker, "qty": _qty(order.remaining_quantity), "side": order.side.lower(),
                 "type": "market", "time_in_force": "day",

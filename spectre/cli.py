@@ -586,7 +586,8 @@ def portfolio_create(name: str, cash: float = typer.Option(100_000.0, help="Star
         s.flush()
         s.add(CashFlow(portfolio_id=pf.id, date=min(latest_price_date(s) or date.today(), date.today()), amount=cash,
                        memo="Initial funding"))
-        for rule_name, rule_type in (("No overdraft", "no_negative_cash"), ("No short positions", "no_short_positions")):
+        for rule_name, rule_type in (("No overdraft", "no_negative_cash"), ("No short positions", "no_short_positions"),
+                                     ("No naked options", "no_naked_options")):
             s.add(ComplianceRule(portfolio_id=pf.id, name=rule_name, rule_type=rule_type, params={}, severity="HARD"))
         s.commit()
         console.print(f"Created portfolio {pf.id} '{name}' with {_money(cash)} {pf.base_currency}")
@@ -649,6 +650,19 @@ def _broker(name: str, session=None):
     return PaperBroker()
 
 
+def _option_rules(budget: float, per_trade: float, enter: float, min_authors: int):
+    from spectre.signals.options_strategy import OptionRules
+
+    return OptionRules(budget=budget, per_trade=per_trade, enter=enter, min_authors=min_authors)
+
+
+def _action_line(a: dict) -> str:
+    px = a.get("fill_price") or a.get("price")
+    colour = {"executed": "green", "dry run": "yellow", "skipped": "dim"}.get(a["outcome"], "red")
+    return (f"{a['side']:<4} {a['quantity']:>6,.0f} {a['ticker']:<21} @ {f'{px:,.2f}' if px else '-':>8}  "
+            f"[{colour}]{a['outcome']}[/]  {a.get('detail') or a['why']}")
+
+
 @app.command()
 def bot(portfolio_id: int,
         top_n: int = typer.Option(5, help="How many names to hold at most"),
@@ -660,6 +674,11 @@ def bot(portfolio_id: int,
         every: float = typer.Option(0.0, help="Minutes between cycles; 0 runs one cycle and stops"),
         dry_run: bool = typer.Option(False, help="Show what it would do without creating any order"),
         broker: str = typer.Option("paper", help="'paper' (built-in simulation) or 'alpaca' (your Alpaca paper account)"),
+        options: bool = typer.Option(False, help="Also run the options sleeve: buy calls on the strongest bullish reads, puts on bearish (needs Alpaca keys for option prices)"),
+        options_budget: float = typer.Option(0.20, help="Options: share of the portfolio that may sit in option premium"),
+        options_per_trade: float = typer.Option(0.03, help="Options: share of the portfolio spent on one new position"),
+        options_enter: float = typer.Option(1.0, help="Options: how strong the read must be (absolute score)"),
+        options_min_authors: int = typer.Option(10, help="Options: fewest distinct authors behind a read"),
         db: str | None = typer.Option(None, "--db")):
     """KAIROS, the trend bot (paper only): buy what the crowd is leaning into, sell what it has turned on."""
     import time as _time
@@ -668,8 +687,16 @@ def bot(portfolio_id: int,
 
     def cycle() -> None:
         with _session(db) as s:
-            r = run_once(s, portfolio_id, _broker(broker, s), top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
+            route = _broker(broker, s)
+            r = run_once(s, portfolio_id, route, top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
                          lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run)
+            if options:
+                from spectre.execution.alpaca import AlpacaClient
+                from spectre.signals.options_strategy import run_options_once
+
+                o = run_options_once(s, portfolio_id, AlpacaClient(), route, lookback_minutes=lookback, dry_run=dry_run,
+                                     rules=_option_rules(options_budget, options_per_trade, options_enter, options_min_authors))
+                r.actions += o.actions
         console.print(f"[bold]KAIROS[/] portfolio {portfolio_id}  NAV {_money(r.nav)}  cash {_money(r.cash)}"
                       f"{'  [yellow](dry run)[/]' if dry_run else ''}")
         t = Table("ticker", "authors", "posts", "bullish", "bearish", "net", "trending", "price", "score", title="Crowd stance")
@@ -684,7 +711,7 @@ def bot(portfolio_id: int,
             for a in r.actions:
                 px = a.get("fill_price") or a.get("price")
                 t.add_row(a["side"], a["ticker"], f"{a['quantity']:,.0f}", f"{px:,.2f}" if px else "-", a["outcome"],
-                          (a.get("detail") or a["why"])[:80])
+                          (a.get("detail") or a["why"])[:110])
             console.print(t)
         else:
             console.print("No trades this cycle.")
@@ -706,6 +733,9 @@ def autopilot(portfolio_id: int,
               top_n: int = 5, invest: float = 0.5, enter: float = 0.2, exit_below: float = 0.0, lookback: int = 60,
               min_authors: int = 4,
               broker: str = typer.Option("paper", help="'paper' (built-in simulation) or 'alpaca' (your Alpaca paper account)"),
+              options: bool = typer.Option(False, help="Also run the options sleeve (bought calls and puts; needs Alpaca keys)"),
+              options_budget: float = 0.20, options_per_trade: float = 0.03, options_enter: float = 1.0,
+              options_min_authors: int = 10,
               db: str | None = typer.Option(None, "--db")):
     """Run the whole thing: live data in, a paper trading decision every few minutes.
 
@@ -727,18 +757,35 @@ def autopilot(portfolio_id: int,
     def decide() -> None:
         if _time.monotonic() - started < warmup * 60:
             return
-        with factory() as s:
-            r = run_once(s, portfolio_id, _broker(broker, s), top_n=top_n, invest=invest, enter=enter,
-                         exit_below=exit_below, lookback_minutes=lookback, min_authors=min_authors)
         stamp = _time.strftime("%H:%M:%S")
+        try:
+            if broker == "alpaca":
+                from spectre.execution.alpaca import AlpacaClient as _Client
+
+                clock = _Client().clock()
+                if not clock.get("is_open"):
+                    console.print(f"{stamp}  market closed (next open {clock.get('next_open')}): still listening, not trading")
+                    return
+            with factory() as s:
+                route = _broker(broker, s)
+                r = run_once(s, portfolio_id, route, top_n=top_n, invest=invest, enter=enter,
+                             exit_below=exit_below, lookback_minutes=lookback, min_authors=min_authors)
+                if options:
+                    from spectre.execution.alpaca import AlpacaClient
+                    from spectre.signals.options_strategy import run_options_once
+
+                    o = run_options_once(s, portfolio_id, AlpacaClient(), route, lookback_minutes=lookback,
+                                         rules=_option_rules(options_budget, options_per_trade, options_enter,
+                                                             options_min_authors))
+                    r.actions += o.actions
+        except Exception as exc:  # one bad cycle (a network blip, a broker error) must not stop the run
+            console.print(f"{stamp}  [red]cycle failed[/]: {type(exc).__name__}: {exc}")
+            return
         if not r.actions:
             console.print(f"{stamp}  no trades  (NAV {_money(r.nav)}, {len(r.signals)} names read, buy zone: "
                           f"{', '.join(r.targets) or 'none'})")
         for a in r.actions:
-            px = a.get("fill_price") or a.get("price")
-            console.print(f"{stamp}  {a['side']:<4} {a['quantity']:>6,.0f} {a['ticker']:<6} @ {px:,.2f}  "
-                          f"[{'green' if a['outcome'] == 'executed' else 'red'}]{a['outcome']}[/]  "
-                          f"{a.get('detail') or a['why']}")
+            console.print(f"{stamp}  {_action_line(a)}")
 
     console.print(f"KAIROS autopilot ({'Alpaca paper account' if broker == 'alpaca' else 'built-in paper'}) on portfolio {portfolio_id}: reading {', '.join(s.name for s in built)}; "
                   f"first decision after {warmup:g} min, then every {every:g} min. Ctrl-C to stop.")
@@ -763,6 +810,9 @@ def alpaca_status(portfolio_id: int | None = typer.Option(None, "--portfolio", h
     kind = "paper (fake money)" if client.paper else "[red]LIVE[/]"
     console.print(f"Alpaca {kind}: status {acct.get('status')}, equity {float(acct['equity']):,.2f}, "
                   f"cash {float(acct['cash']):,.2f}, options level {acct.get('options_trading_level')}")
+    mult = str(acct.get("multiplier"))
+    console.print(f"Buying power {float(acct.get('buying_power') or 0):,.2f}; "
+                  + ("margin is [green]off[/] (cash only)" if mult == "1" else f"margin is [yellow]on[/] ({mult}x)"))
     console.print(f"Market is {'[green]open[/]' if clock.get('is_open') else '[yellow]closed[/]'}; "
                   f"next open {clock.get('next_open')}, next close {clock.get('next_close')}")
     ledger: dict[str, float] = {}
@@ -784,6 +834,26 @@ def alpaca_status(portfolio_id: int | None = typer.Option(None, "--portfolio", h
                   f"{float(p['current_price']):,.2f}" if p else "-", f"{float(p['market_value']):,.2f}" if p else "-",
                   f"{float(p['unrealized_pl']):+,.2f}" if p else "-", f"{lq:,.4g}" if lq is not None else "-", match)
     console.print(t)
+
+
+@app.command()
+def alpaca_margin(multiplier: str | None = typer.Argument(None, help="1 = cash only (no borrowing); 2 or 4 = margin on. Omit to just show it.")):
+    """Show or set how much the Alpaca account may borrow. `spectre alpaca-margin 1` makes it cash only."""
+    from spectre.execution.alpaca import AlpacaClient, AlpacaError
+
+    try:
+        client = AlpacaClient()
+        if multiplier is not None:
+            if multiplier not in ("1", "2", "4"):
+                raise typer.BadParameter("multiplier must be 1, 2 or 4")
+            client.set_configurations(max_margin_multiplier=multiplier)
+        acct = client.account()
+    except AlpacaError as exc:
+        console.print(f"[red]Alpaca: {exc}[/]")
+        raise typer.Exit(1) from exc
+    mult = str(acct.get("multiplier"))
+    console.print(f"Margin multiplier {mult}: " + ("cash only, nothing can be borrowed" if mult == "1" else "the account can borrow")
+                  + f". Cash {float(acct['cash']):,.2f}, buying power {float(acct.get('buying_power') or 0):,.2f}.")
 
 
 @app.command()

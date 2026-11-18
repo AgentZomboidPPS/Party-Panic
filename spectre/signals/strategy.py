@@ -154,6 +154,10 @@ def run_once(
     valued = value_portfolio(session, portfolio_id)
     nav, cash = valued.total_value, valued.cash
     held = {int(sid): float(q) for sid, q in valued.positions["quantity"].items() if q > 0}
+    # `invest` caps the whole stock book. Names that fall out of the top N are kept while the
+    # crowd still likes them, so without this cap the book would creep past it.
+    stocks = valued.positions[valued.positions["asset_class"].isin(("Equity", "Fund"))]
+    room = nav * invest - float(stocks["market_value"].clip(lower=0).sum())
 
     targets = [s for s in signals if s.score >= enter and s.price][:top_n]
     report = BotReport(
@@ -185,15 +189,17 @@ def run_once(
             trade(sig, Side.SELL, float(sell_qty), f"score {sig.score:+.2f} fell to the exit level")
             if report.actions[-1].get("outcome") in ("executed", "dry run"):
                 cash += sell_qty * sig.price
+                room += sell_qty * sig.price
 
     per_name = nav * invest / max(top_n, 1)
     for sig in targets:
         current = held.get(sig.security_id, 0.0) * sig.price
-        want = min(per_name - current, limits.max_order_notional, max(cash, 0.0))
+        want = min(per_name - current, room, limits.max_order_notional, max(cash, 0.0))
         qty = math.floor(want / sig.price)
         if qty < 1:
             continue
         trade(sig, Side.BUY, float(qty), f"score {sig.score:+.2f}, {sig.n_authors} authors, net {sig.net:+.0%}")
         if report.actions[-1].get("outcome") in ("executed", "dry run"):
             cash -= qty * sig.price
+            room -= qty * sig.price
     return report

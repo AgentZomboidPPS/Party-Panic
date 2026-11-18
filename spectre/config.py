@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     alpaca_data_url: str = "https://data.alpaca.markets"
     alpaca_stock_feed: str = "iex"  # free real-time feed; "sip" needs a paid plan
     alpaca_option_feed: str = "indicative"  # free; "opra" (full real-time) needs a paid plan
+    # Cash only: refuse to send an order while the Alpaca account can borrow (margin multiplier above 1).
+    alpaca_cash_only: bool = True
 
 
 settings = Settings()

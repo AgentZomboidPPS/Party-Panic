@@ -200,5 +200,42 @@ def no_negative_cash(spec: RuleSpec, v: ValuedPositions) -> list[Breach]:
     return []
 
 
+@rule("no_naked_options")
+def no_naked_options(spec: RuleSpec, v: ValuedPositions) -> list[Breach]:
+    """No params. Every sold option must be covered: a sold call by 100 shares of the underlying
+    per contract, a sold put by cash equal to strike x 100 per contract. Bought options always pass."""
+    from spectre.execution.alpaca import parse_occ
+
+    df = v.positions
+    shorts = df[(df["asset_class"] == "Option") & (df["quantity"] < -EPS)]
+    if shorts.empty:
+        return []
+    shares = df[df["asset_class"] != "Option"].set_index("ticker")["quantity"].to_dict()
+    need_shares: dict[str, float] = {}
+    need_cash = 0.0
+    out: list[Breach] = []
+    for row in shorts.itertuples():
+        parsed = parse_occ(row.ticker)
+        contracts = -float(row.quantity)
+        if parsed is None:
+            out.append(_breach(spec, row.ticker, contracts, 0.0, contracts,
+                               f"cannot verify cover for sold option {row.ticker}"))
+            continue
+        root, _, kind, strike = parsed
+        if kind == "call":
+            need_shares[root] = need_shares.get(root, 0.0) + contracts * float(row.multiplier)
+        else:
+            need_cash += contracts * float(row.multiplier) * strike
+    for root, need in need_shares.items():
+        have = max(float(shares.get(root, 0.0)), 0.0)
+        if have + EPS < need:
+            out.append(_breach(spec, root, have, need, need - have,
+                               f"sold calls on {root} need {need:,.0f} shares as cover; holding {have:,.0f}"))
+    if need_cash > v.cash + 1e-6:
+        out.append(_breach(spec, "cash", v.cash, need_cash, need_cash - v.cash,
+                           f"sold puts need {need_cash:,.0f} in cash as cover; cash is {v.cash:,.0f}"))
+    return out
+
+
 def rule_types() -> dict[str, str]:
     return {name: (fn.__doc__ or "").strip() for name, fn in REGISTRY.items()}

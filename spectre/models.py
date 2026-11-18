@@ -40,6 +40,7 @@ class AssetClass(str, enum.Enum):
     FIXED_INCOME = "Fixed Income"
     FUND = "Fund"
     COMMODITY = "Commodity"
+    OPTION = "Option"
     CASH = "Cash"
 
 

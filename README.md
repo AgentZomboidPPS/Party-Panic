@@ -5,16 +5,17 @@
 | codename | part | where |
 |---|---|---|
 | **SPECTRE** | the whole system | this repository |
-| **KAIROS** | the trading bot (Greek: *the decisive moment*) | `spectre/signals/strategy.py`, `spectre bot`, `spectre autopilot` |
+| **KAIROS** | the trading bot (Greek: *the decisive moment*) | `spectre/signals/strategy.py`, `spectre/signals/options_strategy.py`, `spectre bot`, `spectre autopilot` |
 | **WRAITH** | crowd listening: sources, screening, topics, sentiment | `spectre/signals` |
 | **RAVEN** | risk analytics | `spectre/risk` |
 | **AEGIS** | compliance rules, trading limits, kill switch | `spectre/compliance`, `spectre/execution` |
 | **REAPER** | order routing and brokers | `spectre/trading`, `spectre/execution/brokers.py` |
 
 **Status, plainly.** Live data flows from five social and prediction-market sources, plus the
-Treasury yield curve, FRED credit spreads and Alpaca prices and option chains. KAIROS trades on
-paper only, either in the built-in simulation or through an Alpaca paper account. Nothing here has
-a demonstrated edge on real data yet, and no live (real-money) broker exists in the code.
+Treasury yield curve, FRED credit spreads and Alpaca prices and option chains. KAIROS trades
+stocks and bought options on paper only, either in the built-in simulation or through an Alpaca
+paper account, with cash only (no borrowing) and never an uncovered option. Nothing here has a
+demonstrated edge on real data yet, and no live (real-money) broker exists in the code.
 
 Portfolio management, risk analytics, pre-trade compliance, order management and an
 alternative-data **signals** layer (public conversation + prediction markets) on **one shared
@@ -102,6 +103,7 @@ Rules live in the database, scoped to one portfolio or firm-wide, each `HARD` (b
 | `restricted_list` | `tickers` |
 | `min_cash_weight` / `max_cash_weight` | `limit` |
 | `no_short_positions` / `no_negative_cash` | – |
+| `no_naked_options` | – (a sold call needs 100 shares per contract, a sold put needs strike × 100 in cash) |
 
 Adding a rule type is one decorated function in `rules.py`. An unknown rule type evaluates as a hard
 breach rather than silently passing.
@@ -230,8 +232,15 @@ Written from Alpaca's published API definition and confirmed against a live pape
 - **Prices.** `spectre prices-sync` stores Alpaca's latest traded price for every US stock and
   fund in the book (free plan: real-time IEX).
 - **Option chains.** `spectre options NVDA` shows bid, ask, implied volatility and greeks per
-  contract (free plan: "indicative" prices; the full real-time feed is a paid plan). This is
-  data only: SPECTRE does not trade options.
+  contract (free plan: "indicative" prices that can lag the market; the full real-time feed is a
+  paid plan).
+- **Option orders.** An option is a security whose ticker is its contract symbol
+  (`NVDA261224C00155000`) with a multiplier of 100, so positions, cash, compliance and the
+  ledger treat it like anything else. Orders go to the same endpoint as whole contracts with a
+  limit price. Quotes and greeks of held contracts are stored in `option_marks`.
+- **Cash only.** `spectre alpaca-margin 1` sets the account's margin multiplier to 1, so buying
+  power equals cash. While `SPECTRE_ALPACA_CASH_ONLY` is true (the default) the broker refuses
+  to send any order if the account is able to borrow.
 - `spectre alpaca-status --portfolio N` shows the account and checks Alpaca's positions against
   the ledger.
 
@@ -270,9 +279,21 @@ collected. Each cycle:
 4. buy the top names above `--enter`, sell holdings whose score fell to `--exit-below`; long
    only, whole shares, each order through compliance and then the execution gate.
 
-`--dry-run` shows the decisions without creating an order. This rule is a transparent starting
-point to measure, not a proven edge: it has not been backtested on real data, because real data
-only started flowing on 2026-11-18.
+`--invest` caps the whole stock book as a share of the portfolio. Shares have no stop or profit
+target: a holding is sold when the crowd turns against it, and held when there is no fresh read.
+
+**Options sleeve (`--options`, `signals/options_strategy.py`).** On the strongest reads it buys
+a call (bullish) or a put (bearish): an expiry three to seven weeks out, the strike whose delta
+is nearest 0.45, and only where the bid/ask spread is tight. It spends `--options-per-trade`
+(3%) of the portfolio per position and at most `--options-budget` (20%) in total premium. A
+holding is sold at +100%, at −50%, a week before expiry (so nothing is exercised or assigned),
+or when the crowd turns; a contract sold today is not bought back the same day. It only ever
+buys options, so the most a position can lose is what was paid for it, and the
+`no_naked_options` rule would reject an uncovered sale regardless.
+
+`--dry-run` shows the decisions without creating an order. These rules are a transparent
+starting point to measure, not a proven edge: they have not been backtested on real data,
+because real data only started flowing on 2026-11-18.
 
 ### Fundamentals (`spectre/fundamentals`) — filed results, quarter against quarter
 
@@ -361,7 +382,7 @@ through the API or directly into the tables.
 Environment variables, all prefixed `SPECTRE_`: `DATABASE_URL`, `BASE_CURRENCY`, `VAR_CONFIDENCE`
 (0.99), `VAR_HORIZON_DAYS` (1), `LOOKBACK_DAYS` (500), `MC_SIMULATIONS` (20000), `MC_SEED` (42).
 Alpaca: `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`, `ALPACA_TRADING_URL` (paper host), `ALPACA_STOCK_FEED` (iex),
-`ALPACA_OPTION_FEED` (indicative). Trading guardrails: `TRADING_MODE` (paper), `TRADING_MAX_ORDER_NOTIONAL` (1000),
+`ALPACA_OPTION_FEED` (indicative), `ALPACA_CASH_ONLY` (true). Trading guardrails: `TRADING_MODE` (paper), `TRADING_MAX_ORDER_NOTIONAL` (1000),
 `TRADING_MAX_DAILY_NOTIONAL` (5000), `TRADING_MAX_ORDERS_PER_DAY` (20), `TRADING_MAX_POSITION_WEIGHT`
 (0.20), `TRADING_REQUIRE_APPROVAL` (true), `TRADING_ALLOWED_SYMBOLS` (empty = any).
 
@@ -382,8 +403,9 @@ Alpaca: `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`, `ALPACA_TRADING_URL` (paper host),
 Next steps in rough priority order: a permanent, always-on home so KAIROS can build a track
 record; measure the crowd signal against real prices once weeks of data exist; train a sentiment
 classifier on the Stocktwits labels and adopt it only if it beats the baseline out of sample; use
-rates and credit as a risk-on / risk-off filter; SEC earnings against the live service; options
-analytics on the chain data (not trading); Reddit via a registered app; performance attribution;
+rates and credit as a risk-on / risk-off filter; SEC earnings against the live service; covered
+calls, cash-secured puts and defined-risk spreads (never an uncovered sale); option fees in the
+ledger; Reddit via a registered app; performance attribution;
 multi-user auth; scheduled end-of-day risk and compliance runs; Postgres migrations via Alembic; a
 data-licensing review before selling derived signals. A live broker would come last, behind the
 live-mode and per-order approval gates, and only after paper results justify it.

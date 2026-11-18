@@ -8,7 +8,7 @@ from sqlalchemy import select
 from spectre.db import init_db, make_engine, make_session_factory
 from spectre.execution.guard import TradingLimits, set_halt
 from spectre.marketdata.universe import seed_universe
-from spectre.models import CashFlow, ComplianceRule, Order, Portfolio, Security
+from spectre.models import CashFlow, ComplianceRule, Order, Portfolio, Security, Trade
 from spectre.portfolio.positions import value_portfolio
 from spectre.signals.pipeline import Pipeline
 from spectre.signals.sources.base import Post, TrendItem
@@ -23,22 +23,8 @@ def _post(i, author, text, label=None, minute=0, prices=None, symbols=("NVDA",))
                 source_sentiment=label, meta={"symbols": list(symbols), "prices": prices or {}})
 
 
-@pytest.fixture
-def book():
-    e = make_engine("sqlite://")
-    init_db(e)
-    factory = make_session_factory(e)
-    with factory() as s:
-        seed_universe(s)
-        pf = Portfolio(name="Bot", base_currency="USD")
-        s.add(pf)
-        s.flush()
-        s.add(CashFlow(portfolio_id=pf.id, date=T0.date(), amount=10_000))
-        s.add(ComplianceRule(portfolio_id=pf.id, name="No overdraft", rule_type="no_negative_cash", params={}))
-        s.add(ComplianceRule(portfolio_id=pf.id, name="No shorts", rule_type="no_short_positions", params={}))
-        s.commit()
-        pid = pf.id
-    pipe = Pipeline(factory)
+def crowd_posts() -> list[Post]:
+    """A small crowd: NVDA clearly bullish, TSLA clearly bearish, AMD too thin to count."""
     posts = []
     # NVDA: six authors bullish, one bearish. One of the bulls posts five times: still one vote.
     bulls = ["$NVDA clean breakout above resistance this morning", "Data center demand keeps surprising, long $NVDA",
@@ -60,7 +46,26 @@ def book():
     # AMD: bullish but only two authors: not enough people to count.
     posts += [_post("a1", "am1", "$AMD nice", "Bullish", 1, {"AMD": 200.0}, ("AMD",)),
               _post("a2", "am2", "$AMD nice move", "Bullish", 2, {"AMD": 200.0}, ("AMD",))]
-    pipe.process_posts(posts)
+    return posts
+
+
+@pytest.fixture
+def book():
+    e = make_engine("sqlite://")
+    init_db(e)
+    factory = make_session_factory(e)
+    with factory() as s:
+        seed_universe(s)
+        pf = Portfolio(name="Bot", base_currency="USD")
+        s.add(pf)
+        s.flush()
+        s.add(CashFlow(portfolio_id=pf.id, date=T0.date(), amount=10_000))
+        s.add(ComplianceRule(portfolio_id=pf.id, name="No overdraft", rule_type="no_negative_cash", params={}))
+        s.add(ComplianceRule(portfolio_id=pf.id, name="No shorts", rule_type="no_short_positions", params={}))
+        s.commit()
+        pid = pf.id
+    pipe = Pipeline(factory)
+    pipe.process_posts(crowd_posts())
     return factory, pid, pipe
 
 
@@ -119,6 +124,20 @@ def test_cycle_buys_the_strong_name_within_limits_then_sells_when_the_crowd_turn
         assert sell["fill_price"] == 140.0
         v = value_portfolio(s, pid)
         assert v.positions.at[nvda_id, "quantity"] == 2, "a 2,000 order cap at 140 sells 14 of 16; the rest goes next cycle"
+
+
+def test_invest_caps_the_whole_stock_book_not_just_each_name(book):
+    factory, pid, _ = book
+    with factory() as s:
+        # An AMD holding the bot did not choose this cycle already fills most of the 50% allowance.
+        amd = s.execute(select(Security).where(Security.ticker == "AMD")).scalar_one()
+        s.add(Trade(portfolio_id=pid, security_id=amd.id, side="BUY", quantity=22, price=200.0, currency="USD", trade_date=T0.date()))
+        s.commit()
+        r = run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5)
+        (buy,) = r.actions
+        # 5,000 allowed in stocks, 4,400 already in AMD: 600 of room buys 4 NVDA at 150, not the 13 its own target asks for.
+        assert buy["ticker"] == "NVDA" and buy["quantity"] == 4
+        assert run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5).actions == [], "no room left"
 
 
 def test_kill_switch_stops_the_bot(book):

@@ -24,8 +24,10 @@ LIMITS = TradingLimits(max_order_notional=5_000, max_daily_notional=50_000, max_
 class FakeAlpaca:
     """Just enough of Alpaca's API to exercise the adapter."""
 
-    def __init__(self, is_open=True, fill_after_polls=1, final_status="filled", fill_price="151.40", partial=None):
+    def __init__(self, is_open=True, fill_after_polls=1, final_status="filled", fill_price="151.40", partial=None,
+                 multiplier="1"):
         self.is_open, self.fill_after_polls, self.final_status = is_open, fill_after_polls, final_status
+        self.multiplier = multiplier
         self.fill_price, self.partial = fill_price, partial
         self.orders: dict[str, dict] = {}
         self.polls = 0
@@ -40,7 +42,12 @@ class FakeAlpaca:
                 return httpx.Response(200, json={"is_open": self.is_open, "next_open": "2026-11-19T09:30:00-05:00",
                                                  "next_close": "2026-11-18T16:00:00-05:00", "timestamp": "x"})
             if path == "/v2/account":
-                return httpx.Response(200, json={"status": "ACTIVE", "cash": "100000", "equity": "100000"})
+                return httpx.Response(200, json={"status": "ACTIVE", "cash": "100000", "equity": "100000",
+                                                 "multiplier": self.multiplier})
+            if path == "/v2/account/configurations":
+                if request.method == "PATCH":
+                    self.multiplier = json.loads(request.content).get("max_margin_multiplier", self.multiplier)
+                return httpx.Response(200, json={"max_margin_multiplier": self.multiplier, "no_shorting": False})
             if path == "/v2/orders" and request.method == "POST":
                 body = json.loads(request.content)
                 if body["symbol"] == "BAD":
@@ -149,6 +156,22 @@ def test_closed_market_rejects_before_anything_is_sent(book):
     r = execute(s, o.id, alpaca.AlpacaPaperBroker(client_for(fake), sleep=lambda _: None), LIMITS)
     assert r.outcome == "blocked" and "market is closed" in r.reasons[0]
     assert not any(q.method == "POST" for q in fake.requests) and o.status == OrderStatus.APPROVED.value
+
+
+def test_cash_only_mode_refuses_to_trade_while_the_account_can_borrow(book):
+    s, pf, nvda = book
+    fake = FakeAlpaca(multiplier="2")
+    client = client_for(fake)
+    o = oms.create_order(s, portfolio_id=pf.id, security_id=nvda.id, side=Side.BUY, quantity=10)
+    r = execute(s, o.id, alpaca.AlpacaPaperBroker(client, sleep=lambda _: None), LIMITS)
+    assert r.outcome == "blocked" and "margin multiplier 2" in r.reasons[0]
+    assert not any(q.method == "POST" for q in fake.requests), "nothing is sent while borrowing is possible"
+
+    assert client.set_configurations(max_margin_multiplier="1")["max_margin_multiplier"] == "1"
+    sent = next(q for q in fake.requests if q.method == "PATCH")
+    assert sent.url.path == "/v2/account/configurations" and json.loads(sent.content) == {"max_margin_multiplier": "1"}
+    assert client.configurations()["max_margin_multiplier"] == "1"
+    assert execute(s, o.id, alpaca.AlpacaPaperBroker(client, sleep=lambda _: None), LIMITS).outcome == "executed"
 
 
 def test_unfilled_order_is_cancelled_and_partial_fills_are_kept(book):
