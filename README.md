@@ -139,6 +139,17 @@ database on the volume. Not yet checked: a deployment on a public host.
 - **Factor model**: OLS betas against stored factor returns, portfolio factor exposures, and a
   systematic / idiosyncratic variance decomposition with per-factor contributions.
 - **Fixed income**: price ⇄ yield, Macaulay and modified duration, convexity, DV01.
+- **Options** (`risk/options.py`) have no useful price history, so they are counted through
+  their delta: an option's return is its underlying's return times `delta × underlying price ÷
+  option price`, never worse than −100% for a bought option. VaR, component VaR and stress
+  scenarios all use this, and the report lists which contracts were treated this way and any
+  that could not be included. It is a first-order estimate: gamma, volatility and time decay
+  are ignored.
+- **Coins** trade at weekends and stocks do not; when both are held, history is sampled on
+  business days so a coin's weekend move lands in Monday's return.
+- **Real price history**: `spectre prices-backfill` loads about two years of daily closes from
+  Alpaca (split- and dividend-adjusted) for every real stock, fund and coin in the book.
+  Without it a new holding has no history and the risk numbers cannot be computed.
 
 ### Compliance (`spectre/compliance`)
 Rules live in the database, scoped to one portfolio or firm-wide, each `HARD` (blocks) or `SOFT`
@@ -479,7 +490,8 @@ build a track record (and prune old posts there); measure the crowd signal again
 classifier on the Stocktwits labels and adopt it only if it beats the baseline out of sample; use
 rates and credit as a risk-on / risk-off filter; SEC earnings against the live service; covered
 calls, cash-secured puts and defined-risk spreads (never an uncovered sale); price history for
-real tickers so the risk numbers work on the live book; Reddit via a registered app; performance attribution;
+a stop-loss on shares and coins; a cap on the options sleeve by exposure rather than premium;
+Reddit via a registered app; performance attribution;
 multi-user auth; scheduled end-of-day risk and compliance runs; Postgres migrations via Alembic; a
 data-licensing review before selling derived signals. A live broker would come last, behind the
 live-mode and per-order approval gates, and only after paper results justify it.

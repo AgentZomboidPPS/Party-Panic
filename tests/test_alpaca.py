@@ -85,6 +85,21 @@ class FakeAlpaca:
                         o.update(filled_qty=o["qty"], filled_avg_price=self.fill_price)
                 return httpx.Response(200, json=o)
         if host == "data.alpaca.markets":
+            if path == "/v2/stocks/bars":
+                wanted = request.url.params["symbols"].split(",")
+                if "page_token" not in request.url.params:  # first page: two days, more to come
+                    bars = {"NVDA": [{"c": 148.0, "t": "2026-11-16T05:00:00Z"}, {"c": 150.0, "t": "2026-11-17T05:00:00Z"}],
+                            "SPY": [{"c": 725.0, "t": "2026-11-16T05:00:00Z"}]}
+                    token = "more"
+                else:  # second page: the rest, including the day in progress
+                    bars = {"NVDA": [{"c": 151.0, "t": "2026-11-18T05:00:00Z"}, {"c": 0, "t": "2026-07-03T04:00:00Z"}],
+                            "SPY": [{"c": 729.0, "t": "2026-11-17T05:00:00Z"}]}
+                    token = None
+                return httpx.Response(200, json={"bars": {k: v for k, v in bars.items() if k in wanted}, "next_page_token": token})
+            if path == "/v1beta3/crypto/us/bars":
+                wanted = request.url.params["symbols"].split(",")
+                bars = {"BTC/USD": [{"c": 64113.15, "t": "2026-11-14T00:00:00Z"}, {"c": 65320.5, "t": "2026-11-15T00:00:00Z"}]}
+                return httpx.Response(200, json={"bars": {k: v for k, v in bars.items() if k in wanted}, "next_page_token": None})
             if path == "/v1beta3/crypto/us/latest/quotes":
                 wanted = request.url.params["symbols"].split(",")
                 return httpx.Response(200, json={"quotes": {s: self.coin_quotes[s] for s in wanted if s in self.coin_quotes}})

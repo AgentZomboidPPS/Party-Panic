@@ -13,6 +13,7 @@ from spectre.models import Security
 from spectre.portfolio.positions import ValuedPositions, security_map, value_portfolio
 from spectre.risk import factors as fm
 from spectre.risk.fixed_income import bond_analytics
+from spectre.risk.options import option_exposures
 from spectre.risk.stress import PREDEFINED, Scenario, apply_scenario
 from spectre.risk.var import (
     component_var,
@@ -24,13 +25,25 @@ from spectre.risk.var import (
 
 
 def asset_returns(
-    session: Session, valued: ValuedPositions, lookback_days: int | None = None
+    session: Session, valued: ValuedPositions, lookback_days: int | None = None,
+    options: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
+    """Daily returns per position. An option has no history of its own, so it gets the returns
+    of its underlying geared by its delta (see `risk/options.py`), floored at -100%."""
     lookback = lookback_days or settings.lookback_days
-    px = price_matrix(
-        session, valued.positions.index, valued.as_of, lookback, base_currency=valued.base_currency
-    )
-    return returns_from_prices(px)
+    opts = option_exposures(session, valued) if options is None else options
+    held = list(valued.positions.index)
+    plain = [i for i in held if i not in opts.index]
+    modelled = opts[opts["leverage"].notna()]
+    under = [int(u) for u in modelled["underlying_id"].unique() if int(u) not in plain]
+    px = price_matrix(session, plain + under, valued.as_of, lookback, base_currency=valued.base_currency)
+    rets = returns_from_prices(px)
+    if rets.empty:
+        return rets
+    for sid, o in modelled.iterrows():
+        if int(o["underlying_id"]) in rets.columns:
+            rets[sid] = (rets[int(o["underlying_id"])] * float(o["leverage"])).clip(lower=-1.0)
+    return rets[[c for c in held if c in rets.columns]]
 
 
 def durations(session: Session, valued: ValuedPositions) -> tuple[pd.Series, list[dict]]:
@@ -62,10 +75,12 @@ def var_suite(
 ) -> dict:
     confidence = confidence or settings.var_confidence
     horizon = horizon_days or settings.var_horizon_days
-    rets = asset_returns(session, valued, lookback_days)
+    opts = option_exposures(session, valued)
+    rets = asset_returns(session, valued, lookback_days, opts)
     w = valued.weights()
     if rets.empty or len(valued.positions) == 0:
         return {"error": "insufficient price history", "methods": {}}
+    left_out = [str(valued.positions.at[i, "ticker"]) for i in valued.positions.index if i not in rets.columns]
     cov = rets.cov()
     port = portfolio_return_series(rets, w)
     value = valued.total_value
@@ -85,6 +100,12 @@ def var_suite(
         "annualised_vol": float(port.std() * (252**0.5)),
         "methods": {r.method: r.to_dict() for r in (hist, para, mc)},
         "component_var": comp.reset_index().to_dict(orient="records"),
+        # Honest footnotes: what was approximated and what could not be included at all.
+        "options_by_delta": [
+            {"ticker": o["ticker"], "underlying": o["underlying"], "delta": o["delta"], "leverage": o["leverage"]}
+            for i, o in opts.iterrows() if i in rets.columns
+        ],
+        "not_modelled": left_out,
     }
 
 
@@ -92,7 +113,17 @@ def stress_suite(
     session: Session, valued: ValuedPositions, scenarios: list[Scenario] | None = None
 ) -> list[dict]:
     durs, _ = durations(session, valued)
-    results = [apply_scenario(valued, s, durs) for s in (scenarios or PREDEFINED)]
+    opts = option_exposures(session, valued)
+    view, leverage = valued, None
+    if len(opts):
+        # An option is shocked as its underlying would be (an equity scenario hits a call on a
+        # stock), then geared by its delta. Without a delta it takes the plain shock.
+        view = valued.copy()
+        for sid, o in opts.iterrows():
+            if o["underlying_class"]:
+                view.positions.at[sid, "asset_class"] = o["underlying_class"]
+        leverage = opts["leverage"].astype(float)
+    results = [apply_scenario(view, s, durs, leverage) for s in (scenarios or PREDEFINED)]
     return [r.to_dict(top=10) for r in results]
 
 

@@ -25,7 +25,7 @@ import re
 import time
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from urllib.parse import urlparse
 
 import httpx
@@ -37,7 +37,7 @@ from spectre.config import settings
 from spectre.execution.brokers import BrokerFill, BrokerReject
 from spectre.execution.models import OptionMark
 from spectre.marketdata.prices import latest_prices, upsert_prices
-from spectre.marketdata.universe import crypto_base
+from spectre.marketdata.universe import BY_TICKER, crypto_base
 from spectre.models import CashFlow, Order, OrderType, Security, Side, Trade
 from spectre.portfolio.positions import value_portfolio
 from spectre.signals.models import PriceTick
@@ -192,6 +192,42 @@ class AlpacaClient:
                     out[sym] = (float(t["p"]), parse_time(t["t"]))
         return out
 
+    def daily_bars(self, symbols: list[str], start: date, end: date | None = None,
+                   feed: str = "sip") -> dict[str, list[tuple[date, float]]]:
+        """Daily closing prices per stock or fund, oldest first, adjusted for splits and dividends
+        so that day-to-day changes are true returns. The free plan serves full-market ("sip")
+        history as long as it is at least 15 minutes old."""
+        out: dict[str, list[tuple[date, float]]] = {}
+        for i in range(0, len(symbols), 50):
+            params: dict = {"symbols": ",".join(symbols[i : i + 50]), "timeframe": "1Day", "start": start.isoformat(),
+                            "limit": 10000, "adjustment": "all", "feed": feed}
+            if end is not None:
+                params["end"] = end.isoformat()
+            while True:
+                body = self._call("GET", f"{self.data_url}/v2/stocks/bars", params=params)
+                for sym, bars in (body.get("bars") or {}).items():
+                    out.setdefault(sym, []).extend((parse_time(b["t"]).date(), float(b["c"])) for b in bars or [])
+                if not body.get("next_page_token"):
+                    break
+                params["page_token"] = body["next_page_token"]
+        return out
+
+    def crypto_daily_bars(self, coins: list[str], start: date) -> dict[str, list[tuple[date, float]]]:
+        """Daily closing prices per coin against the dollar (days run midnight to midnight UTC)."""
+        out: dict[str, list[tuple[date, float]]] = {}
+        if not coins:
+            return out
+        params: dict = {"symbols": ",".join(f"{c}/USD" for c in coins), "timeframe": "1Day", "start": start.isoformat(),
+                        "limit": 10000}
+        while True:
+            body = self._call("GET", f"{self.data_url}/v1beta3/crypto/us/bars", params=params)
+            for pair, bars in (body.get("bars") or {}).items():
+                out.setdefault(pair.split("/")[0], []).extend((parse_time(b["t"]).date(), float(b["c"])) for b in bars or [])
+            if not body.get("next_page_token"):
+                break
+            params["page_token"] = body["next_page_token"]
+        return out
+
     def crypto_quotes(self, coins: list[str]) -> dict[str, tuple[float, float, datetime]]:
         """Latest (bid, ask, time) per coin against the dollar; coins with no two-sided quote are absent."""
         out: dict[str, tuple[float, float, datetime]] = {}
@@ -290,6 +326,36 @@ def sync_prices(session: Session, client: AlpacaClient, tickers: list[str] | Non
     upsert_prices(session, closes)
     session.commit()
     return len(seen)
+
+
+def backfill_prices(session: Session, client: AlpacaClient, days: int = 750, tickers: list[str] | None = None,
+                    everything: bool = False) -> dict:
+    """Store daily closing prices going back `days` calendar days, so risk numbers that need a
+    history (volatility, value at risk) work on real holdings.
+
+    Covers the US stocks, funds and coins of the curated real-world universe; `everything`
+    extends that to any other dollar security in the book (not the default, because a made-up
+    demo ticker that happens to match a real symbol would have its prices overwritten).
+    Today's price is left alone: the live one is fresher. Prices are adjusted as of now, so run
+    this again after a stock split."""
+    q = select(Security).where(Security.currency == "USD", Security.asset_class.in_(("Equity", "Fund", "Crypto")))
+    if tickers:
+        q = q.where(Security.ticker.in_([t.upper() for t in tickers]))
+    secs = {s.ticker: s for s in session.execute(q).scalars() if everything or tickers or s.ticker in BY_TICKER}
+    today = utcnow().date()
+    start = today - timedelta(days=days)
+    bars = client.daily_bars(sorted(t for t, s in secs.items() if s.asset_class != "Crypto"), start)
+    bars.update(client.crypto_daily_bars(sorted(t for t, s in secs.items() if s.asset_class == "Crypto"), start))
+    stored = 0
+    for ticker, series in bars.items():
+        sec = secs.get(ticker)
+        if sec is None:
+            continue
+        stored += upsert_prices(session, [{"security_id": sec.id, "date": day, "close": close}
+                                          for day, close in series if day < today and close > 0])
+    session.commit()
+    return {"securities": len([t for t in secs if bars.get(t)]), "prices": stored, "from": start.isoformat(),
+            "missing": sorted(t for t in secs if not bars.get(t))}
 
 
 def ensure_option_security(session: Session, q: OptionQuote) -> Security:

@@ -86,9 +86,13 @@ PREDEFINED: list[Scenario] = [
 
 
 def apply_scenario(
-    valued: ValuedPositions, scenario: Scenario, durations: pd.Series | None = None
+    valued: ValuedPositions, scenario: Scenario, durations: pd.Series | None = None,
+    leverage: pd.Series | None = None,
 ) -> StressResult:
-    """Shock each position. Shocks across dimensions are additive. Rate shocks use -D_mod * dy."""
+    """Shock each position. Shocks across dimensions are additive. Rate shocks use -D_mod * dy.
+
+    `leverage` (by security id) gears the shock for positions that move more than one for one
+    with what they track, such as options; a geared loss stops at the whole position."""
     df = valued.positions
     if len(df) == 0:
         empty = pd.DataFrame(columns=["ticker", "market_value", "shock", "pnl"])
@@ -108,6 +112,10 @@ def apply_scenario(
     if scenario.rates_bp and durations is not None and len(durations):
         dy = scenario.rates_bp / 10_000.0
         shock = shock + (-durations.reindex(df.index).fillna(0.0) * dy)
+
+    if leverage is not None and len(leverage):
+        gear = leverage.reindex(df.index).astype(float)
+        shock = (shock * gear).clip(lower=-1.0).where(gear.notna(), shock)
 
     pnl = df["market_value"] * shock
     out = pd.DataFrame(

@@ -75,7 +75,16 @@ def price_matrix(
             fx = fx.reindex(px.index).ffill().bfill()
             px[cols] = px[cols].mul(fx, axis=0)
 
-    px = px.ffill().dropna(how="any")
+    # Coins trade every day; everything else only on business days. When both are present, keep
+    # the days the others trade: a coin's weekend move then lands in Monday's return, instead of
+    # the weekend showing up as extra days on which the stocks did not move.
+    kinds = dict(session.execute(select(Security.id, Security.asset_class).where(Security.id.in_(ids))).all())
+    others = [c for c in px.columns if kinds.get(c) != "Crypto"]
+    trading_day = px[others].notna().any(axis=1) if others and len(others) < len(px.columns) else None
+    px = px.ffill()
+    if trading_day is not None:
+        px = px[trading_day]
+    px = px.dropna(how="any")
     return px.tail(lookback_days + 1)
 
 

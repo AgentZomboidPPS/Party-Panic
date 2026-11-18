@@ -292,7 +292,9 @@ async function refreshPortfolio() {
   if (hasVar) {
     $('#var-table').innerHTML = `<table><thead><tr><th>method</th><th class="num">VaR</th><th class="num">% NAV</th><th class="num">expected shortfall</th><th class="num">% NAV</th></tr></thead><tbody>` +
       Object.values(varr.methods).map(m => `<tr><td>${esc(m.method.replace('_', ' '))}</td><td class="num">${fmtMoney(m.var)}</td><td class="num">${fmtPct(m.var_pct, 2)}</td><td class="num">${fmtMoney(m.expected_shortfall)}</td><td class="num">${fmtPct(m.es_pct, 2)}</td></tr>`).join('') +
-      `</tbody></table><div class="muted" style="margin-top:4px">${varr.confidence*100}% confidence, ${varr.horizon_days}-day horizon, ${varr.observations} observations</div>`;
+      `</tbody></table><div class="muted" style="margin-top:4px">${varr.confidence*100}% confidence, ${varr.horizon_days}-day horizon, ${varr.observations} observations</div>` +
+      ((varr.options_by_delta || []).length ? `<div class="muted" style="margin-top:4px">Options are counted through their delta (${varr.options_by_delta.map(o => `${esc(o.underlying)} ${o.leverage >= 0 ? '+' : '−'}${Math.abs(o.leverage).toFixed(0)}×`).join(', ')}): a first-order estimate that ignores gamma, volatility and time decay.</div>` : '') +
+      ((varr.not_modelled || []).length ? `<div class="status bad" style="margin-top:4px"><span class="ic">!</span>Not in these numbers: ${varr.not_modelled.map(esc).join(', ')}</div>` : '');
     const cv = varr.component_var.slice(0, 8), mx = Math.max(...cv.map(c => Math.abs(c.component_var)), 1);
     $('#component-var').innerHTML = `<table><tbody>` + cv.map(c =>
       `<tr><td><b>${esc(c.ticker)}</b></td><td>${hbar(c.component_var, mx, 's1', 160)}</td><td class="num">${fmtMoney(c.component_var)}</td><td class="num muted">${fmtPct(c.pct_of_total, 1)}</td></tr>`).join('') + '</tbody></table>';

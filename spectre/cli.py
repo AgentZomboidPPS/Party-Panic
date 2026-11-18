@@ -990,6 +990,25 @@ def alpaca_margin(multiplier: str | None = typer.Argument(None, help="1 = cash o
 
 
 @app.command()
+def prices_backfill(days: int = typer.Option(750, help="How many calendar days of daily history to load"),
+                    tickers: str = typer.Option("", help="Comma list; default is every real stock, fund and coin in the book"),
+                    everything: bool = typer.Option(False, "--all", help="Also securities outside the curated real-world universe"),
+                    db: str | None = typer.Option(None, "--db")):
+    """Load daily price history from Alpaca so volatility and value at risk work on real holdings."""
+    from spectre.execution.alpaca import AlpacaClient, AlpacaError, backfill_prices
+
+    try:
+        with _session(db) as s:
+            r = backfill_prices(s, AlpacaClient(), days, [t.strip() for t in tickers.split(",") if t.strip()] or None, everything)
+    except AlpacaError as exc:
+        console.print(f"[red]Alpaca: {exc}[/]")
+        raise typer.Exit(1) from exc
+    console.print(f"Stored {r['prices']:,} daily prices for {r['securities']} securities, back to {r['from']}.")
+    if r["missing"]:
+        console.print(f"[yellow]No history returned for: {', '.join(r['missing'])}[/]")
+
+
+@app.command()
 def prices_sync(tickers: str = typer.Option("", help="Comma list; default is every US stock and fund in the book"),
                 db: str | None = typer.Option(None, "--db")):
     """Pull the latest traded prices from Alpaca into the book."""
@@ -1164,6 +1183,13 @@ def run(host: str = typer.Option("127.0.0.1", envvar="SPECTRE_HOST", help="0.0.0
             took = adopt_account(s, client, pid)
             if took["adopted"]:
                 console.print(f"Picked up the Alpaca account: {len(took['positions'])} positions, cash {took['cash']:,.2f}.")
+            try:  # price history for the risk numbers; cheap, and safe to repeat on every start
+                from spectre.execution.alpaca import backfill_prices
+
+                hist = backfill_prices(s, client)
+                console.print(f"Price history: {hist['prices']:,} daily prices for {hist['securities']} securities.")
+            except Exception as exc:
+                console.print(f"[yellow]Could not load price history ({type(exc).__name__}: {exc}); risk numbers may be missing.[/]")
 
     from spectre.api.app import create_app
 
