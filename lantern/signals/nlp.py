@@ -52,30 +52,84 @@ def fear_flag(text: str) -> bool:
     return any(w in FEAR_TERMS for w in _WORD.findall(low))
 
 
-class TickerExtractor:
-    """Finds securities by cashtag ($ACME) or by name/alias ("Acme Systems", "Acme")."""
+# General finance vocabulary: used to pre-filter a firehose down to market conversation.
+FINANCE_TERMS = [
+    "stock market", "stocks", "earnings", "nasdaq", "s&p 500", "dow jones", "wall street", "federal reserve",
+    "the fed", "rate cut", "rate cuts", "rate hike", "interest rates", "inflation", "recession", "tariffs",
+    "layoffs", "jobs report", "unemployment", "treasury yields", "bond market", "bitcoin", "crypto", "ipo",
+    "short squeeze", "bull market", "bear market", "price target", "market cap", "the economy", "stock price",
+    "shareholders", "investors", "hedge fund", "housing market", "mortgage rates", "gas prices", "oil prices",
+]
 
-    def __init__(self, tickers: set[str], aliases: dict[str, str] | None = None):
+# Words that make it plausible a post about "apple" or "target" means the company.
+_FIN_CONTEXT = re.compile(
+    r"\$[A-Za-z]{1,6}\b|\b(?:stocks?|shares?|shareholders?|earnings|revenue|guidance|eps|dividends?|buybacks?|ipo|"
+    r"market cap|price target|valuation|investors?|invest(?:ing|ment|ed)?|traders?|trading|calls|puts|options|"
+    r"bullish|bearish|rally|sell-?off|downgrade[sd]?|upgrade[sd]?|analysts?|nasdaq|nyse|s&p|wall street|"
+    r"quarter(?:ly)?|q[1-4]|ceo|cfo|antitrust|layoffs|10-[kq])\b",
+    re.IGNORECASE,
+)
+_BARE = re.compile(r"(?<![\w$])[A-Z]{2,5}(?:\.[A-Z])?(?![\w])")
+
+
+class TickerExtractor:
+    """Finds securities in text.
+
+    Four routes, from most to least certain:
+    - cashtags (`$NVDA`): always accepted
+    - `aliases` (unambiguous names such as "nvidia", "goldman sachs"): always accepted
+    - `context_aliases` (names that are also ordinary words: "apple", "meta", "target"):
+      accepted only when the text also reads like market talk
+    - bare upper-case symbols: `bare_tickers` always, `context_bare` only with market context
+    """
+
+    def __init__(
+        self,
+        tickers: set[str],
+        aliases: dict[str, str] | None = None,
+        context_aliases: dict[str, str] | None = None,
+        bare_tickers: set[str] | None = None,
+        context_bare: set[str] | None = None,
+    ):
         self.tickers = {t.upper() for t in tickers}
-        aliases = {k.lower(): v.upper() for k, v in (aliases or {}).items() if len(k) >= 3}
-        self.aliases = aliases
-        if aliases:
-            pat = "|".join(re.escape(a) for a in sorted(aliases, key=len, reverse=True))
-            self._alias_re = re.compile(rf"\b({pat})\b", re.IGNORECASE)
-        else:
-            self._alias_re = None
+        self.aliases = {k.lower(): v.upper() for k, v in (aliases or {}).items() if len(k) >= 3}
+        self.context_aliases = {k.lower(): v.upper() for k, v in (context_aliases or {}).items() if len(k) >= 3}
+        self.bare_tickers = {t.upper() for t in (bare_tickers or set())}
+        self.context_bare = {t.upper() for t in (context_bare or set())}
+        self._alias_re = self._compile(self.aliases)
+        self._context_re = self._compile(self.context_aliases)
+
+    @staticmethod
+    def _compile(mapping: dict[str, str]) -> re.Pattern | None:
+        if not mapping:
+            return None
+        pat = "|".join(re.escape(a) for a in sorted(mapping, key=len, reverse=True))
+        return re.compile(rf"(?<![\w$])({pat})(?![\w])", re.IGNORECASE)
 
     def extract(self, text: str) -> list[str]:
         found: list[str] = []
-        for m in _CASHTAG.findall(text):
-            t = m.upper()
-            if t in self.tickers and t not in found:
+
+        def add(t: str | None) -> None:
+            if t and t not in found:
                 found.append(t)
+
+        for m in _CASHTAG.findall(text):
+            t = m.upper().rstrip(".-")
+            if t in self.tickers:
+                add(t)
         if self._alias_re:
             for m in self._alias_re.findall(text):
-                t = self.aliases.get(m.lower())
-                if t and t not in found:
-                    found.append(t)
+                add(self.aliases.get(m.lower()))
+        if not (self._context_re or self.bare_tickers or self.context_bare):
+            return found
+        has_context = bool(_FIN_CONTEXT.search(text))
+        if self._context_re and has_context:
+            for m in self._context_re.findall(text):
+                add(self.context_aliases.get(m.lower()))
+        if self.bare_tickers or self.context_bare:
+            for tok in _BARE.findall(text):
+                if tok in self.bare_tickers or (has_context and tok in self.context_bare):
+                    add(tok)
         return found
 
 
@@ -83,6 +137,9 @@ STOPWORDS_EXTRA = {
     "stock", "stocks", "market", "markets", "today", "just", "like", "think", "going", "really", "people", "time",
     "year", "week", "day", "new", "way", "lol", "got", "know", "right", "good", "bad", "big", "https", "http", "com",
     "www", "amp", "don", "ve", "ll", "re", "im", "rt", "make", "need", "want", "say", "said", "thing", "things",
+    "thats", "dont", "doesnt", "didnt", "isnt", "cant", "wont", "ive", "youre", "theyre", "gonna", "gotta", "yeah",
+    "lets", "let", "looks", "look", "looking", "getting", "come", "coming", "went", "goes", "actually", "probably",
+    "maybe", "sure", "ok", "okay", "hey", "oh", "yes", "nice", "great", "bit", "lot", "lots", "guys", "guy", "man",
 }
 
 
@@ -91,6 +148,9 @@ class TopicCluster:
     label: str
     keywords: list[str]
     indices: np.ndarray  # positions of member texts
+
+
+_NOISE = re.compile(r"https?://\S+|\b[\w.-]+\.(?:com|org|net|io|co|app|tv|gg|social)\S*|@[\w.]+", re.IGNORECASE)
 
 
 def _cosine_distances(X: np.ndarray) -> np.ndarray:
@@ -124,6 +184,7 @@ def cluster_topics(
     n = len(texts)
     if n == 0:
         return []
+    texts = [_NOISE.sub(" ", t) for t in texts]  # links and @handles are not what a post is about
     stop = list(ENGLISH_STOP_WORDS | STOPWORDS_EXTRA)
     vec = TfidfVectorizer(
         stop_words=stop,

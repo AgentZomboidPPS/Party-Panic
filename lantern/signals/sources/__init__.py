@@ -1,12 +1,13 @@
-"""Source adapters. Each yields Post or MarketQuote objects; the pipeline does the rest.
+"""Source adapters. Each yields Post, MarketQuote or TrendItem objects; the pipeline does the rest.
 
-Live adapters (bluesky, reddit, stocktwits, rss, x, kalshi, polymarket) talk to public APIs
-and need outbound network access. `synthetic` and `replay` work offline.
+Verified live: bluesky, stocktwits, kalshi, polymarket, trends. Written to the documented API
+but not verified: reddit (refuses unauthenticated servers), x (needs a paid token), rss (bring
+your own feed URLs). `synthetic` and `replay` work offline.
 """
 
 from __future__ import annotations
 
-from lantern.signals.sources.base import MarketQuote, Post, Source
+from lantern.signals.sources.base import MarketQuote, Post, Source, TrendItem
 
 
 def build(name: str, **kwargs) -> Source:
@@ -48,7 +49,11 @@ def build(name: str, **kwargs) -> Source:
         from lantern.signals.sources.polymarket import PolymarketSource
 
         return PolymarketSource(**kwargs)
+    if name in ("trends", "google_trends"):
+        from lantern.signals.sources.trends import GoogleTrendsSource
+
+        return GoogleTrendsSource(**kwargs)
     raise ValueError(f"Unknown source {name!r}")
 
 
-__all__ = ["MarketQuote", "Post", "Source", "build"]
+__all__ = ["MarketQuote", "Post", "Source", "TrendItem", "build"]

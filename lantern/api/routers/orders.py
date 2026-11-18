@@ -47,3 +47,42 @@ def fill(order_id: int, body: FillIn, db: DB):
 @router.post("/{order_id}/cancel", response_model=OrderOut)
 def cancel(order_id: int, db: DB, reason: str | None = None, actor: str = "api"):
     return oms.cancel_order(db, order_id, actor=actor, reason=reason)
+
+
+@router.post("/{order_id}/execute")
+def execute(order_id: int, db: DB, slippage_bps: float = 0.0, actor: str = "api") -> dict:
+    """Fill an approved order with the paper broker, subject to trading limits and the kill switch."""
+    from lantern.execution.brokers import PaperBroker
+    from lantern.execution.guard import execute as _execute
+
+    return _execute(db, order_id, PaperBroker(slippage_bps), actor=actor).to_dict()
+
+
+trading_router = APIRouter(prefix="/trading", tags=["trading"])
+
+
+@trading_router.get("/status")
+def trading_status(db: DB) -> dict:
+    from dataclasses import asdict
+
+    from lantern.execution.guard import TradingLimits, halt_state
+
+    h = halt_state(db)
+    db.commit()
+    lim = asdict(TradingLimits.from_settings())
+    lim["allowed_symbols"] = sorted(lim["allowed_symbols"])
+    return {"halted": h.halted, "halt_reason": h.reason, "halted_by": h.updated_by, "limits": lim}
+
+
+@trading_router.post("/halt")
+def trading_halt(db: DB, reason: str = "manual halt", actor: str = "api") -> dict:
+    from lantern.execution.guard import set_halt
+
+    return {"halted": set_halt(db, True, actor, reason).halted, "reason": reason}
+
+
+@trading_router.post("/resume")
+def trading_resume(db: DB, actor: str = "api") -> dict:
+    from lantern.execution.guard import set_halt
+
+    return {"halted": set_halt(db, False, actor).halted}

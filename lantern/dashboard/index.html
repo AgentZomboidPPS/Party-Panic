@@ -41,6 +41,7 @@
   .tile .d { color: var(--muted); font-size: 12px; margin-top: 2px; }
   .c8 { grid-column: span 8; } .c4 { grid-column: span 4; } .c6 { grid-column: span 6; } .c12 { grid-column: span 12; }
   .side { grid-column: span 4; display: grid; gap: 16px; align-content: start; }
+  .stackcol { display: grid; gap: 16px; align-content: start; min-width: 0; }
   svg text { fill: var(--ink-2); font-size: 11px; }
   svg .grid { stroke: var(--grid); stroke-width: 1; }
   svg .axis { stroke: var(--axis); stroke-width: 1; }
@@ -150,27 +151,33 @@
     <div class="card tile"><div class="v" id="t-markets">–</div><div class="l">prediction markets tracked</div><div class="d" id="t-markets-d"></div></div>
   </section>
 
-  <section class="card c8">
-    <h2>What people are talking about — bubble size is volume, left/right is sentiment, up/down is how fast it is growing</h2>
-    <svg id="bubble-chart" width="100%" height="460" role="img" aria-label="Topic bubbles: sentiment versus velocity, sized by volume"></svg>
-    <div id="bubble-table" class="hidden"></div>
-  </section>
+  <div class="c8 stackcol">
+    <section class="card">
+      <h2>What people are talking about — bubble size is volume, left/right is sentiment, up/down is how fast it is growing</h2>
+      <svg id="bubble-chart" width="100%" height="460" role="img" aria-label="Topic bubbles: sentiment versus velocity, sized by volume"></svg>
+      <div id="bubble-table" class="hidden"></div>
+    </section>
+    <section class="card">
+      <h2>Topic detail</h2>
+      <div id="topic-detail" class="muted">Hover or click a bubble.</div>
+    </section>
+    <section class="card">
+      <h2>What people are searching — Google trending now</h2>
+      <div id="trends-table"></div>
+    </section>
+  </div>
 
   <aside class="side">
     <div class="card">
-      <h2>Sentiment by security — z-score vs. its own recent history</h2>
+      <h2>Sentiment by security</h2>
       <div id="sentiment-table"></div>
     </div>
     <div class="card">
-      <h2>Prediction markets — implied probability</h2>
+      <h2>Prediction markets — contested (5–95%), most traded</h2>
       <div id="markets-table"></div>
     </div>
   </aside>
 
-  <section class="card c12">
-    <h2>Topic detail</h2>
-    <div id="topic-detail" class="muted">Hover or click a bubble.</div>
-  </section>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -368,12 +375,29 @@ function showTopic(t) {
     <ul style="margin:4px 0 0 18px">${(t.sample||[]).map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
 }
 
-function sentimentTable(rows) {
-  rows = rows.filter(r => r.sentiment_z != null).sort((a,b) => Math.abs(b.sentiment_z) - Math.abs(a.sentiment_z)).slice(0, 12);
-  if (!rows.length) { $('#sentiment-table').innerHTML = '<div class="muted">No sentiment bars yet.</div>'; return; }
-  const scale = Math.max(2, ...rows.map(r => Math.abs(r.sentiment_z)));
-  $('#sentiment-table').innerHTML = `<table><thead><tr><th>ticker</th><th>sentiment z</th><th class="num">z</th><th class="num">attention z</th><th class="num">posts</th></tr></thead><tbody>` +
-    rows.map(r => `<tr><td><b>${esc(r.ticker)}</b></td><td>${dbar(r.sentiment_z, scale, 140)}</td><td class="num">${fmtZ(r.sentiment_z)}</td><td class="num">${fmtZ(r.attention_z)}</td><td class="num">${r.n_posts}</td></tr>`).join('') + '</tbody></table>';
+function sentimentTable(all) {
+  if (!all.length) { $('#sentiment-table').innerHTML = '<div class="muted">No sentiment bars yet.</div>'; return; }
+  let rows = all.filter(r => r.sentiment_z != null).sort((a,b) => Math.abs(b.sentiment_z) - Math.abs(a.sentiment_z)).slice(0, 12);
+  if (rows.length) {
+    const scale = Math.max(2, ...rows.map(r => Math.abs(r.sentiment_z)));
+    $('#sentiment-table').innerHTML = `<table><thead><tr><th>ticker</th><th>sentiment z</th><th class="num">z</th><th class="num">attention z</th><th class="num">posts</th></tr></thead><tbody>` +
+      rows.map(r => `<tr><td><b>${esc(r.ticker)}</b></td><td>${dbar(r.sentiment_z, scale, 140)}</td><td class="num">${fmtZ(r.sentiment_z)}</td><td class="num">${fmtZ(r.attention_z)}</td><td class="num">${r.n_posts}</td></tr>`).join('') + '</tbody></table>';
+    return;
+  }
+  // No z-scores until a security has a few bars of its own history: show the raw average.
+  rows = [...all].sort((a,b) => b.n_posts - a.n_posts).slice(0, 12);
+  $('#sentiment-table').innerHTML = `<table><thead><tr><th>ticker</th><th>average sentiment</th><th class="num">avg</th><th class="num">bullish</th><th class="num">posts</th></tr></thead><tbody>` +
+    rows.map(r => `<tr><td><b>${esc(r.ticker)}</b></td><td>${dbar(r.sentiment_mean, 1, 140)}</td><td class="num">${fmtZ(r.sentiment_mean)}</td><td class="num">${fmtPct(r.bull_share)}</td><td class="num">${r.n_posts}</td></tr>`).join('') +
+    '</tbody></table><div class="muted" style="margin-top:4px">Raw averages. Z-scores appear once each security has a few bars of history.</div>';
+}
+
+function trendsTable(rows) {
+  if (!rows.length) { $('#trends-table').innerHTML = '<div class="muted">No trends yet. Run <code>lantern ingest --sources trends</code>.</div>'; return; }
+  const mx = Math.max(...rows.map(r => r.approx_traffic || 0), 1);
+  $('#trends-table').innerHTML = `<table><thead><tr><th>search term</th><th>searches</th><th class="num">approx.</th><th>tickers</th></tr></thead><tbody>` +
+    rows.slice(0, 12).map(r => `<tr class="hover" title="${esc((r.headlines||[]).join(' · '))}"><td>${esc(r.term)} <span class="muted">${esc(r.geo)}</span>${(r.headlines||[]).length ? `<br><span class="muted">${esc(r.headlines[0].slice(0, 70))}</span>` : ''}</td>
+      <td>${hbar(r.approx_traffic || 0, mx, 's1', 90)}</td><td class="num">${r.approx_traffic ? fmtCompact(r.approx_traffic) + '+' : '–'}</td>
+      <td>${(r.tickers||[]).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</td></tr>`).join('') + '</tbody></table>';
 }
 
 function marketsTable(rows) {
@@ -384,8 +408,10 @@ function marketsTable(rows) {
 }
 
 async function refreshSignals() {
-  const [status, bubbles, sent, mkts, fear] = await Promise.all([
-    getJSON('/signals/status'), getJSON('/signals/bubbles'), getJSON('/signals/sentiment'), getJSON('/signals/markets'), getJSON('/signals/fear')]);
+  const [status, bubbles, sent, mkts, fear, trends] = await Promise.all([
+    getJSON('/signals/status'), getJSON('/signals/bubbles'), getJSON('/signals/sentiment'),
+    getJSON('/signals/markets?min_prob=0.05&max_prob=0.95&limit=12'), getJSON('/signals/fear'),
+    getJSON('/signals/trends').catch(() => [])]);
   $('#t-posts').textContent = fmtNum(status.posts_last_hour);
   $('#t-posts-d').textContent = `${fmtNum(status.posts_total)} total · ${Object.entries(status.by_source).map(([k,v]) => k + ' ' + fmtNum(v)).join(', ')}`;
   $('#t-screen').textContent = fmtPct(status.screened_share, 1);
@@ -401,6 +427,7 @@ async function refreshSignals() {
   drawBubbles(bubbles.topics);
   sentimentTable(sent);
   marketsTable(mkts);
+  trendsTable(trends);
 }
 
 /* ============================================================ shell */

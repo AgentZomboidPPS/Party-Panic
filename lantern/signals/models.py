@@ -28,7 +28,8 @@ class SocialPost(Base):
     author_quality: Mapped[float] = mapped_column(Float)
     screened_out: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     screen_reason: Mapped[str | None] = mapped_column(String(64))
-    sentiment: Mapped[float] = mapped_column(Float)
+    sentiment: Mapped[float] = mapped_column(Float)  # what aggregates use: the author's own label when given
+    model_sentiment: Mapped[float | None] = mapped_column(Float)  # the model's score, always
     fear: Mapped[bool] = mapped_column(Boolean, default=False)
     tickers: Mapped[list] = mapped_column(JSON, default=list)
     dedup_hash: Mapped[str] = mapped_column(String(16), index=True)
@@ -107,3 +108,39 @@ class PredictionMarket(Base):
     open_interest: Mapped[float | None] = mapped_column(Float)
     close_time: Mapped[datetime | None] = mapped_column(DateTime)
     snapshot_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class PriceTick(Base):
+    """A price observed alongside a post (Stocktwits reports the symbol's price at posting time).
+
+    Good enough to value positions and to line sentiment up against price moves; not an
+    execution-grade quote.
+    """
+
+    __tablename__ = "price_ticks"
+    __table_args__ = (UniqueConstraint("security_id", "observed_at", "source", name="uq_tick"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    security_id: Mapped[int] = mapped_column(ForeignKey("securities.id"), index=True)
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    price: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(32))
+
+
+class SearchTrend(Base):
+    """A trending search term (Google Trends). One row per term per spike, updated while it lasts."""
+
+    __tablename__ = "search_trends"
+    __table_args__ = (UniqueConstraint("source", "geo", "term", "started_at", name="uq_trend_spike"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(32), index=True)
+    geo: Mapped[str] = mapped_column(String(8))
+    term: Mapped[str] = mapped_column(String(200), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    first_seen: Mapped[datetime] = mapped_column(DateTime)
+    last_seen: Mapped[datetime] = mapped_column(DateTime, index=True)
+    approx_traffic: Mapped[int | None] = mapped_column(Integer)
+    headlines: Mapped[list] = mapped_column(JSON, default=list)
+    tickers: Mapped[list] = mapped_column(JSON, default=list)

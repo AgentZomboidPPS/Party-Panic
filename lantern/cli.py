@@ -211,37 +211,67 @@ def seed_social(db: str | None = typer.Option(None, "--db"), days: int = 365, po
 
 
 @app.command()
-def ingest(sources: str = typer.Option("synthetic", help="Comma list: synthetic,bluesky,reddit,stocktwits,rss,kalshi,polymarket,x"),
+def seed_universe(db: str | None = typer.Option(None, "--db")):
+    """Add the curated real-world tickers (reference data only, no prices) so live posts map to companies."""
+    from lantern.marketdata.universe import seed_universe as _seed
+
+    with _session(db) as s:
+        console.print_json(data=_seed(s))
+
+
+@app.command()
+def ingest(sources: str = typer.Option("synthetic", help="Comma list: synthetic,bluesky,stocktwits,kalshi,polymarket,trends,reddit,rss,x"),
            minutes: float = typer.Option(5.0, help="How long to run (0 = until Ctrl-C)"),
            topic_window: int = typer.Option(15, help="Minutes per topic-bubble window"),
            bar_window: int = typer.Option(60, help="Minutes per sentiment bar"),
-           keywords: str = typer.Option("", help="bluesky: only keep posts containing one of these (comma list)"),
-           symbols: str = typer.Option("", help="stocktwits: symbols to follow (comma list)"),
+           preset: str = typer.Option("finance", help="bluesky: 'finance' keeps market talk only; 'all' keeps everything (use --sample)"),
+           sample: float = typer.Option(1.0, help="bluesky: fraction of matching posts to keep (e.g. 0.1 with --preset all)"),
+           keywords: str = typer.Option("", help="bluesky: extra terms to keep (comma list)"),
+           symbols: str = typer.Option("", help="stocktwits: symbols to follow besides the trending stream (comma list)"),
+           geos: str = typer.Option("US", help="trends: countries (comma list of codes)"),
+           feeds: str = typer.Option("", help="rss: name=url pairs (comma list)"),
            db: str | None = typer.Option(None, "--db")):
     """Run the live pipeline: sources -> screening -> NLP -> store -> bubbles and bars every window."""
     import asyncio
 
+    from sqlalchemy import select
+
+    from lantern.marketdata.universe import firehose_keywords
+    from lantern.models import Security
     from lantern.signals import sources as src
+    from lantern.signals.nlp import FINANCE_TERMS
     from lantern.signals.pipeline import Pipeline
 
     engine = make_engine(db or settings.database_url)
     init_db(engine)
     factory = make_session_factory(engine)
+    extra = [k.strip() for k in keywords.split(",") if k.strip()]
     built = []
     for name in [x.strip() for x in sources.split(",") if x.strip()]:
         kwargs: dict = {}
         if name == "synthetic":
             kwargs["session_factory"] = factory
-        if name == "bluesky" and keywords:
-            kwargs["keywords"] = [k.strip() for k in keywords.split(",")]
+        if name == "bluesky":
+            kwargs["sample"] = sample
+            if preset == "finance":
+                with factory() as s:
+                    tickers = set(s.execute(select(Security.ticker)).scalars())
+                kwargs["keywords"] = FINANCE_TERMS + firehose_keywords(tickers) + extra
+            elif extra:
+                kwargs["keywords"] = extra
         if name == "stocktwits":
-            kwargs["symbols"] = [k.strip() for k in symbols.split(",") if k.strip()] or ["SPY", "AAPL", "NVDA", "TSLA"]
+            kwargs["symbols"] = [k.strip().upper() for k in symbols.split(",") if k.strip()]
+        if name in ("trends", "google_trends"):
+            kwargs["geos"] = tuple(g.strip().upper() for g in geos.split(",") if g.strip())
+        if name == "rss":
+            kwargs["feeds"] = dict(pair.split("=", 1) for pair in feeds.split(",") if "=" in pair)
         built.append(src.build(name, **kwargs))
     pipe = Pipeline(factory)
 
     def report(c: dict) -> None:
         console.print(f"received {c['received']:>7}  stored {c['stored']:>7}  dup {c['duplicates']:>5}  "
-                      f"screened {c['screened_out']:>6}  quotes {c['quotes']:>5}  queue {c['queue']}", end="\r")
+                      f"screened {c['screened_out']:>6}  quotes {c['quotes']:>5}  trends {c['trends']:>4}  "
+                      f"queue {c['queue']}", end="\r")
 
     console.print(f"Ingesting from {', '.join(s.name for s in built)} for {minutes or '∞'} min; dashboard at /dashboard")
     summary = asyncio.run(pipe.run(built, duration_seconds=minutes * 60 if minutes else None,
@@ -304,8 +334,46 @@ def markets(db: str | None = typer.Option(None, "--db")):
 
 
 @app.command()
+def trends(db: str | None = typer.Option(None, "--db"), hours: float = 24):
+    """Trending search terms (Google Trends)."""
+    from lantern.signals.aggregate import latest_trends
+
+    with _session(db) as s:
+        rows = latest_trends(s, hours)
+    if not rows:
+        console.print("No trends yet. Run `lantern ingest --sources trends`.")
+        return
+    t = Table("term", "geo", "searches", "tickers", "top headline")
+    for r in rows:
+        t.add_row(r["term"], r["geo"], f"{r['approx_traffic']:,}+" if r["approx_traffic"] else "-",
+                  ", ".join(r["tickers"]), (r["headlines"][0] if r["headlines"] else "")[:70])
+    console.print(t)
+
+
+@app.command()
+def calibrate(db: str | None = typer.Option(None, "--db")):
+    """Check the sentiment model against Bullish/Bearish labels users put on their own posts."""
+    from lantern.signals.aggregate import sentiment_calibration
+
+    with _session(db) as s:
+        r = sentiment_calibration(s)
+    if not r["labelled_posts"]:
+        console.print("No labelled posts yet. Run `lantern ingest --sources stocktwits`.")
+        return
+    c = r["confusion"]
+    console.print(f"{r['labelled_posts']} labelled posts, {_pct(r['label_bullish_share'])} of them bullish")
+    console.print(f"Model takes a side on {_pct(r['coverage'])}; when it does it is right {_pct(r['accuracy'])} of the time "
+                  f"(always guessing the majority label would score {_pct(r['majority_baseline'])})")
+    t = Table("user said", "model: bullish", "model: bearish", "model: neutral")
+    t.add_row("Bullish", str(c["bull_as_bull"]), str(c["bull_as_bear"]), str(c["bull_as_neutral"]))
+    t.add_row("Bearish", str(c["bear_as_bull"]), str(c["bear_as_bear"]), str(c["bear_as_neutral"]))
+    console.print(t)
+
+
+@app.command()
 def backtest(db: str | None = typer.Option(None, "--db"), horizon: int = 1, signal: str = "score", quantile: float = 0.3,
-             days: int = 365):
+             days: int = 365,
+             cost_bps: float = typer.Option(5.0, help="One-way trading cost in basis points (spread + fees)")):
     """Does the sentiment signal predict returns? Information coefficient and a long/short backtest."""
     from datetime import timedelta
 
@@ -314,7 +382,7 @@ def backtest(db: str | None = typer.Option(None, "--db"), horizon: int = 1, sign
 
     with _session(db) as s:
         end = latest_price_date(s) or date.today()
-        r = evaluate(s, end - timedelta(days=days), end, horizon, signal, quantile)
+        r = evaluate(s, end - timedelta(days=days), end, horizon, signal, quantile, cost_bps)
     if "error" in r:
         console.print(f"[red]{r['error']}[/]")
         return
@@ -328,13 +396,15 @@ def backtest(db: str | None = typer.Option(None, "--db"), horizon: int = 1, sign
     t.add_row("t-stat", f"{ic['t_stat']:+.2f}")
     t.add_row("hit rate", _pct(ic["hit_rate"]))
     console.print(t)
-    console.print(f"[dim]Long top {quantile:.0%} / short bottom {quantile:.0%} by signal, daily rebalance, no costs[/]")
-    t = Table("metric", "value", title="Long/short backtest", min_width=44)
-    t.add_row("Sharpe", f"{ls['sharpe']:.2f}")
-    t.add_row("ann. return", _pct(ls["ann_return"]))
-    t.add_row("ann. vol", _pct(ls["ann_vol"]))
-    t.add_row("max drawdown", _pct(ls["max_drawdown"]))
-    t.add_row("daily turnover", _pct(ls["turnover"]))
+    console.print(f"[dim]Long top {quantile:.0%} / short bottom {quantile:.0%} by signal, daily rebalance, "
+                  f"{cost_bps:g} bps cost each way[/]")
+    t = Table("metric", "before costs", "after costs", title="Long/short backtest", min_width=56)
+    t.add_row("Sharpe", f"{ls['gross_sharpe']:.2f}", f"{ls['sharpe']:.2f}")
+    t.add_row("ann. return", _pct(ls["gross_ann_return"]), _pct(ls["ann_return"]))
+    t.add_row("ann. trading cost", "-", _pct(ls["ann_cost"]))
+    t.add_row("ann. vol", "", _pct(ls["ann_vol"]))
+    t.add_row("max drawdown", "", _pct(ls["max_drawdown"]))
+    t.add_row("daily turnover", "", _pct(ls["turnover"]))
     console.print(t)
 
 
@@ -356,6 +426,159 @@ def paper_trade(portfolio_id: int, db: str | None = typer.Option(None, "--db"), 
         console.print(t)
         if fill:
             console.print(f"Filled {n} approved orders at the latest price.")
+
+
+# ----------------------------------------------------------------------------- trading
+
+
+@app.command()
+def portfolio_create(name: str, cash: float = typer.Option(100_000.0, help="Starting cash"),
+                     db: str | None = typer.Option(None, "--db")):
+    """Create a portfolio funded with cash (for paper trading real tickers)."""
+    from sqlalchemy import select
+
+    from lantern.marketdata.prices import latest_price_date
+    from lantern.models import CashFlow, ComplianceRule, Portfolio
+
+    with _session(db) as s:
+        if s.execute(select(Portfolio).where(Portfolio.name == name)).scalar_one_or_none():
+            console.print(f"[red]Portfolio '{name}' already exists[/]")
+            raise typer.Exit(1)
+        pf = Portfolio(name=name, base_currency=settings.base_currency)
+        s.add(pf)
+        s.flush()
+        s.add(CashFlow(portfolio_id=pf.id, date=min(latest_price_date(s) or date.today(), date.today()), amount=cash,
+                       memo="Initial funding"))
+        for rule_name, rule_type in (("No overdraft", "no_negative_cash"), ("No short positions", "no_short_positions")):
+            s.add(ComplianceRule(portfolio_id=pf.id, name=rule_name, rule_type=rule_type, params={}, severity="HARD"))
+        s.commit()
+        console.print(f"Created portfolio {pf.id} '{name}' with {_money(cash)} {pf.base_currency}")
+
+
+@app.command()
+def order(portfolio_id: int, ticker: str, side: str, quantity: float,
+          limit: float | None = typer.Option(None, help="Limit price; omit for a market order"),
+          actor: str = "cli", db: str | None = typer.Option(None, "--db")):
+    """Create an order. Compliance checks it immediately; nothing is sent anywhere yet."""
+    from sqlalchemy import select
+
+    from lantern.models import OrderType, Security, Side
+    from lantern.trading import oms
+
+    with _session(db) as s:
+        sec = s.execute(select(Security).where(Security.ticker == ticker.upper())).scalar_one_or_none()
+        if sec is None:
+            console.print(f"[red]Unknown ticker {ticker}[/]")
+            raise typer.Exit(1)
+        o = oms.create_order(s, portfolio_id=portfolio_id, security_id=sec.id, side=Side(side.upper()), quantity=quantity,
+                             order_type=OrderType.LIMIT if limit is not None else OrderType.MARKET, limit_price=limit,
+                             actor=actor)
+        colour = "green" if o.status == "APPROVED" else "red"
+        console.print(f"Order {o.id}: {o.side} {o.quantity:,.0f} {sec.ticker} -> [{colour}]{o.status}[/] {o.reject_reason or ''}")
+        if o.status == "APPROVED":
+            console.print(f"Run `lantern execute {o.id}` to fill it on paper.")
+
+
+@app.command()
+def execute(order_id: int, slippage_bps: float = typer.Option(0.0, help="Paper slippage against you"),
+            db: str | None = typer.Option(None, "--db")):
+    """Fill an approved order with the paper broker, subject to the trading limits and kill switch."""
+    from lantern.execution.brokers import PaperBroker
+    from lantern.execution.guard import execute as _execute
+
+    with _session(db) as s:
+        r = _execute(s, order_id, PaperBroker(slippage_bps), actor="cli")
+    if r.outcome == "executed":
+        console.print(f"[green]Executed[/] order {r.order_id} on {r.broker}: {r.quantity:,.0f} @ {r.price:,.2f}")
+    else:
+        console.print(f"[red]{r.outcome}[/] order {r.order_id}: " + "; ".join(r.reasons))
+
+
+@app.command()
+def bot(portfolio_id: int,
+        top_n: int = typer.Option(5, help="How many names to hold at most"),
+        invest: float = typer.Option(0.5, help="Share of the portfolio the bot may invest"),
+        enter: float = typer.Option(0.2, help="Minimum score to buy"),
+        exit_below: float = typer.Option(0.0, help="Sell a holding when its score falls to this or lower"),
+        lookback: int = typer.Option(60, help="Minutes of conversation to read"),
+        min_authors: int = typer.Option(4, help="Ignore names with fewer distinct authors than this"),
+        every: float = typer.Option(0.0, help="Minutes between cycles; 0 runs one cycle and stops"),
+        dry_run: bool = typer.Option(False, help="Show what it would do without creating any order"),
+        db: str | None = typer.Option(None, "--db")):
+    """Trend bot (paper only): buy what the crowd is leaning into, sell what it has turned on."""
+    import time as _time
+
+    from lantern.execution.brokers import PaperBroker
+    from lantern.signals.strategy import run_once
+
+    def cycle() -> None:
+        with _session(db) as s:
+            r = run_once(s, portfolio_id, PaperBroker(), top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
+                         lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run)
+        console.print(f"[bold]Trend bot[/] portfolio {portfolio_id}  NAV {_money(r.nav)}  cash {_money(r.cash)}"
+                      f"{'  [yellow](dry run)[/]' if dry_run else ''}")
+        t = Table("ticker", "authors", "posts", "bullish", "bearish", "net", "trending", "price", "score", title="Crowd stance")
+        for sg in r.signals[:15]:
+            mark = "[green]buy zone[/]" if sg.ticker in r.targets else ""
+            t.add_row(sg.ticker, str(sg.n_authors), str(sg.n_posts), _pct(sg.bull_share), _pct(sg.bear_share),
+                      f"{sg.net:+.0%}", "yes" if sg.trending else "", f"{sg.price:,.2f}" if sg.price else "-",
+                      f"{sg.score:+.2f} {mark}")
+        console.print(t)
+        if r.actions:
+            t = Table("side", "ticker", "qty", "price", "outcome", "why / detail", title="Actions")
+            for a in r.actions:
+                px = a.get("fill_price") or a.get("price")
+                t.add_row(a["side"], a["ticker"], f"{a['quantity']:,.0f}", f"{px:,.2f}" if px else "-", a["outcome"],
+                          (a.get("detail") or a["why"])[:80])
+            console.print(t)
+        else:
+            console.print("No trades this cycle.")
+
+    cycle()
+    while every > 0:
+        _time.sleep(every * 60)
+        cycle()
+
+
+@app.command()
+def halt(reason: str = typer.Argument("manual halt"), actor: str = "cli", db: str | None = typer.Option(None, "--db")):
+    """Kill switch: stop every order from reaching any broker until `lantern resume`."""
+    from lantern.execution.guard import set_halt
+
+    with _session(db) as s:
+        set_halt(s, True, actor, reason)
+    console.print(f"[red]Trading halted[/]: {reason}")
+
+
+@app.command()
+def resume(actor: str = "cli", db: str | None = typer.Option(None, "--db")):
+    """Lift the kill switch."""
+    from lantern.execution.guard import set_halt
+
+    with _session(db) as s:
+        set_halt(s, False, actor)
+    console.print("[green]Trading resumed[/]")
+
+
+@app.command()
+def limits(db: str | None = typer.Option(None, "--db")):
+    """Show the trading limits in force and whether trading is halted."""
+    from lantern.execution.guard import TradingLimits, halt_state
+
+    lim = TradingLimits.from_settings()
+    with _session(db) as s:
+        h = halt_state(s)
+        s.commit()
+        t = Table("setting", "value")
+        t.add_row("mode", lim.mode)
+        t.add_row("halted", f"[red]yes: {h.reason}[/]" if h.halted else "no")
+        t.add_row("max per order", _money(lim.max_order_notional))
+        t.add_row("max per day", _money(lim.max_daily_notional))
+        t.add_row("max orders per day", str(lim.max_orders_per_day))
+        t.add_row("max position size", _pct(lim.max_position_weight))
+        t.add_row("live orders need approval", "yes" if lim.require_approval else "no")
+        t.add_row("allowed symbols", ", ".join(sorted(lim.allowed_symbols)) or "any")
+    console.print(t)
 
 
 @app.command()

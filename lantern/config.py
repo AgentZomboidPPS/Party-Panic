@@ -16,5 +16,14 @@ class Settings(BaseSettings):
     mc_simulations: int = 20_000
     mc_seed: int = 42
 
+    # Execution guardrails. Defaults are deliberately small; "live" must be chosen explicitly.
+    trading_mode: str = "paper"  # "paper" or "live"
+    trading_max_order_notional: float = 1_000.0
+    trading_max_daily_notional: float = 5_000.0
+    trading_max_orders_per_day: int = 20
+    trading_max_position_weight: float = 0.20
+    trading_require_approval: bool = True  # live orders wait for a named person to approve each one
+    trading_allowed_symbols: str = ""  # comma list; empty means any security in the book
+
 
 settings = Settings()

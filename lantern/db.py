@@ -34,6 +34,7 @@ def make_session_factory(engine: Engine) -> sessionmaker[Session]:
 
 
 def init_db(engine: Engine) -> None:
+    import lantern.execution.models  # noqa: F401
     import lantern.models  # noqa: F401  (registers tables on Base.metadata)
     import lantern.signals.models  # noqa: F401
 

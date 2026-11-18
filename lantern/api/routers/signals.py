@@ -99,16 +99,45 @@ def fear(db: DB, hours: float = 24 * 30, bucket_minutes: int = 1440) -> dict:
 
 
 @router.get("/markets")
-def markets(db: DB) -> list[dict]:
-    return _records(aggregate.latest_markets(db))
+def markets(db: DB, limit: int = 200, min_prob: float = 0.0, max_prob: float = 1.0, source: str | None = None,
+            category: str | None = None) -> list[dict]:
+    """Latest prediction-market snapshots, most-traded first. Use min_prob/max_prob (for
+    example 0.05 and 0.95) to keep only contested markets."""
+    df = aggregate.latest_markets(db, min_prob, max_prob)
+    if not df.empty and source:
+        df = df[df["source"] == source]
+    if not df.empty and category:
+        df = df[df["category"] == category]
+    return _records(df.head(limit))
+
+
+@router.get("/trends")
+def trends(db: DB, hours: float = 24, limit: int = 30) -> list[dict]:
+    """Trending search terms (Google Trends), with any securities they point at."""
+    return aggregate.latest_trends(db, hours, limit)
+
+
+@router.get("/live")
+def live(db: DB, lookback_minutes: int = 60, min_posts: int = 5, min_authors: int = 4) -> list[dict]:
+    """Crowd stance per security over the last stretch of data: what the trend bot trades on."""
+    from lantern.signals.strategy import live_signals
+
+    return _clean([s.to_dict() for s in live_signals(db, lookback_minutes, min_posts, min_authors)])
+
+
+@router.get("/calibration")
+def calibration(db: DB, threshold: float = 0.05) -> dict:
+    """How well the sentiment model agrees with labels users put on their own posts."""
+    return _clean(aggregate.sentiment_calibration(db, threshold))
 
 
 @router.get("/backtest")
 def backtest(db: DB, start: date | None = None, end: date | None = None, horizon: int = 1, signal: str = "score",
-             quantile: float = 0.3) -> dict:
+             quantile: float = 0.3, cost_bps: float = 5.0) -> dict:
+    """`cost_bps` is the one-way trading cost; headline results are after costs, `gross_` before."""
     end = end or date.today()
     start = start or end - timedelta(days=365)
-    return _clean(signals.evaluate(db, start, end, horizon, signal, quantile))
+    return _clean(signals.evaluate(db, start, end, horizon, signal, quantile, cost_bps))
 
 
 @router.post("/paper-trade/{portfolio_id}")

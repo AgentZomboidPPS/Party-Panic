@@ -48,7 +48,7 @@ lantern serve                # REST API with interactive docs at http://127.0.0.
 Point at another database with `--db postgresql://...` or `LANTERN_DATABASE_URL=...`. SQLite is the
 default for development; the schema is plain SQLAlchemy and runs unchanged on Postgres.
 
-Run the tests with `pytest` (57 tests, ~1 min; most of it is seeding synthetic social history).
+Run the tests with `pytest` (82 tests, ~30 s; most of it is seeding synthetic social history).
 Lint with `ruff check lantern tests`.
 
 ## What each module does
@@ -113,13 +113,33 @@ kalshi
 polymarket
 ```
 
-- **Sources** (`sources/`): Bluesky public firehose (Jetstream websocket, no key), Reddit, Stocktwits,
-  RSS news, X recent search (needs a paid bearer token), Kalshi and Polymarket market data, plus
-  `synthetic` (offline demo stream) and `replay` (JSONL recordings). Adding a source is one class
-  with an `async run(emit, stop)`.
-  *The live adapters are written to the documented APIs but have not been exercised from this
-  repository's build environment, which has no outbound network.* Facebook and Instagram do not
-  expose public conversation to third parties and are deliberately absent.
+- **Sources** (`sources/`). Adding one is a class with an `async run(emit, stop)`.
+
+  | source | what it gives | status |
+  |---|---|---|
+  | `bluesky` | every public post in real time (~48/s, ~34/s English); filter by keyword or sample | verified live |
+  | `stocktwits` | per-stock chatter, users' own Bullish/Bearish labels, and the price at posting time | verified live |
+  | `kalshi` | prediction-market odds by category (economics, politics, elections, companies…) | verified live |
+  | `polymarket` | prediction-market odds by topic tag (economy, fed, finance, geopolitics, crypto…) | verified live |
+  | `trends` | Google "trending now" searches per country, with traffic and attached headlines | verified live |
+  | `reddit` | subreddit posts | written, unverified: Reddit refuses unauthenticated servers |
+  | `x` | recent search | written, unverified: needs a paid bearer token |
+  | `rss` | news headlines from feeds you supply | written; no default feeds (see below) |
+  | `synthetic`, `replay` | offline demo stream; JSONL recordings | tested |
+
+  "Verified live" means run against the real service on 2026-11-18. Things learned that day:
+  Kalshi quotes prices as dollar strings and its plain market list is mostly sports parlays (so
+  the adapter reads categorised events); Polymarket's top-by-volume list is mostly esports (so it
+  reads topic tags); the WSJ markets RSS feed has been frozen since January 2025 and CNBC blocks
+  automated clients; Google's interest-over-time endpoint answers servers with HTTP 429.
+  Facebook and Instagram do not expose public conversation to third parties and are absent.
+- **Real tickers** (`marketdata/universe.py`): `lantern seed-universe` loads ~60 real companies
+  and funds with hand-written recognition rules, because names are ambiguous: "nvidia" always
+  counts, "apple" / "meta" / "visa" count only when the post also reads like market talk, and
+  short or word-like symbols (`CAT`, `GM`, `V`) are never matched on their own.
+- **Prices from the conversation**: every Stocktwits message carries the stock's price at
+  posting time. The pipeline keeps each one as a tick and the day's latest as the close, which is
+  enough to value positions and paper trade real names. It is not an execution-grade quote.
 - **Screening** (`screening.py`): a post's quality is the product of independent heuristics —
   text shape (stuffing, link-only, shouting), author burst rate, self-duplication (SimHash),
   cross-author coordination (same text from many accounts in minutes), and account metadata when
@@ -129,23 +149,73 @@ polymarket
 - **NLP** (`nlp.py`): VADER with a finance lexicon, a fear vocabulary, cashtag + company-name
   extraction mapped to the securities table, and topic clustering (agglomerative on TF-IDF cosine
   for ordinary windows, mini-batch k-means for firehose-sized ones).
+  **Known weakness, measured:** against 123 real posts whose authors labelled themselves
+  (`lantern calibrate`), the lexicon model took a side 64% of the time and was right 67% of the
+  time, worse than always guessing "bullish" (72%). So where an author declares a stance, that
+  label is used instead of the model's guess, and the model's own score is kept separately so it
+  can keep being measured. A classifier trained on those labels is the next step.
 - **Aggregation** (`aggregate.py`): per-window **topic bubbles** (volume, unique authors, sentiment,
   fear share, velocity vs. the matching topic in the previous window), per-security **sentiment
   bars** with attention and sentiment z-scores against the security's own history, a **fear
   index**, and prediction-market snapshots with 24h change.
 - **Signals & evaluation** (`signals.py`): daily signal matrix; **information coefficient** (daily
   cross-sectional rank correlation with forward returns, with t-stat and hit rate) and a
-  **long/short backtest**; a **paper strategy** that trades the top names inside a sleeve of a
-  portfolio *through the OMS*, so compliance can reject it like any other order.
+  **long/short backtest** reported before and after trading costs (`--cost-bps`, the one-way
+  cost per trade; the demo strategy replaces most of its book daily, so costs matter); a **paper
+  strategy** that trades the top names inside a sleeve of a portfolio *through the OMS*, so
+  compliance can reject it like any other order.
 
 ```bash
 lantern seed-social                  # synthetic history aligned to the demo prices (daily bubbles + bars)
 lantern bubbles · lantern sentiment · lantern markets
 lantern backtest                     # does the signal predict returns? IC + long/short
 lantern paper-trade 2 --fill         # trade it on paper through compliance
-lantern ingest --sources synthetic --minutes 5 --topic-window 1   # live pipeline, then open /dashboard
-lantern ingest --sources bluesky,kalshi,polymarket --keywords stocks,market,fed   # real data (needs network)
+lantern ingest --sources synthetic --minutes 5 --topic-window 1   # offline live pipeline, then open /dashboard
+
+# real data (needs outbound access to the sources' hosts)
+lantern seed-universe                # real tickers, reference data only
+lantern ingest --sources bluesky,stocktwits,kalshi,polymarket,trends --symbols NVDA,TSLA,SPY --minutes 0
+lantern trends · lantern calibrate   # trending searches; sentiment model vs users' own labels
 ```
+
+### Execution (`lantern/execution`) — the last gate before a broker
+
+An approved order reaches a broker only if every gate is open:
+
+1. compliance approved it when it was created;
+2. the **kill switch** is off (`lantern halt "reason"` / `lantern resume`; stored in the database,
+   so it stops every process);
+3. it fits the **trading limits**: per-order size, daily total, orders per day, position size
+   after the trade, and an optional symbol list. Defaults are small (1,000 per order, 5,000 a day);
+4. for a live broker only: `LANTERN_TRADING_MODE=live` is set **and** a named person approved that
+   specific order. Without both, nothing is sent.
+
+`PaperBroker` fills at the latest known price (optionally with slippage against you) and is the
+only broker in the repository. Paper orders take exactly the path a live order would, so what
+works on paper has already passed every check. A live broker is one more class; it must use the
+broker's official API with a scoped, revocable key, never an account password.
+
+```bash
+lantern portfolio-create "My paper book" --cash 100000   # also adds no-overdraft / no-shorts rules
+lantern order 1 NVDA BUY 5          # compliance decides immediately; nothing is sent
+lantern execute 7                   # paper fill, subject to limits and the kill switch
+lantern limits · lantern halt "something looks wrong" · lantern resume
+```
+
+### Trend bot (`signals/strategy.py`) — paper only
+
+`lantern bot <portfolio>` runs one decision cycle (or one every `--every` minutes):
+
+1. read the last `--lookback` minutes of screened posts;
+2. per security, give **each author one vote** (their average stance) so one loud account cannot
+   move the result; `net` = bullish authors minus bearish authors;
+3. `score` = net × log(1 + authors), boosted 25% if the name is also in a trending search;
+4. buy the top names above `--enter`, sell holdings whose score fell to `--exit-below`; long
+   only, whole shares, each order through compliance and then the execution gate.
+
+`--dry-run` shows the decisions without creating an order. This rule is a transparent starting
+point to measure, not a proven edge: it has not been backtested on real data, because real data
+only started flowing on 2026-11-18.
 
 **On "edge".** The synthetic stream has a dial, `--ic` (default 0.03, roughly what good
 alternative data delivers), that sets how much next-day return leaks into post sentiment. The
@@ -179,6 +249,7 @@ POST /portfolios/{id}/compliance/pre-trade        dry run, nothing recorded
 GET  /portfolios/{id}/compliance/history
 GET/POST /compliance/rules, PATCH /compliance/rules/{id}, GET /compliance/rule-types
 POST /orders  ·  GET /orders  ·  GET /orders/{id}  ·  POST /orders/{id}/fills  ·  POST /orders/{id}/cancel
+POST /orders/{id}/execute (paper, guarded)  ·  GET /trading/status  ·  POST /trading/halt  ·  POST /trading/resume
 GET/POST /securities  ·  POST /prices  ·  POST /fx  ·  GET/POST /benchmarks
 POST /portfolios/{id}/trades (book external trades)  ·  POST /portfolios/{id}/cashflows
 GET  /audit
@@ -187,7 +258,9 @@ GET  /dashboard                                   one screen: Portfolio view (NA
                                                   blotter) and Signals view (bubbles, sentiment, markets, fear)
 GET  /signals/status · /signals/bubbles · /signals/bubbles/history?hours=
 GET  /signals/sentiment · /signals/sentiment/{ticker} · /signals/fear · /signals/markets
-GET  /signals/backtest?start=&end=&horizon=&signal=
+GET  /signals/trends · /signals/live (crowd stance the bot trades on) · /signals/calibration
+GET  /signals/markets?min_prob=0.05&max_prob=0.95   contested markets only
+GET  /signals/backtest?start=&end=&horizon=&signal=&cost_bps=
 POST /signals/paper-trade/{portfolio_id}?top_n=&sleeve=&fill=
 ```
 
@@ -210,6 +283,9 @@ through the API or directly into the tables.
 
 Environment variables, all prefixed `LANTERN_`: `DATABASE_URL`, `BASE_CURRENCY`, `VAR_CONFIDENCE`
 (0.99), `VAR_HORIZON_DAYS` (1), `LOOKBACK_DAYS` (500), `MC_SIMULATIONS` (20000), `MC_SEED` (42).
+Trading guardrails: `TRADING_MODE` (paper), `TRADING_MAX_ORDER_NOTIONAL` (1000),
+`TRADING_MAX_DAILY_NOTIONAL` (5000), `TRADING_MAX_ORDERS_PER_DAY` (20), `TRADING_MAX_POSITION_WEIGHT`
+(0.20), `TRADING_REQUIRE_APPROVAL` (true), `TRADING_ALLOWED_SYMBOLS` (empty = any).
 
 ## Design notes
 
@@ -225,9 +301,10 @@ Environment variables, all prefixed `LANTERN_`: `DATABASE_URL`, `BASE_CURRENCY`,
 
 ## Roadmap
 
-Next steps in rough priority order: run the live source adapters against the real APIs and
-record a replay fixture; extend the dashboard to exposures, risk and the blotter; real market-data
-adapters; a transformer sentiment model calibrated on Stocktwits labels; performance attribution
-(Brinson, and factor-based); settlement and custodian reconciliation; multi-user auth with roles
-(PM / trader / compliance officer); scheduled end-of-day risk and compliance runs with alerting;
-Postgres migrations via Alembic; a data-licensing review before selling derived signals.
+Next steps in rough priority order: keep the live ingest running for days so real signals can
+be backtested against real prices; train a sentiment classifier on the Stocktwits labels and
+adopt it only if it beats the baseline out of sample; a live broker adapter (official API, scoped
+key) behind the execution gate, after paper results justify it; a proper price feed; Reddit via
+a registered app; performance attribution (Brinson, and factor-based); settlement and custodian
+reconciliation; multi-user auth with roles; scheduled end-of-day risk and compliance runs with
+alerting; Postgres migrations via Alembic; a data-licensing review before selling derived signals.

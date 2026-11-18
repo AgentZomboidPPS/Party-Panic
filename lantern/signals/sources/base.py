@@ -45,7 +45,20 @@ class MarketQuote:
     close_time: datetime | None = None
 
 
-Emit = Callable[[Post | MarketQuote], Awaitable[None]]
+@dataclass
+class TrendItem:
+    """A trending search term: attention with no text and no author."""
+
+    source: str
+    geo: str
+    term: str
+    observed_at: datetime
+    started_at: datetime | None = None
+    approx_traffic: int | None = None
+    headlines: list[str] = field(default_factory=list)
+
+
+Emit = Callable[[Post | MarketQuote | TrendItem], Awaitable[None]]
 
 
 class Source(Protocol):

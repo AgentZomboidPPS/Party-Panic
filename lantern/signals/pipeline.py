@@ -11,33 +11,45 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from lantern.marketdata.prices import upsert_prices
+from lantern.marketdata.universe import BY_TICKER, recognition_maps
 from lantern.models import Security
 from lantern.signals import aggregate
-from lantern.signals.models import AuthorStats, PredictionMarket, SocialPost
+from lantern.signals.models import AuthorStats, PredictionMarket, PriceTick, SearchTrend, SocialPost
 from lantern.signals.nlp import SentimentModel, TickerExtractor, fear_flag
 from lantern.signals.screening import Screener, author_hash
-from lantern.signals.sources.base import MarketQuote, Post, Source, utcnow
+from lantern.signals.sources.base import MarketQuote, Post, Source, TrendItem, utcnow
 
 log = logging.getLogger(__name__)
+
+# When an author declares their stance, that beats any model's reading of their words.
+LABEL_SCORES = {"Bullish": 0.7, "Bearish": -0.7}
 
 GENERIC_WORDS = {"us", "the", "and", "trust", "group", "inc", "corp", "treasury", "fund", "etf", "ag", "nv", "sa"}
 
 
 def build_extractor(session: Session) -> TickerExtractor:
-    """Tickers plus name aliases from the securities table ("Acme Systems" and "Acme" -> ACME)."""
+    """How each security in the database may be recognised in free text.
+
+    Securities in the curated universe use its hand-written rules (so "apple" needs market
+    context and "nvidia" does not). Anything else falls back to its full name plus an
+    unambiguous first word ("Acme Systems" and "Acme" -> ACME).
+    """
     rows = session.execute(select(Security.ticker, Security.name)).all()
     tickers = {t for t, _ in rows}
-    aliases: dict[str, str] = {}
+    aliases, context_aliases, bare, context_bare = recognition_maps(tickers)
     first_words: dict[str, set[str]] = {}
     for t, name in rows:
+        if t in BY_TICKER:
+            continue
         aliases[name.lower()] = t
         first = name.split()[0].lower().strip(",.")
         if first.isalpha() and len(first) >= 4 and first not in GENERIC_WORDS:
             first_words.setdefault(first, set()).add(t)
     for w, ts in first_words.items():
-        if len(ts) == 1:  # only unambiguous first words become aliases
+        if len(ts) == 1 and w not in aliases and w not in context_aliases:
             aliases[w] = next(iter(ts))
-    return TickerExtractor(tickers, aliases)
+    return TickerExtractor(tickers, aliases, context_aliases, bare, context_bare)
 
 
 class Pipeline:
@@ -57,7 +69,48 @@ class Pipeline:
             with session_factory() as s:
                 extractor = build_extractor(s)
         self.extractor = extractor
-        self.counters = {"received": 0, "stored": 0, "duplicates": 0, "screened_out": 0, "quotes": 0}
+        self.counters = {"received": 0, "stored": 0, "duplicates": 0, "screened_out": 0, "quotes": 0, "trends": 0,
+                         "price_ticks": 0}
+        self._sec_ids: dict[str, int] | None = None
+        self._last_tick: dict[tuple[int, object], datetime] = {}  # (security, date) -> newest tick time stored
+
+    def _store_prices(self, s: Session, posts: list[Post]) -> None:
+        """Keep the prices that arrived attached to posts: every tick, plus the day's latest as the close."""
+        ticks: dict[tuple[str, datetime, str], float] = {}
+        for p in posts:
+            for sym, px in (p.meta.get("prices") or {}).items():
+                ticks[(str(sym).upper(), p.created_at.replace(microsecond=0), p.source)] = float(px)
+        if not ticks:
+            return
+        if self._sec_ids is None:
+            self._sec_ids = dict(s.execute(select(Security.ticker, Security.id)).all())
+        known = {k: v for k, v in ticks.items() if k[0] in self._sec_ids}
+        if not known:
+            return
+        stamps = {k[1] for k in known}
+        taken = set(
+            s.execute(select(PriceTick.security_id, PriceTick.observed_at, PriceTick.source).where(PriceTick.observed_at.in_(stamps))).all()
+        )
+        daily: dict[tuple[int, object], tuple[datetime, float]] = {}
+        for (sym, at, source), px in known.items():
+            sid = self._sec_ids[sym]
+            if (sid, at, source) not in taken:
+                s.add(PriceTick(security_id=sid, ticker=sym, observed_at=at, price=px, source=source))
+                self.counters["price_ticks"] += 1
+            key = (sid, at.date())
+            if at >= self._last_tick.get(key, datetime.min) and (key not in daily or at >= daily[key][0]):
+                daily[key] = (at, px)
+        for key, (at, _) in daily.items():
+            self._last_tick[key] = at
+        upsert_prices(s, [{"security_id": sid, "date": day, "close": px} for (sid, day), (_, px) in daily.items()])
+
+    def _tickers(self, p: Post) -> list[str]:
+        found = self.extractor.extract(p.text)
+        for sym in p.meta.get("symbols") or []:  # symbols the platform itself attached to the post
+            sym = str(sym).upper()
+            if sym in self.extractor.tickers and sym not in found:
+                found.append(sym)
+        return found
 
     # --- batch processing (synchronous, usable without the event loop) -------------------
 
@@ -86,6 +139,7 @@ class Pipeline:
                 seen_batch.add(key)
                 ah = author_hash(p.source, p.author_id, self.salt)
                 sr = self.screener.screen(p, ah)
+                model_score = self.sentiment.score(p.text)
                 rows.append(
                     SocialPost(
                         source=p.source,
@@ -98,9 +152,10 @@ class Pipeline:
                         author_quality=sr.quality,
                         screened_out=sr.screened_out,
                         screen_reason=sr.reason,
-                        sentiment=self.sentiment.score(p.text),
+                        sentiment=LABEL_SCORES.get(p.source_sentiment or "", model_score),
+                        model_sentiment=model_score,
                         fear=fear_flag(p.text),
-                        tickers=self.extractor.extract(p.text),
+                        tickers=self._tickers(p),
                         dedup_hash=f"{sr.dedup_hash:016x}",
                         source_sentiment=p.source_sentiment,
                     )
@@ -110,6 +165,7 @@ class Pipeline:
                     self.counters["screened_out"] += 1
             s.add_all(rows)
             self._persist_author_stats(s, touched)
+            self._store_prices(s, posts)
             s.commit()
         self.counters["stored"] += len(rows)
         return len(rows)
@@ -143,7 +199,20 @@ class Pipeline:
     def process_quotes(self, quotes: list[MarketQuote]) -> int:
         if not quotes:
             return 0
+        unique: dict[tuple, MarketQuote] = {}
+        for q in quotes:  # one snapshot per market per second, whatever the sources send
+            unique[(q.source, q.market_id, q.observed_at.replace(microsecond=0))] = q
+        quotes = list(unique.values())
         with self.session_factory() as s:
+            stamps = {k[2] for k in unique}
+            taken = set(
+                s.execute(
+                    select(PredictionMarket.source, PredictionMarket.market_id, PredictionMarket.snapshot_at).where(
+                        PredictionMarket.snapshot_at.in_(stamps)
+                    )
+                ).all()
+            )
+            quotes = [q for k, q in unique.items() if k not in taken]
             for q in quotes:
                 s.add(
                     PredictionMarket(
@@ -161,6 +230,35 @@ class Pipeline:
             s.commit()
         self.counters["quotes"] += len(quotes)
         return len(quotes)
+
+    def process_trends(self, items: list[TrendItem]) -> int:
+        """Upsert trending search terms: one row per term per spike, refreshed while it lasts."""
+        if not items:
+            return 0
+        n = 0
+        with self.session_factory() as s:
+            for it in items:
+                started = (it.started_at or it.observed_at.replace(hour=0, minute=0, second=0)).replace(microsecond=0)
+                row = s.execute(
+                    select(SearchTrend).where(
+                        SearchTrend.source == it.source, SearchTrend.geo == it.geo,
+                        SearchTrend.term == it.term[:200], SearchTrend.started_at == started,
+                    )
+                ).scalar_one_or_none()
+                tickers = self.extractor.extract(" . ".join([it.term, *it.headlines]))
+                if row is None:
+                    s.add(SearchTrend(source=it.source, geo=it.geo, term=it.term[:200], started_at=started,
+                                      first_seen=it.observed_at, last_seen=it.observed_at,
+                                      approx_traffic=it.approx_traffic, headlines=it.headlines, tickers=tickers))
+                    n += 1
+                else:
+                    row.last_seen = max(row.last_seen, it.observed_at)
+                    row.approx_traffic = max(row.approx_traffic or 0, it.approx_traffic or 0) or None
+                    row.headlines = it.headlines or row.headlines
+                    row.tickers = tickers
+            s.commit()
+        self.counters["trends"] += n
+        return n
 
     def aggregate_window(self, start: datetime, end: datetime, topics: bool = True, bars: bool = True) -> None:
         with self.session_factory() as s:
@@ -199,17 +297,25 @@ class Pipeline:
                 deadline = time.monotonic() + batch_seconds
                 posts: list[Post] = []
                 quotes: list[MarketQuote] = []
+                trends: list[TrendItem] = []
                 while time.monotonic() < deadline:
                     try:
                         item = await asyncio.wait_for(queue.get(), timeout=max(deadline - time.monotonic(), 0.01))
                     except TimeoutError:
                         break
-                    (posts if isinstance(item, Post) else quotes).append(item)
+                    if isinstance(item, Post):
+                        posts.append(item)
+                    elif isinstance(item, MarketQuote):
+                        quotes.append(item)
+                    elif isinstance(item, TrendItem):
+                        trends.append(item)
                 loop = asyncio.get_running_loop()
                 if posts:
                     await loop.run_in_executor(None, self.process_posts, posts)
                 if quotes:
                     await loop.run_in_executor(None, self.process_quotes, quotes)
+                if trends:
+                    await loop.run_in_executor(None, self.process_trends, trends)
 
                 now = utcnow()
                 t_end = aggregate.floor_time(now, topic_window_minutes)

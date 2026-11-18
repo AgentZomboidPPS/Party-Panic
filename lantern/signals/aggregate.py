@@ -10,7 +10,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from lantern.models import Security
-from lantern.signals.models import PredictionMarket, SentimentBar, SocialPost, Topic
+from lantern.signals.models import PredictionMarket, SearchTrend, SentimentBar, SocialPost, Topic
 from lantern.signals.nlp import cluster_topics
 
 BULL_T, BEAR_T = 0.2, -0.2
@@ -181,42 +181,55 @@ def latest_sentiment(session: Session, at: datetime | None = None) -> pd.DataFra
     return df.sort_values("n_posts", ascending=False).reset_index(drop=True)
 
 
-def latest_markets(session: Session) -> pd.DataFrame:
-    latest = (
-        select(PredictionMarket.source, PredictionMarket.market_id, func.max(PredictionMarket.snapshot_at).label("t"))
-        .group_by(PredictionMarket.source, PredictionMarket.market_id)
-        .subquery()
-    )
+def _snapshot_at_or_before(cutoff: datetime | None):
+    """Subquery: each market's most recent snapshot time (optionally at or before `cutoff`)."""
+    q = select(PredictionMarket.source, PredictionMarket.market_id, func.max(PredictionMarket.snapshot_at).label("t"))
+    if cutoff is not None:
+        q = q.where(PredictionMarket.snapshot_at <= cutoff)
+    return q.group_by(PredictionMarket.source, PredictionMarket.market_id).subquery()
+
+
+def latest_markets(session: Session, min_prob: float = 0.0, max_prob: float = 1.0) -> pd.DataFrame:
+    """Latest snapshot per market with its change over 24 hours, most-traded first.
+
+    `min_prob` / `max_prob` keep only contested markets: a 0.05-0.95 band drops the long shots
+    and foregone conclusions that dominate any ranking by volume.
+    """
+
+    def _join(sub):
+        return (
+            (PredictionMarket.source == sub.c.source)
+            & (PredictionMarket.market_id == sub.c.market_id)
+            & (PredictionMarket.snapshot_at == sub.c.t)
+        )
+
+    latest = _snapshot_at_or_before(None)
     rows = session.execute(
-        select(PredictionMarket).join(
-            latest,
-            (PredictionMarket.source == latest.c.source)
-            & (PredictionMarket.market_id == latest.c.market_id)
-            & (PredictionMarket.snapshot_at == latest.c.t),
-        )
+        select(PredictionMarket)
+        .join(latest, _join(latest))
+        .where(PredictionMarket.yes_price >= min_prob, PredictionMarket.yes_price <= max_prob)
     ).scalars().all()
-    recs = []
-    for m in rows:
-        day_ago = session.execute(
-            select(PredictionMarket.yes_price)
-            .where(
-                PredictionMarket.source == m.source,
-                PredictionMarket.market_id == m.market_id,
-                PredictionMarket.snapshot_at <= m.snapshot_at - timedelta(hours=24),
-            )
-            .order_by(PredictionMarket.snapshot_at.desc())
-            .limit(1)
-        ).scalar_one_or_none()
-        recs.append(
-            {
-                "source": m.source, "market_id": m.market_id, "title": m.title, "category": m.category,
-                "yes_price": m.yes_price, "change_24h": (m.yes_price - day_ago) if day_ago is not None else None,
-                "volume": m.volume, "open_interest": m.open_interest,
-                "close_time": m.close_time.isoformat() if m.close_time else None, "snapshot_at": m.snapshot_at.isoformat(),
-            }
-        )
-    df = pd.DataFrame(recs)
-    return df.sort_values("volume", ascending=False, na_position="last").reset_index(drop=True) if not df.empty else df
+    if not rows:
+        return pd.DataFrame()
+    newest = max(m.snapshot_at for m in rows)
+    earlier = _snapshot_at_or_before(newest - timedelta(hours=24))
+    day_ago = {
+        (s, mid): px
+        for s, mid, px in session.execute(
+            select(PredictionMarket.source, PredictionMarket.market_id, PredictionMarket.yes_price).join(earlier, _join(earlier))
+        ).all()
+    }
+    recs = [
+        {
+            "source": m.source, "market_id": m.market_id, "title": m.title, "category": m.category,
+            "yes_price": m.yes_price,
+            "change_24h": (m.yes_price - day_ago[(m.source, m.market_id)]) if (m.source, m.market_id) in day_ago else None,
+            "volume": m.volume, "open_interest": m.open_interest,
+            "close_time": m.close_time.isoformat() if m.close_time else None, "snapshot_at": m.snapshot_at.isoformat(),
+        }
+        for m in rows
+    ]
+    return pd.DataFrame(recs).sort_values("volume", ascending=False, na_position="last").reset_index(drop=True)
 
 
 def feed_status(session: Session) -> dict:
@@ -247,4 +260,53 @@ def feed_status(session: Session) -> dict:
         "topics_windows": int(session.execute(select(func.count(func.distinct(Topic.window_end)))).scalar_one()),
         "sentiment_bars": int(session.execute(select(func.count(SentimentBar.id))).scalar_one()),
         "prediction_markets": int(markets),
+        "search_trends": int(session.execute(select(func.count(SearchTrend.id))).scalar_one()),
+    }
+
+
+def latest_trends(session: Session, hours: float = 24, limit: int = 30) -> list[dict]:
+    """Trending search terms seen in the last `hours` of trend data, biggest first."""
+    last = session.execute(select(func.max(SearchTrend.last_seen))).scalar_one_or_none()
+    if last is None:
+        return []
+    rows = session.execute(
+        select(SearchTrend)
+        .where(SearchTrend.last_seen >= last - timedelta(hours=hours))
+        .order_by(func.coalesce(SearchTrend.approx_traffic, 0).desc(), SearchTrend.started_at.desc())
+        .limit(limit)
+    ).scalars()
+    return [
+        {
+            "source": t.source, "geo": t.geo, "term": t.term, "approx_traffic": t.approx_traffic,
+            "started_at": t.started_at.isoformat(), "last_seen": t.last_seen.isoformat(),
+            "headlines": t.headlines, "tickers": t.tickers,
+        }
+        for t in rows
+    ]
+
+
+def sentiment_calibration(session: Session, threshold: float = 0.05) -> dict:
+    """Score the sentiment model against labels users gave their own posts (Stocktwits
+    Bullish/Bearish). `accuracy` is over posts where the model took a side; `coverage` is how
+    often it did. A coin flip scores 50% on a balanced sample."""
+    rows = session.execute(
+        select(SocialPost.source_sentiment, func.coalesce(SocialPost.model_sentiment, SocialPost.sentiment)).where(
+            SocialPost.source_sentiment.in_(("Bullish", "Bearish")), SocialPost.screened_out.is_(False)
+        )
+    ).all()
+    n = len(rows)
+    counts = {"bull_as_bull": 0, "bull_as_bear": 0, "bull_as_neutral": 0, "bear_as_bear": 0, "bear_as_bull": 0, "bear_as_neutral": 0}
+    for label, score in rows:
+        side = "bull" if score > threshold else "bear" if score < -threshold else "neutral"
+        counts[f"{'bull' if label == 'Bullish' else 'bear'}_as_{side}"] += 1
+    decided = n - counts["bull_as_neutral"] - counts["bear_as_neutral"]
+    correct = counts["bull_as_bull"] + counts["bear_as_bear"]
+    n_bull = counts["bull_as_bull"] + counts["bull_as_bear"] + counts["bull_as_neutral"]
+    return {
+        "labelled_posts": n,
+        "label_bullish_share": (n_bull / n) if n else None,
+        "coverage": (decided / n) if n else None,
+        "accuracy": (correct / decided) if decided else None,
+        "majority_baseline": (max(n_bull, n - n_bull) / n) if n else None,
+        "confusion": counts,
     }

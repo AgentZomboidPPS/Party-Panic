@@ -104,14 +104,29 @@ def information_coefficient(signal: pd.DataFrame, fwd: pd.DataFrame, min_names: 
     }
 
 
-def long_short_backtest(signal: pd.DataFrame, fwd_1d: pd.DataFrame, quantile: float = 0.3, min_names: int = 5) -> dict:
+def _replaced(cur: set, prev: set, k: int) -> float:
+    """Fraction of a leg swapped for new names since yesterday (1.0 when the leg is first built)."""
+    return len(cur - prev) / k if prev else 1.0
+
+
+def long_short_backtest(
+    signal: pd.DataFrame, fwd_1d: pd.DataFrame, quantile: float = 0.3, min_names: int = 5, cost_bps: float = 0.0
+) -> dict:
     """Each day: long the top `quantile` of names by signal, short the bottom, equal weight,
-    earn the next day's return. Dollar-neutral, daily rebalance, no costs (so: an upper bound)."""
+    earn the next day's return. Dollar-neutral, daily rebalance.
+
+    `cost_bps` is the one-way cost of trading (half the bid-ask spread plus fees), in basis
+    points of the amount traded. Swapping a fraction f of a leg means selling f and buying f,
+    so a day costs 2 * (f_long + f_short) * cost_bps. The headline numbers are after costs;
+    the `gross_` ones are before.
+    """
     idx = signal.index.intersection(fwd_1d.index)
     cols = signal.columns.intersection(fwd_1d.columns)
-    rets: list[tuple] = []
+    gross: list[tuple] = []
+    costs: list[float] = []
     turnover: list[float] = []
     prev_long: set = set()
+    prev_short: set = set()
     for d in idx:
         s, r = signal.loc[d, cols], fwd_1d.loc[d, cols]
         mask = s.notna() & r.notna()
@@ -120,29 +135,43 @@ def long_short_backtest(signal: pd.DataFrame, fwd_1d: pd.DataFrame, quantile: fl
         s, r = s[mask], r[mask]
         k = max(int(np.floor(len(s) * quantile)), 1)
         ranked = s.sort_values()
-        short_names, long_names = ranked.index[:k], ranked.index[-k:]
-        rets.append((d, float(r[long_names].mean() - r[short_names].mean())))
-        cur = set(long_names)
-        turnover.append(len(cur ^ prev_long) / (2 * k) if prev_long else 1.0)
-        prev_long = cur
-    series = pd.Series(dict(rets), dtype=float).sort_index()
-    if series.empty:
-        return {"n_days": 0, "sharpe": 0.0, "ann_return": 0.0, "ann_vol": 0.0, "max_drawdown": 0.0, "turnover": 0.0, "equity": series}
+        short_names, long_names = set(ranked.index[:k]), set(ranked.index[-k:])
+        gross.append((d, float(r[list(long_names)].mean() - r[list(short_names)].mean())))
+        f_long, f_short = _replaced(long_names, prev_long, k), _replaced(short_names, prev_short, k)
+        # Building a leg from nothing is one trade per name, not a sell plus a buy.
+        traded = (2 * f_long if prev_long else 1.0) + (2 * f_short if prev_short else 1.0)
+        costs.append(traded * cost_bps / 10_000.0)
+        turnover.append(f_long)
+        prev_long, prev_short = long_names, short_names
+    gross_series = pd.Series(dict(gross), dtype=float).sort_index()
+    if gross_series.empty:
+        return {"n_days": 0, "sharpe": 0.0, "ann_return": 0.0, "ann_vol": 0.0, "max_drawdown": 0.0, "turnover": 0.0,
+                "cost_bps": cost_bps, "gross_sharpe": 0.0, "gross_ann_return": 0.0, "ann_cost": 0.0, "equity": gross_series}
+    series = gross_series - pd.Series(costs, index=gross_series.index)
+
+    def _sharpe(x: pd.Series) -> float:
+        v = float(x.std(ddof=1)) if len(x) > 1 else 0.0
+        return float(x.mean() / v * np.sqrt(252)) if v > 0 else 0.0
+
     equity = (1 + series).cumprod()
     dd = equity / equity.cummax() - 1
-    vol = float(series.std(ddof=1)) if len(series) > 1 else 0.0
     return {
         "n_days": int(len(series)),
-        "sharpe": float(series.mean() / vol * np.sqrt(252)) if vol > 0 else 0.0,
+        "sharpe": _sharpe(series),
         "ann_return": float(series.mean() * 252),
-        "ann_vol": float(vol * np.sqrt(252)),
+        "ann_vol": float(series.std(ddof=1) * np.sqrt(252)) if len(series) > 1 else 0.0,
         "max_drawdown": float(dd.min()),
         "turnover": float(np.mean(turnover)) if turnover else 0.0,
+        "cost_bps": cost_bps,
+        "gross_sharpe": _sharpe(gross_series),
+        "gross_ann_return": float(gross_series.mean() * 252),
+        "ann_cost": float(np.mean(costs) * 252),
         "equity": equity,
     }
 
 
-def evaluate(session: Session, start: date, end: date, horizon: int = 1, signal: str = "score", quantile: float = 0.3) -> dict:
+def evaluate(session: Session, start: date, end: date, horizon: int = 1, signal: str = "score", quantile: float = 0.3,
+             cost_bps: float = 0.0) -> dict:
     long = daily_signals(session, start, end)
     if long.empty:
         return {"error": "no sentiment bars in range"}
@@ -151,7 +180,7 @@ def evaluate(session: Session, start: date, end: date, horizon: int = 1, signal:
     if px.empty:
         return {"error": "no prices for signal universe"}
     ic = information_coefficient(sig, forward_returns(px, horizon))
-    bt = long_short_backtest(sig, forward_returns(px, 1), quantile)
+    bt = long_short_backtest(sig, forward_returns(px, 1), quantile, cost_bps=cost_bps)
     coverage = long.groupby("date")["security_id"].nunique()
     return {
         "signal": signal,

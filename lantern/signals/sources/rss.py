@@ -1,13 +1,15 @@
 """News headlines from RSS feeds. Low volume, high signal; treated as posts from a trusted author.
 
-Not exercised in this repository's test environment (no outbound network).
+There are no default feeds: the two tried on 2026-11-18 were unusable (the WSJ markets feed
+answers but has been frozen since January 2025; CNBC refuses automated clients). Pass your own
+`feeds`. Entries older than `max_age_days` are ignored so a frozen feed cannot pose as news.
 """
 
 from __future__ import annotations
 
 import asyncio
+import calendar
 import logging
-import time
 from datetime import UTC, datetime
 
 import feedparser
@@ -17,19 +19,16 @@ from lantern.signals.sources.base import Emit, Post, sleep_or_stop, utcnow
 
 log = logging.getLogger(__name__)
 
-DEFAULT_FEEDS = {
-    "wsj-markets": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
-    "cnbc-top": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
-    "ft-markets": "https://www.ft.com/markets?format=rss",
-}
-
 
 class RssSource:
     name = "rss"
 
-    def __init__(self, feeds: dict[str, str] | None = None, poll_seconds: float = 300):
-        self.feeds = feeds or DEFAULT_FEEDS
+    def __init__(self, feeds: dict[str, str] | None = None, poll_seconds: float = 300, max_age_days: float = 3.0):
+        if not feeds:
+            raise ValueError("rss needs feeds: a mapping of name -> feed URL")
+        self.feeds = feeds
         self.poll_seconds = poll_seconds
+        self.max_age_days = max_age_days  # a feed frozen in the past must not look like fresh news
         self._seen: set[str] = set()
 
     async def run(self, emit: Emit, stop: asyncio.Event) -> None:
@@ -48,8 +47,10 @@ class RssSource:
                             text = " ".join(x for x in (e.get("title"), e.get("summary")) if x)
                             ts = e.get("published_parsed") or e.get("updated_parsed")
                             created = (
-                                datetime.fromtimestamp(time.mktime(ts), tz=UTC).replace(tzinfo=None) if ts else utcnow()
+                                datetime.fromtimestamp(calendar.timegm(ts), tz=UTC).replace(tzinfo=None) if ts else utcnow()
                             )
+                            if (utcnow() - created).total_seconds() > self.max_age_days * 86400:
+                                continue
                             await emit(
                                 Post(
                                     source=self.name,
