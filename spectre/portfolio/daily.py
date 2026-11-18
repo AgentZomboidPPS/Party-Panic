@@ -134,6 +134,10 @@ def daily_report(session: Session, portfolio_id: int, day: date | None = None, c
 
     risk = var_suite(session, v)
     para = (risk.get("methods") or {}).get("parametric")
+    from spectre.risk.ladder import ladder
+
+    shape = ladder(session, v, moves=(-0.02,))
+    fall = shape["moves"][0]
     state = simulate(session, portfolio_id)
 
     attention = needs_attention(session, portfolio_id, client, liveness=False)
@@ -155,6 +159,8 @@ def daily_report(session: Session, portfolio_id: int, day: date | None = None, c
         "orders_filled": done, "orders_not_filled": missed, "holdings": holdings,
         "exposure_pct": (risk.get("exposure") or {}).get("net_pct"), "var": para["var"] if para else None,
         "var_pct": para["var_pct"] if para else None, "on_hold": state.restricted,
+        "if_everything_fell_2pct": {"pnl": fall["total"], "pct": fall["pct"]} if fall["total"] else None,
+        "option_time_decay_per_day": shape["time_decay_per_day"] or None,
         "settling": {"arriving": state.receivable, "owed": state.payable},
         "signal": {"windows": signal["windows"], "verdict": signal["verdict"]} if signal else None,
         "attention": attention,
@@ -202,6 +208,11 @@ def render(r: dict) -> str:
         risk.append(f"market exposure {r['exposure_pct']:.0%} of its value")
     if r["var"] is not None:
         risk.append(f"a bad day (1 in 100) would cost about {r['var']:,.0f} ({r['var_pct']:.1%})")
+    if r.get("if_everything_fell_2pct"):
+        fall = r["if_everything_fell_2pct"]
+        risk.append(f"everything falling 2% together would cost about {-fall['pnl']:,.0f} ({-fall['pct']:.1%})")
+    if r.get("option_time_decay_per_day"):
+        risk.append(f"the options lose about {-r['option_time_decay_per_day']:,.0f} a day to time passing")
     if risk:
         out.append("Risk: " + "; ".join(risk) + ".")
     if r["on_hold"]:

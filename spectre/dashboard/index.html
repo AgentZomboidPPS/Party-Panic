@@ -88,7 +88,7 @@
   .sev.HARD { background: var(--critical); } .sev.SOFT { background: var(--warn); color: #0b0b0b; }
   .spark { width: 100%; height: 44px; }
   .spark path { fill: none; stroke: var(--s1); stroke-width: 2; }
-  #holdings, #blotter, #compliance-table, #stress-table, #var-table, #settlement, #signal-check { overflow-x: auto; }
+  #holdings, #blotter, #compliance-table, #stress-table, #moves-table, #var-table, #settlement, #signal-check { overflow-x: auto; }
   .statrow { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0 0 12px; }
   .statrow .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
   .statrow .l { color: var(--ink-2); font-size: 12px; }
@@ -184,6 +184,11 @@
   <section class="card c6">
     <h2>Stress scenarios — instantaneous P&amp;L</h2>
     <div id="stress-table"></div>
+  </section>
+
+  <section class="card c6">
+    <h2>If everything moved together — options priced again, not scaled</h2>
+    <div id="moves-table"></div>
   </section>
 
   <section class="card c6">
@@ -295,6 +300,7 @@ async function refreshPortfolio() {
   drawActivity(await getJSON(`/portfolios/${id}/activity?limit=40`).catch(() => null), await getJSON('/trading/status').catch(() => null));
   drawPerformance(await getJSON(`/portfolios/${id}/performance`).catch(() => null));
   drawCosts(await getJSON(`/portfolios/${id}/costs`).catch(() => null));
+  drawMoves(await getJSON(`/portfolios/${id}/risk/moves`).catch(() => null));
   const sentBy = Object.fromEntries(sent.map(r => [r.ticker, r]));
   const tickerOf = Object.fromEntries(secs.map(s => [s.id, s.ticker]));
   $('#asof').textContent = `${pos.portfolio_name} · as of ${pos.as_of} · ${pos.base_currency}`;
@@ -445,6 +451,23 @@ function drawActivity(act, trading) {
         <td style="white-space:nowrap">${note ? '<span class="muted">note</span>' : `${esc(r.side || '')} ${did ? qty(r.quantity) : ''} <b>${esc(r.ticker || '')}</b>${did ? px(r.price) : ''}`}</td>
         <td>${note ? '' : `<span class="pill ${did ? 'done' : r.outcome === 'skipped' ? '' : 'no'}">${esc(did ? 'done' : r.outcome === 'skipped' ? 'held back' : r.outcome)}</span>`}</td>
         <td class="why">${esc(r.why || '')}</td></tr>`; }).join('') + '</tbody></table>';
+}
+
+/* ============================================================ market moves */
+function drawMoves(r) {
+  const el = $('#moves-table');
+  if (!r || !r.moves || !r.moves.some(m => m.total)) { el.innerHTML = '<div class="muted">Nothing held that a market move would change.</div>'; return; }
+  const mx = Math.max(...r.moves.map(m => Math.abs(m.total)), 1);
+  const signed = (x) => (x > 0 ? '+' : x < 0 ? '−' : '') + fmtMoney(Math.abs(x));
+  const hasOptions = r.options_priced || r.options_by_delta_only.length;
+  el.innerHTML = `<table><thead><tr><th>move</th><th>whole portfolio</th><th class="num">amount</th><th class="num">% NAV</th>${hasOptions ? '<th class="num">of which options</th>' : ''}</tr></thead><tbody>` +
+    r.moves.map(m => `<tr><td>${m.move > 0 ? '+' : '−'}${Math.abs(m.move * 100).toFixed(0)}%</td><td>${dbar(m.total, mx, 160)}</td><td class="num">${signed(m.total)}</td>` +
+      `<td class="num">${fmtSPct(m.pct, 1)}</td>${hasOptions ? `<td class="num">${signed(m.options)}</td>` : ''}</tr>`).join('') + '</tbody></table>' +
+    `<div class="muted" style="margin-top:6px">` +
+    (hasOptions ? `The options (${fmtMoney(r.option_premium)} of premium) lose about <b>${fmtMoney(Math.abs(r.time_decay_per_day))} a day</b> to time passing with nothing else changing; a one-point rise in implied volatility is worth ${signed(r.per_volatility_point)}. ` : '') +
+    `Everything held moves by the same percentage at once. A bought option gains faster as its stock rises and loses more slowly as it falls, which is why the two sides are not mirror images. A map of the book's shape, not a forecast.` +
+    (r.options_by_delta_only.length ? ` Scaled by delta only: ${esc(r.options_by_delta_only.join(', '))}.` : '') +
+    (r.left_out.length ? ` Left out (no quote): ${esc(r.left_out.join(', '))}.` : '') + `</div>`;
 }
 
 /* ============================================================ trading costs */

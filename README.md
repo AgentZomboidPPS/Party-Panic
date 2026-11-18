@@ -468,6 +468,15 @@ is also shown after the cost of one trip in and out: an edge smaller than that i
 lost, however real the edge. The Signals tab of the dashboard shows both and fills in as data
 accumulates.
 
+**What would a market move do? (`risk/ladder.py`, `spectre moves`).** For everything held
+moving together by -10% to +10%, the profit or loss of the whole book. Shares, funds and coins
+move one for one; each option is priced again at the moved stock price (Black-Scholes, with the
+volatility implied by its own current price) rather than scaled by its delta, because over a
+big move delta is wrong in a way that matters: a bought call gains faster as its stock rises
+and loses more slowly as it falls, and never more than it cost. It also says what a day of
+time passing costs the options with nothing else changing. On the dashboard next to the stress
+scenarios, and one line of it is in the daily report.
+
 **What trading costs (`trading/costs.py`, `spectre costs`).** Every order remembers the market
 price SPECTRE held when it was decided, and each fill is judged against it: paying more on a
 buy or receiving less on a sale is a cost. Together with fees from the ledger that gives, per

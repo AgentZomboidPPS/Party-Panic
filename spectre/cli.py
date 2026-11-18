@@ -1204,6 +1204,33 @@ def performance(portfolio_id: int, db: str | None = typer.Option(None, "--db")):
 
 
 @app.command()
+def moves(portfolio_id: int, db: str | None = typer.Option(None, "--db")):
+    """What would a market-wide move do to this portfolio? Options are priced again, not scaled by delta."""
+    from spectre.portfolio.positions import value_portfolio
+    from spectre.risk.ladder import ladder
+
+    with _session(db) as s:
+        r = ladder(s, value_portfolio(s, portfolio_id))
+    t = Table("if everything moved", "stocks and funds", "coins", "options", "whole portfolio", "of its value",
+              title=f"Portfolio {portfolio_id}, worth {r['nav']:,.0f}")
+    for m in r["moves"]:
+        colour = "red" if m["total"] < 0 else "green"
+        t.add_row(f"{m['move']:+.0%}", f"{m['stocks_and_funds']:+,.0f}", f"{m['coins']:+,.0f}", f"{m['options']:+,.0f}",
+                  f"[{colour}]{m['total']:+,.0f}[/]", "-" if m["pct"] is None else f"[{colour}]{m['pct']:+.1%}[/]")
+    console.print(t)
+    if r["options_priced"] or r["options_by_delta_only"]:
+        console.print(f"Options: {r['option_premium']:,.0f} of premium. A day passing with nothing else changing costs about "
+                      f"[bold]{-r['time_decay_per_day']:,.0f}[/]; a one-point rise in implied volatility is worth "
+                      f"{r['per_volatility_point']:+,.0f}.")
+    if r["options_by_delta_only"]:
+        console.print(f"[yellow]Scaled by delta only (no usable volatility): {', '.join(r['options_by_delta_only'])}[/]")
+    if r["left_out"]:
+        console.print(f"[yellow]Left out (no quote or no price for the underlying): {', '.join(r['left_out'])}[/]")
+    console.print("[dim]Everything held moves by the same percentage at once; implied volatility is left unchanged. "
+                  "A map of the book's shape, not a forecast.[/]")
+
+
+@app.command()
 def costs(portfolio_id: int = typer.Argument(None, help="Default: every portfolio"),
           backfill: bool = typer.Option(False, "--backfill", help="First give older orders an arrival price from Alpaca's one-minute history"),
           db: str | None = typer.Option(None, "--db")):

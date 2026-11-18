@@ -40,6 +40,15 @@ def custom_stress(portfolio_id: int, scenarios: list[ScenarioIn], db: DB, as_of:
     )
 
 
+@router.get("/moves")
+def market_moves(portfolio_id: int, db: DB, as_of: date | None = None) -> dict:
+    """What a market-wide move would do to the book, options priced again rather than scaled by
+    delta; plus what a day of time decay costs."""
+    from spectre.risk.ladder import ladder
+
+    return ladder(db, value_portfolio(db, portfolio_id, as_of))
+
+
 @router.get("/factors")
 def factors(portfolio_id: int, db: DB, as_of: date | None = None, lookback_days: int | None = None) -> dict:
     valued = value_portfolio(db, portfolio_id, as_of)
