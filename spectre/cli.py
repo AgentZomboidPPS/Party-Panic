@@ -563,18 +563,36 @@ def order(portfolio_id: int, ticker: str, side: str, quantity: float,
 
 
 @app.command()
-def execute(order_id: int, slippage_bps: float = typer.Option(0.0, help="Paper slippage against you"),
+def execute(order_id: int, slippage_bps: float = typer.Option(0.0, help="Built-in paper broker: slippage against you"),
+            broker: str = typer.Option("paper", help="'paper' (built-in simulation) or 'alpaca' (your Alpaca paper account)"),
             db: str | None = typer.Option(None, "--db")):
-    """Fill an approved order with the paper broker, subject to the trading limits and kill switch."""
+    """Fill an approved order on paper, subject to the trading limits and kill switch."""
     from spectre.execution.brokers import PaperBroker
     from spectre.execution.guard import execute as _execute
 
     with _session(db) as s:
-        r = _execute(s, order_id, PaperBroker(slippage_bps), actor="cli")
+        chosen = PaperBroker(slippage_bps) if broker == "paper" else _broker(broker, s)
+        r = _execute(s, order_id, chosen, actor="cli")
     if r.outcome == "executed":
         console.print(f"[green]Executed[/] order {r.order_id} on {r.broker}: {r.quantity:,.0f} @ {r.price:,.2f}")
     else:
         console.print(f"[red]{r.outcome}[/] order {r.order_id}: " + "; ".join(r.reasons))
+
+
+def _broker(name: str, session=None):
+    """'paper' is the built-in simulation; 'alpaca' is your Alpaca paper account (still fake money)."""
+    if name == "alpaca":
+        from spectre.execution.alpaca import AlpacaClient, AlpacaPaperBroker, sync_prices
+
+        client = AlpacaClient()
+        if session is not None:
+            sync_prices(session, client)  # decide and size on Alpaca's latest prices
+        return AlpacaPaperBroker(client)
+    if name != "paper":
+        raise typer.BadParameter("broker must be 'paper' or 'alpaca'")
+    from spectre.execution.brokers import PaperBroker
+
+    return PaperBroker()
 
 
 @app.command()
@@ -587,16 +605,16 @@ def bot(portfolio_id: int,
         min_authors: int = typer.Option(4, help="Ignore names with fewer distinct authors than this"),
         every: float = typer.Option(0.0, help="Minutes between cycles; 0 runs one cycle and stops"),
         dry_run: bool = typer.Option(False, help="Show what it would do without creating any order"),
+        broker: str = typer.Option("paper", help="'paper' (built-in simulation) or 'alpaca' (your Alpaca paper account)"),
         db: str | None = typer.Option(None, "--db")):
     """KAIROS, the trend bot (paper only): buy what the crowd is leaning into, sell what it has turned on."""
     import time as _time
 
-    from spectre.execution.brokers import PaperBroker
     from spectre.signals.strategy import run_once
 
     def cycle() -> None:
         with _session(db) as s:
-            r = run_once(s, portfolio_id, PaperBroker(), top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
+            r = run_once(s, portfolio_id, _broker(broker, s), top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
                          lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run)
         console.print(f"[bold]KAIROS[/] portfolio {portfolio_id}  NAV {_money(r.nav)}  cash {_money(r.cash)}"
                       f"{'  [yellow](dry run)[/]' if dry_run else ''}")
@@ -633,6 +651,7 @@ def autopilot(portfolio_id: int,
               warmup: float = typer.Option(10.0, help="Minutes of data to collect before the first decision"),
               top_n: int = 5, invest: float = 0.5, enter: float = 0.2, exit_below: float = 0.0, lookback: int = 60,
               min_authors: int = 4,
+              broker: str = typer.Option("paper", help="'paper' (built-in simulation) or 'alpaca' (your Alpaca paper account)"),
               db: str | None = typer.Option(None, "--db")):
     """Run the whole thing: live data in, a paper trading decision every few minutes.
 
@@ -641,7 +660,6 @@ def autopilot(portfolio_id: int,
     import asyncio
     import time as _time
 
-    from spectre.execution.brokers import PaperBroker
     from spectre.signals.pipeline import Pipeline
     from spectre.signals.strategy import run_once
 
@@ -656,8 +674,8 @@ def autopilot(portfolio_id: int,
         if _time.monotonic() - started < warmup * 60:
             return
         with factory() as s:
-            r = run_once(s, portfolio_id, PaperBroker(), top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
-                         lookback_minutes=lookback, min_authors=min_authors)
+            r = run_once(s, portfolio_id, _broker(broker, s), top_n=top_n, invest=invest, enter=enter,
+                         exit_below=exit_below, lookback_minutes=lookback, min_authors=min_authors)
         stamp = _time.strftime("%H:%M:%S")
         if not r.actions:
             console.print(f"{stamp}  no trades  (NAV {_money(r.nav)}, {len(r.signals)} names read, buy zone: "
@@ -668,11 +686,114 @@ def autopilot(portfolio_id: int,
                           f"[{'green' if a['outcome'] == 'executed' else 'red'}]{a['outcome']}[/]  "
                           f"{a.get('detail') or a['why']}")
 
-    console.print(f"KAIROS autopilot (paper) on portfolio {portfolio_id}: reading {', '.join(s.name for s in built)}; "
+    console.print(f"KAIROS autopilot ({'Alpaca paper account' if broker == 'alpaca' else 'built-in paper'}) on portfolio {portfolio_id}: reading {', '.join(s.name for s in built)}; "
                   f"first decision after {warmup:g} min, then every {every:g} min. Ctrl-C to stop.")
     summary = asyncio.run(pipe.run(built, duration_seconds=minutes * 60 if minutes else None,
                                    periodic=[(every * 60 if _time.monotonic() - started >= 0 else 0, decide)]))
     console.print_json(data=summary)
+
+
+@app.command()
+def alpaca_status(portfolio_id: int | None = typer.Option(None, "--portfolio", help="Compare with this ledger portfolio"),
+                  db: str | None = typer.Option(None, "--db")):
+    """Your Alpaca paper account: balance, market clock and positions (optionally against the ledger)."""
+    from spectre.execution.alpaca import AlpacaClient, AlpacaError
+    from spectre.portfolio.positions import value_portfolio
+
+    try:
+        client = AlpacaClient()
+        acct, clock, held = client.account(), client.clock(), client.positions()
+    except AlpacaError as exc:
+        console.print(f"[red]Alpaca: {exc}[/]")
+        raise typer.Exit(1) from exc
+    kind = "paper (fake money)" if client.paper else "[red]LIVE[/]"
+    console.print(f"Alpaca {kind}: status {acct.get('status')}, equity {float(acct['equity']):,.2f}, "
+                  f"cash {float(acct['cash']):,.2f}, options level {acct.get('options_trading_level')}")
+    console.print(f"Market is {'[green]open[/]' if clock.get('is_open') else '[yellow]closed[/]'}; "
+                  f"next open {clock.get('next_open')}, next close {clock.get('next_close')}")
+    ledger: dict[str, float] = {}
+    if portfolio_id is not None:
+        with _session(db) as s:
+            v = value_portfolio(s, portfolio_id)
+            ledger = {r.ticker: float(r.quantity) for r in v.positions.itertuples()}
+            console.print(f"Ledger portfolio {portfolio_id} '{v.portfolio_name}': NAV {v.total_value:,.2f}, cash {v.cash:,.2f}")
+    at_broker = {p["symbol"]: p for p in held}
+    if not at_broker and not ledger:
+        console.print("No positions.")
+        return
+    t = Table("symbol", "qty at Alpaca", "avg entry", "price", "market value", "unrealised P&L", "qty in ledger", "match")
+    for sym in sorted(set(at_broker) | set(ledger)):
+        p = at_broker.get(sym)
+        bq, lq = (float(p["qty"]) if p else 0.0), ledger.get(sym)
+        match = "" if portfolio_id is None else ("[green]yes[/]" if lq is not None and abs(bq - lq) < 1e-6 else "[red]no[/]")
+        t.add_row(sym, f"{bq:,.4g}", f"{float(p['avg_entry_price']):,.2f}" if p else "-",
+                  f"{float(p['current_price']):,.2f}" if p else "-", f"{float(p['market_value']):,.2f}" if p else "-",
+                  f"{float(p['unrealized_pl']):+,.2f}" if p else "-", f"{lq:,.4g}" if lq is not None else "-", match)
+    console.print(t)
+
+
+@app.command()
+def prices_sync(tickers: str = typer.Option("", help="Comma list; default is every US stock and fund in the book"),
+                db: str | None = typer.Option(None, "--db")):
+    """Pull the latest traded prices from Alpaca into the book."""
+    from spectre.execution.alpaca import AlpacaClient, AlpacaError, sync_prices
+
+    with _session(db) as s:
+        try:
+            n = sync_prices(s, AlpacaClient(), [t.strip() for t in tickers.split(",") if t.strip()] or None)
+        except AlpacaError as exc:
+            console.print(f"[red]Alpaca: {exc}[/]")
+            raise typer.Exit(1) from exc
+    console.print(f"Priced {n} securities from Alpaca.")
+
+
+@app.command()
+def options(ticker: str,
+            expiry: str | None = typer.Option(None, help="YYYY-MM-DD; default is the nearest expiry at least a week out"),
+            kind: str | None = typer.Option(None, "--type", help="call or put; default both"),
+            near: float = typer.Option(0.10, help="Only strikes within this fraction of the stock price"),
+            db: str | None = typer.Option(None, "--db")):
+    """Option chain for a stock from Alpaca: bid, ask, implied volatility and greeks per contract."""
+    from datetime import timedelta
+
+    from spectre.execution.alpaca import AlpacaClient, AlpacaError
+
+    ticker = ticker.upper()
+    try:
+        client = AlpacaClient()
+        spot = client.latest_trades([ticker]).get(ticker)
+        if spot is None:
+            console.print(f"[red]No recent trade for {ticker}[/]")
+            raise typer.Exit(1)
+        price = spot[0]
+        lo, hi = round(price * (1 - near), 2), round(price * (1 + near), 2)
+        if expiry:
+            chain = client.option_chain(ticker, expiration_date=date.fromisoformat(expiry), option_type=kind,
+                                        strike_price_gte=lo, strike_price_lte=hi)
+        else:
+            start = date.today() + timedelta(days=7)
+            chain = client.option_chain(ticker, expiration_date_gte=start, expiration_date_lte=start + timedelta(days=45),
+                                        option_type=kind, strike_price_gte=lo, strike_price_lte=hi)
+            if chain:
+                first = min(q.expiration for q in chain)
+                chain = [q for q in chain if q.expiration == first]
+    except AlpacaError as exc:
+        console.print(f"[red]Alpaca: {exc}[/]")
+        raise typer.Exit(1) from exc
+    if not chain:
+        console.print(f"No contracts returned for {ticker} in that range.")
+        return
+    console.print(f"[bold]{ticker}[/] last {price:,.2f}; expiry {chain[0].expiration}; strikes {lo:,.2f} to {hi:,.2f}; "
+                  f"{settings.alpaca_option_feed} prices")
+
+    def f(x, fmt="{:,.2f}"):
+        return "-" if x is None else fmt.format(x)
+
+    t = Table("strike", "type", "bid", "ask", "mid", "implied vol", "delta", "theta", "volume", "contract")
+    for q in chain:
+        t.add_row(f"{q.strike:,.2f}", q.type, f(q.bid), f(q.ask), f(q.mid), f(q.implied_volatility, "{:.1%}"),
+                  f(q.delta, "{:+.2f}"), f(q.theta, "{:+.3f}"), f(q.volume, "{:,}"), q.symbol)
+    console.print(t)
 
 
 @app.command()

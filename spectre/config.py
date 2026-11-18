@@ -29,5 +29,14 @@ class Settings(BaseSettings):
     # Set SPECTRE_SEC_USER_AGENT yourself (environment or .env); it is never stored in the code.
     sec_user_agent: str = ""
 
+    # Alpaca. Paper and live keys are separate at Alpaca; with paper keys real money is unreachable.
+    # Leave the keys empty where a network proxy supplies them.
+    alpaca_key_id: str = ""
+    alpaca_secret_key: str = ""
+    alpaca_trading_url: str = "https://paper-api.alpaca.markets"
+    alpaca_data_url: str = "https://data.alpaca.markets"
+    alpaca_stock_feed: str = "iex"  # free real-time feed; "sip" needs a paid plan
+    alpaca_option_feed: str = "indicative"  # free; "opra" (full real-time) needs a paid plan
+
 
 settings = Settings()
