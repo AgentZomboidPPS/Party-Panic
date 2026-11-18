@@ -781,7 +781,7 @@ CRYPTO_STREAMS = "BTC.X,ETH.X,SOL.X,XRP.X,DOGE.X"
 def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, exit_below, lookback, min_authors,
                   dry_run=False, options=False, option_rules=None, crypto=False, crypto_invest=0.10, crypto_top=3,
                   stop_loss=None, crypto_stop_loss=None, min_hold=60.0, crypto_min_hold=240.0, crypto_enter=0.5,
-                  risk_weighted=True):
+                  risk_weighted=True, crypto_exit_below=-0.2):
     """One full KAIROS cycle: stocks and options while the stock market is open, coins at any hour.
     Returns (stock report or None, coin report or None, every action taken, notes worth printing)."""
     from spectre.signals.strategy import CRYPTO, run_once
@@ -828,8 +828,9 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
     if crypto:
         # Coins cost about half a percent in fees per round trip, so they need a stronger read to
         # get in and are kept longer before a change of mind counts.
+        # ... and are only sold on a read that is clearly negative, not on one that has merely gone flat.
         coins = run_once(s, portfolio_id, route, top_n=crypto_top, invest=crypto_invest, enter=max(enter, crypto_enter),
-                         exit_below=exit_below, lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run,
+                         exit_below=min(exit_below, crypto_exit_below), lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run,
                          asset_classes=CRYPTO, stop_loss=crypto_stop_loss or None, min_hold_minutes=crypto_min_hold,
                          risk_weighted=risk_weighted, allow_buys=not brake)
         actions += coins.actions

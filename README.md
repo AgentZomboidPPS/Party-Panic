@@ -425,7 +425,8 @@ names are sold until it fits. An order the broker does not fill is withdrawn, no
 
 **Coin book (`--crypto`).** The same rule on coins, with its own allowance (`--crypto-invest`,
 10%) and its own top list (`--crypto-top`, 3). Coins cost about half a percent in fees per
-round trip, so the bar to buy is higher (`--crypto-enter`, 0.5). It runs at every cycle, including nights and
+round trip, so the bar to buy is higher (`--crypto-enter`, 0.5) and a coin is sold only on a
+read that is clearly negative (−0.2 or lower), not on one that has merely gone flat. It runs at every cycle, including nights and
 weekends when the stock market is closed; stocks and options are only traded while it is open.
 
 **Settlement holds.** When the portfolio has the `no_good_faith_violations` rule (new ones do),
