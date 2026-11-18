@@ -278,9 +278,15 @@ class Pipeline:
         topic_window_minutes: int = 15,
         bar_window_minutes: int = 60,
         on_batch: Callable[[dict], None] | None = None,
+        periodic: list[tuple[float, Callable[[], None]]] | None = None,
     ) -> dict:
         """Run sources concurrently, flushing batches every `batch_seconds` and building
-        topic bubbles / sentiment bars each time a window closes."""
+        topic bubbles / sentiment bars each time a window closes.
+
+        `periodic` is a list of (interval_seconds, job): each job runs on that cadence in a
+        worker thread (the trend bot uses this). A job that raises is logged and tried again
+        next time; it never stops ingestion."""
+        jobs = [[interval, job, time.monotonic()] for interval, job in (periodic or [])]
         queue: asyncio.Queue = asyncio.Queue(maxsize=50_000)
         stop = asyncio.Event()
 
@@ -326,6 +332,14 @@ class Pipeline:
                 if b_end > last_bar:
                     await loop.run_in_executor(None, self.aggregate_window, last_bar, b_end, False, True)
                     last_bar = b_end
+                for entry in jobs:
+                    interval, job, last_run = entry
+                    if time.monotonic() - last_run >= interval:
+                        entry[2] = time.monotonic()
+                        try:
+                            await loop.run_in_executor(None, job)
+                        except Exception as exc:
+                            log.warning("periodic job failed: %s: %s", type(exc).__name__, exc)
                 if on_batch:
                     on_batch(dict(self.counters, queue=queue.qsize()))
                 if duration_seconds is not None and time.monotonic() - started >= duration_seconds:

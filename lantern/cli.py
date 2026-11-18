@@ -219,32 +219,16 @@ def seed_universe(db: str | None = typer.Option(None, "--db")):
         console.print_json(data=_seed(s))
 
 
-@app.command()
-def ingest(sources: str = typer.Option("synthetic", help="Comma list: synthetic,bluesky,stocktwits,kalshi,polymarket,trends,reddit,rss,x"),
-           minutes: float = typer.Option(5.0, help="How long to run (0 = until Ctrl-C)"),
-           topic_window: int = typer.Option(15, help="Minutes per topic-bubble window"),
-           bar_window: int = typer.Option(60, help="Minutes per sentiment bar"),
-           preset: str = typer.Option("finance", help="bluesky: 'finance' keeps market talk only; 'all' keeps everything (use --sample)"),
-           sample: float = typer.Option(1.0, help="bluesky: fraction of matching posts to keep (e.g. 0.1 with --preset all)"),
-           keywords: str = typer.Option("", help="bluesky: extra terms to keep (comma list)"),
-           symbols: str = typer.Option("", help="stocktwits: symbols to follow besides the trending stream (comma list)"),
-           geos: str = typer.Option("US", help="trends: countries (comma list of codes)"),
-           feeds: str = typer.Option("", help="rss: name=url pairs (comma list)"),
-           db: str | None = typer.Option(None, "--db")):
-    """Run the live pipeline: sources -> screening -> NLP -> store -> bubbles and bars every window."""
-    import asyncio
-
+def _build_sources(factory, sources: str, preset: str = "finance", sample: float = 1.0, keywords: str = "",
+                   symbols: str = "", geos: str = "US", feeds: str = "") -> list:
+    """Turn the command-line source options into source objects."""
     from sqlalchemy import select
 
     from lantern.marketdata.universe import firehose_keywords
     from lantern.models import Security
     from lantern.signals import sources as src
     from lantern.signals.nlp import FINANCE_TERMS
-    from lantern.signals.pipeline import Pipeline
 
-    engine = make_engine(db or settings.database_url)
-    init_db(engine)
-    factory = make_session_factory(engine)
     extra = [k.strip() for k in keywords.split(",") if k.strip()]
     built = []
     for name in [x.strip() for x in sources.split(",") if x.strip()]:
@@ -266,6 +250,30 @@ def ingest(sources: str = typer.Option("synthetic", help="Comma list: synthetic,
         if name == "rss":
             kwargs["feeds"] = dict(pair.split("=", 1) for pair in feeds.split(",") if "=" in pair)
         built.append(src.build(name, **kwargs))
+    return built
+
+
+@app.command()
+def ingest(sources: str = typer.Option("synthetic", help="Comma list: synthetic,bluesky,stocktwits,kalshi,polymarket,trends,reddit,rss,x"),
+           minutes: float = typer.Option(5.0, help="How long to run (0 = until Ctrl-C)"),
+           topic_window: int = typer.Option(15, help="Minutes per topic-bubble window"),
+           bar_window: int = typer.Option(60, help="Minutes per sentiment bar"),
+           preset: str = typer.Option("finance", help="bluesky: 'finance' keeps market talk only; 'all' keeps everything (use --sample)"),
+           sample: float = typer.Option(1.0, help="bluesky: fraction of matching posts to keep (e.g. 0.1 with --preset all)"),
+           keywords: str = typer.Option("", help="bluesky: extra terms to keep (comma list)"),
+           symbols: str = typer.Option("", help="stocktwits: symbols to follow besides the trending stream (comma list)"),
+           geos: str = typer.Option("US", help="trends: countries (comma list of codes)"),
+           feeds: str = typer.Option("", help="rss: name=url pairs (comma list)"),
+           db: str | None = typer.Option(None, "--db")):
+    """Run the live pipeline: sources -> screening -> NLP -> store -> bubbles and bars every window."""
+    import asyncio
+
+    from lantern.signals.pipeline import Pipeline
+
+    engine = make_engine(db or settings.database_url)
+    init_db(engine)
+    factory = make_session_factory(engine)
+    built = _build_sources(factory, sources, preset, sample, keywords, symbols, geos, feeds)
     pipe = Pipeline(factory)
 
     def report(c: dict) -> None:
@@ -428,6 +436,81 @@ def paper_trade(portfolio_id: int, db: str | None = typer.Option(None, "--db"), 
             console.print(f"Filled {n} approved orders at the latest price.")
 
 
+# ----------------------------------------------------------------------------- fundamentals
+
+
+def _big(x: float | None) -> str:
+    if x is None:
+        return "-"
+    a = abs(x)
+    if a >= 1e9:
+        return f"{x / 1e9:,.2f}bn"
+    if a >= 1e6:
+        return f"{x / 1e6:,.1f}m"
+    return f"{x:,.2f}"
+
+
+def _chg(x: float | None) -> str:
+    if x is None:
+        return "-"
+    return f"[{'green' if x >= 0 else 'red'}]{x:+.1%}[/]"
+
+
+@app.command()
+def fundamentals_sync(tickers: str = typer.Option("", help="Comma list; default is every equity in the book"),
+                      db: str | None = typer.Option(None, "--db")):
+    """Download quarterly results from SEC filings (needs LANTERN_SEC_USER_AGENT to be set)."""
+    from lantern.fundamentals.edgar import sync
+
+    with _session(db) as s:
+        try:
+            r = sync(s, [t.strip() for t in tickers.split(",") if t.strip()] or None)
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(1) from exc
+    console.print(f"Stored quarters for {len(r['stored'])} companies; skipped {len(r['skipped'])}.")
+    for t, why in list(r["skipped"].items())[:10]:
+        console.print(f"  [dim]{t}: {why}[/]")
+
+
+@app.command()
+def earnings(ticker: str, db: str | None = typer.Option(None, "--db")):
+    """Latest reported quarter against the previous quarter and the same quarter a year ago."""
+    from sqlalchemy import select
+
+    from lantern.fundamentals.compare import company_report
+    from lantern.models import Security
+
+    with _session(db) as s:
+        sec = s.execute(select(Security).where(Security.ticker == ticker.upper())).scalar_one_or_none()
+        if sec is None:
+            console.print(f"[red]Unknown ticker {ticker}[/]")
+            raise typer.Exit(1)
+        r = company_report(s, sec.id, sec.ticker)
+    if not r["metrics"]:
+        console.print(f"No filed results stored for {sec.ticker}. Run `lantern fundamentals-sync --tickers {sec.ticker}`.")
+        return
+    console.print(f"[bold]{sec.ticker}[/] {sec.name}: quarter ended {r.get('period_end', '?')}")
+    t = Table("metric", "latest quarter", "previous quarter", "change", "year ago", "change", "note")
+    labels = {"revenue": "Revenue", "gross_profit": "Gross profit", "operating_income": "Operating income",
+              "net_income": "Net income", "eps_diluted": "EPS (diluted)", "operating_cash_flow": "Operating cash flow"}
+    for key, label in labels.items():
+        m = r["metrics"].get(key)
+        if m:
+            t.add_row(label, _big(m["latest"]), _big(m["previous_quarter"]), _chg(m["qoq"]), _big(m["year_ago"]),
+                      _chg(m["yoy"]), "derived" if m["derived"] else "")
+    console.print(t)
+    if r["margins"]:
+        t = Table("margin", "latest", "previous quarter", "change (pts)", "year ago", "change (pts)")
+        for key, m in r["margins"].items():
+            def pts(x):
+                return "-" if x is None else f"[{'green' if x >= 0 else 'red'}]{x:+.1f}[/]"
+            t.add_row(key.replace("_", " "), _pct(m["latest"]), _pct(m["previous_quarter"]) if m["previous_quarter"] is not None else "-",
+                      pts(m["change_vs_previous_pts"]), _pct(m["year_ago"]) if m["year_ago"] is not None else "-",
+                      pts(m["change_vs_year_ago_pts"]))
+        console.print(t)
+
+
 # ----------------------------------------------------------------------------- trading
 
 
@@ -538,6 +621,58 @@ def bot(portfolio_id: int,
     while every > 0:
         _time.sleep(every * 60)
         cycle()
+
+
+@app.command()
+def autopilot(portfolio_id: int,
+              sources: str = typer.Option("bluesky,stocktwits,kalshi,polymarket,trends", help="Comma list of live sources"),
+              symbols: str = typer.Option("NVDA,TSLA,SPY,AAPL,AMD,PLTR,MSFT,META,AMZN,QQQ", help="stocktwits symbols to follow"),
+              geos: str = typer.Option("US", help="trends: countries"),
+              minutes: float = typer.Option(0.0, help="How long to run (0 = until Ctrl-C)"),
+              every: float = typer.Option(10.0, help="Minutes between trading decisions"),
+              warmup: float = typer.Option(10.0, help="Minutes of data to collect before the first decision"),
+              top_n: int = 5, invest: float = 0.5, enter: float = 0.2, exit_below: float = 0.0, lookback: int = 60,
+              min_authors: int = 4,
+              db: str | None = typer.Option(None, "--db")):
+    """Run the whole thing: live data in, a paper trading decision every few minutes.
+
+    Paper only. Every order goes through compliance, the trading limits and the kill switch
+    (`lantern halt` from another terminal stops it trading at once)."""
+    import asyncio
+    import time as _time
+
+    from lantern.execution.brokers import PaperBroker
+    from lantern.signals.pipeline import Pipeline
+    from lantern.signals.strategy import run_once
+
+    engine = make_engine(db or settings.database_url)
+    init_db(engine)
+    factory = make_session_factory(engine)
+    built = _build_sources(factory, sources, symbols=symbols, geos=geos)
+    pipe = Pipeline(factory)
+    started = _time.monotonic()
+
+    def decide() -> None:
+        if _time.monotonic() - started < warmup * 60:
+            return
+        with factory() as s:
+            r = run_once(s, portfolio_id, PaperBroker(), top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
+                         lookback_minutes=lookback, min_authors=min_authors)
+        stamp = _time.strftime("%H:%M:%S")
+        if not r.actions:
+            console.print(f"{stamp}  no trades  (NAV {_money(r.nav)}, {len(r.signals)} names read, buy zone: "
+                          f"{', '.join(r.targets) or 'none'})")
+        for a in r.actions:
+            px = a.get("fill_price") or a.get("price")
+            console.print(f"{stamp}  {a['side']:<4} {a['quantity']:>6,.0f} {a['ticker']:<6} @ {px:,.2f}  "
+                          f"[{'green' if a['outcome'] == 'executed' else 'red'}]{a['outcome']}[/]  "
+                          f"{a.get('detail') or a['why']}")
+
+    console.print(f"Autopilot (paper) on portfolio {portfolio_id}: reading {', '.join(s.name for s in built)}; "
+                  f"first decision after {warmup:g} min, then every {every:g} min. Ctrl-C to stop.")
+    summary = asyncio.run(pipe.run(built, duration_seconds=minutes * 60 if minutes else None,
+                                   periodic=[(every * 60 if _time.monotonic() - started >= 0 else 0, decide)]))
+    console.print_json(data=summary)
 
 
 @app.command()

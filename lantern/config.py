@@ -25,5 +25,9 @@ class Settings(BaseSettings):
     trading_require_approval: bool = True  # live orders wait for a named person to approve each one
     trading_allowed_symbols: str = ""  # comma list; empty means any security in the book
 
+    # The SEC answers only tools that identify themselves: "Name contact@example.com".
+    # Set LANTERN_SEC_USER_AGENT yourself (environment or .env); it is never stored in the code.
+    sec_user_agent: str = ""
+
 
 settings = Settings()
