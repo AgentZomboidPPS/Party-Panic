@@ -60,6 +60,22 @@ def record_reason(session: Session, order, why: str) -> None:
     session.commit()
 
 
+def _risk_tilts(session: Session, targets: list[TrendSignal], asset_classes: tuple[str, ...], as_of) -> dict[int, float]:
+    """For each target, the fraction of a full position it should get: the typical volatility of
+    its book over its own, kept between a half and one and a half. A name with too little price
+    history to judge gets a full position, neither more nor less."""
+    from spectre.risk.vol import recent_vols
+
+    if not targets:
+        return {}
+    book_ids = session.execute(select(Security.id).where(Security.asset_class.in_(asset_classes))).scalars().all()
+    vols = recent_vols(session, book_ids, as_of)
+    if len(vols) < 3:
+        return {}
+    typical = float(pd.Series(list(vols.values())).median())
+    return {s.security_id: min(1.5, max(0.5, typical / vols[s.security_id])) if s.security_id in vols else 1.0 for s in targets}
+
+
 def withdraw_unfilled(session: Session, order) -> None:
     """A bot order that did not fill, or only partly, is withdrawn rather than left open: the
     next cycle decides afresh on fresh data, and the blotter does not fill up with stale orders."""
@@ -195,13 +211,17 @@ def run_once(
     asset_classes: tuple[str, ...] = STOCKS,
     stop_loss: float | None = None,
     min_hold_minutes: float = 0.0,
+    risk_weighted: bool = False,
 ) -> BotReport:
     """One decision cycle for one kind of asset: read the crowd, decide targets, trade the difference.
     `invest` is the share of the whole portfolio this book may hold; `stop_loss` (0.08 = 8%) is
     how far below its average cost a holding may fall before it is sold regardless.
     `min_hold_minutes` stops a change of mind from counting until a holding is that old: the
     crowd read wobbles from one cycle to the next, and every round trip costs the spread and,
-    for coins, half a percent in fees. The stop-loss is not held back by it."""
+    for coins, half a percent in fees. The stop-loss is not held back by it.
+    `risk_weighted` sizes each position by how much the name moves: one that has lately been
+    twice as volatile as the typical name in its book gets half a position, a calm one up to
+    one and a half, so each holding carries a similar share of the risk."""
     broker = broker or PaperBroker()
     limits = limits or TradingLimits.from_settings()
     signals = [s for s in live_signals(session, lookback_minutes, min_posts, min_authors, at) if s.asset_class in asset_classes]
@@ -307,17 +327,24 @@ def run_once(
         select(Trade.security_id).where(Trade.portfolio_id == portfolio_id, Trade.side == Side.SELL.value,
                                         Trade.trade_date >= valued.as_of, Trade.order_id.is_not(None))
     ).scalars())
-    per_name = nav * invest / max(top_n, 1)
+    slot = nav * invest / max(top_n, 1)
+    tilt = _risk_tilts(session, targets, asset_classes, valued.as_of) if risk_weighted else {}
+    if tilt and sum(slot * t for t in tilt.values()) > nav * invest:  # calm names may not overfill the book
+        squeeze = nav * invest / sum(slot * t for t in tilt.values())
+        tilt = {sid: t * squeeze for sid, t in tilt.items()}
     for sig in targets:
         if sig.security_id in resting:
             continue
         lot = lot_size(sig.asset_class)
+        size = tilt.get(sig.security_id, 1.0)
+        per_name = slot * size
         current = held.get(sig.security_id, 0.0) * sig.price
         want = min(per_name - current, room, limits.max_order_notional, max(cash, 0.0) * CASH_SLACK)
         qty = _lots(want, sig.price, lot)
         if qty < lot or qty * sig.price < max(MIN_ORDER.get(sig.asset_class, 0.0), MIN_TOPUP * per_name):
             continue
-        if trade(sig, Side.BUY, qty, f"score {sig.score:+.2f}, {sig.n_authors} authors, net {sig.net:+.0%}"):
+        sized = "" if abs(size - 1.0) < 0.1 else f"; sized at {size:.1f} of a full position because it moves {'more' if size < 1 else 'less'} than most"
+        if trade(sig, Side.BUY, qty, f"score {sig.score:+.2f}, {sig.n_authors} authors, net {sig.net:+.0%}{sized}"):
             done = report.actions[-1]["quantity"]
             cash -= done * sig.price
             room -= done * sig.price

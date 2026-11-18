@@ -399,6 +399,12 @@ collected. Each cycle:
 4. buy the top names above `--enter`, sell holdings whose score fell to `--exit-below`; long
    only, whole shares, each order through compliance and then the execution gate.
 
+**Sizing by risk (`--risk-weighted`, the default).** Each position is sized by how much the
+name has been moving over the last sixty trading days: one twice as volatile as the typical
+name in its book gets half a position, a calm one up to one and a half, so each holding
+carries a similar share of the risk instead of the jumpiest name dominating it.
+`--equal-weighted` gives every name the same dollars.
+
 `--invest` caps the whole stock book as a share of the portfolio. A holding is sold when the
 crowd turns against it, and held when there is no fresh read, with one exception: the
 **stop-loss** (`--stop-loss`, 8% for stocks; `--crypto-stop-loss`, 12% for coins; 0 turns it

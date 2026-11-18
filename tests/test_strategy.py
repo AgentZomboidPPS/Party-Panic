@@ -232,6 +232,39 @@ def test_once_old_enough_a_turned_crowd_sells_as_before(book):
         assert no_rule.actions == [], "already sold; and with no minimum hold the rule simply does not apply"
 
 
+def test_risk_weighting_gives_a_jumpy_name_a_smaller_position(book):
+    import numpy as np
+
+    from spectre.models import Price
+    from spectre.risk.vol import recent_vols
+
+    factory, pid, pipe = book
+    # Make AMD a second strongly liked name, so the bot wants both it and NVDA.
+    likes = ["$AMD taking share in servers again", "Long $AMD into the product launch", "$AMD margins finally turning up",
+             "Adding $AMD on this base, looks ready", "$AMD datacenter numbers were excellent", "Buying more $AMD here"]
+    pipe.process_posts([_post(f"m{a}", f"amdfan{a}", t, "Bullish", 3 + a, {"AMD": 200.0}, ("AMD",)) for a, t in enumerate(likes)])
+    with factory() as s:
+        ids = {t: s.execute(select(Security.id).where(Security.ticker == t)).scalar_one() for t in ("NVDA", "AMD", "MSFT", "AAPL", "TSLA")}
+        rng = np.random.default_rng(3)
+        # Sixty days of history: NVDA and three others move about 1% a day, AMD about 3%.
+        for ticker, daily, last in (("NVDA", 0.01, 150.0), ("MSFT", 0.01, 500.0), ("AAPL", 0.01, 350.0), ("TSLA", 0.01, 400.0), ("AMD", 0.03, 200.0)):
+            moves = rng.normal(0, daily, 60)
+            closes = last / np.cumprod(1 + moves[::-1])[::-1]
+            for k, close in enumerate(closes):
+                s.add(Price(security_id=ids[ticker], date=T0.date() - timedelta(days=60 - k), close=float(close)))
+        s.commit()
+        vols = recent_vols(s, ids.values(), T0.date())
+        assert vols[ids["AMD"]] > 2.3 * vols[ids["NVDA"]], "AMD has been moving about three times as much"
+
+        plain = run_once(s, pid, limits=LIMITS, top_n=5, invest=0.5, dry_run=True)
+        assert {a["ticker"]: a["quantity"] for a in plain.actions} == {"NVDA": 6, "AMD": 5}, "equal dollars: 1,000 each"
+        r = run_once(s, pid, limits=LIMITS, top_n=5, invest=0.5, dry_run=True, risk_weighted=True)
+        size = {a["ticker"]: a for a in r.actions}
+        # A slot is 1,000. NVDA moves like the typical name: a full position. AMD moves three times as much: half of one, the floor.
+        assert size["NVDA"]["quantity"] == 6 and "sized at" not in size["NVDA"]["why"]
+        assert size["AMD"]["quantity"] == 2 and "sized at 0.5 of a full position because it moves more than most" in size["AMD"]["why"]
+
+
 def test_an_order_the_broker_does_not_fill_is_withdrawn_not_left_open(book):
     from spectre.execution.brokers import BrokerReject
 
