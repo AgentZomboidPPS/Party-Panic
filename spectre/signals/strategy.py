@@ -112,12 +112,18 @@ def live_signals(
     sec_ids = {t: i for t, i, _ in listed}
     kinds = {t: k for t, _, k in listed}
 
-    last_trend = session.execute(select(func.max(SearchTrend.last_seen))).scalar_one_or_none()
+    # Searches trending over the day before `end`. When the question is about a past moment
+    # (`at`), searches first seen after it are left out: the signal must not peek ahead.
+    seen = select(func.max(SearchTrend.last_seen))
+    if at is not None:
+        seen = seen.where(SearchTrend.first_seen <= at)
+    last_trend = session.execute(seen).scalar_one_or_none()
     trending: set[str] = set()
     if last_trend is not None:
-        for (tickers,) in session.execute(
-            select(SearchTrend.tickers).where(SearchTrend.last_seen >= last_trend - timedelta(hours=24))
-        ):
+        recent = select(SearchTrend.tickers).where(SearchTrend.last_seen >= last_trend - timedelta(hours=24))
+        if at is not None:
+            recent = recent.where(SearchTrend.first_seen <= at)
+        for (tickers,) in session.execute(recent):
             trending.update(tickers or [])
 
     as_of = latest_price_date(session) or end.date()

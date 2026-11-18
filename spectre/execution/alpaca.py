@@ -56,6 +56,11 @@ class AlpacaError(Exception):
         self.status = status
 
 
+def _stamp(when: date | datetime) -> str:
+    """A date as YYYY-MM-DD; a moment as an RFC 3339 UTC timestamp."""
+    return when.strftime("%Y-%m-%dT%H:%M:%SZ") if isinstance(when, datetime) else when.isoformat()
+
+
 def parse_time(s: str) -> datetime:
     """Alpaca timestamps carry nanoseconds; Python keeps microseconds."""
     return to_naive_utc(datetime.fromisoformat(_FRACTION.sub(r"\1", s).replace("Z", "+00:00")))
@@ -224,41 +229,52 @@ class AlpacaClient:
                     out[sym] = (float(t["p"]), parse_time(t["t"]))
         return out
 
-    def daily_bars(self, symbols: list[str], start: date, end: date | None = None,
-                   feed: str = "sip") -> dict[str, list[tuple[date, float]]]:
-        """Daily closing prices per stock or fund, oldest first, adjusted for splits and dividends
-        so that day-to-day changes are true returns. The free plan serves full-market ("sip")
-        history as long as it is at least 15 minutes old."""
-        out: dict[str, list[tuple[date, float]]] = {}
+    def stock_bars(self, symbols: list[str], start: date | datetime, end: date | datetime | None = None,
+                   timeframe: str = "1Day", feed: str = "sip", adjustment: str = "all") -> dict[str, list[tuple[datetime, float]]]:
+        """(bar start time, closing price) per stock or fund, oldest first. The free plan serves
+        full-market ("sip") history as long as it is at least 15 minutes old."""
+        out: dict[str, list[tuple[datetime, float]]] = {}
         for i in range(0, len(symbols), 50):
-            params: dict = {"symbols": ",".join(symbols[i : i + 50]), "timeframe": "1Day", "start": start.isoformat(),
-                            "limit": 10000, "adjustment": "all", "feed": feed}
+            params: dict = {"symbols": ",".join(symbols[i : i + 50]), "timeframe": timeframe, "start": _stamp(start),
+                            "limit": 10000, "adjustment": adjustment, "feed": feed}
             if end is not None:
-                params["end"] = end.isoformat()
+                params["end"] = _stamp(end)
             while True:
                 body = self._call("GET", f"{self.data_url}/v2/stocks/bars", params=params)
                 for sym, bars in (body.get("bars") or {}).items():
-                    out.setdefault(sym, []).extend((parse_time(b["t"]).date(), float(b["c"])) for b in bars or [])
+                    out.setdefault(sym, []).extend((parse_time(b["t"]), float(b["c"])) for b in bars or [])
                 if not body.get("next_page_token"):
                     break
                 params["page_token"] = body["next_page_token"]
         return out
 
-    def crypto_daily_bars(self, coins: list[str], start: date) -> dict[str, list[tuple[date, float]]]:
-        """Daily closing prices per coin against the dollar (days run midnight to midnight UTC)."""
-        out: dict[str, list[tuple[date, float]]] = {}
+    def crypto_bars(self, coins: list[str], start: date | datetime, end: date | datetime | None = None,
+                    timeframe: str = "1Day") -> dict[str, list[tuple[datetime, float]]]:
+        """(bar start time, closing price) per coin against the dollar; daily bars run midnight to midnight UTC."""
+        out: dict[str, list[tuple[datetime, float]]] = {}
         if not coins:
             return out
-        params: dict = {"symbols": ",".join(f"{c}/USD" for c in coins), "timeframe": "1Day", "start": start.isoformat(),
-                        "limit": 10000}
+        params: dict = {"symbols": ",".join(f"{c}/USD" for c in coins), "timeframe": timeframe, "start": _stamp(start), "limit": 10000}
+        if end is not None:
+            params["end"] = _stamp(end)
         while True:
             body = self._call("GET", f"{self.data_url}/v1beta3/crypto/us/bars", params=params)
             for pair, bars in (body.get("bars") or {}).items():
-                out.setdefault(pair.split("/")[0], []).extend((parse_time(b["t"]).date(), float(b["c"])) for b in bars or [])
+                out.setdefault(pair.split("/")[0], []).extend((parse_time(b["t"]), float(b["c"])) for b in bars or [])
             if not body.get("next_page_token"):
                 break
             params["page_token"] = body["next_page_token"]
         return out
+
+    def daily_bars(self, symbols: list[str], start: date, end: date | None = None,
+                   feed: str = "sip") -> dict[str, list[tuple[date, float]]]:
+        """Daily closing prices per stock or fund, oldest first, adjusted for splits and dividends
+        so that day-to-day changes are true returns."""
+        return {sym: [(at.date(), close) for at, close in bars] for sym, bars in self.stock_bars(symbols, start, end, feed=feed).items()}
+
+    def crypto_daily_bars(self, coins: list[str], start: date) -> dict[str, list[tuple[date, float]]]:
+        """Daily closing prices per coin against the dollar (days run midnight to midnight UTC)."""
+        return {coin: [(at.date(), close) for at, close in bars] for coin, bars in self.crypto_bars(coins, start).items()}
 
     def crypto_quotes(self, coins: list[str]) -> dict[str, tuple[float, float, datetime]]:
         """Latest (bid, ask, time) per coin against the dollar; coins with no two-sided quote are absent."""

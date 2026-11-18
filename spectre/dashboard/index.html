@@ -220,6 +220,10 @@
       <div id="sentiment-table"></div>
     </div>
     <div class="card">
+      <h2>Does the crowd read predict prices? Measured, not assumed</h2>
+      <div id="signal-check" class="muted">Measuring…</div>
+    </div>
+    <div class="card">
       <h2>Prediction markets — contested (5–95%), most traded</h2>
       <div id="markets-table"></div>
     </div>
@@ -664,6 +668,25 @@ async function refreshSignals() {
   marketsTable(mkts);
   trendsTable(trends);
   drawCurve(curve, macro);
+  getJSON('/signals/check').then(signalCheck).catch(() => { $('#signal-check').textContent = 'Not available.'; });
+}
+
+function signalCheck(r) {
+  const el = $('#signal-check');
+  if (!r.samples) { el.textContent = r.verdict; return; }
+  const pct = (x, d = 2) => x == null ? '–' : (x >= 0 ? '+' : '−') + Math.abs(x * 100).toFixed(d) + '%';
+  const num = (x) => x == null ? '–' : (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2);
+  const stat = (v, l) => `<div><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  const short = (z) => z.zone.startsWith('buy') ? 'liked (buy zone)' : z.zone.startsWith('in') ? 'in between' : 'disliked (would be sold)';
+  el.classList.remove('muted');
+  el.innerHTML = `<div class="statrow">` +
+    stat(pct(r.held.mean_edge), `top ${r.held.top_n} liked names against the rest, over the next ${r.horizon_minutes} min`) +
+    stat(num(r.rank_agreement.mean), 'rank agreement (−1 to +1)') +
+    stat(`${r.windows} <span class="muted" style="font-size:13px;font-weight:400">of 30 needed</span>`, 'separate windows measured') + `</div>` +
+    `<table><thead><tr><th>what the crowd said</th><th class="num">readings</th><th class="num">next ${r.horizon_minutes} min, against the other names</th><th class="num">beat them</th></tr></thead><tbody>` +
+    r.zones.map(z => `<tr><td>${short(z)}</td><td class="num">${fmtNum(z.samples)}</td><td class="num">${pct(z.mean_relative_return, 3)}</td><td class="num">${z.share_beating_the_rest == null ? '–' : Math.round(z.share_beating_the_rest * 100) + '%'}</td></tr>`).join('') +
+    `</tbody></table><div style="margin-top:8px"><b>${esc(r.verdict)}</b></div>` +
+    `<div class="muted" style="margin-top:4px">${fmtNum(r.samples)} readings of ${r.names} names, ${esc(r.from.replace('T', ' '))} to ${esc(r.to.replace('T', ' '))} UTC. Readings ten minutes apart overlap, so only separate windows count as evidence.</div>`;
 }
 
 /* ============================================================ shell */

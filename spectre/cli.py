@@ -390,6 +390,54 @@ def calibrate(db: str | None = typer.Option(None, "--db")):
 
 
 @app.command()
+def signal_check(horizon: int = typer.Option(60, help="Minutes ahead to look at what the price did"),
+                 days: float = typer.Option(5.0, help="How far back to measure"),
+                 crypto: bool = typer.Option(False, help="Measure the coins instead of stocks and funds"),
+                 lookback: int = typer.Option(45, help="Minutes of conversation behind each read (as the bot uses)"),
+                 min_authors: int = typer.Option(8, help="Fewest distinct authors behind a read (as the bot uses)"),
+                 db: str | None = typer.Option(None, "--db")):
+    """Does the crowd read predict what the price does next? Measured on the data collected so far."""
+    from spectre.execution.alpaca import AlpacaClient, AlpacaError
+    from spectre.signals.intraday import check
+    from spectre.signals.strategy import CRYPTO, STOCKS
+
+    try:
+        with _session(db) as s:
+            r = check(s, AlpacaClient(), days=days, horizon=horizon, lookback=lookback, min_authors=min_authors,
+                      asset_classes=CRYPTO if crypto else STOCKS)
+    except AlpacaError as exc:
+        console.print(f"[red]Alpaca (prices): {exc}[/]")
+        raise typer.Exit(1) from exc
+    if not r["samples"]:
+        console.print(r["verdict"])
+        return
+
+    def pct(x: float | None, digits: int = 3) -> str:
+        return "-" if x is None else f"{x:+.{digits}%}"
+
+    def num(x: float | None) -> str:
+        return "-" if x is None else f"{x:+.2f}"
+
+    console.print(f"[bold]{'Coins' if crypto else 'Stocks and funds'}[/], {r['from']} to {r['to']} UTC: {r['samples']} readings of "
+                  f"{r['names']} names at {r['moments']} moments, looking {r['horizon_minutes']} minutes ahead. "
+                  f"Separate windows: [bold]{r['windows']}[/].")
+    t = Table("what followed", "readings", "return", "against the other names", "share that beat them", title="By zone")
+    for z in r["zones"]:
+        t.add_row(z["zone"], str(z["samples"]), pct(z["mean_return"]), pct(z["mean_relative_return"]),
+                  "-" if z["share_beating_the_rest"] is None else f"{z['share_beating_the_rest']:.0%}")
+    console.print(t)
+    ra, h = r["rank_agreement"], r["held"]
+    t = Table("measure", "value", "moments", "share positive", "t")
+    t.add_row("Rank agreement between score and what followed (-1 to +1)", num(ra["mean"]), str(ra["moments"]),
+              "-" if ra["share_positive"] is None else f"{ra['share_positive']:.0%}", num(ra["t_stat"]))
+    t.add_row(f"Top {h['top_n']} in the buy zone against all names", pct(h["mean_edge"]), str(h["moments"]),
+              "-" if h["share_positive"] is None else f"{h['share_positive']:.0%}", num(h["t_stat"]))
+    console.print(t)
+    console.print(f"[bold]{r['verdict']}[/]")
+    console.print("[dim]t is the average over its standard error, counting only separate windows; around 2 or more starts to mean something.[/]")
+
+
+@app.command()
 def backtest(db: str | None = typer.Option(None, "--db"), horizon: int = 1, signal: str = "score", quantile: float = 0.3,
              days: int = 365,
              cost_bps: float = typer.Option(5.0, help="One-way trading cost in basis points (spread + fees)")):

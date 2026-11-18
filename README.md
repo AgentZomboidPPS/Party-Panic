@@ -408,6 +408,15 @@ quote), so the spread is paid only as far as it has to be. It only ever
 buys options, so the most a position can lose is what was paid for it, and the
 `no_naked_options` rule would reject an uncovered sale regardless.
 
+**Is the signal any good? (`signals/intraday.py`, `spectre signal-check`).** For every past
+decision moment it recomputes the score exactly as the bot would have, from posts up to that
+moment only, and looks at what each name's price did over the following hour (five-minute
+prices from Alpaca). It reports the rank agreement between score and outcome, what followed
+for liked, in-between and disliked names relative to the others at the same moment, and how
+the top five would have done against the field. Readings ten minutes apart overlap heavily, so
+evidence is counted in separate windows, and no verdict is offered below thirty of them. The
+Signals tab of the dashboard shows it and it fills in as data accumulates.
+
 **Exposure cap (`--max-exposure`, default 1.0).** An option costs a fraction of the stock it
 behaves like, so a premium budget alone lets the portfolio carry several times its own value
 in market exposure while borrowing nothing. `spectre risk N` and the dashboard show that
@@ -526,8 +535,8 @@ Alpaca: `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`, `ALPACA_TRADING_URL` (paper host),
 ## Roadmap
 
 Next steps in rough priority order: deploy the container to a permanent host so KAIROS can
-build a track record; measure the crowd signal against real prices
-once weeks of data exist; train a sentiment classifier on the Stocktwits labels and adopt it
+build a track record; let the signal check accumulate a few weeks of windows and act on what
+it says; train a sentiment classifier on the Stocktwits labels and adopt it
 only if it beats the baseline out of sample; covered calls, cash-secured puts and defined-risk
 spreads, with their assignment and expiry bookkeeping (never an uncovered sale); use rates and
 credit as a risk-on / risk-off filter; SEC earnings against the live service; Reddit via a

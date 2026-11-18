@@ -151,6 +151,33 @@ def paper_trade(portfolio_id: int, db: DB, top_n: int = 5, sleeve: float = 0.10,
     }
 
 
+_CHECKS: dict[tuple, tuple[float, dict]] = {}  # (database, horizon, crypto) -> (when computed, result)
+
+
+@router.get("/check")
+def signal_check(db: DB, horizon: int = 60, days: float = 5.0, crypto: bool = False, lookback: int = 45,
+                 min_authors: int = 8) -> dict:
+    """Does the crowd read predict what the price does next? Measured on the data collected so
+    far, with five-minute prices from Alpaca. Recomputed at most every ten minutes."""
+    import time
+
+    from spectre.execution.alpaca import AlpacaClient, AlpacaError
+    from spectre.signals.intraday import check
+    from spectre.signals.strategy import CRYPTO, STOCKS
+
+    key = (str(db.get_bind().url), horizon, days, crypto, lookback, min_authors)
+    cached = _CHECKS.get(key)
+    if cached and time.monotonic() - cached[0] < 600:
+        return cached[1]
+    try:
+        result = _clean(check(db, AlpacaClient(), days=days, horizon=horizon, lookback=lookback, min_authors=min_authors,
+                              asset_classes=CRYPTO if crypto else STOCKS))
+    except AlpacaError as exc:
+        return {"samples": 0, "moments": 0, "windows": 0, "verdict": f"Prices are not available to measure against ({exc})."}
+    _CHECKS[key] = (time.monotonic(), result)
+    return result
+
+
 dashboard_router = APIRouter(tags=["dashboard"])
 
 
