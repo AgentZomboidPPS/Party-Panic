@@ -254,7 +254,9 @@ async function refreshPortfolio() {
   $('#p-var').textContent = para ? fmtCompact(para.var) : '–';
   $('#p-var-d').textContent = para ? `${fmtPct(para.var_pct, 2)} of NAV · ES ${fmtCompact(para.expected_shortfall)} · historical ${fmtCompact(hist.var)}` : (varr.error || '');
   $('#p-vol').textContent = varr.annualised_vol != null ? fmtPct(varr.annualised_vol, 1) : '–';
-  $('#p-vol-d').textContent = varr.observations ? `${varr.observations} daily observations` : '';
+  const expo = varr.exposure && varr.exposure.net_pct != null ? `market exposure ${fmtPct(varr.exposure.net_pct, 0)} of NAV` +
+    (varr.exposure.option_premium > 0 ? ` (options: ${fmtCompact(varr.exposure.by.options_delta_equivalent)} by delta, cost ${fmtCompact(varr.exposure.option_premium)})` : '') : '';
+  $('#p-vol-d').textContent = [varr.observations ? `${varr.observations} daily observations` : '', expo].filter(Boolean).join(' · ');
   const hard = comp.breaches.filter(b => b.severity === 'HARD').length, soft = comp.breaches.length - hard;
   $('#p-comp').innerHTML = comp.passed
     ? `<span class="status ok"><span class="ic">✓</span>PASS</span>`

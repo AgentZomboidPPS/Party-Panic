@@ -13,7 +13,7 @@ from spectre.models import Security
 from spectre.portfolio.positions import ValuedPositions, security_map, value_portfolio
 from spectre.risk import factors as fm
 from spectre.risk.fixed_income import bond_analytics
-from spectre.risk.options import option_exposures
+from spectre.risk.options import market_exposure, option_exposures
 from spectre.risk.stress import PREDEFINED, Scenario, apply_scenario
 from spectre.risk.var import (
     component_var,
@@ -76,10 +76,11 @@ def var_suite(
     confidence = confidence or settings.var_confidence
     horizon = horizon_days or settings.var_horizon_days
     opts = option_exposures(session, valued)
+    exposure = market_exposure(session, valued, opts)
     rets = asset_returns(session, valued, lookback_days, opts)
     w = valued.weights()
     if rets.empty or len(valued.positions) == 0:
-        return {"error": "insufficient price history", "methods": {}}
+        return {"error": "insufficient price history", "methods": {}, "exposure": exposure}
     left_out = [str(valued.positions.at[i, "ticker"]) for i in valued.positions.index if i not in rets.columns]
     cov = rets.cov()
     port = portfolio_return_series(rets, w)
@@ -106,6 +107,7 @@ def var_suite(
             for i, o in opts.iterrows() if i in rets.columns
         ],
         "not_modelled": left_out,
+        "exposure": exposure,
     }
 
 

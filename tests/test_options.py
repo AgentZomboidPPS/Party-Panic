@@ -259,6 +259,39 @@ def test_total_premium_stays_inside_the_budget(book):
         assert strict.actions == [] and strict.targets == [], "no read is strong enough"
 
 
+def test_exposure_cap_counts_a_call_as_the_stock_it_behaves_like(book):
+    factory, pid = book
+    with factory() as s:
+        # One NVDA call behaves like 100 x 0.45 x 150 = 6,750 of stock. A cap of 15% of a 100,000
+        # portfolio leaves room for two of the five contracts the premium budget would buy.
+        r = cycle(s, pid, FakeOptions(), rules=OptionRules(min_authors=4, max_exposure=0.15))
+        done = {a["ticker"]: a for a in r.actions}
+        assert done[NVDA_CALL]["quantity"] == 2 and done[NVDA_CALL]["outcome"] == "executed"
+        assert done[TSLA_PUT]["quantity"] == 1 and done[TSLA_PUT]["outcome"] == "executed", "a put lowers exposure: always allowed"
+
+
+def test_exposure_cap_can_rule_out_a_call_altogether():
+    e = make_engine("sqlite://")
+    init_db(e)
+    factory = make_session_factory(e)
+    with factory() as s:
+        seed_universe(s)
+        pf = Portfolio(name="Capped", base_currency="USD")
+        s.add(pf)
+        s.flush()
+        s.add(CashFlow(portfolio_id=pf.id, date=T0.date(), amount=100_000))
+        s.commit()
+        pid = pf.id
+    Pipeline(factory).process_posts(crowd_posts())
+    with factory() as s:
+        r = cycle(s, pid, FakeOptions(), rules=OptionRules(min_authors=4, max_exposure=0.05))
+        nvda = next(a for a in r.actions if a["ticker"] == NVDA_CALL)
+        assert nvda["outcome"] == "skipped" and "behaves like 6,750 of NVDA" in nvda["why"] and "past 5%" in nvda["why"]
+        assert held(s, pid) == {TSLA_PUT: 1}
+        # With no cap the premium budget alone decides, as before.
+        assert cycle(s, pid, FakeOptions(), rules=OptionRules(min_authors=4)).actions[0]["quantity"] == 5
+
+
 def test_dry_run_touches_nothing(book):
     factory, pid = book
     with factory() as s:

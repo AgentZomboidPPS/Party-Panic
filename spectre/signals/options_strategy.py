@@ -45,6 +45,7 @@ from spectre.execution.guard import TradingLimits, execute
 from spectre.models import OrderType, Security, Side, Trade
 from spectre.portfolio.positions import average_costs, value_portfolio
 from spectre.portfolio.settlement import sale_restrictions
+from spectre.risk.options import market_exposure
 from spectre.signals.sources.base import utcnow
 from spectre.signals.strategy import BOT_ACTOR, BotReport, TrendSignal, live_signals, withdraw_unfilled
 from spectre.trading import oms
@@ -65,6 +66,13 @@ class OptionRules:
     # quote is indicative and can lag the real market, so a limit placed exactly on it often
     # misses; the order still fills at the real price when that is better than the limit.
     limit_cushion: float = 0.03
+    # The most market the whole portfolio may carry, as a multiple of its value, counting each
+    # option as the amount of stock it behaves like (its delta-equivalent). An option costs a
+    # fraction of that, so a premium budget alone lets exposure run to several times the
+    # account. 1.0 means "never carry more market than the account is worth"; None = no cap.
+    # It only stops new calls being added: nothing is sold to get back under it, and a put
+    # (which lowers net exposure) is always allowed.
+    max_exposure: float | None = None
     strike_band: float = 0.15  # only look at strikes within this fraction of the stock price
     exit_dte: int = 7
     take_profit: float = 1.0  # +100%
@@ -210,6 +218,10 @@ def run_options_once(
 
     # --- 3: new positions
     budget_left = rules.budget * valued.total_value - premium_held
+    exposure_room = None
+    if rules.max_exposure is not None:
+        now = value_portfolio(session, portfolio_id)  # after any exits above
+        exposure_room = rules.max_exposure * now.total_value - market_exposure(session, now)["net"]
     wanted = sorted(
         (s for s in signals if abs(s.score) >= rules.enter and s.price and s.ticker not in covered
          and (s.ticker, "call" if s.score > 0 else "put") not in closed),
@@ -243,6 +255,15 @@ def run_options_once(
             report.actions.append({**note, "ticker": q.symbol, "price": limit,
                                    "why": f"one contract costs up to {limit * 100:,.0f}, more than the {spend:,.0f} available"})
             continue
+        # What one contract adds to the market the portfolio carries: 100 shares x delta.
+        carries = 100 * (q.delta if q.delta is not None else (0.5 if kind == "call" else -0.5)) * sig.price
+        if exposure_room is not None and carries > 0:
+            qty = min(qty, math.floor(max(exposure_room, 0.0) / carries))
+            if qty < 1:
+                report.actions.append({**note, "ticker": q.symbol, "price": limit,
+                                       "why": (f"one contract behaves like {carries:,.0f} of {sig.ticker}; that would take market "
+                                               f"exposure past {rules.max_exposure:.0%} of the portfolio")})
+                continue
         delta = f"delta {q.delta:+.2f}" if q.delta is not None else "no greeks"
         why = (f"{'bullish' if kind == 'call' else 'bearish'} read on {sig.ticker} (score {sig.score:+.2f}, "
                f"{sig.n_authors} authors); {(q.expiration - today).days}d, {delta}")
@@ -251,6 +272,8 @@ def run_options_once(
                                    "outcome": "dry run", "why": why})
             cash -= qty * limit * 100
             budget_left -= qty * limit * 100
+            if exposure_room is not None:
+                exposure_room -= qty * carries
             continue
         sec = ensure_option_security(session, q)
         store_option_mark(session, sec, q, sig.price)
@@ -259,4 +282,6 @@ def run_options_once(
             paid = report.actions[-1].get("fill_price") or limit
             cash -= qty * paid * 100
             budget_left -= qty * paid * 100
+            if exposure_room is not None:
+                exposure_room -= qty * carries
     return report

@@ -105,6 +105,26 @@ def test_value_at_risk_counts_the_options_and_says_how(book):
     assert out["not_modelled"] == ["AAA261218P00095000"] and len(out["options_by_delta"]) == 1
 
 
+def test_market_exposure_counts_an_option_as_the_stock_it_behaves_like(book):
+    from spectre.risk.options import market_exposure
+
+    s, pid, sec = book
+    v = value_portfolio(s, pid, END)
+    e = market_exposure(s, v)
+    # 100 shares at 100; two calls = 2 x 100 x 0.50 x 100 of stock; one put = 1 x 100 x -0.40 x 100.
+    assert e["by"]["stocks_and_funds"] == pytest.approx(10_000)
+    assert e["by"]["options_delta_equivalent"] == pytest.approx(10_000 - 4_000)
+    assert e["option_premium"] == pytest.approx(1_400), "what the options cost is a small part of what they carry"
+    assert e["by"]["coins"] == pytest.approx(v.positions.at[sec["coin"].id, "market_value"])
+    assert e["net"] == pytest.approx(16_000 + e["by"]["coins"]) and e["net_pct"] == pytest.approx(e["net"] / v.total_value)
+    assert var_suite(s, v)["exposure"]["net"] == pytest.approx(e["net"])
+
+    s.get(OptionMark, sec["put"].id).delta = None
+    s.commit()
+    e = market_exposure(s, value_portfolio(s, pid, END))
+    assert e["not_modelled"] == ["AAA261218P00095000"] and e["by"]["options_delta_equivalent"] == pytest.approx(10_000 + 400)
+
+
 def test_stress_scenarios_gear_options_and_stop_at_the_premium(book):
     s, pid, sec = book
     v = value_portfolio(s, pid, END)

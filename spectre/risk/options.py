@@ -55,3 +55,39 @@ def option_exposures(session: Session, valued: ValuedPositions) -> pd.DataFrame:
     df = pd.DataFrame.from_dict(rows, orient="index", columns=COLUMNS)
     df.index.name = "security_id"
     return df
+
+
+def market_exposure(session: Session, valued: ValuedPositions, options: pd.DataFrame | None = None) -> dict:
+    """How much market the portfolio is really carrying, as money and as a share of its value.
+
+    A share or a coin counts at its market value. An option counts at its **delta-equivalent**:
+    the amount of the underlying it behaves like (contracts x multiplier x delta x underlying
+    price; negative for a put). That is usually many times what the option cost, which is why a
+    portfolio that borrows nothing can still carry more market than it is worth. A contract
+    with no delta is counted at its cost and listed under `not_modelled`."""
+    opts = option_exposures(session, valued) if options is None else options
+    df = valued.positions
+    parts = {"stocks_and_funds": 0.0, "coins": 0.0, "options_delta_equivalent": 0.0, "other": 0.0}
+    premium, unmodelled = 0.0, []
+    for sid, row in df.iterrows():
+        mv, kind = float(row["market_value"]), row["asset_class"]
+        if kind == "Option":
+            premium += mv
+            lev = opts.at[sid, "leverage"] if sid in opts.index else None
+            if lev is None or pd.isna(lev):
+                unmodelled.append(str(row["ticker"]))
+                parts["options_delta_equivalent"] += mv
+            else:
+                parts["options_delta_equivalent"] += mv * float(lev)
+        elif kind in ("Equity", "Fund"):
+            parts["stocks_and_funds"] += mv
+        elif kind == "Crypto":
+            parts["coins"] += mv
+        else:
+            parts["other"] += mv
+    net = sum(parts.values())
+    nav = valued.total_value
+    return {
+        "net": net, "net_pct": net / nav if nav else None, "by": parts, "option_premium": premium,
+        "option_premium_pct": premium / nav if nav else None, "not_modelled": unmodelled,
+    }

@@ -102,7 +102,7 @@ that can run a container with a small persistent disk will do. It needs:
 | `PORT` | most hosts set this themselves; the default is 8000 |
 
 Optional: `SPECTRE_INVEST` (0.70), `SPECTRE_OPTIONS` (true), `SPECTRE_OPTIONS_BUDGET` (0.20),
-`SPECTRE_CRYPTO` (true), `SPECTRE_CRYPTO_INVEST` (0.10), `SPECTRE_STOP_LOSS` (0.08),
+`SPECTRE_MAX_EXPOSURE` (1.0), `SPECTRE_CRYPTO` (true), `SPECTRE_CRYPTO_INVEST` (0.10), `SPECTRE_STOP_LOSS` (0.08),
 `SPECTRE_CRYPTO_STOP_LOSS` (0.12), `SPECTRE_EVERY` (10 minutes),
 `SPECTRE_SYMBOLS`, `SPECTRE_PORTFOLIO` (KAIROS). `GET /health` needs no password, for the
 host's health check.
@@ -381,6 +381,14 @@ quote), so the spread is paid only as far as it has to be. It only ever
 buys options, so the most a position can lose is what was paid for it, and the
 `no_naked_options` rule would reject an uncovered sale regardless.
 
+**Exposure cap (`--max-exposure`, default 1.0).** An option costs a fraction of the stock it
+behaves like, so a premium budget alone lets the portfolio carry several times its own value
+in market exposure while borrowing nothing. `spectre risk N` and the dashboard show that
+figure (each option counted as contracts × 100 × delta × the stock price). The cap stops new
+calls being bought once the portfolio would carry more market than `--max-exposure` times its
+value; puts, which lower net exposure, are always allowed, and nothing is sold to get back
+under it. 0 switches the cap off.
+
 `--dry-run` shows the decisions without creating an order. These rules are a transparent
 starting point to measure, not a proven edge: they have not been backtested on real data,
 because real data only started flowing on 2026-11-18.
@@ -495,7 +503,7 @@ build a track record (and prune old posts there); measure the crowd signal again
 classifier on the Stocktwits labels and adopt it only if it beats the baseline out of sample; use
 rates and credit as a risk-on / risk-off filter; SEC earnings against the live service; covered
 calls, cash-secured puts and defined-risk spreads (never an uncovered sale); price history for
-a cap on the options sleeve by exposure rather than premium;
+a record of performance over time, by sleeve and against the index;
 Reddit via a registered app; performance attribution;
 multi-user auth; scheduled end-of-day risk and compliance runs; Postgres migrations via Alembic; a
 data-licensing review before selling derived signals. A live broker would come last, behind the

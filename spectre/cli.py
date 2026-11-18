@@ -120,6 +120,17 @@ def risk(portfolio_id: int, db: str | None = typer.Option(None, "--db"),
     console.print(f"[bold]{p['name']}[/] as of {p['as_of']}  value {_money(p['total_value'])} {p['base_currency']}")
 
     v = r["var"]
+    e = v.get("exposure")
+    if e and e["net_pct"] is not None:
+        by = e["by"]
+        console.print(f"Market exposure {_money(e['net'])} = [bold]{e['net_pct']:.0%}[/] of the portfolio's value: "
+                      f"stocks and funds {_money(by['stocks_and_funds'])}, coins {_money(by['coins'])}, "
+                      f"options {_money(by['options_delta_equivalent'])} by delta (they cost {_money(e['option_premium'])}).")
+    if v.get("options_by_delta"):
+        console.print("[dim]Options are counted through their delta: a first-order estimate that ignores gamma, "
+                      "volatility and time decay.[/]")
+    if v.get("not_modelled"):
+        console.print(f"[yellow]Not in the risk numbers: {', '.join(v['not_modelled'])}[/]")
     if v.get("methods"):
         t = Table(
             "method", "VaR", "VaR %", "ES", "ES %",
@@ -661,10 +672,11 @@ def _broker(name: str, session=None):
     return PaperBroker()
 
 
-def _option_rules(budget: float, per_trade: float, enter: float, min_authors: int):
+def _option_rules(budget: float, per_trade: float, enter: float, min_authors: int, max_exposure: float = 0.0):
     from spectre.signals.options_strategy import OptionRules
 
-    return OptionRules(budget=budget, per_trade=per_trade, enter=enter, min_authors=min_authors)
+    return OptionRules(budget=budget, per_trade=per_trade, enter=enter, min_authors=min_authors,
+                       max_exposure=max_exposure or None)
 
 
 def _fmt_qty(q: float) -> str:
@@ -746,6 +758,7 @@ def bot(portfolio_id: int,
         options_per_trade: float = typer.Option(0.03, help="Options: share of the portfolio spent on one new position"),
         options_enter: float = typer.Option(1.0, help="Options: how strong the read must be (absolute score)"),
         options_min_authors: int = typer.Option(10, help="Options: fewest distinct authors behind a read"),
+        max_exposure: float = typer.Option(1.0, help="Most market the portfolio may carry, as a multiple of its value, counting options by delta; stops new calls beyond it (0 = no cap)"),
         crypto: bool = typer.Option(False, help="Also run the coin book (trades at any hour)"),
         crypto_invest: float = typer.Option(0.10, help="Crypto: share of the portfolio the coin book may hold"),
         crypto_top: int = typer.Option(3, help="Crypto: how many coins to hold at most"),
@@ -760,7 +773,7 @@ def bot(portfolio_id: int,
             r, coins, actions, notes = _kairos_cycle(
                 s, portfolio_id, broker, top_n=top_n, invest=invest, enter=enter, exit_below=exit_below, lookback=lookback,
                 min_authors=min_authors, dry_run=dry_run, options=options,
-                option_rules=_option_rules(options_budget, options_per_trade, options_enter, options_min_authors),
+                option_rules=_option_rules(options_budget, options_per_trade, options_enter, options_min_authors, max_exposure),
                 crypto=crypto, crypto_invest=crypto_invest, crypto_top=crypto_top,
                 stop_loss=stop_loss, crypto_stop_loss=crypto_stop_loss)
         for note in notes:
@@ -806,6 +819,7 @@ def autopilot(portfolio_id: int,
               options: bool = typer.Option(False, help="Also run the options sleeve (bought calls and puts; needs Alpaca keys)"),
               options_budget: float = 0.20, options_per_trade: float = 0.03, options_enter: float = 1.0,
               options_min_authors: int = 10,
+              max_exposure: float = typer.Option(1.0, help="Most market the portfolio may carry, as a multiple of its value, counting options by delta; stops new calls beyond it (0 = no cap)"),
               crypto: bool = typer.Option(False, help="Also run the coin book, which trades at any hour"),
               crypto_invest: float = 0.10, crypto_top: int = 3,
               stop_loss: float = typer.Option(0.08, help="Sell a stock that falls this far below its average cost (0 = no stop)"),
@@ -841,7 +855,8 @@ def autopilot(portfolio_id: int,
                 r, coins, actions, notes = _kairos_cycle(
                     s, portfolio_id, broker, top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
                     lookback=lookback, min_authors=min_authors, options=options,
-                    option_rules=_option_rules(options_budget, options_per_trade, options_enter, options_min_authors),
+                    option_rules=_option_rules(options_budget, options_per_trade, options_enter, options_min_authors,
+                                               max_exposure),
                     crypto=crypto, crypto_invest=crypto_invest, crypto_top=crypto_top,
                     stop_loss=stop_loss, crypto_stop_loss=crypto_stop_loss)
         except Exception as exc:  # one bad cycle (a network blip, a broker error) must not stop the run
@@ -1143,6 +1158,7 @@ def run(host: str = typer.Option("127.0.0.1", envvar="SPECTRE_HOST", help="0.0.0
         invest: float = typer.Option(0.70, envvar="SPECTRE_INVEST", help="Share of the portfolio for stocks"),
         options: bool = typer.Option(True, envvar="SPECTRE_OPTIONS", help="Trade bought calls and puts (Alpaca only)"),
         options_budget: float = typer.Option(0.20, envvar="SPECTRE_OPTIONS_BUDGET"),
+        max_exposure: float = typer.Option(1.0, envvar="SPECTRE_MAX_EXPOSURE", help="Most market the portfolio may carry, as a multiple of its value, counting options by delta; stops new calls beyond it (0 = no cap)"),
         crypto: bool = typer.Option(True, envvar="SPECTRE_CRYPTO", help="Trade coins, around the clock"),
         crypto_invest: float = typer.Option(0.10, envvar="SPECTRE_CRYPTO_INVEST"),
         stop_loss: float = typer.Option(0.08, envvar="SPECTRE_STOP_LOSS", help="Stocks: sell this far below average cost (0 = off)"),
@@ -1216,8 +1232,8 @@ def run(host: str = typer.Option("127.0.0.1", envvar="SPECTRE_HOST", help="0.0.0
                       minutes=0.0, every=every, warmup=min(every, 10.0), top_n=5, invest=invest, enter=0.2, exit_below=0.0,
                       lookback=lookback, min_authors=min_authors, broker="alpaca" if use_alpaca else "paper",
                       options=options and use_alpaca, options_budget=options_budget, options_per_trade=0.03,
-                      options_enter=1.0, options_min_authors=10, crypto=crypto, crypto_invest=crypto_invest, crypto_top=3,
-                      stop_loss=stop_loss, crypto_stop_loss=crypto_stop_loss, db=db)
+                      options_enter=1.0, options_min_authors=10, max_exposure=max_exposure, crypto=crypto,
+                      crypto_invest=crypto_invest, crypto_top=3, stop_loss=stop_loss, crypto_stop_loss=crypto_stop_loss, db=db)
             break  # it only returns when asked to stop
         except KeyboardInterrupt:
             break
