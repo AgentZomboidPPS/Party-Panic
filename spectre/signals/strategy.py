@@ -36,11 +36,12 @@ from spectre.execution.brokers import Broker, PaperBroker
 from spectre.execution.guard import TradingLimits, execute
 from spectre.marketdata.prices import latest_price_date, latest_prices
 from spectre.marketdata.universe import lot_size
-from spectre.models import Security, Side, Trade
+from spectre.models import Fill, Order, Security, Side, Trade
 from spectre.portfolio.positions import average_costs, value_portfolio
 from spectre.portfolio.settlement import sale_restrictions
 from spectre.signals.aggregate import BEAR_T, BULL_T
 from spectre.signals.models import SearchTrend, SocialPost
+from spectre.signals.sources.base import utcnow
 from spectre.trading import oms
 
 BOT_ACTOR = "kairos"
@@ -193,10 +194,14 @@ def run_once(
     at: datetime | None = None,
     asset_classes: tuple[str, ...] = STOCKS,
     stop_loss: float | None = None,
+    min_hold_minutes: float = 0.0,
 ) -> BotReport:
     """One decision cycle for one kind of asset: read the crowd, decide targets, trade the difference.
     `invest` is the share of the whole portfolio this book may hold; `stop_loss` (0.08 = 8%) is
-    how far below its average cost a holding may fall before it is sold regardless."""
+    how far below its average cost a holding may fall before it is sold regardless.
+    `min_hold_minutes` stops a change of mind from counting until a holding is that old: the
+    crowd read wobbles from one cycle to the next, and every round trip costs the spread and,
+    for coins, half a percent in fees. The stop-loss is not held back by it."""
     broker = broker or PaperBroker()
     limits = limits or TradingLimits.from_settings()
     signals = [s for s in live_signals(session, lookback_minutes, min_posts, min_authors, at) if s.asset_class in asset_classes]
@@ -256,6 +261,15 @@ def run_once(
     # Exits first: they free cash and reduce risk.
     gone: set[int] = set()
     costs = average_costs(session, portfolio_id) if stop_loss else {}
+    now = at or utcnow()
+    bought: dict[int, datetime] = {}
+    if min_hold_minutes > 0 and held:
+        for sid, when in session.execute(
+            select(Order.security_id, func.max(Fill.filled_at)).join(Fill, Fill.order_id == Order.id)
+            .where(Order.portfolio_id == portfolio_id, Order.side == Side.BUY.value, Order.security_id.in_(list(held)))
+            .group_by(Order.security_id)
+        ):
+            bought[sid] = when.replace(tzinfo=None)
     for sid in held:
         sig = by_sid.get(sid)
         price, cost = float(book.at[sid, "price"]), costs.get(sid)
@@ -267,7 +281,14 @@ def run_once(
             continue
         if sig is None or sig.price is None or sig.score > exit_below:
             continue  # no fresh read on this name: hold rather than trade on silence
-        sell(sig, f"score {sig.score:+.2f} fell to the exit level")
+        why = f"score {sig.score:+.2f} fell to the exit level"
+        age = (now - bought[sid]).total_seconds() / 60 if sid in bought else None
+        if age is not None and age < min_hold_minutes:
+            report.actions.append({"ticker": sig.ticker, "side": "SELL", "quantity": held[sid], "price": sig.price, "outcome": "skipped",
+                                   "why": f"{why}; but it was bought {age:.0f} minutes ago and is kept at least "
+                                          f"{min_hold_minutes:.0f} before a change of mind counts"})
+            continue
+        sell(sig, why)
 
     # Still well over the allowance (it was lowered, or prices ran): let go of the weakest
     # reads outside the top names until the book fits again.

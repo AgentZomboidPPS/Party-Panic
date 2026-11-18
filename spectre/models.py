@@ -213,6 +213,27 @@ class NavSnapshot(Base):
     benchmark: Mapped[float | None] = mapped_column(Float)  # price of the yardstick (SPY) at that moment
 
 
+class BotDecision(Base):
+    """One line of the bot's thinking: an order it placed, something it chose not to do and why,
+    or simply that it looked and found nothing to do. The log on a screen, kept in the book."""
+
+    __tablename__ = "bot_decisions"
+    __table_args__ = (Index("ix_bot_decision_portfolio_at", "portfolio_id", "at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    portfolio_id: Mapped[int] = mapped_column(ForeignKey("portfolios.id"))
+    at: Mapped[datetime] = mapped_column(DateTime)
+    book: Mapped[str] = mapped_column(String(16))  # stocks | options | coins | system
+    ticker: Mapped[str | None] = mapped_column(String(32))
+    side: Mapped[str | None] = mapped_column(String(4))
+    quantity: Mapped[float | None] = mapped_column(Float)
+    price: Mapped[float | None] = mapped_column(Float)
+    # executed | skipped | blocked | rejected by compliance | idle (looked, nothing to do) | note
+    outcome: Mapped[str] = mapped_column(String(32))
+    why: Mapped[str | None] = mapped_column(Text)
+    order_id: Mapped[int | None] = mapped_column(Integer)
+
+
 # --------------------------------------------------------------------------- trading
 
 

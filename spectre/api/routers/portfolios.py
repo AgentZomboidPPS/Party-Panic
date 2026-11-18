@@ -144,7 +144,26 @@ def book_trade(portfolio_id: int, body: TradeIn, db: DB):
 
 @router.get("/portfolios/{portfolio_id}/positions")
 def positions(portfolio_id: int, db: DB, as_of: date | None = None) -> dict:
-    return value_portfolio(db, portfolio_id, as_of).to_dict()
+    """Valued holdings, each with what it cost on average and the profit or loss still open on it."""
+    from spectre.portfolio.positions import average_costs
+
+    valued = value_portfolio(db, portfolio_id, as_of)
+    out = valued.to_dict()
+    costs = average_costs(db, portfolio_id, valued.as_of)
+    for p in out["positions"]:
+        cost = costs.get(p["security_id"])
+        p["average_cost"] = cost
+        p["open_pnl"] = (p["price"] - cost) * p["quantity"] * p["multiplier"] * p.get("fx_rate", 1.0) if cost else None
+        p["open_pnl_pct"] = p["price"] / cost - 1 if cost else None
+    return out
+
+
+@router.get("/portfolios/{portfolio_id}/activity")
+def activity(portfolio_id: int, db: DB, limit: int = 60, include_idle: bool = False) -> dict:
+    """What the bot has been deciding, newest first, with its reasons; and when it last looked."""
+    from spectre.signals.journal import recent
+
+    return recent(db, portfolio_id, limit, include_idle)
 
 
 @router.get("/portfolios/{portfolio_id}/report")

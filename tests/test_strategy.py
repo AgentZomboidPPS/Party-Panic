@@ -191,6 +191,47 @@ def test_stop_loss_sells_whatever_the_crowd_says_and_the_name_rests_for_the_day(
         assert cycle(s, dry_run=True).actions == [], "the rest-of-the-day pause applies with or without a stop configured"
 
 
+TURNS = ["$NVDA rolling over hard now", "That $NVDA guide was a disaster", "Out of $NVDA completely, the trade is done",
+         "Export rules just gutted the $NVDA story", "$NVDA breaking the 50 day, this is not a dip to buy",
+         "Margins guided down at $NVDA, sell the news", "Short $NVDA from here with a tight stop",
+         "Everyone is trapped long $NVDA at the highs"]
+
+
+def _bought_then_the_crowd_turned(factory, pid, pipe):
+    """13 NVDA bought a quarter of an hour into the story; half an hour in, eight new voices turn bearish."""
+    with factory() as s:
+        run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5)
+        fill = s.execute(select(Order)).scalar_one().fills[0]
+        fill.filled_at = T0 + timedelta(minutes=15)
+        s.commit()
+    pipe.process_posts([_post(f"z{a}", f"turn{a}", t, "Bearish", 30 + a, {"NVDA": 148.0}) for a, t in enumerate(TURNS)])
+
+
+def test_a_change_of_mind_does_not_count_until_the_holding_is_old_enough(book):
+    factory, pid, pipe = book
+    _bought_then_the_crowd_turned(factory, pid, pipe)
+    with factory() as s:
+        # Thirty minutes after buying the crowd has turned: with an hour's minimum hold nothing is sold yet...
+        soon = run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5, min_hold_minutes=60, stop_loss=0.08, at=T0 + timedelta(minutes=45))
+        (held_back,) = soon.actions
+        assert held_back["outcome"] == "skipped" and "bought 30 minutes ago" in held_back["why"] and "at least 60" in held_back["why"]
+        assert float(value_portfolio(s, pid).positions["quantity"].sum()) == 13
+        # ...but the stop-loss does not wait for anything.
+        _set_price(s, "NVDA", 130.0)
+        stopped = run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5, min_hold_minutes=60, stop_loss=0.08, at=T0 + timedelta(minutes=50))
+        assert stopped.actions[0]["side"] == "SELL" and "stop" in stopped.actions[0]["why"] and stopped.actions[0]["outcome"] == "executed"
+
+
+def test_once_old_enough_a_turned_crowd_sells_as_before(book):
+    factory, pid, pipe = book
+    _bought_then_the_crowd_turned(factory, pid, pipe)
+    with factory() as s:
+        later = run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5, min_hold_minutes=60, at=T0 + timedelta(minutes=80))
+        assert [(a["side"], a["outcome"]) for a in later.actions] == [("SELL", "executed")]
+        no_rule = run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5, at=T0 + timedelta(minutes=80))
+        assert no_rule.actions == [], "already sold; and with no minimum hold the rule simply does not apply"
+
+
 def test_an_order_the_broker_does_not_fill_is_withdrawn_not_left_open(book):
     from spectre.execution.brokers import BrokerReject
 

@@ -37,5 +37,9 @@ def prune(session: Session, post_days: int = 30, market_detail_days: int = 7, no
     markets = session.execute(
         delete(PredictionMarket).where(PredictionMarket.snapshot_at < cutoff, PredictionMarket.id.not_in(keep))
     ).rowcount
+    # The journal's "looked, nothing to do" lines are only useful while fresh; real decisions stay.
+    from spectre.models import BotDecision
+
+    session.execute(delete(BotDecision).where(BotDecision.at < now - timedelta(days=2), BotDecision.outcome == "idle"))
     session.commit()
     return {"posts": posts, "price_ticks": ticks, "market_snapshots": markets}

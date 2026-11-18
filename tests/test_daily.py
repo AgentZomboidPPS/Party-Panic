@@ -65,3 +65,52 @@ def test_one_report_a_day(book):  # noqa: F811
         assert not daily.already_reported(s, pid, T0.date())
         daily.mark_reported(s, pid, T0.date())
         assert daily.already_reported(s, pid, T0.date()) and not daily.already_reported(s, pid, date(2026, 11, 19))
+
+
+def test_every_cycle_is_written_to_the_journal_with_its_reasons(book):  # noqa: F811
+    from datetime import timedelta
+
+    from spectre.signals import journal
+
+    factory, pid, _ = book
+    t0 = datetime(2026, 11, 18, 15, 0)
+    with factory() as s:
+        r = run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5)
+        journal.record_cycle(s, pid, [("stocks", a) for a in r.actions], ["stock market open"], r.targets, at=t0)
+        skipped = {"ticker": "BTC", "side": "SELL", "quantity": 0.05, "price": 62_000.0, "outcome": "skipped",
+                   "why": "score -0.08 fell to the exit level; held until 2026-11-19"}
+        blocked = {"ticker": "AMD", "side": "BUY", "quantity": 3, "price": 520.0, "outcome": "blocked", "why": "score +1.2",
+                   "detail": "broker: not filled within 20s; cancelled", "order_id": 99}
+        journal.record_cycle(s, pid, [("coins", skipped), ("stocks", blocked)], [], at=t0 + timedelta(minutes=10))
+        journal.record_cycle(s, pid, [], [], ["NVDA", "ETH"], at=t0 + timedelta(minutes=20))
+
+        feed = journal.recent(s, pid)
+        assert feed["last_looked_at"] == "2026-11-18T15:20:00", "a cycle that did nothing still counts as having looked"
+        rows = feed["decisions"]
+        assert [(d["book"], d["ticker"], d["outcome"]) for d in rows] == [
+            ("stocks", "AMD", "blocked"), ("coins", "BTC", "skipped"), ("stocks", "NVDA", "executed"), ("system", None, "note")]
+        assert rows[0]["why"] == "score +1.2 — broker: not filled within 20s; cancelled", "the reason and what stopped it"
+        assert rows[2]["quantity"] == 13 and rows[2]["price"] == 150.0 and rows[2]["why"].startswith("score +") and rows[2]["order_id"]
+        idle = journal.recent(s, pid, include_idle=True)["decisions"][0]
+        assert idle["outcome"] == "idle" and "NVDA, ETH" in idle["why"]
+        assert journal.recent(s, 999)["last_looked_at"] is None
+
+
+def test_the_api_serves_the_journal_and_what_each_holding_cost(book):  # noqa: F811
+    from fastapi.testclient import TestClient
+
+    from spectre.api.app import create_app
+    from spectre.signals import journal
+
+    factory, pid, _ = book
+    with factory() as s:
+        r = run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5)  # 13 NVDA at 150
+        journal.record_cycle(s, pid, [("stocks", a) for a in r.actions], [])
+        from tests.test_strategy import _set_price
+
+        _set_price(s, "NVDA", 156.0)
+        web = TestClient(create_app(engine=s.get_bind()))
+        feed = web.get(f"/portfolios/{pid}/activity").json()
+        assert feed["minutes_since"] < 1 and feed["decisions"][0]["ticker"] == "NVDA"
+        (pos,) = web.get(f"/portfolios/{pid}/positions").json()["positions"]
+        assert pos["average_cost"] == 150.0 and pos["open_pnl"] == 13 * 6.0 and round(pos["open_pnl_pct"], 4) == 0.04

@@ -749,7 +749,7 @@ CRYPTO_STREAMS = "BTC.X,ETH.X,SOL.X,XRP.X,DOGE.X"
 
 def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, exit_below, lookback, min_authors,
                   dry_run=False, options=False, option_rules=None, crypto=False, crypto_invest=0.10, crypto_top=3,
-                  stop_loss=None, crypto_stop_loss=None):
+                  stop_loss=None, crypto_stop_loss=None, min_hold=60.0, crypto_min_hold=240.0, crypto_enter=0.5):
     """One full KAIROS cycle: stocks and options while the stock market is open, coins at any hour.
     Returns (stock report or None, coin report or None, every action taken, notes worth printing)."""
     from spectre.signals.strategy import CRYPTO, run_once
@@ -771,26 +771,36 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
             if rec["cash"]:
                 notes.append(f"reconcile cash: {rec['cash']['difference']:+,.2f} -> {rec['cash']['action']}")
     report, actions = None, []
+    booked: list[tuple[str, dict]] = []  # (which book, what was done) for the journal
     if market_open:
         report = run_once(s, portfolio_id, route, top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
-                          lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run, stop_loss=stop_loss or None)
+                          lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run, stop_loss=stop_loss or None,
+                          min_hold_minutes=min_hold)
         actions += report.actions
+        booked += [("stocks", a) for a in report.actions]
         if options:
             from spectre.execution.alpaca import AlpacaClient
             from spectre.signals.options_strategy import run_options_once
 
-            actions += run_options_once(s, portfolio_id, getattr(route, "client", None) or AlpacaClient(), route,
-                                        lookback_minutes=lookback, dry_run=dry_run, rules=option_rules).actions
+            done = run_options_once(s, portfolio_id, getattr(route, "client", None) or AlpacaClient(), route,
+                                    lookback_minutes=lookback, dry_run=dry_run, rules=option_rules).actions
+            actions += done
+            booked += [("options", a) for a in done]
     coins = None
     if crypto:
-        coins = run_once(s, portfolio_id, route, top_n=crypto_top, invest=crypto_invest, enter=enter, exit_below=exit_below,
-                         lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run, asset_classes=CRYPTO,
-                         stop_loss=crypto_stop_loss or None)
+        # Coins cost about half a percent in fees per round trip, so they need a stronger read to
+        # get in and are kept longer before a change of mind counts.
+        coins = run_once(s, portfolio_id, route, top_n=crypto_top, invest=crypto_invest, enter=max(enter, crypto_enter),
+                         exit_below=exit_below, lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run,
+                         asset_classes=CRYPTO, stop_loss=crypto_stop_loss or None, min_hold_minutes=crypto_min_hold)
         actions += coins.actions
+        booked += [("coins", a) for a in coins.actions]
     if not dry_run:
         from spectre.portfolio.performance import record_snapshot
+        from spectre.signals.journal import record_cycle
 
         record_snapshot(s, portfolio_id)  # the track record: what it was worth after this cycle
+        record_cycle(s, portfolio_id, booked, notes, (report.targets if report else []) + (coins.targets if coins else []))
     return report, coins, actions, notes
 
 
@@ -816,6 +826,9 @@ def bot(portfolio_id: int,
         crypto_top: int = typer.Option(3, help="Crypto: how many coins to hold at most"),
         stop_loss: float = typer.Option(0.08, help="Sell a stock that falls this far below its average cost (0 = no stop)"),
         crypto_stop_loss: float = typer.Option(0.12, help="The same for coins, which move more"),
+        min_hold: float = typer.Option(60.0, help="Minutes a stock is kept before a change of mind by the crowd can sell it (the stop-loss is not held back)"),
+        crypto_min_hold: float = typer.Option(240.0, help="The same for coins, which cost about 0.5% in fees per round trip"),
+        crypto_enter: float = typer.Option(0.5, help="Crypto: minimum score to buy (higher than for stocks, because of the fees)"),
         db: str | None = typer.Option(None, "--db")):
     """KAIROS, the trend bot (paper only): buy what the crowd is leaning into, sell what it has turned on."""
     import time as _time
@@ -827,7 +840,8 @@ def bot(portfolio_id: int,
                 min_authors=min_authors, dry_run=dry_run, options=options,
                 option_rules=_option_rules(options_budget, options_per_trade, options_enter, options_min_authors, max_exposure),
                 crypto=crypto, crypto_invest=crypto_invest, crypto_top=crypto_top,
-                stop_loss=stop_loss, crypto_stop_loss=crypto_stop_loss)
+                stop_loss=stop_loss, crypto_stop_loss=crypto_stop_loss, min_hold=min_hold, crypto_min_hold=crypto_min_hold,
+                crypto_enter=crypto_enter)
         for note in notes:
             console.print(f"[dim]{note}[/]")
         shown = r or coins
@@ -876,6 +890,9 @@ def autopilot(portfolio_id: int,
               crypto_invest: float = 0.10, crypto_top: int = 3,
               stop_loss: float = typer.Option(0.08, help="Sell a stock that falls this far below its average cost (0 = no stop)"),
               crypto_stop_loss: float = typer.Option(0.12, help="The same for coins"),
+              min_hold: float = typer.Option(60.0, help="Minutes a stock is kept before a change of mind can sell it"),
+              crypto_min_hold: float = typer.Option(240.0, help="The same for coins"),
+              crypto_enter: float = typer.Option(0.5, help="Crypto: minimum score to buy"),
               db: str | None = typer.Option(None, "--db")):
     """Run the whole thing: live data in, a paper trading decision every few minutes.
 
@@ -910,7 +927,8 @@ def autopilot(portfolio_id: int,
                     option_rules=_option_rules(options_budget, options_per_trade, options_enter, options_min_authors,
                                                max_exposure),
                     crypto=crypto, crypto_invest=crypto_invest, crypto_top=crypto_top,
-                    stop_loss=stop_loss, crypto_stop_loss=crypto_stop_loss)
+                    stop_loss=stop_loss, crypto_stop_loss=crypto_stop_loss, min_hold=min_hold,
+                    crypto_min_hold=crypto_min_hold, crypto_enter=crypto_enter)
         except Exception as exc:  # one bad cycle (a network blip, a broker error) must not stop the run
             console.print(f"{stamp}  [red]cycle failed[/]: {type(exc).__name__}: {exc}")
             return
@@ -1309,6 +1327,9 @@ def run(host: str = typer.Option("127.0.0.1", envvar="SPECTRE_HOST", help="0.0.0
         crypto_invest: float = typer.Option(0.10, envvar="SPECTRE_CRYPTO_INVEST"),
         stop_loss: float = typer.Option(0.08, envvar="SPECTRE_STOP_LOSS", help="Stocks: sell this far below average cost (0 = off)"),
         crypto_stop_loss: float = typer.Option(0.12, envvar="SPECTRE_CRYPTO_STOP_LOSS"),
+        min_hold: float = typer.Option(60.0, envvar="SPECTRE_MIN_HOLD", help="Stocks: minutes held before a change of mind can sell"),
+        crypto_min_hold: float = typer.Option(240.0, envvar="SPECTRE_CRYPTO_MIN_HOLD"),
+        crypto_enter: float = typer.Option(0.5, envvar="SPECTRE_CRYPTO_ENTER", help="Crypto: minimum score to buy"),
         min_authors: int = typer.Option(8, envvar="SPECTRE_MIN_AUTHORS"),
         lookback: int = typer.Option(45, envvar="SPECTRE_LOOKBACK"),
         symbols: str = typer.Option("NVDA,TSLA,SPY,AAPL,AMD,PLTR,MSFT,META,AMZN,QQQ,GOOGL,INTC", envvar="SPECTRE_SYMBOLS"),
@@ -1416,7 +1437,8 @@ def run(host: str = typer.Option("127.0.0.1", envvar="SPECTRE_HOST", help="0.0.0
                       lookback=lookback, min_authors=min_authors, broker="alpaca" if use_alpaca else "paper",
                       options=options and use_alpaca, options_budget=options_budget, options_per_trade=0.03,
                       options_enter=1.0, options_min_authors=10, max_exposure=max_exposure, crypto=crypto,
-                      crypto_invest=crypto_invest, crypto_top=3, stop_loss=stop_loss, crypto_stop_loss=crypto_stop_loss, db=db)
+                      crypto_invest=crypto_invest, crypto_top=3, stop_loss=stop_loss, crypto_stop_loss=crypto_stop_loss,
+                      min_hold=min_hold, crypto_min_hold=crypto_min_hold, crypto_enter=crypto_enter, db=db)
             break  # it only returns when asked to stop
         except KeyboardInterrupt:
             break

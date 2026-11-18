@@ -152,6 +152,11 @@ database on the volume. Not yet checked: a deployment on a public host.
   settlement, the state of the signal check, and anything that needs a person. With
   `--if-closed` it prints once per trading day, after the close, and nothing otherwise, so a
   scheduler can call it hourly. Also `GET /portfolios/N/report`.
+- **The bot's journal (`signals/journal.py`).** Every decision cycle is written down: orders
+  placed, things it chose not to do and why (a settlement hold, the exposure cap, a holding
+  too young to sell), and a line when it looked and found nothing to do. The dashboard's
+  "What KAIROS is doing" card reads it, shows when the bot last looked and whether trading is
+  on, and has a button for the kill switch. `GET /portfolios/N/activity`.
 - **Settlement (`portfolio/settlement.py`).** A trade is agreed today and the money moves later:
   stocks, funds and options settle the next business day (two days before 28 May 2024, three
   before September 2017), coins at once; weekends and exchange holidays are worked out, not
@@ -390,12 +395,15 @@ crowd turns against it, and held when there is no fresh read, with one exception
 **stop-loss** (`--stop-loss`, 8% for stocks; `--crypto-stop-loss`, 12% for coins; 0 turns it
 off) sells anything that has fallen that far below its average cost, whatever the crowd says
 and even when nobody is talking about it. There is no profit target on shares. Nothing sold
-today is bought back today.
+today is bought back today. A change of mind by the crowd does not sell a holding until it has
+been held for `--min-hold` minutes (60 for stocks, 240 for coins): the read wobbles from one
+cycle to the next and every round trip has a cost. The stop-loss is never held back by this.
 If the book is more than five points over its allowance, the weakest reads outside the top
 names are sold until it fits. An order the broker does not fill is withdrawn, not left open.
 
 **Coin book (`--crypto`).** The same rule on coins, with its own allowance (`--crypto-invest`,
-10%) and its own top list (`--crypto-top`, 3). It runs at every cycle, including nights and
+10%) and its own top list (`--crypto-top`, 3). Coins cost about half a percent in fees per
+round trip, so the bar to buy is higher (`--crypto-enter`, 0.5). It runs at every cycle, including nights and
 weekends when the stock market is closed; stocks and options are only traded while it is open.
 
 **Settlement holds.** When the portfolio has the `no_good_faith_violations` rule (new ones do),
