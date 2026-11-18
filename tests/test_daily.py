@@ -141,3 +141,22 @@ def test_needs_attention_lists_what_a_person_should_look_at(book):  # noqa: F811
         lines = daily.needs_attention(s, pid, liveness=False)
         assert lines[0].startswith("trading is halted (checking)") and "buying is paused: the account is 6.5% down today" in lines[1]
         assert "buying is paused" in daily.render(daily.daily_report(s, pid))
+
+
+def test_the_portfolio_kairos_is_trading_is_marked_so_the_dashboard_opens_on_it():
+    from fastapi.testclient import TestClient
+
+    from spectre.api.app import create_app
+    from spectre.db import init_db, make_engine, make_session_factory
+    from spectre.models import Portfolio
+    from spectre.signals import journal
+
+    e = make_engine("sqlite://")
+    init_db(e)
+    with make_session_factory(e)() as s:
+        s.add_all([Portfolio(name="old paper book", base_currency="USD"), Portfolio(name="live", base_currency="USD")])
+        s.commit()
+        web = TestClient(create_app(engine=e))
+        assert [p["is_live"] for p in web.get("/portfolios").json()] == [False, False]
+        journal.record_cycle(s, 2, [], [])
+        assert [(p["name"], p["is_live"]) for p in web.get("/portfolios").json()] == [("old paper book", False), ("live", True)]

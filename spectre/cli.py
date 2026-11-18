@@ -424,7 +424,7 @@ def calibrate(db: str | None = typer.Option(None, "--db")):
 def signal_check(horizon: int = typer.Option(60, help="Minutes ahead to look at what the price did"),
                  days: float = typer.Option(30.0, help="How far back to measure"),
                  crypto: bool = typer.Option(False, help="Measure the coins instead of stocks and funds"),
-                 sweep: bool = typer.Option(False, "--sweep", help="Compare 30, 60, 120 and 240 minutes ahead side by side"),
+                 sweep: bool = typer.Option(False, "--sweep", help="Compare several horizons side by side (30 minutes to 4 hours; an hour to a day for coins)"),
                  lookback: int = typer.Option(45, help="Minutes of conversation behind each read (as the bot uses)"),
                  min_authors: int = typer.Option(8, help="Fewest distinct authors behind a read (as the bot uses)"),
                  enter: float | None = typer.Option(None, help="Score that counts as the buy zone (default: 0.2 for stocks, 0.5 for coins, as the bot uses)"),
@@ -447,8 +447,13 @@ def signal_check(horizon: int = typer.Option(60, help="Minutes ahead to look at 
     try:
         with _session(db) as s:
             if sweep:
-                r = intraday.sweep(s, AlpacaClient(), days=days, lookback=lookback, min_authors=min_authors, enter=enter, top_n=top,
-                                   asset_classes=CRYPTO if crypto else STOCKS, round_trip_cost=intraday.round_trip_cost(crypto))
+                from spectre.trading.costs import round_trip
+
+                cost, measured = round_trip(s, "Coins" if crypto else "Stocks and funds", intraday.round_trip_cost(crypto))
+                r = intraday.sweep(s, AlpacaClient(), horizons=intraday.COIN_HORIZONS if crypto else intraday.HORIZONS, days=days,
+                                   lookback=lookback, min_authors=min_authors, enter=enter, top_n=top,
+                                   asset_classes=CRYPTO if crypto else STOCKS, round_trip_cost=cost)
+                r["cost_is_measured"] = measured
             else:
                 r = intraday.check(s, AlpacaClient(), days=days, horizon=horizon, lookback=lookback, min_authors=min_authors,
                                    enter=enter, top_n=top, asset_classes=CRYPTO if crypto else STOCKS)
@@ -469,7 +474,8 @@ def signal_check(horizon: int = typer.Option(60, help="Minutes ahead to look at 
         console.print(f"[bold]{r['verdict']}[/]")
         console.print(f"[dim]A horizon needs {r['enough_windows']} separate windows and a t of {r['bar']:.1f} or more (higher than the usual 2, "
                       f"because {r['looks']} horizons are being looked at and the best of several flatters). \"After costs\" takes off "
-                      f"{r['round_trip_cost']:.2%} for getting in and out once.[/]")
+                      f"{r['round_trip_cost']:.2%} for getting in and out once "
+                      f"({'measured from fills so far' if r['cost_is_measured'] else 'an estimate until enough fills are measured'}).[/]")
         return
     if not r["samples"]:
         console.print(r["verdict"])
@@ -1195,6 +1201,48 @@ def performance(portfolio_id: int, db: str | None = typer.Option(None, "--db")):
         t.add_row("Broker fees outside any one trade", "", "", "", "", signed(r["account_fees_and_adjustments"]), "", "")
     console.print(t)
     console.print("[dim]Banked = profit already taken by selling. Still open = at today's prices; it can still change.[/]")
+
+
+@app.command()
+def costs(portfolio_id: int = typer.Argument(None, help="Default: every portfolio"),
+          backfill: bool = typer.Option(False, "--backfill", help="First give older orders an arrival price from Alpaca's one-minute history"),
+          db: str | None = typer.Option(None, "--db")):
+    """What trading has cost: each fill against the price when the order was decided, and fees, by book."""
+    from spectre.trading.costs import backfill_arrival_prices, execution_costs
+
+    with _session(db) as s:
+        if backfill:
+            from spectre.execution.alpaca import AlpacaClient, AlpacaError
+
+            try:
+                done = backfill_arrival_prices(s, AlpacaClient(), portfolio_id)
+                console.print(f"Arrival prices filled in from history for {done['filled_in']} order(s); {done['left']} could not be.")
+            except AlpacaError as exc:
+                console.print(f"[red]Alpaca (prices): {exc}[/]")
+        r = execution_costs(s, portfolio_id)
+    if not r["books"]:
+        console.print("Nothing has been traded yet.")
+        return
+
+    def pct(x: float | None) -> str:
+        return "-" if x is None else f"{x:+.3%}"
+
+    t = Table("book", "orders measured", "money moved", "gap to the decision price", "buys", "sells", "fees", "one trip in and out",
+              title="What trading has cost (a plus is a cost)")
+    for b in r["books"]:
+        t.add_row(b["book"], f"{b['orders']}" + (f" (+{b['not_measured']} not)" if b["not_measured"] else ""), f"{b['traded']:,.0f}",
+                  f"{b['slippage']:+,.2f} ({pct(b['slippage_pct'])})", pct(b["buys"]["slippage_pct"]), pct(b["sells"]["slippage_pct"]),
+                  f"{b['fees']:,.2f} ({pct(b['fees_pct'])})", pct(b["round_trip_pct"]) + ("" if b["enough"] else " (few orders)"))
+    console.print(t)
+    if r["worst"]:
+        t = Table("when (UTC)", "order", "decided at", "filled at", "cost", title="Costliest fills")
+        for w in r["worst"]:
+            t.add_row(w["at"].replace("T", " "), f"{w['side']} {_fmt_qty(w['quantity'])} {w['ticker']}", _fmt_px(w["arrival_price"]),
+                      _fmt_px(w["fill_price"]), f"{w['cost']:+,.2f} ({pct(w['cost_pct'])})")
+        console.print(t)
+    console.print(f"[dim]One fill says little: the price moves between deciding and filling, for or against. A book's figure is "
+                  f"treated as measured once {r['enough_orders']} orders stand behind it; the signal check then uses it for its "
+                  "\"after costs\" column.[/]")
 
 
 @app.command()

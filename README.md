@@ -460,13 +460,22 @@ in-between and disliked names relative to the others at the same moment, and how
 KAIROS would have held did against the field. Readings ten minutes apart overlap heavily, so
 evidence is counted in separate windows, and no verdict is offered below thirty of them.
 
-`spectre signal-check --sweep` (add `--crypto` for the coin book) asks the same question 30,
-60, 120 and 240 minutes ahead in one go, to see how far ahead the crowd read says anything.
-Because the best of four horizons flatters, each has to clear a higher bar (a t of 2.5 rather
-than 2), and the edge is also shown after the cost of one trip in and out (about 0.05% for
-stocks, 0.6% for coins, mostly Alpaca's fee): an edge smaller than that is real money lost,
-however real the edge. The Signals tab of the dashboard shows both and fills in as data
+`spectre signal-check --sweep` (add `--crypto` for the coin book) asks the same question at
+several horizons in one go (30 minutes to 4 hours for stocks; an hour to a day for coins, which
+trade round the clock), to see how far ahead the crowd read says anything. Because the best of
+four horizons flatters, each has to clear a higher bar (a t of 2.5 rather than 2), and the edge
+is also shown after the cost of one trip in and out: an edge smaller than that is real money
+lost, however real the edge. The Signals tab of the dashboard shows both and fills in as data
 accumulates.
+
+**What trading costs (`trading/costs.py`, `spectre costs`).** Every order remembers the market
+price SPECTRE held when it was decided, and each fill is judged against it: paying more on a
+buy or receiving less on a sale is a cost. Together with fees from the ledger that gives, per
+book, the cost of one trip in and out. On the first day of live fills that was about 0.06% for
+stocks and 0.58% for coins (nearly all of it Alpaca's 0.25% fee each way). Once a book has
+twenty measured orders its own figure replaces the estimate in the signal check's "after
+costs" column. `spectre costs --backfill` gives orders from before this was kept an arrival
+price from Alpaca's one-minute history.
 
 **Brakes on the whole account.** While the account is more than 10% below the most it has
 been worth, or more than 3% down on the day (`SPECTRE_TRADING_MAX_DRAWDOWN`,

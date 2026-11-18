@@ -150,6 +150,7 @@
   <section class="card c4">
     <h2>Where the profit and loss came from</h2>
     <div id="perf-sleeves"></div>
+    <div id="perf-costs" style="margin-top:14px"></div>
   </section>
 
   <section class="card c12">
@@ -293,6 +294,7 @@ async function refreshPortfolio() {
   const settle = await getJSON(`/portfolios/${id}/settlement`).catch(() => null);
   drawActivity(await getJSON(`/portfolios/${id}/activity?limit=40`).catch(() => null), await getJSON('/trading/status').catch(() => null));
   drawPerformance(await getJSON(`/portfolios/${id}/performance`).catch(() => null));
+  drawCosts(await getJSON(`/portfolios/${id}/costs`).catch(() => null));
   const sentBy = Object.fromEntries(sent.map(r => [r.ticker, r]));
   const tickerOf = Object.fromEntries(secs.map(s => [s.id, s.ticker]));
   $('#asof').textContent = `${pos.portfolio_name} · as of ${pos.as_of} · ${pos.base_currency}`;
@@ -443,6 +445,22 @@ function drawActivity(act, trading) {
         <td style="white-space:nowrap">${note ? '<span class="muted">note</span>' : `${esc(r.side || '')} ${did ? qty(r.quantity) : ''} <b>${esc(r.ticker || '')}</b>${did ? px(r.price) : ''}`}</td>
         <td>${note ? '' : `<span class="pill ${did ? 'done' : r.outcome === 'skipped' ? '' : 'no'}">${esc(did ? 'done' : r.outcome === 'skipped' ? 'held back' : r.outcome)}</span>`}</td>
         <td class="why">${esc(r.why || '')}</td></tr>`; }).join('') + '</tbody></table>';
+}
+
+/* ============================================================ trading costs */
+function drawCosts(c) {
+  const el = $('#perf-costs');
+  const books = ((c && c.books) || []).filter(b => b.orders);
+  if (!books.length) { el.innerHTML = ''; return; }
+  const pct = (x) => x == null ? '–' : (x >= 0 ? '+' : '−') + Math.abs(x * 100).toFixed(2) + '%';
+  const unmeasured = (c.books || []).filter(b => b.not_measured && !b.orders).map(b => b.book.toLowerCase());
+  el.innerHTML = '<div style="font-weight:600;margin-bottom:4px">What trading has cost</div>' +
+    `<table><thead><tr><th>book</th><th class="num">orders</th><th class="num">price gap</th><th class="num">fees</th><th class="num">one round trip</th></tr></thead><tbody>` +
+    books.map(b => `<tr><td><b>${esc(b.book)}</b></td><td class="num">${b.orders}</td><td class="num" title="${fmtMoney(b.slippage)} on ${fmtMoney(b.traded)} moved">${pct(b.slippage_pct)}</td>` +
+      `<td class="num" title="${fmtMoney(b.fees)}">${pct(b.fees_pct)}</td><td class="num"><b>${pct(b.round_trip_pct)}</b>${b.enough ? '' : ' <span class="muted">(few)</span>'}</td></tr>`).join('') +
+    `</tbody></table><div class="muted" style="margin-top:6px">Price gap is how much worse fills were than the price when KAIROS decided (a plus is a cost). ` +
+    `A round trip is getting in and out once, fees included; a signal has to beat that to be worth trading. Figures firm up after ${c.enough_orders} orders in a book.` +
+    (unmeasured.length ? ` Not measured yet: ${esc(unmeasured.join(', '))}.` : '') + `</div>`;
 }
 
 /* ============================================================ performance */
@@ -776,13 +794,13 @@ function signalSweep(r) {
   const pct = (x) => x == null ? '–' : (x >= 0 ? '+' : '−') + Math.abs(x * 100).toFixed(2) + '%';
   const num = (x) => x == null ? '–' : (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(1);
   el.innerHTML = '<div style="font-weight:600;margin-bottom:4px">How far ahead does it say anything?</div>' + books.map(([name, b]) =>
-    `<table style="margin-bottom:8px"><thead><tr><th>${esc(name)}: minutes ahead</th><th class="num">windows</th>` +
-    `<th class="num">top ${b.top_n} vs the rest</th><th class="num">t</th><th class="num">after costs</th></tr></thead><tbody>` +
-    b.horizons.map(h => `<tr><td>${h.horizon_minutes}${h.clears_the_bar ? ' <span class="pill done">clears the bar</span>' : ''}</td>` +
-      `<td class="num">${h.windows}${h.samples && !h.enough ? ' <span class="muted">(too few)</span>' : ''}</td>` +
+    `<table style="margin-bottom:8px"><thead><tr><th>${esc(name)}</th><th class="num">windows</th>` +
+    `<th class="num">top ${b.top_n} vs rest</th><th class="num">t</th><th class="num">after costs</th></tr></thead><tbody>` +
+    b.horizons.map(h => `<tr><td style="white-space:nowrap">${h.horizon_minutes >= 120 ? h.horizon_minutes / 60 + ' h' : h.horizon_minutes + ' min'}${h.clears_the_bar ? ' <span class="pill done">clears the bar</span>' : ''}</td>` +
+      `<td class="num" style="white-space:nowrap">${h.windows}<span class="muted"> / ${b.enough_windows}</span></td>` +
       `<td class="num">${pct(h.edge)}</td><td class="num">${num(h.edge_t)}</td><td class="num">${pct(h.edge_after_costs)}</td></tr>`).join('') +
     `</tbody></table><div style="margin-bottom:10px">${esc(b.verdict)}</div>`).join('') +
-    `<div class="muted">A horizon needs ${books[0][1].enough_windows} separate windows and a t of ${books[0][1].bar.toFixed(1)} or more: higher than the usual 2, because the best of ${books[0][1].looks} horizons flatters. "After costs" takes off one trip in and out (${(r.stocks.round_trip_cost * 100).toFixed(2)}% for stocks, ${(r.coins.round_trip_cost * 100).toFixed(2)}% for coins, mostly fees).</div>`;
+    `<div class="muted">Rows are how far ahead the price is looked at. A horizon needs ${books[0][1].enough_windows} separate windows and a t of ${books[0][1].bar.toFixed(1)} or more: higher than the usual 2, because the best of ${books[0][1].looks} horizons flatters. "After costs" takes off one trip in and out (${(r.stocks.round_trip_cost * 100).toFixed(2)}% for stocks, ${(r.coins.round_trip_cost * 100).toFixed(2)}% for coins, mostly fees; ${r.stocks.cost_is_measured && r.coins.cost_is_measured ? 'measured from fills' : 'estimates until enough fills are measured'}).</div>`;
 }
 
 /* ============================================================ shell */
@@ -804,7 +822,9 @@ function setView(v) {
 }
 $('#nav-portfolio').addEventListener('click', () => setView('portfolio'));
 $('#nav-signals').addEventListener('click', () => setView('signals'));
-$('#portfolio-select').addEventListener('change', (e) => { portfolioId = Number(e.target.value); refresh(); });
+$('#portfolio-select').addEventListener('change', (e) => { portfolioId = Number(e.target.value);
+  try { localStorage.setItem('spectre-portfolio', String(portfolioId)); } catch (err) { /* lasts for this visit */ }
+  refresh(); });
 $('#toggleTable').addEventListener('click', () => { tableMode = !tableMode;
   $('#bubble-chart').classList.toggle('hidden', tableMode); $('#bubble-table').classList.toggle('hidden', !tableMode);
   $('#perf-chart').classList.toggle('hidden', tableMode); $('#perf-table').classList.toggle('hidden', !tableMode);
@@ -825,7 +845,12 @@ window.addEventListener('resize', () => { if (view === 'signals') drawBubbles(la
   try {
     const pfs = await getJSON('/portfolios');
     $('#portfolio-select').innerHTML = pfs.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
-    portfolioId = pfs.length ? pfs[0].id : null;
+    // Open on the portfolio last chosen here; failing that the one KAIROS is trading; failing that the first.
+    let chosen = null;
+    try { chosen = Number(localStorage.getItem('spectre-portfolio')); } catch (e) { /* storage unavailable */ }
+    const start = pfs.find(p => p.id === chosen) || pfs.find(p => p.is_live) || pfs[0];
+    portfolioId = start ? start.id : null;
+    if (start) $('#portfolio-select').value = String(start.id);
   } catch (e) { $('#asof').textContent = 'error: ' + e.message; }
   setView(location.hash === '#signals' ? 'signals' : 'portfolio');
   setInterval(refresh, 10000);

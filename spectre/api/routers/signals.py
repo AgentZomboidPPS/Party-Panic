@@ -211,13 +211,18 @@ def signal_sweep(db: DB, days: float = 30.0, lookback: int = 45, min_authors: in
     from spectre.signals.strategy import CRYPTO, STOCKS
 
     def both() -> dict:
+        from spectre.trading.costs import round_trip
+
         client = AlpacaClient()
-        return {
-            "stocks": intraday.sweep(db, client, days=days, lookback=lookback, min_authors=min_authors, enter=0.2, top_n=5,
-                                     asset_classes=STOCKS, round_trip_cost=intraday.round_trip_cost(False)),
-            "coins": intraday.sweep(db, client, days=days, lookback=lookback, min_authors=min_authors, enter=0.5, top_n=3,
-                                    asset_classes=CRYPTO, round_trip_cost=intraday.round_trip_cost(True)),
-        }
+        out = {}
+        for key, book, crypto in (("stocks", "Stocks and funds", False), ("coins", "Coins", True)):
+            # What a trip in and out costs: measured from SPECTRE's own fills once there are enough, else an estimate.
+            cost, measured = round_trip(db, book, intraday.round_trip_cost(crypto))
+            out[key] = intraday.sweep(db, client, horizons=intraday.COIN_HORIZONS if crypto else intraday.HORIZONS, days=days,
+                                      lookback=lookback, min_authors=min_authors, enter=0.5 if crypto else 0.2,
+                                      top_n=3 if crypto else 5, asset_classes=CRYPTO if crypto else STOCKS, round_trip_cost=cost)
+            out[key]["cost_is_measured"] = measured
+        return out
 
     return _measured(db, ("sweep", days, lookback, min_authors), both)
 

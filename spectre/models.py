@@ -247,6 +247,8 @@ class Order(Base):
     quantity: Mapped[float] = mapped_column(Float)
     order_type: Mapped[str] = mapped_column(String(8), default=OrderType.MARKET.value)
     limit_price: Mapped[float | None] = mapped_column(Float)
+    # The market price SPECTRE held when the order was decided; what fills are judged against.
+    arrival_price: Mapped[float | None] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(20), default=OrderStatus.PENDING.value, index=True)
     filled_quantity: Mapped[float] = mapped_column(Float, default=0.0)
     avg_fill_price: Mapped[float | None] = mapped_column(Float)

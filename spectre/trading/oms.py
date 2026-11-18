@@ -79,10 +79,10 @@ def create_order(
     )
 
     as_of = as_of or latest_price_date(session) or date.today()
-    ref_price = limit_price
-    if ref_price is None:
-        px = latest_prices(session, [security_id], as_of)
-        ref_price = float(px[security_id]) if security_id in px.index else None
+    px = latest_prices(session, [security_id], as_of)
+    market = float(px[security_id]) if security_id in px.index else None
+    order.arrival_price = market
+    ref_price = limit_price if limit_price is not None else market
     if ref_price is None:
         order.reject_reason = f"No reference price for {security.ticker} on or before {as_of}"
         _set_status(session, order, OrderStatus.REJECTED, actor, {"reason": order.reject_reason})

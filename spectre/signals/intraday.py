@@ -245,6 +245,9 @@ def check(session: Session, client, days: float = 30.0, horizon: int = 60, step:
 
 
 HORIZONS = (30, 60, 120, 240)
+# Coins trade round the clock and cost far more to get in and out of, so what matters is whether
+# the read still says anything hours later.
+COIN_HORIZONS = (60, 240, 720, 1440)
 
 
 def round_trip_cost(crypto: bool) -> float:

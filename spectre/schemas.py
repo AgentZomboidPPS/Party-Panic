@@ -100,6 +100,7 @@ class PortfolioOut(ORMModel):
     base_currency: str
     benchmark_id: int | None
     created_at: datetime
+    is_live: bool = False  # the one KAIROS looked at most recently
 
 
 class CashFlowIn(BaseModel):

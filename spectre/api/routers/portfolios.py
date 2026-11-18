@@ -72,7 +72,16 @@ def benchmark_weights(benchmark_id: int, db: DB) -> list[dict]:
 
 @router.get("/portfolios", response_model=list[PortfolioOut])
 def list_portfolios(db: DB):
-    return list(db.execute(select(Portfolio).order_by(Portfolio.id)).scalars())
+    """Every portfolio. `is_live` marks the one KAIROS looked at most recently: where the dashboard opens."""
+    from spectre.models import BotDecision
+
+    live = db.execute(select(BotDecision.portfolio_id).order_by(BotDecision.at.desc()).limit(1)).scalar_one_or_none()
+    out = []
+    for pf in db.execute(select(Portfolio).order_by(Portfolio.id)).scalars():
+        row = PortfolioOut.model_validate(pf)
+        row.is_live = pf.id == live
+        out.append(row)
+    return out
 
 
 @router.post("/portfolios", response_model=PortfolioOut, status_code=201)
@@ -178,6 +187,14 @@ def daily_report(portfolio_id: int, db: DB, day: date | None = None) -> dict:
 
     r = daily.daily_report(db, portfolio_id, day)
     return {**r, "text": daily.render(r)}
+
+
+@router.get("/portfolios/{portfolio_id}/costs")
+def trading_costs(portfolio_id: int, db: DB) -> dict:
+    """What trading has cost: each fill against the price when the order was decided, and fees, by book."""
+    from spectre.trading.costs import execution_costs
+
+    return execution_costs(db, portfolio_id)
 
 
 @router.get("/portfolios/{portfolio_id}/performance")
