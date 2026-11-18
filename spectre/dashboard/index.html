@@ -164,12 +164,12 @@
   </section>
   <aside class="side">
     <div class="card">
-      <h2>Asset class vs benchmark</h2>
-      <div class="legend"><span><i style="background:var(--s1)"></i>portfolio</span><span><i style="background:var(--s2)"></i>benchmark</span></div>
+      <h2 id="exposure-ac-title">Asset class vs benchmark</h2>
+      <div class="legend" id="exposure-ac-legend"><span><i style="background:var(--s1)"></i>portfolio</span><span><i style="background:var(--s2)"></i>benchmark</span></div>
       <div id="exposure-ac"></div>
     </div>
     <div class="card">
-      <h2>Sector — active weight vs benchmark</h2>
+      <h2 id="exposure-sector-title">Sector — active weight vs benchmark</h2>
       <div id="exposure-sector"></div>
     </div>
   </aside>
@@ -318,12 +318,12 @@ async function refreshPortfolio() {
   // holdings with sentiment overlay
   const rows = [...pos.positions].sort((a, b) => b.market_value - a.market_value);
   const maxW = Math.max(...rows.map(r => r.weight), 0.01);
-  $('#holdings').innerHTML = `<table><thead><tr><th>ticker</th><th>name</th><th>class</th><th>sector</th><th class="num">value</th><th class="num" title="Against what it cost on average">open P&amp;L</th><th>weight</th><th class="num">%</th><th title="z-score against the security's own history; the raw average (marked avg) until there is enough history">sentiment</th><th class="num">attention z</th><th class="num">posts</th></tr></thead><tbody>` +
-    rows.map(r => { const s = sentBy[r.ticker] || {}; return `<tr class="hover"><td><b>${esc(r.ticker)}</b></td><td>${esc(r.name)}</td><td class="muted">${esc(r.asset_class)}</td><td class="muted">${esc(r.sector)}</td>
+  $('#holdings').innerHTML = `<table><thead><tr><th>ticker</th><th>name</th><th>class</th><th class="num">value</th><th class="num" title="Against what it cost on average">open P&amp;L</th><th>weight</th><th class="num">%</th><th title="z-score against the security's own history; the raw average (marked avg) until there is enough history">sentiment</th><th class="num">attention z</th><th class="num">posts</th></tr></thead><tbody>` +
+    rows.map(r => { const s = sentBy[r.ticker] || {}; return `<tr class="hover"><td><b>${esc(r.ticker)}</b></td><td>${esc(r.name)}</td><td class="muted" title="${esc(r.sector || '')}">${esc(r.asset_class)}</td>
       <td class="num">${fmtMoney(r.market_value)}</td><td class="num" style="white-space:nowrap" title="${r.average_cost == null ? '' : 'average cost ' + Number(r.average_cost).toLocaleString(undefined, {maximumFractionDigits: 4})}">${r.open_pnl == null ? '–' : signed(r.open_pnl) + ' <span class="muted">' + fmtSPct(r.open_pnl_pct, 1) + '</span>'}</td><td>${hbar(r.weight, maxW, 's1', 64)}</td><td class="num">${fmtPct(r.weight, 2)}</td>
       <td style="white-space:nowrap">${s.sentiment_z != null ? dbar(s.sentiment_z, 3, 48) + ' ' + fmtZ(s.sentiment_z) : s.sentiment_mean != null ? dbar(s.sentiment_mean, 1, 48) + ' ' + fmtZ(s.sentiment_mean) + ' <span class="muted">avg</span>' : '<span class="muted">–</span>'}</td>
       <td class="num">${fmtZ(s.attention_z)}</td><td class="num">${s.n_posts ?? '–'}</td></tr>`; }).join('') +
-    `<tr><td><b>CASH</b></td><td></td><td class="muted">Cash</td><td></td><td class="num">${fmtMoney(pos.cash)}</td><td></td><td>${hbar(pos.cash_weight, maxW, 's1', 64)}</td><td class="num">${fmtPct(pos.cash_weight, 2)}</td><td></td><td></td><td></td></tr></tbody></table>`;
+    `<tr><td><b>CASH</b></td><td></td><td class="muted">Cash</td><td class="num">${fmtMoney(pos.cash)}</td><td></td><td>${hbar(pos.cash_weight, maxW, 's1', 64)}</td><td class="num">${fmtPct(pos.cash_weight, 2)}</td><td></td><td></td><td></td></tr></tbody></table>`;
 
   // exposures
   if (ac) {
@@ -331,12 +331,24 @@ async function refreshPortfolio() {
     $('#exposure-ac').innerHTML = `<table><tbody>` + ac.rows.sort((a, b) => b.portfolio_weight - a.portfolio_weight).map(r =>
       `<tr><td>${esc(r.asset_class)}</td><td><span class="stack">${hbar(r.portfolio_weight, mx, 's1', 160)}${hbar(r.benchmark_weight, mx, 's2', 160)}</span></td>
        <td class="num">${fmtPct(r.portfolio_weight, 1)}<br><span class="muted">${fmtPct(r.benchmark_weight, 1)}</span></td></tr>`).join('') + '</tbody></table>';
-  } else $('#exposure-ac').innerHTML = '<div class="muted">No benchmark set.</div>';
+  }
+  // No benchmark to compare with (a trading book rather than a managed fund): show where the money is instead.
+  const plain = async (dim, box, label) => {
+    const e = await getJSON(`/portfolios/${id}/exposures?dimension=${dim}`).catch(() => null);
+    if (!e || !e.buckets.length) { $(box).innerHTML = '<div class="muted">Nothing held.</div>'; return; }
+    const rows = [...e.buckets].sort((a, b) => b.weight - a.weight).slice(0, 9), mx = Math.max(...rows.map(r => r.weight), 0.01);
+    $(box).innerHTML = `<table><tbody>` + rows.map(r =>
+      `<tr title="${fmtMoney(r.market_value)}"><td>${esc(r[label])}</td><td>${hbar(r.weight, mx, 's1', 150)}</td><td class="num">${fmtPct(r.weight, 1)}</td></tr>`).join('') + '</tbody></table>';
+  };
+  $('#exposure-ac-title').textContent = ac ? 'Asset class vs benchmark' : 'Where the money is — by kind of asset';
+  $('#exposure-ac-legend').classList.toggle('hidden', !ac);
+  $('#exposure-sector-title').textContent = sec ? 'Sector — active weight vs benchmark' : 'Where the money is — by sector';
+  if (!ac) plain('asset_class', '#exposure-ac', 'asset_class');
   if (sec) {
     const mx = Math.max(...sec.rows.map(r => Math.abs(r.active_weight)), 0.01);
     $('#exposure-sector').innerHTML = `<table><tbody>` + sec.rows.slice(0, 10).map(r =>
       `<tr><td>${esc(r.sector)}</td><td>${dbar(r.active_weight, mx, 120)}</td><td class="num">${fmtSPct(r.active_weight, 1)}</td></tr>`).join('') + '</tbody></table>';
-  } else $('#exposure-sector').innerHTML = '<div class="muted">No benchmark set.</div>';
+  } else plain('sector', '#exposure-sector', 'sector');
 
   // VaR
   const hasVar = varr.methods && Object.keys(varr.methods).length > 0;
