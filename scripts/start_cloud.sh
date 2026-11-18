@@ -9,8 +9,16 @@
 #
 # State lives in $SPECTRE_HOME (default ~/.spectre): the database, the log, and an optional
 # `env` file of settings to apply (for example SPECTRE_DATABASE_URL or SPECTRE_PORTFOLIO).
+#
+#   scripts/start_cloud.sh               start in the background and return (a server, a VM)
+#   scripts/start_cloud.sh --foreground  stay attached, for a supervisor that tracks the
+#                                        process itself. Some hosted sessions pause the machine
+#                                        when nothing they track is running, which kills a
+#                                        process that was merely left in the background.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+FOREGROUND=false
+[ "${1:-}" = "--foreground" ] && FOREGROUND=true
 
 STATE="${SPECTRE_HOME:-$HOME/.spectre}"
 mkdir -p "$STATE"
@@ -38,6 +46,10 @@ pkill -f "spectre (serve|autopilot|ingest|run)( |$)" 2>/dev/null || true
 export SPECTRE_DATABASE_URL="${SPECTRE_DATABASE_URL:-sqlite:///$STATE/spectre.db}"
 export SPECTRE_REQUIRE_ALPACA="${SPECTRE_REQUIRE_ALPACA:-true}"
 export PYTHONUNBUFFERED=1 COLUMNS=170
+if $FOREGROUND; then
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) starting in the foreground" >> "$STATE/run.log"
+  exec "$SPECTRE" run --port "$PORT" >> "$STATE/run.log" 2>&1
+fi
 nohup setsid "$SPECTRE" run --port "$PORT" >> "$STATE/run.log" 2>&1 &
 
 if curl -fsS --retry 45 --retry-delay 2 --retry-connrefused -m 5 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
