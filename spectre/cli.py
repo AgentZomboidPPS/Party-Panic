@@ -574,24 +574,34 @@ def portfolio_create(name: str, cash: float = typer.Option(100_000.0, help="Star
     """Create a portfolio funded with cash (for paper trading real tickers)."""
     from sqlalchemy import select
 
-    from spectre.marketdata.prices import latest_price_date
-    from spectre.models import CashFlow, ComplianceRule, Portfolio
+    from spectre.models import Portfolio
 
     with _session(db) as s:
         if s.execute(select(Portfolio).where(Portfolio.name == name)).scalar_one_or_none():
             console.print(f"[red]Portfolio '{name}' already exists[/]")
             raise typer.Exit(1)
-        pf = Portfolio(name=name, base_currency=settings.base_currency)
-        s.add(pf)
-        s.flush()
+        pf = _new_trading_portfolio(s, name, cash)
+        console.print(f"Created portfolio {pf.id} '{name}' with {_money(cash)} {pf.base_currency}")
+
+
+def _new_trading_portfolio(s, name: str, cash: float | None):
+    """A portfolio for the bot: funded with `cash` (None = leave it empty, to be filled from a
+    broker account) and given the rules a cash account trades under."""
+    from spectre.marketdata.prices import latest_price_date
+    from spectre.models import CashFlow, ComplianceRule, Portfolio
+
+    pf = Portfolio(name=name, base_currency=settings.base_currency)
+    s.add(pf)
+    s.flush()
+    if cash is not None:
         s.add(CashFlow(portfolio_id=pf.id, date=min(latest_price_date(s) or date.today(), date.today()), amount=cash,
                        memo="Initial funding"))
-        for rule_name, rule_type in (("No overdraft", "no_negative_cash"), ("No short positions", "no_short_positions"),
-                                     ("No naked options", "no_naked_options"),
-                                     ("No good-faith violations", "no_good_faith_violations")):
-            s.add(ComplianceRule(portfolio_id=pf.id, name=rule_name, rule_type=rule_type, params={}, severity="HARD"))
-        s.commit()
-        console.print(f"Created portfolio {pf.id} '{name}' with {_money(cash)} {pf.base_currency}")
+    for rule_name, rule_type in (("No overdraft", "no_negative_cash"), ("No short positions", "no_short_positions"),
+                                 ("No naked options", "no_naked_options"),
+                                 ("No good-faith violations", "no_good_faith_violations")):
+        s.add(ComplianceRule(portfolio_id=pf.id, name=rule_name, rule_type=rule_type, params={}, severity="HARD"))
+    s.commit()
+    return pf
 
 
 @app.command()
@@ -1095,6 +1105,89 @@ def serve(host: str = "127.0.0.1", port: int = 8000, db: str | None = typer.Opti
     if db:
         os.environ["SPECTRE_DATABASE_URL"] = db
     uvicorn.run("spectre.api.app:app", host=host, port=port, reload=reload)
+
+
+@app.command()
+def run(host: str = typer.Option("127.0.0.1", envvar="SPECTRE_HOST", help="0.0.0.0 to be reachable from outside; needs SPECTRE_DASHBOARD_PASSWORD"),
+        port: int = typer.Option(8000, envvar="PORT"),
+        portfolio: str = typer.Option("KAIROS", envvar="SPECTRE_PORTFOLIO", help="Portfolio to trade; created if it does not exist"),
+        cash: float = typer.Option(100_000.0, envvar="SPECTRE_START_CASH", help="Starting cash for the built-in paper broker (an Alpaca account brings its own)"),
+        every: float = typer.Option(10.0, envvar="SPECTRE_EVERY", help="Minutes between decisions"),
+        invest: float = typer.Option(0.70, envvar="SPECTRE_INVEST", help="Share of the portfolio for stocks"),
+        options: bool = typer.Option(True, envvar="SPECTRE_OPTIONS", help="Trade bought calls and puts (Alpaca only)"),
+        options_budget: float = typer.Option(0.20, envvar="SPECTRE_OPTIONS_BUDGET"),
+        crypto: bool = typer.Option(True, envvar="SPECTRE_CRYPTO", help="Trade coins, around the clock"),
+        crypto_invest: float = typer.Option(0.10, envvar="SPECTRE_CRYPTO_INVEST"),
+        min_authors: int = typer.Option(8, envvar="SPECTRE_MIN_AUTHORS"),
+        lookback: int = typer.Option(45, envvar="SPECTRE_LOOKBACK"),
+        symbols: str = typer.Option("NVDA,TSLA,SPY,AAPL,AMD,PLTR,MSFT,META,AMZN,QQQ,GOOGL,INTC", envvar="SPECTRE_SYMBOLS"),
+        db: str | None = typer.Option(None, "--db")):
+    """Everything in one process, for a machine that stays on: the dashboard and API, the live
+    feeds, and KAIROS deciding every few minutes. Paper only.
+
+    With Alpaca keys configured it trades your Alpaca paper account (and, on a fresh database,
+    starts from what that account already holds); without them it uses the built-in simulation."""
+    import os
+    import threading
+    import time as _time
+
+    import uvicorn
+    from sqlalchemy import select
+
+    from spectre.marketdata.universe import seed_universe as _seed
+    from spectre.models import Portfolio
+
+    local = host in ("127.0.0.1", "localhost", "::1")
+    if not local and not settings.dashboard_password:
+        console.print("[red]Refusing to listen on a public address without a password.[/] The API can place orders. "
+                      "Set SPECTRE_DASHBOARD_PASSWORD, or use --host 127.0.0.1.")
+        raise typer.Exit(1)
+    if db:
+        os.environ["SPECTRE_DATABASE_URL"] = db
+        settings.database_url = db
+    use_alpaca = bool(settings.alpaca_key_id and settings.alpaca_secret_key)
+
+    with _session(db) as s:
+        _seed(s)
+        pf = s.execute(select(Portfolio).where(Portfolio.name == portfolio)).scalar_one_or_none()
+        if pf is None:
+            pf = _new_trading_portfolio(s, portfolio, None if use_alpaca else cash)
+            console.print(f"Created portfolio {pf.id} '{portfolio}'.")
+        pid = pf.id
+        if use_alpaca:
+            from spectre.execution.alpaca import AlpacaClient, adopt_account
+
+            client = AlpacaClient()
+            if settings.alpaca_cash_only and str(client.account().get("multiplier")) != "1":
+                client.set_configurations(max_margin_multiplier="1")
+                console.print("Cash only: margin switched off at Alpaca.")
+            took = adopt_account(s, client, pid)
+            if took["adopted"]:
+                console.print(f"Picked up the Alpaca account: {len(took['positions'])} positions, cash {took['cash']:,.2f}.")
+
+    from spectre.api.app import create_app
+
+    server = uvicorn.Server(uvicorn.Config(create_app(), host=host, port=port, log_level="warning"))
+    threading.Thread(target=server.run, daemon=True, name="spectre-api").start()
+    where = f"http://localhost:{port}/" if local else f"port {port} of this machine's address"
+    console.print(f"[bold]SPECTRE[/] is up: dashboard at {where}"
+                  f"{' (password protected)' if settings.dashboard_password else ''}; "
+                  f"KAIROS trading portfolio {pid} on {'the Alpaca paper account' if use_alpaca else 'the built-in paper broker'}.")
+
+    while True:  # the feeds and the bot; if they ever fall over, start them again
+        try:
+            autopilot(portfolio_id=pid, sources="bluesky,stocktwits,kalshi,polymarket,trends", symbols=symbols, geos="US",
+                      minutes=0.0, every=every, warmup=min(every, 10.0), top_n=5, invest=invest, enter=0.2, exit_below=0.0,
+                      lookback=lookback, min_authors=min_authors, broker="alpaca" if use_alpaca else "paper",
+                      options=options and use_alpaca, options_budget=options_budget, options_per_trade=0.03,
+                      options_enter=1.0, options_min_authors=10, crypto=crypto, crypto_invest=crypto_invest, crypto_top=3,
+                      db=db)
+            break  # it only returns when asked to stop
+        except KeyboardInterrupt:
+            break
+        except Exception as exc:
+            console.print(f"[red]KAIROS stopped[/]: {type(exc).__name__}: {exc}. Restarting in 30 seconds.")
+            _time.sleep(30)
 
 
 if __name__ == "__main__":

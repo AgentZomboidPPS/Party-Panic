@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import secrets
+
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy.engine import Engine
 
 from spectre import __version__
@@ -32,6 +36,26 @@ def create_app(database_url: str | None = None, engine: Engine | None = None) ->
     )
     app.state.engine = engine
     app.state.session_factory = make_session_factory(engine)
+
+    @app.middleware("http")
+    async def _password_gate(request: Request, call_next):
+        """With SPECTRE_DASHBOARD_PASSWORD set, everything but the health check needs it
+        (HTTP Basic, any user name). The API can create and execute orders, so it must not be
+        reachable by strangers."""
+        expected = settings.dashboard_password
+        if not expected or request.url.path == "/health":
+            return await call_next(request)
+        supplied = ""
+        scheme, _, token = request.headers.get("authorization", "").partition(" ")
+        if scheme.lower() == "basic":
+            try:
+                supplied = base64.b64decode(token).decode("utf-8").partition(":")[2]
+            except (binascii.Error, UnicodeDecodeError):
+                supplied = ""
+        if not secrets.compare_digest(supplied.encode(), expected.encode()):
+            return PlainTextResponse("Password required", status_code=401,
+                                     headers={"WWW-Authenticate": 'Basic realm="SPECTRE"'})
+        return await call_next(request)
 
     @app.exception_handler(LookupError)
     async def _not_found(_: Request, exc: LookupError):

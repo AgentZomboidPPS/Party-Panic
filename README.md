@@ -66,8 +66,48 @@ spectre serve                # REST API with interactive docs at http://127.0.0.
 Point at another database with `--db postgresql://...` or `SPECTRE_DATABASE_URL=...`. SQLite is the
 default for development; the schema is plain SQLAlchemy and runs unchanged on Postgres.
 
-Run the tests with `pytest` (106 tests, ~30 s; most of it is seeding synthetic social history).
-Lint with `ruff check spectre tests`.
+Run the tests with `pytest` (about 150 tests, ~35 s; most of it is seeding synthetic social
+history). Lint with `ruff check spectre tests`.
+
+## Running it nonstop
+
+`spectre run` is everything in one process: the dashboard and API, the live feeds, and KAIROS
+deciding every ten minutes. It creates the portfolio if it does not exist. With Alpaca paper
+keys it trades that account, switches margin off, and on a fresh database starts from what the
+account already holds; without keys it uses the built-in simulation. If the feeds or the bot
+fall over they are restarted.
+
+**On your own computer** (Windows, Mac or Linux; needs Python 3.11 or newer and Git):
+
+```bash
+git clone https://github.com/agentzomboidpps/party-panic && cd party-panic
+git checkout claude/quirky-hopper-5yk8zk   # until this branch is merged into the main one
+pip install -e .
+# optional: your Alpaca paper keys, in a file named .env in this folder
+#   SPECTRE_ALPACA_KEY_ID=PK...
+#   SPECTRE_ALPACA_SECRET_KEY=...
+spectre run                  # then open http://localhost:8000
+```
+
+It only runs while that window is open and the computer is awake.
+
+**On a cloud host.** The `Dockerfile` builds one container that runs `spectre run`. Any host
+that can run a container with a small persistent disk will do. It needs:
+
+| setting | what to put there |
+|---|---|
+| `SPECTRE_DASHBOARD_PASSWORD` | a password you choose. Required: `run` refuses to listen on a public address without one, because the API can place orders. The browser asks for it once; any user name works. |
+| `SPECTRE_ALPACA_KEY_ID`, `SPECTRE_ALPACA_SECRET_KEY` | your Alpaca **paper** keys, entered in the host's secrets settings, never in the repository |
+| a disk mounted at `/data` | the database lives there, so history survives restarts and new versions |
+| `PORT` | most hosts set this themselves; the default is 8000 |
+
+Optional: `SPECTRE_INVEST` (0.70), `SPECTRE_OPTIONS` (true), `SPECTRE_OPTIONS_BUDGET` (0.20),
+`SPECTRE_CRYPTO` (true), `SPECTRE_CRYPTO_INVEST` (0.10), `SPECTRE_EVERY` (10 minutes),
+`SPECTRE_SYMBOLS`, `SPECTRE_PORTFOLIO` (KAIROS). `GET /health` needs no password, for the
+host's health check.
+
+Checked: the image builds, starts, serves the dashboard behind the password and keeps its
+database on the volume. Not yet checked: a deployment on a public host.
 
 ## What each module does
 
@@ -431,8 +471,8 @@ Alpaca: `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`, `ALPACA_TRADING_URL` (paper host),
 
 ## Roadmap
 
-Next steps in rough priority order: a permanent, always-on home so KAIROS can build a track
-record; measure the crowd signal against real prices once weeks of data exist; train a sentiment
+Next steps in rough priority order: deploy the container to a permanent host so KAIROS can
+build a track record (and prune old posts there); measure the crowd signal against real prices once weeks of data exist; train a sentiment
 classifier on the Stocktwits labels and adopt it only if it beats the baseline out of sample; use
 rates and credit as a risk-on / risk-off filter; SEC earnings against the live service; covered
 calls, cash-secured puts and defined-risk spreads (never an uncovered sale); price history for

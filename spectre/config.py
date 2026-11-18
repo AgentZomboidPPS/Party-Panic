@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     alpaca_option_feed: str = "indicative"  # free; "opra" (full real-time) needs a paid plan
     # Cash only: refuse to send an order while the Alpaca account can borrow (margin multiplier above 1).
     alpaca_cash_only: bool = True
+    # When set, the dashboard and API ask for this password (any user name). Required before
+    # `spectre run` will listen on anything but this machine.
+    dashboard_password: str = ""
 
 
 settings = Settings()

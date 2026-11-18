@@ -417,6 +417,55 @@ def reconcile(session: Session, client: AlpacaClient, portfolio_id: int, apply: 
     return out
 
 
+def adopt_account(session: Session, client: AlpacaClient, portfolio_id: int) -> dict:
+    """Start an empty ledger from what the broker already holds, so a fresh database (a new
+    machine, a new deployment) carries on with the same account instead of disagreeing with it.
+
+    Each position is booked as bought at the broker's average entry price, already settled, and
+    the portfolio is funded so that its cash equals the broker's. Does nothing if the ledger
+    already has a trade or a cash movement. Short positions are reported, not adopted."""
+    used = session.execute(select(func.count(Trade.id)).where(Trade.portfolio_id == portfolio_id)).scalar_one() or \
+        session.execute(select(func.count(CashFlow.id)).where(CashFlow.portfolio_id == portfolio_id)).scalar_one()
+    if used:
+        return {"adopted": False, "reason": "the ledger already has history"}
+    acct, held = client.account(), client.positions()
+    today, cost, taken, skipped = utcnow().date(), 0.0, [], []
+    fallback: dict[int, float] = {}  # the broker's own mark, for anything the price feeds cannot price
+    kinds = {"us_equity": "Equity", "crypto": "Crypto", "us_option": "Option"}
+    for p in held:
+        ticker, qty, price = position_ticker(p), float(p["qty"]), float(p["avg_entry_price"])
+        if qty <= 0:
+            skipped.append(ticker)
+            continue
+        sec = session.execute(select(Security).where(Security.ticker == ticker)).scalar_one_or_none()
+        if sec is None:
+            parsed = parse_occ(ticker) if p.get("asset_class") == "us_option" else None
+            if parsed:
+                root, expiry, kind, strike = parsed
+                sec = ensure_option_security(session, OptionQuote(ticker, root, expiry, kind, strike, *([None] * 9)))
+            else:
+                sec = Security(ticker=ticker, name=ticker, asset_class=kinds.get(p.get("asset_class"), "Equity"),
+                               currency="USD", country="US", issuer=ticker, multiplier=1.0)
+                session.add(sec)
+                session.flush()
+        session.add(Trade(portfolio_id=portfolio_id, security_id=sec.id, side=Side.BUY.value, quantity=qty, price=price,
+                          currency="USD", trade_date=today, settle_date=today))
+        cost += qty * price * sec.multiplier
+        taken.append(ticker)
+        fallback[sec.id] = float(p.get("current_price") or price)
+    session.add(CashFlow(portfolio_id=portfolio_id, date=today, amount=float(acct["cash"]) + cost,
+                         memo="Opening balance adopted from the Alpaca account"))
+    audit.record(session, actor="adopt", entity_type="portfolio", entity_id=portfolio_id, action="adopted_broker_account",
+                 detail={"positions": taken, "skipped_short": skipped, "cash": float(acct["cash"])})
+    session.commit()
+    sync_prices(session, client)
+    sync_option_marks(session, client)
+    priced = set(latest_prices(session, list(fallback), today).index)
+    upsert_prices(session, [{"security_id": sid, "date": today, "close": px} for sid, px in fallback.items() if sid not in priced])
+    session.commit()
+    return {"adopted": True, "positions": taken, "skipped_short": skipped, "cash": float(acct["cash"])}
+
+
 def _qty(q: float) -> str:
     return str(int(q)) if float(q).is_integer() else f"{q:.6f}".rstrip("0").rstrip(".")
 
