@@ -6,14 +6,14 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from lantern.api.app import create_app
-from lantern.db import init_db, make_engine, make_session_factory
-from lantern.marketdata.synthetic import seed_demo
-from lantern.signals import aggregate, nlp, screening, signals
-from lantern.signals.models import AuthorStats, SentimentBar, SocialPost, Topic
-from lantern.signals.pipeline import Pipeline, build_extractor
-from lantern.signals.sources.base import Post
-from lantern.signals.sources.synthetic import seed_social_history
+from spectre.api.app import create_app
+from spectre.db import init_db, make_engine, make_session_factory
+from spectre.marketdata.synthetic import seed_demo
+from spectre.signals import aggregate, nlp, screening, signals
+from spectre.signals.models import AuthorStats, SentimentBar, SocialPost, Topic
+from spectre.signals.pipeline import Pipeline, build_extractor
+from spectre.signals.sources.base import Post
+from spectre.signals.sources.synthetic import seed_social_history
 
 T0 = datetime(2025, 6, 2, 14, 0)
 
@@ -51,6 +51,9 @@ def test_text_and_account_heuristics():
     sc = screening.Screener()
     assert sc.screen(_post("$A $B $C $D $E $F $G pump"), "x").factors.get("cashtag_stuffing") == 0.3
     assert sc.screen(_post("https://t.co/abc"), "y").reason == "link_or_empty"
+    ad = sc.screen(_post("Great deal on this Amazon air fryer today #ad paidlink amazonaffiliate"), "seller")
+    assert ad.reason == "promotion" and ad.screened_out, "adverts name companies without saying anything about them"
+    assert not sc.screen(_post("Amazon ad revenue grew again this quarter, impressive"), "analyst").screened_out
     assert sc.screen(_post("a perfectly normal sentence about markets", followers=0), "z").factors.get("no_followers") == 0.5
 
 

@@ -4,10 +4,10 @@ from datetime import date, timedelta
 
 import pytest
 
-from lantern.marketdata.synthetic import UNIVERSE
-from lantern.portfolio.positions import value_portfolio
-from lantern.risk import factors as fm
-from lantern.risk.report import asset_returns, risk_report
+from spectre.marketdata.synthetic import UNIVERSE
+from spectre.portfolio.positions import value_portfolio
+from spectre.risk import factors as fm
+from spectre.risk.report import asset_returns, risk_report
 
 
 def test_demo_portfolios_value_sensibly(demo):
@@ -62,7 +62,7 @@ def test_full_risk_report(demo):
 
 def test_demo_orders_went_through_compliance(demo):
     s, summary = demo
-    from lantern.models import Order
+    from spectre.models import Order
 
     rejected = s.get(Order, summary["orders"]["rejected"])
     assert rejected.status == "REJECTED" and "restricted" in rejected.reject_reason

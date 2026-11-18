@@ -5,10 +5,10 @@ from datetime import date, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from lantern.api.app import create_app
-from lantern.db import init_db, make_engine, make_session_factory
-from lantern.marketdata.synthetic import seed_demo
-from lantern.models import (
+from spectre.api.app import create_app
+from spectre.db import init_db, make_engine, make_session_factory
+from spectre.marketdata.synthetic import seed_demo
+from spectre.models import (
     AssetClass,
     CashFlow,
     FxRate,

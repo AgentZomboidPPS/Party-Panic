@@ -1,5 +1,5 @@
 [project]
-name = "lantern"
+name = "spectre"
 version = "0.1.0"
 description = "Portfolio, risk, compliance and order management on one shared book of record."
 readme = "README.md"
@@ -26,15 +26,15 @@ dependencies = [
 dev = ["pytest>=8", "pytest-cov", "ruff"]
 
 [project.scripts]
-lantern = "lantern.cli:app"
+spectre = "spectre.cli:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["lantern"]
-include = ["lantern/dashboard/*.html"]
+packages = ["spectre"]
+include = ["spectre/dashboard/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -51,9 +51,9 @@ ignore = ["UP042"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
-"lantern/marketdata/synthetic.py" = ["E501"]
-"lantern/marketdata/universe.py" = ["E501"]
-"lantern/signals/**" = ["E501"]
-"lantern/fundamentals/**" = ["E501"]
-"lantern/cli.py" = ["E501"]
-"lantern/api/routers/signals.py" = ["E501"]
+"spectre/marketdata/synthetic.py" = ["E501"]
+"spectre/marketdata/universe.py" = ["E501"]
+"spectre/signals/**" = ["E501"]
+"spectre/fundamentals/**" = ["E501"]
+"spectre/cli.py" = ["E501"]
+"spectre/api/routers/signals.py" = ["E501"]

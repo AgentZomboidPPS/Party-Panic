@@ -5,11 +5,11 @@ from datetime import datetime
 import pytest
 from sqlalchemy import select
 
-from lantern.execution.brokers import BrokerFill, BrokerReject, PaperBroker
-from lantern.execution.guard import TradingLimits, check, execute, halt_state, set_halt
-from lantern.models import AuditEvent, OrderStatus, OrderType, Side
-from lantern.portfolio.positions import value_portfolio
-from lantern.trading import oms
+from spectre.execution.brokers import BrokerFill, BrokerReject, PaperBroker
+from spectre.execution.guard import TradingLimits, check, execute, halt_state, set_halt
+from spectre.models import AuditEvent, OrderStatus, OrderType, Side
+from spectre.portfolio.positions import value_portfolio
+from spectre.trading import oms
 from tests.conftest import D1
 
 # The `mini` book (see conftest): 1,022,000 total, 594,000 cash, AAA last price 110.

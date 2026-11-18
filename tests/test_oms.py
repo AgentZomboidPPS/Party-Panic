@@ -3,9 +3,9 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy import select
 
-from lantern.models import AuditEvent, ComplianceRule, OrderStatus, OrderType, Severity, Side, Trade
-from lantern.portfolio.positions import value_portfolio
-from lantern.trading import oms
+from spectre.models import AuditEvent, ComplianceRule, OrderStatus, OrderType, Severity, Side, Trade
+from spectre.portfolio.positions import value_portfolio
+from spectre.trading import oms
 from tests.conftest import D1
 
 FILLED_AT = datetime(D1.year, D1.month, D1.day, 15, 0, tzinfo=UTC)

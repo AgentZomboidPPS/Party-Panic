@@ -1,4 +1,18 @@
-# Lantern
+# SPECTRE
+
+**S**ignal **P**rocessing, **E**xecution, **C**ompliance, **T**rading & **R**isk **E**ngine.
+
+| codename | part | where |
+|---|---|---|
+| **SPECTRE** | the whole system | this repository |
+| **KAIROS** | the trading bot (Greek: *the decisive moment*) | `spectre/signals/strategy.py`, `spectre bot`, `spectre autopilot` |
+| **WRAITH** | crowd listening: sources, screening, topics, sentiment | `spectre/signals` |
+| **RAVEN** | risk analytics | `spectre/risk` |
+| **AEGIS** | compliance rules, trading limits, kill switch | `spectre/compliance`, `spectre/execution` |
+| **REAPER** | order routing and brokers | `spectre/trading`, `spectre/execution/brokers.py` |
+
+**Status, plainly.** Live data flows from five sources. KAIROS trades on paper only. Nothing here
+has a demonstrated edge on real data yet, and no real broker is connected.
 
 Portfolio management, risk analytics, pre-trade compliance, order management and an
 alternative-data **signals** layer (public conversation + prediction markets) on **one shared
@@ -35,25 +49,25 @@ date, so there is exactly one source of truth and point-in-time reporting comes 
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-lantern seed-demo            # 21 securities, 3y of prices, 2 portfolios, rules, orders -> ./lantern.db
-lantern portfolios
-lantern positions 1
-lantern exposures 1 --by sector
-lantern risk 1               # VaR x3, component VaR, stress, factor model, bond analytics
-lantern compliance 1
-lantern orders
-lantern serve                # REST API with interactive docs at http://127.0.0.1:8000/docs
+spectre seed-demo            # 21 securities, 3y of prices, 2 portfolios, rules, orders -> ./spectre.db
+spectre portfolios
+spectre positions 1
+spectre exposures 1 --by sector
+spectre risk 1               # VaR x3, component VaR, stress, factor model, bond analytics
+spectre compliance 1
+spectre orders
+spectre serve                # REST API with interactive docs at http://127.0.0.1:8000/docs
 ```
 
-Point at another database with `--db postgresql://...` or `LANTERN_DATABASE_URL=...`. SQLite is the
+Point at another database with `--db postgresql://...` or `SPECTRE_DATABASE_URL=...`. SQLite is the
 default for development; the schema is plain SQLAlchemy and runs unchanged on Postgres.
 
-Run the tests with `pytest` (82 tests, ~30 s; most of it is seeding synthetic social history).
-Lint with `ruff check lantern tests`.
+Run the tests with `pytest` (88 tests, ~30 s; most of it is seeding synthetic social history).
+Lint with `ruff check spectre tests`.
 
 ## What each module does
 
-### Portfolio (`lantern/portfolio`)
+### Portfolio (`spectre/portfolio`)
 - `value_portfolio(session, portfolio_id, as_of)` → holdings from the ledger, latest prices on or
   before `as_of`, FX-converted to the portfolio's base currency, weights relative to total value
   including cash. Bonds are quoted per 100 face (`multiplier = 0.01`), quantity is face amount.
@@ -61,7 +75,7 @@ Lint with `ruff check lantern tests`.
 - `active_weights` / `active_exposures` versus a benchmark (security-level or bucketed).
 - `apply_trades(session, valued, [ProposedTrade...])` – what-if analysis that never touches the ledger.
 
-### Risk (`lantern/risk`)
+### Risk (`spectre/risk`)
 - **VaR / Expected Shortfall** by three methods: historical, parametric (variance–covariance),
   Monte Carlo (Cholesky, seeded). Square-root-of-time horizon scaling. Returns are computed in base
   currency so FX risk is included.
@@ -73,7 +87,7 @@ Lint with `ruff check lantern tests`.
   systematic / idiosyncratic variance decomposition with per-factor contributions.
 - **Fixed income**: price ⇄ yield, Macaulay and modified duration, convexity, DV01.
 
-### Compliance (`lantern/compliance`)
+### Compliance (`spectre/compliance`)
 Rules live in the database, scoped to one portfolio or firm-wide, each `HARD` (blocks) or `SOFT`
 (warns). Built-in rule types:
 
@@ -95,13 +109,13 @@ is *introduced or worsened* blocks the order. A breach that already existed and 
 is reported but does not block, so a portfolio already over a limit can still trade back into line.
 Every check is recorded in `compliance_checks`.
 
-### Trading (`lantern/trading`)
+### Trading (`spectre/trading`)
 `create_order` runs pre-trade compliance and returns the order as `APPROVED` or `REJECTED` (with
 the breach messages as the reason). `fill_order` accepts partial fills, enforces limit prices, writes
 a `Trade` to the ledger, and tracks average fill price. `cancel_order`, `blotter`. Every status
 transition writes an `audit_events` row with actor and detail.
 
-### Signals (`lantern/signals`) — what the crowd is saying, made tradeable
+### Signals (`spectre/signals`) — what the crowd is saying, made tradeable
 
 ```
 sources ──► screening ──► NLP ──► store ──► aggregation ──► signals ──► backtest / paper strategy
@@ -133,7 +147,7 @@ polymarket
   reads topic tags); the WSJ markets RSS feed has been frozen since January 2025 and CNBC blocks
   automated clients; Google's interest-over-time endpoint answers servers with HTTP 429.
   Facebook and Instagram do not expose public conversation to third parties and are absent.
-- **Real tickers** (`marketdata/universe.py`): `lantern seed-universe` loads ~60 real companies
+- **Real tickers** (`marketdata/universe.py`): `spectre seed-universe` loads ~60 real companies
   and funds with hand-written recognition rules, because names are ambiguous: "nvidia" always
   counts, "apple" / "meta" / "visa" count only when the post also reads like market talk, and
   short or word-like symbols (`CAT`, `GM`, `V`) are never matched on their own.
@@ -150,7 +164,7 @@ polymarket
   extraction mapped to the securities table, and topic clustering (agglomerative on TF-IDF cosine
   for ordinary windows, mini-batch k-means for firehose-sized ones).
   **Known weakness, measured:** against 123 real posts whose authors labelled themselves
-  (`lantern calibrate`), the lexicon model took a side 64% of the time and was right 67% of the
+  (`spectre calibrate`), the lexicon model took a side 64% of the time and was right 67% of the
   time, worse than always guessing "bullish" (72%). So where an author declares a stance, that
   label is used instead of the model's guess, and the model's own score is kept separately so it
   can keep being measured. A classifier trained on those labels is the next step.
@@ -166,28 +180,28 @@ polymarket
   compliance can reject it like any other order.
 
 ```bash
-lantern seed-social                  # synthetic history aligned to the demo prices (daily bubbles + bars)
-lantern bubbles · lantern sentiment · lantern markets
-lantern backtest                     # does the signal predict returns? IC + long/short
-lantern paper-trade 2 --fill         # trade it on paper through compliance
-lantern ingest --sources synthetic --minutes 5 --topic-window 1   # offline live pipeline, then open /dashboard
+spectre seed-social                  # synthetic history aligned to the demo prices (daily bubbles + bars)
+spectre bubbles · spectre sentiment · spectre markets
+spectre backtest                     # does the signal predict returns? IC + long/short
+spectre paper-trade 2 --fill         # trade it on paper through compliance
+spectre ingest --sources synthetic --minutes 5 --topic-window 1   # offline live pipeline, then open /dashboard
 
 # real data (needs outbound access to the sources' hosts)
-lantern seed-universe                # real tickers, reference data only
-lantern ingest --sources bluesky,stocktwits,kalshi,polymarket,trends --symbols NVDA,TSLA,SPY --minutes 0
-lantern trends · lantern calibrate   # trending searches; sentiment model vs users' own labels
+spectre seed-universe                # real tickers, reference data only
+spectre ingest --sources bluesky,stocktwits,kalshi,polymarket,trends --symbols NVDA,TSLA,SPY --minutes 0
+spectre trends · spectre calibrate   # trending searches; sentiment model vs users' own labels
 ```
 
-### Execution (`lantern/execution`) — the last gate before a broker
+### Execution (`spectre/execution`) — the last gate before a broker
 
 An approved order reaches a broker only if every gate is open:
 
 1. compliance approved it when it was created;
-2. the **kill switch** is off (`lantern halt "reason"` / `lantern resume`; stored in the database,
+2. the **kill switch** is off (`spectre halt "reason"` / `spectre resume`; stored in the database,
    so it stops every process);
 3. it fits the **trading limits**: per-order size, daily total, orders per day, position size
    after the trade, and an optional symbol list. Defaults are small (1,000 per order, 5,000 a day);
-4. for a live broker only: `LANTERN_TRADING_MODE=live` is set **and** a named person approved that
+4. for a live broker only: `SPECTRE_TRADING_MODE=live` is set **and** a named person approved that
    specific order. Without both, nothing is sent.
 
 `PaperBroker` fills at the latest known price (optionally with slippage against you) and is the
@@ -196,15 +210,17 @@ works on paper has already passed every check. A live broker is one more class; 
 broker's official API with a scoped, revocable key, never an account password.
 
 ```bash
-lantern portfolio-create "My paper book" --cash 100000   # also adds no-overdraft / no-shorts rules
-lantern order 1 NVDA BUY 5          # compliance decides immediately; nothing is sent
-lantern execute 7                   # paper fill, subject to limits and the kill switch
-lantern limits · lantern halt "something looks wrong" · lantern resume
+spectre portfolio-create "My paper book" --cash 100000   # also adds no-overdraft / no-shorts rules
+spectre order 1 NVDA BUY 5          # compliance decides immediately; nothing is sent
+spectre execute 7                   # paper fill, subject to limits and the kill switch
+spectre limits · spectre halt "something looks wrong" · spectre resume
 ```
 
-### Trend bot (`signals/strategy.py`) — paper only
+### KAIROS, the trend bot (`signals/strategy.py`) — paper only
 
-`lantern bot <portfolio>` runs one decision cycle (or one every `--every` minutes):
+`spectre autopilot <portfolio>` runs the live data feeds and a trading decision every few minutes
+in one process; `spectre bot <portfolio>` runs a single decision cycle against data already
+collected. Each cycle:
 
 1. read the last `--lookback` minutes of screened posts;
 2. per security, give **each author one vote** (their average stance) so one loud account cannot
@@ -216,6 +232,24 @@ lantern limits · lantern halt "something looks wrong" · lantern resume
 `--dry-run` shows the decisions without creating an order. This rule is a transparent starting
 point to measure, not a proven edge: it has not been backtested on real data, because real data
 only started flowing on 2026-11-18.
+
+### Fundamentals (`spectre/fundamentals`) — filed results, quarter against quarter
+
+Reads the SEC's EDGAR company-facts data and reduces it to one value per fiscal quarter for
+revenue, gross profit, operating income, net income, diluted EPS and operating cash flow.
+Filings do not state every quarter directly (cash flow is year-to-date only; the fourth quarter
+exists only inside the annual figure), so missing quarters are derived by subtraction and
+flagged. `spectre earnings NVDA` compares the latest quarter with the previous one and the same
+quarter a year ago, with margin changes in points.
+
+```bash
+# The SEC only answers tools that declare a contact. Set it yourself; it is never stored here.
+echo 'SPECTRE_SEC_USER_AGENT="Your Name you@example.com"' >> .env
+spectre fundamentals-sync --tickers NVDA,AAPL,MSFT
+spectre earnings NVDA
+```
+
+*Not yet run against the live SEC service; the quarter arithmetic is covered by tests.*
 
 **On "edge".** The synthetic stream has a dial, `--ic` (default 0.03, roughly what good
 alternative data delivers), that sets how much next-day return leaks into post sentiment. The
@@ -231,7 +265,7 @@ sellable product, and a data-licensing review is still part of commercialising t
 
 ## REST API
 
-Start with `lantern serve` and open `/docs`. Main endpoints:
+Start with `spectre serve` and open `/docs`. Main endpoints:
 
 ```
 GET  /portfolios/{id}/positions?as_of=            valued holdings
@@ -258,6 +292,7 @@ GET  /dashboard                                   one screen: Portfolio view (NA
                                                   blotter) and Signals view (bubbles, sentiment, markets, fear)
 GET  /signals/status · /signals/bubbles · /signals/bubbles/history?hours=
 GET  /signals/sentiment · /signals/sentiment/{ticker} · /signals/fear · /signals/markets
+GET  /fundamentals/{ticker}                        latest quarter vs previous quarter and a year ago
 GET  /signals/trends · /signals/live (crowd stance the bot trades on) · /signals/calibration
 GET  /signals/markets?min_prob=0.05&max_prob=0.95   contested markets only
 GET  /signals/backtest?start=&end=&horizon=&signal=&cost_bps=
@@ -268,7 +303,7 @@ Errors map to HTTP status: not found → 404, bad input → 400, order-state con
 
 ## Demo data
 
-`lantern seed-demo` builds a deterministic universe: 12 US equities across 9 sectors, 3 EUR
+`spectre seed-demo` builds a deterministic universe: 12 US equities across 9 sectors, 3 EUR
 equities, 4 bonds (two Treasuries, an IG corporate, a HY corporate), a commodity ETF and one
 restricted tobacco name. Prices are generated from a **known** five-factor model (market, rates,
 credit, size, EURUSD), which is what lets the test suite check that the factor estimator recovers
@@ -281,7 +316,7 @@ through the API or directly into the tables.
 
 ## Configuration
 
-Environment variables, all prefixed `LANTERN_`: `DATABASE_URL`, `BASE_CURRENCY`, `VAR_CONFIDENCE`
+Environment variables, all prefixed `SPECTRE_`: `DATABASE_URL`, `BASE_CURRENCY`, `VAR_CONFIDENCE`
 (0.99), `VAR_HORIZON_DAYS` (1), `LOOKBACK_DAYS` (500), `MC_SIMULATIONS` (20000), `MC_SEED` (42).
 Trading guardrails: `TRADING_MODE` (paper), `TRADING_MAX_ORDER_NOTIONAL` (1000),
 `TRADING_MAX_DAILY_NOTIONAL` (5000), `TRADING_MAX_ORDERS_PER_DAY` (20), `TRADING_MAX_POSITION_WEIGHT`
@@ -290,7 +325,7 @@ Trading guardrails: `TRADING_MODE` (paper), `TRADING_MAX_ORDER_NOTIONAL` (1000),
 ## Design notes
 
 - **Single data model.** The reason integrated platforms win over best-of-breed point tools is that
-  risk, compliance and trading all see the same positions at the same instant. Lantern gets that by
+  risk, compliance and trading all see the same positions at the same instant. SPECTRE gets that by
   construction: there is no positions table to fall out of sync.
 - **Point-in-time everywhere.** Every valuation, exposure and risk call takes `as_of`; trades dated
   after it are ignored, prices are the latest on or before it.

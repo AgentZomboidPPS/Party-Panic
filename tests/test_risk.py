@@ -3,10 +3,10 @@ import pandas as pd
 import pytest
 from scipy.stats import norm
 
-from lantern.risk import factors as fm
-from lantern.risk import fixed_income as fi
-from lantern.risk.stress import Scenario, apply_scenario
-from lantern.risk.var import (
+from spectre.risk import factors as fm
+from spectre.risk import fixed_income as fi
+from spectre.risk.stress import Scenario, apply_scenario
+from spectre.risk.var import (
     component_var,
     historical_var,
     monte_carlo_var,
@@ -129,7 +129,7 @@ def test_factor_model_recovers_known_betas():
 
 
 def test_stress_shocks_are_additive_and_rates_use_duration(mini):
-    from lantern.portfolio.positions import value_portfolio
+    from spectre.portfolio.positions import value_portfolio
     from tests.conftest import D1
 
     v = value_portfolio(mini["session"], mini["pf"].id, D1)
@@ -142,7 +142,7 @@ def test_stress_shocks_are_additive_and_rates_use_duration(mini):
 
 
 def test_currency_shock_skips_base_currency(mini):
-    from lantern.portfolio.positions import value_portfolio
+    from spectre.portfolio.positions import value_portfolio
     from tests.conftest import D1
 
     v = value_portfolio(mini["session"], mini["pf"].id, D1)

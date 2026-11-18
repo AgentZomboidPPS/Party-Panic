@@ -9,10 +9,10 @@ from datetime import date
 
 import pytest
 
-from lantern.db import init_db, make_engine, make_session_factory
-from lantern.fundamentals import edgar
-from lantern.fundamentals.compare import company_report
-from lantern.models import Security
+from spectre.db import init_db, make_engine, make_session_factory
+from spectre.fundamentals import edgar
+from spectre.fundamentals.compare import company_report
+from spectre.models import Security
 
 
 def row(start, end, val, form="10-Q", filed=None, fy=None, fp=None):
@@ -83,7 +83,7 @@ def test_missing_metric_and_instant_facts_are_ignored():
 
 def test_client_refuses_to_run_without_a_declared_contact(monkeypatch):
     monkeypatch.setattr(edgar.settings, "sec_user_agent", "")
-    with pytest.raises(ValueError, match="LANTERN_SEC_USER_AGENT"):
+    with pytest.raises(ValueError, match="SPECTRE_SEC_USER_AGENT"):
         edgar.EdgarClient()
     with pytest.raises(ValueError):
         edgar.EdgarClient("a tool with no email")

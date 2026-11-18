@@ -1,8 +1,8 @@
 import pytest
 
-from lantern.compliance.engine import post_trade_check, pre_trade_check
-from lantern.models import ComplianceRule, Severity, Side
-from lantern.portfolio.whatif import ProposedTrade
+from spectre.compliance.engine import post_trade_check, pre_trade_check
+from spectre.models import ComplianceRule, Severity, Side
+from spectre.portfolio.whatif import ProposedTrade
 from tests.conftest import D1
 
 
@@ -83,7 +83,7 @@ def test_unknown_rule_type_is_a_hard_breach(mini):
 
 
 def test_scoped_rules_only_apply_to_their_portfolio(mini):
-    from lantern.models import Portfolio
+    from spectre.models import Portfolio
 
     s, pf = mini["session"], mini["pf"]
     other = Portfolio(name="Other", base_currency="USD")

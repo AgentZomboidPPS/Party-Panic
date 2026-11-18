@@ -1,9 +1,9 @@
 import pytest
 
-from lantern.models import Side
-from lantern.portfolio import exposures as ex
-from lantern.portfolio.positions import value_portfolio
-from lantern.portfolio.whatif import ProposedTrade, apply_trades
+from spectre.models import Side
+from spectre.portfolio import exposures as ex
+from spectre.portfolio.positions import value_portfolio
+from spectre.portfolio.whatif import ProposedTrade, apply_trades
 from tests.conftest import D0, D1
 
 # Mini book, bought on D0:

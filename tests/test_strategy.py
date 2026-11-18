@@ -5,14 +5,14 @@ from datetime import datetime, timedelta
 import pytest
 from sqlalchemy import select
 
-from lantern.db import init_db, make_engine, make_session_factory
-from lantern.execution.guard import TradingLimits, set_halt
-from lantern.marketdata.universe import seed_universe
-from lantern.models import CashFlow, ComplianceRule, Order, Portfolio, Security
-from lantern.portfolio.positions import value_portfolio
-from lantern.signals.pipeline import Pipeline
-from lantern.signals.sources.base import Post, TrendItem
-from lantern.signals.strategy import BOT_ACTOR, live_signals, run_once
+from spectre.db import init_db, make_engine, make_session_factory
+from spectre.execution.guard import TradingLimits, set_halt
+from spectre.marketdata.universe import seed_universe
+from spectre.models import CashFlow, ComplianceRule, Order, Portfolio, Security
+from spectre.portfolio.positions import value_portfolio
+from spectre.signals.pipeline import Pipeline
+from spectre.signals.sources.base import Post, TrendItem
+from spectre.signals.strategy import BOT_ACTOR, live_signals, run_once
 
 T0 = datetime(2026, 11, 18, 15, 0)
 LIMITS = TradingLimits(max_order_notional=2_000, max_daily_notional=20_000, max_orders_per_day=20, max_position_weight=0.25)

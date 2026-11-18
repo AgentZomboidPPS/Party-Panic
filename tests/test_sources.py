@@ -10,13 +10,13 @@ from datetime import datetime, timedelta
 import pytest
 from sqlalchemy import select
 
-from lantern.db import init_db, make_engine, make_session_factory
-from lantern.marketdata.universe import UNIVERSE, firehose_keywords, seed_universe
-from lantern.signals import aggregate
-from lantern.signals.models import PredictionMarket, SearchTrend, SocialPost
-from lantern.signals.pipeline import Pipeline, build_extractor
-from lantern.signals.sources import bluesky, kalshi, polymarket, stocktwits, trends
-from lantern.signals.sources.base import MarketQuote, Post, TrendItem
+from spectre.db import init_db, make_engine, make_session_factory
+from spectre.marketdata.universe import UNIVERSE, firehose_keywords, seed_universe
+from spectre.signals import aggregate
+from spectre.signals.models import PredictionMarket, SearchTrend, SocialPost
+from spectre.signals.pipeline import Pipeline, build_extractor
+from spectre.signals.sources import bluesky, kalshi, polymarket, stocktwits, trends
+from spectre.signals.sources.base import MarketQuote, Post, TrendItem
 
 NOW = datetime(2026, 11, 18, 17, 0, 0)
 
@@ -106,7 +106,7 @@ def test_stocktwits_message_parsing():
 
 
 def _commit(text, langs=("en",), created=None, **record):
-    from lantern.signals.sources.base import utcnow
+    from spectre.signals.sources.base import utcnow
 
     created = created or (utcnow().isoformat() + "Z")
     return {"did": "did:plc:abc123", "time_us": 1, "kind": "commit",
@@ -129,7 +129,7 @@ def test_bluesky_commit_parsing_and_non_posts():
 
 
 def test_bluesky_client_clock_is_not_trusted():
-    from lantern.signals.sources.base import utcnow
+    from spectre.signals.sources.base import utcnow
 
     p = bluesky.parse_commit(_commit("backdated", created="2019-01-01T00:00:00.000Z"))
     assert abs((utcnow() - p.created_at).total_seconds()) < 5
@@ -243,9 +243,9 @@ def test_pipeline_stores_real_shaped_items(real_db):
 
 
 def test_prices_attached_to_posts_become_ticks_and_the_daily_close(real_db):
-    from lantern.models import Portfolio, Price, Security, Side, Trade
-    from lantern.portfolio.positions import value_portfolio
-    from lantern.signals.models import PriceTick
+    from spectre.models import Portfolio, Price, Security, Side, Trade
+    from spectre.portfolio.positions import value_portfolio
+    from spectre.signals.models import PriceTick
 
     pipe = Pipeline(real_db)
 
