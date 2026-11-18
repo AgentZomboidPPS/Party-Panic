@@ -987,6 +987,46 @@ def alpaca_status(portfolio_id: int | None = typer.Option(None, "--portfolio", h
 
 
 @app.command()
+def report(portfolio_id: int | None = typer.Argument(None, help="Default: the portfolio named by SPECTRE_PORTFOLIO (KAIROS)"),
+           day: str | None = typer.Option(None, help="YYYY-MM-DD; default today (UTC)"),
+           if_closed: bool = typer.Option(False, help="Print only once per day, after the stock market has closed; otherwise print nothing"),
+           db: str | None = typer.Option(None, "--db")):
+    """The day in one page: value, what the bot did and why, holdings, risk, and anything needing attention."""
+    import os
+    from datetime import date as _date
+
+    from sqlalchemy import select
+
+    from spectre.models import Portfolio
+    from spectre.portfolio import daily
+
+    client = None
+    market_open = None
+    if settings.alpaca_key_id and settings.alpaca_secret_key:
+        from spectre.execution.alpaca import AlpacaClient, AlpacaError
+
+        client = AlpacaClient()
+        try:
+            market_open = bool(client.clock().get("is_open"))
+        except AlpacaError:
+            client = None
+    with _session(db) as s:
+        if portfolio_id is None:
+            name = os.environ.get("SPECTRE_PORTFOLIO", "KAIROS")
+            portfolio_id = s.execute(select(Portfolio.id).where(Portfolio.name == name)).scalar_one_or_none()
+            if portfolio_id is None:
+                console.print(f"[red]No portfolio named '{name}'.[/]")
+                raise typer.Exit(1)
+        which = _date.fromisoformat(day) if day else daily.datetime.now(daily.UTC).date()
+        if if_closed and (not daily.session_is_over(market_open=market_open) or daily.already_reported(s, portfolio_id, which)):
+            return
+        text = daily.render(daily.daily_report(s, portfolio_id, which, client))
+        if if_closed:
+            daily.mark_reported(s, portfolio_id, which)
+    print(text)  # plain text on purpose: it is meant to be pasted into a message
+
+
+@app.command()
 def performance(portfolio_id: int, db: str | None = typer.Option(None, "--db")):
     """Is it making money? Profit and loss since the start, against the S&P 500, and where it came from."""
     from spectre.portfolio.performance import performance as _performance

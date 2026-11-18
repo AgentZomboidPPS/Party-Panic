@@ -147,6 +147,15 @@ def positions(portfolio_id: int, db: DB, as_of: date | None = None) -> dict:
     return value_portfolio(db, portfolio_id, as_of).to_dict()
 
 
+@router.get("/portfolios/{portfolio_id}/report")
+def daily_report(portfolio_id: int, db: DB, day: date | None = None) -> dict:
+    """The day in one page, as data and as text."""
+    from spectre.portfolio import daily
+
+    r = daily.daily_report(db, portfolio_id, day)
+    return {**r, "text": daily.render(r)}
+
+
 @router.get("/portfolios/{portfolio_id}/performance")
 def performance(portfolio_id: int, db: DB) -> dict:
     """Value over time against the S&P 500, and profit and loss by sleeve."""

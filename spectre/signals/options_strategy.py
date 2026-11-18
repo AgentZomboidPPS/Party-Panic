@@ -49,7 +49,7 @@ from spectre.portfolio.positions import average_costs, value_portfolio
 from spectre.portfolio.settlement import sale_restrictions
 from spectre.risk.options import market_exposure
 from spectre.signals.sources.base import utcnow
-from spectre.signals.strategy import BOT_ACTOR, BotReport, TrendSignal, live_signals, withdraw_unfilled
+from spectre.signals.strategy import BOT_ACTOR, BotReport, TrendSignal, live_signals, record_reason, withdraw_unfilled
 from spectre.trading import oms
 
 
@@ -157,6 +157,7 @@ def run_options_once(
         else:
             order = oms.create_order(session, portfolio_id=portfolio_id, security_id=sec.id, side=side, quantity=qty,
                                      order_type=OrderType.LIMIT, limit_price=limit_price, actor=BOT_ACTOR)
+            record_reason(session, order, why)
             if order.status != "APPROVED":
                 action.update(outcome="rejected by compliance", detail=order.reject_reason)
             else:

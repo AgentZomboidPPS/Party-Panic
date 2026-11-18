@@ -31,6 +31,7 @@ import pandas as pd
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from spectre import audit
 from spectre.execution.brokers import Broker, PaperBroker
 from spectre.execution.guard import TradingLimits, execute
 from spectre.marketdata.prices import latest_price_date, latest_prices
@@ -50,6 +51,12 @@ MIN_ORDER = {"Crypto": 10.0}  # dollars: a coin order smaller than this is dust
 OVER_ALLOWANCE = 0.05  # how far past its allowance (as a share of the portfolio) a book may drift before it is trimmed
 CASH_SLACK = 0.99  # market orders fill a little away from the last price: never size to the last dollar
 MIN_TOPUP = 0.05  # a purchase smaller than this share of a full position is not worth an order (or its fee)
+
+
+def record_reason(session: Session, order, why: str) -> None:
+    """Keep the bot's reason with the order, so the day's report can say why each trade was made."""
+    audit.record(session, actor=BOT_ACTOR, entity_type="order", entity_id=order.id, action="decision", detail={"why": why})
+    session.commit()
 
 
 def withdraw_unfilled(session: Session, order) -> None:
@@ -215,6 +222,7 @@ def run_once(
         else:
             order = oms.create_order(session, portfolio_id=portfolio_id, security_id=sig.security_id, side=side,
                                      quantity=qty, actor=BOT_ACTOR)
+            record_reason(session, order, why)
             if order.status != "APPROVED":
                 action.update(outcome="rejected by compliance", detail=order.reject_reason)
             else:

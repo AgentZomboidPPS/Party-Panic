@@ -146,6 +146,12 @@ database on the volume. Not yet checked: a deployment on a public host.
   deepest fall from a high, and where the result came from: for each sleeve, profit already
   banked by selling, profit or loss still open at today's prices, and fees. The parts add up
   exactly to the change in value.
+- **Daily report (`portfolio/daily.py`).** `spectre report` is the day on one page, in plain
+  text: what the portfolio is worth and how the day went, every order with the reason the bot
+  recorded for it, orders that did not go through and why, holdings, risk, what is on hold for
+  settlement, the state of the signal check, and anything that needs a person. With
+  `--if-closed` it prints once per trading day, after the close, and nothing otherwise, so a
+  scheduler can call it hourly. Also `GET /portfolios/N/report`.
 - **Settlement (`portfolio/settlement.py`).** A trade is agreed today and the money moves later:
   stocks, funds and options settle the next business day (two days before 28 May 2024, three
   before September 2017), coins at once; weekends and exchange holidays are worked out, not

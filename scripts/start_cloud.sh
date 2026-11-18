@@ -44,6 +44,9 @@ fi
 pkill -f "spectre (serve|autopilot|ingest|run)( |$)" 2>/dev/null || true
 
 export SPECTRE_DATABASE_URL="${SPECTRE_DATABASE_URL:-sqlite:///$STATE/spectre.db}"
+# Remember where the database is, so other commands (`spectre report`, `spectre risk`) can be
+# pointed at the same one with:  set -a; . "$STATE/env"; set +a
+[ -f "$STATE/env" ] || printf 'SPECTRE_DATABASE_URL=%s\nPORT=%s\n' "$SPECTRE_DATABASE_URL" "$PORT" > "$STATE/env"
 export SPECTRE_REQUIRE_ALPACA="${SPECTRE_REQUIRE_ALPACA:-true}"
 export PYTHONUNBUFFERED=1 COLUMNS=170
 if $FOREGROUND; then
