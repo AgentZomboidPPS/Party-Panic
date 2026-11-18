@@ -151,7 +151,9 @@ database on the volume. Not yet checked: a deployment on a public host.
   recorded for it, orders that did not go through and why, holdings, risk, what is on hold for
   settlement, the state of the signal check, and anything that needs a person. With
   `--if-closed` it prints once per trading day, after the close, and nothing otherwise, so a
-  scheduler can call it hourly. Also `GET /portfolios/N/report`.
+  scheduler can call it hourly. Also `GET /portfolios/N/report`. `spectre attention` prints
+  only what needs a person (a halt, a brake, a bot that has stopped looking, a compliance
+  failure, a ledger that disagrees with the broker) and nothing at all when all is well.
 - **The bot's journal (`signals/journal.py`).** Every decision cycle is written down: orders
   placed, things it chose not to do and why (a settlement hold, the exposure cap, a holding
   too young to sell), and a line when it looked and found nothing to do. The dashboard's
@@ -438,7 +440,9 @@ chains the monthly expiry traded many times the volume of the weeklies around it
 bid/ask gap of about 3% on AMZN against 8% a week later. It spends `--options-per-trade`
 (3%) of the portfolio per position and at most `--options-budget` (20%) in total premium. A
 holding is sold at +100%, at −50%, a week before expiry (so nothing is exercised or assigned),
-or when the crowd turns; a contract sold today is not bought back the same day. Orders are
+or when the crowd has clearly turned (a score of −0.5 or lower for a call, +0.5 or higher for
+a put) and the position is at least four hours old: getting out costs the bid/ask gap, so a
+wobble is not enough. A contract sold today is not bought back the same day. Orders are
 worked rather than thrown at the market: the first try is at the midpoint of the bid and ask,
 then halfway to the far side, then the quote, and only last the order's own limit (3% past the
 quote), so the spread is paid only as far as it has to be. It only ever
@@ -453,6 +457,13 @@ for liked, in-between and disliked names relative to the others at the same mome
 the top five would have done against the field. Readings ten minutes apart overlap heavily, so
 evidence is counted in separate windows, and no verdict is offered below thirty of them. The
 Signals tab of the dashboard shows it and it fills in as data accumulates.
+
+**Brakes on the whole account.** While the account is more than 10% below the most it has
+been worth, or more than 3% down on the day (`SPECTRE_TRADING_MAX_DRAWDOWN`,
+`SPECTRE_TRADING_MAX_DAILY_LOSS`; 0 switches one off), KAIROS buys nothing new in any book.
+Selling and the stop-losses carry on, since those reduce risk. Nothing has to be reset: the
+brake releases when the account is back inside the limit, or the next day. The dashboard and
+the journal say when one is on.
 
 **Exposure cap (`--max-exposure`, default 1.0).** An option costs a fraction of the stock it
 behaves like, so a premium budget alone lets the portfolio carry several times its own value

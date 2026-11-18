@@ -47,6 +47,46 @@ def mark_reported(session: Session, portfolio_id: int, day: date) -> None:
     session.commit()
 
 
+def needs_attention(session: Session, portfolio_id: int, client=None, liveness: bool = True) -> list[str]:
+    """Everything about this portfolio that a person should look at, in plain sentences; an
+    empty list when all is well. With a broker client the ledger is also checked against the
+    broker. `liveness` adds "the bot has stopped looking", which only makes sense while it is
+    meant to be running."""
+    from spectre.config import settings
+    from spectre.execution.guard import halt_state
+    from spectre.portfolio.performance import buying_brake
+    from spectre.signals.journal import recent
+
+    out: list[str] = []
+    halt = halt_state(session)
+    if halt.halted:
+        out.append(f"trading is halted ({halt.reason or 'no reason given'}): nothing is bought or sold until it is resumed")
+    brake = buying_brake(session, portfolio_id, settings.trading_max_drawdown, settings.trading_max_daily_loss)
+    if brake:
+        out.append(f"buying is paused: {brake}")
+    if liveness:
+        looked = recent(session, portfolio_id, limit=1)["minutes_since"]
+        if looked is None:
+            out.append("the bot has never run on this portfolio")
+        elif looked > 25:
+            out.append(f"the bot last looked {looked:.0f} minutes ago; it should look every ten")
+    comp = post_trade_check(session, portfolio_id, record=False)
+    if not comp.passed:
+        out.append("compliance: " + "; ".join(b.message for b in comp.breaches if b.severity.value == "HARD")[:300])
+    violations = simulate(session, portfolio_id).recent_violations()
+    if violations:
+        out.append(f"{len(violations)} good-faith violation(s) in the last 12 months")
+    if client is not None:
+        try:
+            from spectre.execution.alpaca import reconcile
+
+            if not reconcile(session, client, portfolio_id)["clean"]:
+                out.append("the ledger and the broker disagree: run `spectre alpaca-reconcile`")
+        except Exception as exc:
+            out.append(f"could not reach the broker to check the ledger against it ({type(exc).__name__})")
+    return out
+
+
 def daily_report(session: Session, portfolio_id: int, day: date | None = None, client=None) -> dict:
     day = day or datetime.now(UTC).date()
     pf = session.get(Portfolio, portfolio_id)
@@ -95,27 +135,18 @@ def daily_report(session: Session, portfolio_id: int, day: date | None = None, c
     risk = var_suite(session, v)
     para = (risk.get("methods") or {}).get("parametric")
     state = simulate(session, portfolio_id)
-    comp = post_trade_check(session, portfolio_id, record=False)
 
-    attention: list[str] = []
-    if not comp.passed:
-        attention.append("compliance: " + "; ".join(b.message for b in comp.breaches if b.severity.value == "HARD")[:300])
-    if state.recent_violations():
-        attention.append(f"{len(state.recent_violations())} good-faith violation(s) in the last 12 months")
+    attention = needs_attention(session, portfolio_id, client, liveness=False)
     if risk.get("not_modelled"):
         attention.append("not in the risk numbers: " + ", ".join(risk["not_modelled"]))
     signal = None
     if client is not None:
         try:
-            from spectre.execution.alpaca import reconcile
             from spectre.signals.intraday import check
 
-            rec = reconcile(session, client, portfolio_id)
-            if not rec["clean"]:
-                attention.append("the ledger and the broker disagree: run `spectre alpaca-reconcile`")
             signal = check(session, client)
-        except Exception as exc:  # the report is still worth having without the broker's side
-            attention.append(f"could not reach the broker for the reconciliation and signal check ({type(exc).__name__})")
+        except Exception:  # the report is still worth having without the signal check
+            signal = None
 
     return {
         "day": day.isoformat(), "portfolio_id": portfolio_id, "portfolio": pf.name, "nav": v.total_value, "cash": v.cash,

@@ -54,6 +54,18 @@ CASH_SLACK = 0.99  # market orders fill a little away from the last price: never
 MIN_TOPUP = 0.05  # a purchase smaller than this share of a full position is not worth an order (or its fee)
 
 
+def last_bought(session: Session, portfolio_id: int, security_ids: list[int]) -> dict[int, datetime]:
+    """When each of these securities was most recently bought in this portfolio."""
+    if not security_ids:
+        return {}
+    rows = session.execute(
+        select(Order.security_id, func.max(Fill.filled_at)).join(Fill, Fill.order_id == Order.id)
+        .where(Order.portfolio_id == portfolio_id, Order.side == Side.BUY.value, Order.security_id.in_(security_ids))
+        .group_by(Order.security_id)
+    )
+    return {sid: when.replace(tzinfo=None) for sid, when in rows}
+
+
 def record_reason(session: Session, order, why: str) -> None:
     """Keep the bot's reason with the order, so the day's report can say why each trade was made."""
     audit.record(session, actor=BOT_ACTOR, entity_type="order", entity_id=order.id, action="decision", detail={"why": why})
@@ -212,6 +224,7 @@ def run_once(
     stop_loss: float | None = None,
     min_hold_minutes: float = 0.0,
     risk_weighted: bool = False,
+    allow_buys: bool = True,
 ) -> BotReport:
     """One decision cycle for one kind of asset: read the crowd, decide targets, trade the difference.
     `invest` is the share of the whole portfolio this book may hold; `stop_loss` (0.08 = 8%) is
@@ -282,14 +295,7 @@ def run_once(
     gone: set[int] = set()
     costs = average_costs(session, portfolio_id) if stop_loss else {}
     now = at or utcnow()
-    bought: dict[int, datetime] = {}
-    if min_hold_minutes > 0 and held:
-        for sid, when in session.execute(
-            select(Order.security_id, func.max(Fill.filled_at)).join(Fill, Fill.order_id == Order.id)
-            .where(Order.portfolio_id == portfolio_id, Order.side == Side.BUY.value, Order.security_id.in_(list(held)))
-            .group_by(Order.security_id)
-        ):
-            bought[sid] = when.replace(tzinfo=None)
+    bought = last_bought(session, portfolio_id, list(held)) if min_hold_minutes > 0 else {}
     for sid in held:
         sig = by_sid.get(sid)
         price, cost = float(book.at[sid, "price"]), costs.get(sid)
@@ -327,6 +333,8 @@ def run_once(
         select(Trade.security_id).where(Trade.portfolio_id == portfolio_id, Trade.side == Side.SELL.value,
                                         Trade.trade_date >= valued.as_of, Trade.order_id.is_not(None))
     ).scalars())
+    if not allow_buys:  # a brake is on: this cycle only sells
+        return report
     slot = nav * invest / max(top_n, 1)
     tilt = _risk_tilts(session, targets, asset_classes, valued.as_of) if risk_weighted else {}
     if tilt and sum(slot * t for t in tilt.values()) > nav * invest:  # calm names may not overfill the book

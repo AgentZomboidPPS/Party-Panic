@@ -8,7 +8,7 @@ Each cycle:
 1. refresh quotes and greeks for the contracts already held;
 2. close a holding when it is within `exit_dte` days of expiry (never held into expiry week, so
    nothing is exercised or assigned), when it has hit the profit target or the loss stop, or
-   when the crowd has turned against it;
+   when the crowd has clearly turned against it and the position is no longer young;
 3. for the strongest reads not already covered, buy one contract series: a call when the crowd
    is bullish, a put when bearish; an expiry a few weeks out, the standard monthly one when
    there is one in range (far more heavily traded than the weeklies, so cheaper to get in and
@@ -49,7 +49,15 @@ from spectre.portfolio.positions import average_costs, value_portfolio
 from spectre.portfolio.settlement import sale_restrictions
 from spectre.risk.options import market_exposure
 from spectre.signals.sources.base import utcnow
-from spectre.signals.strategy import BOT_ACTOR, BotReport, TrendSignal, live_signals, record_reason, withdraw_unfilled
+from spectre.signals.strategy import (
+    BOT_ACTOR,
+    BotReport,
+    TrendSignal,
+    last_bought,
+    live_signals,
+    record_reason,
+    withdraw_unfilled,
+)
 from spectre.trading import oms
 
 
@@ -79,6 +87,12 @@ class OptionRules:
     exit_dte: int = 7
     take_profit: float = 1.0  # +100%
     stop_loss: float = -0.5  # -50%
+    # Selling because the crowd changed its mind costs the bid/ask gap, several percent of the
+    # position, so it takes more than a wobble: the read must be clearly the other way (a call
+    # is sold at a score of -`turn` or lower, a put at +`turn` or higher), and not before the
+    # position is `min_hold_minutes` old. The stop, the profit target and expiry do not wait.
+    turn: float = 0.5
+    min_hold_minutes: float = 240.0
 
 
 def is_monthly(expiry: date) -> bool:
@@ -135,6 +149,7 @@ def run_options_once(
     dry_run: bool = False,
     at: datetime | None = None,
     today: date | None = None,
+    allow_buys: bool = True,
 ) -> BotReport:
     broker = broker or PaperBroker()
     limits = limits or TradingLimits.from_settings()
@@ -173,6 +188,8 @@ def run_options_once(
     closed = _sold_today(session, portfolio_id, today)
     on_hold = sale_restrictions(session, portfolio_id) if len(held) else {}
     costs = average_costs(session, portfolio_id) if len(held) else {}
+    bought = last_bought(session, portfolio_id, [int(i) for i in held.index]) if len(held) else {}
+    now = at or utcnow()
     premium_held = 0.0
     if len(held):
         try:
@@ -204,8 +221,14 @@ def run_options_once(
                 reason = f"up {pnl:+.0%}: profit target"
             elif pnl is not None and pnl <= rules.stop_loss:
                 reason = f"down {pnl:+.0%}: stop"
-            elif sig is not None and ((kind == "call" and sig.score <= 0) or (kind == "put" and sig.score >= 0)):
+            elif sig is not None and ((kind == "call" and sig.score <= -rules.turn) or (kind == "put" and sig.score >= rules.turn)):
                 reason = f"crowd has turned (score {sig.score:+.2f})"
+                age = (now - bought[int(sid)]).total_seconds() / 60 if int(sid) in bought else None
+                if age is not None and age < rules.min_hold_minutes:
+                    report.actions.append({"ticker": row["ticker"], "side": "SELL", "quantity": qty, "price": bid, "outcome": "skipped",
+                                           "why": f"{reason}; but it was bought {age:.0f} minutes ago and is kept at least "
+                                                  f"{rules.min_hold_minutes:.0f} before a change of mind counts"})
+                    reason = None
             if reason and row["ticker"] in on_hold and dte > 2:
                 # Bought with money from a sale that has not settled yet: selling today would be
                 # a good-faith violation. (With expiry two days off, getting out matters more.)
@@ -229,6 +252,8 @@ def run_options_once(
         session.commit()
 
     # --- 3: new positions
+    if not allow_buys:  # a brake is on: this cycle only sells
+        return report
     budget_left = rules.budget * valued.total_value - premium_held
     exposure_room = None
     if rules.max_exposure is not None:

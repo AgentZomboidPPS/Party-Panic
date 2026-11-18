@@ -182,3 +182,32 @@ def performance(session: Session, portfolio_id: int, max_points: int = 400) -> d
         "closed_trades": closed, "winners": sum(s["winners"] for s in sleeves),
         "snapshots": len(snaps), "series": points,
     }
+
+
+def buying_brake(session: Session, portfolio_id: int, max_drawdown: float = 0.10, max_daily_loss: float = 0.03,
+                 now: datetime | None = None) -> str | None:
+    """A reason to stop buying, or None.
+
+    Two brakes on the whole account, both read off the record of its value: it is more than
+    `max_drawdown` below the most it has ever been worth, or it is more than `max_daily_loss`
+    down since the last value recorded before today. Either one stops new purchases only:
+    selling, and the stop-losses, carry on, since those reduce risk. Nothing has to be reset;
+    the brake releases by itself when the account is back inside the limit (or, for the daily
+    one, the next day). 0 switches a brake off."""
+    now = now or _now()
+    nav = value_portfolio(session, portfolio_id).total_value
+    put_in = session.execute(
+        select(func.coalesce(func.sum(CashFlow.amount), 0.0)).where(CashFlow.portfolio_id == portfolio_id, CashFlow.kind == "EXTERNAL")
+    ).scalar_one()
+    snaps = session.execute(
+        select(NavSnapshot.at, NavSnapshot.nav).where(NavSnapshot.portfolio_id == portfolio_id).order_by(NavSnapshot.at)
+    ).all()
+    peak = max([put_in, nav] + [n for _, n in snaps])
+    if max_drawdown and peak > 0 and nav <= peak * (1 - max_drawdown):
+        return f"the account is {1 - nav / peak:.1%} below its high of {peak:,.0f} (the limit is {max_drawdown:.0%})"
+    earlier = [n for at, n in snaps if at.date() < now.date()]
+    start = _inception(session, portfolio_id)
+    day_start = earlier[-1] if earlier else (put_in if start is not None and start.date() == now.date() else None)
+    if max_daily_loss and day_start and nav <= day_start * (1 - max_daily_loss):
+        return f"the account is {1 - nav / day_start:.1%} down today (the limit is {max_daily_loss:.0%})"
+    return None

@@ -802,12 +802,17 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
                 notes.append(f"reconcile {item['ticker']}: ledger {item['ledger']:g}, broker {item['broker']:g} -> {item['action']}")
             if rec["cash"]:
                 notes.append(f"reconcile cash: {rec['cash']['difference']:+,.2f} -> {rec['cash']['action']}")
+    from spectre.portfolio.performance import buying_brake
+
+    brake = buying_brake(s, portfolio_id, settings.trading_max_drawdown, settings.trading_max_daily_loss)
+    if brake:
+        notes.append(f"Buying is paused: {brake}. Sales and stop-losses still run.")
     report, actions = None, []
     booked: list[tuple[str, dict]] = []  # (which book, what was done) for the journal
     if market_open:
         report = run_once(s, portfolio_id, route, top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
                           lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run, stop_loss=stop_loss or None,
-                          min_hold_minutes=min_hold, risk_weighted=risk_weighted)
+                          min_hold_minutes=min_hold, risk_weighted=risk_weighted, allow_buys=not brake)
         actions += report.actions
         booked += [("stocks", a) for a in report.actions]
         if options:
@@ -815,7 +820,8 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
             from spectre.signals.options_strategy import run_options_once
 
             done = run_options_once(s, portfolio_id, getattr(route, "client", None) or AlpacaClient(), route,
-                                    lookback_minutes=lookback, dry_run=dry_run, rules=option_rules).actions
+                                    lookback_minutes=lookback, dry_run=dry_run, rules=option_rules,
+                                    allow_buys=not brake).actions
             actions += done
             booked += [("options", a) for a in done]
     coins = None
@@ -825,7 +831,7 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
         coins = run_once(s, portfolio_id, route, top_n=crypto_top, invest=crypto_invest, enter=max(enter, crypto_enter),
                          exit_below=exit_below, lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run,
                          asset_classes=CRYPTO, stop_loss=crypto_stop_loss or None, min_hold_minutes=crypto_min_hold,
-                         risk_weighted=risk_weighted)
+                         risk_weighted=risk_weighted, allow_buys=not brake)
         actions += coins.actions
         booked += [("coins", a) for a in coins.actions]
     if not dry_run:
@@ -1102,6 +1108,34 @@ def report(portfolio_id: int | None = typer.Argument(None, help="Default: the po
         if if_closed:
             daily.mark_reported(s, portfolio_id, which)
     print(text)  # plain text on purpose: it is meant to be pasted into a message
+
+
+@app.command()
+def attention(portfolio_id: int | None = typer.Argument(None, help="Default: the portfolio named by SPECTRE_PORTFOLIO (KAIROS)"),
+              db: str | None = typer.Option(None, "--db")):
+    """Anything a person should look at: a halt, a brake, a bot that has stopped looking, a
+    compliance failure, a ledger that disagrees with the broker. Prints nothing when all is well."""
+    import os
+
+    from sqlalchemy import select
+
+    from spectre.models import Portfolio
+    from spectre.portfolio import daily
+
+    client = None
+    if settings.alpaca_key_id and settings.alpaca_secret_key:
+        from spectre.execution.alpaca import AlpacaClient
+
+        client = AlpacaClient()
+    with _session(db) as s:
+        if portfolio_id is None:
+            name = os.environ.get("SPECTRE_PORTFOLIO", "KAIROS")
+            portfolio_id = s.execute(select(Portfolio.id).where(Portfolio.name == name)).scalar_one_or_none()
+            if portfolio_id is None:
+                print(f"No portfolio named '{name}'.")
+                raise typer.Exit(1)
+        for line in daily.needs_attention(s, portfolio_id, client):
+            print("- " + line)
 
 
 @app.command()

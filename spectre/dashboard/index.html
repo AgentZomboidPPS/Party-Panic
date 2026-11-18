@@ -421,6 +421,7 @@ function drawActivity(act, trading) {
   const halted = trading && trading.halted;
   status.innerHTML =
     `<span class="status ${mins == null || stale ? 'bad' : 'ok'}"><span class="ic">${mins == null || stale ? '!' : '✓'}</span>KAIROS ${ago}${stale ? ' — it should look every ten minutes' : ''}</span>` +
+    (act.buying_paused ? `<span class="status warn"><span class="ic">!</span>Buying is paused: ${esc(act.buying_paused)}. Sales and stops still run.</span>` : '') +
     (trading ? `<span class="status ${halted ? 'bad' : 'ok'}"><span class="ic">${halted ? '!' : '✓'}</span>${halted ? 'Trading is HALTED' + (trading.halt_reason ? ': ' + esc(trading.halt_reason) : '') : 'Trading is on'}</span>
       <button class="ghost ${halted ? '' : 'danger'}" id="haltBtn">${halted ? 'Resume trading' : 'Halt trading'}</button>` : '');
   const btn = $('#haltBtn');

@@ -161,9 +161,14 @@ def positions(portfolio_id: int, db: DB, as_of: date | None = None) -> dict:
 @router.get("/portfolios/{portfolio_id}/activity")
 def activity(portfolio_id: int, db: DB, limit: int = 60, include_idle: bool = False) -> dict:
     """What the bot has been deciding, newest first, with its reasons; and when it last looked."""
+    from spectre.config import settings
+    from spectre.portfolio.performance import buying_brake
     from spectre.signals.journal import recent
 
-    return recent(db, portfolio_id, limit, include_idle)
+    out = recent(db, portfolio_id, limit, include_idle)
+    out["buying_paused"] = buying_brake(db, portfolio_id, settings.trading_max_drawdown,
+                                        settings.trading_max_daily_loss)
+    return out
 
 
 @router.get("/portfolios/{portfolio_id}/report")

@@ -114,3 +114,30 @@ def test_the_api_serves_the_journal_and_what_each_holding_cost(book):  # noqa: F
         assert feed["minutes_since"] < 1 and feed["decisions"][0]["ticker"] == "NVDA"
         (pos,) = web.get(f"/portfolios/{pid}/positions").json()["positions"]
         assert pos["average_cost"] == 150.0 and pos["open_pnl"] == 13 * 6.0 and round(pos["open_pnl_pct"], 4) == 0.04
+
+
+def test_needs_attention_lists_what_a_person_should_look_at(book):  # noqa: F811
+    from spectre.execution.guard import set_halt
+    from spectre.signals import journal
+    from tests.test_strategy import _set_price
+
+    factory, pid, _ = book
+    with factory() as s:
+        assert daily.needs_attention(s, pid) == ["the bot has never run on this portfolio"]
+        assert daily.needs_attention(s, pid, liveness=False) == [], "all is well: nothing to say"
+
+        run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5)  # 13 NVDA at 150 in a 10,000 account
+        journal.record_cycle(s, pid, [], [])
+        assert daily.needs_attention(s, pid) == []
+
+        journal.record_cycle(s, pid, [], [], at=datetime(2026, 11, 18, 15, 0))
+        s.execute(journal.BotDecision.__table__.delete().where(journal.BotDecision.at > datetime(2026, 11, 18, 16, 0)))
+        s.commit()
+        (stale,) = daily.needs_attention(s, pid)
+        assert "last looked" in stale and "every ten" in stale
+
+        set_halt(s, True, "tester", "checking")
+        _set_price(s, "NVDA", 100.0)  # 13 x -50 = -650: 6.5% down on the day it started
+        lines = daily.needs_attention(s, pid, liveness=False)
+        assert lines[0].startswith("trading is halted (checking)") and "buying is paused: the account is 6.5% down today" in lines[1]
+        assert "buying is paused" in daily.render(daily.daily_report(s, pid))

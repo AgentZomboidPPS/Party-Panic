@@ -229,7 +229,15 @@ def test_a_call_is_sold_when_the_crowd_turns_bearish_and_a_put_replaces_it(book)
         o = oms.create_order(s, portfolio_id=pid, security_id=sec.id, side=Side.BUY, quantity=1,
                              order_type=OrderType.LIMIT, limit_price=16.4)
         assert execute(s, o.id, PaperBroker(), LIMITS).outcome == "executed"
-        r = cycle(s, pid, fake)
+        # Minutes after buying, a turned crowd is not yet a reason to pay the spread and get out...
+        young = cycle(s, pid, fake, dry_run=True)
+        wait = next(a for a in young.actions if a["ticker"] == TSLA_CALL)
+        assert wait["outcome"] == "skipped" and "crowd has turned" in wait["why"] and "kept at least 240" in wait["why"]
+        # ...and a read that has merely cooled is not a turn at all: TSLA is at -1.08, well past -0.5, but not past -2.
+        assert not [a for a in cycle(s, pid, fake, dry_run=True, rules=OptionRules(min_authors=4, turn=2.0)).actions
+                    if a["ticker"] == TSLA_CALL]
+        # Once the position is old enough (here: no minimum), it is sold and a put takes its place.
+        r = cycle(s, pid, fake, rules=OptionRules(min_authors=4, min_hold_minutes=0))
         tsla = {a["ticker"]: a for a in r.actions if a["ticker"].startswith("TSLA")}
         assert tsla[TSLA_CALL]["side"] == "SELL" and "crowd has turned" in tsla[TSLA_CALL]["why"]
         assert tsla[TSLA_PUT]["side"] == "BUY" and tsla[TSLA_PUT]["outcome"] == "executed"
@@ -293,6 +301,17 @@ def test_exposure_cap_can_rule_out_a_call_altogether():
         assert held(s, pid) == {TSLA_PUT: 1}
         # With no cap the premium budget alone decides, as before.
         assert cycle(s, pid, FakeOptions(), rules=OptionRules(min_authors=4)).actions[0]["quantity"] == 5
+
+
+def test_with_a_brake_on_the_options_sleeve_only_sells(book):
+    factory, pid = book
+    fake = FakeOptions()
+    with factory() as s:
+        assert cycle(s, pid, fake, allow_buys=False).actions == [], "nothing is bought while a brake is on"
+        cycle(s, pid, fake)
+        fake.chain[NVDA_CALL] = snap(2.6, 2.8, 0.25)  # through the stop
+        r = cycle(s, pid, fake, allow_buys=False)
+        assert [(a["ticker"], a["side"], a["outcome"]) for a in r.actions] == [(NVDA_CALL, "SELL", "executed")]
 
 
 def test_dry_run_touches_nothing(book):

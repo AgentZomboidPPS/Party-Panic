@@ -123,3 +123,36 @@ def test_an_untouched_portfolio_has_a_record_of_nothing(acct):
     s, pid, *_ = acct
     r = perf.performance(s, pid)
     assert r["pnl"] == 0 and r["series"] == [] and r["sleeves"] == [] and r["since"] is None and r["max_drawdown"] == 0
+
+
+def test_brakes_pause_buying_on_a_drawdown_or_a_bad_day_and_release_by_themselves(acct):
+    s, pid, secs, price, trade = acct
+    trade("AAA", "BUY", 80)  # 8,000 of a 10,000 account in one stock, to make the arithmetic plain
+    today = perf._inception(s, pid)  # the moment of the first fill: whatever the clock says, it is "today"
+    assert perf.buying_brake(s, pid, now=today) is None
+
+    price("AAA", 96.0)  # the account is 3.2% down on the day it started
+    reason = perf.buying_brake(s, pid, now=today)
+    assert reason == "the account is 3.2% down today (the limit is 3%)"
+    assert perf.buying_brake(s, pid, max_daily_loss=0, now=today) is None, "a brake set to 0 is switched off"
+    price("AAA", 98.0)
+    assert perf.buying_brake(s, pid, now=today) is None, "back inside the limit: released, nothing to reset"
+
+    # A new day starts from yesterday's last recorded value, so yesterday's loss is not counted again.
+    price("AAA", 96.0)
+    perf.record_snapshot(s, pid, at=today)  # 9,680 recorded "yesterday"
+    tomorrow = today + timedelta(days=1)
+    assert perf.buying_brake(s, pid, now=tomorrow) is None
+    price("AAA", 92.0)  # 9,360: 3.3% below yesterday's close
+    assert "3.3% down today" in perf.buying_brake(s, pid, now=tomorrow)
+
+    # The drawdown brake measures from the most the account has ever been worth.
+    price("AAA", 130.0)
+    perf.record_snapshot(s, pid, at=tomorrow)  # a high of 12,400
+    later = tomorrow + timedelta(days=3)
+    price("AAA", 126.0)
+    perf.record_snapshot(s, pid, at=later - timedelta(days=1))
+    price("AAA", 124.0)
+    assert perf.buying_brake(s, pid, now=later) is None
+    price("AAA", 113.0)  # 11,040: 11% below the high
+    assert perf.buying_brake(s, pid, max_daily_loss=0, now=later) == "the account is 11.0% below its high of 12,400 (the limit is 10%)"

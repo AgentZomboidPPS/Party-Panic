@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     alpaca_option_feed: str = "indicative"  # free; "opra" (full real-time) needs a paid plan
     # Cash only: refuse to send an order while the Alpaca account can borrow (margin multiplier above 1).
     alpaca_cash_only: bool = True
+    # Brakes on the whole account. While it is this far below its high, or this far down on the
+    # day, the bot buys nothing new; sales and stops carry on. 0 switches a brake off.
+    trading_max_drawdown: float = 0.10
+    trading_max_daily_loss: float = 0.03
     # When set, the dashboard and API ask for this password (any user name). Required before
     # `spectre run` will listen on anything but this machine.
     dashboard_password: str = ""

@@ -265,6 +265,17 @@ def test_risk_weighting_gives_a_jumpy_name_a_smaller_position(book):
         assert size["AMD"]["quantity"] == 2 and "sized at 0.5 of a full position because it moves more than most" in size["AMD"]["why"]
 
 
+def test_with_a_brake_on_a_cycle_sells_but_does_not_buy(book):
+    factory, pid, pipe = book
+    with factory() as s:
+        paused = run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5, allow_buys=False)
+        assert paused.actions == [] and paused.targets == ["NVDA"], "it still sees what it would buy; it just does not"
+    _bought_then_the_crowd_turned(factory, pid, pipe)
+    with factory() as s:
+        r = run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5, allow_buys=False, at=T0 + timedelta(minutes=80))
+        assert [(a["side"], a["outcome"]) for a in r.actions] == [("SELL", "executed")], "selling reduces risk: never paused"
+
+
 def test_an_order_the_broker_does_not_fill_is_withdrawn_not_left_open(book):
     from spectre.execution.brokers import BrokerReject
 
