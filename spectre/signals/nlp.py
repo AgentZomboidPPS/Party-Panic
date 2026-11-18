@@ -36,13 +36,37 @@ _WORD = re.compile(r"[a-z][a-z\-']+")
 
 
 class SentimentModel:
-    def __init__(self):
+    """Scores a post from -1 (bearish) to +1 (bullish).
+
+    The base is a general-purpose word list with finance vocabulary added. When a model learned
+    from authors' own Bullish/Bearish tags has been trained and has earned its place (see
+    `signals/learned.py`), the score is an even blend of the two."""
+
+    def __init__(self, learned_path=None):
         self._a = SentimentIntensityAnalyzer()
         self._a.lexicon.update(FINANCE_LEXICON)
+        self._learned, self._scale, self.trained_at = None, 1.0, None
+        if learned_path is not None:
+            from spectre.signals.learned import load
+
+            saved = load(learned_path)
+            if saved:
+                self._learned, self._scale, self.trained_at = saved["model"], float(saved.get("scale", 1.0)), saved.get("trained_at")
+
+    @property
+    def kind(self) -> str:
+        return "word list blended with a model learned from tagged posts" if self._learned is not None else "word list"
+
+    def lexicon_score(self, text: str) -> float:
+        return float(self._a.polarity_scores(text)["compound"])
 
     def score(self, text: str) -> float:
-        """Compound sentiment in [-1, 1]."""
-        return float(self._a.polarity_scores(text)["compound"])
+        """Sentiment in [-1, 1]."""
+        base = self.lexicon_score(text)
+        if self._learned is None:
+            return base
+        learned = 2.0 * float(self._learned.predict_proba([text])[0, 1]) - 1.0
+        return float(min(1.0, max(-1.0, 0.5 * base + 0.5 * learned * self._scale)))
 
 
 def fear_flag(text: str) -> bool:

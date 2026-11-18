@@ -273,7 +273,16 @@ polymarket
   (`spectre calibrate`), the lexicon model took a side 64% of the time and was right 67% of the
   time, worse than always guessing "bullish" (72%). So where an author declares a stance, that
   label is used instead of the model's guess, and the model's own score is kept separately so it
-  can keep being measured. A classifier trained on those labels is the next step.
+  can keep being measured.
+  **A model learned from those labels** (`learned.py`, `spectre sentiment-train`): word and
+  word-pair frequencies into a logistic regression, with tickers, links and numbers blanked so
+  it learns the language rather than the day's popular stock. It is trained on earlier posts
+  and judged on later ones. On the first 1,656 tagged posts it was no better alone than the
+  word list (both rank later posts at about 0.63, where 0.50 is a coin toss), but the two are
+  nearly uncorrelated and an even blend reaches 0.66 and is right 69% of the time when it takes
+  a side (always guessing the commoner tag scores 60%). So the scorer for untagged posts is
+  that blend, and only while it keeps beating the word list by a set margin on later posts: it
+  is re-tested at every start and a few times a day, and dropped if it stops earning its place.
 - **Aggregation** (`aggregate.py`): per-window **topic bubbles** (volume, unique authors, sentiment,
   fear share, velocity vs. the matching topic in the previous window), per-security **sentiment
   bars** with attention and sentiment z-scores against the security's own history, a **fear

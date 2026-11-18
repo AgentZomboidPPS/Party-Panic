@@ -369,6 +369,37 @@ def trends(db: str | None = typer.Option(None, "--db"), hours: float = 24):
     console.print(t)
 
 
+def _sentiment_line(r: dict) -> str:
+    """One line on the state of the learned sentiment model, for a log or a terminal."""
+    if "blend" not in r:
+        return f"Sentiment: word list only ({r.get('reason', 'no model trained')})."
+    return (f"Sentiment: {'word list blended with a learned model' if r['adopt'] else 'word list only'} "
+            f"({r['reason']}; {r['labelled']:,} tagged posts, judged on {r['judged']:,} later ones).")
+
+
+@app.command()
+def sentiment_train(db: str | None = typer.Option(None, "--db")):
+    """Train a sentiment model on posts their authors tagged Bullish or Bearish, test it on later
+    posts, and use it (blended with the word list) only if that beats the word list alone."""
+    from spectre.signals import learned
+
+    url = db or settings.database_url
+    with _session(db) as s:
+        r = learned.train(s, learned.model_path(url))
+    if "blend" not in r:
+        console.print(r.get("reason", "Nothing to train on."))
+        return
+    console.print(f"{r['labelled']:,} tagged posts ({r['bullish_share']:.0%} bullish), {r['from']} to {r['to']} UTC. "
+                  f"Trained on earlier posts and judged on {r['judged']:,} later ones.")
+    t = Table("scorer", "ranks later posts (0.5 = coin toss)", "takes a side on", "right when it does")
+    for name, key in (("word list", "lexicon"), ("learned from tags", "learned"), ("even blend of the two", "blend")):
+        m = r[key]
+        t.add_row(name, f"{m['auc']:.3f}", f"{m['takes_a_side']:.0%}", "-" if m["right_when_it_does"] is None else f"{m['right_when_it_does']:.0%}")
+    console.print(t)
+    console.print(f"Always guessing the commoner tag would be right {r['majority_share']:.0%} of the time.")
+    console.print(("[green]In use from the next start:[/] " if r["adopt"] else "[yellow]Not adopted:[/] ") + r["reason"] + ".")
+
+
 @app.command()
 def calibrate(db: str | None = typer.Option(None, "--db")):
     """Check the sentiment model against Bullish/Bearish labels users put on their own posts."""
@@ -912,7 +943,22 @@ def autopilot(portfolio_id: int,
             _seed(s)  # make sure the coins exist before the recogniser is built
         symbols = ",".join(dict.fromkeys(filter(None, symbols.split(",") + CRYPTO_STREAMS.split(","))))
     built = _build_sources(factory, sources, symbols=symbols, geos=geos)
-    pipe = Pipeline(factory)
+    from spectre.signals import learned
+    from spectre.signals.nlp import SentimentModel
+
+    model_file = learned.model_path(db or settings.database_url)
+
+    def retrain() -> SentimentModel:
+        """Re-test the learned sentiment model on the tagged posts collected so far, and use
+        the blend only while it beats the word list on later posts."""
+        try:
+            with factory() as s:
+                console.print(_sentiment_line(learned.train(s, model_file)))
+        except Exception as exc:  # never worth stopping the run for
+            console.print(f"[yellow]Sentiment model not retrained ({type(exc).__name__}: {exc}).[/]")
+        return SentimentModel(model_file)
+
+    pipe = Pipeline(factory, sentiment=retrain())
     started = _time.monotonic()
 
     def decide() -> None:
@@ -953,6 +999,7 @@ def autopilot(portfolio_id: int,
         if any(r.values()):
             console.print(f"{_time.strftime('%H:%M:%S')}  [dim]tidied: {r['posts']:,} old posts, {r['price_ticks']:,} ticks, "
                           f"{r['market_snapshots']:,} market snapshots removed[/]")
+        pipe.sentiment = retrain()
 
     summary = asyncio.run(pipe.run(built, duration_seconds=minutes * 60 if minutes else None,
                                    periodic=[(every * 60, decide), (6 * 3600.0, tidy)],
