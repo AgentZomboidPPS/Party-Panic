@@ -107,6 +107,11 @@ Optional: `SPECTRE_INVEST` (0.70), `SPECTRE_OPTIONS` (true), `SPECTRE_OPTIONS_BU
 `SPECTRE_SYMBOLS`, `SPECTRE_PORTFOLIO` (KAIROS). `GET /health` needs no password, for the
 host's health check.
 
+A few times a day it trims old raw data (`spectre prune` does the same by hand): posts and
+their price ticks after 30 days, and prediction-market snapshots older than a week down to one
+per market per day. The ledger, the audit trail, value snapshots and price history are never
+touched, so the database stops growing without losing the record.
+
 Checked: the image builds, starts, serves the dashboard behind the password and keeps its
 database on the volume. Not yet checked: a deployment on a public host.
 
@@ -506,7 +511,7 @@ Alpaca: `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`, `ALPACA_TRADING_URL` (paper host),
 ## Roadmap
 
 Next steps in rough priority order: deploy the container to a permanent host so KAIROS can
-build a track record (and prune old posts there); measure the crowd signal against real prices
+build a track record; measure the crowd signal against real prices
 once weeks of data exist; train a sentiment classifier on the Stocktwits labels and adopt it
 only if it beats the baseline out of sample; covered calls, cash-secured puts and defined-risk
 spreads, with their assignment and expiry bookkeeping (never an uncovered sale); use rates and

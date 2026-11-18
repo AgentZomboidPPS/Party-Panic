@@ -879,8 +879,17 @@ def autopilot(portfolio_id: int,
                   f"first decision {'in under a minute' if warmup <= 0 else f'after {max(warmup, every):g} min'}, then every {every:g} min. Ctrl-C to stop.")
     # With no warm-up asked for, decide soon after starting rather than a whole interval later:
     # a restart on a database that already holds the last hour of posts has what it needs.
+    def tidy() -> None:  # a few times a day, so a database that runs for months stops growing
+        from spectre.signals.retention import prune as _prune
+
+        with factory() as s:
+            r = _prune(s)
+        if any(r.values()):
+            console.print(f"{_time.strftime('%H:%M:%S')}  [dim]tidied: {r['posts']:,} old posts, {r['price_ticks']:,} ticks, "
+                          f"{r['market_snapshots']:,} market snapshots removed[/]")
+
     summary = asyncio.run(pipe.run(built, duration_seconds=minutes * 60 if minutes else None,
-                                   periodic=[(every * 60, decide)],
+                                   periodic=[(every * 60, decide), (6 * 3600.0, tidy)],
                                    periodic_first_after=min(45.0, every * 60) if warmup <= 0 else None))
     console.print_json(data=summary)
 
@@ -1047,6 +1056,18 @@ def alpaca_margin(multiplier: str | None = typer.Argument(None, help="1 = cash o
     mult = str(acct.get("multiplier"))
     console.print(f"Margin multiplier {mult}: " + ("cash only, nothing can be borrowed" if mult == "1" else "the account can borrow")
                   + f". Cash {float(acct['cash']):,.2f}, buying power {float(acct.get('buying_power') or 0):,.2f}.")
+
+
+@app.command()
+def prune(days: int = typer.Option(30, help="Keep raw posts and their price ticks this many days"),
+          market_days: int = typer.Option(7, help="Keep every prediction-market snapshot this many days; older ones are thinned to one a day"),
+          db: str | None = typer.Option(None, "--db")):
+    """Trim old raw data so a long-running database stops growing. The ledger and audit trail are never touched."""
+    from spectre.signals.retention import prune as _prune
+
+    with _session(db) as s:
+        r = _prune(s, days, market_days)
+    console.print(f"Removed {r['posts']:,} posts, {r['price_ticks']:,} price ticks and {r['market_snapshots']:,} market snapshots.")
 
 
 @app.command()

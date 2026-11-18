@@ -261,3 +261,39 @@ def test_periodic_jobs_can_start_soon_after_launch_instead_of_a_full_interval_la
 
     assert runs(None) == 0, "by default the first run waits a whole interval"
     assert runs(0.1) == 1, "asked to start early, it runs once and then keeps its hourly cadence"
+
+
+def test_old_raw_data_is_trimmed_and_the_record_that_matters_is_kept():
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import func, select
+
+    from spectre.db import init_db, make_engine, make_session_factory
+    from spectre.models import Security
+    from spectre.signals.models import PredictionMarket, PriceTick, SocialPost
+    from spectre.signals.retention import prune
+
+    now = datetime(2026, 12, 31, 12, 0)
+    e = make_engine("sqlite://")
+    init_db(e)
+    with make_session_factory(e)() as s:
+        sec = Security(ticker="AAA", name="Alpha", asset_class="Equity", currency="USD")
+        s.add(sec)
+        s.flush()
+        for i, age in enumerate((1, 29, 31, 90)):  # days old
+            when = now - timedelta(days=age)
+            s.add(SocialPost(source="t", external_id=str(i), author_hash="a", author_quality=1.0, dedup_hash=str(i), text="x",
+                             posted_at=when, ingested_at=when, sentiment=0.0, tickers=[], fear=False, screened_out=False))
+            s.add(PriceTick(security_id=sec.id, ticker="AAA", observed_at=when, price=1.0, source="t"))
+        # One market polled four times a day: three days ago (inside the detail window) and twenty days ago.
+        for age in (3, 20):
+            for hour in (1, 7, 13, 19):
+                when = (now - timedelta(days=age)).replace(hour=hour)
+                s.add(PredictionMarket(source="k", market_id="M1", title="t", yes_price=hour / 100, snapshot_at=when))
+        s.commit()
+
+        assert prune(s, now=now) == {"posts": 2, "price_ticks": 2, "market_snapshots": 3}
+        assert s.execute(select(func.count(SocialPost.id))).scalar_one() == 2
+        left = s.execute(select(PredictionMarket.snapshot_at, PredictionMarket.yes_price).order_by(PredictionMarket.snapshot_at)).all()
+        assert len(left) == 5 and left[0][1] == 0.19, "the old day keeps its last snapshot; the recent day keeps all four"
+        assert prune(s, now=now) == {"posts": 0, "price_ticks": 0, "market_snapshots": 0}, "nothing more to do"
