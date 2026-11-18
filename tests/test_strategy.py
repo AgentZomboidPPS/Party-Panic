@@ -126,6 +126,71 @@ def test_cycle_buys_the_strong_name_within_limits_then_sells_when_the_crowd_turn
         assert v.positions.at[nvda_id, "quantity"] == 2, "a 2,000 order cap at 140 sells 14 of 16; the rest goes next cycle"
 
 
+def _set_price(s, ticker, close):
+    from spectre.marketdata.prices import upsert_prices
+
+    sid = s.execute(select(Security.id).where(Security.ticker == ticker)).scalar_one()
+    upsert_prices(s, [{"security_id": sid, "date": T0.date(), "close": close}])
+    s.commit()
+    return sid
+
+
+def test_average_cost_follows_buys_and_starts_afresh_after_a_full_exit(book):
+    from spectre.portfolio.positions import average_costs
+
+    factory, pid, _ = book
+    with factory() as s:
+        amd = _set_price(s, "AMD", 200.0)
+
+        def trade(side, qty, price):
+            s.add(Trade(portfolio_id=pid, security_id=amd, side=side, quantity=qty, price=price, currency="USD", trade_date=T0.date()))
+            s.commit()
+
+        trade("BUY", 10, 200.0)
+        trade("BUY", 30, 220.0)
+        assert average_costs(s, pid)[amd] == pytest.approx(215.0)
+        trade("SELL", 20, 300.0)
+        assert average_costs(s, pid)[amd] == pytest.approx(215.0), "selling some does not change what the rest cost"
+        trade("SELL", 20, 300.0)
+        assert amd not in average_costs(s, pid)
+        trade("BUY", 5, 180.0)
+        assert average_costs(s, pid)[amd] == pytest.approx(180.0), "a new position does not inherit the old average"
+
+
+def test_stop_loss_sells_whatever_the_crowd_says_and_the_name_rests_for_the_day(book):
+    factory, pid, _ = book
+    roomy = TradingLimits(max_order_notional=50_000, max_daily_notional=500_000, max_orders_per_day=50, max_position_weight=1.0)
+
+    def cycle(s, **kw):
+        return run_once(s, pid, limits=roomy, top_n=2, invest=0.5, **kw)
+
+    with factory() as s:
+        cycle(s)  # 10,000 x 50% / 2 names = 2,500 -> 16 NVDA at 150
+        # AMD is held too, and there is no read on it at all (too few people talking).
+        amd = _set_price(s, "AMD", 200.0)
+        s.add(Trade(portfolio_id=pid, security_id=amd, side="BUY", quantity=5, price=200.0, currency="USD", trade_date=T0.date()))
+        s.commit()
+
+        _set_price(s, "NVDA", 141.0)  # down 6%
+        _set_price(s, "AMD", 190.0)  # down 5%
+        calm = cycle(s, stop_loss=0.08)
+        assert [(a["side"], a["ticker"], a["quantity"]) for a in calm.actions] == [("BUY", "NVDA", 1)], \
+            "inside the 8% stop nothing is sold; NVDA is topped back up to its target instead"
+
+        _set_price(s, "NVDA", 135.0)  # while the crowd is as bullish as ever
+        _set_price(s, "AMD", 180.0)  # and still nobody is talking about AMD
+        r = cycle(s, stop_loss=0.08)
+        sold = {a["ticker"]: a for a in r.actions}
+        assert set(sold) == {"NVDA", "AMD"} and all(a["side"] == "SELL" and a["outcome"] == "executed" for a in sold.values())
+        # 16 shares at 150 and 1 at 141 cost 149.47 on average; 135 is 9.7% below that.
+        assert sold["NVDA"]["why"] == "9.7% below its average cost of 149.47: stop" and sold["NVDA"]["quantity"] == 17
+        assert sold["AMD"]["why"] == "10.0% below its average cost of 200.00: stop" and sold["AMD"]["quantity"] == 5
+        assert "NVDA" in r.targets, "the crowd still wants it..."
+        assert value_portfolio(s, pid).positions.empty, "...but it was not bought straight back"
+        assert cycle(s, stop_loss=0.08).actions == [], "nor later the same day"
+        assert cycle(s, dry_run=True).actions == [], "the rest-of-the-day pause applies with or without a stop configured"
+
+
 def test_an_order_the_broker_does_not_fill_is_withdrawn_not_left_open(book):
     from spectre.execution.brokers import BrokerReject
 

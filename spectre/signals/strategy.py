@@ -10,6 +10,9 @@ The rule is deliberately simple and easy to audit:
 4. Hold the top few names whose score clears `enter`; sell anything held whose score has
    fallen to `exit` or below. Long only, equal weight inside the invested share: whole shares
    for stocks and funds, millionths of a coin for crypto.
+5. With `stop_loss` set, sell a holding whose price has fallen that far below its average
+   cost, whatever the crowd says and even with no fresh read on it. Nothing sold today is
+   bought back today.
 
 The same rule runs separately for each kind of asset it is pointed at (`asset_classes`): the
 stock book during market hours, the coin book around the clock, each with its own allowance.
@@ -21,7 +24,7 @@ switch). Nothing here has a proven edge: it is a starting rule to measure, not a
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -32,8 +35,8 @@ from spectre.execution.brokers import Broker, PaperBroker
 from spectre.execution.guard import TradingLimits, execute
 from spectre.marketdata.prices import latest_price_date, latest_prices
 from spectre.marketdata.universe import lot_size
-from spectre.models import Security, Side
-from spectre.portfolio.positions import value_portfolio
+from spectre.models import Security, Side, Trade
+from spectre.portfolio.positions import average_costs, value_portfolio
 from spectre.portfolio.settlement import sale_restrictions
 from spectre.signals.aggregate import BEAR_T, BULL_T
 from spectre.signals.models import SearchTrend, SocialPost
@@ -175,9 +178,11 @@ def run_once(
     dry_run: bool = False,
     at: datetime | None = None,
     asset_classes: tuple[str, ...] = STOCKS,
+    stop_loss: float | None = None,
 ) -> BotReport:
     """One decision cycle for one kind of asset: read the crowd, decide targets, trade the difference.
-    `invest` is the share of the whole portfolio this book may hold."""
+    `invest` is the share of the whole portfolio this book may hold; `stop_loss` (0.08 = 8%) is
+    how far below its average cost a holding may fall before it is sold regardless."""
     broker = broker or PaperBroker()
     limits = limits or TradingLimits.from_settings()
     signals = [s for s in live_signals(session, lookback_minutes, min_posts, min_authors, at) if s.asset_class in asset_classes]
@@ -235,8 +240,16 @@ def run_once(
 
     # Exits first: they free cash and reduce risk.
     gone: set[int] = set()
+    costs = average_costs(session, portfolio_id) if stop_loss else {}
     for sid in held:
         sig = by_sid.get(sid)
+        price, cost = float(book.at[sid, "price"]), costs.get(sid)
+        if stop_loss and cost and price <= cost * (1 - stop_loss):
+            # A stop does not wait for the crowd: it uses the latest price, read or no read.
+            row = book.loc[sid]
+            stand_in = sig or TrendSignal(row["ticker"], sid, 0, 0, 0.0, 0.0, 0.0, 0.0, False, price, 0.0, row["asset_class"])
+            sell(replace(stand_in, price=price), f"{1 - price / cost:.1%} below its average cost of {cost:,.2f}: stop")
+            continue
         if sig is None or sig.price is None or sig.score > exit_below:
             continue  # no fresh read on this name: hold rather than trade on silence
         sell(sig, f"score {sig.score:+.2f} fell to the exit level")
@@ -251,8 +264,17 @@ def run_once(
             break
         sell(sig, f"book is over its {invest:.0%} allowance and {sig.ticker} is the weakest read outside the top {top_n}")
 
+    # Nothing sold today is bought back today: a stop re-entered ten minutes later is not a
+    # stop, and flip-flopping on one name is how a cash account runs into settlement trouble.
+    # (Slivers booked for a fee paid in coin are not orders and do not count.)
+    resting = gone | set(session.execute(
+        select(Trade.security_id).where(Trade.portfolio_id == portfolio_id, Trade.side == Side.SELL.value,
+                                        Trade.trade_date >= valued.as_of, Trade.order_id.is_not(None))
+    ).scalars())
     per_name = nav * invest / max(top_n, 1)
     for sig in targets:
+        if sig.security_id in resting:
+            continue
         lot = lot_size(sig.asset_class)
         current = held.get(sig.security_id, 0.0) * sig.price
         want = min(per_name - current, room, limits.max_order_notional, max(cash, 0.0) * CASH_SLACK)

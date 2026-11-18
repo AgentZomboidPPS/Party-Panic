@@ -106,6 +106,29 @@ def holdings(session: Session, portfolio_id: int, as_of: date) -> pd.Series:
     return s[s.abs() > EPS]
 
 
+def average_costs(session: Session, portfolio_id: int, as_of: date | None = None) -> dict[int, float]:
+    """Average price paid for each holding as it stands now, per security id.
+
+    Buys move the average; sells leave it alone; and once a position has been sold out
+    completely, a later purchase starts a fresh average rather than inheriting the old one."""
+    q = select(Trade.security_id, Trade.side, Trade.quantity, Trade.price).where(Trade.portfolio_id == portfolio_id)
+    if as_of is not None:
+        q = q.where(Trade.trade_date <= as_of)
+    held: dict[int, float] = {}
+    cost: dict[int, float] = {}
+    for sid, side, qty, price in session.execute(q.order_by(Trade.trade_date, Trade.id)):
+        have = held.get(sid, 0.0)
+        if side == Side.BUY.value:
+            cost[sid] = (cost.get(sid, 0.0) * have + price * qty) / (have + qty) if have + qty > EPS else price
+            held[sid] = have + qty
+        else:
+            held[sid] = have - qty
+            if held[sid] <= EPS:
+                held[sid] = 0.0
+                cost.pop(sid, None)
+    return {sid: c for sid, c in cost.items() if held.get(sid, 0.0) > EPS}
+
+
 def cash_balance(session: Session, portfolio_id: int, as_of: date, base_currency: str) -> float:
     """External cash flows minus the cost of every trade, in base currency."""
     flows = session.execute(

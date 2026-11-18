@@ -43,7 +43,7 @@ from spectre.execution.alpaca import (
 from spectre.execution.brokers import Broker, PaperBroker
 from spectre.execution.guard import TradingLimits, execute
 from spectre.models import OrderType, Security, Side, Trade
-from spectre.portfolio.positions import value_portfolio
+from spectre.portfolio.positions import average_costs, value_portfolio
 from spectre.portfolio.settlement import sale_restrictions
 from spectre.signals.sources.base import utcnow
 from spectre.signals.strategy import BOT_ACTOR, BotReport, TrendSignal, live_signals, withdraw_unfilled
@@ -92,16 +92,6 @@ def pick_contract(chain: list[OptionQuote], spot: float, rules: OptionRules, tod
         return min(otm, key=lambda q: q.strike) if otm else max(candidates, key=lambda q: q.strike)
     otm = [q for q in candidates if q.strike <= spot]
     return max(otm, key=lambda q: q.strike) if otm else min(candidates, key=lambda q: q.strike)
-
-
-def _average_cost(session: Session, portfolio_id: int, security_id: int) -> float | None:
-    rows = session.execute(
-        select(Trade.quantity, Trade.price).where(
-            Trade.portfolio_id == portfolio_id, Trade.security_id == security_id, Trade.side == Side.BUY.value
-        )
-    ).all()
-    qty = sum(q for q, _ in rows)
-    return sum(q * p for q, p in rows) / qty if qty else None
 
 
 def _sold_today(session: Session, portfolio_id: int, today: date) -> set[tuple[str, str]]:
@@ -162,6 +152,7 @@ def run_options_once(
     covered: set[str] = set()
     closed = _sold_today(session, portfolio_id, today)
     on_hold = sale_restrictions(session, portfolio_id) if len(held) else {}
+    costs = average_costs(session, portfolio_id) if len(held) else {}
     premium_held = 0.0
     if len(held):
         try:
@@ -182,7 +173,7 @@ def run_options_once(
                 store_option_mark(session, sec, q, spot)
             qty = int(row["quantity"])
             bid = q.bid if q is not None and q.bid else None
-            cost = _average_cost(session, portfolio_id, int(sid))
+            cost = costs.get(int(sid))
             pnl = (bid / cost - 1.0) if bid and cost else None
             dte = (expiry - today).days
             sig = by_ticker.get(root)

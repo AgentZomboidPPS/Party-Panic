@@ -102,7 +102,8 @@ that can run a container with a small persistent disk will do. It needs:
 | `PORT` | most hosts set this themselves; the default is 8000 |
 
 Optional: `SPECTRE_INVEST` (0.70), `SPECTRE_OPTIONS` (true), `SPECTRE_OPTIONS_BUDGET` (0.20),
-`SPECTRE_CRYPTO` (true), `SPECTRE_CRYPTO_INVEST` (0.10), `SPECTRE_EVERY` (10 minutes),
+`SPECTRE_CRYPTO` (true), `SPECTRE_CRYPTO_INVEST` (0.10), `SPECTRE_STOP_LOSS` (0.08),
+`SPECTRE_CRYPTO_STOP_LOSS` (0.12), `SPECTRE_EVERY` (10 minutes),
 `SPECTRE_SYMBOLS`, `SPECTRE_PORTFOLIO` (KAIROS). `GET /health` needs no password, for the
 host's health check.
 
@@ -351,8 +352,12 @@ collected. Each cycle:
 4. buy the top names above `--enter`, sell holdings whose score fell to `--exit-below`; long
    only, whole shares, each order through compliance and then the execution gate.
 
-`--invest` caps the whole stock book as a share of the portfolio. Shares have no stop or profit
-target: a holding is sold when the crowd turns against it, and held when there is no fresh read.
+`--invest` caps the whole stock book as a share of the portfolio. A holding is sold when the
+crowd turns against it, and held when there is no fresh read, with one exception: the
+**stop-loss** (`--stop-loss`, 8% for stocks; `--crypto-stop-loss`, 12% for coins; 0 turns it
+off) sells anything that has fallen that far below its average cost, whatever the crowd says
+and even when nobody is talking about it. There is no profit target on shares. Nothing sold
+today is bought back today.
 If the book is more than five points over its allowance, the weakest reads outside the top
 names are sold until it fits. An order the broker does not fill is withdrawn, not left open.
 
@@ -490,7 +495,7 @@ build a track record (and prune old posts there); measure the crowd signal again
 classifier on the Stocktwits labels and adopt it only if it beats the baseline out of sample; use
 rates and credit as a risk-on / risk-off filter; SEC earnings against the live service; covered
 calls, cash-secured puts and defined-risk spreads (never an uncovered sale); price history for
-a stop-loss on shares and coins; a cap on the options sleeve by exposure rather than premium;
+a cap on the options sleeve by exposure rather than premium;
 Reddit via a registered app; performance attribution;
 multi-user auth; scheduled end-of-day risk and compliance runs; Postgres migrations via Alembic; a
 data-licensing review before selling derived signals. A live broker would come last, behind the
