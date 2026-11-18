@@ -462,7 +462,7 @@ function drawMoves(r) {
   const hasOptions = r.options_priced || r.options_by_delta_only.length;
   el.innerHTML = `<table><thead><tr><th>move</th><th>whole portfolio</th><th class="num">amount</th><th class="num">% NAV</th>${hasOptions ? '<th class="num">of which options</th>' : ''}</tr></thead><tbody>` +
     r.moves.map(m => `<tr><td>${m.move > 0 ? '+' : '−'}${Math.abs(m.move * 100).toFixed(0)}%</td><td>${dbar(m.total, mx, 160)}</td><td class="num">${signed(m.total)}</td>` +
-      `<td class="num">${fmtSPct(m.pct, 1)}</td>${hasOptions ? `<td class="num">${signed(m.options)}</td>` : ''}</tr>`).join('') + '</tbody></table>' +
+      `<td class="num">${m.pct == null ? '–' : (m.pct > 0 ? '+' : '−') + Math.abs(m.pct * 100).toFixed(1) + '%'}</td>${hasOptions ? `<td class="num">${signed(m.options)}</td>` : ''}</tr>`).join('') + '</tbody></table>' +
     `<div class="muted" style="margin-top:6px">` +
     (hasOptions ? `The options (${fmtMoney(r.option_premium)} of premium) lose about <b>${fmtMoney(Math.abs(r.time_decay_per_day))} a day</b> to time passing with nothing else changing; a one-point rise in implied volatility is worth ${signed(r.per_volatility_point)}. ` : '') +
     `Everything held moves by the same percentage at once. A bought option gains faster as its stock rises and loses more slowly as it falls, which is why the two sides are not mirror images. A map of the book's shape, not a forecast.` +
