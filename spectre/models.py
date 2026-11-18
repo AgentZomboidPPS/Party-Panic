@@ -193,6 +193,26 @@ class CashFlow(Base):
     kind: Mapped[str] = mapped_column(String(12), default="EXTERNAL", server_default="EXTERNAL")
 
 
+class NavSnapshot(Base):
+    """What a portfolio was worth at a moment, split by kind of holding. Written by the bot
+    after each decision cycle, so there is a record of performance to look back on (the ledger
+    alone cannot say what an option or a coin was worth at 14:10 last Tuesday)."""
+
+    __tablename__ = "nav_snapshots"
+    __table_args__ = (Index("ix_nav_snapshot_portfolio_at", "portfolio_id", "at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    portfolio_id: Mapped[int] = mapped_column(ForeignKey("portfolios.id"))
+    at: Mapped[datetime] = mapped_column(DateTime)
+    nav: Mapped[float] = mapped_column(Float)
+    cash: Mapped[float] = mapped_column(Float)
+    stocks: Mapped[float] = mapped_column(Float, default=0.0)
+    options: Mapped[float] = mapped_column(Float, default=0.0)
+    coins: Mapped[float] = mapped_column(Float, default=0.0)
+    other: Mapped[float] = mapped_column(Float, default=0.0)
+    benchmark: Mapped[float | None] = mapped_column(Float)  # price of the yardstick (SPY) at that moment
+
+
 # --------------------------------------------------------------------------- trading
 
 

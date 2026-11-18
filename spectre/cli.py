@@ -739,6 +739,10 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
                          lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run, asset_classes=CRYPTO,
                          stop_loss=crypto_stop_loss or None)
         actions += coins.actions
+    if not dry_run:
+        from spectre.portfolio.performance import record_snapshot
+
+        record_snapshot(s, portfolio_id)  # the track record: what it was worth after this cycle
     return report, coins, actions, notes
 
 
@@ -872,9 +876,12 @@ def autopilot(portfolio_id: int,
             console.print(f"{stamp}  {_action_line(a)}")
 
     console.print(f"KAIROS autopilot ({'Alpaca paper account' if broker == 'alpaca' else 'built-in paper'}) on portfolio {portfolio_id}: reading {', '.join(s.name for s in built)}; "
-                  f"first decision after {warmup:g} min, then every {every:g} min. Ctrl-C to stop.")
+                  f"first decision {'in under a minute' if warmup <= 0 else f'after {max(warmup, every):g} min'}, then every {every:g} min. Ctrl-C to stop.")
+    # With no warm-up asked for, decide soon after starting rather than a whole interval later:
+    # a restart on a database that already holds the last hour of posts has what it needs.
     summary = asyncio.run(pipe.run(built, duration_seconds=minutes * 60 if minutes else None,
-                                   periodic=[(every * 60 if _time.monotonic() - started >= 0 else 0, decide)]))
+                                   periodic=[(every * 60, decide)],
+                                   periodic_first_after=min(45.0, every * 60) if warmup <= 0 else None))
     console.print_json(data=summary)
 
 
@@ -920,6 +927,36 @@ def alpaca_status(portfolio_id: int | None = typer.Option(None, "--portfolio", h
                   _fmt_px(float(p["current_price"])) if p else "-", f"{float(p['market_value']):,.2f}" if p else "-",
                   f"{float(p['unrealized_pl']):+,.2f}" if p else "-", _fmt_qty(lq) if lq is not None else "-", match)
     console.print(t)
+
+
+@app.command()
+def performance(portfolio_id: int, db: str | None = typer.Option(None, "--db")):
+    """Is it making money? Profit and loss since the start, against the S&P 500, and where it came from."""
+    from spectre.portfolio.performance import performance as _performance
+
+    with _session(db) as s:
+        r = _performance(s, portfolio_id)
+
+    def signed(x: float | None, pct: bool = False) -> str:
+        if x is None:
+            return "-"
+        return f"{x:+.2%}" if pct else f"{x:+,.2f}"
+
+    bench = r["benchmark"]
+    console.print(f"[bold]Portfolio {portfolio_id}[/] is worth {r['nav']:,.2f}; {r['put_in']:,.2f} was put in. "
+                  f"Profit and loss {signed(r['pnl'])} ({signed(r['return'], True)})"
+                  + (f" since {r['since']} UTC." if r["since"] else "."))
+    console.print(f"{bench['ticker']} over the same stretch: {signed(bench['return'], True)}; difference {signed(r['excess_return'], True)}. "
+                  f"Today {signed(r['day_change'])}. Deepest fall from a high so far: {r['max_drawdown']:.2%} "
+                  f"({r['snapshots']} recorded values).")
+    t = Table("sleeve", "worth now", "banked", "still open", "fees", "total", "sales", "at a profit", title="Where it came from")
+    for x in r["sleeves"]:
+        t.add_row(x["sleeve"], f"{x['market_value']:,.2f}", signed(x["realised"]), signed(x["unrealised"]), f"{x['fees']:,.2f}",
+                  signed(x["total"]), str(x["closed_trades"]), str(x["winners"]))
+    if abs(r["account_fees_and_adjustments"]) >= 0.005:
+        t.add_row("Broker fees outside any one trade", "", "", "", "", signed(r["account_fees_and_adjustments"]), "", "")
+    console.print(t)
+    console.print("[dim]Banked = profit already taken by selling. Still open = at today's prices; it can still change.[/]")
 
 
 @app.command()

@@ -281,14 +281,19 @@ class Pipeline:
         bar_window_minutes: int = 60,
         on_batch: Callable[[dict], None] | None = None,
         periodic: list[tuple[float, Callable[[], None]]] | None = None,
+        periodic_first_after: float | None = None,
     ) -> dict:
         """Run sources concurrently, flushing batches every `batch_seconds` and building
         topic bubbles / sentiment bars each time a window closes.
 
         `periodic` is a list of (interval_seconds, job): each job runs on that cadence in a
         worker thread (the trend bot uses this). A job that raises is logged and tried again
-        next time; it never stops ingestion."""
-        jobs = [[interval, job, time.monotonic()] for interval, job in (periodic or [])]
+        next time; it never stops ingestion. The first run comes one full interval after the
+        start unless `periodic_first_after` (seconds) says sooner: a restart on a database
+        that is already warm should not sit idle for a whole interval."""
+        begun = time.monotonic()
+        jobs = [[interval, job, begun if periodic_first_after is None else begun - interval + periodic_first_after]
+                for interval, job in (periodic or [])]
         queue: asyncio.Queue = asyncio.Queue(maxsize=50_000)
         stop = asyncio.Event()
 

@@ -49,6 +49,7 @@ CRYPTO: tuple[str, ...] = ("Crypto",)
 MIN_ORDER = {"Crypto": 10.0}  # dollars: a coin order smaller than this is dust
 OVER_ALLOWANCE = 0.05  # how far past its allowance (as a share of the portfolio) a book may drift before it is trimmed
 CASH_SLACK = 0.99  # market orders fill a little away from the last price: never size to the last dollar
+MIN_TOPUP = 0.05  # a purchase smaller than this share of a full position is not worth an order (or its fee)
 
 
 def withdraw_unfilled(session: Session, order) -> None:
@@ -279,7 +280,7 @@ def run_once(
         current = held.get(sig.security_id, 0.0) * sig.price
         want = min(per_name - current, room, limits.max_order_notional, max(cash, 0.0) * CASH_SLACK)
         qty = _lots(want, sig.price, lot)
-        if qty < lot or qty * sig.price < MIN_ORDER.get(sig.asset_class, 0.0):
+        if qty < lot or qty * sig.price < max(MIN_ORDER.get(sig.asset_class, 0.0), MIN_TOPUP * per_name):
             continue
         if trade(sig, Side.BUY, qty, f"score {sig.score:+.2f}, {sig.n_authors} authors, net {sig.net:+.0%}"):
             done = report.actions[-1]["quantity"]

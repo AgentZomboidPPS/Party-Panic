@@ -119,6 +119,13 @@ database on the volume. Not yet checked: a deployment on a public host.
 - `exposure_by(valued, dimension)` for `asset_class | sector | country | currency | issuer`.
 - `active_weights` / `active_exposures` versus a benchmark (security-level or bucketed).
 - `apply_trades(session, valued, [ProposedTrade...])` – what-if analysis that never touches the ledger.
+- **Performance (`portfolio/performance.py`).** After every decision the bot writes down what
+  the portfolio is worth, split into stocks, options, coins and cash, with the S&P 500 fund's
+  price at that moment. `spectre performance N`, `GET /portfolios/N/performance` and the
+  dashboard show profit and loss since the start, the index over the same stretch, the
+  deepest fall from a high, and where the result came from: for each sleeve, profit already
+  banked by selling, profit or loss still open at today's prices, and fees. The parts add up
+  exactly to the change in value.
 - **Settlement (`portfolio/settlement.py`).** A trade is agreed today and the money moves later:
   stocks, funds and options settle the next business day (two days before 28 May 2024, three
   before September 2017), coins at once; weekends and exchange holidays are worked out, not
@@ -499,12 +506,12 @@ Alpaca: `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`, `ALPACA_TRADING_URL` (paper host),
 ## Roadmap
 
 Next steps in rough priority order: deploy the container to a permanent host so KAIROS can
-build a track record (and prune old posts there); measure the crowd signal against real prices once weeks of data exist; train a sentiment
-classifier on the Stocktwits labels and adopt it only if it beats the baseline out of sample; use
-rates and credit as a risk-on / risk-off filter; SEC earnings against the live service; covered
-calls, cash-secured puts and defined-risk spreads (never an uncovered sale); price history for
-a record of performance over time, by sleeve and against the index;
-Reddit via a registered app; performance attribution;
-multi-user auth; scheduled end-of-day risk and compliance runs; Postgres migrations via Alembic; a
-data-licensing review before selling derived signals. A live broker would come last, behind the
-live-mode and per-order approval gates, and only after paper results justify it.
+build a track record (and prune old posts there); measure the crowd signal against real prices
+once weeks of data exist; train a sentiment classifier on the Stocktwits labels and adopt it
+only if it beats the baseline out of sample; covered calls, cash-secured puts and defined-risk
+spreads, with their assignment and expiry bookkeeping (never an uncovered sale); use rates and
+credit as a risk-on / risk-off filter; SEC earnings against the live service; Reddit via a
+registered app; multi-user auth; scheduled end-of-day risk and compliance runs; Postgres
+migrations via Alembic; a data-licensing review before selling derived signals. A live broker
+would come last, behind the live-mode and per-order approval gates, and only after paper
+results justify it.

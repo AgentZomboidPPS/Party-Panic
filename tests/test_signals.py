@@ -241,3 +241,23 @@ def test_topic_count_matches_windows(social):
     assert windows == summary["days"]
     bars = s.execute(select(func.count(func.distinct(SentimentBar.window_start)))).scalar_one()
     assert bars == summary["days"]
+
+
+def test_periodic_jobs_can_start_soon_after_launch_instead_of_a_full_interval_later():
+    import asyncio
+
+    from spectre.db import init_db, make_engine, make_session_factory
+    from spectre.signals.pipeline import Pipeline
+
+    e = make_engine("sqlite://")
+    init_db(e)
+    pipe = Pipeline(make_session_factory(e))
+
+    def runs(first_after):
+        calls = []
+        asyncio.run(pipe.run([], duration_seconds=0.35, batch_seconds=0.05, periodic=[(3600.0, lambda: calls.append(1))],
+                             periodic_first_after=first_after))
+        return len(calls)
+
+    assert runs(None) == 0, "by default the first run waits a whole interval"
+    assert runs(0.1) == 1, "asked to start early, it runs once and then keeps its hourly cadence"

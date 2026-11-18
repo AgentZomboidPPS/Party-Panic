@@ -147,6 +147,14 @@ def positions(portfolio_id: int, db: DB, as_of: date | None = None) -> dict:
     return value_portfolio(db, portfolio_id, as_of).to_dict()
 
 
+@router.get("/portfolios/{portfolio_id}/performance")
+def performance(portfolio_id: int, db: DB) -> dict:
+    """Value over time against the S&P 500, and profit and loss by sleeve."""
+    from spectre.portfolio.performance import performance as _performance
+
+    return _performance(db, portfolio_id)
+
+
 @router.get("/portfolios/{portfolio_id}/settlement")
 def settlement(portfolio_id: int, db: DB, as_of: date | None = None) -> dict:
     """Settled and unsettled cash, what settles when, and holdings that cannot be sold cleanly yet."""
