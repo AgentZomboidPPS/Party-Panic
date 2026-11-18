@@ -151,6 +151,21 @@ def paper_trade(portfolio_id: int, db: DB, top_n: int = 5, sleeve: float = 0.10,
     }
 
 
+@router.get("/news")
+def news(db: DB, limit: int = 25, ticker: str | None = None, portfolio_id: int | None = None) -> list[dict]:
+    """The latest company headlines; with `portfolio_id`, those about its holdings come first."""
+    from spectre.portfolio.positions import value_portfolio
+    from spectre.signals.news import recent_news
+
+    held: set[str] = set()
+    if portfolio_id is not None:
+        for t in value_portfolio(db, portfolio_id).positions["ticker"]:
+            held.add(str(t))
+            if len(str(t)) > 15:  # an option contract: news about its underlying is news about it
+                held.add("".join(ch for ch in str(t)[:6] if ch.isalpha()))
+    return recent_news(db, limit, ticker, held)
+
+
 _CHECKS: dict[tuple, tuple[float, dict]] = {}  # (database, horizon, crypto) -> (when computed, result)
 
 

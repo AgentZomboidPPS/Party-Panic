@@ -283,6 +283,11 @@ polymarket
   a side (always guessing the commoner tag scores 60%). So the scorer for untagged posts is
   that blend, and only while it keeps beating the word list by a set margin on later posts: it
   is re-tested at every start and a few times a day, and dropped if it stops earning its place.
+- **Company news** (`news.py`): the latest headlines from Alpaca's news feed about the real
+  stocks, funds and coins in the book, stored once each with the tickers they name and the
+  tone the sentiment scorer reads in them. The Signals tab lists them with holdings first, and
+  `GET /signals/news` serves them. It is context for a person: the bot does not trade on
+  headlines, because nothing about them has been measured against prices yet.
 - **Aggregation** (`aggregate.py`): per-window **topic bubbles** (volume, unique authors, sentiment,
   fear share, velocity vs. the matching topic in the previous window), per-security **sentiment
   bars** with attention and sentiment z-scores against the security's own history, a **fear

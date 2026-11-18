@@ -1005,8 +1005,17 @@ def autopilot(portfolio_id: int,
                           f"{r['market_snapshots']:,} market snapshots removed[/]")
         pipe.sentiment = retrain()
 
+    def headlines() -> None:  # company news for the dashboard; needs the Alpaca data feed
+        if broker != "alpaca":
+            return
+        from spectre.execution.alpaca import AlpacaClient
+        from spectre.signals.news import sync_news
+
+        with factory() as s:
+            sync_news(s, AlpacaClient(), sentiment=pipe.sentiment)
+
     summary = asyncio.run(pipe.run(built, duration_seconds=minutes * 60 if minutes else None,
-                                   periodic=[(every * 60, decide), (6 * 3600.0, tidy)],
+                                   periodic=[(every * 60, decide), (6 * 3600.0, tidy), (300.0, headlines)],
                                    periodic_first_after=min(45.0, every * 60) if warmup <= 0 else None))
     console.print_json(data=summary)
 

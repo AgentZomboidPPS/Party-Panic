@@ -303,3 +303,35 @@ def test_calibration_against_user_labels(real_db):
         stored = dict(s.execute(select(SocialPost.external_id, SocialPost.sentiment)).all())
     assert stored["5"] == -0.7, "the author said bearish, so aggregates treat it as bearish"
     assert stored["6"] != 0.7 and stored["6"] != -0.7, "unlabelled posts keep the model's score"
+
+
+def test_kalshi_keeps_what_it_fetched_when_told_to_slow_down():
+    import asyncio
+
+    import httpx
+
+    from spectre.signals.sources import kalshi
+
+    event = {"title": "Recession in 2027?", "category": "Economics",
+             "markets": [_kalshi_market("E1-A", "Before 2028", "0.3000", "0.3400", "0.3100", "5000.00")]}
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.params.get("cursor"))
+        if len(calls) == 1:
+            return httpx.Response(200, json={"events": [event], "cursor": "next"})
+        return httpx.Response(429, headers={"retry-after": "120"}, json={"error": "too many requests"})
+
+    async def go():
+        src = kalshi.KalshiSource(categories=None)
+        src.page_gap = 0
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            first = await src.fetch(client)
+            calls.clear()
+            calls.append("pretend this is not the first call")
+            throttled_at_once = await src.fetch(client)
+            return src, first, throttled_at_once
+
+    src, first, at_once = asyncio.run(go())
+    assert len(first) >= 1 and first[0].market_id == "E1-A", "the first page is kept although the second was refused"
+    assert at_once == [] and src.throttled_for == 120.0, "and the service's own waiting time is noted"

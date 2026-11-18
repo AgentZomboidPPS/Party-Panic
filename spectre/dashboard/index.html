@@ -102,6 +102,7 @@
   svg#perf-chart:focus { outline: 1px solid var(--axis); outline-offset: 2px; }
   .tip .key { display: inline-block; width: 12px; height: 2px; border-radius: 1px; vertical-align: middle; margin-right: 6px; }
   #perf-table { max-height: 240px; overflow: auto; }
+  #news-table { overflow-x: auto; } #news-table a { color: var(--ink); text-decoration-color: var(--axis); }
   #bot-activity { max-height: 330px; overflow: auto; }
   #bot-activity td.why { color: var(--ink-2); white-space: normal; min-width: 260px; }
   button.danger { border-color: var(--critical); color: var(--ink); }
@@ -221,6 +222,10 @@
     <section class="card">
       <h2>What people are searching — Google trending now</h2>
       <div id="trends-table"></div>
+    </section>
+    <section class="card">
+      <h2>Company news — the latest on what is held and watched</h2>
+      <div id="news-table"></div>
     </section>
   </div>
 
@@ -714,6 +719,21 @@ async function refreshSignals() {
   trendsTable(trends);
   drawCurve(curve, macro);
   getJSON('/signals/check').then(signalCheck).catch(() => { $('#signal-check').textContent = 'Not available.'; });
+  getJSON('/signals/news?limit=16' + (portfolioId != null ? '&portfolio_id=' + portfolioId : '')).then(newsTable).catch(() => { $('#news-table').innerHTML = '<div class="muted">Not available.</div>'; });
+}
+
+function newsTable(rows) {
+  const el = $('#news-table');
+  if (!rows.length) { el.innerHTML = '<div class="muted">No headlines yet. They arrive every few minutes while the bot runs with Alpaca.</div>'; return; }
+  const day = new Date().toDateString();
+  const when = (iso) => { const d = new Date(iso + 'Z'); return d.toDateString() === day ? d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : d.toLocaleDateString([], {month: 'short', day: 'numeric'}); };
+  el.innerHTML = `<table><thead><tr><th>when</th><th>about</th><th>headline</th><th title="The tone the sentiment scorer reads in the headline, from negative to positive">tone</th></tr></thead><tbody>` +
+    rows.map(r => { const safe = r.url && /^https?:\/\//.test(r.url);
+      return `<tr title="${esc(r.summary || '')}"><td class="muted" style="white-space:nowrap">${when(r.at)}</td>
+        <td style="white-space:nowrap"><b>${r.tickers.slice(0, 3).map(esc).join(', ')}</b>${r.held ? ' <span class="pill done">held</span>' : ''}</td>
+        <td style="white-space:normal">${safe ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.headline)}</a>` : esc(r.headline)} <span class="muted">${esc(r.source)}</span></td>
+        <td style="white-space:nowrap">${dbar(r.tone, 1, 48)}</td></tr>`; }).join('') + '</tbody></table>' +
+    '<div class="muted" style="margin-top:6px">Context for a person. KAIROS does not trade on headlines.</div>';
 }
 
 function signalCheck(r) {

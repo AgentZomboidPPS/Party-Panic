@@ -144,3 +144,19 @@ class SearchTrend(Base):
     approx_traffic: Mapped[int | None] = mapped_column(Integer)
     headlines: Mapped[list] = mapped_column(JSON, default=list)
     tickers: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class NewsItem(Base):
+    """A news headline about one or more securities, with the tone the sentiment scorer read in
+    it. Information for a person looking at a holding; the bot does not trade on it."""
+
+    __tablename__ = "news_items"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # "<provider>:<their id>"
+    source: Mapped[str] = mapped_column(String(64))
+    headline: Mapped[str] = mapped_column(Text)
+    summary: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str | None] = mapped_column(String(600))
+    published_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    tickers: Mapped[list] = mapped_column(JSON, default=list)
+    sentiment: Mapped[float] = mapped_column(Float, default=0.0)

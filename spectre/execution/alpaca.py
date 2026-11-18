@@ -276,6 +276,13 @@ class AlpacaClient:
         """Daily closing prices per coin against the dollar (days run midnight to midnight UTC)."""
         return {coin: [(at.date(), close) for at, close in bars] for coin, bars in self.crypto_bars(coins, start).items()}
 
+    def news(self, symbols: list[str], start: datetime | None = None, limit: int = 50) -> list[dict]:
+        """The latest news articles that mention any of the symbols, newest first (one page)."""
+        params: dict = {"symbols": ",".join(symbols), "limit": min(limit, 50), "sort": "desc"}
+        if start is not None:
+            params["start"] = _stamp(start)
+        return (self._call("GET", f"{self.data_url}/v1beta1/news", params=params) or {}).get("news") or []
+
     def crypto_quotes(self, coins: list[str]) -> dict[str, tuple[float, float, datetime]]:
         """Latest (bid, ask, time) per coin against the dollar; coins with no two-sided quote are absent."""
         out: dict[str, tuple[float, float, datetime]] = {}

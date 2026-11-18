@@ -100,12 +100,25 @@ class KalshiSource:
         self.categories = set(categories) if categories else None
         self.max_pages = max_pages
         self.max_markets_per_event = max_markets_per_event
+        self.page_gap = 1.5  # seconds between pages of one poll
+        self.throttled_for: float | None = None  # set by fetch() when the service answers 429
 
     async def fetch(self, client: httpx.AsyncClient) -> list[MarketQuote]:
+        """Open markets in the chosen categories. If the service says "slow down" part-way
+        through, what was already fetched is kept and `throttled_for` says how long to wait."""
         params: dict = {"status": "open", "with_nested_markets": "true", "limit": 200}
         out: list[MarketQuote] = []
-        for _ in range(self.max_pages):
+        self.throttled_for = None
+        for page in range(self.max_pages):
+            if page:
+                await asyncio.sleep(self.page_gap)  # three pages in a burst is what earns the 429
             r = await client.get(f"{BASE}/events", params=params)
+            if r.status_code == 429:
+                try:
+                    self.throttled_for = float(r.headers.get("retry-after", ""))
+                except ValueError:
+                    self.throttled_for = 0.0
+                break
             r.raise_for_status()
             body = r.json()
             now = utcnow()
@@ -120,12 +133,20 @@ class KalshiSource:
         return out
 
     async def run(self, emit: Emit, stop: asyncio.Event) -> None:
+        backoff = self.poll_seconds
         async with httpx.AsyncClient(timeout=60, headers={"User-Agent": "spectre-signals/0.1"}) as client:
             while not stop.is_set():
+                wait = self.poll_seconds
                 try:
                     for q in await self.fetch(client):
                         await emit(q)
+                    if self.throttled_for is None:
+                        backoff = self.poll_seconds
+                    else:  # asked to slow down: wait longer each time, up to half an hour
+                        backoff = min(max(backoff * 2, self.throttled_for), 1800.0)
+                        wait = backoff
+                        log.warning("kalshi: asked to slow down; next try in %.0f minutes", wait / 60)
                 except Exception as exc:
-                    log.warning("kalshi: %s: %s", type(exc).__name__, exc)
-                if await sleep_or_stop(self.poll_seconds, stop):
+                    log.warning("kalshi: %s: %s", type(exc).__name__, str(exc).splitlines()[0][:160])
+                if await sleep_or_stop(wait, stop):
                     return
