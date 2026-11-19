@@ -297,12 +297,12 @@ def test_invest_caps_the_whole_stock_book_not_just_each_name(book):
     with factory() as s:
         # An AMD holding the bot did not choose this cycle already fills most of the 50% allowance.
         amd = s.execute(select(Security).where(Security.ticker == "AMD")).scalar_one()
-        s.add(Trade(portfolio_id=pid, security_id=amd.id, side="BUY", quantity=22, price=200.0, currency="USD", trade_date=T0.date()))
+        s.add(Trade(portfolio_id=pid, security_id=amd.id, side="BUY", quantity=18, price=200.0, currency="USD", trade_date=T0.date()))
         s.commit()
         r = run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5)
         (buy,) = r.actions
-        # 5,000 allowed in stocks, 4,400 already in AMD: 600 of room buys 4 NVDA at 150, not the 13 its own target asks for.
-        assert buy["ticker"] == "NVDA" and buy["quantity"] == 4
+        # 5,000 allowed in stocks, 3,600 already in AMD: 1,400 of room buys 9 NVDA at 150, not the 13 its own target asks for.
+        assert buy["ticker"] == "NVDA" and buy["quantity"] == 9
         assert run_once(s, pid, limits=LIMITS, top_n=2, invest=0.5).actions == [], "no room left"
 
 
@@ -313,3 +313,18 @@ def test_kill_switch_stops_the_bot(book):
         r = run_once(s, pid, limits=LIMITS, top_n=2)
         assert r.actions[0]["outcome"] == "blocked" and "halted" in r.actions[0]["detail"]
         assert value_portfolio(s, pid).positions.empty
+
+
+def test_a_new_name_is_not_started_with_a_token_amount(book):
+    factory, pid, _ = book
+    with factory() as s:
+        # The plan is 2,000 of NVDA (one slot of a 20% book), but only 700 can go into one order here.
+        tight = TradingLimits(max_order_notional=700, max_daily_notional=20_000, max_orders_per_day=20, max_position_weight=0.25)
+        r = run_once(s, pid, limits=tight, top_n=1, invest=0.2)
+        assert r.actions == [] and value_portfolio(s, pid).positions.empty, "700 of an intended 2,000 is under half: wait"
+        roomy = TradingLimits(max_order_notional=1_200, max_daily_notional=20_000, max_orders_per_day=20, max_position_weight=0.25)
+        r = run_once(s, pid, limits=roomy, top_n=1, invest=0.2)
+        assert [(a["ticker"], a["quantity"], a["outcome"]) for a in r.actions] == [("NVDA", 8.0, "executed")], "1,200 of 2,000 is a real start"
+        # ... and once held, it is topped up towards the full position in pieces of any worthwhile size.
+        r = run_once(s, pid, limits=tight, top_n=1, invest=0.2)
+        assert [(a["ticker"], a["quantity"]) for a in r.actions] == [("NVDA", 4.0)]

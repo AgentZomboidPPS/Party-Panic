@@ -54,6 +54,7 @@ MIN_ORDER = {"Crypto": 10.0}  # dollars: a coin order smaller than this is dust
 OVER_ALLOWANCE = 0.05  # how far past its allowance (as a share of the portfolio) a book may drift before it is trimmed
 CASH_SLACK = 0.99  # market orders fill a little away from the last price: never size to the last dollar
 MIN_TOPUP = 0.05  # a purchase smaller than this share of a full position is not worth an order (or its fee)
+MIN_START = 0.5  # a new name is only started with at least this share of its intended position: no token holdings
 
 
 def last_bought(session: Session, portfolio_id: int, security_ids: list[int]) -> dict[int, datetime]:
@@ -380,6 +381,11 @@ def run_once(
         want = min(per_name - current, room, limits.max_order_notional, max(cash, 0.0) * CASH_SLACK)
         qty = _lots(want, sig.price, lot)
         if qty < lot or qty * sig.price < max(MIN_ORDER.get(sig.asset_class, 0.0), MIN_TOPUP * per_name):
+            continue
+        if current <= 0 and qty * sig.price < MIN_START * per_name:
+            # The book has room for only a sliver of this name (it is nearly full, or cash is
+            # short). A few shares would be a holding to watch and trade for no purpose: wait
+            # until there is room for a real position.
             continue
         sized = "" if abs(size - 1.0) < 0.1 else f"; sized at {size:.1f} of a full position because it moves {'more' if size < 1 else 'less'} than most"
         if buy_scale < 0.95:
