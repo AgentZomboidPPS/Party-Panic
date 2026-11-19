@@ -15,6 +15,8 @@ from spectre.portfolio.performance import performance
 from spectre.portfolio.positions import average_costs, value_portfolio
 from spectre.portfolio.settlement import is_business_day, simulate
 
+DUST = 1.0  # a holding worth less than this many dollars is left out of the list of what is held
+
 
 def _utc_day(day: date) -> tuple[datetime, datetime]:
     start = datetime.combine(day, time.min)
@@ -124,6 +126,8 @@ def daily_report(session: Session, portfolio_id: int, day: date | None = None, c
     costs = average_costs(session, portfolio_id)
     holdings = []
     for sid, r in v.positions.iterrows():
+        if abs(float(r["market_value"])) < DUST:
+            continue  # the sliver of a coin left when a sale is rounded to the smallest amount that trades
         cost = costs.get(int(sid))
         holdings.append({"ticker": r["ticker"], "asset_class": r["asset_class"], "quantity": float(r["quantity"]),
                          "value": float(r["market_value"]), "weight": float(r["weight"]),
@@ -199,7 +203,7 @@ def render(r: dict) -> str:
             out.append(f"  {o['at']}  {o['side']:<4} {qty(o['quantity'])} {o['ticker']}: {o['outcome'].lower()}"
                        + (f" ({o['detail'][:110]})" if o["detail"] else ""))
     out.append("")
-    out.append(f"Holding {len(r['holdings'])} positions and {r['cash']:,.0f} in cash:")
+    out.append(f"Holding {len(r['holdings'])} position{'' if len(r['holdings']) == 1 else 's'} and {r['cash']:,.0f} in cash:")
     for h in r["holdings"]:
         out.append(f"  {h['ticker']:<22} {h['value']:>9,.0f}  {h['weight']:>6.1%}  " + (pct(h["open_pnl_pct"]) if h["open_pnl_pct"] is not None else ""))
     out.append("")

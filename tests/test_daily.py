@@ -4,7 +4,8 @@ from datetime import date, datetime
 
 from sqlalchemy import select
 
-from spectre.models import Order
+from spectre.marketdata.prices import upsert_prices
+from spectre.models import Order, Security, Side, Trade
 from spectre.portfolio import daily
 from spectre.signals.strategy import run_once
 from tests.test_strategy import LIMITS, T0, book  # noqa: F401  (the fixture)
@@ -25,7 +26,17 @@ def test_the_report_says_what_was_done_and_why(book):  # noqa: F811
 
         text = daily.render(r)
         assert "KAIROS daily report" in text and "BUY  13 NVDA @ 150.00  (score +" in text
-        assert "Holding 1 positions" in text and "Needs attention: nothing." in text
+        assert "Holding 1 position and" in text and "Needs attention: nothing." in text
+
+        # Selling a coin rounds to the smallest amount that trades and can leave a sliver worth
+        # a cent or two (live: 0.000000254 of a bitcoin). That is not a holding worth listing.
+        btc = s.execute(select(Security).where(Security.ticker == "BTC")).scalar_one()
+        s.add(Trade(portfolio_id=pid, security_id=btc.id, side=Side.BUY.value, quantity=2.54e-7, price=62_000.0,
+                    currency="USD", trade_date=day))
+        upsert_prices(s, [{"security_id": btc.id, "date": day, "close": 62_000.0}])
+        s.commit()
+        r = daily.daily_report(s, pid, day)
+        assert [h["ticker"] for h in r["holdings"]] == ["NVDA"] and "BTC" not in daily.render(r)
         assert daily.render(daily.daily_report(s, pid, date(2020, 1, 1))).count("It did not trade today.") == 1
 
 
