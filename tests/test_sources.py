@@ -335,3 +335,36 @@ def test_kalshi_keeps_what_it_fetched_when_told_to_slow_down():
     src, first, at_once = asyncio.run(go())
     assert len(first) >= 1 and first[0].market_id == "E1-A", "the first page is kept although the second was refused"
     assert at_once == [] and src.throttled_for == 120.0, "and the service's own waiting time is noted"
+
+
+def test_stocktwits_spends_its_spare_streams_on_what_is_trending_then_on_the_rest_in_turn():
+    src = stocktwits.StocktwitsSource(symbols=["NVDA", "TSLA"], universe=["NVDA", "AAA", "BBB", "CCC", "DDD", "EEE", "FFF"],
+                                      extra_per_round=3)
+    assert src.others == ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"], "names always followed are not counted twice"
+    # Nothing trending: the rest of the book in turn, three a round, coming back round to the start.
+    assert [src.extras([]) for _ in range(3)] == [["AAA", "BBB", "CCC"], ["DDD", "EEE", "FFF"], ["AAA", "BBB", "CCC"]]
+    # Two names in the book are trending (and one that is not in it): they come first, every round.
+    src = stocktwits.StocktwitsSource(symbols=["NVDA"], universe=["AAA", "BBB", "CCC", "DDD", "EEE"], extra_per_round=3)
+    first, second = src.extras(["ZZZ", "DDD", "BBB"]), src.extras(["ZZZ", "DDD", "BBB"])
+    assert src.hot == ["DDD", "BBB"] and set(first[:2]) == {"DDD", "BBB"} and set(second[:2]) == {"DDD", "BBB"}
+    assert first[2] != second[2] and {first[2], second[2]} <= {"AAA", "CCC", "EEE"}, "the spare stream still goes round the rest"
+    # More trending than fit: they take turns.
+    src = stocktwits.StocktwitsSource(symbols=[], universe=["AAA", "BBB", "CCC", "DDD"], extra_per_round=2)
+    seen = [src.extras(["AAA", "BBB", "CCC"]) for _ in range(3)]
+    assert all(len(r) == 2 for r in seen) and {s for r in seen for s in r} == {"AAA", "BBB", "CCC"}
+    # No book given: only the symbols asked for, as before.
+    assert stocktwits.StocktwitsSource(symbols=["NVDA"]).extras(["AAA"]) == []
+
+
+def test_the_wider_book_is_recognised_without_mistaking_ordinary_words_for_stocks():
+    from spectre.marketdata.universe import BY_TICKER, UNIVERSE, recognition_maps
+
+    stocks = [e for e in UNIVERSE if e.asset_class != "Crypto"]
+    assert len(stocks) >= 110 and len({e.ticker for e in UNIVERSE}) == len(UNIVERSE), "no ticker listed twice"
+    aliases, context, bare, context_bare = recognition_maps(set(BY_TICKER))
+    assert len(aliases) + len(context) == sum(len(e.aliases) + len(e.context) for e in UNIVERSE), "no name claimed by two companies"
+    # Symbols that are also words, or mean something else in market talk, never count on their own.
+    for word in ("NOW", "NET", "ARM", "SNOW", "APP", "SHOP", "COP", "UPS", "RTX", "T", "DE"):
+        assert word not in bare and word not in context_bare
+    assert {"QCOM", "CRWD", "PANW", "BABA", "ABBV"} <= bare and {"UBER", "HOOD", "DELL"} <= context_bare
+    assert aliases["crowdstrike"] == "CRWD" and aliases["raytheon"] == "RTX" and context["uber"] == "UBER"

@@ -256,6 +256,11 @@ def _build_sources(factory, sources: str, preset: str = "finance", sample: float
                 kwargs["keywords"] = extra
         if name == "stocktwits":
             kwargs["symbols"] = [k.strip().upper() for k in symbols.split(",") if k.strip()]
+            from spectre.marketdata.universe import BY_TICKER
+
+            with factory() as s:  # the rest of the book: followed when trending there, otherwise in turn
+                listed = s.execute(select(Security.ticker).where(Security.asset_class.in_(("Equity", "Fund")))).scalars()
+                kwargs["universe"] = sorted(t for t in listed if t in BY_TICKER)
         if name in ("trends", "google_trends"):
             kwargs["geos"] = tuple(g.strip().upper() for g in geos.split(",") if g.strip())
         if name == "rss":

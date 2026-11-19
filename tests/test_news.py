@@ -42,7 +42,8 @@ def test_headlines_are_stored_once_with_their_tickers_and_tone():
         ])
         assert sync_news(s, feed, now=NOW) == 3, "the unknown company and the empty headline are left out"
         asked = [sym for symbols, _ in feed.calls for sym in symbols]
-        assert "AMZN" in asked and "BTCUSD" in asked and len(feed.calls) == 2, "coins are asked for as pairs; forty symbols a request"
+        assert "AMZN" in asked and "BTCUSD" in asked, "coins are asked for as pairs"
+        assert len(feed.calls) == -(-len(asked) // 40) and all(len(symbols) <= 40 for symbols, _ in feed.calls), "forty symbols a request"
         assert feed.calls[0][1] == NOW - timedelta(hours=24)
 
         rows = {n.id: n for n in s.execute(select(NewsItem)).scalars()}

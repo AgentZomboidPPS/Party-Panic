@@ -1,8 +1,14 @@
-"""Stocktwits: the trending stream (one request, messages across many symbols) and optional
-per-symbol streams. Messages carry an optional user-declared Bullish/Bearish label, which is
-the ground truth used to calibrate the sentiment model.
+"""Stocktwits: the trending stream (one request, messages across many symbols) and per-symbol
+streams. Messages carry an optional user-declared Bullish/Bearish label, which is the ground
+truth used to calibrate the sentiment model.
 
-The unauthenticated API allows roughly 200 requests an hour, so requests are spaced out.
+The unauthenticated API allows roughly 200 requests an hour, so requests are spaced out and
+there are only so many streams to go round. Each round they are spent on:
+- the symbols always followed (the busiest names, and the coins);
+- then whichever names in the book Stocktwits itself says are trending right now, so
+  attention goes where the crowd's has gone;
+- then, with what is left, the rest of the book in turn, so every name is looked at a few
+  times a day and nothing is never heard from.
 
 Verified against the live API on 2026-11-18.
 """
@@ -84,12 +90,40 @@ class StocktwitsSource:
         trending: bool = True,
         poll_seconds: float = 120,
         request_gap_seconds: float = 20,
+        universe: list[str] | None = None,
+        extra_per_round: int = 5,
     ):
         self.symbols = list(symbols or [])
         self.trending = trending
         self.poll_seconds = poll_seconds
         self.request_gap_seconds = request_gap_seconds
+        # Every other name in the book: followed when trending, otherwise in turn.
+        self.others = [s for s in dict.fromkeys(universe or []) if s not in self.symbols]
+        self.extra_per_round = extra_per_round
+        self.hot: list[str] = []  # names in the book that Stocktwits lists as trending now
+        self._turn = 0
         self._since: dict[str, int] = {}
+
+    async def _trending_symbols(self, client: httpx.AsyncClient) -> list[str]:
+        """The symbols Stocktwits lists as trending now, as SPECTRE names them."""
+        r = await client.get(f"{BASE}/trending/symbols.json")
+        r.raise_for_status()
+        return [sym for s in r.json().get("symbols", []) if (sym := _symbol(s.get("symbol")))]
+
+    def extras(self, trending: list[str]) -> list[str]:
+        """This round's streams beyond the always-followed ones: the book's trending names
+        first (taking turns if there are more than fit), then the rest of the book in turn."""
+        if not self.others or self.extra_per_round <= 0:
+            return []
+        pool = set(self.others)
+        self.hot = [s for s in dict.fromkeys(trending) if s in pool]
+        start = self._turn
+        self._turn += 1
+        hot = [self.hot[(start + i) % len(self.hot)] for i in range(min(len(self.hot), self.extra_per_round))]
+        rest = [s for s in self.others if s not in self.hot]
+        spare = self.extra_per_round - len(hot)
+        offset = (start * spare) % len(rest) if rest and spare > 0 else 0
+        return hot + [rest[(offset + i) % len(rest)] for i in range(min(spare, len(rest)))]
 
     async def _fetch(self, client: httpx.AsyncClient, path: str, key: str) -> list[Post]:
         params = {"since": self._since[key]} if key in self._since else {}
@@ -107,11 +141,20 @@ class StocktwitsSource:
         return out
 
     async def run(self, emit: Emit, stop: asyncio.Event) -> None:
-        streams = ([("streams/trending.json", "__trending__")] if self.trending else []) + [
+        base = ([("streams/trending.json", "__trending__")] if self.trending else []) + [
             (f"streams/symbol/{s}.json", s) for s in self.symbols
         ]
         async with httpx.AsyncClient(timeout=30, headers={"User-Agent": "spectre-signals/0.1"}) as client:
             while not stop.is_set():
+                trending: list[str] = []
+                if self.others:
+                    try:
+                        trending = await self._trending_symbols(client)
+                    except Exception as exc:
+                        log.warning("stocktwits trending symbols: %s: %s", type(exc).__name__, exc)
+                    if await sleep_or_stop(self.request_gap_seconds, stop):
+                        return
+                streams = base + [(f"streams/symbol/{s}.json", s) for s in self.extras(trending)]
                 for path, key in streams:
                     try:
                         for p in await self._fetch(client, path, key):
