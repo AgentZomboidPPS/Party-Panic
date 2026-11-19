@@ -61,6 +61,7 @@ from spectre.risk.options import market_exposure
 from spectre.signals.sources.base import utcnow
 from spectre.signals.strategy import (
     BOT_ACTOR,
+    STOCKS,
     BotReport,
     TrendSignal,
     last_bought,
@@ -321,9 +322,10 @@ def run_options_once(
     if rules.max_exposure is not None:
         now = value_portfolio(session, portfolio_id)  # after any exits above
         exposure_room = rules.max_exposure * now.total_value - market_exposure(session, now)["net"]
+    # Only stocks and funds have listed options: a coin would use up one of the cycle's few places and find nothing.
     wanted = sorted(
         (s for s in signals if abs(s.strength) >= rules.enter and s.price and s.ticker not in covered
-         and (s.ticker, "call" if s.score > 0 else "put") not in closed),
+         and s.asset_class in STOCKS and (s.ticker, "call" if s.score > 0 else "put") not in closed),
         key=lambda s: -abs(s.strength),
     )
     report.targets = [s.ticker for s in wanted[: rules.max_new]]

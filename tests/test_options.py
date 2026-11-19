@@ -175,6 +175,22 @@ def test_cycle_buys_a_call_on_the_bullish_name_and_a_put_on_the_bearish_one(book
         assert cycle(s, pid, fake).actions == [], "both names are already covered"
 
 
+def test_a_coin_takes_no_place_among_the_option_ideas(book):
+    """Nothing lists options on a coin, so a strong read on one must not use up one of the few
+    new positions a cycle may open (live, ether was looked up every ten minutes and found nothing)."""
+    from tests.test_crypto import crowd as coin_crowd
+
+    factory, pid = book
+    Pipeline(factory).process_posts(coin_crowd())  # bitcoin liked as much as NVDA, ether disliked
+    fake = FakeOptions()
+    with factory() as s:
+        r = cycle(s, pid, fake, rules=OptionRules(min_authors=4, max_new=2))
+        assert r.targets == ["NVDA", "TSLA"]
+        asked = {q.url.path.rsplit("/", 1)[1] for q in fake.requests if "/options/snapshots/" in q.url.path}
+        assert asked == {"NVDA", "TSLA"}, "no chain is asked for on a coin"
+        assert {a["ticker"] for a in r.actions} == {NVDA_CALL, TSLA_PUT}
+
+
 def test_holdings_are_sold_at_the_stop_and_the_profit_target_and_not_bought_back_that_day(book):
     factory, pid = book
     fake = FakeOptions()
