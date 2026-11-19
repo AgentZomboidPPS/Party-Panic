@@ -489,6 +489,21 @@ def sync_option_marks(session: Session, client: AlpacaClient) -> int:
     return len(quotes)
 
 
+def trading_day_state(clock: dict, lead_minutes: float = 90.0) -> tuple[bool, str]:
+    """Whether a bot that is meant to run "during the day" should be running now, from
+    Alpaca's market clock, and why in words: yes while the stock market is open and for
+    `lead_minutes` before it opens (time to gather the morning's posts). The clock knows about
+    holidays, half days and daylight saving, which a fixed timetable would get wrong."""
+    now, opens = parse_time(clock["timestamp"]), parse_time(clock["next_open"])
+    if clock.get("is_open"):
+        left = (parse_time(clock["next_close"]) - now).total_seconds() / 60
+        return True, f"the stock market is open (it closes in {left:.0f} minutes)"
+    to_open = (opens - now).total_seconds() / 60
+    if to_open <= lead_minutes:
+        return True, f"the stock market opens in {to_open:.0f} minutes"
+    return False, f"the stock market is closed; it opens in {to_open / 60:.1f} hours"
+
+
 def position_ticker(position: dict) -> str:
     """The ledger ticker for one of Alpaca's positions: coins come back as "BTCUSD"."""
     if position.get("asset_class") == "crypto":

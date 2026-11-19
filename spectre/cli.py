@@ -1212,6 +1212,21 @@ def autopilot(portfolio_id: int,
 
 
 @app.command()
+def market_hours(lead: float = typer.Option(90.0, help="Minutes before the open that count as part of the day")):
+    """Should KAIROS be running now, if it is meant to run during the trading day? Says why, and
+    exits 0 for yes and 1 for no, so a watchdog can decide whether to start it."""
+    from spectre.execution.alpaca import AlpacaClient, AlpacaError, trading_day_state
+
+    try:
+        wanted, why = trading_day_state(AlpacaClient().clock(), lead)
+    except AlpacaError as exc:
+        console.print(f"[red]Alpaca: {exc}[/]")
+        raise typer.Exit(2) from exc
+    console.print(("Run: " if wanted else "Rest: ") + why + ".")
+    raise typer.Exit(0 if wanted else 1)
+
+
+@app.command()
 def alpaca_status(portfolio_id: int | None = typer.Option(None, "--portfolio", help="Compare with this ledger portfolio"),
                   db: str | None = typer.Option(None, "--db")):
     """Your Alpaca paper account: balance, market clock and positions (optionally against the ledger)."""

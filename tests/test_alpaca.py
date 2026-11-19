@@ -313,3 +313,21 @@ def test_holdings_are_valued_at_the_brokers_own_prices(tmp_path):
         assert alpaca.mark_to_broker(s, client_for(fake)) == 3
         px = latest_prices(s, [amzn.id, call.id, btc.id], utcnow().date())
         assert px[amzn.id] == 270.89 and px[call.id] == 8.75 and px[btc.id] == 62815.1
+
+
+def test_the_trading_day_is_read_off_the_market_clock():
+    def clock(now, is_open, next_open, next_close):
+        return {"timestamp": now, "is_open": is_open, "next_open": next_open, "next_close": next_close}
+
+    # Mid-session: run, and say how long is left.
+    wanted, why = alpaca.trading_day_state(clock("2026-11-19T10:00:00.123456789-05:00", True, "2026-11-20T09:30:00-05:00", "2026-11-19T16:00:00-05:00"))
+    assert wanted and "is open (it closes in 360 minutes)" in why
+    # An hour before the open: run, so the morning's posts are in hand when it does.
+    wanted, why = alpaca.trading_day_state(clock("2026-11-19T08:30:00-05:00", False, "2026-11-19T09:30:00-05:00", "2026-11-19T16:00:00-05:00"))
+    assert wanted and "opens in 60 minutes" in why
+    # The evening before, and a weekend: rest.
+    wanted, why = alpaca.trading_day_state(clock("2026-11-19T20:00:00-05:00", False, "2026-11-20T09:30:00-05:00", "2026-11-20T16:00:00-05:00"))
+    assert not wanted and "opens in 13.5 hours" in why
+    assert not alpaca.trading_day_state(clock("2026-11-21T12:00:00-05:00", False, "2026-11-23T09:30:00-05:00", "2026-11-23T16:00:00-05:00"))[0]
+    # A longer lead reaches further back.
+    assert alpaca.trading_day_state(clock("2026-11-19T07:00:00-05:00", False, "2026-11-19T09:30:00-05:00", "2026-11-19T16:00:00-05:00"), lead_minutes=180)[0]
