@@ -831,15 +831,16 @@ function drawWeigh(reads, ev) {
   if (!reads.length) { el.innerHTML = '<div class="muted">No name has enough people talking about it right now.</div>'; }
   else {
     const mx = Math.max(...reads.map(r => Math.abs(r.conviction ?? r.score)), 1);
-    el.innerHTML = `<table><thead><tr><th>name</th><th class="num">crowd</th><th class="num">authors</th><th class="num">trend</th><th>news, last 2 days</th><th class="num">today vs rest</th><th>conviction</th><th class="num"></th></tr></thead><tbody>` +
+    el.innerHTML = `<table><thead><tr><th>name</th><th class="num">crowd</th><th class="num">authors</th><th class="num">trend</th><th>news, last 2 days</th><th class="num">today vs rest</th><th class="num" title="the last full day's trading volume as a multiple of the name's usual">volume</th><th>conviction</th><th class="num"></th></tr></thead><tbody>` +
       reads.map(r => { const c = r.conviction ?? r.score, raised = r.score > 0 && c > r.score * 1.02;
         const news = r.news == null ? '<span class="muted">–</span>' : `${num(r.news)} <span class="muted">(${r.news_count})</span>` + (r.events || []).map(e => ` <span class="pill">${esc(e)}</span>`).join('');
         return `<tr><td><b>${esc(r.ticker)}</b></td><td class="num">${num(r.score)}</td><td class="num">${r.n_authors}</td>` +
           `<td class="num" title="standing among the stocks and funds in the book on 6-12 month momentum">${r.trend == null ? '–' : Math.round(r.trend * 100) + '%'}${raised ? ' <span class="pill done">raises it</span>' : ''}</td>` +
-          `<td style="white-space:normal">${news}</td><td class="num">${pct(r.tape)}</td><td>${dbar(c, mx, 120)}</td><td class="num"><b>${num(c)}</b></td></tr>`; }).join('') +
-      `</tbody></table><div class="muted" style="margin-top:6px">Conviction is what buying ranks on: the crowd score, raised by up to ${Math.round(ev.settings.trend_strength * 100)}% for a stock or fund whose trend stands near the top of the book. Selling still goes by the crowd score alone. News and today's move are shown and recorded but change nothing yet.</div>`;
+          `<td style="white-space:normal">${news}</td><td class="num">${pct(r.tape)}</td><td class="num">${r.volume == null ? '–' : r.volume.toFixed(1) + '×'}</td><td>${dbar(c, mx, 120)}</td><td class="num"><b>${num(c)}</b></td></tr>`; }).join('') +
+      `</tbody></table><div class="muted" style="margin-top:6px">Conviction is what buying ranks on: the crowd score, raised by up to ${Math.round(ev.settings.trend_strength * 100)}% for a stock or fund whose trend stands near the top of the book. Selling still goes by the crowd score alone. News, today's move and volume are shown and recorded but change nothing yet.</div>`;
   }
-  const t = (ev.tests || {}).trend, bd = (ev.tests || {}).backdrop;
+  const t = (ev.tests || {}).trend, bd = (ev.tests || {}).backdrop, vt = (ev.tests || {}).volume;
+  const busiest = (d) => vt && vt.available ? vt.horizons.find(h => h.days_ahead === d).fifths[0] : null;
   const top = t && t.available ? t.fifths[t.fifths.length - 1] : null;
   const tested = {
     trend: top ? `Tested on ${fmtNum(t.days)} trading days of ${t.names} stocks and funds (${esc(t.from.slice(0, 4))}–${esc(t.to.slice(0, 4))}): the strongest fifth went on to beat the average name by ${pct(top.next_day_against_average, 3)} a day (${pct(top.first_half, 3)} in the first half, ${pct(top.second_half, 3)} in the second); the other four fifths did not stand apart. The list is of names well known today, which flatters this somewhat.` : 'Needs more price history to test.',
@@ -847,6 +848,7 @@ function drawWeigh(reads, ev) {
     crowd: 'Being measured live: see "Does the crowd read predict prices?" on this page.',
     news: 'Not tested yet: recorded with every reading and compared below as data builds up.',
     tape: 'Not tested yet: recorded with every reading and compared below as data builds up.',
+    volume: busiest(1) ? `Tested on ${fmtNum(vt.days)} trading days of ${vt.names} names: the busiest fifth went on to beat the average name by ${pct(busiest(1).against_average, 3)} the next day and ${pct(busiest(5).against_average, 2)} over a week, in both halves. Suggestive, but it was one of ${vt.ideas_tried} ideas tried on the same history and does not clear the bar for that many, so it has to show up live first.` : 'Needs volume history to test.',
   };
   $('#weigh-kinds').innerHTML = `<table><thead><tr><th>evidence</th><th>status</th><th>what it is, and what stands behind it</th></tr></thead><tbody>` +
     ev.kinds.map(k => `<tr><td style="white-space:nowrap"><b>${esc(k.name)}</b></td><td style="white-space:nowrap"><span class="pill ${k.status === 'in use' ? 'done' : ''}">${esc(k.status)}</span></td>` +

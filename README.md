@@ -414,9 +414,10 @@ either *in use*, meaning it has been tested against real prices and may change a
 what prices did, and changes nothing until it has earned it.
 
 - **Price trend, in use.** Where a stock or fund stands among all those in the book on 6-12
-  month momentum. Tested on nine years of daily prices for the 60 names: the strongest fifth
-  went on to beat the average name by about 0.08% a day (t = 3.4; 0.06% in the first half of
-  the period, 0.10% in the second), and the other four fifths could not be told apart. So a
+  month momentum. Tested on nine years of daily prices for the 113 names: the strongest fifth
+  went on to beat the average name by about 0.07% a day (t = 2.8; 0.05% in the first half of
+  the period, 0.08% in the second; on the original 60 names it was 0.08% and t = 3.4), and
+  the other four fifths could not be told apart. So a
   name near the top has its crowd score raised by up to half, and a weak trend takes nothing
   away. While the S&P 500 is more than 10% below its one-year high the effect was absent in
   the same history, so the raise is switched off then. The book is a list of names that are
@@ -430,6 +431,14 @@ what prices did, and changes nothing until it has earned it.
 - **News and today's move, on trial.** The tone of the last two days' headlines about the
   name with events spotted in them (results, guidance, analyst changes, deals, share
   offerings, legal trouble), and how the name has moved today against the typical name.
+- **Unusual volume, on trial.** How heavily the name traded on the last full day, as a
+  multiple of its own fifty-day usual. On the same nine years the busiest fifth went on to
+  beat the average name by about 0.03% the next day (t = 2.1) and 0.17% over a week, in both
+  halves of the period. That is suggestive rather than settled: it was one of eight ideas
+  tried on this data, and with that many looks a t near 2 does not clear the bar, so it
+  changes no decision until it has also shown up live. The other seven showed nothing, among
+  them a gap at the open carrying on through the day and a close near the day's high
+  carrying into the next.
 
 - **Big market moves, tested and not used.** "The market has just moved a lot: buy index calls
   or puts the same way and get out quickly." On eight years of half-hourly prices of the S&P

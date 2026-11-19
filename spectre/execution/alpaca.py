@@ -230,10 +230,12 @@ class AlpacaClient:
         return out
 
     def stock_bars(self, symbols: list[str], start: date | datetime, end: date | datetime | None = None,
-                   timeframe: str = "1Day", feed: str = "sip", adjustment: str = "all") -> dict[str, list[tuple[datetime, float]]]:
-        """(bar start time, closing price) per stock or fund, oldest first. The free plan serves
-        full-market ("sip") history as long as it is at least 15 minutes old."""
-        out: dict[str, list[tuple[datetime, float]]] = {}
+                   timeframe: str = "1Day", feed: str = "sip", adjustment: str = "all",
+                   with_volume: bool = False) -> dict[str, list[tuple]]:
+        """(bar start time, closing price) per stock or fund, oldest first; with `with_volume`,
+        (bar start time, closing price, shares traded or None). The free plan serves full-market
+        ("sip") history as long as it is at least 15 minutes old."""
+        out: dict[str, list[tuple]] = {}
         for i in range(0, len(symbols), 50):
             params: dict = {"symbols": ",".join(symbols[i : i + 50]), "timeframe": timeframe, "start": _stamp(start),
                             "limit": 10000, "adjustment": adjustment, "feed": feed}
@@ -242,7 +244,11 @@ class AlpacaClient:
             while True:
                 body = self._call("GET", f"{self.data_url}/v2/stocks/bars", params=params)
                 for sym, bars in (body.get("bars") or {}).items():
-                    out.setdefault(sym, []).extend((parse_time(b["t"]), float(b["c"])) for b in bars or [])
+                    if with_volume:
+                        out.setdefault(sym, []).extend(
+                            (parse_time(b["t"]), float(b["c"]), None if b.get("v") is None else float(b["v"])) for b in bars or [])
+                    else:
+                        out.setdefault(sym, []).extend((parse_time(b["t"]), float(b["c"])) for b in bars or [])
                 if not body.get("next_page_token"):
                     break
                 params["page_token"] = body["next_page_token"]
@@ -267,10 +273,12 @@ class AlpacaClient:
         return out
 
     def daily_bars(self, symbols: list[str], start: date, end: date | None = None,
-                   feed: str = "sip") -> dict[str, list[tuple[date, float]]]:
+                   feed: str = "sip", with_volume: bool = False) -> dict[str, list[tuple]]:
         """Daily closing prices per stock or fund, oldest first, adjusted for splits and dividends
-        so that day-to-day changes are true returns."""
-        return {sym: [(at.date(), close) for at, close in bars] for sym, bars in self.stock_bars(symbols, start, end, feed=feed).items()}
+        so that day-to-day changes are true returns: (day, close), or with `with_volume`
+        (day, close, shares traded)."""
+        bars = self.stock_bars(symbols, start, end, feed=feed, with_volume=with_volume)
+        return {sym: [(bar[0].date(), *bar[1:]) for bar in series] for sym, series in bars.items()}
 
     def crypto_daily_bars(self, coins: list[str], start: date) -> dict[str, list[tuple[date, float]]]:
         """Daily closing prices per coin against the dollar (days run midnight to midnight UTC)."""
@@ -399,15 +407,17 @@ def backfill_prices(session: Session, client: AlpacaClient, days: int = 750, tic
     secs = {s.ticker: s for s in session.execute(q).scalars() if everything or tickers or s.ticker in BY_TICKER}
     today = utcnow().date()
     start = today - timedelta(days=days)
-    bars = client.daily_bars(sorted(t for t, s in secs.items() if s.asset_class != "Crypto"), start)
+    bars = client.daily_bars(sorted(t for t, s in secs.items() if s.asset_class != "Crypto"), start, with_volume=True)
     bars.update(client.crypto_daily_bars(sorted(t for t, s in secs.items() if s.asset_class == "Crypto"), start))
     stored = 0
     for ticker, series in bars.items():
         sec = secs.get(ticker)
         if sec is None:
             continue
-        stored += upsert_prices(session, [{"security_id": sec.id, "date": day, "close": close}
-                                          for day, close in series if day < today and close > 0])
+        # A stock's bar carries the day's volume as a third item; a coin's does not.
+        stored += upsert_prices(session, [{"security_id": sec.id, "date": bar[0], "close": bar[1],
+                                           "volume": bar[2] if len(bar) > 2 else None}
+                                          for bar in series if bar[0] < today and bar[1] > 0])
     session.commit()
     return {"securities": len([t for t in secs if bars.get(t)]), "prices": stored, "from": start.isoformat(),
             "missing": sorted(t for t in secs if not bars.get(t))}

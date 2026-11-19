@@ -23,7 +23,14 @@ later against what prices did, and changes no decision until it has earned it:
 
 - **news**: the tone of the last two days' headlines about the name, and events spotted in
   them (results, guidance, analyst changes, deals, share offerings, legal trouble);
-- **tape**: how the name has moved today against the typical name in the book.
+- **tape**: how the name has moved today against the typical name in the book;
+- **volume**: how heavily the name traded on the last full day, as a multiple of its own
+  usual. Tested on nine years of daily data (`volume_check`): the busiest fifth went on to
+  beat the average name by about 0.03% the next day and 0.17% over a week, in both halves of
+  the period. That is suggestive, but it was one of eight ideas tried on the same data, and
+  with that many looks it does not clear the bar, so it has to prove itself live first. (The
+  others, a gap at the open carrying on through the day and a close near the day's high
+  carrying into the next, showed nothing.)
 
 Coins get no trend evidence: the same test on six years of coin prices showed nothing that
 held up in both halves of the period.
@@ -65,6 +72,8 @@ TARGET_VOL = 0.15  # S&P 500 volatility (a year) above which new buying is scale
 MIN_SCALE = 0.5  # never below half size
 VOL_DAYS = 20
 
+VOLUME_DAYS = 50  # a day's volume is compared with the name's average over this many days before it
+
 NEWS_HOURS = 48.0
 NEWS_HALF_LIFE = 12.0  # hours: a headline counts half as much after this long
 
@@ -83,6 +92,8 @@ KINDS = (
      "what": "Tone of the last two days' headlines about the name, and events spotted in them."},
     {"key": "tape", "name": "Today's move", "status": ON_TRIAL,
      "what": "How the name has moved today against the typical name in the book."},
+    {"key": "volume", "name": "Unusual volume", "status": ON_TRIAL,
+     "what": "How heavily the name traded on the last full day, as a multiple of its own usual."},
     {"key": "market_move", "name": "Big market moves", "status": NOT_USED,
      "what": "After a big move in the S&P 500, buy index calls or puts the same way and get out quickly. On eight years of "
              "half-hourly prices a big move did not tend to carry on: the next half hour, the last half hour and the rest "
@@ -113,20 +124,38 @@ def trend_boost(standing: float | None) -> float:
     return 1.0 + TREND_STRENGTH * min(max((float(standing) - TREND_FROM) / (TREND_FULL - TREND_FROM), 0.0), 1.0)
 
 
-def stock_closes(session: Session, as_of: date | None = None, days: int = 420) -> pd.DataFrame:
-    """Daily closes of every stock and fund in the book (rows: dates, columns: tickers) over
-    the last `days` calendar days up to `as_of`."""
-    q = (select(Security.ticker, Price.date, Price.close).join(Price, Price.security_id == Security.id)
+def _stock_frame(session: Session, column, as_of: date | None, days: int | None) -> pd.DataFrame:
+    """One daily figure for every stock and fund in the book (rows: dates, columns: tickers)."""
+    q = (select(Security.ticker, Price.date, column).join(Price, Price.security_id == Security.id)
          .where(Security.asset_class.in_(STOCKS)))
     if as_of is not None:
-        q = q.where(Price.date <= as_of, Price.date >= as_of - timedelta(days=days))
+        q = q.where(Price.date <= as_of)
+        if days is not None:
+            q = q.where(Price.date >= as_of - timedelta(days=days))
     rows = session.execute(q).all()
     if not rows:
         return pd.DataFrame()
-    df = pd.DataFrame(rows, columns=["ticker", "date", "close"]).pivot(index="date", columns="ticker", values="close").sort_index()
+    return pd.DataFrame(rows, columns=["ticker", "date", "value"]).pivot(index="date", columns="ticker", values="value").sort_index()
+
+
+def stock_closes(session: Session, as_of: date | None = None, days: int | None = 420) -> pd.DataFrame:
+    """Daily closes of every stock and fund in the book over the last `days` calendar days up to `as_of`."""
+    df = _stock_frame(session, Price.close, as_of, days)
     if BENCHMARK in df.columns:
         df = df[df[BENCHMARK].notna()]  # market days only
     return df
+
+
+def stock_volumes(session: Session, as_of: date | None = None, days: int | None = 120) -> pd.DataFrame:
+    """Shares traded each day by every stock and fund in the book, full days only (the day still
+    in progress has no volume stored)."""
+    return _stock_frame(session, Price.volume, as_of, days).dropna(how="all").dropna(axis=1, how="all")
+
+
+def unusual_volume(volumes: pd.DataFrame) -> pd.DataFrame:
+    """Each day's volume as a multiple of the name's own average over the `VOLUME_DAYS` trading
+    days before it: 1.0 is an ordinary day, 2.0 twice the usual."""
+    return volumes / volumes.rolling(VOLUME_DAYS).mean().shift(1)
 
 
 # --------------------------------------------------------------------------- news
@@ -196,6 +225,10 @@ def weigh(session: Session, signals: list, at: datetime | None = None, use_trend
         today = (closes.iloc[-1] / closes.iloc[-2] - 1).dropna()
         tape = (today - today.median()).to_dict()
     news = news_evidence(session, now)
+    busy: dict = {}
+    volumes = stock_volumes(session, now.date() - timedelta(days=1))  # the last full day and those before it
+    if len(volumes) > VOLUME_DAYS:
+        busy = unusual_volume(volumes).iloc[-1].dropna().to_dict()
     out = []
     for s in signals:
         is_stock = s.asset_class in STOCKS
@@ -205,6 +238,7 @@ def weigh(session: Session, signals: list, at: datetime | None = None, use_trend
         out.append(replace(
             s, trend=None if rank is None else float(rank), tape=float(tape[s.ticker]) if is_stock and s.ticker in tape else None,
             news=float(n["tone"]) if n else None, news_count=n["count"] if n else 0, events=list(n["events"]) if n else [],
+            volume=float(busy[s.ticker]) if is_stock and s.ticker in busy else None,
             conviction=s.score * boost,
         ))
     return sorted(out, key=lambda s: -s.conviction)
@@ -302,6 +336,32 @@ def trend_check(session: Session, as_of: date | None = None) -> dict:
                               "top_fifth_next_day_against_average": float(daily.mean()) if len(daily) else None, "t_stat": _t(daily)})
     return {"available": days > 250, "from": closes.index[0].isoformat(), "to": closes.index[-1].isoformat(), "days": days,
             "names": int(closes.shape[1]), "fifths": fifths, "top_fifth_by_market": by_market}
+
+
+def volume_check(session: Session, as_of: date | None = None) -> dict:
+    """The test behind the volume evidence, on all the daily history in the database: each day
+    the names are sorted into fifths by how unusual their volume was, and each fifth's return
+    over the next day and the next five days is set against the average name's."""
+    volumes, closes = stock_volumes(session, as_of, None), _stock_frame(session, Price.close, as_of, None)
+    if len(volumes) < 260 or len(closes) < 260:
+        return {"available": False, "horizons": []}
+    closes = closes.reindex(volumes.index)
+    standing = unusual_volume(volumes).rank(axis=1, pct=True)
+    enough = standing.notna().sum(axis=1) >= 20
+    horizons = []
+    for days in (1, 5):
+        ahead = closes.shift(-days) / closes - 1
+        against = ahead.sub(ahead.mean(axis=1), axis=0)
+        fifths = []
+        for name, inside in (("busiest fifth", standing > 0.8), ("quietest fifth", standing <= 0.2)):
+            every = against.where(inside)[enough].mean(axis=1).iloc[::days].dropna()  # separate stretches only
+            half = len(every) // 2
+            fifths.append({"fifth": name, "times": int(len(every)), "against_average": float(every.mean()) if len(every) else None,
+                           "t_stat": _t(every), "first_half": float(every.iloc[:half].mean()) if half else None,
+                           "second_half": float(every.iloc[half:].mean()) if half else None})
+        horizons.append({"days_ahead": days, "fifths": fifths})
+    return {"available": True, "from": volumes.index[0].isoformat(), "to": volumes.index[-1].isoformat(),
+            "days": int(enough.sum()), "names": int(volumes.shape[1]), "horizons": horizons, "ideas_tried": 8}
 
 
 def backdrop_check(session: Session, as_of: date | None = None) -> dict:

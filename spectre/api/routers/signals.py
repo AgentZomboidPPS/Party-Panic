@@ -145,7 +145,8 @@ def evidence_summary(db: DB) -> dict:
     key = str(db.get_bind().url)
     cached = _TESTS.get(key)
     if not cached or time.monotonic() - cached[0] > 3600:
-        cached = (time.monotonic(), _clean({"trend": ev.trend_check(db), "backdrop": ev.backdrop_check(db)}))
+        cached = (time.monotonic(), _clean({"trend": ev.trend_check(db), "backdrop": ev.backdrop_check(db),
+                                            "volume": ev.volume_check(db)}))
         _TESTS[key] = cached
     switched_on = {"crowd": True, "trend": settings.kairos_evidence, "backdrop": settings.kairos_backdrop}
     kinds = [{**k, "status": k["status"] if switched_on.get(k["key"], True) else "switched off"} for k in ev.KINDS]

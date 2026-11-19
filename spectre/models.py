@@ -111,6 +111,7 @@ class Price(Base):
     security_id: Mapped[int] = mapped_column(ForeignKey("securities.id", ondelete="CASCADE"), index=True)
     date: Mapped[date] = mapped_column(Date, index=True)
     close: Mapped[float] = mapped_column(Float)
+    volume: Mapped[float | None] = mapped_column(Float)  # shares traded that day, where the source gives it
 
     security: Mapped[Security] = relationship(back_populates="prices")
 

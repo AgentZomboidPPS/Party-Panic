@@ -522,7 +522,7 @@ def evidence(lookback: int = typer.Option(45, help="Minutes of conversation behi
     with _session(db) as s:
         state = ev.backdrop(s)
         reads = ev.weigh(s, live_signals(s, lookback, min_posts=5, min_authors=min_authors))
-        trend, calm = ev.trend_check(s), ev.backdrop_check(s)
+        trend, calm, busy = ev.trend_check(s), ev.backdrop_check(s), ev.volume_check(s)
         live = None
         try:
             from spectre.execution.alpaca import AlpacaClient
@@ -541,13 +541,14 @@ def evidence(lookback: int = typer.Option(45, help="Minutes of conversation behi
     console.print(f"[bold]{state['note']}[/]")
 
     if reads:
-        t = Table("name", "crowd score", "authors", "trend standing", "news (headlines)", "today vs the rest", "conviction",
-                  title="Each name now, strongest conviction first")
+        t = Table("name", "crowd score", "authors", "trend standing", "news (headlines)", "today vs the rest", "volume yesterday",
+                  "conviction", title="Each name now, strongest conviction first")
         for g in reads:
             raised = g.conviction is not None and g.conviction > g.score * 1.02 and g.score > 0
             t.add_row(g.ticker, num(g.score), str(g.n_authors), "-" if g.trend is None else f"{g.trend:.0%}",
                       "-" if g.news is None else f"{g.news:+.2f} ({g.news_count})" + (f" {', '.join(g.events)}" if g.events else ""),
-                      pct(g.tape, 2), f"[green]{num(g.conviction)}[/]" if raised else num(g.conviction))
+                      pct(g.tape, 2), "-" if g.volume is None else f"{g.volume:.1f}x usual",
+                      f"[green]{num(g.conviction)}[/]" if raised else num(g.conviction))
         console.print(t)
 
     if trend.get("available"):
@@ -576,6 +577,16 @@ def evidence(lookback: int = typer.Option(45, help="Minutes of conversation behi
                           f"volatility {st['volatility']:.0%} a year")
         console.print("[dim]Turbulence does not say which way the market goes next; it says how violently. Scaling down gives up "
                       "some return for much shallower falls. It is a seatbelt, not an engine.[/]")
+    if busy.get("available"):
+        t = Table("days ahead", "fifth by volume", "against the average name", "t", "first half", "second half",
+                  title=f"The test behind unusual volume (on trial): {busy['names']} stocks and funds, {busy['from']} to {busy['to']}")
+        for hz in busy["horizons"]:
+            for f in hz["fifths"]:
+                t.add_row(str(hz["days_ahead"]), f["fifth"], pct(f["against_average"]), num(f["t_stat"]), pct(f["first_half"]),
+                          pct(f["second_half"]))
+        console.print(t)
+        console.print(f"[dim]Suggestive, in both halves. But it was one of {busy['ideas_tried']} ideas tried on the same history, and with that "
+                      "many looks a t near 2 is not enough, so it changes no decision until it has also shown up live.[/]")
     if live and live["kinds"]:
         t = Table("ranked by", "readings", "separate windows", "rank agreement", "t", f"top {live['top_n']} against the rest", "t",
                   title=f"On KAIROS's own readings so far, looking {live['horizon_minutes']} minutes ahead")

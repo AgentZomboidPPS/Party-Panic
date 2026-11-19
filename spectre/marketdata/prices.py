@@ -93,7 +93,8 @@ def returns_from_prices(prices: pd.DataFrame) -> pd.DataFrame:
 
 
 def upsert_prices(session: Session, rows: list[dict]) -> int:
-    """Insert price rows ({security_id, date, close}); existing (security, date) pairs are replaced."""
+    """Insert price rows ({security_id, date, close} and optionally volume); existing (security,
+    date) pairs are replaced. A row without a volume leaves a stored volume as it is."""
     if not rows:
         return 0
     keys = {(r["security_id"], r["date"]) for r in rows}
@@ -106,10 +107,14 @@ def upsert_prices(session: Session, rows: list[dict]) -> int:
     new_rows = []
     for r in rows:
         key = (r["security_id"], r["date"])
+        volume = r.get("volume")
         if key in existing_map:
             existing_map[key].close = float(r["close"])
+            if volume is not None:
+                existing_map[key].volume = float(volume)
         else:
-            new_rows.append({"security_id": key[0], "date": key[1], "close": float(r["close"])})
+            new_rows.append({"security_id": key[0], "date": key[1], "close": float(r["close"]),
+                             "volume": None if volume is None else float(volume)})
     if new_rows:
         session.execute(insert(Price), new_rows)
     session.flush()

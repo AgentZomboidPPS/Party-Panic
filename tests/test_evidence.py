@@ -222,11 +222,11 @@ def test_readings_keep_the_evidence_and_the_kinds_are_compared_on_the_same_price
 
         r = intraday.evidence_check(s, Prices(), days=2, horizon=30, top_n=1, now=NOW + timedelta(hours=4))
     by = {k["key"]: k for k in r["kinds"]}
-    assert set(by) == {"crowd", "conviction", "trend", "news", "tape"}
+    assert set(by) == {"crowd", "conviction", "trend", "news", "tape", "volume"}
     assert by["trend"]["top_edge"] > 0 and by["trend"]["rank_agreement"] == pytest.approx(1.0)
     assert by["conviction"]["top_edge"] > by["crowd"]["top_edge"], "adding the trend to the crowd did better than the crowd alone"
     assert by["news"]["readings"] > 0 and by["news"]["windows"] > 0 and not by["news"]["clears_the_bar"]
-    assert r["bar"] == pytest.approx(intraday.bar_for(5)) and "Too little data to compare them" in r["verdict"]
+    assert r["bar"] == pytest.approx(intraday.bar_for(6)) and "Too little data to compare them" in r["verdict"]
     # The main check judges what KAIROS bought on: conviction where it was written down.
     with factory() as s:
         assert {t: v for _, t, v, _ in intraday.stored_readings(s, NOW, NOW)}["NVDA"] == pytest.approx(row.conviction)
@@ -279,7 +279,8 @@ def test_the_api_shows_what_is_weighed(book, monkeypatch):  # noqa: F811
     assert web.get("/signals/live?evidence=false").json()[0]["conviction"] is None
     r = web.get("/signals/evidence").json()
     assert {k["key"]: k["status"] for k in r["kinds"]} == {"crowd": "in use", "trend": "in use", "backdrop": "in use",
-                                                         "news": "on trial", "tape": "on trial", "market_move": "tested, not used"}
+                                                         "news": "on trial", "tape": "on trial", "volume": "on trial",
+                                                         "market_move": "tested, not used"}
     assert r["backdrop"]["state"] == "calm" and "trend" in r["tests"] and r["settings"]["trend_strength"] == 0.5
     monkeypatch.setattr(settings, "kairos_evidence", False)
     assert {k["key"]: k["status"] for k in web.get("/signals/evidence").json()["kinds"]}["trend"] == "switched off"
@@ -316,3 +317,52 @@ def test_the_big_move_test_finds_a_carry_on_when_there_is_one_and_nothing_when_t
     turned = {r["rule"]: r for r in ev.market_move_check(world(-0.5))["rules"]}
     assert turned["the first half hour, into the rest of the day"]["carried_on"] == 0.0
     assert turned["the first half hour, into the rest of the day"]["average_after"] < 0
+
+
+def test_unusual_volume_is_measured_against_the_names_own_usual_and_recorded(book):  # noqa: F811
+    days = pd.date_range("2026-01-01", periods=60, freq="B")
+    volumes = pd.DataFrame({"A": [1_000.0] * 59 + [3_000.0], "B": [50.0] * 60}, index=days)
+    last = ev.unusual_volume(volumes).iloc[-1]
+    assert last["A"] == pytest.approx(3.0) and last["B"] == pytest.approx(1.0), "a multiple of its own average, whatever its size"
+    assert ev.unusual_volume(volumes).iloc[49].isna().all(), "nothing before there are fifty days to compare with"
+
+    factory, _, _ = book
+    with factory() as s:
+        history(s, DRIFTS)
+        ids = dict(s.execute(select(Security.ticker, Security.id).where(Security.ticker.in_(("NVDA", "TSLA")))).all())
+        dates = business_days(60, T0.date() - timedelta(days=1))
+        for name, last_day in (("NVDA", 4_000_000.0), ("TSLA", 1_000_000.0)):  # NVDA traded four times its usual yesterday
+            upsert_prices(s, [{"security_id": ids[name], "date": d, "close": 100.0 + i, "volume": last_day if d == dates[-1] else 1_000_000.0}
+                              for i, d in enumerate(dates)])
+        s.commit()
+        read = {g.ticker: g for g in ev.weigh(s, live_signals(s, 60, 5, 4), NOW)}
+        assert read["NVDA"].volume == pytest.approx(4.0) and read["TSLA"].volume == pytest.approx(1.0)
+        assert intraday.record_readings(s, lookback=10_000_000, min_authors=4, at=NOW) == 2
+        stored = {r.ticker: r.volume for r in s.execute(select(SignalReading)).scalars()}
+        assert stored["NVDA"] == pytest.approx(4.0)
+        assert {t: v for _, t, v, _ in intraday.stored_readings(s, NOW, NOW, column="volume")}["NVDA"] == pytest.approx(4.0)
+
+
+def test_the_volume_test_finds_what_was_built_into_the_history(book):  # noqa: F811
+    factory, _, _ = book
+    with factory() as s:
+        assert ev.volume_check(s) == {"available": False, "horizons": []}, "no volume history: no test"
+        names = [t for (t,) in s.execute(select(Security.ticker).where(Security.asset_class.in_(ev.STOCKS)).order_by(Security.ticker).limit(25))]
+        ids = dict(s.execute(select(Security.ticker, Security.id).where(Security.ticker.in_(names))).all())
+        dates = business_days(320, T0.date() - timedelta(days=1))
+        rows = []
+        for k, name in enumerate(names):
+            px = 100.0
+            for i, d in enumerate(dates):
+                busy = (i + k) % 5 == 0  # every fifth day, in turn, a name trades three times its usual ...
+                if i and (i - 1 + k) % 5 == 0:
+                    px *= 1.01  # ... and rises 1% the day after
+                rows.append({"security_id": ids[name], "date": d, "close": px, "volume": 3_000.0 if busy else 1_000.0 + 10 * k})
+        upsert_prices(s, rows)
+        s.commit()
+        r = ev.volume_check(s)
+        assert r["available"] and r["names"] == 25 and [h["days_ahead"] for h in r["horizons"]] == [1, 5]
+        busiest, quietest = r["horizons"][0]["fifths"]
+        assert busiest["fifth"] == "busiest fifth" and busiest["against_average"] == pytest.approx(0.008, rel=0.05)  # +1% against a 0.2% average
+        assert busiest["first_half"] > 0 and busiest["second_half"] > 0 and busiest["times"] > 250
+        assert quietest["against_average"] < 0

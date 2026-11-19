@@ -86,7 +86,7 @@ def record_readings(session: Session, lookback: int = 45, min_authors: int = 8, 
     signals = weigh(session, live_signals(session, lookback, min_posts=5, min_authors=min_authors))
     session.add_all([SignalReading(at=at, ticker=g.ticker, asset_class=g.asset_class, score=g.score, authors=g.n_authors,
                                    posts=g.n_posts, lookback_minutes=lookback, conviction=g.conviction, trend=g.trend,
-                                   tape=g.tape, news=g.news, news_count=g.news_count) for g in signals])
+                                   tape=g.tape, news=g.news, news_count=g.news_count, volume=g.volume) for g in signals])
     session.commit()
     return len(signals)
 
@@ -95,7 +95,7 @@ _COLUMNS = {
     # what KAIROS bought on: conviction where it was kept, else the crowd score it was then
     "strength": func.coalesce(SignalReading.conviction, SignalReading.score),
     "score": SignalReading.score, "conviction": SignalReading.conviction, "trend": SignalReading.trend,
-    "tape": SignalReading.tape, "news": SignalReading.news,
+    "tape": SignalReading.tape, "news": SignalReading.news, "volume": SignalReading.volume,
 }
 
 
@@ -347,6 +347,7 @@ EVIDENCE = (
     ("trend", "trend", "Price trend alone"),
     ("news", "news", "News alone"),
     ("tape", "tape", "Today's move alone"),
+    ("volume", "volume", "Unusual volume alone"),
 )
 
 

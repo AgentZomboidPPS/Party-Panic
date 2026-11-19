@@ -126,6 +126,7 @@ class TrendSignal:
     news: float | None = None  # tone of recent headlines, -1 to +1
     news_count: int = 0
     events: list[str] = field(default_factory=list)
+    volume: float | None = None  # the last full day's volume as a multiple of the name's usual
 
     @property
     def strength(self) -> float:

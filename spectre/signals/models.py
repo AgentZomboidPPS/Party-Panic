@@ -186,3 +186,4 @@ class SignalReading(Base):
     tape: Mapped[float | None] = mapped_column(Float)  # the day's move against the typical name
     news: Mapped[float | None] = mapped_column(Float)  # tone of recent headlines, -1 to +1
     news_count: Mapped[int | None] = mapped_column(Integer)
+    volume: Mapped[float | None] = mapped_column(Float)  # the last full day's volume as a multiple of the usual
