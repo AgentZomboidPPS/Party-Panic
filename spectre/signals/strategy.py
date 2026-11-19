@@ -9,7 +9,9 @@ The rule is deliberately simple and easy to audit:
    a small boost when the name also appears in a trending search.
 4. Hold the top few names whose score clears `enter`; sell anything held whose score has
    fallen to `exit` or below. Long only, equal weight inside the invested share: whole shares
-   for stocks and funds, millionths of a coin for crypto.
+   for stocks and funds, millionths of a coin for crypto. With `evidence` on, buying ranks on
+   conviction instead: the score, raised for a name whose price trend is strong
+   (`signals/evidence.py`, where the test behind that is).
 5. With `stop_loss` set, sell a holding whose price has fallen that far below its average
    cost, whatever the crowd says and even with no fresh read on it. Nothing sold today is
    bought back today.
@@ -116,6 +118,19 @@ class TrendSignal:
     price: float | None
     score: float
     asset_class: str = "Equity"
+    # Other evidence, attached by `evidence.weigh` (None until then). `conviction` is what
+    # buying decisions rank on: the crowd score, raised for a name whose trend is strong.
+    conviction: float | None = None
+    trend: float | None = None  # standing among stocks and funds on 6-12 month momentum, 0 to 1
+    tape: float | None = None  # today's move against the typical name
+    news: float | None = None  # tone of recent headlines, -1 to +1
+    news_count: int = 0
+    events: list[str] = field(default_factory=list)
+
+    @property
+    def strength(self) -> float:
+        """What a buying decision ranks on: conviction when the evidence has been weighed, else the crowd score."""
+        return self.score if self.conviction is None else self.conviction
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -225,8 +240,14 @@ def run_once(
     min_hold_minutes: float = 0.0,
     risk_weighted: bool = False,
     allow_buys: bool = True,
+    evidence: bool = False,
+    buy_scale: float = 1.0,
 ) -> BotReport:
     """One decision cycle for one kind of asset: read the crowd, decide targets, trade the difference.
+    With `evidence`, what else is known about each name is weighed in (`signals/evidence.py`):
+    buying ranks on conviction, the crowd score raised for a name whose price trend is strong.
+    Selling still goes by the crowd score alone. `buy_scale` (0.5 to 1) shrinks new purchases,
+    for a turbulent market; it never forces a sale.
     `invest` is the share of the whole portfolio this book may hold; `stop_loss` (0.08 = 8%) is
     how far below its average cost a holding may fall before it is sold regardless.
     `min_hold_minutes` stops a change of mind from counting until a holding is that old: the
@@ -237,7 +258,12 @@ def run_once(
     one and a half, so each holding carries a similar share of the risk."""
     broker = broker or PaperBroker()
     limits = limits or TradingLimits.from_settings()
-    signals = [s for s in live_signals(session, lookback_minutes, min_posts, min_authors, at) if s.asset_class in asset_classes]
+    signals = live_signals(session, lookback_minutes, min_posts, min_authors, at)
+    if evidence:
+        from spectre.signals.evidence import describe, weigh
+
+        signals = weigh(session, signals, at)
+    signals = [s for s in signals if s.asset_class in asset_classes]
     by_sid = {s.security_id: s for s in signals}
     valued = value_portfolio(session, portfolio_id)
     nav, cash = valued.total_value, valued.cash
@@ -247,7 +273,7 @@ def run_once(
     # still likes them, so without this cap the book would creep past it.
     room = nav * invest - float(book["market_value"].clip(lower=0).sum())
 
-    targets = [s for s in signals if s.score >= enter and s.price][:top_n]
+    targets = [s for s in sorted(signals, key=lambda s: -s.strength) if s.strength >= enter and s.price][:top_n]
     report = BotReport(
         at=(at or datetime.now()).isoformat(timespec="seconds"), portfolio_id=portfolio_id, nav=nav, cash=cash,
         signals=signals, targets=[s.ticker for s in targets], dry_run=dry_run,
@@ -335,7 +361,10 @@ def run_once(
     ).scalars())
     if not allow_buys:  # a brake is on: this cycle only sells
         return report
-    slot = nav * invest / max(top_n, 1)
+    buy_scale = min(max(buy_scale, 0.0), 1.0)
+    # In a turbulent market each new position is smaller. The book's allowance is left alone, so
+    # names can still be rotated; the book shrinks as full-size holdings are replaced by smaller ones.
+    slot = nav * invest / max(top_n, 1) * buy_scale
     tilt = _risk_tilts(session, targets, asset_classes, valued.as_of) if risk_weighted else {}
     if tilt and sum(slot * t for t in tilt.values()) > nav * invest:  # calm names may not overfill the book
         squeeze = nav * invest / sum(slot * t for t in tilt.values())
@@ -352,7 +381,10 @@ def run_once(
         if qty < lot or qty * sig.price < max(MIN_ORDER.get(sig.asset_class, 0.0), MIN_TOPUP * per_name):
             continue
         sized = "" if abs(size - 1.0) < 0.1 else f"; sized at {size:.1f} of a full position because it moves {'more' if size < 1 else 'less'} than most"
-        if trade(sig, Side.BUY, qty, f"score {sig.score:+.2f}, {sig.n_authors} authors, net {sig.net:+.0%}{sized}"):
+        if buy_scale < 0.95:
+            sized += f"; at {buy_scale:.0%} of normal size because the market is turbulent"
+        backed = describe(sig) if evidence else ""
+        if trade(sig, Side.BUY, qty, f"score {sig.score:+.2f}, {sig.n_authors} authors, net {sig.net:+.0%}{backed}{sized}"):
             done = report.actions[-1]["quantity"]
             cash -= done * sig.price
             room -= done * sig.price

@@ -283,3 +283,33 @@ def test_option_chain_parsing_and_paging():
 def test_timestamps_with_nanoseconds():
     assert alpaca.parse_time("2026-11-18T18:11:49.565822695Z") == datetime(2026, 11, 18, 18, 11, 49, 565822)
     assert alpaca.parse_time("2026-11-18T13:11:50-05:00") == datetime(2026, 11, 18, 18, 11, 50)
+
+
+def test_holdings_are_valued_at_the_brokers_own_prices(tmp_path):
+    """The account should be worth the same here as in Alpaca's app, options included."""
+    from spectre.execution.models import OptionMark  # noqa: F401  (registers the table)
+    from spectre.marketdata.prices import latest_prices
+    from spectre.marketdata.universe import seed_universe
+    from spectre.signals.sources.base import utcnow
+
+    e = make_engine("sqlite://")
+    init_db(e)
+    with make_session_factory(e)() as s:
+        seed_universe(s)
+        call = Security(ticker="AMZN261224C00275000", name="AMZN call", asset_class="Option", currency="USD", multiplier=100.0)
+        s.add(call)
+        s.commit()
+        amzn = s.execute(select(Security).where(Security.ticker == "AMZN")).scalar_one()
+        btc = s.execute(select(Security).where(Security.ticker == "BTC")).scalar_one()
+        alpaca.upsert_prices(s, [{"security_id": call.id, "date": utcnow().date(), "close": 9.35}])  # SPECTRE's mid
+        fake = FakeAlpaca()
+        fake.positions = [
+            {"symbol": "AMZN", "asset_class": "us_equity", "qty": "56", "current_price": "270.89"},
+            {"symbol": "AMZN261224C00275000", "asset_class": "us_option", "qty": "3", "current_price": "8.75"},
+            {"symbol": "BTCUSD", "asset_class": "crypto", "qty": "0.0529", "current_price": "62815.1"},
+            {"symbol": "NOTINBOOK", "asset_class": "us_equity", "qty": "1", "current_price": "5"},
+            {"symbol": "MSFT", "asset_class": "us_equity", "qty": "1", "current_price": None},
+        ]
+        assert alpaca.mark_to_broker(s, client_for(fake)) == 3
+        px = latest_prices(s, [amzn.id, call.id, btc.id], utcnow().date())
+        assert px[amzn.id] == 270.89 and px[call.id] == 8.75 and px[btc.id] == 62815.1

@@ -118,11 +118,49 @@ def trends(db: DB, hours: float = 24, limit: int = 30) -> list[dict]:
 
 
 @router.get("/live")
-def live(db: DB, lookback_minutes: int = 60, min_posts: int = 5, min_authors: int = 4) -> list[dict]:
-    """Crowd stance per security over the last stretch of data: what the trend bot trades on."""
+def live(db: DB, lookback_minutes: int = 60, min_posts: int = 5, min_authors: int = 4, evidence: bool = True) -> list[dict]:
+    """What KAIROS trades on: the crowd's stance on each security over the last stretch of data
+    and, with `evidence`, the rest of what it weighs (trend, news, today's move) and the
+    conviction that comes out. Strongest first."""
+    from spectre.signals.evidence import weigh
     from spectre.signals.strategy import live_signals
 
-    return _clean([s.to_dict() for s in live_signals(db, lookback_minutes, min_posts, min_authors)])
+    signals = live_signals(db, lookback_minutes, min_posts, min_authors)
+    return _clean([s.to_dict() for s in (weigh(db, signals) if evidence else signals)])
+
+
+_TESTS: dict[str, tuple[float, dict]] = {}  # database -> (when computed, the tests on history)
+
+
+@router.get("/evidence")
+def evidence_summary(db: DB) -> dict:
+    """What KAIROS weighs besides the crowd, which of it is in use and which on trial, the state
+    of the market backdrop now, and the tests on price history behind the parts in use (those
+    are recomputed at most once an hour)."""
+    import time
+
+    from spectre.config import settings
+    from spectre.signals import evidence as ev
+
+    key = str(db.get_bind().url)
+    cached = _TESTS.get(key)
+    if not cached or time.monotonic() - cached[0] > 3600:
+        cached = (time.monotonic(), _clean({"trend": ev.trend_check(db), "backdrop": ev.backdrop_check(db)}))
+        _TESTS[key] = cached
+    switched_on = {"crowd": True, "trend": settings.kairos_evidence, "backdrop": settings.kairos_backdrop}
+    kinds = [{**k, "status": k["status"] if switched_on.get(k["key"], True) else "switched off"} for k in ev.KINDS]
+    return {"kinds": kinds, "backdrop": _clean(ev.backdrop(db)), "tests": cached[1],
+            "settings": {"trend_strength": ev.TREND_STRENGTH, "target_volatility": ev.TARGET_VOL, "smallest_scale": ev.MIN_SCALE}}
+
+
+@router.get("/evidence/live")
+def evidence_live(db: DB, days: float = 30.0, horizon: int = 60) -> dict:
+    """What each kind of evidence has been worth so far on KAIROS's own recorded readings."""
+    from spectre.execution.alpaca import AlpacaClient
+    from spectre.signals.intraday import evidence_check
+
+    r = _measured(db, ("evidence", days, horizon), lambda: evidence_check(db, AlpacaClient(), days=days, horizon=horizon))
+    return r if "kinds" in r else {**r, "kinds": []}
 
 
 @router.get("/calibration")

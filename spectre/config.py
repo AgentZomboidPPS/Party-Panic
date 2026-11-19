@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # day, the bot buys nothing new; sales and stops carry on. 0 switches a brake off.
     trading_max_drawdown: float = 0.10
     trading_max_daily_loss: float = 0.03
+    # What KAIROS weighs besides the crowd (signals/evidence.py). Each can be switched off.
+    kairos_evidence: bool = True  # raise conviction for a name whose 6-12 month price trend is strong
+    kairos_backdrop: bool = True  # make new stock and option purchases smaller while the market is turbulent
     # When set, the dashboard and API ask for this password (any user name). Required before
     # `spectre run` will listen on anything but this machine.
     dashboard_password: str = ""

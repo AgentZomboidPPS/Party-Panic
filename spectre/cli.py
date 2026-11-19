@@ -501,6 +501,91 @@ def signal_check(horizon: int = typer.Option(60, help="Minutes ahead to look at 
 
 
 @app.command()
+def evidence(lookback: int = typer.Option(45, help="Minutes of conversation behind each read (as the bot uses)"),
+             min_authors: int = typer.Option(8, help="Fewest distinct authors behind a read (as the bot uses)"),
+             db: str | None = typer.Option(None, "--db")):
+    """What KAIROS weighs besides the crowd, what each name looks like now, and the tests behind it."""
+    from spectre.signals import evidence as ev
+    from spectre.signals.strategy import live_signals
+
+    def pct(x: float | None, digits: int = 3) -> str:
+        return "-" if x is None else f"{x:+.{digits}%}"
+
+    def num(x: float | None) -> str:
+        return "-" if x is None else f"{x:+.2f}"
+
+    with _session(db) as s:
+        state = ev.backdrop(s)
+        reads = ev.weigh(s, live_signals(s, lookback, min_posts=5, min_authors=min_authors))
+        trend, calm = ev.trend_check(s), ev.backdrop_check(s)
+        live = None
+        try:
+            from spectre.execution.alpaca import AlpacaClient
+            from spectre.signals.intraday import evidence_check
+
+            live = evidence_check(s, AlpacaClient())
+        except Exception as exc:  # no keys, or no market data: the rest is still worth showing
+            console.print(f"[dim]Live comparison not available ({exc}).[/]")
+
+    switched_on = {"trend": settings.kairos_evidence, "backdrop": settings.kairos_backdrop}
+    t = Table("evidence", "status", "what it is", title="What KAIROS weighs")
+    for k in ev.KINDS:
+        status = k["status"] if switched_on.get(k["key"], True) else "switched off"
+        t.add_row(k["name"], f"[green]{status}[/]" if status == ev.IN_USE else f"[yellow]{status}[/]", k["what"])
+    console.print(t)
+    console.print(f"[bold]{state['note']}[/]")
+
+    if reads:
+        t = Table("name", "crowd score", "authors", "trend standing", "news (headlines)", "today vs the rest", "conviction",
+                  title="Each name now, strongest conviction first")
+        for g in reads:
+            raised = g.conviction is not None and g.conviction > g.score * 1.02 and g.score > 0
+            t.add_row(g.ticker, num(g.score), str(g.n_authors), "-" if g.trend is None else f"{g.trend:.0%}",
+                      "-" if g.news is None else f"{g.news:+.2f} ({g.news_count})" + (f" {', '.join(g.events)}" if g.events else ""),
+                      pct(g.tape, 2), f"[green]{num(g.conviction)}[/]" if raised else num(g.conviction))
+        console.print(t)
+
+    if trend.get("available"):
+        t = Table("fifth by trend", "next day against the average name", "t", "first half", "second half",
+                  title=f"The test behind the trend: {trend['names']} stocks and funds, {trend['from']} to {trend['to']}")
+        for f in trend["fifths"]:
+            label = {1: "1 (weakest)", 5: "5 (strongest)"}.get(f["fifth"], str(f["fifth"]))
+            t.add_row(label, pct(f["next_day_against_average"]), num(f["t_stat"]), pct(f["first_half"]), pct(f["second_half"]))
+        console.print(t)
+        for m in trend["top_fifth_by_market"]:
+            console.print(f"  Strongest fifth while the {m['market']}: {pct(m['top_fifth_next_day_against_average'])} a day "
+                          f"(t {num(m['t_stat'])}, {m['days']:,} days)")
+        console.print("[dim]Only the strongest fifth stands apart, so a strong trend raises conviction and a weak one takes nothing "
+                      "away. The book is a list of names well known today, which flatters this somewhat.[/]")
+    if calm.get("available"):
+        held, scaled = calm["held_throughout"], calm["scaled_down_when_turbulent"]
+        t = Table("S&P 500", "return a year", "volatility", "worst day", "deepest fall",
+                  title=f"The test behind the backdrop: {calm['from']} to {calm['to']}")
+        t.add_row("held throughout", f"{held['return_a_year']:+.1%}", f"{held['volatility']:.1%}", f"{held['worst_day']:+.1%}",
+                  f"{held['deepest_fall']:+.1%}")
+        t.add_row("scaled down when turbulent", f"{scaled['return_a_year']:+.1%}", f"{scaled['volatility']:.1%}",
+                  f"{scaled['worst_day']:+.1%}", f"{scaled['deepest_fall']:+.1%}")
+        console.print(t)
+        for st in calm["states"]:
+            console.print(f"  After {st['state']} stretches ({st['days']:,} days): next day {pct(st['next_day_mean'])} on average, "
+                          f"volatility {st['volatility']:.0%} a year")
+        console.print("[dim]Turbulence does not say which way the market goes next; it says how violently. Scaling down gives up "
+                      "some return for much shallower falls. It is a seatbelt, not an engine.[/]")
+    if live and live["kinds"]:
+        t = Table("ranked by", "readings", "separate windows", "rank agreement", "t", f"top {live['top_n']} against the rest", "t",
+                  title=f"On KAIROS's own readings so far, looking {live['horizon_minutes']} minutes ahead")
+        for k in live["kinds"]:
+            if not k["readings"]:
+                t.add_row(k["name"], "0", "0", "-", "-", "-", "-")
+                continue
+            t.add_row(k["name"], str(k["readings"]), f"{k['windows']}{'' if k['enough'] else ' (too few)'}", num(k["rank_agreement"]),
+                      num(k["rank_t"]), pct(k["top_edge"]), num(k["top_t"]) + (" [green]clears the bar[/]" if k["clears_the_bar"] else ""))
+        console.print(t)
+    if live:
+        console.print(f"[bold]{live['verdict']}[/]")
+
+
+@app.command()
 def backtest(db: str | None = typer.Option(None, "--db"), horizon: int = 1, signal: str = "score", quantile: float = 0.3,
              days: int = 365,
              cost_bps: float = typer.Option(5.0, help="One-way trading cost in basis points (spread + fees)")):
@@ -839,12 +924,22 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
     brake = buying_brake(s, portfolio_id, settings.trading_max_drawdown, settings.trading_max_daily_loss)
     if brake:
         notes.append(f"Buying is paused: {brake}. Sales and stop-losses still run.")
+    # What else is weighed besides the crowd: each name's price trend, and how turbulent the market is.
+    weigh, scale = settings.kairos_evidence, 1.0
+    if settings.kairos_backdrop and market_open:
+        from spectre.signals.evidence import backdrop
+
+        state = backdrop(s)
+        scale = state["scale"]
+        if scale < 0.95 or not state.get("trend_in_play", True):
+            notes.append(state["note"])
     report, actions = None, []
     booked: list[tuple[str, dict]] = []  # (which book, what was done) for the journal
     if market_open:
         report = run_once(s, portfolio_id, route, top_n=top_n, invest=invest, enter=enter, exit_below=exit_below,
                           lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run, stop_loss=stop_loss or None,
-                          min_hold_minutes=min_hold, risk_weighted=risk_weighted, allow_buys=not brake)
+                          min_hold_minutes=min_hold, risk_weighted=risk_weighted, allow_buys=not brake,
+                          evidence=weigh, buy_scale=scale)
         actions += report.actions
         booked += [("stocks", a) for a in report.actions]
         if options:
@@ -853,7 +948,7 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
 
             done = run_options_once(s, portfolio_id, getattr(route, "client", None) or AlpacaClient(), route,
                                     lookback_minutes=lookback, dry_run=dry_run, rules=option_rules,
-                                    allow_buys=not brake).actions
+                                    allow_buys=not brake, evidence=weigh, buy_scale=scale).actions
             actions += done
             booked += [("options", a) for a in done]
     coins = None
@@ -864,7 +959,7 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
         coins = run_once(s, portfolio_id, route, top_n=crypto_top, invest=crypto_invest, enter=max(enter, crypto_enter),
                          exit_below=min(exit_below, crypto_exit_below), lookback_minutes=lookback, min_authors=min_authors, dry_run=dry_run,
                          asset_classes=CRYPTO, stop_loss=crypto_stop_loss or None, min_hold_minutes=crypto_min_hold,
-                         risk_weighted=risk_weighted, allow_buys=not brake)
+                         risk_weighted=risk_weighted, allow_buys=not brake, evidence=weigh)
         actions += coins.actions
         booked += [("coins", a) for a in coins.actions]
     if not dry_run:
@@ -872,6 +967,13 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
         from spectre.signals.intraday import record_readings
         from spectre.signals.journal import record_cycle
 
+        if broker == "alpaca":
+            from spectre.execution.alpaca import AlpacaError, mark_to_broker
+
+            try:
+                mark_to_broker(s, route.client)  # the record is kept at the broker's own valuation
+            except AlpacaError as exc:
+                notes.append(f"could not read the broker's prices for the holdings: {exc}")
         record_snapshot(s, portfolio_id)  # the track record: what it was worth after this cycle
         record_cycle(s, portfolio_id, booked, notes, (report.targets if report else []) + (coins.targets if coins else []))
         record_readings(s, lookback, min_authors)  # what the score said, to be judged against prices later
@@ -1045,6 +1147,16 @@ def autopilot(portfolio_id: int,
             console.print(f"{_time.strftime('%H:%M:%S')}  [dim]tidied: {r['posts']:,} old posts, {r['price_ticks']:,} ticks, "
                           f"{r['market_snapshots']:,} market snapshots removed[/]")
         pipe.sentiment = retrain()
+        if broker == "alpaca":
+            # During the day a close is whatever price came in last. Replace the last few days'
+            # with the official ones, so the price history the trend and risk numbers rest on stays exact.
+            from spectre.execution.alpaca import AlpacaClient, AlpacaError, backfill_prices
+
+            try:
+                with factory() as s:
+                    backfill_prices(s, AlpacaClient(), days=10)
+            except AlpacaError as exc:
+                console.print(f"{_time.strftime('%H:%M:%S')}  [dim]could not refresh closing prices: {exc}[/]")
 
     def headlines() -> None:  # company news for the dashboard; needs the Alpaca data feed
         if broker != "alpaca":

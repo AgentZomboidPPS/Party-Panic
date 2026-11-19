@@ -88,7 +88,7 @@
   .sev.HARD { background: var(--critical); } .sev.SOFT { background: var(--warn); color: #0b0b0b; }
   .spark { width: 100%; height: 44px; }
   .spark path { fill: none; stroke: var(--s1); stroke-width: 2; }
-  #holdings, #blotter, #compliance-table, #stress-table, #moves-table, #var-table, #settlement, #signal-check { overflow-x: auto; }
+  #holdings, #blotter, #compliance-table, #stress-table, #moves-table, #var-table, #settlement, #signal-check, #weigh-table, #weigh-live { overflow-x: auto; }
   .statrow { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0 0 12px; }
   .statrow .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
   .statrow .l { color: var(--ink-2); font-size: 12px; }
@@ -216,6 +216,13 @@
   </section>
 
   <div class="c8 stackcol">
+    <section class="card">
+      <h2>What KAIROS weighs before it buys — the crowd, and what else is known about each name</h2>
+      <div id="weigh-backdrop" class="settle-line"></div>
+      <div id="weigh-table" class="muted">Loading…</div>
+      <div id="weigh-kinds" style="margin-top:12px"></div>
+      <div id="weigh-live" style="margin-top:12px"></div>
+    </section>
     <section class="card">
       <h2>What people are talking about — bubble size is volume, left/right is sentiment, up/down is how fast it is growing</h2>
       <svg id="bubble-chart" width="100%" height="460" role="img" aria-label="Topic bubbles: sentiment versus velocity, sized by volume"></svg>
@@ -774,6 +781,9 @@ async function refreshSignals() {
   trendsTable(trends);
   drawCurve(curve, macro);
   getJSON('/signals/check').then(signalCheck).catch(() => { $('#signal-check').textContent = 'Not available.'; });
+  Promise.all([getJSON('/signals/live?lookback_minutes=45&min_authors=8'), getJSON('/signals/evidence')]).then(([reads, ev]) => drawWeigh(reads, ev))
+    .catch(() => { $('#weigh-table').textContent = 'Not available.'; });
+  getJSON('/signals/evidence/live').then(drawWeighLive).catch(() => { $('#weigh-live').textContent = ''; });
   getJSON('/signals/sweep').then(signalSweep).catch(() => { $('#signal-sweep').textContent = ''; });
   getJSON('/signals/news?limit=16' + (portfolioId != null ? '&portfolio_id=' + portfolioId : '')).then(newsTable).catch(() => { $('#news-table').innerHTML = '<div class="muted">Not available.</div>'; });
 }
@@ -808,6 +818,50 @@ function signalCheck(r) {
     r.zones.map(z => `<tr><td>${short(z)}</td><td class="num">${fmtNum(z.samples)}</td><td class="num">${pct(z.mean_relative_return, 3)}</td><td class="num">${z.share_beating_the_rest == null ? '–' : Math.round(z.share_beating_the_rest * 100) + '%'}</td></tr>`).join('') +
     `</tbody></table><div style="margin-top:8px"><b>${esc(r.verdict)}</b></div>` +
     `<div class="muted" style="margin-top:4px">${fmtNum(r.samples)} readings of ${r.names} names, ${esc(r.from.replace('T', ' '))} to ${esc(r.to.replace('T', ' '))} UTC. "Vs the rest" is the return over the next ${r.horizon_minutes} minutes against the other names at the same moment. Readings ten minutes apart overlap, so only separate windows count as evidence.</div>`;
+}
+
+function drawWeigh(reads, ev) {
+  const pct = (x, d = 2) => x == null ? '–' : (x >= 0 ? '+' : '−') + Math.abs(x * 100).toFixed(d) + '%';
+  const num = (x) => x == null ? '–' : (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2);
+  const b = ev.backdrop || {};
+  $('#weigh-backdrop').innerHTML = b.note
+    ? `<span class="status ${b.scale < 0.95 || b.trend_in_play === false ? 'warn' : 'ok'}"><span class="ic">${b.scale < 0.95 || b.trend_in_play === false ? '!' : '✓'}</span>${esc(b.note)}</span>` : '';
+  const el = $('#weigh-table');
+  el.classList.remove('muted');
+  if (!reads.length) { el.innerHTML = '<div class="muted">No name has enough people talking about it right now.</div>'; }
+  else {
+    const mx = Math.max(...reads.map(r => Math.abs(r.conviction ?? r.score)), 1);
+    el.innerHTML = `<table><thead><tr><th>name</th><th class="num">crowd</th><th class="num">authors</th><th class="num">trend</th><th>news, last 2 days</th><th class="num">today vs rest</th><th>conviction</th><th class="num"></th></tr></thead><tbody>` +
+      reads.map(r => { const c = r.conviction ?? r.score, raised = r.score > 0 && c > r.score * 1.02;
+        const news = r.news == null ? '<span class="muted">–</span>' : `${num(r.news)} <span class="muted">(${r.news_count})</span>` + (r.events || []).map(e => ` <span class="pill">${esc(e)}</span>`).join('');
+        return `<tr><td><b>${esc(r.ticker)}</b></td><td class="num">${num(r.score)}</td><td class="num">${r.n_authors}</td>` +
+          `<td class="num" title="standing among the stocks and funds in the book on 6-12 month momentum">${r.trend == null ? '–' : Math.round(r.trend * 100) + '%'}${raised ? ' <span class="pill done">raises it</span>' : ''}</td>` +
+          `<td style="white-space:normal">${news}</td><td class="num">${pct(r.tape)}</td><td>${dbar(c, mx, 120)}</td><td class="num"><b>${num(c)}</b></td></tr>`; }).join('') +
+      `</tbody></table><div class="muted" style="margin-top:6px">Conviction is what buying ranks on: the crowd score, raised by up to ${Math.round(ev.settings.trend_strength * 100)}% for a stock or fund whose trend stands near the top of the book. Selling still goes by the crowd score alone. News and today's move are shown and recorded but change nothing yet.</div>`;
+  }
+  const t = (ev.tests || {}).trend, bd = (ev.tests || {}).backdrop;
+  const top = t && t.available ? t.fifths[t.fifths.length - 1] : null;
+  const tested = {
+    trend: top ? `Tested on ${fmtNum(t.days)} trading days of ${t.names} stocks and funds (${esc(t.from.slice(0, 4))}–${esc(t.to.slice(0, 4))}): the strongest fifth went on to beat the average name by ${pct(top.next_day_against_average, 3)} a day (${pct(top.first_half, 3)} in the first half, ${pct(top.second_half, 3)} in the second); the other four fifths did not stand apart. The list is of names well known today, which flatters this somewhat.` : 'Needs more price history to test.',
+    backdrop: bd && bd.available ? `Tested on the S&P 500 over the same years: turbulence did not say which way the market went next, only how violently. Scaling down in turbulent stretches cut the deepest fall from ${pct(bd.held_throughout.deepest_fall, 0)} to ${pct(bd.scaled_down_when_turbulent.deepest_fall, 0)} and the worst day from ${pct(bd.held_throughout.worst_day, 1)} to ${pct(bd.scaled_down_when_turbulent.worst_day, 1)}, at the cost of ${((bd.held_throughout.return_a_year - bd.scaled_down_when_turbulent.return_a_year) * 100).toFixed(1)} points of return a year. A seatbelt, not an engine.` : 'Needs more price history to test.',
+    crowd: 'Being measured live: see "Does the crowd read predict prices?" on this page.',
+    news: 'Not tested yet: recorded with every reading and compared below as data builds up.',
+    tape: 'Not tested yet: recorded with every reading and compared below as data builds up.',
+  };
+  $('#weigh-kinds').innerHTML = `<table><thead><tr><th>evidence</th><th>status</th><th>what it is, and what stands behind it</th></tr></thead><tbody>` +
+    ev.kinds.map(k => `<tr><td style="white-space:nowrap"><b>${esc(k.name)}</b></td><td style="white-space:nowrap"><span class="pill ${k.status === 'in use' ? 'done' : ''}">${esc(k.status)}</span></td>` +
+      `<td style="white-space:normal">${esc(k.what)} <span class="muted">${tested[k.key] || ''}</span></td></tr>`).join('') + '</tbody></table>';
+}
+function drawWeighLive(r) {
+  const el = $('#weigh-live');
+  const kinds = (r.kinds || []).filter(k => k.readings);
+  if (!kinds.length) { el.innerHTML = r.verdict ? `<div class="muted">Each kind of evidence against what prices did next: ${esc(r.verdict)}</div>` : ''; return; }
+  const pct = (x) => x == null ? '–' : (x >= 0 ? '+' : '−') + Math.abs(x * 100).toFixed(2) + '%';
+  const num = (x) => x == null ? '–' : (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(1);
+  el.innerHTML = `<div style="font-weight:600;margin-bottom:4px">Each kind of evidence against what prices did over the next ${r.horizon_minutes} minutes</div>` +
+    `<table><thead><tr><th>names ranked by</th><th class="num">windows</th><th class="num">top ${r.top_n} vs rest</th><th class="num">t</th></tr></thead><tbody>` +
+    kinds.map(k => `<tr><td>${esc(k.name)}${k.clears_the_bar ? ' <span class="pill done">clears the bar</span>' : ''}</td><td class="num">${k.windows}<span class="muted"> / ${r.enough_windows}</span></td><td class="num">${pct(k.top_edge)}</td><td class="num">${num(k.top_t)}</td></tr>`).join('') +
+    `</tbody></table><div style="margin-top:6px">${esc(r.verdict)}</div>`;
 }
 
 function signalSweep(r) {

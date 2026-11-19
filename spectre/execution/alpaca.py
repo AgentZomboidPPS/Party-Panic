@@ -477,6 +477,24 @@ def position_ticker(position: dict) -> str:
     return position["symbol"]
 
 
+def mark_to_broker(session: Session, client: AlpacaClient) -> int:
+    """Value what is held at the broker's own prices, so the account is worth the same here as
+    in Alpaca's app. It matters most for options: SPECTRE's own mark is the middle of a quote
+    that can be a tenth wide, while the broker marks nearer what a sale would fetch, and five
+    contracts were enough to make the two totals differ by 0.6% of the account. Returns how
+    many holdings were marked."""
+    rows = []
+    for position in client.positions():
+        price = float(position.get("current_price") or 0.0)
+        sec = session.execute(select(Security).where(Security.ticker == position_ticker(position))).scalar_one_or_none()
+        if sec is not None and price > 0:
+            rows.append({"security_id": sec.id, "date": utcnow().date(), "close": price})
+    if rows:
+        upsert_prices(session, rows)
+        session.commit()
+    return len(rows)
+
+
 def position_quantities(positions: list[dict]) -> dict[str, float]:
     return {position_ticker(p): float(p.get("qty_available") or p["qty"]) for p in positions}
 

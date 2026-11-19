@@ -150,12 +150,18 @@ def run_options_once(
     at: datetime | None = None,
     today: date | None = None,
     allow_buys: bool = True,
+    evidence: bool = False,
+    buy_scale: float = 1.0,
 ) -> BotReport:
     broker = broker or PaperBroker()
     limits = limits or TradingLimits.from_settings()
     rules = rules or OptionRules()
     today = today or utcnow().date()
     signals = live_signals(session, lookback_minutes, min_posts=5, min_authors=rules.min_authors, at=at)
+    if evidence:  # what else is known about each name: a call needs less of a crowd read on a name in a strong trend
+        from spectre.signals.evidence import describe, weigh
+
+        signals = weigh(session, signals, at)
     by_ticker: dict[str, TrendSignal] = {s.ticker: s for s in signals}
 
     valued = value_portfolio(session, portfolio_id)
@@ -254,19 +260,20 @@ def run_options_once(
     # --- 3: new positions
     if not allow_buys:  # a brake is on: this cycle only sells
         return report
-    budget_left = rules.budget * valued.total_value - premium_held
+    buy_scale = min(max(buy_scale, 0.0), 1.0)  # below 1 in a turbulent market: smaller and fewer new positions
+    budget_left = rules.budget * valued.total_value * buy_scale - premium_held
     exposure_room = None
     if rules.max_exposure is not None:
         now = value_portfolio(session, portfolio_id)  # after any exits above
         exposure_room = rules.max_exposure * now.total_value - market_exposure(session, now)["net"]
     wanted = sorted(
-        (s for s in signals if abs(s.score) >= rules.enter and s.price and s.ticker not in covered
+        (s for s in signals if abs(s.strength) >= rules.enter and s.price and s.ticker not in covered
          and (s.ticker, "call" if s.score > 0 else "put") not in closed),
-        key=lambda s: -abs(s.score),
+        key=lambda s: -abs(s.strength),
     )
     report.targets = [s.ticker for s in wanted[: rules.max_new]]
     for sig in wanted[: rules.max_new]:
-        spend = min(rules.per_trade * valued.total_value, budget_left, cash)
+        spend = min(rules.per_trade * valued.total_value * buy_scale, budget_left, cash)
         if spend <= 0:
             break
         kind = "call" if sig.score > 0 else "put"
@@ -303,7 +310,8 @@ def run_options_once(
                 continue
         delta = f"delta {q.delta:+.2f}" if q.delta is not None else "no greeks"
         why = (f"{'bullish' if kind == 'call' else 'bearish'} read on {sig.ticker} (score {sig.score:+.2f}, "
-               f"{sig.n_authors} authors); {(q.expiration - today).days}d, {delta}")
+               f"{sig.n_authors} authors{describe(sig) if evidence else ''}); {(q.expiration - today).days}d, {delta}"
+               + (f"; at {buy_scale:.0%} of normal size because the market is turbulent" if buy_scale < 0.95 else ""))
         if dry_run:
             report.actions.append({"ticker": q.symbol, "side": "BUY", "quantity": qty, "price": limit,
                                    "outcome": "dry run", "why": why})

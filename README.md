@@ -403,8 +403,38 @@ collected. Each cycle:
 2. per security, give **each author one vote** (their average stance) so one loud account cannot
    move the result; `net` = bullish authors minus bearish authors;
 3. `score` = net × log(1 + authors), boosted 25% if the name is also in a trending search;
-4. buy the top names above `--enter`, sell holdings whose score fell to `--exit-below`; long
-   only, whole shares, each order through compliance and then the execution gate.
+4. weigh in what else is known about each name (below) to get its **conviction**;
+5. buy the top names whose conviction is above `--enter`, sell holdings whose crowd score fell
+   to `--exit-below`; long only, whole shares, each order through compliance and then the
+   execution gate.
+
+**More than the crowd (`signals/evidence.py`, `spectre evidence`).** Each kind of evidence is
+either *in use*, meaning it has been tested against real prices and may change a decision, or
+*on trial*, meaning it is worked out and written down with every reading, compared later with
+what prices did, and changes nothing until it has earned it.
+
+- **Price trend, in use.** Where a stock or fund stands among all those in the book on 6-12
+  month momentum. Tested on nine years of daily prices for the 60 names: the strongest fifth
+  went on to beat the average name by about 0.08% a day (t = 3.4; 0.06% in the first half of
+  the period, 0.10% in the second), and the other four fifths could not be told apart. So a
+  name near the top has its crowd score raised by up to half, and a weak trend takes nothing
+  away. While the S&P 500 is more than 10% below its one-year high the effect was absent in
+  the same history, so the raise is switched off then. The book is a list of names that are
+  well known today, which flatters this test somewhat.
+- **Market backdrop, in use.** How turbulent the S&P 500 has been over the last 20 trading
+  days. The history says turbulence does not tell which way the market goes next, only how
+  violently: scaling down in turbulent stretches cut the index's deepest fall from 34% to 22%
+  and its worst day from 10.8% to 5.4%, and cost 2.5 points of return a year. So above 15%
+  volatility each new stock or option position is made proportionally smaller, never below
+  half size. Nothing is sold because of it. A seatbelt, not an engine.
+- **News and today's move, on trial.** The tone of the last two days' headlines about the
+  name with events spotted in them (results, guidance, analyst changes, deals, share
+  offerings, legal trouble), and how the name has moved today against the typical name.
+
+`spectre evidence` prints all of it: what is weighed, each name as it stands now, the two
+tests on history, and the live comparison of each kind of evidence on KAIROS's own recorded
+readings. `SPECTRE_KAIROS_EVIDENCE=false` and `SPECTRE_KAIROS_BACKDROP=false` switch the two
+that are in use off.
 
 **Sizing by risk (`--risk-weighted`, the default).** Each position is sized by how much the
 name has been moving over the last sixty trading days: one twice as volatile as the typical
@@ -594,7 +624,9 @@ Environment variables, all prefixed `SPECTRE_`: `DATABASE_URL`, `BASE_CURRENCY`,
 Alpaca: `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`, `ALPACA_TRADING_URL` (paper host), `ALPACA_STOCK_FEED` (iex),
 `ALPACA_OPTION_FEED` (indicative), `ALPACA_CASH_ONLY` (true: refuse to trade while the account can borrow). Trading guardrails: `TRADING_MODE` (paper), `TRADING_MAX_ORDER_NOTIONAL` (1000),
 `TRADING_MAX_DAILY_NOTIONAL` (5000), `TRADING_MAX_ORDERS_PER_DAY` (20), `TRADING_MAX_POSITION_WEIGHT`
-(0.20), `TRADING_REQUIRE_APPROVAL` (true), `TRADING_ALLOWED_SYMBOLS` (empty = any).
+(0.20), `TRADING_REQUIRE_APPROVAL` (true), `TRADING_ALLOWED_SYMBOLS` (empty = any). KAIROS:
+`TRADING_MAX_DRAWDOWN` (0.10), `TRADING_MAX_DAILY_LOSS` (0.03), `KAIROS_EVIDENCE` (true: a strong
+price trend raises conviction), `KAIROS_BACKDROP` (true: smaller new positions in a turbulent market).
 
 ## Design notes
 
@@ -614,8 +646,9 @@ Next steps in rough priority order: deploy the container to a permanent host so 
 build a track record; let the signal check accumulate a few weeks of windows and act on what
 it says; train a sentiment classifier on the Stocktwits labels and adopt it
 only if it beats the baseline out of sample; covered calls, cash-secured puts and defined-risk
-spreads, with their assignment and expiry bookkeeping (never an uncovered sale); use rates and
-credit as a risk-on / risk-off filter; SEC earnings against the live service; Reddit via a
+spreads, with their assignment and expiry bookkeeping (never an uncovered sale); more kinds of
+evidence put on trial (what the options market implies, unusual volume, results dates, rates
+and credit) and promoted only when they earn it; SEC earnings against the live service; Reddit via a
 registered app; multi-user auth; scheduled end-of-day risk and compliance runs; Postgres
 migrations via Alembic; a data-licensing review before selling derived signals. A live broker
 would come last, behind the live-mode and per-order approval gates, and only after paper

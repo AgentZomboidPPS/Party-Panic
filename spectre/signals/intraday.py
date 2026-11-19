@@ -81,19 +81,32 @@ def record_readings(session: Session, lookback: int = 45, min_authors: int = 8, 
     at = (at or utcnow()).replace(microsecond=0)
     if session.execute(select(func.count()).select_from(SignalReading).where(SignalReading.at == at)).scalar_one():
         return 0
-    signals = live_signals(session, lookback, min_posts=5, min_authors=min_authors)
+    from spectre.signals.evidence import weigh
+
+    signals = weigh(session, live_signals(session, lookback, min_posts=5, min_authors=min_authors))
     session.add_all([SignalReading(at=at, ticker=g.ticker, asset_class=g.asset_class, score=g.score, authors=g.n_authors,
-                                   posts=g.n_posts, lookback_minutes=lookback) for g in signals])
+                                   posts=g.n_posts, lookback_minutes=lookback, conviction=g.conviction, trend=g.trend,
+                                   tape=g.tape, news=g.news, news_count=g.news_count) for g in signals])
     session.commit()
     return len(signals)
 
 
-def stored_readings(session: Session, start: datetime, end: datetime,
-                    asset_classes: tuple[str, ...] = STOCKS) -> list[tuple[datetime, str, float, int]]:
-    """The scores written down at the time between `start` and `end`, oldest first."""
+_COLUMNS = {
+    # what KAIROS bought on: conviction where it was kept, else the crowd score it was then
+    "strength": func.coalesce(SignalReading.conviction, SignalReading.score),
+    "score": SignalReading.score, "conviction": SignalReading.conviction, "trend": SignalReading.trend,
+    "tape": SignalReading.tape, "news": SignalReading.news,
+}
+
+
+def stored_readings(session: Session, start: datetime, end: datetime, asset_classes: tuple[str, ...] = STOCKS,
+                    column: str = "strength") -> list[tuple[datetime, str, float, int]]:
+    """What was written down at the time between `start` and `end`, oldest first: by default
+    what KAIROS bought on, or one kind of evidence by name (readings without it are left out)."""
+    value = _COLUMNS[column]
     rows = session.execute(
-        select(SignalReading.at, SignalReading.ticker, SignalReading.score, SignalReading.authors)
-        .where(SignalReading.at >= start, SignalReading.at <= end, SignalReading.asset_class.in_(asset_classes))
+        select(SignalReading.at, SignalReading.ticker, value, SignalReading.authors)
+        .where(SignalReading.at >= start, SignalReading.at <= end, SignalReading.asset_class.in_(asset_classes), value.is_not(None))
         .order_by(SignalReading.at, SignalReading.ticker)).all()
     return [(at, ticker, score, authors) for at, ticker, score, authors in rows]
 
@@ -195,7 +208,6 @@ def _load(session: Session, client, days: float, step: int, lookback: int, min_a
           now: datetime | None) -> _Span | None:
     """The scores over the last `days` and five-minute prices from Alpaca for the names in them.
     None when there is nothing to score."""
-    from spectre.models import Security
     from spectre.signals.sources.base import utcnow
 
     end = now or utcnow()
@@ -218,7 +230,13 @@ def _load(session: Session, client, days: float, step: int, lookback: int, min_a
     scored += written
     if not scored:
         return None
-    names = {ticker for _, ticker, _, _ in scored}
+    return _Span(_prices(session, client, {ticker for _, ticker, _, _ in scored}, start), start, end, scored, len(written))
+
+
+def _prices(session: Session, client, names: set[str], start: datetime) -> PricePath:
+    """Five-minute prices from Alpaca for these names since `start`."""
+    from spectre.models import Security
+
     kinds = dict(session.execute(select(Security.ticker, Security.asset_class).where(Security.ticker.in_(names))).all())
     coins = sorted(n for n in names if kinds.get(n) == "Crypto")
     stocks = sorted(names - set(coins))
@@ -227,7 +245,7 @@ def _load(session: Session, client, days: float, step: int, lookback: int, min_a
         bars.update(client.stock_bars(stocks, start, timeframe="5Min", adjustment="raw"))
     if coins:
         bars.update(client.crypto_bars(coins, start, timeframe="5Min"))
-    return _Span(PricePath(bars), start, end, scored, len(written))
+    return PricePath(bars)
 
 
 _EMPTY = ["at", "ticker", "score", "authors", "fwd", "rel"]
@@ -321,3 +339,56 @@ def sweep(session: Session, client, horizons: tuple[int, ...] = HORIZONS, days: 
     return {"horizons": rows, "bar": bar, "looks": len(horizons), "round_trip_cost": round_trip_cost, "entry_score": enter, "top_n": top_n,
             "lookback_minutes": lookback, "enough_windows": ENOUGH_WINDOWS, "verdict": verdict,
             **(span.counts(None) if span is not None else {})}
+
+
+EVIDENCE = (
+    ("crowd", "score", "The crowd alone"),
+    ("conviction", "conviction", "Crowd and trend together (what KAIROS buys on)"),
+    ("trend", "trend", "Price trend alone"),
+    ("news", "news", "News alone"),
+    ("tape", "tape", "Today's move alone"),
+)
+
+
+def evidence_check(session: Session, client, days: float = 30.0, horizon: int = 60, top_n: int = 5,
+                   asset_classes: tuple[str, ...] = STOCKS, now: datetime | None = None) -> dict:
+    """What each kind of evidence has been worth so far, on the readings written down at the
+    time: had KAIROS ranked the names by that evidence alone, did the top few go on to beat
+    the rest over the following `horizon` minutes, and did a higher value go with a better
+    outcome? The same prices and the same moments for every kind, so they can be compared;
+    the same caution as everywhere else about separate windows, and a higher bar because
+    several kinds are being looked at."""
+    from spectre.signals.sources.base import utcnow
+
+    end = now or utcnow()
+    since = end - timedelta(days=days)
+    per = {key: stored_readings(session, since, end, asset_classes, column) for key, column, _ in EVIDENCE}
+    every = [r for rows in per.values() for r in rows]
+    bar = bar_for(len(EVIDENCE))
+    if not every:
+        return {"kinds": [], "bar": bar, "horizon_minutes": horizon, "top_n": top_n, "enough_windows": ENOUGH_WINDOWS,
+                "verdict": "No readings with the other evidence written down yet. It is kept from the first decision after this was switched on."}
+    start = min(at for at, _, _, _ in every) - timedelta(minutes=30)
+    prices = _prices(session, client, {ticker for _, ticker, _, _ in every}, start)
+    kinds = []
+    for key, _, name in EVIDENCE:
+        r = summarise(collect(session, prices, start, end, horizon=horizon, asset_classes=asset_classes, scored=per[key]),
+                      horizon, 45, enter=-math.inf, top_n=top_n)
+        if not r["samples"]:
+            kinds.append({"key": key, "name": name, "readings": 0, "windows": 0, "enough": False, "clears_the_bar": False})
+            continue
+        t = r["held"]["t_stat"]
+        kinds.append({"key": key, "name": name, "readings": r["samples"], "windows": r["windows"], "enough": r["windows"] >= ENOUGH_WINDOWS,
+                      "rank_agreement": r["rank_agreement"]["mean"], "rank_t": r["rank_agreement"]["t_stat"],
+                      "top_edge": r["held"]["mean_edge"], "top_t": t,
+                      "clears_the_bar": bool(r["windows"] >= ENOUGH_WINDOWS and t is not None and abs(t) >= bar)})
+    most = max(k["windows"] for k in kinds)
+    earned = [k["name"].lower() for k in kinds if k["clears_the_bar"] and k["top_edge"] > 0]
+    if most < ENOUGH_WINDOWS:
+        verdict = (f"Too little data to compare them: {most} separate window{'s' if most != 1 else ''} so far, and nothing below "
+                   f"{ENOUGH_WINDOWS} deserves a conclusion. Keep collecting.")
+    elif earned:
+        verdict = "Beating the rest by more than chance explains: " + "; ".join(earned) + "."
+    else:
+        verdict = "None of them, taken alone, has yet beaten the rest by more than chance explains."
+    return {"kinds": kinds, "bar": bar, "horizon_minutes": horizon, "top_n": top_n, "enough_windows": ENOUGH_WINDOWS, "verdict": verdict}

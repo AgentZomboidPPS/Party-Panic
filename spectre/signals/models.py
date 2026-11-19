@@ -180,3 +180,9 @@ class SignalReading(Base):
     authors: Mapped[int] = mapped_column(Integer)
     posts: Mapped[int] = mapped_column(Integer)
     lookback_minutes: Mapped[int] = mapped_column(Integer)
+    # The other evidence as it stood then (signals/evidence.py); empty on readings from before it was kept.
+    conviction: Mapped[float | None] = mapped_column(Float)  # what buying ranked on: the score, raised for a strong trend
+    trend: Mapped[float | None] = mapped_column(Float)  # standing on 6-12 month momentum, 0 to 1
+    tape: Mapped[float | None] = mapped_column(Float)  # the day's move against the typical name
+    news: Mapped[float | None] = mapped_column(Float)  # tone of recent headlines, -1 to +1
+    news_count: Mapped[int | None] = mapped_column(Integer)
