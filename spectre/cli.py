@@ -967,6 +967,17 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
     route = _broker(broker, s)
     notes: list[str] = []
     market_open = True
+
+    def mark_to_broker_prices() -> None:
+        from spectre.execution.alpaca import AlpacaError, mark_to_broker
+
+        try:
+            mark_to_broker(s, route.client)
+        except AlpacaError as exc:
+            note = f"could not read the broker's prices for the holdings: {exc}"
+            if note not in notes:
+                notes.append(note)
+
     if broker == "alpaca":
         from spectre.execution.alpaca import reconcile
 
@@ -980,6 +991,10 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
                 notes.append(f"reconcile {item['ticker']}: ledger {item['ledger']:g}, broker {item['broker']:g} -> {item['action']}")
             if rec["cash"]:
                 notes.append(f"reconcile cash: {rec['cash']['difference']:+,.2f} -> {rec['cash']['action']}")
+            # The brakes compare the account with a record kept at the broker's valuation, so it is
+            # valued the same way before they are read. Without this the options were still at the
+            # prices the last cycle left, ten minutes old.
+            mark_to_broker_prices()
     from spectre.portfolio.performance import buying_brake
 
     brake = buying_brake(s, portfolio_id, settings.trading_max_drawdown, settings.trading_max_daily_loss)
@@ -1029,12 +1044,7 @@ def _kairos_cycle(s, portfolio_id: int, broker: str, *, top_n, invest, enter, ex
         from spectre.signals.journal import record_cycle
 
         if broker == "alpaca":
-            from spectre.execution.alpaca import AlpacaError, mark_to_broker
-
-            try:
-                mark_to_broker(s, route.client)  # the record is kept at the broker's own valuation
-            except AlpacaError as exc:
-                notes.append(f"could not read the broker's prices for the holdings: {exc}")
+            mark_to_broker_prices()  # the record is kept at the broker's own valuation
         record_snapshot(s, portfolio_id)  # the track record: what it was worth after this cycle
         record_cycle(s, portfolio_id, booked, notes, (report.targets if report else []) + (coins.targets if coins else []))
         record_readings(s, lookback, min_authors)  # what the score said, to be judged against prices later

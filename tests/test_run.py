@@ -183,3 +183,32 @@ def test_keys_supplied_by_the_environment_are_detected():
     bare = dict(key_id="", secret_key="")
     assert not alpaca.AlpacaClient(**bare, transport=httpx.MockTransport(needs_basic)).authorised()
     assert alpaca.AlpacaClient(**bare, transport=httpx.MockTransport(injecting)).authorised()
+
+
+def test_the_daily_brake_is_read_at_the_brokers_current_prices(fresh, monkeypatch):
+    """The brake compares the account with a record kept at the broker's valuation, so the
+    holdings are valued at the broker's prices before it is read: calls that have fallen since
+    the last cycle count in this cycle, not the next one."""
+    from datetime import timedelta
+
+    from spectre import cli as commands
+    from spectre.portfolio.performance import record_snapshot
+    from spectre.signals.sources.base import utcnow
+
+    s, pid = fresh
+    fake = FakeOptions()
+    fake.cash = "90000.00"
+    fake.positions = [{"symbol": "NVDA261224C00155000", "asset_class": "us_option", "qty": "20", "avg_entry_price": "5.00",
+                       "current_price": "5.00"}]
+    client = client_for(fake)
+    alpaca.adopt_account(s, client, pid)  # 90,000 in cash and twenty calls at 5.00: 100,000
+    record_snapshot(s, pid, at=utcnow() - timedelta(days=1))
+    assert value_portfolio(s, pid).total_value == pytest.approx(100_000)
+
+    fake.positions[0]["current_price"] = "3.00"  # the calls have lost 4,000 since the last look
+    monkeypatch.setattr(commands, "_broker", lambda name, session=None: alpaca.AlpacaPaperBroker(client))
+    _, _, actions, notes = commands._kairos_cycle(s, pid, "alpaca", top_n=5, invest=0.9, enter=1.0, exit_below=0.0,
+                                                  lookback=60, min_authors=4)
+    assert actions == []
+    assert any(n.startswith("Buying is paused: the account is 4.0% down today") for n in notes), notes
+    assert value_portfolio(s, pid).total_value == pytest.approx(96_000)
