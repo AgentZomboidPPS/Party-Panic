@@ -5,8 +5,10 @@ on 2026-11-18 (prices as dollar strings on Kalshi, JSON-encoded lists on Polymar
 on). The content is invented: no real user posts are stored in this repository.
 """
 
+import asyncio
 from datetime import datetime, timedelta
 
+import httpx
 import pytest
 from sqlalchemy import select
 
@@ -368,3 +370,105 @@ def test_the_wider_book_is_recognised_without_mistaking_ordinary_words_for_stock
         assert word not in bare and word not in context_bare
     assert {"QCOM", "CRWD", "PANW", "BABA", "ABBV"} <= bare and {"UBER", "HOOD", "DELL"} <= context_bare
     assert aliases["crowdstrike"] == "CRWD" and aliases["raytheon"] == "RTX" and context["uber"] == "UBER"
+
+
+# --------------------------------------------------------------------------- X (paid per post read)
+
+
+def test_x_queries_cover_the_symbols_inside_the_length_limit():
+    from spectre.signals.sources import x
+
+    assert x.build_queries(["NVDA", "TSLA"]) == ["($NVDA OR $TSLA) lang:en -is:retweet"]
+    many = [f"SYM{i}" for i in range(120)]
+    queries = x.build_queries(many)
+    assert len(queries) > 1 and all(len(q) <= 512 for q in queries)
+    assert sum(q.count("$SYM") for q in queries) == 120, "every symbol is in exactly one query"
+    # A plan that refuses the cashtag operator: plain words, and only ones long enough not to be ordinary words.
+    assert x.build_queries(["NVDA", "MU", "F", "TSLA"], cashtags=False) == ["(NVDA OR TSLA) lang:en -is:retweet"]
+
+
+def test_x_refuses_to_run_without_a_budget():
+    from spectre.signals.sources import x
+
+    with pytest.raises(ValueError, match="daily budget"):
+        x.XRecentSearch(symbols=["NVDA"])
+    with pytest.raises(ValueError, match="symbols or a query"):
+        x.XRecentSearch(daily_posts=100)
+    reader = x.XRecentSearch(symbols=["NVDA", "BTC.X"], daily_posts=2_000)
+    assert reader.queries == ["($NVDA OR $BTC) lang:en -is:retweet"]
+    assert reader.poll_seconds == pytest.approx(8 * 3600 / 20), "twenty requests of a hundred, spread over the day"
+    assert x.XRecentSearch(symbols=["NVDA"], daily_posts=1_000_000).poll_seconds == 60, "never faster than once a minute"
+
+
+def x_body(first_id: int, n: int) -> dict:
+    return {"data": [{"id": str(first_id + i), "text": f"$NVDA looks strong {i}", "created_at": "2026-11-19T15:00:00.000Z", "lang": "en",
+                      "author_id": "7"} for i in range(n)],
+            "includes": {"users": [{"id": "7", "created_at": "2020-11-19T15:00:00.000Z", "public_metrics": {"followers_count": 321}}]}}
+
+
+def run_x(reader, transport_calls, rounds_wanted: int, settle: int = 0) -> list[Post]:
+    """Run the reader until it has made `rounds_wanted` requests, then give it `settle` more
+    turns of the loop (to show it makes no further ones) and stop it."""
+    got: list[Post] = []
+
+    async def go():
+        stop = asyncio.Event()
+
+        async def emit(p):
+            got.append(p)
+
+        async def watch():
+            while len(transport_calls) < rounds_wanted:
+                await asyncio.sleep(0)
+            for _ in range(settle):
+                await asyncio.sleep(0)
+            stop.set()
+
+        await asyncio.gather(reader.run(emit, stop), watch())
+
+    asyncio.run(go())
+    return got
+
+
+def test_x_reads_posts_and_never_goes_past_the_days_budget():
+    from spectre.signals.sources import x
+
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        want = int(request.url.params["max_results"])
+        return httpx.Response(200, json=x_body(1000 * len(calls), want))
+
+    # 250 allowed today, 200 of them read before a restart: 50 left.
+    reader = x.XRecentSearch(symbols=["NVDA"], daily_posts=250, already_read=lambda: 200, poll_seconds=0,
+                             bearer_token="t", transport=httpx.MockTransport(handler))
+    got = run_x(reader, calls, 1, settle=20)
+    asked = [int(c.url.params["max_results"]) for c in calls]
+    assert asked == [50], "asks only for what is left of the budget, and then for nothing more"
+    assert reader.read_today == 250 and len(got) == 50, "stops at the cap"
+    first = calls[0]
+    assert first.url.params["query"] == "($NVDA) lang:en -is:retweet" and first.headers["authorization"] == "Bearer t"
+    post = got[0]
+    assert post.source == "x" and post.author_id == "7" and post.followers == 321 and post.account_age_days == 2191
+    assert post.text.startswith("$NVDA looks strong")
+
+
+def test_x_does_not_pay_twice_for_a_post_and_falls_back_when_cashtags_are_refused():
+    from spectre.signals.sources import x
+
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if "$" in request.url.params["query"]:
+            return httpx.Response(400, json={"errors": [{"message": "Reference to invalid operator 'cashtag'"}]})
+        return httpx.Response(200, json=x_body(5000 + 100 * len(calls), 10))
+
+    reader = x.XRecentSearch(symbols=["NVDA", "MU"], daily_posts=10_000, poll_seconds=0, bearer_token="t",
+                             transport=httpx.MockTransport(handler))
+    got = run_x(reader, calls, 3)
+    queries = [c.url.params["query"] for c in calls]
+    assert queries[0] == "($NVDA OR $MU) lang:en -is:retweet" and queries[1] == "(NVDA) lang:en -is:retweet"
+    assert "since_id" not in calls[1].url.params and calls[2].url.params["since_id"] == str(5000 + 100 * 2 + 9), "only newer posts next time"
+    assert len(got) >= 10 and reader.read_today == len(got)

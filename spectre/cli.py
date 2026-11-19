@@ -261,6 +261,20 @@ def _build_sources(factory, sources: str, preset: str = "finance", sample: float
             with factory() as s:  # the rest of the book: followed when trending there, otherwise in turn
                 listed = s.execute(select(Security.ticker).where(Security.asset_class.in_(("Equity", "Fund")))).scalars()
                 kwargs["universe"] = sorted(t for t in listed if t in BY_TICKER)
+        if name == "x":
+            from sqlalchemy import func
+
+            from spectre.signals.models import SocialPost
+            from spectre.signals.sources.base import utcnow as _now
+
+            def read_today() -> int:  # so a restart does not hand the reader a fresh day's budget
+                with factory() as s:
+                    start = _now().replace(hour=0, minute=0, second=0, microsecond=0)
+                    return s.execute(select(func.count()).select_from(SocialPost)
+                                     .where(SocialPost.source == "x", SocialPost.ingested_at >= start)).scalar_one()
+
+            kwargs.update(symbols=[k.strip().upper() for k in symbols.split(",") if k.strip()], daily_posts=settings.x_daily_posts,
+                          cost_per_post=settings.x_cost_per_post, bearer_token=settings.x_bearer_token or None, already_read=read_today)
         if name in ("trends", "google_trends"):
             kwargs["geos"] = tuple(g.strip().upper() for g in geos.split(",") if g.strip())
         if name == "rss":
@@ -1744,6 +1758,11 @@ def run(host: str = typer.Option("127.0.0.1", envvar="SPECTRE_HOST", help="0.0.0
             console.print("Alpaca credentials are supplied by this environment.")
 
     listen_only = require_alpaca and not use_alpaca
+    # X is read only when a daily budget of posts has been set: every post read is paid for.
+    live_sources = "bluesky,stocktwits,kalshi,polymarket,trends" + (",x" if settings.x_daily_posts > 0 else "")
+    if settings.x_daily_posts > 0:
+        console.print(f"X: reading up to {settings.x_daily_posts:,} posts a day "
+                      f"(about ${settings.x_daily_posts * settings.x_cost_per_post:,.2f} a day at ${settings.x_cost_per_post:g} a post).")
     warm = False
     with _session(db) as s:
         _seed(s)
@@ -1803,11 +1822,11 @@ def run(host: str = typer.Option("127.0.0.1", envvar="SPECTRE_HOST", help="0.0.0
     while True:  # the feeds and the bot; if they ever fall over, start them again
         try:
             if listen_only:
-                ingest(sources="bluesky,stocktwits,kalshi,polymarket,trends", minutes=0.0, topic_window=15, bar_window=60,
+                ingest(sources=live_sources, minutes=0.0, topic_window=15, bar_window=60,
                        preset="finance", sample=1.0, keywords="", symbols=symbols, geos="US", feeds="", db=db)
                 break
             # A database that already holds the last stretch of posts needs no warm-up.
-            autopilot(portfolio_id=pid, sources="bluesky,stocktwits,kalshi,polymarket,trends", symbols=symbols, geos="US",
+            autopilot(portfolio_id=pid, sources=live_sources, symbols=symbols, geos="US",
                       minutes=0.0, every=every, warmup=0.0 if warm else min(every, 10.0), top_n=5, invest=invest, enter=0.2, exit_below=0.0,
                       lookback=lookback, min_authors=min_authors, broker="alpaca" if use_alpaca else "paper",
                       options=options and use_alpaca, options_budget=options_budget, options_per_trade=0.03,

@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # day, the bot buys nothing new; sales and stops carry on. 0 switches a brake off.
     trading_max_drawdown: float = 0.10
     trading_max_daily_loss: float = 0.03
+    # X (Twitter). X charges for every post read, so it stays off until a daily budget of posts
+    # is set; the reader never goes past it. The token can also be added by the hosting environment.
+    x_daily_posts: int = 0
+    x_cost_per_post: float = 0.005  # dollars; for the running estimate of what has been spent
+    x_bearer_token: str = ""
     # What KAIROS weighs besides the crowd (signals/evidence.py). Each can be switched off.
     kairos_evidence: bool = True  # raise conviction for a name whose 6-12 month price trend is strong
     kairos_backdrop: bool = True  # make new stock and option purchases smaller while the market is turbulent

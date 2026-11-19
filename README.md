@@ -245,9 +245,17 @@ polymarket
   | `polymarket` | prediction-market odds by topic tag (economy, fed, finance, geopolitics, crypto…) | verified live |
   | `trends` | Google "trending now" searches per country, with traffic and attached headlines | verified live |
   | `reddit` | subreddit posts | written, unverified: Reddit refuses unauthenticated servers |
-  | `x` | recent search | written, unverified: needs a paid bearer token |
+  | `x` | the newest posts carrying the book's cashtags, on a daily budget | written and tested against a stand-in; not yet run live (needs a paid token) |
   | `rss` | news headlines from feeds you supply | written; no default feeds (see below) |
   | `synthetic`, `replay` | offline demo stream; JSONL recordings | tested |
+
+  **X (Twitter) costs money per post read**, about half a cent on its pay-per-use plan, so the
+  reader is off until a budget is set and never goes past it: `SPECTRE_X_DAILY_POSTS=4000`
+  reads at most 4,000 posts in a UTC day (about $20), across restarts, spaced through the
+  trading day. It needs a bearer token from an X developer app (`SPECTRE_X_BEARER_TOKEN`, or a
+  network secret for `api.x.com` that the hosting environment adds itself) and `api.x.com` on
+  the allowed hosts. For scale: a hundred posts every ten minutes on the dozen busiest names
+  through a trading day is about 3,900 posts.
 
   "Verified live" means run against the real service on 2026-11-18. Things learned that day:
   Kalshi quotes prices as dollar strings and its plain market list is mostly sports parlays (so
