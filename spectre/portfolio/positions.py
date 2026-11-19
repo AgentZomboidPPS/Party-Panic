@@ -176,12 +176,24 @@ def position_row(sec: Security, quantity: float, price: float, fx: float) -> dic
     }
 
 
+def valuation_date(session: Session, portfolio_id: int) -> date:
+    """The date a portfolio is valued at when none is given: the latest date there is a price
+    for, or the date of the portfolio's own latest trade or cash movement when that is later.
+    Without the second part, anything booked after the last price came in (a trade just after
+    midnight, before the next price sync) would be left out of the positions and the cash."""
+    last_trade = select(func.max(Trade.trade_date)).where(Trade.portfolio_id == portfolio_id)
+    last_cash = select(func.max(CashFlow.date)).where(CashFlow.portfolio_id == portfolio_id)
+    dates = [latest_price_date(session), session.execute(last_trade).scalar_one_or_none(),
+             session.execute(last_cash).scalar_one_or_none()]
+    return max((d for d in dates if d is not None), default=date.today())
+
+
 def value_portfolio(session: Session, portfolio_id: int, as_of: date | None = None) -> ValuedPositions:
     portfolio = session.get(Portfolio, portfolio_id)
     if portfolio is None:
         raise LookupError(f"Portfolio {portfolio_id} not found")
     if as_of is None:
-        as_of = latest_price_date(session) or date.today()
+        as_of = valuation_date(session, portfolio_id)
 
     qty = holdings(session, portfolio_id, as_of)
     secs = security_map(session, qty.index)

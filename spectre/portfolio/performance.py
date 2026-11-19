@@ -207,7 +207,15 @@ def buying_brake(session: Session, portfolio_id: int, max_drawdown: float = 0.10
         return f"the account is {1 - nav / peak:.1%} below its high of {peak:,.0f} (the limit is {max_drawdown:.0%})"
     earlier = [n for at, n in snaps if at.date() < now.date()]
     start = _inception(session, portfolio_id)
-    day_start = earlier[-1] if earlier else (put_in if start is not None and start.date() == now.date() else None)
+    # What today is measured from: the last value recorded before today; for an account that
+    # began today, what was put in; failing both, the first value recorded today, or with no
+    # record at all what was put in (the only reference there is).
+    if earlier:
+        day_start = earlier[-1]
+    elif start is not None and start.date() == now.date():
+        day_start = put_in
+    else:
+        day_start = snaps[0][1] if snaps else put_in
     if max_daily_loss and day_start and nav <= day_start * (1 - max_daily_loss):
         return f"the account is {1 - nav / day_start:.1%} down today (the limit is {max_daily_loss:.0%})"
     return None

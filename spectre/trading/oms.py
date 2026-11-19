@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 
 from spectre import audit
 from spectre.compliance.engine import pre_trade_check
-from spectre.marketdata.prices import latest_price_date, latest_prices
+from spectre.marketdata.prices import latest_prices
 from spectre.models import Fill, Order, OrderStatus, OrderType, Portfolio, Security, Side, Trade
+from spectre.portfolio.positions import valuation_date
 from spectre.portfolio.settlement import settlement_date
 from spectre.portfolio.whatif import ProposedTrade
 
@@ -78,7 +79,7 @@ def create_order(
                 "order_type": order_type.value, "limit_price": limit_price},
     )
 
-    as_of = as_of or latest_price_date(session) or date.today()
+    as_of = as_of or valuation_date(session, portfolio_id)
     px = latest_prices(session, [security_id], as_of)
     market = float(px[security_id]) if security_id in px.index else None
     order.arrival_price = market
