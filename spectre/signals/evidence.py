@@ -27,6 +27,15 @@ later against what prices did, and changes no decision until it has earned it:
 
 Coins get no trend evidence: the same test on six years of coin prices showed nothing that
 held up in both halves of the period.
+
+Tested and not used:
+
+- **big market moves**: "the market has just moved a lot, so buy index calls or puts the same
+  way and get out quickly". On eight years of half-hourly prices of the S&P 500 fund
+  (`market_move_check`) a big move did not tend to carry on: not from the first half hour
+  into the last, not into the rest of the day, not from any unusually large half hour into
+  the next. Whatever there is to be had in the seconds after a number comes out belongs to
+  machines that are there in those seconds, which this is not.
 """
 
 from __future__ import annotations
@@ -61,6 +70,7 @@ NEWS_HALF_LIFE = 12.0  # hours: a headline counts half as much after this long
 
 IN_USE = "in use"
 ON_TRIAL = "on trial"
+NOT_USED = "tested, not used"
 KINDS = (
     {"key": "crowd", "name": "The crowd", "status": IN_USE,
      "what": "Share of authors bullish minus bearish over the last stretch of posts, weighted by how many are talking."},
@@ -73,6 +83,10 @@ KINDS = (
      "what": "Tone of the last two days' headlines about the name, and events spotted in them."},
     {"key": "tape", "name": "Today's move", "status": ON_TRIAL,
      "what": "How the name has moved today against the typical name in the book."},
+    {"key": "market_move", "name": "Big market moves", "status": NOT_USED,
+     "what": "After a big move in the S&P 500, buy index calls or puts the same way and get out quickly. On eight years of "
+             "half-hourly prices a big move did not tend to carry on: the next half hour, the last half hour and the rest "
+             "of the day were each as likely to go the other way. `spectre market-moves` runs the test again."},
 )
 
 
@@ -319,3 +333,52 @@ def backdrop_check(session: Session, as_of: date | None = None) -> dict:
     return {"available": True, "from": frame.index[0].isoformat(), "to": frame.index[-1].isoformat(), "days": int(len(frame)),
             "states": states, "held_throughout": describe_run(frame["ahead"]), "scaled_down_when_turbulent": describe_run(frame["ahead"] * scale),
             "average_scale": float(scale.mean())}
+
+
+def market_move_check(bars: list[tuple[datetime, float]], big: float = 0.01, unusual: float = 3.0) -> dict:
+    """Does a big move in the market carry on? Tested on half-hourly prices of the S&P 500
+    fund (`bars`: (start of the half hour in UTC, its closing price), regular hours or more).
+
+    Each rule is "go the way of the move": its result is the average return that followed,
+    counted as a gain when the market carried on and a loss when it turned back, with the
+    share of times it carried on and the two halves of the period apart. Rules:
+    - the first half hour of the day (measured from the previous close), into the last half
+      hour: the one pattern of this kind with a published study behind it;
+    - the first half hour into the rest of the day, on every day and on days it moved over `big`;
+    - any later half hour that moved more than `unusual` times what was usual over the last
+      twenty days, into the next half hour and into the next hour."""
+    if len(bars) < 500:
+        return {"available": False, "rules": []}
+    series = pd.Series({t: c for t, c in bars}).sort_index()
+    local = pd.DatetimeIndex(series.index).tz_localize("UTC").tz_convert("America/New_York")
+    frame = pd.DataFrame({"close": series.to_numpy(), "day": local.date, "at": local.strftime("%H:%M")})
+    frame = frame[(frame["at"] >= "09:30") & (frame["at"] <= "15:30")]
+    table = frame.pivot(index="day", columns="at", values="close").dropna(subset=["09:30", "15:00", "15:30"])  # whole days only
+    if len(table) < 60:
+        return {"available": False, "rules": []}
+    close, at_ten, at_half_three = table["15:30"], table["09:30"], table["15:00"]
+    previous = close.shift(1)
+    first = at_ten / previous - 1
+
+    def rule(name: str, move: pd.Series, after: pd.Series) -> dict:
+        both = pd.DataFrame({"move": move, "after": after}).dropna()
+        both = both[both["move"] != 0]
+        gain = (both["move"].apply(lambda x: 1.0 if x > 0 else -1.0) * both["after"])
+        half = len(gain) // 2
+        return {"rule": name, "times": int(len(gain)), "average_after": float(gain.mean()) if len(gain) else None, "t_stat": _t(gain),
+                "carried_on": float((gain > 0).mean()) if len(gain) else None,
+                "first_half": float(gain.iloc[:half].mean()) if half else None,
+                "second_half": float(gain.iloc[half:].mean()) if half else None}
+
+    rules = [
+        rule("the first half hour, into the last half hour", first, close / at_half_three - 1),
+        rule("the first half hour, into the rest of the day", first, close / at_ten - 1),
+        rule(f"a first half hour of more than {big:.0%}, into the rest of the day", first[first.abs() > big], close / at_ten - 1),
+    ]
+    moves = table.pct_change(axis=1)
+    usual = moves.abs().mean(axis=1).rolling(20).mean().shift(1)  # the typical half-hour move over the last twenty days
+    large = moves.where(moves.abs().gt(unusual * usual, axis=0)).iloc[:, 1:]  # the opening half hour is covered above
+    for name, steps in (("the next half hour", 1), ("the next hour", 2)):
+        after = (table.shift(-steps, axis=1) / table - 1).iloc[:, 1:]
+        rules.append(rule(f"a half hour of more than {unusual:g} times the usual move, into {name}", large.stack(), after.stack()))
+    return {"available": True, "from": table.index[0].isoformat(), "to": table.index[-1].isoformat(), "days": int(len(table)), "rules": rules}

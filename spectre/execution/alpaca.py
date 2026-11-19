@@ -37,7 +37,7 @@ from spectre.config import settings
 from spectre.execution.brokers import BrokerFill, BrokerReject
 from spectre.execution.models import OptionMark
 from spectre.marketdata.prices import latest_prices, upsert_prices
-from spectre.marketdata.universe import BY_TICKER, crypto_base
+from spectre.marketdata.universe import BY_TICKER, crypto_base, option_view
 from spectre.models import CashFlow, Fill, Order, OrderType, Security, Side, Trade
 from spectre.portfolio.positions import value_portfolio
 from spectre.portfolio.settlement import settlement_date
@@ -441,10 +441,27 @@ def store_option_mark(session: Session, sec: Security, q: OptionQuote, underlyin
     row.as_of, row.bid, row.ask, row.mark = utcnow(), q.bid, q.ask, mark
     row.implied_volatility, row.delta, row.gamma, row.theta, row.vega = q.implied_volatility, q.delta, q.gamma, q.theta, q.vega
     row.underlying_price = underlying_price
+    if row.delta is None and mark and underlying_price:
+        # The feed carries no greeks for index options. Work the delta out from the price, so
+        # the position still counts as the amount of market it behaves like.
+        row.implied_volatility, row.delta = implied_delta(q, underlying_price, mark)
     if mark is not None and mark > 0:
         upsert_prices(session, [{"security_id": sec.id, "date": utcnow().date(), "close": mark}])
     session.flush()
     return mark
+
+
+def implied_delta(q: OptionQuote, spot: float, price: float | None = None, today: date | None = None) -> tuple[float | None, float | None]:
+    """(implied volatility, delta) of a contract worked out from its price and the price of its
+    underlying, for when the feed gives no greeks. (None, None) when no volatility explains the price."""
+    from spectre.risk.ladder import bs_delta, implied_vol
+
+    price = price if price is not None else q.mid
+    if not price or not spot:
+        return None, None
+    years = max((q.expiration - (today or utcnow().date())).days, 0.5) / 365.0
+    vol = implied_vol(q.type, price, spot, q.strike, years)
+    return (vol, bs_delta(q.type, spot, q.strike, years, vol)) if vol else (None, None)
 
 
 def sync_option_marks(session: Session, client: AlpacaClient) -> int:
@@ -460,12 +477,14 @@ def sync_option_marks(session: Session, client: AlpacaClient) -> int:
         return 0
     by_symbol = {s.ticker: s for s in held}
     quotes = client.option_snapshots(sorted(by_symbol))
+    views = {q.underlying: option_view(q.underlying) for q in quotes}  # an index option is priced off its fund
     unders = {s.ticker: s.id for s in session.execute(
-        select(Security).where(Security.ticker.in_({q.underlying for q in quotes}))).scalars()}
+        select(Security).where(Security.ticker.in_({name for name, _ in views.values()}))).scalars()}
     spots = latest_prices(session, unders.values(), utcnow().date())
     for q in quotes:
-        uid = unders.get(q.underlying)
-        store_option_mark(session, by_symbol[q.symbol], q, float(spots[uid]) if uid in spots.index else None)
+        name, per_share = views[q.underlying]
+        uid = unders.get(name)
+        store_option_mark(session, by_symbol[q.symbol], q, float(spots[uid]) * per_share if uid in spots.index else None)
     session.commit()
     return len(quotes)
 

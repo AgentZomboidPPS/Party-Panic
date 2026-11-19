@@ -17,6 +17,14 @@ Each cycle:
    (or puts) were sold today is not bought back the same day: a stop that is re-entered ten
    minutes later is not a stop.
 
+A view on a fund that tracks an index can be carried by options on the index itself. For the
+S&P 500 that means three places to look: SPY (the fund), XSP (the index at a tenth of its
+size) and SPX (the index). Each cycle the contract that would be picked is found in each, and
+the one with the tightest market that the position's money can buy at least one of is taken.
+The reason is written down with the order. At this account's size that is nearly always SPY:
+one SPX contract a month out costs more than five whole positions, and XSP's quoted markets
+are several times wider than SPY's.
+
 Orders are limit orders a few percent through the quoted ask (buys) or bid (sells): option
 spreads are too wide for market orders, and the free quote is not exact enough for a limit
 placed right on it. Each goes through the OMS and the execution guard like any other order.
@@ -28,7 +36,7 @@ demonstrated edge.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
@@ -39,11 +47,13 @@ from spectre.execution.alpaca import (
     AlpacaError,
     OptionQuote,
     ensure_option_security,
+    implied_delta,
     parse_occ,
     store_option_mark,
 )
 from spectre.execution.brokers import Broker, PaperBroker
 from spectre.execution.guard import TradingLimits, execute
+from spectre.marketdata.universe import INDEX_PROXIES, INDEX_VEHICLES, option_view
 from spectre.models import OrderType, Security, Side, Trade
 from spectre.portfolio.positions import average_costs, value_portfolio
 from spectre.portfolio.settlement import sale_restrictions
@@ -135,7 +145,39 @@ def _sold_today(session: Session, portfolio_id: int, today: date) -> set[tuple[s
             Security.asset_class == "Option",
         )
     ).scalars()
-    return {(p[0], p[2]) for p in map(parse_occ, rows) if p}
+    return {(option_view(p[0])[0], p[2]) for p in map(parse_occ, rows) if p}
+
+
+def spread_of(q: OptionQuote) -> float:
+    """The gap between buying and selling prices as a share of the price in the middle."""
+    return (q.ask - q.bid) / q.mid
+
+
+def candidates(client: AlpacaClient, ticker: str, price: float, kind: str, rules: OptionRules,
+               today: date) -> tuple[list[tuple[OptionQuote, float]], list[str]]:
+    """The contract that would be picked on the name itself and, for a fund that tracks an
+    index, on each of that index's own option roots: [(contract, price of what it is an option
+    on)], and a line for each place that had nothing usable."""
+    found, nothing = [], []
+    for root in (ticker, *INDEX_VEHICLES.get(ticker, ())):
+        spot = price * INDEX_PROXIES[root][1] if root in INDEX_PROXIES else price
+        try:
+            chain = client.option_chain(
+                root, option_type=kind,
+                expiration_date_gte=today + timedelta(days=rules.dte_min),
+                expiration_date_lte=today + timedelta(days=rules.dte_max),
+                strike_price_gte=round(spot * (1 - rules.strike_band), 2),
+                strike_price_lte=round(spot * (1 + rules.strike_band), 2),
+            )
+        except AlpacaError as exc:
+            nothing.append(f"{root}: no option chain ({exc})")
+            continue
+        q = pick_contract(chain, spot, rules, today)
+        if q is None:
+            nothing.append(f"{root}: no {kind} with a tight enough market ({len(chain)} contracts seen)")
+        else:
+            found.append((q, spot))
+    return found, nothing
 
 
 def run_options_once(
@@ -209,10 +251,11 @@ def run_options_once(
             if parsed is None:
                 continue
             root, expiry, kind, _ = parsed
+            root, per_share = option_view(root)  # an index option follows the read on the fund that tracks it
             sec = session.get(Security, int(sid))
             q = quotes.get(row["ticker"])
             if q is not None:
-                spot = by_ticker[root].price if root in by_ticker else None
+                spot = by_ticker[root].price * per_share if root in by_ticker and by_ticker[root].price else None
                 store_option_mark(session, sec, q, spot)
             qty = int(row["quantity"])
             bid = q.bid if q is not None and q.bid else None
@@ -278,29 +321,35 @@ def run_options_once(
             break
         kind = "call" if sig.score > 0 else "put"
         note = {"ticker": sig.ticker, "side": "BUY", "quantity": 0, "price": None, "outcome": "skipped"}
-        try:
-            chain = client.option_chain(
-                sig.ticker, option_type=kind,
-                expiration_date_gte=today + timedelta(days=rules.dte_min),
-                expiration_date_lte=today + timedelta(days=rules.dte_max),
-                strike_price_gte=round(sig.price * (1 - rules.strike_band), 2),
-                strike_price_lte=round(sig.price * (1 + rules.strike_band), 2),
-            )
-        except AlpacaError as exc:
-            report.actions.append({**note, "why": f"no option chain: {exc}"})
+        found, nothing = candidates(client, sig.ticker, sig.price, kind, rules, today)
+        if not found:
+            report.actions.append({**note, "why": "; ".join(nothing).removeprefix(f"{sig.ticker}: ")})
             continue
-        q = pick_contract(chain, sig.price, rules, today)
-        if q is None:
-            report.actions.append({**note, "why": f"no {kind} with a tight enough market ({len(chain)} contracts seen)"})
+
+        def most(q: OptionQuote) -> float:  # the most one share's worth of the contract may cost
+            return math.ceil(q.ask * (1 + rules.limit_cushion) * 100) / 100
+
+        # Of the places this view could be carried, the tightest market that the money buys at least one of.
+        within = [(q, spot) for q, spot in found if math.floor(spend / (most(q) * 100)) >= 1]
+        if not within:
+            q, _ = min(found, key=lambda c: most(c[0]))
+            report.actions.append({**note, "ticker": q.symbol, "price": most(q),
+                                   "why": f"one contract costs up to {most(q) * 100:,.0f}, more than the {spend:,.0f} available"})
             continue
-        limit = math.ceil(q.ask * (1 + rules.limit_cushion) * 100) / 100  # the most it may pay, per share
+        q, spot = min(within, key=lambda c: spread_of(c[0]))
+        chosen = ""
+        if len(found) + len(nothing) > 1:  # there was a choice: say what it was between
+            others = [f"{o.underlying} has a {spread_of(o):.1%} gap" if (o, sp) in within else
+                      f"one {o.underlying} contract costs {most(o) * 100:,.0f}, too much for this position"
+                      for o, sp in found if o is not q] + [n.split(" (")[0] for n in nothing]
+            chosen = f"; through {q.underlying} options ({spread_of(q):.1%} between buying and selling prices; {'; '.join(others)})"
+        limit = most(q)
         qty = math.floor(spend / (limit * 100))
-        if qty < 1:
-            report.actions.append({**note, "ticker": q.symbol, "price": limit,
-                                   "why": f"one contract costs up to {limit * 100:,.0f}, more than the {spend:,.0f} available"})
-            continue
-        # What one contract adds to the market the portfolio carries: 100 shares x delta.
-        carries = 100 * (q.delta if q.delta is not None else (0.5 if kind == "call" else -0.5)) * sig.price
+        if q.delta is None:  # no greeks on the feed (index options): work the delta out from the price
+            vol, delta_now = implied_delta(q, spot, today=today)
+            q = replace(q, delta=delta_now, implied_volatility=q.implied_volatility or vol)
+        # What one contract adds to the market the portfolio carries: 100 x delta x the price of what it is on.
+        carries = 100 * (q.delta if q.delta is not None else (0.5 if kind == "call" else -0.5)) * spot
         if exposure_room is not None and carries > 0:
             qty = min(qty, math.floor(max(exposure_room, 0.0) / carries))
             if qty < 1:
@@ -310,7 +359,7 @@ def run_options_once(
                 continue
         delta = f"delta {q.delta:+.2f}" if q.delta is not None else "no greeks"
         why = (f"{'bullish' if kind == 'call' else 'bearish'} read on {sig.ticker} (score {sig.score:+.2f}, "
-               f"{sig.n_authors} authors{describe(sig) if evidence else ''}); {(q.expiration - today).days}d, {delta}"
+               f"{sig.n_authors} authors{describe(sig) if evidence else ''}); {(q.expiration - today).days}d, {delta}{chosen}"
                + (f"; at {buy_scale:.0%} of normal size because the market is turbulent" if buy_scale < 0.95 else ""))
         if dry_run:
             report.actions.append({"ticker": q.symbol, "side": "BUY", "quantity": qty, "price": limit,
@@ -321,7 +370,7 @@ def run_options_once(
                 exposure_room -= qty * carries
             continue
         sec = ensure_option_security(session, q)
-        store_option_mark(session, sec, q, sig.price)
+        store_option_mark(session, sec, q, spot)
         session.commit()
         if trade(sec, Side.BUY, qty, limit, why):
             paid = report.actions[-1].get("fill_price") or limit

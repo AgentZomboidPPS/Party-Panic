@@ -417,3 +417,92 @@ def test_sold_options_must_be_covered(mini):
     assert res.blocked and {b.scope for b in res.new_breaches} == {"cash"}
     res = check(odd, Side.SELL, 1)
     assert res.blocked and "cannot verify cover" in res.new_breaches[0].message
+
+
+# --------------------------------------------------------------------------- index options
+
+SPY_CALL, XSP_CALL, SPX_CALL = "SPY261218C00740000", "XSP261218C00740000", "SPX261218C07400000"
+
+
+def index_book(book, spy=(14.32, 14.44), xsp=(12.95, 13.76), spx=(157.44, 159.44)):
+    """The options book with a bullish crowd on the S&P 500 fund, and calls on it in three
+    places: the fund (with greeks), the index at a tenth of its size and the index itself
+    (neither with greeks, as on the live feed)."""
+    from tests.test_strategy import _post
+
+    factory, pid = book
+    Pipeline(factory).process_posts([
+        _post(f"spy{i}", f"spy-bull{i}", "$SPY breaking out to new highs, staying long", "Bullish", i, {"SPY": 736.0}, ("SPY",))
+        for i in range(8)])
+    fake = FakeOptions()
+    fake.chain = {
+        SPY_CALL: snap(*spy, 0.45), "SPY261218C00760000": snap(5.0, 5.1, 0.25),
+        "XSP261218C00735000": snap(xsp[0] + 3, xsp[1] + 3), XSP_CALL: snap(*xsp),
+        "SPX261218C07350000": snap(spx[0] + 30, spx[1] + 30), SPX_CALL: snap(*spx),
+    }
+    return factory, pid, fake
+
+
+def test_an_index_option_is_read_through_the_fund_that_tracks_the_index():
+    from spectre.marketdata.universe import option_view
+    from spectre.risk.ladder import bs_delta
+
+    assert option_view("NVDA") == ("NVDA", 1.0) and option_view("SPX") == ("SPY", 10.04) and option_view("XSP") == ("SPY", 1.004)
+    assert parse_occ(SPX_CALL) == ("SPX", date(2026, 12, 18), "call", 7400.0) and parse_occ("SPXW261120P07355000")[0] == "SPXW"
+    call, put = bs_delta("call", 100, 100, 30 / 365, 0.2), bs_delta("put", 100, 100, 30 / 365, 0.2)
+    assert 0.5 < call < 0.56 and call - put == pytest.approx(1.0), "a call and a put at one strike move the stock's whole distance between them"
+    assert bs_delta("call", 120, 100, 0, 0.2) == 1.0 and bs_delta("put", 120, 100, 0, 0.2) == 0.0
+
+
+def test_a_view_on_the_index_goes_through_the_cheapest_place_to_trade_it(book):
+    factory, pid, fake = index_book(book)
+    with factory() as s:
+        r = cycle(s, pid, fake, rules=OptionRules(min_authors=4, max_new=1))
+        (buy,) = [a for a in r.actions if a["side"] == "BUY" and a["outcome"] == "executed"]
+        # SPY: 0.8% between buying and selling prices. XSP: 6.1%. One SPX contract: 16,423, with 3,000 to spend.
+        assert buy["ticker"] == SPY_CALL and buy["quantity"] == 2
+        assert "through SPY options (0.8% between buying and selling prices" in buy["why"]
+        assert "XSP has a 6.1% gap" in buy["why"] and "one SPX contract costs 16,423, too much for this position" in buy["why"]
+        asked = {q.url.path.rsplit("/", 1)[1] for q in fake.requests if "/options/snapshots/" in q.url.path}
+        assert {"SPY", "XSP", "SPX"} <= asked, "all three places were looked at"
+
+
+def test_the_index_itself_is_used_when_its_market_is_the_tighter_one(book):
+    from spectre.risk.ladder import ladder
+    from spectre.risk.options import market_exposure, option_exposures
+
+    factory, pid, fake = index_book(book, spy=(13.0, 14.44), xsp=(13.60, 13.76))
+    with factory() as s:
+        r = cycle(s, pid, fake, rules=OptionRules(min_authors=4, max_new=1))
+        (buy,) = [a for a in r.actions if a["side"] == "BUY" and a["outcome"] == "executed"]
+        assert buy["ticker"] == XSP_CALL and buy["quantity"] == 2 and "through XSP options (1.2% between" in buy["why"]
+        assert "SPY has a 10.5% gap" in buy["why"]
+        # The feed gave no greeks for it, so the delta was worked out from its price against the index level.
+        sec = s.execute(select(Security).where(Security.ticker == XSP_CALL)).scalar_one()
+        mark = s.get(OptionMark, sec.id)
+        assert mark.underlying == "XSP" and mark.underlying_price == pytest.approx(736.0 * 1.004)
+        assert 0.3 < mark.delta < 0.6 and mark.implied_volatility > 0.05
+        assert "delta +0." in buy["why"]
+        # And so it counts in the risk numbers as the amount of market it behaves like, through the fund.
+        v = value_portfolio(s, pid)
+        exposure = option_exposures(s, v)
+        spy = s.execute(select(Security).where(Security.ticker == "SPY")).scalar_one()
+        assert exposure.loc[sec.id, "underlying_id"] == spy.id and exposure.loc[sec.id, "leverage"] > 10
+        carried = market_exposure(s, v, exposure)
+        assert carried["not_modelled"] == [] and carried["net"] == pytest.approx(2 * 100 * mark.delta * 736.0 * 1.004, rel=0.02)
+        shape = ladder(s, v, today=TODAY)
+        assert shape["options_priced"] == 1 and shape["left_out"] == [] and shape["moves"][-1]["options"] > 0
+        # The next cycle sees the index view as already carried: no second position through another door.
+        again = cycle(s, pid, fake, rules=OptionRules(min_authors=4, max_new=1))
+        assert [a for a in again.actions if a["side"] == "BUY" and a["outcome"] == "executed" and "SPY" in a["why"]] == []
+        assert set(held(s, pid)) == {XSP_CALL}
+
+
+def test_when_no_index_contract_fits_the_money_it_says_what_one_costs(book):
+    factory, pid, fake = index_book(book)
+    fake.chain = {SPX_CALL: fake.chain[SPX_CALL], "SPX261218C07350000": fake.chain["SPX261218C07350000"]}  # only the full-size index
+    with factory() as s:
+        r = cycle(s, pid, fake, rules=OptionRules(min_authors=4, max_new=1))
+        (skipped,) = [a for a in r.actions if a["outcome"] == "skipped"]
+        assert skipped["ticker"] == SPX_CALL and "one contract costs up to 16,423, more than the 3,000 available" in skipped["why"]
+        assert held(s, pid) == {}

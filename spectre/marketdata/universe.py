@@ -178,6 +178,22 @@ UNIVERSE: list[Entry] = [
 ]
 
 BY_TICKER: dict[str, Entry] = {e.ticker: e for e in UNIVERSE}
+
+# Index options (cash-settled options on the S&P 500 itself: SPX, and XSP at a tenth of the
+# size). An index is not something that can be bought or that anybody posts a cashtag for, so
+# each is read through the fund that tracks it: (fund, index points per share of the fund).
+# The ratio drifts by a tenth of a percent or two as the fund's dividend accrues and is paid;
+# that is close enough to choose a strike near the money and to count exposure.
+INDEX_PROXIES: dict[str, tuple[str, float]] = {"SPX": ("SPY", 10.04), "SPXW": ("SPY", 10.04), "XSP": ("SPY", 1.004)}
+# For a view on a fund, the index roots whose options could carry it instead.
+INDEX_VEHICLES: dict[str, tuple[str, ...]] = {"SPY": ("XSP", "SPX")}
+
+
+def option_view(root: str) -> tuple[str, float]:
+    """For options on `root`: the name whose crowd read and price history stand behind them,
+    and how many of the root's price units one share of that name is. ("NVDA", 1.0) for a
+    stock; ("SPY", 10.04) for options on the S&P 500 index."""
+    return INDEX_PROXIES.get(root.upper(), (root, 1.0))
 CRYPTO_TICKERS: frozenset[str] = frozenset(e.ticker for e in UNIVERSE if e.asset_class == "Crypto")
 
 

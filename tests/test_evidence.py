@@ -279,7 +279,40 @@ def test_the_api_shows_what_is_weighed(book, monkeypatch):  # noqa: F811
     assert web.get("/signals/live?evidence=false").json()[0]["conviction"] is None
     r = web.get("/signals/evidence").json()
     assert {k["key"]: k["status"] for k in r["kinds"]} == {"crowd": "in use", "trend": "in use", "backdrop": "in use",
-                                                         "news": "on trial", "tape": "on trial"}
+                                                         "news": "on trial", "tape": "on trial", "market_move": "tested, not used"}
     assert r["backdrop"]["state"] == "calm" and "trend" in r["tests"] and r["settings"]["trend_strength"] == 0.5
     monkeypatch.setattr(settings, "kairos_evidence", False)
     assert {k["key"]: k["status"] for k in web.get("/signals/evidence").json()["kinds"]}["trend"] == "switched off"
+
+
+def test_the_big_move_test_finds_a_carry_on_when_there_is_one_and_nothing_when_there_is_not():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    def world(carry: float, days: int = 120):
+        """Half-hourly prices, regular hours. Each day opens with a move of 1.5% one way or the
+        other (alternating in an irregular pattern); the rest of the day goes `carry` times as
+        far the same way, spread evenly over the remaining half hours."""
+        bars, price, day = [], 100.0, datetime(2026, 1, 5, tzinfo=ZoneInfo("America/New_York"))
+        n = 0
+        while n < days:
+            if day.weekday() < 5:
+                move = 0.015 * (1 if (n * 7) % 5 < 3 else -1)
+                for k in range(13):  # 09:30 ... 15:30
+                    price *= 1 + (move if k == 0 else move * carry / 12)
+                    at = day.replace(hour=9, minute=30) + timedelta(minutes=30 * k)
+                    bars.append((at.astimezone(ZoneInfo("UTC")).replace(tzinfo=None), price))
+                n += 1
+            day += timedelta(days=1)
+        return bars
+
+    assert ev.market_move_check(world(0.5)[:100]) == {"available": False, "rules": []}, "a few days prove nothing"
+    carried = {r["rule"]: r for r in ev.market_move_check(world(0.5))["rules"]}
+    rest = carried["the first half hour, into the rest of the day"]
+    assert rest["times"] == 119 and rest["carried_on"] == 1.0 and rest["average_after"] == pytest.approx(0.0075, rel=0.02)
+    assert rest["first_half"] > 0 and rest["second_half"] > 0 and rest["t_stat"] > 10
+    assert carried["a first half hour of more than 1%, into the rest of the day"]["times"] == 119
+    assert carried["the first half hour, into the last half hour"]["carried_on"] == 1.0
+    turned = {r["rule"]: r for r in ev.market_move_check(world(-0.5))["rules"]}
+    assert turned["the first half hour, into the rest of the day"]["carried_on"] == 0.0
+    assert turned["the first half hour, into the rest of the day"]["average_after"] < 0

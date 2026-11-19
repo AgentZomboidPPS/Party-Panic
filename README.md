@@ -431,6 +431,16 @@ what prices did, and changes nothing until it has earned it.
   name with events spotted in them (results, guidance, analyst changes, deals, share
   offerings, legal trouble), and how the name has moved today against the typical name.
 
+- **Big market moves, tested and not used.** "The market has just moved a lot: buy index calls
+  or puts the same way and get out quickly." On eight years of half-hourly prices of the S&P
+  500 fund (`spectre market-moves` runs it again) a big move did not tend to carry on: not
+  from the first half hour into the last (48% of the time), not into the rest of the day
+  (52%), not from an unusually large half hour into the next (52%). None is distinguishable
+  from a coin toss, and an option held for half an hour also pays for its bid/ask gap and
+  for the time that passes. Whatever there is in the seconds after a number comes out
+  belongs to machines that are there in those seconds; KAIROS decides every ten minutes on
+  option quotes that are fifteen minutes old.
+
 `spectre evidence` prints all of it: what is weighed, each name as it stands now, the two
 tests on history, and the live comparison of each kind of evidence on KAIROS's own recorded
 readings. `SPECTRE_KAIROS_EVIDENCE=false` and `SPECTRE_KAIROS_BACKDROP=false` switch the two
@@ -479,6 +489,17 @@ then halfway to the far side, then the quote, and only last the order's own limi
 quote), so the spread is paid only as far as it has to be. It only ever
 buys options, so the most a position can lose is what was paid for it, and the
 `no_naked_options` rule would reject an uncovered sale regardless.
+
+**Index options (SPX, XSP).** Alpaca lists options on the S&P 500 index itself: SPX, and XSP
+at a tenth of the size. A view on SPY can be carried by any of the three, so each cycle the
+contract KAIROS would pick is found in each and the one with the tightest market that the
+position's money buys at least one of is taken; the order's reason says what the choice was
+between. At this account's size that is nearly always SPY: a month-out SPX contract at the
+money costs about 16,000 against 3,000 for a position, and XSP's quoted markets were found
+to be up to twenty times as wide as SPY's (0.8% to 25% against 0.5% to 0.8%). An index is
+read through the fund that tracks it (the crowd read, the price history and the exposure
+count all come from SPY, scaled), and since the feed carries no greeks for index options
+their delta is worked out from their price.
 
 **Is the signal any good? (`signals/intraday.py`, `spectre signal-check`).** At every decision
 KAIROS writes down its score for every name (`signal_readings`), and the check sets those

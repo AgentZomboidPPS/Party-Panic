@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from spectre.execution.models import OptionMark
 from spectre.marketdata.prices import latest_prices
+from spectre.marketdata.universe import option_view
 from spectre.models import Security
 from spectre.portfolio.positions import ValuedPositions
 
@@ -37,9 +38,11 @@ def option_exposures(session: Session, valued: ValuedPositions) -> pd.DataFrame:
     rows: dict[int, dict] = {}
     for sid, row in opts.iterrows():
         mark = session.get(OptionMark, int(sid))
-        under = None
+        under, per_share = None, 1.0
         if mark is not None:
-            under = session.execute(select(Security).where(Security.ticker == mark.underlying)).scalar_one_or_none()
+            # An option on an index is carried by the fund that tracks it: its history, its price scaled.
+            name, per_share = option_view(mark.underlying)
+            under = session.execute(select(Security).where(Security.ticker == name)).scalar_one_or_none()
         out = {"ticker": row["ticker"], "underlying": mark.underlying if mark else None,
                "underlying_id": under.id if under else None, "underlying_class": under.asset_class if under else None,
                "delta": mark.delta if mark else None, "leverage": None}
@@ -48,7 +51,7 @@ def option_exposures(session: Session, valued: ValuedPositions) -> pd.DataFrame:
             spot = mark.underlying_price
             if not spot:
                 px = latest_prices(session, [under.id], valued.as_of)
-                spot = float(px[under.id]) if under.id in px.index else None
+                spot = float(px[under.id]) * per_share if under.id in px.index else None
             if spot:
                 out["leverage"] = float(mark.delta) * float(spot) / price
         rows[int(sid)] = out

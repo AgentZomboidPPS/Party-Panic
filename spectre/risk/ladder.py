@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from spectre.execution.models import OptionMark
 from spectre.marketdata.prices import latest_prices
+from spectre.marketdata.universe import option_view
 from spectre.models import Security
 from spectre.portfolio.positions import ValuedPositions
 
@@ -49,6 +50,15 @@ def bs_price(kind: str, spot: float, strike: float, years: float, vol: float, ra
     if kind == "call":
         return spot * _cdf(d1) - strike * math.exp(-rate * years) * _cdf(d2)
     return strike * math.exp(-rate * years) * _cdf(-d2) - spot * _cdf(-d1)
+
+
+def bs_delta(kind: str, spot: float, strike: float, years: float, vol: float, rate: float = RATE) -> float:
+    """How much the option's price moves per unit move in the underlying (negative for a put)."""
+    if years <= 0 or vol <= 0:
+        itm = spot > strike if kind == "call" else spot < strike
+        return (1.0 if kind == "call" else -1.0) if itm else 0.0
+    d1 = (math.log(spot / strike) + (rate + 0.5 * vol * vol) * years) / (vol * math.sqrt(years))
+    return _cdf(d1) if kind == "call" else _cdf(d1) - 1.0
 
 
 def implied_vol(kind: str, price: float, spot: float, strike: float, years: float, rate: float = RATE) -> float | None:
@@ -140,9 +150,10 @@ def ladder(session: Session, valued: ValuedPositions, moves: tuple[float, ...] =
 def _spot(session: Session, mark: OptionMark, as_of: date) -> float | None:
     """The underlying's latest price: from the price history when it is listed there, else the
     price stored with the option's last quote."""
-    under = session.execute(select(Security.id).where(Security.ticker == mark.underlying)).scalar_one_or_none()
+    name, per_share = option_view(mark.underlying)  # an index option is read through the fund that tracks it
+    under = session.execute(select(Security.id).where(Security.ticker == name)).scalar_one_or_none()
     if under is not None:
         px = latest_prices(session, [under], as_of)
         if under in px.index:
-            return float(px[under])
+            return float(px[under]) * per_share
     return mark.underlying_price

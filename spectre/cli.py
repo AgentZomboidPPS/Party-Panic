@@ -591,6 +591,37 @@ def evidence(lookback: int = typer.Option(45, help="Minutes of conversation behi
 
 
 @app.command()
+def market_moves(years: float = typer.Option(8.0, help="How many years of half-hourly prices to test on"),
+                 symbol: str = typer.Option("SPY", help="The fund standing in for the market")):
+    """Does a big move in the market carry on? The test behind not trading index options on big moves."""
+    from datetime import timedelta
+
+    from spectre.execution.alpaca import AlpacaClient, AlpacaError
+    from spectre.signals.evidence import market_move_check
+    from spectre.signals.sources.base import utcnow
+
+    try:
+        bars = AlpacaClient().stock_bars([symbol], utcnow() - timedelta(days=365.25 * years), timeframe="30Min").get(symbol, [])
+    except AlpacaError as exc:
+        console.print(f"[red]Alpaca (prices): {exc}[/]")
+        raise typer.Exit(1) from exc
+    r = market_move_check(bars)
+    if not r["available"]:
+        console.print("Too little price history to test on.")
+        return
+    t = Table("go the way of...", "times", "what followed, on average", "t", "carried on", "first half", "second half",
+              title=f"{symbol}, half-hourly, {r['from']} to {r['to']} ({r['days']:,} days)")
+    for x in r["rules"]:
+        t.add_row(x["rule"], f"{x['times']:,}", "-" if x["average_after"] is None else f"{x['average_after']:+.3%}",
+                  "-" if x["t_stat"] is None else f"{x['t_stat']:+.2f}", "-" if x["carried_on"] is None else f"{x['carried_on']:.0%}",
+                  "-" if x["first_half"] is None else f"{x['first_half']:+.3%}", "-" if x["second_half"] is None else f"{x['second_half']:+.3%}")
+    console.print(t)
+    console.print("[dim]A rule worth trading would show an average clearly above zero (a t of 2 or more) in both halves. An at-the-money "
+                  "option held for half an hour also has to pay for the gap between its buying and selling prices and for the time "
+                  "that passes, which on a same-day contract is most of what it costs.[/]")
+
+
+@app.command()
 def backtest(db: str | None = typer.Option(None, "--db"), horizon: int = 1, signal: str = "score", quantile: float = 0.3,
              days: int = 365,
              cost_bps: float = typer.Option(5.0, help="One-way trading cost in basis points (spread + fees)")):
