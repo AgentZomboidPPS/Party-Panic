@@ -475,10 +475,15 @@ has arrived, normally the next business day. It says so in its log instead.
 
 **Options sleeve (`--options`, `signals/options_strategy.py`).** On the strongest reads it buys
 a call (bullish) or a put (bearish): an expiry three to seven weeks out, the standard monthly
-one (third Friday) when there is one in range, the strike whose delta is nearest 0.45, and
-only where the bid/ask spread is tight. The monthly preference is from measurement: on live
-chains the monthly expiry traded many times the volume of the weeklies around it, with a
-bid/ask gap of about 3% on AMZN against 8% a week later. It spends `--options-per-trade`
+one (third Friday) when there is one in range, and the strike with the best trade-off between
+a tight bid/ask gap and a delta near 0.45, never one with a gap over 6%. Both preferences are
+from measurement. On live chains the monthly expiry traded many times the volume of the
+weeklies around it, with a gap of about 3% on AMZN against 8% a week later. And across 22
+names the strike nearest the target delta often had a gap several times its neighbour's (AAPL
+7.3% against 0.1% one strike further in the money, MSFT 5.8% against 0.5%); on the first day
+of live trading that gap was the sleeve's largest cost, about 6% of what was spent. So a
+contract with a delta between 0.40 and 0.70 is scored on its gap plus a tenth of its distance
+from the target delta, and the lowest score is bought. It spends `--options-per-trade`
 (3%) of the portfolio per position and at most `--options-budget` (20%) in total premium. A
 holding is sold at +100%, at −50%, a week before expiry (so nothing is exercised or assigned),
 or when the crowd has clearly turned (a score of −0.5 or lower for a call, +0.5 or higher for

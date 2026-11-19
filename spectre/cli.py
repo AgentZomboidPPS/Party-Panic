@@ -1158,15 +1158,17 @@ def autopilot(portfolio_id: int,
                     crypto=crypto, crypto_invest=crypto_invest, crypto_top=crypto_top,
                     stop_loss=stop_loss, crypto_stop_loss=crypto_stop_loss, min_hold=min_hold,
                     crypto_min_hold=crypto_min_hold, crypto_enter=crypto_enter, risk_weighted=risk_weighted)
+                from spectre.portfolio.positions import value_portfolio
+
+                worth = value_portfolio(s, portfolio_id).total_value  # after the cycle, at the broker's prices: what was recorded
         except Exception as exc:  # one bad cycle (a network blip, a broker error) must not stop the run
             console.print(f"{stamp}  [red]cycle failed[/]: {type(exc).__name__}: {exc}")
             return
         for note in notes:
             console.print(f"{stamp}  [dim]{note}[/]")
         if not actions:
-            shown = r or coins
             zone = (r.targets if r else []) + (coins.targets if coins else [])
-            console.print(f"{stamp}  no trades" + (f"  (NAV {_money(shown.nav)}, buy zone: {', '.join(zone) or 'none'})" if shown else ""))
+            console.print(f"{stamp}  no trades  (worth {_money(worth)}, buy zone: {', '.join(zone) or 'none'})")
         for a in actions:
             console.print(f"{stamp}  {_action_line(a)}")
 

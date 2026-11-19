@@ -44,7 +44,7 @@ def chain():
         "NVDA261127C00150000": snap(3.0, 3.1, 0.52),  # 9 days out: too close
         "NVDA261224C00155000": snap(4.9, 5.1, 0.44),  # 36 days: nearest the middle of the 21-50 day window, but a weekly
         "NVDA261218C00140000": snap(13.0, 13.4, 0.68),  # 30 days, the monthly expiry (third Friday): preferred
-        "NVDA261218C00150000": snap(8.0, 8.2, 0.55),
+        "NVDA261218C00150000": snap(7.9, 8.3, 0.55),  # a wider market than the 155 strike's: not worth the extra delta
         NVDA_CALL: snap(5.4, 5.6, 0.45),  # ... and nearest the 0.45 target delta
         "NVDA261218C00157500": snap(3.0, 5.0, 0.45),  # right delta, but a spread nobody should pay
         "NVDA261218C00160000": snap(3.2, 3.3, 0.35),
@@ -424,7 +424,7 @@ def test_sold_options_must_be_covered(mini):
 SPY_CALL, XSP_CALL, SPX_CALL = "SPY261218C00740000", "XSP261218C00740000", "SPX261218C07400000"
 
 
-def index_book(book, spy=(14.32, 14.44), xsp=(12.95, 13.76), spx=(157.44, 159.44)):
+def index_book(book, spy=(14.32, 14.44), xsp=(13.10, 13.76), spx=(157.44, 159.44)):
     """The options book with a bullish crowd on the S&P 500 fund, and calls on it in three
     places: the fund (with greeks), the index at a tenth of its size and the index itself
     (neither with greeks, as on the live feed)."""
@@ -459,10 +459,10 @@ def test_a_view_on_the_index_goes_through_the_cheapest_place_to_trade_it(book):
     with factory() as s:
         r = cycle(s, pid, fake, rules=OptionRules(min_authors=4, max_new=1))
         (buy,) = [a for a in r.actions if a["side"] == "BUY" and a["outcome"] == "executed"]
-        # SPY: 0.8% between buying and selling prices. XSP: 6.1%. One SPX contract: 16,423, with 3,000 to spend.
+        # SPY: 0.8% between buying and selling prices. XSP: 4.9%. One SPX contract: 16,423, with 3,000 to spend.
         assert buy["ticker"] == SPY_CALL and buy["quantity"] == 2
         assert "through SPY options (0.8% between buying and selling prices" in buy["why"]
-        assert "XSP has a 6.1% gap" in buy["why"] and "one SPX contract costs 16,423, too much for this position" in buy["why"]
+        assert "XSP has a 4.9% gap" in buy["why"] and "one SPX contract costs 16,423, too much for this position" in buy["why"]
         asked = {q.url.path.rsplit("/", 1)[1] for q in fake.requests if "/options/snapshots/" in q.url.path}
         assert {"SPY", "XSP", "SPX"} <= asked, "all three places were looked at"
 
@@ -471,12 +471,12 @@ def test_the_index_itself_is_used_when_its_market_is_the_tighter_one(book):
     from spectre.risk.ladder import ladder
     from spectre.risk.options import market_exposure, option_exposures
 
-    factory, pid, fake = index_book(book, spy=(13.0, 14.44), xsp=(13.60, 13.76))
+    factory, pid, fake = index_book(book, spy=(13.9, 14.44), xsp=(13.60, 13.76))
     with factory() as s:
         r = cycle(s, pid, fake, rules=OptionRules(min_authors=4, max_new=1))
         (buy,) = [a for a in r.actions if a["side"] == "BUY" and a["outcome"] == "executed"]
         assert buy["ticker"] == XSP_CALL and buy["quantity"] == 2 and "through XSP options (1.2% between" in buy["why"]
-        assert "SPY has a 10.5% gap" in buy["why"]
+        assert "SPY has a 3.8% gap" in buy["why"]
         # The feed gave no greeks for it, so the delta was worked out from its price against the index level.
         sec = s.execute(select(Security).where(Security.ticker == XSP_CALL)).scalar_one()
         mark = s.get(OptionMark, sec.id)
@@ -506,3 +506,20 @@ def test_when_no_index_contract_fits_the_money_it_says_what_one_costs(book):
         (skipped,) = [a for a in r.actions if a["outcome"] == "skipped"]
         assert skipped["ticker"] == SPX_CALL and "one contract costs up to 16,423, more than the 3,000 available" in skipped["why"]
         assert held(s, pid) == {}
+
+
+def test_a_tighter_market_a_little_further_in_the_money_beats_the_exact_delta():
+    """Real chains: the strike nearest the target delta often has a gap several times its neighbour's."""
+    def q(strike, bid, ask, delta):
+        return alpaca.quote_from_snapshot(f"AAPL261218C00{strike}000", snap(bid, ask, delta))
+
+    wide_at_target, tight_nearby = q(360, 6.32, 6.80, 0.44), q(355, 8.99, 9.00, 0.53)
+    tight_but_far, too_deep = q(340, 19.0, 19.02, 0.75), q(330, 27.0, 27.01, 0.85)
+    assert pick_contract([wide_at_target, tight_nearby, too_deep], 354.9, OptionRules(max_spread=0.10), TODAY) is tight_nearby
+    # ... but not at any distance: outside the delta band a tight market does not count.
+    assert pick_contract([wide_at_target, tight_but_far, too_deep], 354.9, OptionRules(max_spread=0.10), TODAY) is wide_at_target
+    # With the same gap everywhere, the delta nearest the target still wins.
+    even = [q(360, 6.50, 6.60, 0.44), q(355, 8.93, 9.07, 0.53)]
+    assert pick_contract(even, 354.9, OptionRules(), TODAY) is even[0]
+    # And by default a gap over 6% is not traded at all.
+    assert pick_contract([wide_at_target], 354.9, OptionRules(), TODAY) is None

@@ -12,8 +12,8 @@ Each cycle:
 3. for the strongest reads not already covered, buy one contract series: a call when the crowd
    is bullish, a put when bearish; an expiry a few weeks out, the standard monthly one when
    there is one in range (far more heavily traded than the weeklies, so cheaper to get in and
-   out of); the strike whose delta is nearest `target_delta`; and only if the bid/ask spread
-   is tight enough to trade. A name whose calls
+   out of); the strike with the best trade-off between a tight bid/ask gap and a delta near
+   `target_delta`; and only if that gap is tight enough to trade. A name whose calls
    (or puts) were sold today is not bought back the same day: a stop that is re-entered ten
    minutes later is not a stop.
 
@@ -81,7 +81,17 @@ class OptionRules:
     dte_min: int = 21  # days to expiry at entry: far enough out that time decay is not brutal
     dte_max: int = 50
     target_delta: float = 0.45  # roughly at the money
-    max_spread: float = 0.12  # (ask - bid) / mid; wider than this is too expensive to trade
+    # The gap between buying and selling prices is paid in full on a trip in and out, and on the
+    # first day of live trading it was the sleeve's largest cost (about 6% of what was spent).
+    # Neighbouring strikes often differ several-fold in that gap, so a strike a little further
+    # in the money is taken when its market is tighter: each contract with a delta inside
+    # `delta_min`..`delta_max` is scored on its gap plus `delta_weight` for each whole point of
+    # delta it sits away from the target (0.10: a strike 0.2 of delta away must be 2 points of
+    # premium tighter to win). Nothing wider than `max_spread` is traded at all.
+    delta_min: float = 0.40
+    delta_max: float = 0.70
+    delta_weight: float = 0.10
+    max_spread: float = 0.06  # (ask - bid) / mid
     # How far past the quoted ask (buying) or bid (selling) the limit price may go. The free
     # quote is indicative and can lag the real market, so a limit placed exactly on it often
     # misses; the order still fills at the real price when that is better than the limit.
@@ -110,8 +120,14 @@ def is_monthly(expiry: date) -> bool:
     return expiry.weekday() == 4 and 15 <= expiry.day <= 21
 
 
+def spread_of(q: OptionQuote) -> float:
+    """The gap between buying and selling prices as a share of the price in the middle."""
+    return (q.ask - q.bid) / q.mid
+
+
 def pick_contract(chain: list[OptionQuote], spot: float, rules: OptionRules, today: date) -> OptionQuote | None:
-    """One contract from a chain of a single type: tradable, in the expiry window, delta nearest target."""
+    """One contract from a chain of a single type: tradable, in the expiry window, and the best
+    trade-off between a tight market and a delta near the target."""
     usable = [
         q for q in chain
         if q.bid and q.ask and q.mid and (q.ask - q.bid) / q.mid <= rules.max_spread
@@ -128,7 +144,8 @@ def pick_contract(chain: list[OptionQuote], spot: float, rules: OptionRules, tod
     candidates = [q for q in usable if q.expiration == expiry]
     with_delta = [q for q in candidates if q.delta is not None]
     if with_delta:
-        return min(with_delta, key=lambda q: abs(abs(q.delta) - rules.target_delta))
+        near = [q for q in with_delta if rules.delta_min <= abs(q.delta) <= rules.delta_max] or with_delta
+        return min(near, key=lambda q: spread_of(q) + rules.delta_weight * abs(abs(q.delta) - rules.target_delta))
     # No greeks on the feed: take the first strike out of the money.
     if candidates[0].type == "call":
         otm = [q for q in candidates if q.strike >= spot]
@@ -146,11 +163,6 @@ def _sold_today(session: Session, portfolio_id: int, today: date) -> set[tuple[s
         )
     ).scalars()
     return {(option_view(p[0])[0], p[2]) for p in map(parse_occ, rows) if p}
-
-
-def spread_of(q: OptionQuote) -> float:
-    """The gap between buying and selling prices as a share of the price in the middle."""
-    return (q.ask - q.bid) / q.mid
 
 
 def candidates(client: AlpacaClient, ticker: str, price: float, kind: str, rules: OptionRules,
